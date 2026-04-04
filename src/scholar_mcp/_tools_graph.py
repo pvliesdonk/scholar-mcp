@@ -210,7 +210,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
             except (httpx.HTTPError, ValueError):
                 seed_results = [None] * len(seed_batch)
 
-            for seed_id, seed_data in zip(seed_batch, seed_results, strict=True):
+            for seed_id, seed_data in zip(seed_batch, seed_results, strict=False):
                 nodes[seed_id] = {
                     "id": seed_id,
                     "title": seed_data.get("title") if seed_data else None,
