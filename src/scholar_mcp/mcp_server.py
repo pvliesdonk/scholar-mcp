@@ -121,8 +121,7 @@ def _build_oidc_auth() -> Any:
         from fastmcp.server.auth.oidc_proxy import OIDCProxy
     except ImportError as exc:
         raise RuntimeError(
-            "OIDC auth requires httpx. Install with: "
-            "pip install 'scholar-mcp[mcp]'"
+            "OIDC auth requires httpx. Install with: pip install 'scholar-mcp[mcp]'"
         ) from exc
 
     jwt_signing_key = (
@@ -278,7 +277,7 @@ def create_server(*, transport: str = "stdio") -> FastMCP:
     mcp = FastMCP(
         server_name,
         instructions=instructions,
-        lifespan=make_service_lifespan(config),
+        lifespan=make_service_lifespan,
         auth=auth,
     )
 

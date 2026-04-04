@@ -19,3 +19,4 @@ htmlcov/
 *.npy
 *.npz
 site/
+.worktrees/

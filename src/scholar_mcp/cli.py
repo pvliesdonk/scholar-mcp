@@ -1,15 +1,17 @@
 """Command-line interface for scholar-mcp.
 
-Provides a ``serve`` subcommand.  The entry point is :func:`main`,
+Provides ``serve`` and ``cache`` subcommands. The entry point is :func:`main`,
 registered as ``scholar-mcp`` in ``pyproject.toml``.
 """
 
 from __future__ import annotations
 
-import argparse
+import asyncio
 import logging
 import os
-import sys
+from pathlib import Path
+
+import click
 
 from scholar_mcp.config import _ENV_PREFIX, get_log_level
 
@@ -24,6 +26,12 @@ def _normalise_http_path(path: str | None) -> str:
 
     Ensures a leading slash and removes a trailing slash (except for root ``/``).
     Empty values fall back to ``/mcp``.
+
+    Args:
+        path: Raw path string or None.
+
+    Returns:
+        Normalised path string.
     """
     if path is None:
         return _DEFAULT_HTTP_PATH
@@ -37,124 +45,159 @@ def _normalise_http_path(path: str | None) -> str:
     return normalised
 
 
-def _cmd_serve(args: argparse.Namespace) -> None:
-    """Run the MCP server."""
-    try:
-        from scholar_mcp.mcp_server import build_event_store, create_server
-    except ImportError:
-        logger.error(
-            "FastMCP is not installed. Install with: "
-            "pip install scholar-mcp[mcp]"
-        )
-        sys.exit(1)
-
-    transport = args.transport
-    server = create_server(transport=transport)
-    env_http_path = os.environ.get(f"{_ENV_PREFIX}_HTTP_PATH")
-    http_path = _normalise_http_path(args.path or env_http_path)
-    if transport == "stdio" and (
-        args.host != "0.0.0.0" or args.port != 8000 or args.path is not None
-    ):
-        logger.warning("--host, --port and --path are only used with --transport http")
-    if transport == "http":
-        try:
-            import uvicorn
-        except ImportError:
-            logger.error(
-                "HTTP transport requires uvicorn. Install with: "
-                "pip install 'scholar-mcp[mcp]'"
-            )
-            sys.exit(1)
-
-        event_store = build_event_store()
-        app = server.http_app(path=http_path, event_store=event_store)
-        uvicorn.run(
-            app,
-            host=args.host,
-            port=args.port,
-            lifespan="on",
-            timeout_graceful_shutdown=0,
-        )
-    else:
-        server.run(transport=transport)
-
-
-def _build_parser() -> argparse.ArgumentParser:
-    """Build the argument parser.
-
-    Returns:
-        Configured :class:`argparse.ArgumentParser`.
-    """
-    parser = argparse.ArgumentParser(
-        prog=_PROG,
-        description="FastMCP server — replace this description",
-    )
-    parser.add_argument(
-        "-v",
-        "--verbose",
-        action="store_true",
-        help="enable debug logging",
-    )
-
-    sub = parser.add_subparsers(dest="command", required=True)
-
-    # serve
-    serve_parser = sub.add_parser("serve", help="run the MCP server")
-    serve_parser.add_argument(
-        "--transport",
-        choices=["stdio", "sse", "http"],
-        default="stdio",
-        help="MCP transport: stdio (default), sse, or http (streamable-http)",
-    )
-    serve_parser.add_argument(
-        "--host",
-        default="0.0.0.0",
-        help="host to bind to for http transport (default: 0.0.0.0)",
-    )
-    serve_parser.add_argument(
-        "--port",
-        type=int,
-        default=8000,
-        help="port for http transport (default: 8000)",
-    )
-    serve_parser.add_argument(
-        "--path",
-        default=None,
-        help=(
-            f"mount path for http transport (default: ${_ENV_PREFIX}_HTTP_PATH or /mcp)"
-        ),
-    )
-
-    return parser
-
-
-_COMMANDS = {
-    "serve": _cmd_serve,
-}
-
-
-def main() -> None:
-    """CLI entry point."""
-    parser = _build_parser()
-    args = parser.parse_args()
-
-    # -v flag overrides LOG_LEVEL env var; env var overrides default INFO.
-    level = logging.DEBUG if args.verbose else get_log_level()
+@click.group()
+@click.option("-v", "--verbose", is_flag=True, help="Enable debug logging.")
+@click.pass_context
+def cli(ctx: click.Context, verbose: bool) -> None:
+    """Scholar MCP — academic literature server."""
+    level = logging.DEBUG if verbose else get_log_level()
     logging.basicConfig(
         level=level,
         format="%(levelname)s %(name)s: %(message)s",
     )
-    # httpx is noisy at DEBUG — keep it at WARNING unless explicitly targeted.
     if level == logging.DEBUG:
         logging.getLogger("httpx").setLevel(logging.WARNING)
         logging.getLogger("httpcore").setLevel(logging.WARNING)
+    ctx.ensure_object(dict)
+    ctx.obj["verbose"] = verbose
 
-    handler = _COMMANDS[args.command]
+
+@cli.command("serve")
+@click.option(
+    "--transport",
+    type=click.Choice(["stdio", "sse", "http"]),
+    default="stdio",
+    show_default=True,
+    help="MCP transport.",
+)
+@click.option(
+    "--host", default="0.0.0.0", show_default=True, help="Bind host (http only)."
+)
+@click.option(
+    "--port", type=int, default=8000, show_default=True, help="Bind port (http only)."
+)
+@click.option(
+    "--path",
+    default=None,
+    help=f"Mount path (http only, default: ${_ENV_PREFIX}_HTTP_PATH or /mcp).",
+)
+def serve(transport: str, host: str, port: int, path: str | None) -> None:
+    """Run the MCP server."""
     try:
-        handler(args)
-    except ValueError as exc:
-        logger.error("%s", exc)
-        sys.exit(1)
+        from scholar_mcp.mcp_server import build_event_store, create_server
+    except ImportError as exc:
+        logger.error(
+            "FastMCP is not installed. Install with: pip install scholar-mcp[mcp]"
+        )
+        raise SystemExit(1) from exc
+
+    server = create_server(transport=transport)
+    env_http_path = os.environ.get(f"{_ENV_PREFIX}_HTTP_PATH")
+    http_path = _normalise_http_path(path or env_http_path)
+
+    if transport != "http" and (host != "0.0.0.0" or port != 8000 or path is not None):
+        logger.warning("--host, --port and --path are only used with --transport http")
+
+    if transport == "http":
+        try:
+            import uvicorn
+        except ImportError as exc:
+            logger.error(
+                "HTTP transport requires uvicorn. Install with: pip install 'scholar-mcp[mcp]'"
+            )
+            raise SystemExit(1) from exc
+
+        event_store = build_event_store()
+        app = server.http_app(path=http_path, event_store=event_store)
+        uvicorn.run(
+            app, host=host, port=port, lifespan="on", timeout_graceful_shutdown=0
+        )
+    else:
+        from typing import Literal, cast
+
+        transport_literal = cast(
+            "Literal['stdio', 'http', 'sse', 'streamable-http']", transport
+        )
+        server.run(transport=transport_literal)
+
+
+@cli.group("cache")
+def cache_group() -> None:
+    """Manage the Scholar MCP local cache."""
+
+
+@cache_group.command("stats")
+@click.option(
+    "--cache-dir",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Override cache directory.",
+)
+def cache_stats(cache_dir: Path | None) -> None:
+    """Show cache statistics (row counts, file size)."""
+    from scholar_mcp._cache import ScholarCache
+    from scholar_mcp.config import load_config
+
+    async def _run() -> None:
+        config = load_config()
+        db_path = (cache_dir or config.cache_dir) / "cache.db"
+        if not db_path.exists():
+            click.echo("No cache database found.")
+            return
+        c = ScholarCache(db_path)
+        await c.open()
+        stats = await c.stats()
+        await c.close()
+        for key, val in stats.items():
+            click.echo(f"{key}: {val}")
+
+    asyncio.run(_run())
+
+
+@cache_group.command("clear")
+@click.option(
+    "--older-than",
+    "older_than",
+    type=int,
+    default=None,
+    help="Only remove entries older than this many days.",
+)
+@click.option(
+    "--cache-dir",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Override cache directory.",
+)
+def cache_clear(older_than: int | None, cache_dir: Path | None) -> None:
+    """Clear cache entries.
+
+    Without --older-than, wipes all cached data (preserves id_aliases).
+    With --older-than N, removes only entries older than N days.
+    """
+    from scholar_mcp._cache import ScholarCache
+    from scholar_mcp.config import load_config
+
+    async def _run() -> None:
+        config = load_config()
+        db_path = (cache_dir or config.cache_dir) / "cache.db"
+        if not db_path.exists():
+            click.echo("No cache database found.")
+            return
+        c = ScholarCache(db_path)
+        await c.open()
+        await c.clear(older_than_days=older_than)
+        await c.close()
+        if older_than is not None:
+            click.echo(f"Cache cleared (older than {older_than} days).")
+        else:
+            click.echo("Cache cleared.")
+
+    asyncio.run(_run())
+
+
+def main() -> None:
+    """CLI entry point."""
+    cli()
 
 
 if __name__ == "__main__":
