@@ -3,7 +3,7 @@
   "name": "io.github.pvliesdonk/scholar-mcp",
   "title": "Scholar MCP Server",
   "description": "FastMCP server template — replace this with your description",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "repository": {
     "url": "https://github.com/pvliesdonk/scholar-mcp",
     "source": "github"
@@ -12,7 +12,7 @@
     {
       "registryType": "pypi",
       "identifier": "scholar-mcp",
-      "version": "0.1.0",
+      "version": "1.0.0",
       "transport": {
         "type": "stdio"
       },
@@ -32,7 +32,7 @@
     },
     {
       "registryType": "oci",
-      "identifier": "ghcr.io/pvliesdonk/scholar-mcp:0.1.0",
+      "identifier": "ghcr.io/pvliesdonk/scholar-mcp:1.0.0",
       "transport": {
         "type": "streamable-http",
         "url": "http://localhost:{--port}/mcp"
