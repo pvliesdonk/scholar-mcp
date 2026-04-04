@@ -1537,6 +1537,62 @@ wheels = [
 ]
 
 [[package]]
+name = "pvliesdonk-scholar-mcp"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "aiosqlite" },
+    { name = "click" },
+    { name = "httpx" },
+]
+
+[package.optional-dependencies]
+all = [
+    { name = "fastmcp" },
+    { name = "uvicorn" },
+]
+dev = [
+    { name = "mypy" },
+    { name = "pip-audit" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+    { name = "respx" },
+    { name = "ruff" },
+]
+docs = [
+    { name = "mkdocs-llmstxt" },
+    { name = "mkdocs-material" },
+    { name = "mkdocstrings", extra = ["python"] },
+]
+mcp = [
+    { name = "fastmcp" },
+    { name = "uvicorn" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aiosqlite" },
+    { name = "click", specifier = ">=8.0" },
+    { name = "fastmcp", marker = "extra == 'all'", specifier = ">=3.2.0,<4" },
+    { name = "fastmcp", marker = "extra == 'mcp'", specifier = ">=3.2.0,<4" },
+    { name = "httpx" },
+    { name = "mkdocs-llmstxt", marker = "extra == 'docs'", specifier = ">=0.2" },
+    { name = "mkdocs-material", marker = "extra == 'docs'", specifier = ">=9.5" },
+    { name = "mkdocstrings", extras = ["python"], marker = "extra == 'docs'", specifier = ">=0.24" },
+    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0" },
+    { name = "pip-audit", marker = "extra == 'dev'", specifier = ">=2.7" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0" },
+    { name = "respx", marker = "extra == 'dev'", specifier = ">=0.20" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1" },
+    { name = "uvicorn", marker = "extra == 'all'" },
+    { name = "uvicorn", marker = "extra == 'mcp'" },
+]
+provides-extras = ["mcp", "all", "dev", "docs"]
+
+[[package]]
 name = "py-key-value-aio"
 version = "0.4.4"
 source = { registry = "https://pypi.org/simple" }
@@ -2134,62 +2190,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/89/7a/09ece68445ceac348df06e08bf75db72d0e8427765b96c9c0ffabc1be1d9/ruff-0.15.6-py3-none-win_amd64.whl", hash = "sha256:aee25bc84c2f1007ecb5037dff75cef00414fdf17c23f07dc13e577883dca406", size = 11787271, upload-time = "2026-03-12T23:05:20.168Z" },
     { url = "https://files.pythonhosted.org/packages/7f/d0/578c47dd68152ddddddf31cd7fc67dc30b7cdf639a86275fda821b0d9d98/ruff-0.15.6-py3-none-win_arm64.whl", hash = "sha256:c34de3dd0b0ba203be50ae70f5910b17188556630e2178fd7d79fc030eb0d837", size = 11060497, upload-time = "2026-03-12T23:05:25.968Z" },
 ]
-
-[[package]]
-name = "scholar-mcp"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "aiosqlite" },
-    { name = "click" },
-    { name = "httpx" },
-]
-
-[package.optional-dependencies]
-all = [
-    { name = "fastmcp" },
-    { name = "uvicorn" },
-]
-dev = [
-    { name = "mypy" },
-    { name = "pip-audit" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "pytest-cov" },
-    { name = "respx" },
-    { name = "ruff" },
-]
-docs = [
-    { name = "mkdocs-llmstxt" },
-    { name = "mkdocs-material" },
-    { name = "mkdocstrings", extra = ["python"] },
-]
-mcp = [
-    { name = "fastmcp" },
-    { name = "uvicorn" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "aiosqlite" },
-    { name = "click", specifier = ">=8.0" },
-    { name = "fastmcp", marker = "extra == 'all'", specifier = ">=3.2.0,<4" },
-    { name = "fastmcp", marker = "extra == 'mcp'", specifier = ">=3.2.0,<4" },
-    { name = "httpx" },
-    { name = "mkdocs-llmstxt", marker = "extra == 'docs'", specifier = ">=0.2" },
-    { name = "mkdocs-material", marker = "extra == 'docs'", specifier = ">=9.5" },
-    { name = "mkdocstrings", extras = ["python"], marker = "extra == 'docs'", specifier = ">=0.24" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0" },
-    { name = "pip-audit", marker = "extra == 'dev'", specifier = ">=2.7" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0" },
-    { name = "respx", marker = "extra == 'dev'", specifier = ">=0.20" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1" },
-    { name = "uvicorn", marker = "extra == 'all'" },
-    { name = "uvicorn", marker = "extra == 'mcp'" },
-]
-provides-extras = ["mcp", "all", "dev", "docs"]
 
 [[package]]
 name = "secretstorage"

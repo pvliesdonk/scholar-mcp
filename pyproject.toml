@@ -1,12 +1,12 @@
 [project]
-name = "scholar-mcp"
+name = "pvliesdonk-scholar-mcp"
 version = "0.1.0"
 description = "FastMCP server template — replace this with your description"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
 authors = [{ name = "Your Name" }]
-keywords = ["mcp", "scholar-mcp", "model-context-protocol", "fastmcp"]
+keywords = ["mcp", "pvliesdonk-scholar-mcp", "scholar-mcp", "model-context-protocol", "fastmcp"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Programming Language :: Python :: 3",
