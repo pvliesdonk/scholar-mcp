@@ -9,6 +9,7 @@ import httpx
 import pytest
 
 from scholar_mcp._cache import ScholarCache
+from scholar_mcp._openalex_client import OpenAlexClient
 from scholar_mcp._s2_client import S2Client
 from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp.config import ServerConfig
@@ -44,7 +45,8 @@ def test_config(tmp_path: Path) -> ServerConfig:
 async def bundle(cache: ScholarCache, test_config: ServerConfig) -> ServiceBundle:
     """Provide a ServiceBundle wired to in-memory/temp test services."""
     s2 = S2Client(api_key=None, delay=0.0)
-    openalex = httpx.AsyncClient(base_url="https://api.openalex.org")
+    openalex_http = httpx.AsyncClient(base_url="https://api.openalex.org")
+    openalex = OpenAlexClient(openalex_http)
     yield ServiceBundle(
         s2=s2,
         openalex=openalex,
@@ -52,5 +54,5 @@ async def bundle(cache: ScholarCache, test_config: ServerConfig) -> ServiceBundl
         cache=cache,
         config=test_config,
     )
-    await openalex.aclose()
+    await openalex_http.aclose()
     await s2.aclose()

@@ -13,6 +13,7 @@ from fastmcp.dependencies import CurrentContext, Depends
 from fastmcp.server.context import Context
 
 from ._cache import ScholarCache
+from ._openalex_client import OpenAlexClient
 from ._s2_client import S2Client
 from .config import ServerConfig, load_config
 
@@ -34,7 +35,7 @@ class ServiceBundle:
     """
 
     s2: S2Client
-    openalex: httpx.AsyncClient  # NOTE: refined to OpenAlexClient in Task 11
+    openalex: OpenAlexClient
     docling: httpx.AsyncClient | None  # NOTE: refined to DoclingClient in Task 12
     cache: ScholarCache
     config: ServerConfig
@@ -56,11 +57,12 @@ async def make_service_lifespan(
     config.cache_dir.mkdir(parents=True, exist_ok=True)
 
     s2 = S2Client(api_key=config.s2_api_key)
-    openalex = httpx.AsyncClient(
+    openalex_http = httpx.AsyncClient(
         base_url=_OPENALEX_BASE,
         headers={"User-Agent": "scholar-mcp/0.1 (mailto:scholar-mcp@pvliesdonk.nl)"},
         timeout=30.0,
     )
+    openalex = OpenAlexClient(openalex_http)
     docling: httpx.AsyncClient | None = None
     if config.docling_url:
         docling = httpx.AsyncClient(base_url=config.docling_url, timeout=300.0)
@@ -78,7 +80,7 @@ async def make_service_lifespan(
         yield {"bundle": bundle}
     finally:
         await s2.aclose()
-        await openalex.aclose()
+        await openalex_http.aclose()
         if docling:
             await docling.aclose()
         await cache.close()
