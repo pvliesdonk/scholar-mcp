@@ -87,7 +87,7 @@ def serve(transport: str, host: str, port: int, path: str | None) -> None:
         from scholar_mcp.mcp_server import build_event_store, create_server
     except ImportError as exc:
         logger.error(
-            "FastMCP is not installed. Install with: pip install scholar-mcp[mcp]"
+            "FastMCP is not installed. Install with: pip install pvliesdonk-scholar-mcp[mcp]"
         )
         raise SystemExit(1) from exc
 
