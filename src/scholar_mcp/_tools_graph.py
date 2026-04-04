@@ -224,6 +224,12 @@ def register_graph_tools(mcp: FastMCP) -> None:
             truncated = False
             actual_depth_reached = 0
 
+            # When client-side filters are active, fetch more candidates
+            # per node so filtering doesn't exhaust the pool before
+            # reaching qualifying papers (S2 returns newest-first).
+            has_client_filters = min_citations is not None
+            fetch_limit = 500 if has_client_filters else 50
+
             while bfs_queue:
                 paper_id, current_depth = bfs_queue.popleft()
                 if current_depth >= clamped_depth:
@@ -237,7 +243,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
                         result = await bundle.s2.get_citations(
                             paper_id,
                             fields=FIELD_SETS["compact"],
-                            limit=50,
+                            limit=fetch_limit,
                             offset=0,
                             year=year,
                             fieldsOfStudy=fos,
@@ -277,7 +283,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
                         result = await bundle.s2.get_references(
                             paper_id,
                             fields=FIELD_SETS["compact"],
-                            limit=50,
+                            limit=fetch_limit,
                             offset=0,
                             retry=retry,
                         )
