@@ -2,6 +2,35 @@
 
 <!-- version list -->
 
+## v1.2.0 (2026-04-04)
+
+### Bug Fixes
+
+- Address PR review comments for remote auth
+  ([`1130c2a`](https://github.com/pvliesdonk/scholar-mcp/commit/1130c2a0fc6c7deb715a85010aa58bde68d6fdb4))
+
+- Remove dead warning block, fix docs scope default, fix formatting
+  ([`7424634`](https://github.com/pvliesdonk/scholar-mcp/commit/7424634bea5b12a2928194f47badeb0438a08c1f))
+
+- Shorten server.json description to fit MCP registry 100-char limit
+  ([`549df65`](https://github.com/pvliesdonk/scholar-mcp/commit/549df650172f81a69e36cb6b492734de9388f9c3))
+
+### Chores
+
+- Update server.json to v1.1.0 [skip ci]
+  ([`efba0a1`](https://github.com/pvliesdonk/scholar-mcp/commit/efba0a1af4283884c3e4c72d3184a1ba01367537))
+
+### Features
+
+- Add remote auth mode (RemoteAuthProvider + JWTVerifier)
+  ([`31f41ee`](https://github.com/pvliesdonk/scholar-mcp/commit/31f41eec1ca095614cc5348f8355933190be114d))
+
+### Testing
+
+- Add tests for remote auth mode and auth mode resolution
+  ([`02b55f3`](https://github.com/pvliesdonk/scholar-mcp/commit/02b55f3afa41b282e6a60e6cae48fd8eaa33c5c8))
+
+
 ## v1.1.0 (2026-04-04)
 
 ### Bug Fixes
