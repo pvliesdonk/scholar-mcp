@@ -1,0 +1,23 @@
+services:
+  mcp-server:
+    image: ghcr.io/pvliesdonk/fastmcp-server-template:latest
+    build: .
+    # Named volume permissions are fixed automatically by the entrypoint.
+    # For bind-mount UID/GID mismatch, set PUID/PGID in your .env file:
+    #   PUID=1001
+    #   PGID=1001
+    env_file: .env
+    volumes:
+      - service-data:/data/service
+      - state-data:/data/state
+    environment:
+      FASTMCP_HOME: /data/state/fastmcp
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.mcp-server.rule=Host(`${MCP_SERVER_HOST:-mcp-server.local}`)"
+      - "traefik.http.services.mcp-server.loadbalancer.server.port=8000"
+
+volumes:
+  service-data:
+  state-data:

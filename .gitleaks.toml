@@ -1,0 +1,8 @@
+[allowlist]
+description = "Allow test/example tokens"
+regexes = [
+    # Test bearer tokens in test files and examples
+    '''my-secret-token''',
+    '''test-secret''',
+    '''your-generated-token''',
+]

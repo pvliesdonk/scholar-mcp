@@ -1,0 +1,88 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.pvliesdonk/fastmcp-server-template",
+  "title": "FastMCP Server Template",
+  "description": "FastMCP server template — replace this with your description",
+  "version": "0.1.0",
+  "repository": {
+    "url": "https://github.com/pvliesdonk/fastmcp-server-template",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "fastmcp-server-template",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "MCP_SERVER_READ_ONLY",
+          "description": "Set to 'false' to enable write tools (default: true)",
+          "required": false,
+          "default": "true"
+        },
+        {
+          "name": "MCP_SERVER_BEARER_TOKEN",
+          "description": "Static bearer token for authentication (optional)",
+          "required": false
+        }
+      ]
+    },
+    {
+      "registryType": "oci",
+      "identifier": "ghcr.io/pvliesdonk/fastmcp-server-template:0.1.0",
+      "transport": {
+        "type": "streamable-http",
+        "url": "http://localhost:{--port}/mcp"
+      },
+      "packageArguments": [
+        {
+          "type": "named",
+          "name": "--port",
+          "default": 8000,
+          "description": "Port for the HTTP transport"
+        }
+      ],
+      "environmentVariables": [
+        {
+          "name": "MCP_SERVER_READ_ONLY",
+          "description": "Set to 'false' to enable write tools (default: true)",
+          "required": false,
+          "default": "true"
+        },
+        {
+          "name": "MCP_SERVER_BEARER_TOKEN",
+          "description": "Static bearer token for authentication (optional)",
+          "required": false
+        },
+        {
+          "name": "MCP_SERVER_BASE_URL",
+          "description": "Public base URL of this server, required for OIDC (e.g. https://mcp.example.com)",
+          "required": false
+        },
+        {
+          "name": "MCP_SERVER_OIDC_CONFIG_URL",
+          "description": "OIDC discovery endpoint URL (e.g. https://auth.example.com/.well-known/openid-configuration)",
+          "required": false
+        },
+        {
+          "name": "MCP_SERVER_OIDC_CLIENT_ID",
+          "description": "OIDC client ID",
+          "required": false
+        },
+        {
+          "name": "MCP_SERVER_OIDC_CLIENT_SECRET",
+          "description": "OIDC client secret",
+          "required": false
+        },
+        {
+          "name": "MCP_SERVER_OIDC_JWT_SIGNING_KEY",
+          "description": "JWT signing key — required on Linux/Docker to survive restarts (generate with: openssl rand -hex 32)",
+          "required": false
+        }
+      ]
+    }
+  ]
+}
