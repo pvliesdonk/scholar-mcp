@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.2.2 (2026-04-04)
+
+### Bug Fixes
+
+- Remove broken citingPaper/citedPaper field prefix from S2 client
+  ([`d210cac`](https://github.com/pvliesdonk/scholar-mcp/commit/d210cacca02e83fae502cbd0db8205ed9d65ac6e))
+
+### Chores
+
+- Update server.json and uv.lock to v1.2.1 [skip ci]
+  ([`23e28f2`](https://github.com/pvliesdonk/scholar-mcp/commit/23e28f22de10ee17af42a1414054f19230866615))
+
+
 ## v1.2.1 (2026-04-04)
 
 ### Bug Fixes
