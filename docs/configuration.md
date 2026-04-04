@@ -41,17 +41,33 @@ Authentication is optional. When no auth variables are set, the server accepts u
 !!! warning
     Authentication only applies to the HTTP transport. stdio connections (e.g. Claude Desktop) are always unauthenticated since the client spawns the server process directly.
 
+### Auth modes
+
+The server supports two OIDC modes, auto-detected from environment variables:
+
+| Mode | When selected | How it works |
+|---|---|---|
+| **remote** | `BASE_URL` + `OIDC_CONFIG_URL` set (no client credentials) | Validates JWTs locally via JWKS. The external auth provider (e.g. Authelia behind a reverse proxy) handles the full OAuth flow. |
+| **oidc-proxy** | All four OIDC vars set (`BASE_URL`, `OIDC_CONFIG_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`) | The MCP server acts as an OAuth proxy, handling the OIDC authorization flow itself. |
+
+Auto-detection prefers `oidc-proxy` when all four vars are present. Override with `SCHOLAR_MCP_AUTH_MODE=remote` or `SCHOLAR_MCP_AUTH_MODE=oidc-proxy`.
+
+When both bearer and OIDC auth are configured, the server uses multi-auth — either mechanism is accepted.
+
+### Variables
+
 | Variable | Default | Description |
 |---|---|---|
 | `SCHOLAR_MCP_BEARER_TOKEN` | -- | Static bearer token. When set, HTTP clients must send `Authorization: Bearer <token>`. |
-| `SCHOLAR_MCP_BASE_URL` | -- | Public base URL of this server, required for OIDC callback routing (e.g. `https://mcp.example.com`). |
+| `SCHOLAR_MCP_AUTH_MODE` | *(auto)* | Force auth mode: `remote` or `oidc-proxy`. When unset, auto-detected from which OIDC env vars are present. |
+| `SCHOLAR_MCP_BASE_URL` | -- | Public base URL of this server (e.g. `https://mcp.example.com`). Required for both OIDC modes. |
 | `SCHOLAR_MCP_OIDC_CONFIG_URL` | -- | OIDC discovery endpoint URL (e.g. `https://auth.example.com/.well-known/openid-configuration`). |
-| `SCHOLAR_MCP_OIDC_CLIENT_ID` | -- | OIDC client ID registered with your identity provider. |
-| `SCHOLAR_MCP_OIDC_CLIENT_SECRET` | -- | OIDC client secret. |
-| `SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY` | *(ephemeral)* | JWT signing key for OIDC sessions. **Required on Linux/Docker** -- the ephemeral default invalidates all sessions on restart. Generate with: `openssl rand -hex 32`. |
-| `SCHOLAR_MCP_OIDC_AUDIENCE` | -- | Expected JWT audience claim. When set, the token's `aud` must match. Useful for multi-tenant deployments. |
-| `SCHOLAR_MCP_OIDC_REQUIRED_SCOPES` | `openid` | Comma-separated required scopes (e.g. `openid,profile`). Token must include all listed scopes. |
-| `SCHOLAR_MCP_OIDC_VERIFY_ACCESS_TOKEN` | `false` | Set `true` to verify the upstream `access_token` as a JWT instead of the `id_token`. Use when your provider issues JWT access tokens and you need audience-claim validation on that token. |
+| `SCHOLAR_MCP_OIDC_CLIENT_ID` | -- | OIDC client ID registered with your identity provider. Only needed for `oidc-proxy` mode. |
+| `SCHOLAR_MCP_OIDC_CLIENT_SECRET` | -- | OIDC client secret. Only needed for `oidc-proxy` mode. |
+| `SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY` | *(ephemeral)* | JWT signing key for OIDC proxy sessions. **Required on Linux/Docker** for `oidc-proxy` mode -- the ephemeral default invalidates all sessions on restart. Generate with: `openssl rand -hex 32`. |
+| `SCHOLAR_MCP_OIDC_AUDIENCE` | -- | Expected JWT audience claim. When set, the token's `aud` must match. Used by both modes. |
+| `SCHOLAR_MCP_OIDC_REQUIRED_SCOPES` | `openid` | Comma-separated required scopes (e.g. `openid,profile`). Used by both modes. |
+| `SCHOLAR_MCP_OIDC_VERIFY_ACCESS_TOKEN` | `false` | (`oidc-proxy` only) Set `true` to verify the upstream `access_token` as a JWT instead of the `id_token`. Use when your provider issues JWT access tokens. |
 
 See [Authentication guide](guides/authentication.md) for setup instructions and [OIDC deployment](deployment/oidc.md) for provider-specific configuration.
 

@@ -56,6 +56,137 @@ def _build_default_instructions(*, read_only: bool) -> str:
     )
 
 
+def _resolve_auth_mode() -> str | None:
+    """Determine which OIDC auth mode to use.
+
+    Reads ``SCHOLAR_MCP_AUTH_MODE`` for an explicit override.
+    When not set, auto-detects based on which env vars are present:
+
+    - All four OIDC vars (BASE_URL, CONFIG_URL, CLIENT_ID, CLIENT_SECRET)
+      → ``"oidc-proxy"``
+    - Only BASE_URL + CONFIG_URL → ``"remote"``
+    - Otherwise → ``None`` (no OIDC)
+
+    Returns:
+        ``"remote"``, ``"oidc-proxy"``, or ``None``.
+    """
+    explicit = os.environ.get(f"{_ENV_PREFIX}_AUTH_MODE", "").strip().lower()
+    if explicit in ("remote", "oidc-proxy"):
+        logger.info("OIDC auth mode: %s (explicit via AUTH_MODE)", explicit)
+        return explicit
+    if explicit:
+        logger.warning(
+            "Unknown AUTH_MODE %r — ignoring, falling back to auto-detection",
+            explicit,
+        )
+
+    base_url = os.environ.get(f"{_ENV_PREFIX}_BASE_URL", "").strip()
+    config_url = os.environ.get(f"{_ENV_PREFIX}_OIDC_CONFIG_URL", "").strip()
+    client_id = os.environ.get(f"{_ENV_PREFIX}_OIDC_CLIENT_ID", "").strip()
+    client_secret = os.environ.get(f"{_ENV_PREFIX}_OIDC_CLIENT_SECRET", "").strip()
+
+    if all([base_url, config_url, client_id, client_secret]):
+        logger.info(
+            "OIDC auth mode: oidc-proxy (auto-detected — all four OIDC vars set)"
+        )
+        return "oidc-proxy"
+
+    if base_url and config_url:
+        logger.info(
+            "OIDC auth mode: remote (auto-detected — BASE_URL + OIDC_CONFIG_URL set)"
+        )
+        return "remote"
+
+    return None
+
+
+def _build_remote_auth() -> Any:
+    """Build a RemoteAuthProvider from OIDC discovery.
+
+    Fetches the OIDC discovery document at startup to extract ``jwks_uri``
+    and ``issuer``, then constructs a ``JWTVerifier`` for local token
+    validation via JWKS.  No client credentials are needed — tokens are
+    validated locally by the MCP server while the external auth provider
+    (e.g. Authelia behind a reverse proxy) handles the OAuth flow.
+
+    Requires ``BASE_URL`` and ``OIDC_CONFIG_URL`` env vars.
+
+    Returns:
+        A configured ``RemoteAuthProvider``.
+
+    Raises:
+        RuntimeError: When required env vars are missing, httpx is not
+            installed, or OIDC discovery fails.
+    """
+    base_url = os.environ.get(f"{_ENV_PREFIX}_BASE_URL", "").strip()
+    config_url = os.environ.get(f"{_ENV_PREFIX}_OIDC_CONFIG_URL", "").strip()
+
+    if not base_url or not config_url:
+        raise RuntimeError("Remote auth requires BASE_URL and OIDC_CONFIG_URL env vars")
+
+    audience = os.environ.get(f"{_ENV_PREFIX}_OIDC_AUDIENCE", "").strip() or None
+    raw_scopes = os.environ.get(f"{_ENV_PREFIX}_OIDC_REQUIRED_SCOPES", "openid").strip()
+    required_scopes = [s.strip() for s in raw_scopes.split(",") if s.strip()] or [
+        "openid"
+    ]
+
+    try:
+        import httpx
+    except ImportError as exc:
+        raise RuntimeError(
+            "Remote auth requires 'httpx'. "
+            "Install it with: pip install 'pvliesdonk-scholar-mcp[mcp]' "
+            "or pip install httpx"
+        ) from exc
+
+    try:
+        resp = httpx.get(config_url, timeout=10)
+        resp.raise_for_status()
+        discovery = resp.json()
+    except Exception as exc:
+        raise RuntimeError(
+            f"Remote auth: failed to fetch OIDC discovery from {config_url}"
+        ) from exc
+
+    jwks_uri = discovery.get("jwks_uri")
+    issuer = discovery.get("issuer")
+    if not jwks_uri or not issuer:
+        raise RuntimeError(
+            f"Remote auth: OIDC discovery missing jwks_uri or issuer "
+            f"(got jwks_uri={jwks_uri}, issuer={issuer})"
+        )
+
+    logger.debug(
+        "Remote auth config:\n"
+        "  config_url      = %s\n"
+        "  jwks_uri        = %s\n"
+        "  issuer          = %s\n"
+        "  base_url        = %s\n"
+        "  audience        = %s\n"
+        "  required_scopes = %s",
+        config_url,
+        jwks_uri,
+        issuer,
+        base_url,
+        audience or "(not set)",
+        required_scopes or "(not set)",
+    )
+
+    from fastmcp.server.auth import JWTVerifier, RemoteAuthProvider
+
+    verifier = JWTVerifier(
+        jwks_uri=jwks_uri,
+        issuer=issuer,
+        audience=audience,
+        required_scopes=required_scopes,
+    )
+    return RemoteAuthProvider(
+        token_verifier=verifier,
+        authorization_servers=[issuer],
+        base_url=base_url,
+    )
+
+
 def _build_bearer_auth() -> Any:
     """Build a StaticTokenVerifier from ``SCHOLAR_MCP_BEARER_TOKEN``.
 
@@ -246,22 +377,37 @@ def create_server(*, transport: str = "stdio") -> FastMCP:
     instructions = os.environ.get(f"{_ENV_PREFIX}_INSTRUCTIONS", default_instructions)
 
     bearer_auth = _build_bearer_auth()
-    oidc_auth = _build_oidc_auth()
+
+    # Auth has no effect on stdio — skip OIDC setup (avoids blocking
+    # network calls and unnecessary errors in local/stdio environments).
+    oidc_mode = None
+    oidc_auth = None
+    if transport != "stdio":
+        oidc_mode = _resolve_auth_mode()
+        if oidc_mode == "remote":
+            oidc_auth = _build_remote_auth()
+        elif oidc_mode == "oidc-proxy":
+            oidc_auth = _build_oidc_auth()
 
     if bearer_auth and oidc_auth:
         from fastmcp.server.auth import MultiAuth
 
-        auth = MultiAuth(server=oidc_auth, verifiers=[bearer_auth])
-        auth_mode = "multi"
-        logger.info("Multi-auth enabled: bearer token + OIDC (either accepted)")
+        # Override required_scopes to empty — OIDC's required_scopes
+        # (e.g. ["openid"]) would otherwise propagate to the HTTP
+        # middleware and reject bearer tokens that lack "openid".
+        auth = MultiAuth(server=oidc_auth, verifiers=[bearer_auth], required_scopes=[])
+        auth_mode = f"multi({oidc_mode}+bearer)"
+        logger.info(
+            "Multi-auth enabled: bearer token + OIDC %s (either accepted)", oidc_mode
+        )
     elif bearer_auth:
         auth = bearer_auth
         auth_mode = "bearer"
         logger.info("Bearer token auth enabled")
     elif oidc_auth:
         auth = oidc_auth
-        auth_mode = "oidc"
-        logger.info("OIDC auth enabled")
+        auth_mode = oidc_mode or "oidc"
+        logger.info("OIDC auth enabled (mode: %s)", oidc_mode)
     else:
         auth = None
         auth_mode = "none"
