@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Annotated, Literal
+from typing import Literal
 
 import httpx
 from fastmcp import FastMCP
@@ -55,11 +55,11 @@ def register_search_tools(mcp: FastMCP) -> None:
             JSON string with ``data`` (list of papers) and ``total``.
         """
         year: str | None = None
-        if year_start and year_end:
+        if year_start is not None and year_end is not None:
             year = f"{year_start}-{year_end}"
-        elif year_start:
+        elif year_start is not None:
             year = f"{year_start}-"
-        elif year_end:
+        elif year_end is not None:
             year = f"-{year_end}"
 
         s2_sort = {
@@ -109,12 +109,11 @@ def register_search_tools(mcp: FastMCP) -> None:
             JSON string with full paper metadata, or
             ``{"error": "not_found", "identifier": "..."}`` if not found.
         """
-        cached_id = await bundle.cache.get_alias(identifier)
-        if cached_id:
-            data = await bundle.cache.get_paper(cached_id)
-            if data:
-                logger.debug("cache_hit identifier=%s", identifier)
-                return json.dumps(data)
+        cached_id = await bundle.cache.get_alias(identifier) or identifier
+        data = await bundle.cache.get_paper(cached_id)
+        if data:
+            logger.debug("cache_hit identifier=%s", identifier)
+            return json.dumps(data)
 
         try:
             data = await bundle.s2.get_paper(identifier)
@@ -173,7 +172,8 @@ def register_search_tools(mcp: FastMCP) -> None:
                 return json.dumps(
                     {"error": "upstream_error", "status": exc.response.status_code}
                 )
-            await bundle.cache.set_author(identifier, data)
+            if offset == 0:
+                await bundle.cache.set_author(identifier, data)
             return json.dumps(data)
 
         # Name search — return candidates for disambiguation
