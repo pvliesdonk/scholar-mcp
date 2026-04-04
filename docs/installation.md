@@ -24,8 +24,7 @@ The `[mcp]` extra installs FastMCP and uvicorn. Without it, you get only the lib
 ## With Docker
 
 ```bash
-docker run -e SCHOLAR_MCP_S2_API_KEY=your-key \
-           -v scholar-mcp-data:/data/scholar-mcp \
+docker run -v scholar-mcp-data:/data/scholar-mcp \
            ghcr.io/pvliesdonk/scholar-mcp:latest
 ```
 

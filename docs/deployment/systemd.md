@@ -39,11 +39,12 @@ sudo chmod 600 /etc/scholar-mcp/env
 sudo nano /etc/scholar-mcp/env
 ```
 
-At minimum, set your Semantic Scholar API key:
+Set the cache directory and (optionally) your Semantic Scholar API key:
 
 ```bash
-SCHOLAR_MCP_S2_API_KEY=your-key-here
 SCHOLAR_MCP_CACHE_DIR=/var/lib/scholar-mcp
+# Optional but recommended — without a key, requests are limited to ~1 req/s
+SCHOLAR_MCP_S2_API_KEY=your-key-here
 ```
 
 See [Configuration](../configuration.md) for all available variables.

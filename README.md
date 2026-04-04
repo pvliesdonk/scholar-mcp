@@ -40,8 +40,7 @@ scholar-mcp serve
 ### With Docker
 
 ```bash
-docker run -e SCHOLAR_MCP_S2_API_KEY=your-key \
-           -v scholar-mcp-data:/data/scholar-mcp \
+docker run -v scholar-mcp-data:/data/scholar-mcp \
            ghcr.io/pvliesdonk/scholar-mcp:latest
 ```
 
@@ -64,8 +63,10 @@ sudo rpm -i scholar-mcp-*.rpm
 ### stdio transport (Claude Desktop / MCP clients)
 
 ```bash
-SCHOLAR_MCP_S2_API_KEY=your-key uvx --from pvliesdonk-scholar-mcp scholar-mcp serve
+uvx --from pvliesdonk-scholar-mcp scholar-mcp serve
 ```
+
+> **API key optional but recommended:** The server works without a Semantic Scholar API key, but unauthenticated requests are limited to ~1 req/s and will hit 429 throttles quickly during multi-step operations like citation graph traversal. [Request a free key](https://www.semanticscholar.org/product/api#api-key-form) to get ~10 req/s.
 
 Claude Desktop configuration (`claude_desktop_config.json`):
 

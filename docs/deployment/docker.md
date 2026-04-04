@@ -3,12 +3,11 @@
 ## Quick start
 
 ```bash
-docker run -e SCHOLAR_MCP_S2_API_KEY=your-key \
-           -v scholar-mcp-data:/data/scholar-mcp \
+docker run -v scholar-mcp-data:/data/scholar-mcp \
            ghcr.io/pvliesdonk/scholar-mcp:latest
 ```
 
-The server listens on port 8000 with HTTP transport by default.
+The server listens on port 8000 with HTTP transport by default. Add `-e SCHOLAR_MCP_S2_API_KEY=your-key` for higher rate limits (see below).
 
 ## Docker Compose
 
@@ -91,7 +90,7 @@ See [Configuration](../configuration.md) for the full reference. Key variables f
 
 | Variable | Default | Description |
 |---|---|---|
-| `SCHOLAR_MCP_S2_API_KEY` | -- | Semantic Scholar API key |
+| `SCHOLAR_MCP_S2_API_KEY` | -- | Semantic Scholar API key (optional; ~1 req/s without, ~10 req/s with) |
 | `SCHOLAR_MCP_CACHE_DIR` | `/data/scholar-mcp` | Cache and PDF storage directory |
 | `SCHOLAR_MCP_READ_ONLY` | `true` | Set `false` to enable PDF tools |
 | `SCHOLAR_MCP_DOCLING_URL` | -- | docling-serve URL (e.g. `http://docling-serve:5001`) |
