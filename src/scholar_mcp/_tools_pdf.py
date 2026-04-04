@@ -166,13 +166,12 @@ def register_pdf_tools(mcp: FastMCP) -> None:
         """Convert a local PDF to Markdown using docling-serve.
 
         Works on any local PDF, including manually placed paywalled papers.
-        Requires ``SCHOLAR_MCP_DOCLING_URL`` to be configured.
+        Returns an error if the server does not have PDF conversion configured.
 
         Args:
             file_path: Absolute path to the local PDF file.
-            use_vlm: Use VLM enrichment for formulas and figures (requires
-                ``SCHOLAR_MCP_VLM_API_URL`` and ``SCHOLAR_MCP_VLM_API_KEY``).
-                Falls back to standard path if VLM is not configured.
+            use_vlm: Use VLM enrichment for formulas and figures.
+                Falls back to standard conversion if VLM is not available.
 
         Returns:
             JSON ``{"markdown": "...", "path": "...", "vlm_used": bool}``.
