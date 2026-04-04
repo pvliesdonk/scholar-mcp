@@ -161,9 +161,10 @@ def register_search_tools(mcp: FastMCP) -> None:
         is_id = identifier.isdigit()
 
         if is_id:
-            cached = await bundle.cache.get_author(identifier)
-            if cached:
-                return json.dumps(cached)
+            if offset == 0:
+                cached = await bundle.cache.get_author(identifier)
+                if cached:
+                    return json.dumps(cached)
             try:
                 data = await bundle.s2.get_author(identifier, limit=limit, offset=offset)
             except httpx.HTTPStatusError as exc:
