@@ -242,26 +242,35 @@ def register_graph_tools(mcp: FastMCP) -> None:
                             offset=0,
                             year=year,
                             fieldsOfStudy=fos,
-                            minCitationCount=min_citations,
+                            minCitationCount=None,
                             retry=retry,
                         )
                         for item in result.get("data", []):
                             p = item.get("citingPaper", {})
-                            if pid := p.get("paperId"):
-                                node = {
-                                    "id": pid,
-                                    "title": p.get("title"),
-                                    "year": p.get("year"),
-                                    "citationCount": p.get("citationCount"),
+                            pid = p.get("paperId")
+                            if not pid:
+                                continue
+                            # S2 citations endpoint does not support
+                            # minCitationCount — apply client-side
+                            p_cites = p.get("citationCount")
+                            if min_citations is not None and (
+                                p_cites is None or p_cites < min_citations
+                            ):
+                                continue
+                            node = {
+                                "id": pid,
+                                "title": p.get("title"),
+                                "year": p.get("year"),
+                                "citationCount": p_cites,
+                            }
+                            new_nodes.append((pid, node))
+                            edges.append(
+                                {
+                                    "source": pid,
+                                    "target": paper_id,
+                                    "direction": "cites",
                                 }
-                                new_nodes.append((pid, node))
-                                edges.append(
-                                    {
-                                        "source": pid,
-                                        "target": paper_id,
-                                        "direction": "cites",
-                                    }
-                                )
+                            )
                     except httpx.HTTPError:
                         pass
 
