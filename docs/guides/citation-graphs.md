@@ -28,7 +28,7 @@ get_citations(
     "DOI:10.48550/arXiv.2005.11401",
     year_start=2023,
     min_citations=10,
-    fields_of_study="Computer Science"
+    fields_of_study=["Computer Science"]
 )
 ```
 
@@ -102,7 +102,7 @@ The response contains:
 
 ```json
 {
-  "nodes": [{"paperId": "...", "title": "...", ...}],
+  "nodes": [{"id": "...", "title": "...", "year": 2024, "citationCount": 42}],
   "edges": [{"source": "id1", "target": "id2"}],
   "stats": {
     "total_nodes": 42,

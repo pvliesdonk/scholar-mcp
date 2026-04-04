@@ -11,15 +11,15 @@ Full-text search across the Semantic Scholar corpus.
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `query` | string | *(required)* | Search query string |
-| `fields` | string | `"standard"` | Field set: `compact`, `standard`, or `full` |
+| `fields` | string | `"compact"` | Field set: `compact`, `standard`, or `full` |
 | `limit` | int | `10` | Results per page (max 100) |
 | `offset` | int | `0` | Pagination offset |
 | `year_start` | int | -- | Filter: earliest publication year |
 | `year_end` | int | -- | Filter: latest publication year |
-| `fields_of_study` | string | -- | Comma-separated S2 field-of-study names (e.g. `"Computer Science,Physics"`) |
+| `fields_of_study` | list[string] | -- | S2 field-of-study names (e.g. `["Computer Science", "Physics"]`) |
 | `venue` | string | -- | Filter by venue name |
 | `min_citations` | int | -- | Minimum citation count |
-| `sort` | string | -- | Sort order: `relevance`, `citationCount`, or `year` |
+| `sort` | string | `"relevance"` | Sort order: `relevance`, `citations`, or `year` |
 
 **Returns:** `{"data": [...], "total": N}` where each item contains the requested field set.
 
@@ -71,12 +71,12 @@ Forward citations -- papers that cite the given paper.
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `identifier` | string | *(required)* | Paper ID (DOI, S2 ID, etc.) |
-| `fields` | string | `"standard"` | Field set for citing papers |
+| `fields` | string | `"compact"` | Field set for citing papers |
 | `limit` | int | `20` | Max results (max 1000) |
 | `offset` | int | `0` | Pagination offset |
 | `year_start` | int | -- | Filter: earliest year |
 | `year_end` | int | -- | Filter: latest year |
-| `fields_of_study` | string | -- | Comma-separated field-of-study filter |
+| `fields_of_study` | list[string] | -- | Field-of-study filter |
 | `min_citations` | int | -- | Minimum citation count filter |
 
 **Returns:** `{"data": [{"citingPaper": {...}}, ...]}`.
@@ -90,7 +90,7 @@ Backward references -- papers cited by the given paper.
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `identifier` | string | *(required)* | Paper ID (DOI, S2 ID, etc.) |
-| `fields` | string | `"standard"` | Field set for cited papers |
+| `fields` | string | `"compact"` | Field set for cited papers |
 | `limit` | int | `50` | Max results (max 1000) |
 | `offset` | int | `0` | Pagination offset |
 
@@ -110,14 +110,14 @@ BFS traversal from one or more seed papers, collecting nodes and edges.
 | `max_nodes` | int | `100` | Hard cap on collected nodes |
 | `year_start` | int | -- | Filter: earliest year |
 | `year_end` | int | -- | Filter: latest year |
-| `fields_of_study` | string | -- | Comma-separated field-of-study filter |
+| `fields_of_study` | list[string] | -- | Field-of-study filter |
 | `min_citations` | int | -- | Minimum citation count filter |
 
 **Returns:**
 
 ```json
 {
-  "nodes": [{"paperId": "...", "title": "...", ...}, ...],
+  "nodes": [{"id": "...", "title": "...", "year": 2024, "citationCount": 42}, ...],
   "edges": [{"source": "id1", "target": "id2"}, ...],
   "stats": {
     "total_nodes": 42,
@@ -144,7 +144,7 @@ Find the shortest citation path between two papers.
 | `source_id` | string | *(required)* | Starting paper ID |
 | `target_id` | string | *(required)* | Target paper ID |
 | `max_depth` | int | `4` | Maximum BFS depth |
-| `direction` | string | `"citations"` | `citations` or `references` |
+| `direction` | string | `"both"` | `citations`, `references`, or `both` |
 
 **Returns:**
 
@@ -207,7 +207,7 @@ Augment Semantic Scholar metadata with OpenAlex data.
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `identifier` | string | *(required)* | S2 paper ID or `DOI:xxx` |
-| `fields` | string | `"affiliations,funders,oa_status,concepts"` | Comma-separated fields to retrieve |
+| `fields` | list[string] | *(required)* | Fields to retrieve: `affiliations`, `funders`, `oa_status`, `concepts` |
 
 **Available fields:**
 
@@ -215,8 +215,7 @@ Augment Semantic Scholar metadata with OpenAlex data.
 |---|---|
 | `affiliations` | Institution display names from author affiliations |
 | `funders` | Funding organization names |
-| `oa_status` | Open access status string (e.g. `gold`, `green`, `hybrid`) |
-| `is_oa` | Boolean open access flag |
+| `oa_status` | Open access status string (e.g. `gold`, `green`, `hybrid`); also includes `is_oa` boolean |
 | `concepts` | List of `{"name": "...", "score": 0.95}` topic concepts |
 
 Results are cached for 30 days.
