@@ -9,7 +9,7 @@ from typing import AsyncGenerator
 
 import httpx
 from fastmcp import FastMCP
-from fastmcp.dependencies import Depends
+from fastmcp.dependencies import CurrentContext, Depends
 from fastmcp.server.context import Context
 
 from ._cache import ScholarCache
@@ -84,7 +84,7 @@ async def make_service_lifespan(
         await cache.close()
 
 
-def get_bundle(ctx: Context = Depends(Context)) -> ServiceBundle:
+def get_bundle(ctx: Context = CurrentContext()) -> ServiceBundle:
     """FastMCP dependency: extract ServiceBundle from lifespan context.
 
     Args:
@@ -93,4 +93,4 @@ def get_bundle(ctx: Context = Depends(Context)) -> ServiceBundle:
     Returns:
         The :class:`ServiceBundle` created during lifespan.
     """
-    return ctx.request_context.lifespan_context["bundle"]  # type: ignore[return-value]
+    return ctx.lifespan_context["bundle"]  # type: ignore[return-value]
