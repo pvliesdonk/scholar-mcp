@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from contextlib import asynccontextmanager
 
@@ -192,3 +193,172 @@ async def test_search_papers_upstream_error(
     data = json.loads(result.content[0].text)
     assert data["error"] == "upstream_error"
     assert data["status"] == 500
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_search_papers_404_returns_not_found(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """search_papers returns not_found on 404."""
+    respx_mock.get("/paper/search").mock(return_value=httpx.Response(404))
+    async with Client(mcp) as client:
+        result = await client.call_tool("search_papers", {"query": "nonexistent"})
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "not_found"
+    assert data["identifier"] == "nonexistent"
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_paper_upstream_error_non_404(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """get_paper returns upstream_error on non-404 HTTP error."""
+    respx_mock.get("/paper/p1").mock(
+        return_value=httpx.Response(500, text="Server Error")
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool("get_paper", {"identifier": "p1"})
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "upstream_error"
+    assert data["status"] == 500
+    assert "Server Error" in data["detail"]
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_author_by_id_404(respx_mock: respx.MockRouter, mcp: FastMCP) -> None:
+    """get_author returns not_found when author ID is not found (404)."""
+    respx_mock.get("/author/99999").mock(return_value=httpx.Response(404))
+    async with Client(mcp) as client:
+        result = await client.call_tool("get_author", {"identifier": "99999"})
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "not_found"
+    assert data["identifier"] == "99999"
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_author_by_id_upstream_error(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """get_author returns upstream_error on non-404 for author by ID."""
+    respx_mock.get("/author/11111").mock(return_value=httpx.Response(503))
+    async with Client(mcp) as client:
+        result = await client.call_tool("get_author", {"identifier": "11111"})
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "upstream_error"
+    assert data["status"] == 503
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_author_by_id_queued_on_429(
+    respx_mock: respx.MockRouter, bundle: ServiceBundle
+) -> None:
+    """get_author by ID returns queued on 429, background task completes."""
+    call_count = 0
+
+    def _side_effect(request: httpx.Request) -> httpx.Response:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return httpx.Response(429)
+        return httpx.Response(
+            200,
+            json={
+                "authorId": "12345",
+                "name": "Ada Lovelace",
+                "hIndex": 42,
+                "paperCount": 100,
+                "papers": [],
+            },
+        )
+
+    respx_mock.get("/author/12345").mock(side_effect=_side_effect)
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_search_tools(app)
+    from scholar_mcp._tools_tasks import register_task_tools
+
+    register_task_tools(app)
+
+    async with Client(app) as client:
+        result = await client.call_tool("get_author", {"identifier": "12345"})
+        data = json.loads(result.content[0].text)
+        assert data["queued"] is True
+        assert data["tool"] == "get_author"
+
+        # Poll for background result
+        for _ in range(40):
+            poll = await client.call_tool(
+                "get_task_result", {"task_id": data["task_id"]}
+            )
+            poll_data = json.loads(poll.content[0].text)
+            if poll_data["status"] in ("completed", "failed"):
+                break
+            await asyncio.sleep(0.05)
+        assert poll_data["status"] == "completed"
+        inner = json.loads(poll_data["result"])
+        assert inner["name"] == "Ada Lovelace"
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_author_name_search_upstream_error(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """get_author name search returns upstream_error on HTTP error."""
+    respx_mock.get("/author/search").mock(return_value=httpx.Response(502))
+    async with Client(mcp) as client:
+        result = await client.call_tool("get_author", {"identifier": "John Smith"})
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "upstream_error"
+    assert data["status"] == 502
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_author_name_search_queued_on_429(
+    respx_mock: respx.MockRouter, bundle: ServiceBundle
+) -> None:
+    """get_author name search returns queued on 429, background completes."""
+    call_count = 0
+
+    def _side_effect(request: httpx.Request) -> httpx.Response:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return httpx.Response(429)
+        return httpx.Response(
+            200,
+            json={"data": [{"authorId": "a1", "name": "John Smith", "hIndex": 10}]},
+        )
+
+    respx_mock.get("/author/search").mock(side_effect=_side_effect)
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_search_tools(app)
+    from scholar_mcp._tools_tasks import register_task_tools
+
+    register_task_tools(app)
+
+    async with Client(app) as client:
+        result = await client.call_tool("get_author", {"identifier": "John Smith"})
+        data = json.loads(result.content[0].text)
+        assert data["queued"] is True
+        assert data["tool"] == "get_author"
+
+        for _ in range(40):
+            poll = await client.call_tool(
+                "get_task_result", {"task_id": data["task_id"]}
+            )
+            poll_data = json.loads(poll.content[0].text)
+            if poll_data["status"] in ("completed", "failed"):
+                break
+            await asyncio.sleep(0.05)
+        assert poll_data["status"] == "completed"
+        inner = json.loads(poll_data["result"])
+        assert inner["candidates"][0]["name"] == "John Smith"

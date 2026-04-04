@@ -197,3 +197,147 @@ async def test_convert_cached_markdown(
     data = json.loads(result.content[0].text)
     assert "queued" not in data
     assert "# Cached" in data["markdown"]
+
+
+@pytest.mark.respx(assert_all_called=False)
+async def test_fetch_paper_pdf_download_succeeds(
+    bundle: ServiceBundle,
+) -> None:
+    """fetch_paper_pdf downloads PDF when not cached; background task completes."""
+    pdf_url = "https://example.com/paper.pdf"
+    paper_json = {
+        "paperId": "dl1",
+        "openAccessPdf": {"url": pdf_url},
+        "title": "Download Test",
+    }
+
+    # Mock both S2 metadata call and the external PDF download
+    with respx.mock(assert_all_called=False) as router:
+        router.get(f"{S2_BASE}/paper/dl1").mock(
+            return_value=httpx.Response(200, json=paper_json)
+        )
+        router.get(pdf_url).mock(
+            return_value=httpx.Response(200, content=b"%PDF-1.4 fake content")
+        )
+
+        @asynccontextmanager
+        async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+            yield {"bundle": bundle}
+
+        app = FastMCP("test", lifespan=lifespan)
+        register_pdf_tools(app)
+        register_task_tools(app)
+
+        async with Client(app) as client:
+            result = await client.call_tool("fetch_paper_pdf", {"identifier": "dl1"})
+            queued = json.loads(result.content[0].text)
+            assert queued["queued"] is True
+
+            task_data = await _poll_task(client, queued["task_id"])
+
+    assert task_data["status"] == "completed"
+    inner = json.loads(task_data["result"])
+    assert "path" in inner
+    pdf_path = Path(inner["path"])
+    assert pdf_path.exists()
+    assert pdf_path.read_bytes() == b"%PDF-1.4 fake content"
+
+
+@pytest.mark.respx(assert_all_called=False)
+async def test_fetch_paper_pdf_rate_limited_then_succeeds(
+    bundle: ServiceBundle,
+) -> None:
+    """fetch_paper_pdf queues full operation on 429; background retry succeeds."""
+    pdf_url = "https://example.com/rl_paper.pdf"
+    paper_json = {
+        "paperId": "rl1",
+        "openAccessPdf": {"url": pdf_url},
+        "title": "Rate Limited Paper",
+    }
+
+    call_count = 0
+
+    def s2_side_effect(request: httpx.Request) -> httpx.Response:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return httpx.Response(429)
+        return httpx.Response(200, json=paper_json)
+
+    with respx.mock(assert_all_called=False) as router:
+        router.get(f"{S2_BASE}/paper/rl1").mock(side_effect=s2_side_effect)
+        router.get(pdf_url).mock(
+            return_value=httpx.Response(200, content=b"%PDF rate limited ok")
+        )
+
+        @asynccontextmanager
+        async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+            yield {"bundle": bundle}
+
+        app = FastMCP("test", lifespan=lifespan)
+        register_pdf_tools(app)
+        register_task_tools(app)
+
+        async with Client(app) as client:
+            result = await client.call_tool("fetch_paper_pdf", {"identifier": "rl1"})
+            queued = json.loads(result.content[0].text)
+            assert queued["queued"] is True
+            assert queued["tool"] == "fetch_paper_pdf"
+
+            task_data = await _poll_task(client, queued["task_id"])
+
+    assert task_data["status"] == "completed"
+    inner = json.loads(task_data["result"])
+    assert "path" in inner
+    pdf_path = Path(inner["path"])
+    assert pdf_path.exists()
+    assert pdf_path.read_bytes() == b"%PDF rate limited ok"
+
+
+@pytest.mark.respx(assert_all_called=False)
+async def test_fetch_and_convert_success(
+    bundle_with_docling: ServiceBundle,
+) -> None:
+    """fetch_and_convert full pipeline: S2 resolve, PDF download, docling convert."""
+    pdf_url = "https://example.com/fc_paper.pdf"
+    paper_json = {
+        "paperId": "fc1",
+        "openAccessPdf": {"url": pdf_url},
+        "title": "Fetch and Convert Test",
+    }
+
+    bundle_with_docling.docling.convert = AsyncMock(  # type: ignore[union-attr]
+        return_value="# Converted\n\nMarkdown content."
+    )
+
+    with respx.mock(assert_all_called=False) as router:
+        router.get(f"{S2_BASE}/paper/fc1").mock(
+            return_value=httpx.Response(200, json=paper_json)
+        )
+        router.get(pdf_url).mock(
+            return_value=httpx.Response(200, content=b"%PDF-1.4 fc content")
+        )
+
+        @asynccontextmanager
+        async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+            yield {"bundle": bundle_with_docling}
+
+        app = FastMCP("test", lifespan=lifespan)
+        register_pdf_tools(app)
+        register_task_tools(app)
+
+        async with Client(app) as client:
+            result = await client.call_tool("fetch_and_convert", {"identifier": "fc1"})
+            queued = json.loads(result.content[0].text)
+            assert queued["queued"] is True
+            assert queued["tool"] == "fetch_and_convert"
+
+            task_data = await _poll_task(client, queued["task_id"])
+
+    assert task_data["status"] == "completed"
+    inner = json.loads(task_data["result"])
+    assert inner["metadata"]["paperId"] == "fc1"
+    assert "# Converted" in inner["markdown"]
+    assert inner["pdf_path"].endswith("fc1.pdf")
+    assert inner["md_path"].endswith("fc1.md")
+    assert inner["vlm_used"] is False
