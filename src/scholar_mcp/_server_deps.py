@@ -13,6 +13,7 @@ from fastmcp.dependencies import CurrentContext, Depends
 from fastmcp.server.context import Context
 
 from ._cache import ScholarCache
+from ._docling_client import DoclingClient
 from ._openalex_client import OpenAlexClient
 from ._s2_client import S2Client
 from .config import ServerConfig, load_config
@@ -36,7 +37,7 @@ class ServiceBundle:
 
     s2: S2Client
     openalex: OpenAlexClient
-    docling: httpx.AsyncClient | None  # NOTE: refined to DoclingClient in Task 12
+    docling: DoclingClient | None
     cache: ScholarCache
     config: ServerConfig
 
@@ -63,9 +64,16 @@ async def make_service_lifespan(
         timeout=30.0,
     )
     openalex = OpenAlexClient(openalex_http)
-    docling: httpx.AsyncClient | None = None
+    docling_http: httpx.AsyncClient | None = None
+    docling: DoclingClient | None = None
     if config.docling_url:
-        docling = httpx.AsyncClient(base_url=config.docling_url, timeout=300.0)
+        docling_http = httpx.AsyncClient(base_url=config.docling_url, timeout=300.0)
+        docling = DoclingClient(
+            http_client=docling_http,
+            vlm_api_url=config.vlm_api_url,
+            vlm_api_key=config.vlm_api_key,
+            vlm_model=config.vlm_model,
+        )
         logger.info("docling_configured url=%s", config.docling_url)
     else:
         logger.info("docling_not_configured pdf_tools_disabled")
@@ -81,8 +89,8 @@ async def make_service_lifespan(
     finally:
         await s2.aclose()
         await openalex_http.aclose()
-        if docling:
-            await docling.aclose()
+        if docling_http:
+            await docling_http.aclose()
         await cache.close()
 
 
