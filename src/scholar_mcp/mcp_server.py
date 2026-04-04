@@ -112,50 +112,53 @@ def _build_remote_auth() -> Any:
     Requires ``BASE_URL`` and ``OIDC_CONFIG_URL`` env vars.
 
     Returns:
-        A configured ``RemoteAuthProvider``, or ``None`` when env vars are
-        missing or the discovery fetch fails.
+        A configured ``RemoteAuthProvider``.
+
+    Raises:
+        RuntimeError: When required env vars are missing, httpx is not
+            installed, or OIDC discovery fails.
     """
     base_url = os.environ.get(f"{_ENV_PREFIX}_BASE_URL", "").strip()
     config_url = os.environ.get(f"{_ENV_PREFIX}_OIDC_CONFIG_URL", "").strip()
 
     if not base_url or not config_url:
-        logger.debug("Remote auth: disabled — missing BASE_URL or OIDC_CONFIG_URL")
-        return None
+        raise RuntimeError(
+            "Remote auth requires BASE_URL and OIDC_CONFIG_URL env vars"
+        )
 
     audience = os.environ.get(f"{_ENV_PREFIX}_OIDC_AUDIENCE", "").strip() or None
-    raw_scopes = os.environ.get(f"{_ENV_PREFIX}_OIDC_REQUIRED_SCOPES", "").strip()
-    required_scopes = [s.strip() for s in raw_scopes.split(",") if s.strip()] or None
+    raw_scopes = os.environ.get(
+        f"{_ENV_PREFIX}_OIDC_REQUIRED_SCOPES", "openid"
+    ).strip()
+    required_scopes = [s.strip() for s in raw_scopes.split(",") if s.strip()] or [
+        "openid"
+    ]
 
     try:
         import httpx
-    except ImportError:
-        logger.error(
-            "Remote auth: 'httpx' is not installed. "
+    except ImportError as exc:
+        raise RuntimeError(
+            "Remote auth requires 'httpx'. "
             "Install it with: pip install 'pvliesdonk-scholar-mcp[mcp]' "
             "or pip install httpx"
-        )
-        return None
+        ) from exc
 
     try:
         resp = httpx.get(config_url, timeout=10)
         resp.raise_for_status()
         discovery = resp.json()
-    except Exception:
-        logger.exception(
-            "Remote auth: failed to fetch OIDC discovery from %s", config_url
-        )
-        return None
+    except Exception as exc:
+        raise RuntimeError(
+            f"Remote auth: failed to fetch OIDC discovery from {config_url}"
+        ) from exc
 
     jwks_uri = discovery.get("jwks_uri")
     issuer = discovery.get("issuer")
     if not jwks_uri or not issuer:
-        logger.error(
-            "Remote auth: OIDC discovery missing jwks_uri or issuer "
-            "(got jwks_uri=%s, issuer=%s)",
-            jwks_uri,
-            issuer,
+        raise RuntimeError(
+            f"Remote auth: OIDC discovery missing jwks_uri or issuer "
+            f"(got jwks_uri={jwks_uri}, issuer={issuer})"
         )
-        return None
 
     logger.debug(
         "Remote auth config:\n"
@@ -378,13 +381,17 @@ def create_server(*, transport: str = "stdio") -> FastMCP:
     instructions = os.environ.get(f"{_ENV_PREFIX}_INSTRUCTIONS", default_instructions)
 
     bearer_auth = _build_bearer_auth()
-    oidc_mode = _resolve_auth_mode()
 
+    # Auth has no effect on stdio — skip OIDC setup (avoids blocking
+    # network calls and unnecessary errors in local/stdio environments).
+    oidc_mode = None
     oidc_auth = None
-    if oidc_mode == "remote":
-        oidc_auth = _build_remote_auth()
-    elif oidc_mode == "oidc-proxy":
-        oidc_auth = _build_oidc_auth()
+    if transport != "stdio":
+        oidc_mode = _resolve_auth_mode()
+        if oidc_mode == "remote":
+            oidc_auth = _build_remote_auth()
+        elif oidc_mode == "oidc-proxy":
+            oidc_auth = _build_oidc_auth()
 
     if oidc_mode and not oidc_auth:
         logger.warning(
