@@ -95,6 +95,14 @@ async def test_get_citations_not_found(
 async def test_get_citation_graph_single_hop(
     respx_mock: respx.MockRouter, mcp: FastMCP
 ) -> None:
+    respx_mock.post("/paper/batch").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {"paperId": "p1", "title": "Seed", "year": 2020, "citationCount": 10}
+            ],
+        )
+    )
     respx_mock.get("/paper/p1/citations").mock(
         return_value=httpx.Response(
             200,
@@ -130,6 +138,9 @@ async def test_get_citation_graph_single_hop(
     assert "p1" in node_ids
     assert "c1" in node_ids
     assert "c2" in node_ids
+    # Seed node should have resolved title from batch_resolve
+    seed = next(n for n in data["nodes"] if n["id"] == "p1")
+    assert seed["title"] == "Seed"
     assert data["stats"]["truncated"] is False
 
 
@@ -137,6 +148,14 @@ async def test_get_citation_graph_single_hop(
 async def test_get_citation_graph_max_nodes_cap(
     respx_mock: respx.MockRouter, mcp: FastMCP
 ) -> None:
+    respx_mock.post("/paper/batch").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {"paperId": "p1", "title": "Seed", "year": 2020, "citationCount": 10}
+            ],
+        )
+    )
     respx_mock.get("/paper/p1/citations").mock(
         return_value=httpx.Response(
             200,
@@ -400,6 +419,14 @@ async def test_get_citation_graph_references_direction(
     respx_mock: respx.MockRouter, mcp: FastMCP
 ) -> None:
     """get_citation_graph with direction=references expands via references."""
+    respx_mock.post("/paper/batch").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {"paperId": "p1", "title": "Seed", "year": 2020, "citationCount": 10}
+            ],
+        )
+    )
     respx_mock.get("/paper/p1/references").mock(
         return_value=httpx.Response(
             200,
@@ -451,6 +478,14 @@ async def test_get_citation_graph_both_direction(
     respx_mock: respx.MockRouter, mcp: FastMCP
 ) -> None:
     """get_citation_graph with direction=both expands citations and references."""
+    respx_mock.post("/paper/batch").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {"paperId": "p1", "title": "Seed", "year": 2020, "citationCount": 10}
+            ],
+        )
+    )
     respx_mock.get("/paper/p1/citations").mock(
         return_value=httpx.Response(
             200,
@@ -511,14 +546,23 @@ async def test_get_citation_graph_queued_on_429(
     respx_mock: respx.MockRouter, mcp_with_tasks: FastMCP
 ) -> None:
     """get_citation_graph queues on 429 and background task completes."""
-    call_count = 0
+    batch_call_count = 0
 
-    def _side_effect(request: httpx.Request) -> httpx.Response:
-        nonlocal call_count
-        call_count += 1
-        if call_count == 1:
+    def _batch_side_effect(request: httpx.Request) -> httpx.Response:
+        nonlocal batch_call_count
+        batch_call_count += 1
+        if batch_call_count == 1:
             return httpx.Response(429)
         return httpx.Response(
+            200,
+            json=[
+                {"paperId": "p1", "title": "Seed", "year": 2020, "citationCount": 10}
+            ],
+        )
+
+    respx_mock.post("/paper/batch").mock(side_effect=_batch_side_effect)
+    respx_mock.get("/paper/p1/citations").mock(
+        return_value=httpx.Response(
             200,
             json={
                 "data": [
@@ -533,8 +577,7 @@ async def test_get_citation_graph_queued_on_429(
                 ]
             },
         )
-
-    respx_mock.get("/paper/p1/citations").mock(side_effect=_side_effect)
+    )
 
     async with Client(mcp_with_tasks) as client:
         result = await client.call_tool(
@@ -860,6 +903,14 @@ async def test_get_citation_graph_references_http_error(
     respx_mock: respx.MockRouter, mcp: FastMCP
 ) -> None:
     """get_citation_graph swallows HTTP errors in the references branch."""
+    respx_mock.post("/paper/batch").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {"paperId": "p1", "title": "Seed", "year": 2020, "citationCount": 10}
+            ],
+        )
+    )
     respx_mock.get("/paper/p1/references").mock(return_value=httpx.Response(500))
     async with Client(mcp) as client:
         result = await client.call_tool(
@@ -876,3 +927,168 @@ async def test_get_citation_graph_references_http_error(
     assert data["stats"]["total_nodes"] == 1
     assert data["nodes"][0]["id"] == "p1"
     assert data["stats"]["truncated"] is False
+
+
+# --- get_citation_graph: batch_resolve failure falls back gracefully ---
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_citation_graph_batch_resolve_failure(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """Seed nodes fall back to null metadata when batch_resolve fails."""
+    respx_mock.post("/paper/batch").mock(return_value=httpx.Response(500))
+    respx_mock.get("/paper/p1/citations").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "citingPaper": {
+                            "paperId": "c1",
+                            "title": "C1",
+                            "year": 2022,
+                            "citationCount": 3,
+                        }
+                    }
+                ]
+            },
+        )
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_citation_graph",
+            {"seed_ids": ["p1"], "direction": "citations", "depth": 1, "max_nodes": 50},
+        )
+    data = json.loads(result.content[0].text)
+    # Seed node present but with null metadata (fallback)
+    seed = next(n for n in data["nodes"] if n["id"] == "p1")
+    assert seed["title"] is None
+    # Expansion still works
+    assert "c1" in {n["id"] for n in data["nodes"]}
+
+
+# --- get_citation_graph: client-side min_citations filter on references ---
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_citation_graph_references_min_citations_filter(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """min_citations filter is applied client-side to references."""
+    respx_mock.post("/paper/batch").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {"paperId": "p1", "title": "Seed", "year": 2020, "citationCount": 10}
+            ],
+        )
+    )
+    respx_mock.get("/paper/p1/references").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "citedPaper": {
+                            "paperId": "r1",
+                            "title": "Popular",
+                            "year": 2018,
+                            "citationCount": 100,
+                        }
+                    },
+                    {
+                        "citedPaper": {
+                            "paperId": "r2",
+                            "title": "Obscure",
+                            "year": 2019,
+                            "citationCount": 2,
+                        }
+                    },
+                ]
+            },
+        )
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_citation_graph",
+            {
+                "seed_ids": ["p1"],
+                "direction": "references",
+                "depth": 1,
+                "max_nodes": 50,
+                "min_citations": 50,
+            },
+        )
+    data = json.loads(result.content[0].text)
+    node_ids = {n["id"] for n in data["nodes"]}
+    assert "r1" in node_ids  # 100 >= 50
+    assert "r2" not in node_ids  # 2 < 50
+
+
+# --- get_citation_graph: client-side year filter on references ---
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_citation_graph_references_year_filter(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """year_start/year_end filters are applied client-side to references."""
+    respx_mock.post("/paper/batch").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {"paperId": "p1", "title": "Seed", "year": 2020, "citationCount": 10}
+            ],
+        )
+    )
+    respx_mock.get("/paper/p1/references").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "citedPaper": {
+                            "paperId": "r1",
+                            "title": "InRange",
+                            "year": 2019,
+                            "citationCount": 10,
+                        }
+                    },
+                    {
+                        "citedPaper": {
+                            "paperId": "r2",
+                            "title": "TooOld",
+                            "year": 2010,
+                            "citationCount": 10,
+                        }
+                    },
+                    {
+                        "citedPaper": {
+                            "paperId": "r3",
+                            "title": "TooNew",
+                            "year": 2025,
+                            "citationCount": 10,
+                        }
+                    },
+                ]
+            },
+        )
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_citation_graph",
+            {
+                "seed_ids": ["p1"],
+                "direction": "references",
+                "depth": 1,
+                "max_nodes": 50,
+                "year_start": 2015,
+                "year_end": 2022,
+            },
+        )
+    data = json.loads(result.content[0].text)
+    node_ids = {n["id"] for n in data["nodes"]}
+    assert "r1" in node_ids  # 2019 in [2015, 2022]
+    assert "r2" not in node_ids  # 2010 < 2015
+    assert "r3" not in node_ids  # 2025 > 2022
