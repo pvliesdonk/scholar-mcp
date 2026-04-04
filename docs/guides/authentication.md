@@ -91,7 +91,7 @@ Client → Reverse proxy (Authelia) → scholar-mcp (JWT validation only)
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `SCHOLAR_MCP_OIDC_AUDIENCE` | -- | Expected JWT audience claim |
-| `SCHOLAR_MCP_OIDC_REQUIRED_SCOPES` | -- | Comma-separated required scopes |
+| `SCHOLAR_MCP_OIDC_REQUIRED_SCOPES` | `openid` | Comma-separated required scopes |
 
 ### When to use remote auth
 

@@ -122,14 +122,10 @@ def _build_remote_auth() -> Any:
     config_url = os.environ.get(f"{_ENV_PREFIX}_OIDC_CONFIG_URL", "").strip()
 
     if not base_url or not config_url:
-        raise RuntimeError(
-            "Remote auth requires BASE_URL and OIDC_CONFIG_URL env vars"
-        )
+        raise RuntimeError("Remote auth requires BASE_URL and OIDC_CONFIG_URL env vars")
 
     audience = os.environ.get(f"{_ENV_PREFIX}_OIDC_AUDIENCE", "").strip() or None
-    raw_scopes = os.environ.get(
-        f"{_ENV_PREFIX}_OIDC_REQUIRED_SCOPES", "openid"
-    ).strip()
+    raw_scopes = os.environ.get(f"{_ENV_PREFIX}_OIDC_REQUIRED_SCOPES", "openid").strip()
     required_scopes = [s.strip() for s in raw_scopes.split(",") if s.strip()] or [
         "openid"
     ]
@@ -392,13 +388,6 @@ def create_server(*, transport: str = "stdio") -> FastMCP:
             oidc_auth = _build_remote_auth()
         elif oidc_mode == "oidc-proxy":
             oidc_auth = _build_oidc_auth()
-
-    if oidc_mode and not oidc_auth:
-        logger.warning(
-            "OIDC auth mode '%s' was selected but auth failed to initialize — "
-            "server will start without OIDC",
-            oidc_mode,
-        )
 
     if bearer_auth and oidc_auth:
         from fastmcp.server.auth import MultiAuth
