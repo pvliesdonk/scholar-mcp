@@ -2,6 +2,28 @@
 
 <!-- version list -->
 
+## v1.2.1 (2026-04-04)
+
+### Bug Fixes
+
+- Add mcp-name to README for MCP registry validation
+  ([`469b64c`](https://github.com/pvliesdonk/scholar-mcp/commit/469b64c2b78978ec44ad6e98031c4184b4a8da43))
+
+- Address review — broader exception handling, consistent min_citations check
+  ([`1e351e5`](https://github.com/pvliesdonk/scholar-mcp/commit/1e351e5d1521aa342945e7a096d122c7a38e40af))
+
+- Drop strict zip, sync uv.lock, fix release workflow lock regeneration
+  ([`876f432`](https://github.com/pvliesdonk/scholar-mcp/commit/876f4327587e7f86ff9dd2d0ea272cffdad8e2f2))
+
+- Resolve seed node metadata, apply filters to references, clean docstrings
+  ([`265c51f`](https://github.com/pvliesdonk/scholar-mcp/commit/265c51f2004addaf5ee85837b90fd149b9dd2c1a))
+
+### Chores
+
+- Update server.json to v1.2.0 [skip ci]
+  ([`f0a0a5f`](https://github.com/pvliesdonk/scholar-mcp/commit/f0a0a5f49bce3254d1691ceacb075d376d2e0810))
+
+
 ## v1.2.0 (2026-04-04)
 
 ### Bug Fixes
