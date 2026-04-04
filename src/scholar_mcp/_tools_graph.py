@@ -207,7 +207,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
                     fields=FIELD_SETS["compact"],
                     retry=retry,
                 )
-            except httpx.HTTPStatusError:
+            except (httpx.HTTPError, ValueError):
                 seed_results = [None] * len(seed_batch)
 
             for seed_id, seed_data in zip(seed_batch, seed_results, strict=True):
@@ -262,7 +262,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
                                         "direction": "cites",
                                     }
                                 )
-                    except httpx.HTTPStatusError:
+                    except httpx.HTTPError:
                         pass
 
                 if direction in ("references", "both"):
@@ -283,7 +283,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
                             # server-side filters — apply client-side
                             p_year = p.get("year")
                             p_cites = p.get("citationCount")
-                            if min_citations and (
+                            if min_citations is not None and (
                                 p_cites is None or p_cites < min_citations
                             ):
                                 continue
@@ -309,7 +309,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
                                     "direction": "cites",
                                 }
                             )
-                    except httpx.HTTPStatusError:
+                    except httpx.HTTPError:
                         pass
 
                 for pid, node in new_nodes:
