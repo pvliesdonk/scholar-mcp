@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import html
 import logging
 from dataclasses import dataclass
 
@@ -46,20 +47,24 @@ class DoclingClient:
         """True if VLM enrichment is configured."""
         return bool(self.vlm_api_url and self.vlm_api_key)
 
-    async def _poll(self, task_id: str, poll_interval: float = 3.0) -> str:
+    async def _poll(
+        self, task_id: str, poll_interval: float = 3.0, max_polls: int = 200
+    ) -> str:
         """Poll task until complete, then fetch and return markdown.
 
         Args:
             task_id: Task ID returned by the async submit endpoint.
             poll_interval: Seconds between status polls.
+            max_polls: Maximum poll attempts before giving up (default 200,
+                ~10 min at 3 s/poll).
 
         Returns:
             Markdown string.
 
         Raises:
-            RuntimeError: If task fails or no markdown is returned.
+            RuntimeError: If task fails, returns no markdown, or times out.
         """
-        while True:
+        for _ in range(max_polls):
             await asyncio.sleep(poll_interval)
             r = await self.http_client.get(f"/v1/status/poll/{task_id}", timeout=30)
             r.raise_for_status()
@@ -90,6 +95,9 @@ class DoclingClient:
                 return md
 
             logger.debug("docling_polling task_id=%s status=%s", task_id, status)
+        raise RuntimeError(
+            f"docling task {task_id} timed out after {max_polls} polls"
+        )
 
     async def convert(
         self,
@@ -203,4 +211,4 @@ class DoclingClient:
         if not task_id:
             raise RuntimeError(f"docling VLM did not return task_id: {r.text[:200]}")
         md = await self._poll(task_id, poll_interval)
-        return md.replace("&gt;", ">").replace("&lt;", "<").replace("&amp;", "&")
+        return html.unescape(md)

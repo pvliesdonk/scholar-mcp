@@ -58,9 +58,12 @@ async def make_service_lifespan(
     config.cache_dir.mkdir(parents=True, exist_ok=True)
 
     s2 = S2Client(api_key=config.s2_api_key)
+    ua = "scholar-mcp/0.1"
+    if config.contact_email:
+        ua = f"{ua} (mailto:{config.contact_email})"
     openalex_http = httpx.AsyncClient(
         base_url=_OPENALEX_BASE,
-        headers={"User-Agent": "scholar-mcp/0.1 (mailto:scholar-mcp@pvliesdonk.nl)"},
+        headers={"User-Agent": ua},
         timeout=30.0,
     )
     openalex = OpenAlexClient(openalex_http)

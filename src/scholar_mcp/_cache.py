@@ -28,43 +28,60 @@ CREATE TABLE IF NOT EXISTS papers (
     data      TEXT NOT NULL,
     cached_at REAL NOT NULL
 );
-
-CREATE TABLE IF NOT EXISTS citation_counts (
-    paper_id        TEXT PRIMARY KEY,
-    citation_count  INTEGER NOT NULL,
-    reference_count INTEGER NOT NULL,
-    cached_at       REAL NOT NULL
-);
+CREATE INDEX IF NOT EXISTS idx_papers_cached_at ON papers (cached_at);
 
 CREATE TABLE IF NOT EXISTS citations (
     paper_id   TEXT PRIMARY KEY,
     citing_ids TEXT NOT NULL,
     cached_at  REAL NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_citations_cached_at ON citations (cached_at);
 
 CREATE TABLE IF NOT EXISTS refs (
     paper_id       TEXT PRIMARY KEY,
     referenced_ids TEXT NOT NULL,
     cached_at      REAL NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_refs_cached_at ON refs (cached_at);
 
 CREATE TABLE IF NOT EXISTS authors (
     author_id TEXT PRIMARY KEY,
     data      TEXT NOT NULL,
     cached_at REAL NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_authors_cached_at ON authors (cached_at);
 
 CREATE TABLE IF NOT EXISTS openalex (
     doi       TEXT PRIMARY KEY,
     data      TEXT NOT NULL,
     cached_at REAL NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_openalex_cached_at ON openalex (cached_at);
 
 CREATE TABLE IF NOT EXISTS id_aliases (
     raw_id      TEXT PRIMARY KEY,
     s2_paper_id TEXT NOT NULL
 );
 """
+
+_TTL_TABLES = ("papers", "citations", "refs", "authors", "openalex")
+
+
+def _require_open(db: aiosqlite.Connection | None) -> aiosqlite.Connection:
+    """Return *db* or raise RuntimeError if not open.
+
+    Args:
+        db: Database connection or None.
+
+    Returns:
+        The open database connection.
+
+    Raises:
+        RuntimeError: If *db* is None (cache not opened yet).
+    """
+    if db is None:
+        raise RuntimeError("Cache not open — call await cache.open() first")
+    return db
 
 
 class ScholarCache:
@@ -105,8 +122,8 @@ class ScholarCache:
         Returns:
             Paper dict or None.
         """
-        assert self._db
-        async with self._db.execute(
+        db = _require_open(self._db)
+        async with db.execute(
             "SELECT data, cached_at FROM papers WHERE paper_id = ?", (paper_id,)
         ) as cur:
             row = await cur.fetchone()
@@ -123,12 +140,12 @@ class ScholarCache:
             paper_id: S2 paper ID.
             data: Paper metadata dict.
         """
-        assert self._db
-        await self._db.execute(
+        db = _require_open(self._db)
+        await db.execute(
             "INSERT OR REPLACE INTO papers (paper_id, data, cached_at) VALUES (?, ?, ?)",
             (paper_id, json.dumps(data), time.time()),
         )
-        await self._db.commit()
+        await db.commit()
 
     # ------------------------------------------------------------------
     # Citations (list of citing paper IDs)
@@ -143,10 +160,9 @@ class ScholarCache:
         Returns:
             List of citing paper IDs or None.
         """
-        assert self._db
-        async with self._db.execute(
-            "SELECT citing_ids, cached_at FROM citations WHERE paper_id = ?",
-            (paper_id,),
+        db = _require_open(self._db)
+        async with db.execute(
+            "SELECT citing_ids, cached_at FROM citations WHERE paper_id = ?", (paper_id,)
         ) as cur:
             row = await cur.fetchone()
         if row is None or time.time() - row[1] > _CITATION_TTL:
@@ -160,12 +176,12 @@ class ScholarCache:
             paper_id: S2 paper ID.
             ids: List of citing paper IDs.
         """
-        assert self._db
-        await self._db.execute(
+        db = _require_open(self._db)
+        await db.execute(
             "INSERT OR REPLACE INTO citations (paper_id, citing_ids, cached_at) VALUES (?, ?, ?)",
             (paper_id, json.dumps(ids), time.time()),
         )
-        await self._db.commit()
+        await db.commit()
 
     # ------------------------------------------------------------------
     # References (list of referenced paper IDs)
@@ -180,8 +196,8 @@ class ScholarCache:
         Returns:
             List of referenced paper IDs or None.
         """
-        assert self._db
-        async with self._db.execute(
+        db = _require_open(self._db)
+        async with db.execute(
             "SELECT referenced_ids, cached_at FROM refs WHERE paper_id = ?", (paper_id,)
         ) as cur:
             row = await cur.fetchone()
@@ -196,12 +212,12 @@ class ScholarCache:
             paper_id: S2 paper ID.
             ids: List of referenced paper IDs.
         """
-        assert self._db
-        await self._db.execute(
+        db = _require_open(self._db)
+        await db.execute(
             "INSERT OR REPLACE INTO refs (paper_id, referenced_ids, cached_at) VALUES (?, ?, ?)",
             (paper_id, json.dumps(ids), time.time()),
         )
-        await self._db.commit()
+        await db.commit()
 
     # ------------------------------------------------------------------
     # Authors
@@ -216,8 +232,8 @@ class ScholarCache:
         Returns:
             Author dict or None.
         """
-        assert self._db
-        async with self._db.execute(
+        db = _require_open(self._db)
+        async with db.execute(
             "SELECT data, cached_at FROM authors WHERE author_id = ?", (author_id,)
         ) as cur:
             row = await cur.fetchone()
@@ -232,12 +248,12 @@ class ScholarCache:
             author_id: S2 author ID.
             data: Author metadata dict.
         """
-        assert self._db
-        await self._db.execute(
+        db = _require_open(self._db)
+        await db.execute(
             "INSERT OR REPLACE INTO authors (author_id, data, cached_at) VALUES (?, ?, ?)",
             (author_id, json.dumps(data), time.time()),
         )
-        await self._db.commit()
+        await db.commit()
 
     # ------------------------------------------------------------------
     # OpenAlex enrichment
@@ -252,8 +268,8 @@ class ScholarCache:
         Returns:
             OpenAlex work dict or None.
         """
-        assert self._db
-        async with self._db.execute(
+        db = _require_open(self._db)
+        async with db.execute(
             "SELECT data, cached_at FROM openalex WHERE doi = ?", (doi,)
         ) as cur:
             row = await cur.fetchone()
@@ -268,12 +284,12 @@ class ScholarCache:
             doi: DOI string.
             data: OpenAlex work dict.
         """
-        assert self._db
-        await self._db.execute(
+        db = _require_open(self._db)
+        await db.execute(
             "INSERT OR REPLACE INTO openalex (doi, data, cached_at) VALUES (?, ?, ?)",
             (doi, json.dumps(data), time.time()),
         )
-        await self._db.commit()
+        await db.commit()
 
     # ------------------------------------------------------------------
     # Identifier aliases (no TTL)
@@ -288,8 +304,8 @@ class ScholarCache:
         Returns:
             S2 paper ID or None.
         """
-        assert self._db
-        async with self._db.execute(
+        db = _require_open(self._db)
+        async with db.execute(
             "SELECT s2_paper_id FROM id_aliases WHERE raw_id = ?", (raw_id,)
         ) as cur:
             row = await cur.fetchone()
@@ -302,35 +318,28 @@ class ScholarCache:
             raw_id: Raw identifier string.
             s2_paper_id: Canonical S2 paper ID.
         """
-        assert self._db
-        await self._db.execute(
+        db = _require_open(self._db)
+        await db.execute(
             "INSERT OR REPLACE INTO id_aliases (raw_id, s2_paper_id) VALUES (?, ?)",
             (raw_id, s2_paper_id),
         )
-        await self._db.commit()
+        await db.commit()
 
     # ------------------------------------------------------------------
     # Maintenance
     # ------------------------------------------------------------------
 
     async def stats(self) -> dict[str, int]:
-        """Return row counts and file size for all tables.
+        """Return row counts and file size for all TTL tables.
 
         Returns:
-            Dict with keys: papers, citation_counts, citations, refs, authors,
-            openalex, db_size_bytes.
+            Dict with keys: papers, citations, refs, authors, openalex,
+            db_size_bytes.
         """
-        assert self._db
+        db = _require_open(self._db)
         counts: dict[str, int] = {}
-        for table in (
-            "papers",
-            "citation_counts",
-            "citations",
-            "refs",
-            "authors",
-            "openalex",
-        ):
-            async with self._db.execute(f"SELECT COUNT(*) FROM {table}") as cur:
+        for table in _TTL_TABLES:
+            async with db.execute(f"SELECT COUNT(*) FROM {table}") as cur:
                 row = await cur.fetchone()
                 counts[table] = row[0] if row else 0
         counts["db_size_bytes"] = (
@@ -345,29 +354,15 @@ class ScholarCache:
             older_than_days: If set, only evict entries older than this many
                 days. If None, wipes all entries in all TTL-bearing tables.
         """
-        assert self._db
+        db = _require_open(self._db)
         if older_than_days is None:
-            for table in (
-                "papers",
-                "citation_counts",
-                "citations",
-                "refs",
-                "authors",
-                "openalex",
-            ):
-                await self._db.execute(f"DELETE FROM {table}")
+            for table in _TTL_TABLES:
+                await db.execute(f"DELETE FROM {table}")
         else:
             cutoff = time.time() - older_than_days * 86400
-            for table in (
-                "papers",
-                "citation_counts",
-                "citations",
-                "refs",
-                "authors",
-                "openalex",
-            ):
-                await self._db.execute(
+            for table in _TTL_TABLES:
+                await db.execute(
                     f"DELETE FROM {table} WHERE cached_at < ?", (cutoff,)
                 )
-        await self._db.commit()
+        await db.commit()
         logger.info("cache_cleared older_than_days=%s", older_than_days)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 import httpx
 
@@ -19,7 +20,7 @@ class OpenAlexClient:
     def __init__(self, http_client: httpx.AsyncClient) -> None:
         self._client = http_client
 
-    async def get_by_doi(self, doi: str) -> dict | None:  # type: ignore[type-arg]
+    async def get_by_doi(self, doi: str) -> dict[str, Any] | None:
         """Fetch OpenAlex work metadata by DOI.
 
         Args:
@@ -34,7 +35,7 @@ class OpenAlexClient:
             if r.status_code == 404:
                 return None
             r.raise_for_status()
-            return r.json()  # type: ignore[no-any-return]
+            return r.json()  # type: ignore[no-any-return]  # httpx returns Any
         except httpx.HTTPStatusError:
             logger.warning("openalex_error doi=%s status=%s", doi, r.status_code)
             return None

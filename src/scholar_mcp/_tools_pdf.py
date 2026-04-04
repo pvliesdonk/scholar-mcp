@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from pathlib import Path
@@ -76,11 +77,11 @@ def register_pdf_tools(mcp: FastMCP) -> None:
             except httpx.HTTPError as exc:
                 return json.dumps({"error": "download_failed", "detail": str(exc)})
 
-        pdf_path.write_bytes(r.content)
+        await asyncio.to_thread(pdf_path.write_bytes, r.content)
         logger.info("pdf_downloaded path=%s bytes=%d", pdf_path, len(r.content))
         return json.dumps({"path": str(pdf_path)})
 
-    @mcp.tool()
+    @mcp.tool(tags={"write"})
     async def convert_pdf_to_markdown(
         file_path: str,
         use_vlm: bool = False,
@@ -127,7 +128,7 @@ def register_pdf_tools(mcp: FastMCP) -> None:
             {"markdown": markdown, "path": str(md_path), "vlm_used": vlm_used}
         )
 
-    @mcp.tool()
+    @mcp.tool(tags={"write"})
     async def fetch_and_convert(
         identifier: str,
         use_vlm: bool = False,
@@ -170,7 +171,7 @@ def register_pdf_tools(mcp: FastMCP) -> None:
                 try:
                     r = await client.get(url, follow_redirects=True)
                     r.raise_for_status()
-                    pdf_path.write_bytes(r.content)
+                    await asyncio.to_thread(pdf_path.write_bytes, r.content)
                 except httpx.HTTPError as exc:
                     return json.dumps(
                         {

@@ -22,6 +22,8 @@ class ServerConfig:
         vlm_api_key: API key for the VLM endpoint.
         vlm_model: Model name passed to the VLM endpoint.
         cache_dir: Directory for SQLite DB and downloaded PDFs.
+        contact_email: Email address included in the OpenAlex User-Agent header
+            for the polite pool. Set ``SCHOLAR_MCP_CONTACT_EMAIL`` to opt in.
     """
 
     read_only: bool = True
@@ -31,6 +33,7 @@ class ServerConfig:
     vlm_api_key: str | None = None
     vlm_model: str = "gpt-4o"
     cache_dir: Path = Path("/data/scholar-mcp")
+    contact_email: str | None = None
 
 
 def get_log_level() -> int:
@@ -73,4 +76,5 @@ def load_config() -> ServerConfig:
         vlm_api_key=_str("VLM_API_KEY"),
         vlm_model=os.environ.get(f"{p}_VLM_MODEL", "gpt-4o"),
         cache_dir=Path(os.environ.get(f"{p}_CACHE_DIR", "/data/scholar-mcp")),
+        contact_email=_str("CONTACT_EMAIL"),
     )

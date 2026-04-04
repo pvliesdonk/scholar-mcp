@@ -28,11 +28,11 @@ class RateLimiter:
     async def acquire(self) -> None:
         """Wait until the minimum inter-request delay has elapsed."""
         async with self._lock:
-            now = asyncio.get_event_loop().time()
+            now = asyncio.get_running_loop().time()
             wait = self._last + self.delay - now
             if wait > 0:
                 await asyncio.sleep(wait)
-            self._last = asyncio.get_event_loop().time()
+            self._last = asyncio.get_running_loop().time()
 
 
 async def with_s2_retry(

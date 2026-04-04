@@ -89,7 +89,6 @@ async def test_stats(cache):
     stats = await cache.stats()
     assert stats["papers"] == 1
     assert stats["authors"] == 1
-    assert stats["citation_counts"] == 0
     assert stats["citations"] == 0
     assert stats["refs"] == 0
     assert stats["openalex"] == 0

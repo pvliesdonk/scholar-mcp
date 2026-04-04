@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from typing import Any, Literal
@@ -61,22 +62,26 @@ def register_utility_tools(mcp: FastMCP) -> None:
                 {"error": "upstream_error", "status": exc.response.status_code}
             )
 
-        results: list[dict] = []  # type: ignore[type-arg]
-        for i, (raw, s2_data) in enumerate(zip(identifiers, s2_results, strict=True)):
+        async def _resolve_one(
+            i: int, raw: str, s2_data: dict[str, Any] | None
+        ) -> dict[str, Any]:
             if s2_data is not None:
-                results.append({"identifier": raw, "paper": s2_data})
-            elif i in doi_map:
+                return {"identifier": raw, "paper": s2_data}
+            if i in doi_map:
                 oa = await bundle.openalex.get_by_doi(doi_map[i])
                 if oa:
-                    results.append(
-                        {"identifier": raw, "paper": oa, "source": "openalex"}
-                    )
-                else:
-                    results.append({"identifier": raw, "error": "not_found"})
-            else:
-                results.append({"identifier": raw, "error": "not_found"})
+                    return {"identifier": raw, "paper": oa, "source": "openalex"}
+            return {"identifier": raw, "error": "not_found"}
 
-        return json.dumps(results)
+        results = await asyncio.gather(
+            *[
+                _resolve_one(i, raw, s2_data)
+                for i, (raw, s2_data) in enumerate(
+                    zip(identifiers, s2_results, strict=True)
+                )
+            ]
+        )
+        return json.dumps(list(results))
 
     @mcp.tool()
     async def enrich_paper(
