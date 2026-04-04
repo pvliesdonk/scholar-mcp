@@ -1,0 +1,76 @@
+[Unit]
+Description=Scholar MCP Server
+Documentation=https://pvliesdonk.github.io/scholar-mcp/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=scholar-mcp
+Group=scholar-mcp
+
+# Configuration via environment file
+EnvironmentFile=-/etc/scholar-mcp/env
+
+# Start the server in HTTP mode
+ExecStart=/opt/scholar-mcp/venv/bin/scholar-mcp serve --transport http
+
+# State directory (auto-creates /var/lib/scholar-mcp/)
+StateDirectory=scholar-mcp
+
+# Restart policy
+Restart=on-failure
+RestartSec=5
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=scholar-mcp
+
+# --- Security hardening ---
+
+# Filesystem
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/lib/scholar-mcp
+
+# Capabilities
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+# Kernel
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+
+# Devices
+PrivateDevices=yes
+DevicePolicy=closed
+
+# Network — only IPv4/IPv6 + Unix sockets (no Netlink, etc.)
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+# System calls
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+
+# Misc
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictNamespaces=yes
+
+# Python requires writable+executable memory for JIT
+MemoryDenyWriteExecute=no
+
+# Process
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

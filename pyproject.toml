@@ -29,6 +29,7 @@ dev = [
     "mypy>=1.0",
     "pip-audit>=2.7",
     "respx>=0.20",
+    "diff-cover>=9.0",
 ]
 docs = [
     "mkdocs-material>=9.5",
