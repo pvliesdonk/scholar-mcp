@@ -24,7 +24,7 @@ These settings are only needed if you want to use the PDF conversion tools. They
 | `SCHOLAR_MCP_VLM_MODEL` | `gpt-4o` | Model name to use with the VLM endpoint. |
 
 !!! tip "VLM enrichment"
-    When both `VLM_API_URL` and `VLM_API_KEY` are set, tools can request VLM-enriched conversion that extracts LaTeX formulas and generates figure descriptions. This produces higher-quality Markdown but is slower and costs API calls.
+    When both `SCHOLAR_MCP_VLM_API_URL` and `SCHOLAR_MCP_VLM_API_KEY` are set, tools can request VLM-enriched conversion that extracts LaTeX formulas and generates figure descriptions. This produces higher-quality Markdown but is slower and costs API calls.
 
 ## Server
 
@@ -49,6 +49,9 @@ Authentication is optional. When no auth variables are set, the server accepts u
 | `SCHOLAR_MCP_OIDC_CLIENT_ID` | -- | OIDC client ID registered with your identity provider. |
 | `SCHOLAR_MCP_OIDC_CLIENT_SECRET` | -- | OIDC client secret. |
 | `SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY` | *(ephemeral)* | JWT signing key for OIDC sessions. **Required on Linux/Docker** -- the ephemeral default invalidates all sessions on restart. Generate with: `openssl rand -hex 32`. |
+| `SCHOLAR_MCP_OIDC_AUDIENCE` | -- | Expected JWT `aud` claim. When set, tokens must include this audience. Useful for multi-tenant deployments. |
+| `SCHOLAR_MCP_OIDC_REQUIRED_SCOPES` | `openid` | Space-separated list of required scopes. |
+| `SCHOLAR_MCP_OIDC_VERIFY_ACCESS_TOKEN` | `false` | Set `true` to verify the upstream `access_token` as a JWT instead of the `id_token` (for providers that issue JWT access tokens). |
 
 See [Authentication guide](guides/authentication.md) for setup instructions and [OIDC deployment](deployment/oidc.md) for provider-specific configuration.
 

@@ -150,6 +150,6 @@ Common causes:
 If the post-install script failed (e.g. no internet during package install):
 
 ```bash
-sudo /opt/scholar-mcp/venv/bin/pip install 'pvliesdonk-scholar-mcp[all]'
+sudo /opt/scholar-mcp/venv/bin/pip install 'pvliesdonk-scholar-mcp[mcp]'
 sudo systemctl restart scholar-mcp
 ```

@@ -31,7 +31,7 @@ export SCHOLAR_MCP_READ_ONLY=false
 Start the server and check the logs. You should see:
 
 ```
-INFO scholar_mcp._server_deps: docling client configured: http://localhost:5001
+INFO scholar_mcp._server_deps: docling_configured url=http://localhost:5001
 ```
 
 ## Tools
