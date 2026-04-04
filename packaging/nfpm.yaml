@@ -1,0 +1,69 @@
+# yaml-language-server: $schema=https://nfpm.goreleaser.com/schema.json
+#
+# nfpm configuration for scholar-mcp .deb and .rpm packages.
+# Build: VERSION=1.0.0 nfpm package --packager deb --target dist/
+#        VERSION=1.0.0 nfpm package --packager rpm --target dist/
+
+name: scholar-mcp
+arch: "${ARCH:-amd64}"
+platform: linux
+# VERSION env var is required (e.g. VERSION=1.0.0 nfpm package ...)
+# Note: nfpm does not support bash :? guards — use simple ${VAR} only.
+version: "${VERSION}"
+version_schema: semver
+section: utils
+priority: optional
+maintainer: "Peter van Liesdonk <pvliesdonk@users.noreply.github.com>"
+description: |
+  FastMCP server providing structured academic literature access via Semantic
+  Scholar, with OpenAlex enrichment and optional docling-serve PDF conversion.
+homepage: "https://pvliesdonk.github.io/scholar-mcp/"
+license: "MIT"
+
+# --- Package contents ---
+
+contents:
+  # systemd unit file
+  - src: packaging/scholar-mcp.service
+    dst: /usr/lib/systemd/system/scholar-mcp.service
+
+  # Example environment file (preserved on upgrade, never overwritten)
+  - src: packaging/env.example
+    dst: /etc/scholar-mcp/env.example
+    type: config|noreplace
+
+  # State directory (auto-created with correct ownership)
+  - dst: /var/lib/scholar-mcp
+    type: dir
+    file_info:
+      mode: 0750
+      owner: scholar-mcp
+      group: scholar-mcp
+
+  # Install directory for venv
+  - dst: /opt/scholar-mcp
+    type: dir
+    file_info:
+      mode: 0755
+      owner: root
+      group: root
+
+# --- Lifecycle scripts ---
+
+scripts:
+  preinstall: packaging/scripts/preinstall.sh
+  postinstall: packaging/scripts/postinstall.sh
+  preremove: packaging/scripts/preremove.sh
+  postremove: packaging/scripts/postremove.sh
+
+# --- Packager-specific overrides ---
+# Dependencies are defined per-packager (nfpm overrides replace, not extend).
+
+overrides:
+  deb:
+    depends:
+      - python3 (>= 3.11)
+      - python3-venv
+  rpm:
+    depends:
+      - python3 >= 3.11

@@ -61,7 +61,7 @@ jobs:
             .version = $v |
             .packages |= map(
               if .registryType == "pypi" then .version = $v
-              elif .registryType == "oci" then .identifier = ("ghcr.io/pvliesdonk/scholar-mcp:" + $v)
+              elif .registryType == "oci" then .identifier = ("ghcr.io/pvliesdonk/scholar-mcp:v" + $v)
               else . end
             )
           ' server.json > server.json.tmp
@@ -117,7 +117,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/p/scholar-mcp
+      url: https://pypi.org/p/pvliesdonk-scholar-mcp
 
     permissions:
       id-token: write
@@ -192,8 +192,9 @@ jobs:
             type=raw,value=v${{ steps.version.outputs.major }}
           labels: |
             org.opencontainers.image.title=scholar-mcp
-            org.opencontainers.image.description=FastMCP server template
+            org.opencontainers.image.description=FastMCP server for Semantic Scholar with OpenAlex enrichment and docling PDF conversion
             org.opencontainers.image.vendor=pvliesdonk
+            io.modelcontextprotocol.server.name=io.github.pvliesdonk/scholar-mcp
 
       - name: Build and push Docker image
         id: build-push
@@ -230,3 +231,83 @@ jobs:
           subject-digest: ${{ steps.build-push.outputs.digest }}
           sbom-path: sbom-docker.cdx.json
           push-to-registry: true
+
+  publish-linux-packages:
+    needs: release
+    if: needs.release.outputs.released == 'true'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release.outputs.tag }}
+          fetch-depth: 1
+
+      - name: Create output directory
+        run: mkdir -p dist
+
+      - name: Build .deb package
+        uses: burningalchemist/action-gh-nfpm@eeac96f42da23d091eec0d0088bf05cac0ceb9f3  # v1
+        id: deb
+        with:
+          nfpm_version: "2.41.1"
+          packager: deb
+          config: packaging/nfpm.yaml
+          target: dist/
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+          ARCH: amd64
+
+      - name: Build .rpm package
+        uses: burningalchemist/action-gh-nfpm@eeac96f42da23d091eec0d0088bf05cac0ceb9f3  # v1
+        id: rpm
+        with:
+          nfpm_version: "2.41.1"
+          packager: rpm
+          config: packaging/nfpm.yaml
+          target: dist/
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+          ARCH: x86_64
+
+      - name: Create versionless copies for stable download URLs
+        run: |
+          cp dist/scholar-mcp_*.deb dist/scholar-mcp_latest.deb
+          cp dist/scholar-mcp-*.rpm dist/scholar-mcp_latest.rpm
+
+      - name: Upload packages to GitHub Release
+        run: gh release upload ${{ needs.release.outputs.tag }} dist/*.deb dist/*.rpm --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-registry:
+    needs: [release, publish-pypi, publish-docker]
+    if: needs.release.outputs.released == 'true'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Install mcp-publisher
+        env:
+          MCP_PUBLISHER_VERSION: v1.5.0
+        run: |
+          curl -sL "https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz" | tar xz mcp-publisher
+
+      - name: Authenticate to MCP Registry
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish to MCP Registry
+        run: ./mcp-publisher publish

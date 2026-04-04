@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.pvliesdonk/scholar-mcp",
   "title": "Scholar MCP Server",
-  "description": "FastMCP server template — replace this with your description",
+  "description": "FastMCP server providing structured academic literature access via Semantic Scholar, with OpenAlex enrichment and optional docling-serve PDF conversion.",
   "version": "1.0.0",
   "repository": {
     "url": "https://github.com/pvliesdonk/scholar-mcp",
@@ -11,7 +11,7 @@
   "packages": [
     {
       "registryType": "pypi",
-      "identifier": "scholar-mcp",
+      "identifier": "pvliesdonk-scholar-mcp",
       "version": "1.0.0",
       "transport": {
         "type": "stdio"
