@@ -25,6 +25,11 @@ src/scholar_mcp/
 - `logging.getLogger(__name__)` throughout, no `print()`
 - Type hints everywhere
 
+## Documentation
+
+- `README.md` and `docs/**` must be kept up to date with any user-facing changes (new tools, config options, CLI flags, deployment changes, etc.)
+- Update docs in the same PR as the code change
+
 ## Key Patterns
 
 - Library is sync; MCP layer uses `asyncio.to_thread()` for blocking calls
