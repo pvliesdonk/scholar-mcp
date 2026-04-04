@@ -7,16 +7,19 @@ This guide covers how to protect your MCP server with authentication. Choose the
 
 ## Auth modes
 
-The server supports four authentication modes:
+The server supports five authentication modes:
 
 | Mode | When to use | Configuration |
 |------|-------------|---------------|
-| **Multi-auth** | Mixed clients — e.g. Claude web (OIDC) + Claude Code (bearer token) on the same server | Set both `SCHOLAR_MCP_BEARER_TOKEN` and all four OIDC variables |
+| **Multi-auth** | Mixed clients — e.g. Claude web (OIDC) + Claude Code (bearer token) on the same server | Set `SCHOLAR_MCP_BEARER_TOKEN` + OIDC vars (either remote or oidc-proxy) |
+| **Remote** | Behind a reverse proxy that handles OAuth (e.g. Traefik + Authelia) | Set `SCHOLAR_MCP_BASE_URL` + `SCHOLAR_MCP_OIDC_CONFIG_URL` only |
+| **OIDC proxy** | Production with user identity, SSO, multi-user access — server handles OAuth directly | Set all four OIDC variables (`BASE_URL`, `OIDC_CONFIG_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`) |
 | **Bearer token** | Simple deployments behind a VPN, Docker compose stacks, development | Set `SCHOLAR_MCP_BEARER_TOKEN` only |
-| **OIDC** | Production with user identity, SSO, multi-user access | Set all four OIDC variables only |
 | **No auth** | Local stdio usage, trusted networks | Default (nothing to configure) |
 
-When both bearer token and OIDC are configured, the server accepts **either** credential — a valid bearer token or a valid OIDC session. This is useful when different clients require different authentication flows against the same server instance.
+The OIDC mode is auto-detected from environment variables: `oidc-proxy` when all four OIDC vars are present, `remote` when only `BASE_URL` + `OIDC_CONFIG_URL` are set. Override with `SCHOLAR_MCP_AUTH_MODE=remote` or `SCHOLAR_MCP_AUTH_MODE=oidc-proxy`.
+
+When both bearer token and OIDC (either mode) are configured, the server accepts **either** credential — a valid bearer token or a valid OIDC session. This is useful when different clients require different authentication flows against the same server instance.
 
 ---
 
@@ -61,9 +64,46 @@ Authorization: Bearer your-generated-token
 
 ---
 
-## OIDC
+## Remote auth
 
-Full OAuth 2.1 authentication using an external identity provider. Supports user login flows, SSO, and multi-user access control.
+Use this when your server sits behind a reverse proxy (e.g. Traefik + Authelia) that handles the full OAuth/OIDC flow. The MCP server validates JWTs locally using the OIDC provider's JWKS endpoint — no client credentials needed.
+
+### How it works
+
+```
+Client → Reverse proxy (Authelia) → scholar-mcp (JWT validation only)
+```
+
+1. Client connects to the server
+2. The reverse proxy's auth middleware (Authelia) handles the OAuth flow
+3. Authelia issues a JWT and forwards the request with the token
+4. Scholar-mcp validates the JWT locally via the provider's JWKS keys
+
+### Required variables
+
+| Variable | Description |
+|----------|-------------|
+| `SCHOLAR_MCP_BASE_URL` | Public base URL (e.g. `https://mcp.example.com`) |
+| `SCHOLAR_MCP_OIDC_CONFIG_URL` | OIDC discovery endpoint (e.g. `https://auth.example.com/.well-known/openid-configuration`) |
+
+### Optional variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SCHOLAR_MCP_OIDC_AUDIENCE` | -- | Expected JWT audience claim |
+| `SCHOLAR_MCP_OIDC_REQUIRED_SCOPES` | -- | Comma-separated required scopes |
+
+### When to use remote auth
+
+- Deployments behind Traefik + Authelia, Caddy + Authentik, or similar reverse-proxy auth stacks
+- When the OIDC provider issues opaque access tokens (e.g. Authelia) — the proxy handles the token exchange
+- When you don't want to register the MCP server as an OIDC client
+
+---
+
+## OIDC proxy
+
+Full OAuth 2.1 authentication using an external identity provider. The MCP server itself acts as an OAuth proxy — supports user login flows, SSO, and multi-user access control without an external auth reverse proxy.
 
 ### How it works
 
