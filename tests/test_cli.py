@@ -2,10 +2,20 @@
 
 from __future__ import annotations
 
-import pytest
+import asyncio
+from pathlib import Path
+
 from click.testing import CliRunner
 
 from scholar_mcp.cli import cli
+
+
+async def _init_db(path: Path) -> None:
+    from scholar_mcp._cache import ScholarCache
+
+    c = ScholarCache(path)
+    await c.open()
+    await c.close()
 
 
 def test_cache_help() -> None:
@@ -17,17 +27,16 @@ def test_cache_help() -> None:
 
 
 def test_cache_stats_no_db() -> None:
-    """With no real DB, stats should exit gracefully."""
+    """With no real DB, stats should exit gracefully with code 0."""
     runner = CliRunner()
     with runner.isolated_filesystem():
         result = runner.invoke(cli, ["cache", "stats"])
-    assert result.exit_code in (0, 1)
+    assert result.exit_code == 0
+    assert "No cache database found" in result.output
 
 
-def test_cache_stats_with_db(tmp_path) -> None:
+def test_cache_stats_with_db(tmp_path: Path) -> None:
     """Stats on a real (empty) database."""
-    import asyncio
-    from scholar_mcp._cache import ScholarCache
     db_path = tmp_path / "cache.db"
     asyncio.run(_init_db(db_path))
 
@@ -37,22 +46,17 @@ def test_cache_stats_with_db(tmp_path) -> None:
     assert "papers:" in result.output
 
 
-async def _init_db(path):
-    from scholar_mcp._cache import ScholarCache
-    c = ScholarCache(path)
-    await c.open()
-    await c.close()
-
-
 def test_cache_clear_no_db() -> None:
+    """With no real DB, clear should exit gracefully with code 0."""
     runner = CliRunner()
     with runner.isolated_filesystem():
         result = runner.invoke(cli, ["cache", "clear"])
-    assert result.exit_code in (0, 1)
+    assert result.exit_code == 0
+    assert "No cache database found" in result.output
 
 
-def test_cache_clear_with_db(tmp_path) -> None:
-    import asyncio
+def test_cache_clear_with_db(tmp_path: Path) -> None:
+    """Clear all cache entries."""
     db_path = tmp_path / "cache.db"
     asyncio.run(_init_db(db_path))
 
@@ -62,13 +66,15 @@ def test_cache_clear_with_db(tmp_path) -> None:
     assert "cleared" in result.output.lower()
 
 
-def test_cache_clear_older_than(tmp_path) -> None:
-    import asyncio
+def test_cache_clear_older_than(tmp_path: Path) -> None:
+    """Clear entries older than N days."""
     db_path = tmp_path / "cache.db"
     asyncio.run(_init_db(db_path))
 
     runner = CliRunner()
-    result = runner.invoke(cli, ["cache", "clear", "--older-than", "30", "--cache-dir", str(tmp_path)])
+    result = runner.invoke(
+        cli, ["cache", "clear", "--older-than", "30", "--cache-dir", str(tmp_path)]
+    )
     assert result.exit_code == 0
     assert "30" in result.output
 

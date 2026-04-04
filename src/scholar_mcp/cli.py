@@ -95,7 +95,7 @@ def serve(transport: str, host: str, port: int, path: str | None) -> None:
     env_http_path = os.environ.get(f"{_ENV_PREFIX}_HTTP_PATH")
     http_path = _normalise_http_path(path or env_http_path)
 
-    if transport == "stdio" and (host != "0.0.0.0" or port != 8000 or path is not None):
+    if transport != "http" and (host != "0.0.0.0" or port != 8000 or path is not None):
         logger.warning("--host, --port and --path are only used with --transport http")
 
     if transport == "http":
@@ -182,7 +182,7 @@ def cache_clear(older_than: int | None, cache_dir: Path | None) -> None:
         await c.open()
         await c.clear(older_than_days=older_than)
         await c.close()
-        if older_than:
+        if older_than is not None:
             click.echo(f"Cache cleared (older than {older_than} days).")
         else:
             click.echo("Cache cleared.")
