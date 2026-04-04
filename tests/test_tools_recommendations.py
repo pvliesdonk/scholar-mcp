@@ -69,7 +69,7 @@ async def test_recommend_papers_with_negatives(mcp: FastMCP) -> None:
 
 
 async def test_recommend_papers_caps_positive_ids(mcp: FastMCP) -> None:
-    """Only first 5 positive IDs are sent (spec: 1–5)."""
+    """Only first 5 positive IDs are sent (spec: 1-5)."""
     captured_body: dict = {}
 
     async def capture(request: httpx.Request) -> httpx.Response:

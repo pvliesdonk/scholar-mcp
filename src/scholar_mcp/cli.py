@@ -113,7 +113,12 @@ def serve(transport: str, host: str, port: int, path: str | None) -> None:
             app, host=host, port=port, lifespan="on", timeout_graceful_shutdown=0
         )
     else:
-        server.run(transport=transport)
+        from typing import Literal, cast
+
+        transport_literal = cast(
+            "Literal['stdio', 'http', 'sse', 'streamable-http']", transport
+        )
+        server.run(transport=transport_literal)
 
 
 @cli.group("cache")

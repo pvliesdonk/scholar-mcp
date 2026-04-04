@@ -29,7 +29,9 @@ def mcp(bundle: ServiceBundle) -> FastMCP:
 
 
 @pytest.mark.respx(base_url=S2_BASE)
-async def test_search_papers_returns_results(respx_mock: respx.MockRouter, mcp: FastMCP) -> None:
+async def test_search_papers_returns_results(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
     respx_mock.get("/paper/search").mock(
         return_value=httpx.Response(
             200,
@@ -48,14 +50,18 @@ async def test_search_papers_returns_results(respx_mock: respx.MockRouter, mcp: 
         )
     )
     async with Client(mcp) as client:
-        result = await client.call_tool("search_papers", {"query": "attention transformer"})
+        result = await client.call_tool(
+            "search_papers", {"query": "attention transformer"}
+        )
     data = json.loads(result.content[0].text)
     assert data["total"] == 1
     assert data["data"][0]["paperId"] == "p1"
 
 
 @pytest.mark.respx(base_url=S2_BASE)
-async def test_get_paper_returns_full_metadata(respx_mock: respx.MockRouter, mcp: FastMCP) -> None:
+async def test_get_paper_returns_full_metadata(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
     respx_mock.get("/paper/abc123").mock(
         return_value=httpx.Response(
             200,
@@ -94,7 +100,12 @@ async def test_get_author_by_id(respx_mock: respx.MockRouter, mcp: FastMCP) -> N
                 "hIndex": 42,
                 "paperCount": 100,
                 "papers": [
-                    {"paperId": "p1", "title": "Paper 1", "year": 2020, "citationCount": 5}
+                    {
+                        "paperId": "p1",
+                        "title": "Paper 1",
+                        "year": 2020,
+                        "citationCount": 5,
+                    }
                 ],
             },
         )
@@ -114,8 +125,18 @@ async def test_get_author_by_name_returns_candidates(
             200,
             json={
                 "data": [
-                    {"authorId": "a1", "name": "John Smith", "hIndex": 10, "paperCount": 50},
-                    {"authorId": "a2", "name": "John Smith", "hIndex": 5, "paperCount": 20},
+                    {
+                        "authorId": "a1",
+                        "name": "John Smith",
+                        "hIndex": 10,
+                        "paperCount": 50,
+                    },
+                    {
+                        "authorId": "a2",
+                        "name": "John Smith",
+                        "hIndex": 5,
+                        "paperCount": 20,
+                    },
                 ]
             },
         )

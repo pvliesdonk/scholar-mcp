@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Literal
+from typing import Any, Literal
 
 import httpx
 from fastmcp import FastMCP
@@ -62,7 +62,7 @@ def register_utility_tools(mcp: FastMCP) -> None:
             )
 
         results: list[dict] = []  # type: ignore[type-arg]
-        for i, (raw, s2_data) in enumerate(zip(identifiers, s2_results)):
+        for i, (raw, s2_data) in enumerate(zip(identifiers, s2_results, strict=True)):
             if s2_data is not None:
                 results.append({"identifier": raw, "paper": s2_data})
             elif i in doi_map:
@@ -119,7 +119,7 @@ def register_utility_tools(mcp: FastMCP) -> None:
                 return json.dumps({"error": "not_found_in_openalex", "doi": doi})
             await bundle.cache.set_openalex(doi, oa_data)
 
-        result: dict = {"doi": doi}  # type: ignore[type-arg]
+        result: dict[str, Any] = {"doi": doi}
 
         if "affiliations" in fields:
             result["affiliations"] = [

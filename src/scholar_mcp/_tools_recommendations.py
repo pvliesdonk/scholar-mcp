@@ -34,7 +34,7 @@ def register_recommendation_tools(mcp: FastMCP) -> None:
         """Recommend papers based on positive (and optionally negative) examples.
 
         Args:
-            positive_ids: 1–5 S2 paper IDs to use as positive examples.
+            positive_ids: 1-5 S2 paper IDs to use as positive examples.
             negative_ids: Optional S2 paper IDs to steer away from.
             limit: Number of recommendations to return.
             fields: Field set preset for returned records.
@@ -43,7 +43,12 @@ def register_recommendation_tools(mcp: FastMCP) -> None:
             JSON list of recommended paper records, or an error dict.
         """
         if not positive_ids:
-            return json.dumps({"error": "validation_error", "detail": "positive_ids must contain at least 1 ID"})
+            return json.dumps(
+                {
+                    "error": "validation_error",
+                    "detail": "positive_ids must contain at least 1 ID",
+                }
+            )
         try:
             result = await bundle.s2.recommend(
                 positive_ids[:5],

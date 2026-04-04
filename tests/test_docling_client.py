@@ -22,7 +22,9 @@ def client() -> DoclingClient:
 
 
 @pytest.mark.respx(base_url=DOCLING_BASE)
-async def test_standard_convert(respx_mock: respx.MockRouter, client: DoclingClient) -> None:
+async def test_standard_convert(
+    respx_mock: respx.MockRouter, client: DoclingClient
+) -> None:
     task_id = "task-001"
     respx_mock.post("/v1/convert/file/async").mock(
         return_value=httpx.Response(200, json={"task_id": task_id})
@@ -35,7 +37,9 @@ async def test_standard_convert(respx_mock: respx.MockRouter, client: DoclingCli
             200, json={"document": {"md_content": "# Paper Title\n\nContent here."}}
         )
     )
-    result = await client.convert(b"%PDF-1.4 fake", "paper.pdf", use_vlm=False, poll_interval=0.0)
+    result = await client.convert(
+        b"%PDF-1.4 fake", "paper.pdf", use_vlm=False, poll_interval=0.0
+    )
     assert result == "# Paper Title\n\nContent here."
 
 
@@ -74,7 +78,9 @@ async def test_convert_task_failure(
         return_value=httpx.Response(200, json={"task_id": task_id})
     )
     respx_mock.get(f"/v1/status/poll/{task_id}").mock(
-        return_value=httpx.Response(200, json={"task_status": "failure", "error_message": "Bad PDF"})
+        return_value=httpx.Response(
+            200, json={"task_status": "failure", "error_message": "Bad PDF"}
+        )
     )
     with pytest.raises(RuntimeError, match="failed"):
         await client.convert(b"bad", "bad.pdf", use_vlm=False, poll_interval=0.0)

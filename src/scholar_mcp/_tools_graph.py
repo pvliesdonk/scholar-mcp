@@ -73,7 +73,9 @@ def register_graph_tools(mcp: FastMCP) -> None:
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 404:
                 return json.dumps({"error": "not_found", "identifier": identifier})
-            return json.dumps({"error": "upstream_error", "status": exc.response.status_code})
+            return json.dumps(
+                {"error": "upstream_error", "status": exc.response.status_code}
+            )
         return json.dumps(result)
 
     @mcp.tool()
@@ -102,7 +104,9 @@ def register_graph_tools(mcp: FastMCP) -> None:
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 404:
                 return json.dumps({"error": "not_found", "identifier": identifier})
-            return json.dumps({"error": "upstream_error", "status": exc.response.status_code})
+            return json.dumps(
+                {"error": "upstream_error", "status": exc.response.status_code}
+            )
         return json.dumps(result)
 
     @mcp.tool()
@@ -123,9 +127,9 @@ def register_graph_tools(mcp: FastMCP) -> None:
         directed edges. Hard-caps at *max_nodes* to prevent runaway expansion.
 
         Args:
-            seed_ids: 1–10 paper identifiers to start from.
+            seed_ids: 1-10 paper identifiers to start from.
             direction: Expand via citations, references, or both.
-            depth: Number of hops (1–3).
+            depth: Number of hops (1-3).
             max_nodes: Hard cap on total nodes returned.
             year_start: Filter expanded papers to this year and later.
             year_end: Filter expanded papers to this year and earlier.
@@ -136,8 +140,8 @@ def register_graph_tools(mcp: FastMCP) -> None:
             JSON ``{"nodes": [...], "edges": [...], "stats": {...}}``.
         """
         depth = max(1, min(depth, 3))
-        nodes: dict[str, dict] = {}
-        edges: list[dict] = []
+        nodes: dict[str, dict[str, object]] = {}
+        edges: list[dict[str, object]] = []
         queue: deque[tuple[str, int]] = deque()
 
         for seed_id in seed_ids[:10]:
@@ -168,7 +172,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
                 continue
             actual_depth_reached = max(actual_depth_reached, current_depth + 1)
 
-            new_nodes: list[tuple[str, dict]] = []
+            new_nodes: list[tuple[str, dict[str, object]]] = []
 
             if direction in ("citations", "both"):
                 try:
@@ -192,7 +196,11 @@ def register_graph_tools(mcp: FastMCP) -> None:
                             }
                             new_nodes.append((pid, node))
                             edges.append(
-                                {"source": pid, "target": paper_id, "direction": "cites"}
+                                {
+                                    "source": pid,
+                                    "target": paper_id,
+                                    "direction": "cites",
+                                }
                             )
                 except httpx.HTTPStatusError:
                     pass
@@ -216,7 +224,11 @@ def register_graph_tools(mcp: FastMCP) -> None:
                             }
                             new_nodes.append((pid, node))
                             edges.append(
-                                {"source": paper_id, "target": pid, "direction": "cites"}
+                                {
+                                    "source": paper_id,
+                                    "target": pid,
+                                    "direction": "cites",
+                                }
                             )
                 except httpx.HTTPStatusError:
                     pass
@@ -321,7 +333,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
             neighbours = await _get_neighbours(current_id)
             for neighbour_id in neighbours:
                 if neighbour_id == target_id:
-                    full_path = path + [target_id]
+                    full_path = [*path, target_id]
                     path_records = []
                     for pid in full_path:
                         cached = await bundle.cache.get_paper(pid)
@@ -332,6 +344,6 @@ def register_graph_tools(mcp: FastMCP) -> None:
                     return json.dumps({"found": True, "path": path_records})
                 if neighbour_id not in visited:
                     visited.add(neighbour_id)
-                    queue.append((neighbour_id, path + [neighbour_id]))
+                    queue.append((neighbour_id, [*path, neighbour_id]))
 
         return json.dumps({"found": False})

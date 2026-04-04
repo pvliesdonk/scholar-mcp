@@ -1,7 +1,10 @@
 import asyncio
-import pytest
+
 import httpx
+import pytest
+
 from scholar_mcp._rate_limiter import RateLimiter, with_s2_retry
+
 
 async def test_delay_between_requests():
     limiter = RateLimiter(delay=0.05)
@@ -10,6 +13,7 @@ async def test_delay_between_requests():
     await limiter.acquire()
     elapsed = asyncio.get_event_loop().time() - t0
     assert elapsed >= 0.04  # at least one delay cycle
+
 
 async def test_retry_on_429(respx_mock):
     limiter = RateLimiter(delay=0.0)
@@ -29,6 +33,7 @@ async def test_retry_on_429(respx_mock):
     result = await with_s2_retry(flaky, limiter, max_retries=3, base_delay=0.01)
     assert result == "ok"
     assert call_count == 3
+
 
 async def test_retry_exhausted():
     limiter = RateLimiter(delay=0.0)

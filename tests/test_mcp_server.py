@@ -104,9 +104,10 @@ class TestReadOnlyMode:
     async def test_read_only_by_default(self) -> None:
         """Server is read-only by default — creates without error."""
         server = create_server()
-        tool_names = [t.name for t in await server.list_tools()]
         # No write-tagged tools should be present in read-only mode.
-        write_tools = [t for t in await server.list_tools() if "write" in (t.tags or set())]
+        write_tools = [
+            t for t in await server.list_tools() if "write" in (t.tags or set())
+        ]
         assert write_tools == []
 
     async def test_read_write_mode(self, monkeypatch: pytest.MonkeyPatch) -> None:

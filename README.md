@@ -1,85 +1,135 @@
 # scholar-mcp
 
-> **This is a template repository.** Click "Use this template" to create your own MCP server, then follow [TEMPLATE.md](TEMPLATE.md) to customise it.
+A [FastMCP](https://github.com/jlowin/fastmcp) server providing structured academic literature access via [Semantic Scholar](https://www.semanticscholar.org/), with [OpenAlex](https://openalex.org/) enrichment and optional [docling-serve](https://github.com/DS4SD/docling-serve) PDF conversion.
 
-A production-ready [FastMCP](https://gofastmcp.com) server scaffold with batteries included:
+## Features
 
-- **Auth** — bearer token, OIDC, and multi-auth (both simultaneously)
-- **Read-only mode** — write tools hidden via `mcp.disable(tags={"write"})`
-- **CI** — test matrix (Python 3.11–3.14), ruff, mypy, pip-audit, gitleaks, CodeQL
-- **Release pipeline** — semantic-release → PyPI + Docker (GHCR), SBOM attestation
-- **Docker** — multi-arch, `gosu` privilege dropping, configurable PUID/PGID
-- **Docs** — MkDocs Material + GitHub Pages
+### Search & Retrieval
+- **`search_papers`** — full-text search with year, field-of-study, venue, and citation-count filters
+- **`get_paper`** — fetch full metadata for a single paper by DOI, S2 ID, arXiv ID, ACM ID, or PubMed ID
+- **`get_author`** — fetch author profile and publications, or search by name
 
-## Quick start
+### Citation Graph
+- **`get_citations`** — forward citations (papers that cite a given paper)
+- **`get_references`** — backward references (papers cited by a given paper)
+- **`get_citation_graph`** — BFS traversal returning nodes + edges up to configurable depth
+- **`find_bridge_papers`** — shortest citation path between two papers
+
+### Recommendations
+- **`recommend_papers`** — paper recommendations from positive (and optional negative) examples
+
+### Utility
+- **`batch_resolve`** — resolve up to 100 identifiers to full metadata in one call
+- **`enrich_paper`** — augment S2 metadata with OpenAlex fields (open-access URL, topics, concepts)
+
+### PDF Conversion (requires docling-serve)
+- **`fetch_paper_pdf`** — download open-access PDF for a paper
+- **`convert_pdf_to_markdown`** — convert local PDF to Markdown via docling-serve
+- **`fetch_and_convert`** — full pipeline: fetch OA PDF → convert to Markdown
+
+### Cache Management (CLI)
+- **`scholar-mcp cache stats`** — show cache row counts and file size
+- **`scholar-mcp cache clear [--older-than N]`** — clear cache entries
+
+## Quick Start
+
+### With `uvx`
 
 ```bash
-# Install and run (stdio transport)
-pip install scholar-mcp[mcp]
-scholar-mcp serve
+# stdio transport (default, for Claude Desktop / MCP clients)
+SCHOLAR_MCP_S2_API_KEY=your-key uvx scholar-mcp serve
 
-# Or with HTTP transport
-scholar-mcp serve --transport http --port 8000
+# HTTP transport
+uvx scholar-mcp serve --transport http --port 8000
+```
+
+### With Docker
+
+```bash
+docker run -e SCHOLAR_MCP_S2_API_KEY=your-key \
+           -v scholar-mcp-data:/data/scholar-mcp \
+           ghcr.io/pvliesdonk/scholar-mcp:latest
 ```
 
 ## Configuration
 
-All configuration is via environment variables prefixed with `SCHOLAR_MCP_`:
+All settings are controlled via environment variables with the `SCHOLAR_MCP_` prefix.
 
 | Variable | Default | Description |
-|----------|---------|-------------|
-| `SCHOLAR_MCP_READ_ONLY` | `true` | Disable write tools |
-| `SCHOLAR_MCP_LOG_LEVEL` | `INFO` | Log level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
-| `SCHOLAR_MCP_SERVER_NAME` | `scholar-mcp` | Server name shown to clients |
-| `SCHOLAR_MCP_INSTRUCTIONS` | (dynamic) | System instructions for LLM context |
-| `SCHOLAR_MCP_HTTP_PATH` | `/mcp` | Mount path for HTTP transport |
+|---|---|---|
+| `SCHOLAR_MCP_S2_API_KEY` | — | Semantic Scholar API key (optional; unauthenticated rate limit applies without it) |
+| `SCHOLAR_MCP_READ_ONLY` | `true` | If `true`, write-tagged tools (`fetch_paper_pdf`) are hidden |
+| `SCHOLAR_MCP_CACHE_DIR` | `/data/scholar-mcp` | Directory for the SQLite cache database |
+| `SCHOLAR_MCP_DOCLING_URL` | — | Base URL of a running docling-serve instance (e.g. `http://localhost:5001`) |
+| `SCHOLAR_MCP_VLM_API_URL` | — | OpenAI-compatible VLM endpoint for formula/figure-enriched PDF conversion |
+| `SCHOLAR_MCP_VLM_API_KEY` | — | API key for the VLM endpoint |
+| `SCHOLAR_MCP_VLM_MODEL` | `gpt-4o` | Model name for VLM-enriched conversion |
+| `SCHOLAR_MCP_LOG_LEVEL` | `INFO` | Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
+| `SCHOLAR_MCP_BEARER_TOKEN` | — | Bearer token for HTTP transport authentication |
+| `SCHOLAR_MCP_OIDC_ISSUER` | — | OIDC issuer URL for JWT authentication |
+| `SCHOLAR_MCP_OIDC_AUDIENCE` | — | Expected audience for OIDC tokens |
 
-## Authentication
+## Docker Compose
 
-The server supports four auth modes:
+```yaml
+services:
+  scholar-mcp:
+    image: ghcr.io/pvliesdonk/scholar-mcp:latest
+    restart: unless-stopped
+    environment:
+      SCHOLAR_MCP_S2_API_KEY: "${SCHOLAR_MCP_S2_API_KEY}"
+      SCHOLAR_MCP_DOCLING_URL: "http://docling-serve:5001"
+      SCHOLAR_MCP_VLM_API_URL: "${VLM_API_URL}"
+      SCHOLAR_MCP_VLM_API_KEY: "${VLM_API_KEY}"
+      SCHOLAR_MCP_CACHE_DIR: "/data/scholar-mcp"
+      SCHOLAR_MCP_READ_ONLY: "false"
+    volumes:
+      - scholar-mcp-data:/data/scholar-mcp
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.scholar-mcp.rule=Host(`scholar-mcp.yourdomain.com`)"
+      - "traefik.http.routers.scholar-mcp.middlewares=authelia@docker"
 
-1. **Multi-auth** — both bearer token and OIDC configured; either credential accepted
-2. **Bearer token** — set `SCHOLAR_MCP_BEARER_TOKEN` to a secret string
-3. **OIDC** — full OAuth 2.1 flow via `OIDC_CONFIG_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, and `BASE_URL`
-4. **No auth** — server accepts all connections (default)
+  docling-serve:
+    image: ghcr.io/ds4sd/docling-serve:latest
+    restart: unless-stopped
 
-**Auth requires `--transport http` (or `sse`).** It has no effect with `--transport stdio`.
-
-| Variable | Description |
-|----------|-------------|
-| `SCHOLAR_MCP_BEARER_TOKEN` | Static bearer token |
-| `SCHOLAR_MCP_BASE_URL` | Public base URL — required for OIDC (e.g. `https://mcp.example.com`) |
-| `SCHOLAR_MCP_OIDC_CONFIG_URL` | OIDC discovery endpoint |
-| `SCHOLAR_MCP_OIDC_CLIENT_ID` | OIDC client ID |
-| `SCHOLAR_MCP_OIDC_CLIENT_SECRET` | OIDC client secret |
-| `SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY` | JWT signing key — **required on Linux/Docker** to survive restarts |
-
-See [Authentication guide](docs/guides/authentication.md) for full setup details.
-
-## Docker
-
-```bash
-docker compose up -d
+volumes:
+  scholar-mcp-data:
 ```
 
-See [Docker deployment](docs/deployment/docker.md) for volumes, UID/GID, and Traefik setup.
+## Cache Management
+
+```bash
+# Show cache statistics
+scholar-mcp cache stats
+
+# Clear all cached data (preserves identifier aliases)
+scholar-mcp cache clear
+
+# Remove entries older than 30 days
+scholar-mcp cache clear --older-than 30
+
+# Override cache directory
+scholar-mcp cache stats --cache-dir /path/to/cache
+```
 
 ## Development
 
 ```bash
-uv sync
+# Install with dev dependencies
+uv sync --extra dev --extra mcp
+
+# Run tests
 uv run pytest
+
+# Lint and format
 uv run ruff check src/ tests/
+uv run ruff format src/ tests/
+
+# Type check
 uv run mypy src/
 ```
-
-## Using this template
-
-See [TEMPLATE.md](TEMPLATE.md) for the step-by-step customisation guide, including the `rename.sh` bootstrap script.
-
-## Keeping derived repos in sync
-
-See [SYNC.md](SYNC.md) for the infrastructure vs domain boundary definition and the cherry-pick workflow for propagating non-domain changes between this template and derived repositories.
 
 ## License
 

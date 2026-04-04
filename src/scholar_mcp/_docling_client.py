@@ -73,7 +73,9 @@ class DoclingClient:
                 )
 
             if status.lower() == "success":
-                result_r = await self.http_client.get(f"/v1/result/{task_id}", timeout=30)
+                result_r = await self.http_client.get(
+                    f"/v1/result/{task_id}", timeout=30
+                )
                 result_r.raise_for_status()
                 result = result_r.json()
                 doc = result.get("document") or {}
@@ -121,7 +123,11 @@ class DoclingClient:
         r = await self.http_client.post(
             "/v1/convert/file/async",
             files={"files": (filename, pdf_bytes, "application/pdf")},
-            data={"to_formats": "md", "do_ocr": "true", "image_export_mode": "placeholder"},
+            data={
+                "to_formats": "md",
+                "do_ocr": "true",
+                "image_export_mode": "placeholder",
+            },
             timeout=60,
         )
         r.raise_for_status()
@@ -189,7 +195,9 @@ class DoclingClient:
             },
             "sources": [{"kind": "file", "base64_string": b64, "filename": filename}],
         }
-        r = await self.http_client.post("/v1/convert/source/async", json=payload, timeout=60)
+        r = await self.http_client.post(
+            "/v1/convert/source/async", json=payload, timeout=60
+        )
         r.raise_for_status()
         task_id = r.json().get("task_id") or r.json().get("id")
         if not task_id:

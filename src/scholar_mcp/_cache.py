@@ -6,17 +6,18 @@ import json
 import logging
 import time
 from pathlib import Path
+from typing import Any
 
 import aiosqlite
 
 logger = logging.getLogger(__name__)
 
 # TTLs in seconds
-_PAPER_TTL = 30 * 86400       # 30 days
-_CITATION_TTL = 7 * 86400     # 7 days
-_REFERENCE_TTL = 7 * 86400    # 7 days
-_AUTHOR_TTL = 30 * 86400      # 30 days
-_OPENALEX_TTL = 30 * 86400    # 30 days
+_PAPER_TTL = 30 * 86400  # 30 days
+_CITATION_TTL = 7 * 86400  # 7 days
+_REFERENCE_TTL = 7 * 86400  # 7 days
+_AUTHOR_TTL = 30 * 86400  # 30 days
+_OPENALEX_TTL = 30 * 86400  # 30 days
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY);
@@ -95,7 +96,7 @@ class ScholarCache:
     # Papers
     # ------------------------------------------------------------------
 
-    async def get_paper(self, paper_id: str) -> dict | None:
+    async def get_paper(self, paper_id: str) -> dict[str, Any] | None:
         """Return cached paper data or None if missing/stale.
 
         Args:
@@ -115,7 +116,7 @@ class ScholarCache:
             return None
         return json.loads(row[0])  # type: ignore[no-any-return]
 
-    async def set_paper(self, paper_id: str, data: dict) -> None:
+    async def set_paper(self, paper_id: str, data: dict[str, Any]) -> None:
         """Cache paper data.
 
         Args:
@@ -144,7 +145,8 @@ class ScholarCache:
         """
         assert self._db
         async with self._db.execute(
-            "SELECT citing_ids, cached_at FROM citations WHERE paper_id = ?", (paper_id,)
+            "SELECT citing_ids, cached_at FROM citations WHERE paper_id = ?",
+            (paper_id,),
         ) as cur:
             row = await cur.fetchone()
         if row is None or time.time() - row[1] > _CITATION_TTL:
@@ -205,7 +207,7 @@ class ScholarCache:
     # Authors
     # ------------------------------------------------------------------
 
-    async def get_author(self, author_id: str) -> dict | None:
+    async def get_author(self, author_id: str) -> dict[str, Any] | None:
         """Return cached author data or None if missing/stale.
 
         Args:
@@ -223,7 +225,7 @@ class ScholarCache:
             return None
         return json.loads(row[0])  # type: ignore[no-any-return]
 
-    async def set_author(self, author_id: str, data: dict) -> None:
+    async def set_author(self, author_id: str, data: dict[str, Any]) -> None:
         """Cache author data.
 
         Args:
@@ -241,7 +243,7 @@ class ScholarCache:
     # OpenAlex enrichment
     # ------------------------------------------------------------------
 
-    async def get_openalex(self, doi: str) -> dict | None:
+    async def get_openalex(self, doi: str) -> dict[str, Any] | None:
         """Return cached OpenAlex data for a DOI or None if missing/stale.
 
         Args:
@@ -259,7 +261,7 @@ class ScholarCache:
             return None
         return json.loads(row[0])  # type: ignore[no-any-return]
 
-    async def set_openalex(self, doi: str, data: dict) -> None:
+    async def set_openalex(self, doi: str, data: dict[str, Any]) -> None:
         """Cache OpenAlex enrichment data for a DOI.
 
         Args:
@@ -311,7 +313,7 @@ class ScholarCache:
     # Maintenance
     # ------------------------------------------------------------------
 
-    async def stats(self) -> dict:
+    async def stats(self) -> dict[str, int]:
         """Return row counts and file size for all tables.
 
         Returns:
@@ -320,11 +322,20 @@ class ScholarCache:
         """
         assert self._db
         counts: dict[str, int] = {}
-        for table in ("papers", "citation_counts", "citations", "refs", "authors", "openalex"):
-            async with self._db.execute(f"SELECT COUNT(*) FROM {table}") as cur:  # noqa: S608
+        for table in (
+            "papers",
+            "citation_counts",
+            "citations",
+            "refs",
+            "authors",
+            "openalex",
+        ):
+            async with self._db.execute(f"SELECT COUNT(*) FROM {table}") as cur:
                 row = await cur.fetchone()
                 counts[table] = row[0] if row else 0
-        counts["db_size_bytes"] = self._db_path.stat().st_size if self._db_path.exists() else 0
+        counts["db_size_bytes"] = (
+            self._db_path.stat().st_size if self._db_path.exists() else 0
+        )
         return counts
 
     async def clear(self, older_than_days: int | None = None) -> None:
@@ -336,12 +347,26 @@ class ScholarCache:
         """
         assert self._db
         if older_than_days is None:
-            for table in ("papers", "citation_counts", "citations", "refs", "authors", "openalex"):
-                await self._db.execute(f"DELETE FROM {table}")  # noqa: S608
+            for table in (
+                "papers",
+                "citation_counts",
+                "citations",
+                "refs",
+                "authors",
+                "openalex",
+            ):
+                await self._db.execute(f"DELETE FROM {table}")
         else:
             cutoff = time.time() - older_than_days * 86400
-            for table in ("papers", "citation_counts", "citations", "refs", "authors", "openalex"):
-                await self._db.execute(  # noqa: S608
+            for table in (
+                "papers",
+                "citation_counts",
+                "citations",
+                "refs",
+                "authors",
+                "openalex",
+            ):
+                await self._db.execute(
                     f"DELETE FROM {table} WHERE cached_at < ?", (cutoff,)
                 )
         await self._db.commit()

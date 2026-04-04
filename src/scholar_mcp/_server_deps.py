@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import AsyncGenerator
 
 import httpx
 from fastmcp import FastMCP
-from fastmcp.dependencies import CurrentContext, Depends
+from fastmcp.dependencies import CurrentContext
 from fastmcp.server.context import Context
 
 from ._cache import ScholarCache
@@ -103,4 +103,4 @@ def get_bundle(ctx: Context = CurrentContext()) -> ServiceBundle:
     Returns:
         The :class:`ServiceBundle` created during lifespan.
     """
-    return ctx.lifespan_context["bundle"]  # type: ignore[return-value]
+    return ctx.lifespan_context["bundle"]  # type: ignore[no-any-return]

@@ -128,7 +128,7 @@ def register_search_tools(mcp: FastMCP) -> None:
                 }
             )
 
-        paper_id = data.get("paperId", "")
+        paper_id: str = data.get("paperId") or ""
         if paper_id:
             await bundle.cache.set_paper(paper_id, data)
             if identifier != paper_id:
@@ -166,7 +166,9 @@ def register_search_tools(mcp: FastMCP) -> None:
                 if cached:
                     return json.dumps(cached)
             try:
-                data = await bundle.s2.get_author(identifier, limit=limit, offset=offset)
+                data = await bundle.s2.get_author(
+                    identifier, limit=limit, offset=offset
+                )
             except httpx.HTTPStatusError as exc:
                 if exc.response.status_code == 404:
                     return json.dumps({"error": "not_found", "identifier": identifier})

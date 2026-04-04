@@ -111,7 +111,9 @@ def register_pdf_tools(mcp: FastMCP) -> None:
         vlm_used = use_vlm and bundle.docling.vlm_available
 
         try:
-            markdown = await bundle.docling.convert(pdf_bytes, path.name, use_vlm=use_vlm)
+            markdown = await bundle.docling.convert(
+                pdf_bytes, path.name, use_vlm=use_vlm
+            )
         except Exception as exc:
             logger.exception("docling_convert_failed path=%s", file_path)
             return json.dumps({"error": "docling_error", "detail": str(exc)})
@@ -171,7 +173,11 @@ def register_pdf_tools(mcp: FastMCP) -> None:
                     pdf_path.write_bytes(r.content)
                 except httpx.HTTPError as exc:
                     return json.dumps(
-                        {"metadata": paper, "error": "download_failed", "detail": str(exc)}
+                        {
+                            "metadata": paper,
+                            "error": "download_failed",
+                            "detail": str(exc),
+                        }
                     )
 
         if bundle.docling is None:

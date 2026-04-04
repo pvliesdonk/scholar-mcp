@@ -1,6 +1,5 @@
-import os
-import pytest
-from scholar_mcp.config import ServerConfig, load_config
+from scholar_mcp.config import load_config
+
 
 def test_defaults(monkeypatch):
     monkeypatch.delenv("SCHOLAR_MCP_S2_API_KEY", raising=False)
@@ -18,6 +17,7 @@ def test_defaults(monkeypatch):
     assert cfg.vlm_model == "gpt-4o"
     assert str(cfg.cache_dir) == "/data/scholar-mcp"
     assert cfg.read_only is True
+
 
 def test_env_vars_loaded(monkeypatch):
     monkeypatch.setenv("SCHOLAR_MCP_S2_API_KEY", "test-key")

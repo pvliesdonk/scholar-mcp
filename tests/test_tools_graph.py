@@ -35,7 +35,14 @@ async def test_get_citations(respx_mock: respx.MockRouter, mcp: FastMCP) -> None
             200,
             json={
                 "data": [
-                    {"citingPaper": {"paperId": "c1", "title": "Citer", "year": 2022, "citationCount": 5}}
+                    {
+                        "citingPaper": {
+                            "paperId": "c1",
+                            "title": "Citer",
+                            "year": 2022,
+                            "citationCount": 5,
+                        }
+                    }
                 ]
             },
         )
@@ -53,7 +60,14 @@ async def test_get_references(respx_mock: respx.MockRouter, mcp: FastMCP) -> Non
             200,
             json={
                 "data": [
-                    {"citedPaper": {"paperId": "r1", "title": "Foundation", "year": 2015, "citationCount": 1000}}
+                    {
+                        "citedPaper": {
+                            "paperId": "r1",
+                            "title": "Foundation",
+                            "year": 2015,
+                            "citationCount": 1000,
+                        }
+                    }
                 ]
             },
         )
@@ -65,7 +79,9 @@ async def test_get_references(respx_mock: respx.MockRouter, mcp: FastMCP) -> Non
 
 
 @pytest.mark.respx(base_url=S2_BASE)
-async def test_get_citations_not_found(respx_mock: respx.MockRouter, mcp: FastMCP) -> None:
+async def test_get_citations_not_found(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
     respx_mock.get("/paper/missing/citations").mock(return_value=httpx.Response(404))
     async with Client(mcp) as client:
         result = await client.call_tool("get_citations", {"identifier": "missing"})
@@ -74,14 +90,30 @@ async def test_get_citations_not_found(respx_mock: respx.MockRouter, mcp: FastMC
 
 
 @pytest.mark.respx(base_url=S2_BASE)
-async def test_get_citation_graph_single_hop(respx_mock: respx.MockRouter, mcp: FastMCP) -> None:
+async def test_get_citation_graph_single_hop(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
     respx_mock.get("/paper/p1/citations").mock(
         return_value=httpx.Response(
             200,
             json={
                 "data": [
-                    {"citingPaper": {"paperId": "c1", "title": "C1", "year": 2022, "citationCount": 3}},
-                    {"citingPaper": {"paperId": "c2", "title": "C2", "year": 2023, "citationCount": 1}},
+                    {
+                        "citingPaper": {
+                            "paperId": "c1",
+                            "title": "C1",
+                            "year": 2022,
+                            "citationCount": 3,
+                        }
+                    },
+                    {
+                        "citingPaper": {
+                            "paperId": "c2",
+                            "title": "C2",
+                            "year": 2023,
+                            "citationCount": 1,
+                        }
+                    },
                 ]
             },
         )
@@ -100,15 +132,38 @@ async def test_get_citation_graph_single_hop(respx_mock: respx.MockRouter, mcp: 
 
 
 @pytest.mark.respx(base_url=S2_BASE)
-async def test_get_citation_graph_max_nodes_cap(respx_mock: respx.MockRouter, mcp: FastMCP) -> None:
+async def test_get_citation_graph_max_nodes_cap(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
     respx_mock.get("/paper/p1/citations").mock(
         return_value=httpx.Response(
             200,
             json={
                 "data": [
-                    {"citingPaper": {"paperId": "c1", "title": "C1", "year": 2022, "citationCount": 1}},
-                    {"citingPaper": {"paperId": "c2", "title": "C2", "year": 2022, "citationCount": 1}},
-                    {"citingPaper": {"paperId": "c3", "title": "C3", "year": 2022, "citationCount": 1}},
+                    {
+                        "citingPaper": {
+                            "paperId": "c1",
+                            "title": "C1",
+                            "year": 2022,
+                            "citationCount": 1,
+                        }
+                    },
+                    {
+                        "citingPaper": {
+                            "paperId": "c2",
+                            "title": "C2",
+                            "year": 2022,
+                            "citationCount": 1,
+                        }
+                    },
+                    {
+                        "citingPaper": {
+                            "paperId": "c3",
+                            "title": "C3",
+                            "year": 2022,
+                            "citationCount": 1,
+                        }
+                    },
                 ]
             },
         )
@@ -124,13 +179,22 @@ async def test_get_citation_graph_max_nodes_cap(respx_mock: respx.MockRouter, mc
 
 
 @pytest.mark.respx(base_url=S2_BASE)
-async def test_find_bridge_papers_direct(respx_mock: respx.MockRouter, mcp: FastMCP) -> None:
+async def test_find_bridge_papers_direct(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
     respx_mock.get("/paper/p1/references").mock(
         return_value=httpx.Response(
             200,
             json={
                 "data": [
-                    {"citedPaper": {"paperId": "p2", "title": "Target", "year": 2020, "citationCount": 5}}
+                    {
+                        "citedPaper": {
+                            "paperId": "p2",
+                            "title": "Target",
+                            "year": 2020,
+                            "citationCount": 5,
+                        }
+                    }
                 ]
             },
         )
@@ -138,7 +202,12 @@ async def test_find_bridge_papers_direct(respx_mock: respx.MockRouter, mcp: Fast
     async with Client(mcp) as client:
         result = await client.call_tool(
             "find_bridge_papers",
-            {"source_id": "p1", "target_id": "p2", "max_depth": 3, "direction": "references"},
+            {
+                "source_id": "p1",
+                "target_id": "p2",
+                "max_depth": 3,
+                "direction": "references",
+            },
         )
     data = json.loads(result.content[0].text)
     assert data["found"] is True
@@ -147,14 +216,21 @@ async def test_find_bridge_papers_direct(respx_mock: respx.MockRouter, mcp: Fast
 
 
 @pytest.mark.respx(base_url=S2_BASE)
-async def test_find_bridge_papers_not_found(respx_mock: respx.MockRouter, mcp: FastMCP) -> None:
+async def test_find_bridge_papers_not_found(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
     respx_mock.get("/paper/p1/references").mock(
         return_value=httpx.Response(200, json={"data": []})
     )
     async with Client(mcp) as client:
         result = await client.call_tool(
             "find_bridge_papers",
-            {"source_id": "p1", "target_id": "nowhere", "max_depth": 1, "direction": "references"},
+            {
+                "source_id": "p1",
+                "target_id": "nowhere",
+                "max_depth": 1,
+                "direction": "references",
+            },
         )
     data = json.loads(result.content[0].text)
     assert data["found"] is False

@@ -40,23 +40,27 @@ class S2Client:
         headers: dict[str, str] = {"User-Agent": "scholar-mcp/0.1"}
         if api_key:
             headers["x-api-key"] = api_key
-        self._client = httpx.AsyncClient(base_url=_S2_BASE, headers=headers, timeout=30.0)
+        self._client = httpx.AsyncClient(
+            base_url=_S2_BASE, headers=headers, timeout=30.0
+        )
 
     async def aclose(self) -> None:
         """Close the underlying HTTP client."""
         await self._client.aclose()
 
-    async def _get(self, path: str, **params: Any) -> dict:  # type: ignore[type-arg]
-        async def _call() -> dict:  # type: ignore[type-arg]
+    async def _get(self, path: str, **params: Any) -> dict[str, Any]:
+        async def _call() -> dict[str, Any]:
             r = await self._client.get(
                 path, params={k: v for k, v in params.items() if v is not None}
             )
             r.raise_for_status()
             return r.json()  # type: ignore[no-any-return]
 
-        return await with_s2_retry(_call, self._limiter)  # type: ignore[return-value]
+        return await with_s2_retry(_call, self._limiter)  # type: ignore[no-any-return]
 
-    async def get_paper(self, identifier: str, fields: str = FIELD_SETS["full"]) -> dict:  # type: ignore[type-arg]
+    async def get_paper(
+        self, identifier: str, fields: str = FIELD_SETS["full"]
+    ) -> dict[str, Any]:
         """Fetch full metadata for a single paper.
 
         Args:
@@ -80,7 +84,7 @@ class S2Client:
         venue: str | None = None,
         minCitationCount: int | None = None,
         sort: str | None = None,
-    ) -> dict:  # type: ignore[type-arg]
+    ) -> dict[str, Any]:
         """Search the S2 corpus.
 
         Args:
@@ -120,7 +124,7 @@ class S2Client:
         year: str | None = None,
         fieldsOfStudy: str | None = None,
         minCitationCount: int | None = None,
-    ) -> dict:  # type: ignore[type-arg]
+    ) -> dict[str, Any]:
         """Fetch papers that cite the given paper.
 
         Args:
@@ -152,7 +156,7 @@ class S2Client:
         fields: str,
         limit: int,
         offset: int,
-    ) -> dict:  # type: ignore[type-arg]
+    ) -> dict[str, Any]:
         """Fetch papers referenced by the given paper.
 
         Args:
@@ -171,7 +175,7 @@ class S2Client:
             offset=offset,
         )
 
-    async def search_authors(self, name: str, limit: int = 5) -> list[dict]:  # type: ignore[type-arg]
+    async def search_authors(self, name: str, limit: int = 5) -> list[dict[str, Any]]:
         """Search for authors by name.
 
         Args:
@@ -187,11 +191,11 @@ class S2Client:
             fields="name,affiliations,hIndex,paperCount",
             limit=limit,
         )
-        return result.get("data", [])  # type: ignore[return-value]
+        return result.get("data", [])  # type: ignore[no-any-return]
 
     async def get_author(
         self, author_id: str, *, limit: int = 20, offset: int = 0
-    ) -> dict:  # type: ignore[type-arg]
+    ) -> dict[str, Any]:
         """Fetch author profile with paginated publications.
 
         Args:
@@ -216,7 +220,7 @@ class S2Client:
         negative_ids: list[str] | None = None,
         limit: int = 10,
         fields: str,
-    ) -> list[dict]:  # type: ignore[type-arg]
+    ) -> list[dict[str, Any]]:
         """Fetch paper recommendations from S2 recommendations endpoint.
 
         Args:
@@ -229,7 +233,7 @@ class S2Client:
             List of recommended paper dicts.
         """
 
-        async def _call() -> list[dict]:  # type: ignore[type-arg]
+        async def _call() -> list[dict[str, Any]]:
             body: dict[str, Any] = {
                 "positivePaperIds": positive_ids,
                 "negativePaperIds": negative_ids or [],
@@ -242,9 +246,11 @@ class S2Client:
             r.raise_for_status()
             return r.json().get("recommendedPapers", [])  # type: ignore[no-any-return]
 
-        return await with_s2_retry(_call, self._limiter)  # type: ignore[return-value]
+        return await with_s2_retry(_call, self._limiter)  # type: ignore[no-any-return]
 
-    async def batch_resolve(self, ids: list[str], *, fields: str) -> list[dict | None]:
+    async def batch_resolve(
+        self, ids: list[str], *, fields: str
+    ) -> list[dict[str, Any] | None]:
         """Resolve a batch of paper IDs using the S2 batch endpoint.
 
         Args:
@@ -255,7 +261,7 @@ class S2Client:
             List of paper dicts (None for unresolved items, preserving order).
         """
 
-        async def _call() -> list[dict | None]:
+        async def _call() -> list[dict[str, Any] | None]:
             r = await self._client.post(
                 "/paper/batch",
                 json={"ids": ids},
@@ -264,4 +270,4 @@ class S2Client:
             r.raise_for_status()
             return r.json()  # type: ignore[no-any-return]
 
-        return await with_s2_retry(_call, self._limiter)  # type: ignore[return-value]
+        return await with_s2_retry(_call, self._limiter)  # type: ignore[no-any-return]
