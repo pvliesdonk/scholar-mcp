@@ -77,7 +77,6 @@ def register_graph_tools(mcp: FastMCP) -> None:
                     offset=offset,
                     year=year,
                     fieldsOfStudy=fos,
-                    minCitationCount=min_citations,
                     retry=retry,
                 )
             except httpx.HTTPStatusError as exc:
@@ -242,7 +241,6 @@ def register_graph_tools(mcp: FastMCP) -> None:
                             offset=0,
                             year=year,
                             fieldsOfStudy=fos,
-                            minCitationCount=None,
                             retry=retry,
                         )
                         for item in result.get("data", []):
