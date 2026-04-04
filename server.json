@@ -1,30 +1,30 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.pvliesdonk/fastmcp-server-template",
-  "title": "FastMCP Server Template",
+  "name": "io.github.pvliesdonk/scholar-mcp",
+  "title": "Scholar MCP Server",
   "description": "FastMCP server template — replace this with your description",
   "version": "0.1.0",
   "repository": {
-    "url": "https://github.com/pvliesdonk/fastmcp-server-template",
+    "url": "https://github.com/pvliesdonk/scholar-mcp",
     "source": "github"
   },
   "packages": [
     {
       "registryType": "pypi",
-      "identifier": "fastmcp-server-template",
+      "identifier": "scholar-mcp",
       "version": "0.1.0",
       "transport": {
         "type": "stdio"
       },
       "environmentVariables": [
         {
-          "name": "MCP_SERVER_READ_ONLY",
+          "name": "SCHOLAR_MCP_READ_ONLY",
           "description": "Set to 'false' to enable write tools (default: true)",
           "required": false,
           "default": "true"
         },
         {
-          "name": "MCP_SERVER_BEARER_TOKEN",
+          "name": "SCHOLAR_MCP_BEARER_TOKEN",
           "description": "Static bearer token for authentication (optional)",
           "required": false
         }
@@ -32,7 +32,7 @@
     },
     {
       "registryType": "oci",
-      "identifier": "ghcr.io/pvliesdonk/fastmcp-server-template:0.1.0",
+      "identifier": "ghcr.io/pvliesdonk/scholar-mcp:0.1.0",
       "transport": {
         "type": "streamable-http",
         "url": "http://localhost:{--port}/mcp"
@@ -47,38 +47,38 @@
       ],
       "environmentVariables": [
         {
-          "name": "MCP_SERVER_READ_ONLY",
+          "name": "SCHOLAR_MCP_READ_ONLY",
           "description": "Set to 'false' to enable write tools (default: true)",
           "required": false,
           "default": "true"
         },
         {
-          "name": "MCP_SERVER_BEARER_TOKEN",
+          "name": "SCHOLAR_MCP_BEARER_TOKEN",
           "description": "Static bearer token for authentication (optional)",
           "required": false
         },
         {
-          "name": "MCP_SERVER_BASE_URL",
+          "name": "SCHOLAR_MCP_BASE_URL",
           "description": "Public base URL of this server, required for OIDC (e.g. https://mcp.example.com)",
           "required": false
         },
         {
-          "name": "MCP_SERVER_OIDC_CONFIG_URL",
+          "name": "SCHOLAR_MCP_OIDC_CONFIG_URL",
           "description": "OIDC discovery endpoint URL (e.g. https://auth.example.com/.well-known/openid-configuration)",
           "required": false
         },
         {
-          "name": "MCP_SERVER_OIDC_CLIENT_ID",
+          "name": "SCHOLAR_MCP_OIDC_CLIENT_ID",
           "description": "OIDC client ID",
           "required": false
         },
         {
-          "name": "MCP_SERVER_OIDC_CLIENT_SECRET",
+          "name": "SCHOLAR_MCP_OIDC_CLIENT_SECRET",
           "description": "OIDC client secret",
           "required": false
         },
         {
-          "name": "MCP_SERVER_OIDC_JWT_SIGNING_KEY",
+          "name": "SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY",
           "description": "JWT signing key — required on Linux/Docker to survive restarts (generate with: openssl rand -hex 32)",
           "required": false
         }

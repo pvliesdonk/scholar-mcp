@@ -121,7 +121,7 @@ jobs:
                 state: 'success',
                 context: 'codecov/patch',
                 description: 'Coverage not affected',
-                target_url: 'https://app.codecov.io/gh/pvliesdonk/fastmcp-server-template',
+                target_url: 'https://app.codecov.io/gh/pvliesdonk/scholar-mcp',
               });
             } else {
               core.info('Python source changes detected — Codecov will post patch status');

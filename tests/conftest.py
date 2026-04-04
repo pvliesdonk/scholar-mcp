@@ -7,12 +7,12 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Remove all MCP_SERVER_* env vars before each test.
+    """Remove all SCHOLAR_MCP_* env vars before each test.
 
     Prevents env var leakage between tests that call :func:`create_server`.
     """
     import os
 
     for key in list(os.environ):
-        if key.startswith("MCP_SERVER_"):
+        if key.startswith("SCHOLAR_MCP_"):
             monkeypatch.delenv(key, raising=False)

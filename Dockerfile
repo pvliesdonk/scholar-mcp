@@ -41,4 +41,4 @@ EXPOSE 8000
 VOLUME ["/data/service", "/data/state"]
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
-CMD ["mcp-server", "serve", "--transport", "http"]
+CMD ["scholar-mcp", "serve", "--transport", "http"]

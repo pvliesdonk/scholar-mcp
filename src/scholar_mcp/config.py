@@ -1,6 +1,6 @@
 """Configuration loading from environment variables.
 
-All environment variables share the ``MCP_SERVER_`` prefix (controlled by
+All environment variables share the ``SCHOLAR_MCP_`` prefix (controlled by
 :data:`_ENV_PREFIX`).  Add your domain-specific configuration fields to
 :class:`ServerConfig` and read them in :func:`load_config`.
 """
@@ -17,11 +17,11 @@ logger = logging.getLogger(__name__)
 # Change this to match your service.  All env vars will be prefixed with it.
 # e.g. _ENV_PREFIX = "WEATHER_MCP" → WEATHER_MCP_READ_ONLY, WEATHER_MCP_PORT …
 # ---------------------------------------------------------------------------
-_ENV_PREFIX = "MCP_SERVER"
+_ENV_PREFIX = "SCHOLAR_MCP"
 
 
 def get_log_level() -> int:
-    """Return the configured log level from ``MCP_SERVER_LOG_LEVEL``.
+    """Return the configured log level from ``SCHOLAR_MCP_LOG_LEVEL``.
 
     Accepts standard Python level names (``DEBUG``, ``INFO``, ``WARNING``,
     ``ERROR``).  Falls back to :data:`logging.INFO` when the variable is
@@ -93,7 +93,7 @@ def load_config() -> ServerConfig:
 
     Currently reads:
 
-    - ``MCP_SERVER_READ_ONLY``: disable write tools; default ``true``.
+    - ``SCHOLAR_MCP_READ_ONLY``: disable write tools; default ``true``.
 
     TODO: Add your domain-specific env vars here and populate the
     corresponding :class:`ServerConfig` fields.

@@ -20,7 +20,7 @@ from fastmcp.server.lifespan import lifespan
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
-    from fastmcp_server_template.config import ServerConfig
+    from scholar_mcp.config import ServerConfig
 
 logger = logging.getLogger(__name__)
 
@@ -29,9 +29,9 @@ def make_service_lifespan(config: ServerConfig) -> Any:
     """Create a lifespan function that closes over a pre-loaded config.
 
     Args:
-        config: A fully-loaded :class:`~fastmcp_server_template.config.ServerConfig`
+        config: A fully-loaded :class:`~scholar_mcp.config.ServerConfig`
             instance produced by a single :func:`load_config` call in
-            :func:`~fastmcp_server_template.mcp_server.create_server`.
+            :func:`~scholar_mcp.mcp_server.create_server`.
 
     Returns:
         A FastMCP lifespan coroutine that initialises the service object and

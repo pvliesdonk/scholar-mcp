@@ -11,8 +11,8 @@ The server supports four authentication modes:
 
 | Mode | When to use | Configuration |
 |------|-------------|---------------|
-| **Multi-auth** | Mixed clients — e.g. Claude web (OIDC) + Claude Code (bearer token) on the same server | Set both `MCP_SERVER_BEARER_TOKEN` and all four OIDC variables |
-| **Bearer token** | Simple deployments behind a VPN, Docker compose stacks, development | Set `MCP_SERVER_BEARER_TOKEN` only |
+| **Multi-auth** | Mixed clients — e.g. Claude web (OIDC) + Claude Code (bearer token) on the same server | Set both `SCHOLAR_MCP_BEARER_TOKEN` and all four OIDC variables |
+| **Bearer token** | Simple deployments behind a VPN, Docker compose stacks, development | Set `SCHOLAR_MCP_BEARER_TOKEN` only |
 | **OIDC** | Production with user identity, SSO, multi-user access | Set all four OIDC variables only |
 | **No auth** | Local stdio usage, trusted networks | Default (nothing to configure) |
 
@@ -35,13 +35,13 @@ The simplest way to protect your server. A single static token shared between se
 2. Set the environment variable:
 
     ```bash
-    MCP_SERVER_BEARER_TOKEN=your-generated-token
+    SCHOLAR_MCP_BEARER_TOKEN=your-generated-token
     ```
 
 3. Start the server with HTTP transport:
 
     ```bash
-    mcp-server serve --transport http --port 8000
+    scholar-mcp serve --transport http --port 8000
     ```
 
 ### Client usage
@@ -70,7 +70,7 @@ Full OAuth 2.1 authentication using an external identity provider. Supports user
 The server uses FastMCP's built-in `OIDCProxy` — no external auth sidecar needed:
 
 ```
-Client → mcp-server (OIDCProxy) → OIDC Provider
+Client → scholar-mcp (OIDCProxy) → OIDC Provider
 ```
 
 1. Client connects to the server
@@ -83,19 +83,19 @@ Client → mcp-server (OIDCProxy) → OIDC Provider
 
 | Variable | Description |
 |----------|-------------|
-| `MCP_SERVER_BASE_URL` | Public base URL (e.g. `https://mcp.example.com`) |
-| `MCP_SERVER_OIDC_CONFIG_URL` | OIDC discovery endpoint |
-| `MCP_SERVER_OIDC_CLIENT_ID` | Client ID registered with your provider |
-| `MCP_SERVER_OIDC_CLIENT_SECRET` | Client secret |
+| `SCHOLAR_MCP_BASE_URL` | Public base URL (e.g. `https://mcp.example.com`) |
+| `SCHOLAR_MCP_OIDC_CONFIG_URL` | OIDC discovery endpoint |
+| `SCHOLAR_MCP_OIDC_CLIENT_ID` | Client ID registered with your provider |
+| `SCHOLAR_MCP_OIDC_CLIENT_SECRET` | Client secret |
 
 ### Optional variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MCP_SERVER_OIDC_JWT_SIGNING_KEY` | ephemeral | JWT signing key — **required on Linux/Docker** |
-| `MCP_SERVER_OIDC_AUDIENCE` | — | Expected JWT audience claim; leave unset if your provider does not set one |
-| `MCP_SERVER_OIDC_REQUIRED_SCOPES` | `openid` | Comma-separated required scopes |
-| `MCP_SERVER_OIDC_VERIFY_ACCESS_TOKEN` | `false` | Set `true` to verify the access token as a JWT instead of the id token; useful for audience-claim validation on JWT access tokens |
+| `SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY` | ephemeral | JWT signing key — **required on Linux/Docker** |
+| `SCHOLAR_MCP_OIDC_AUDIENCE` | — | Expected JWT audience claim; leave unset if your provider does not set one |
+| `SCHOLAR_MCP_OIDC_REQUIRED_SCOPES` | `openid` | Comma-separated required scopes |
+| `SCHOLAR_MCP_OIDC_VERIFY_ACCESS_TOKEN` | `false` | Set `true` to verify the access token as a JWT instead of the id token; useful for audience-claim validation on JWT access tokens |
 
 !!! danger "JWT signing key on Linux/Docker"
     Without `OIDC_JWT_SIGNING_KEY`, FastMCP generates an ephemeral key that invalidates all tokens on restart. Always set a stable key in production:
@@ -121,7 +121,7 @@ The `client_id` and/or `redirect_uris` in your OIDC provider config don't match 
 
 ### Tokens invalidated after restart
 
-You're missing `MCP_SERVER_OIDC_JWT_SIGNING_KEY`. Without it, FastMCP generates an ephemeral key on each startup. Generate and set a stable key:
+You're missing `SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY`. Without it, FastMCP generates an ephemeral key on each startup. Generate and set a stable key:
 
 ```bash
 openssl rand -hex 32

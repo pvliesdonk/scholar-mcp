@@ -12,11 +12,11 @@ The server listens on port 8000 with HTTP transport by default.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MCP_SERVER_READ_ONLY` | `true` | Disable write tools |
-| `MCP_SERVER_BEARER_TOKEN` | — | Enable bearer token auth |
-| `MCP_SERVER_LOG_LEVEL` | `INFO` | Log level |
-| `MCP_SERVER_SERVER_NAME` | `mcp-server` | Server name shown to clients |
-| `MCP_SERVER_INSTRUCTIONS` | (dynamic) | System instructions for LLM context |
+| `SCHOLAR_MCP_READ_ONLY` | `true` | Disable write tools |
+| `SCHOLAR_MCP_BEARER_TOKEN` | — | Enable bearer token auth |
+| `SCHOLAR_MCP_LOG_LEVEL` | `INFO` | Log level |
+| `SCHOLAR_MCP_SERVER_NAME` | `scholar-mcp` | Server name shown to clients |
+| `SCHOLAR_MCP_INSTRUCTIONS` | (dynamic) | System instructions for LLM context |
 
 For OIDC auth variables, see [Authentication](../guides/authentication.md).
 

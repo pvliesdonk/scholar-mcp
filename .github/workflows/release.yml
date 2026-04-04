@@ -61,7 +61,7 @@ jobs:
             .version = $v |
             .packages |= map(
               if .registryType == "pypi" then .version = $v
-              elif .registryType == "oci" then .identifier = ("ghcr.io/pvliesdonk/fastmcp-server-template:" + $v)
+              elif .registryType == "oci" then .identifier = ("ghcr.io/pvliesdonk/scholar-mcp:" + $v)
               else . end
             )
           ' server.json > server.json.tmp
@@ -117,7 +117,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/p/fastmcp-server-template
+      url: https://pypi.org/p/scholar-mcp
 
     permissions:
       id-token: write
@@ -191,7 +191,7 @@ jobs:
             type=raw,value=v${{ steps.version.outputs.minor }}
             type=raw,value=v${{ steps.version.outputs.major }}
           labels: |
-            org.opencontainers.image.title=fastmcp-server-template
+            org.opencontainers.image.title=scholar-mcp
             org.opencontainers.image.description=FastMCP server template
             org.opencontainers.image.vendor=pvliesdonk
 

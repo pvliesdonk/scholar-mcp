@@ -6,14 +6,14 @@ import logging
 
 import pytest
 
-from fastmcp_server_template.mcp_server import create_server
+from scholar_mcp.mcp_server import create_server
 
 # OIDC vars required by _build_oidc_auth()
 _OIDC_REQUIRED = {
-    "MCP_SERVER_BASE_URL": "https://mcp.example.com",
-    "MCP_SERVER_OIDC_CONFIG_URL": "https://auth.example.com/.well-known/openid-configuration",
-    "MCP_SERVER_OIDC_CLIENT_ID": "mcp-client",
-    "MCP_SERVER_OIDC_CLIENT_SECRET": "test-secret",
+    "SCHOLAR_MCP_BASE_URL": "https://mcp.example.com",
+    "SCHOLAR_MCP_OIDC_CONFIG_URL": "https://auth.example.com/.well-known/openid-configuration",
+    "SCHOLAR_MCP_OIDC_CLIENT_ID": "mcp-client",
+    "SCHOLAR_MCP_OIDC_CLIENT_SECRET": "test-secret",
 }
 
 
@@ -33,7 +33,7 @@ class TestAuthModeSelection:
         """Bearer-only: StaticTokenVerifier when only BEARER_TOKEN is set."""
         from fastmcp.server.auth import StaticTokenVerifier
 
-        monkeypatch.setenv("MCP_SERVER_BEARER_TOKEN", "my-secret-token")
+        monkeypatch.setenv("SCHOLAR_MCP_BEARER_TOKEN", "my-secret-token")
         server = create_server()
         assert isinstance(server.auth, StaticTokenVerifier)
 
@@ -59,7 +59,7 @@ class TestAuthModeSelection:
 
         from fastmcp.server.auth import MultiAuth
 
-        monkeypatch.setenv("MCP_SERVER_BEARER_TOKEN", "my-secret-token")
+        monkeypatch.setenv("SCHOLAR_MCP_BEARER_TOKEN", "my-secret-token")
         for var, val in _OIDC_REQUIRED.items():
             monkeypatch.setenv(var, val)
 
@@ -80,7 +80,7 @@ class TestAuthModeSelection:
 
         from fastmcp.server.auth import MultiAuth, StaticTokenVerifier
 
-        monkeypatch.setenv("MCP_SERVER_BEARER_TOKEN", "my-secret-token")
+        monkeypatch.setenv("SCHOLAR_MCP_BEARER_TOKEN", "my-secret-token")
         for var, val in _OIDC_REQUIRED.items():
             monkeypatch.setenv(var, val)
 
@@ -110,7 +110,7 @@ class TestReadOnlyMode:
 
     async def test_read_write_mode(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Setting READ_ONLY=false makes write tools visible."""
-        monkeypatch.setenv("MCP_SERVER_READ_ONLY", "false")
+        monkeypatch.setenv("SCHOLAR_MCP_READ_ONLY", "false")
         server = create_server()
         tool_names = [t.name for t in await server.list_tools()]
         assert "ping" in tool_names
