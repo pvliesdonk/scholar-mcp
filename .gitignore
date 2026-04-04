@@ -20,3 +20,4 @@ htmlcov/
 *.npz
 site/
 .worktrees/
+docs/superpowers/
