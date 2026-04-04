@@ -37,11 +37,13 @@ A [FastMCP](https://github.com/jlowin/fastmcp) server providing structured acade
 
 ```bash
 # stdio transport (default, for Claude Desktop / MCP clients)
-SCHOLAR_MCP_S2_API_KEY=your-key uvx scholar-mcp serve
+SCHOLAR_MCP_S2_API_KEY=your-key uvx pvliesdonk-scholar-mcp serve
 
 # HTTP transport
-uvx scholar-mcp serve --transport http --port 8000
+uvx pvliesdonk-scholar-mcp serve --transport http --port 8000
 ```
+
+> **Note:** The PyPI package is `pvliesdonk-scholar-mcp`. The CLI command installed is `scholar-mcp`.
 
 ### With Docker
 
