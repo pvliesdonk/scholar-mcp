@@ -162,7 +162,7 @@ class S2Client:
         return await self._get(
             f"/paper/{paper_id}/citations",
             retry=retry,
-            fields=f"citingPaper.{fields}",
+            fields=fields,
             limit=limit,
             offset=offset,
             year=year,
@@ -194,7 +194,7 @@ class S2Client:
         return await self._get(
             f"/paper/{paper_id}/references",
             retry=retry,
-            fields=f"citedPaper.{fields}",
+            fields=fields,
             limit=limit,
             offset=offset,
         )
