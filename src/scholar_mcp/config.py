@@ -45,7 +45,7 @@ def load_config() -> ServerConfig:
         val = os.environ.get(f"{p}_{key}")
         if val is None:
             return default
-        return val.lower() not in ("0", "false", "no")
+        return val.lower() not in ("0", "false", "no", "off", "n")
 
     def _str(key: str) -> str | None:
         return os.environ.get(f"{p}_{key}") or None

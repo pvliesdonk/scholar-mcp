@@ -9,6 +9,7 @@ def test_defaults(monkeypatch):
     monkeypatch.delenv("SCHOLAR_MCP_VLM_API_KEY", raising=False)
     monkeypatch.delenv("SCHOLAR_MCP_VLM_MODEL", raising=False)
     monkeypatch.delenv("SCHOLAR_MCP_CACHE_DIR", raising=False)
+    monkeypatch.delenv("SCHOLAR_MCP_READ_ONLY", raising=False)
     cfg = load_config()
     assert cfg.s2_api_key is None
     assert cfg.docling_url is None
@@ -16,6 +17,7 @@ def test_defaults(monkeypatch):
     assert cfg.vlm_api_key is None
     assert cfg.vlm_model == "gpt-4o"
     assert str(cfg.cache_dir) == "/data/scholar-mcp"
+    assert cfg.read_only is True
 
 def test_env_vars_loaded(monkeypatch):
     monkeypatch.setenv("SCHOLAR_MCP_S2_API_KEY", "test-key")
@@ -31,3 +33,15 @@ def test_env_vars_loaded(monkeypatch):
     assert cfg.vlm_api_key == "vlm-key"
     assert cfg.vlm_model == "gpt-4o-mini"
     assert str(cfg.cache_dir) == "/tmp/scholar-test"
+
+
+def test_read_only_false_values(monkeypatch):
+    for falsy in ("0", "false", "False", "FALSE", "no", "No", "off", "n"):
+        monkeypatch.setenv("SCHOLAR_MCP_READ_ONLY", falsy)
+        assert load_config().read_only is False, f"expected False for {falsy!r}"
+
+
+def test_read_only_true_values(monkeypatch):
+    for truthy in ("1", "true", "True", "yes", "YES"):
+        monkeypatch.setenv("SCHOLAR_MCP_READ_ONLY", truthy)
+        assert load_config().read_only is True, f"expected True for {truthy!r}"
