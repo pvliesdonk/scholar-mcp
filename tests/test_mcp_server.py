@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import logging
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from scholar_mcp.mcp_server import create_server
+from scholar_mcp.mcp_server import (
+    _build_remote_auth,
+    _resolve_auth_mode,
+    create_server,
+)
 
 # OIDC vars required by _build_oidc_auth()
 _OIDC_REQUIRED = {
@@ -116,3 +121,117 @@ class TestReadOnlyMode:
         server = create_server()
         # Server should be created successfully in read-write mode.
         assert server is not None
+
+
+class TestResolveAuthMode:
+    """Tests for _resolve_auth_mode() auto-detection and explicit overrides."""
+
+    def test_returns_none_when_no_vars(self) -> None:
+        assert _resolve_auth_mode() is None
+
+    def test_explicit_remote(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("SCHOLAR_MCP_AUTH_MODE", "remote")
+        assert _resolve_auth_mode() == "remote"
+
+    def test_explicit_oidc_proxy(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("SCHOLAR_MCP_AUTH_MODE", "oidc-proxy")
+        assert _resolve_auth_mode() == "oidc-proxy"
+
+    def test_unknown_mode_falls_back(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        monkeypatch.setenv("SCHOLAR_MCP_AUTH_MODE", "bogus")
+        with caplog.at_level(logging.WARNING):
+            result = _resolve_auth_mode()
+        assert result is None
+        assert "Unknown AUTH_MODE" in caplog.text
+
+    def test_auto_detects_oidc_proxy(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        for var, val in _OIDC_REQUIRED.items():
+            monkeypatch.setenv(var, val)
+        assert _resolve_auth_mode() == "oidc-proxy"
+
+    def test_auto_detects_remote(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("SCHOLAR_MCP_BASE_URL", "https://mcp.example.com")
+        monkeypatch.setenv(
+            "SCHOLAR_MCP_OIDC_CONFIG_URL",
+            "https://auth.example.com/.well-known/openid-configuration",
+        )
+        assert _resolve_auth_mode() == "remote"
+
+
+class TestBuildRemoteAuth:
+    """Tests for _build_remote_auth() — OIDC discovery and RemoteAuthProvider."""
+
+    def test_returns_none_without_vars(self) -> None:
+        assert _build_remote_auth() is None
+
+    def test_returns_none_on_discovery_failure(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("SCHOLAR_MCP_BASE_URL", "https://mcp.example.com")
+        monkeypatch.setenv("SCHOLAR_MCP_OIDC_CONFIG_URL", "https://bad.url/oidc")
+        import httpx
+
+        with patch("httpx.get", side_effect=httpx.ConnectError("fail")):
+            assert _build_remote_auth() is None
+
+    def test_returns_none_on_missing_jwks(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("SCHOLAR_MCP_BASE_URL", "https://mcp.example.com")
+        monkeypatch.setenv("SCHOLAR_MCP_OIDC_CONFIG_URL", "https://auth.example.com/d")
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"issuer": "https://auth.example.com"}
+        with patch("httpx.get", return_value=mock_resp):
+            assert _build_remote_auth() is None
+
+    def test_success(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from fastmcp.server.auth import RemoteAuthProvider
+
+        monkeypatch.setenv("SCHOLAR_MCP_BASE_URL", "https://mcp.example.com")
+        monkeypatch.setenv("SCHOLAR_MCP_OIDC_CONFIG_URL", "https://auth.example.com/d")
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "jwks_uri": "https://auth.example.com/jwks.json",
+            "issuer": "https://auth.example.com",
+        }
+        with patch("httpx.get", return_value=mock_resp):
+            result = _build_remote_auth()
+        assert isinstance(result, RemoteAuthProvider)
+
+    def test_create_server_remote_mode(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """create_server() uses remote auth when only BASE_URL + CONFIG_URL set."""
+        from fastmcp.server.auth import RemoteAuthProvider
+
+        monkeypatch.setenv("SCHOLAR_MCP_BASE_URL", "https://mcp.example.com")
+        monkeypatch.setenv("SCHOLAR_MCP_OIDC_CONFIG_URL", "https://auth.example.com/d")
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "jwks_uri": "https://auth.example.com/jwks.json",
+            "issuer": "https://auth.example.com",
+        }
+        with patch("httpx.get", return_value=mock_resp), caplog.at_level(logging.INFO):
+            server = create_server()
+        assert isinstance(server.auth, RemoteAuthProvider)
+
+    def test_create_server_multi_remote_bearer(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """create_server() uses MultiAuth(remote+bearer) when both configured."""
+        from fastmcp.server.auth import MultiAuth
+
+        monkeypatch.setenv("SCHOLAR_MCP_BEARER_TOKEN", "my-token")
+        monkeypatch.setenv("SCHOLAR_MCP_BASE_URL", "https://mcp.example.com")
+        monkeypatch.setenv("SCHOLAR_MCP_OIDC_CONFIG_URL", "https://auth.example.com/d")
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "jwks_uri": "https://auth.example.com/jwks.json",
+            "issuer": "https://auth.example.com",
+        }
+        with patch("httpx.get", return_value=mock_resp), caplog.at_level(logging.INFO):
+            server = create_server()
+        assert isinstance(server.auth, MultiAuth)
+        assert "multi(remote+bearer)" in caplog.text
