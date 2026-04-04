@@ -95,9 +95,7 @@ class DoclingClient:
                 return md
 
             logger.debug("docling_polling task_id=%s status=%s", task_id, status)
-        raise RuntimeError(
-            f"docling task {task_id} timed out after {max_polls} polls"
-        )
+        raise RuntimeError(f"docling task {task_id} timed out after {max_polls} polls")
 
     async def convert(
         self,

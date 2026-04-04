@@ -108,7 +108,7 @@ def register_pdf_tools(mcp: FastMCP) -> None:
         if not path.exists():
             return json.dumps({"error": "file_not_found", "path": file_path})
 
-        pdf_bytes = path.read_bytes()
+        pdf_bytes = await asyncio.to_thread(path.read_bytes)
         vlm_used = use_vlm and bundle.docling.vlm_available
 
         try:
@@ -122,7 +122,7 @@ def register_pdf_tools(mcp: FastMCP) -> None:
         md_dir = bundle.config.cache_dir / "md"
         md_dir.mkdir(parents=True, exist_ok=True)
         md_path = md_dir / f"{path.stem}.md"
-        md_path.write_text(markdown, encoding="utf-8")
+        await asyncio.to_thread(md_path.write_text, markdown, encoding="utf-8")
 
         return json.dumps(
             {"markdown": markdown, "path": str(md_path), "vlm_used": vlm_used}
@@ -191,8 +191,9 @@ def register_pdf_tools(mcp: FastMCP) -> None:
             )
 
         try:
+            pdf_bytes_for_convert = await asyncio.to_thread(pdf_path.read_bytes)
             markdown = await bundle.docling.convert(
-                pdf_path.read_bytes(), pdf_path.name, use_vlm=use_vlm
+                pdf_bytes_for_convert, pdf_path.name, use_vlm=use_vlm
             )
         except Exception as exc:
             return json.dumps(
@@ -207,7 +208,7 @@ def register_pdf_tools(mcp: FastMCP) -> None:
         md_dir = bundle.config.cache_dir / "md"
         md_dir.mkdir(parents=True, exist_ok=True)
         md_path = md_dir / f"{paper_id}.md"
-        md_path.write_text(markdown, encoding="utf-8")
+        await asyncio.to_thread(md_path.write_text, markdown, encoding="utf-8")
 
         return json.dumps(
             {

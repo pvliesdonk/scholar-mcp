@@ -162,7 +162,8 @@ class ScholarCache:
         """
         db = _require_open(self._db)
         async with db.execute(
-            "SELECT citing_ids, cached_at FROM citations WHERE paper_id = ?", (paper_id,)
+            "SELECT citing_ids, cached_at FROM citations WHERE paper_id = ?",
+            (paper_id,),
         ) as cur:
             row = await cur.fetchone()
         if row is None or time.time() - row[1] > _CITATION_TTL:
@@ -361,8 +362,6 @@ class ScholarCache:
         else:
             cutoff = time.time() - older_than_days * 86400
             for table in _TTL_TABLES:
-                await db.execute(
-                    f"DELETE FROM {table} WHERE cached_at < ?", (cutoff,)
-                )
+                await db.execute(f"DELETE FROM {table} WHERE cached_at < ?", (cutoff,))
         await db.commit()
         logger.info("cache_cleared older_than_days=%s", older_than_days)
