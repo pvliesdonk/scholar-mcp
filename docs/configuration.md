@@ -49,9 +49,9 @@ Authentication is optional. When no auth variables are set, the server accepts u
 | `SCHOLAR_MCP_OIDC_CLIENT_ID` | -- | OIDC client ID registered with your identity provider. |
 | `SCHOLAR_MCP_OIDC_CLIENT_SECRET` | -- | OIDC client secret. |
 | `SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY` | *(ephemeral)* | JWT signing key for OIDC sessions. **Required on Linux/Docker** -- the ephemeral default invalidates all sessions on restart. Generate with: `openssl rand -hex 32`. |
-| `SCHOLAR_MCP_OIDC_AUDIENCE` | -- | Expected JWT `aud` claim. When set, tokens must include this audience. Useful for multi-tenant deployments. |
-| `SCHOLAR_MCP_OIDC_REQUIRED_SCOPES` | `openid` | Space-separated list of required scopes. |
-| `SCHOLAR_MCP_OIDC_VERIFY_ACCESS_TOKEN` | `false` | Set `true` to verify the upstream `access_token` as a JWT instead of the `id_token` (for providers that issue JWT access tokens). |
+| `SCHOLAR_MCP_OIDC_AUDIENCE` | -- | Expected JWT audience claim. When set, the token's `aud` must match. Useful for multi-tenant deployments. |
+| `SCHOLAR_MCP_OIDC_REQUIRED_SCOPES` | `openid` | Comma-separated required scopes (e.g. `openid,profile`). Token must include all listed scopes. |
+| `SCHOLAR_MCP_OIDC_VERIFY_ACCESS_TOKEN` | `false` | Set `true` to verify the upstream `access_token` as a JWT instead of the `id_token`. Use when your provider issues JWT access tokens and you need audience-claim validation on that token. |
 
 See [Authentication guide](guides/authentication.md) for setup instructions and [OIDC deployment](deployment/oidc.md) for provider-specific configuration.
 
