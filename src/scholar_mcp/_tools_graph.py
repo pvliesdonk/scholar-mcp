@@ -199,12 +199,25 @@ def register_graph_tools(mcp: FastMCP) -> None:
             edges: list[dict[str, object]] = []
             bfs_queue: deque[tuple[str, int]] = deque()
 
-            for seed_id in seed_ids[:10]:
+            # Resolve seed metadata so nodes have titles/years populated
+            seed_batch = seed_ids[:10]
+            try:
+                seed_results = await bundle.s2.batch_resolve(
+                    seed_batch,
+                    fields=FIELD_SETS["compact"],
+                    retry=retry,
+                )
+            except httpx.HTTPStatusError:
+                seed_results = [None] * len(seed_batch)
+
+            for seed_id, seed_data in zip(seed_batch, seed_results, strict=True):
                 nodes[seed_id] = {
                     "id": seed_id,
-                    "title": None,
-                    "year": None,
-                    "citationCount": None,
+                    "title": seed_data.get("title") if seed_data else None,
+                    "year": seed_data.get("year") if seed_data else None,
+                    "citationCount": (
+                        seed_data.get("citationCount") if seed_data else None
+                    ),
                 }
                 bfs_queue.append((seed_id, 0))
 
@@ -263,21 +276,39 @@ def register_graph_tools(mcp: FastMCP) -> None:
                         )
                         for item in result.get("data", []):
                             p = item.get("citedPaper", {})
-                            if pid := p.get("paperId"):
-                                node = {
-                                    "id": pid,
-                                    "title": p.get("title"),
-                                    "year": p.get("year"),
-                                    "citationCount": p.get("citationCount"),
+                            pid = p.get("paperId")
+                            if not pid:
+                                continue
+                            # S2 references endpoint doesn't support
+                            # server-side filters — apply client-side
+                            p_year = p.get("year")
+                            p_cites = p.get("citationCount")
+                            if min_citations and (
+                                p_cites is None or p_cites < min_citations
+                            ):
+                                continue
+                            if year_start is not None and (
+                                p_year is None or p_year < year_start
+                            ):
+                                continue
+                            if year_end is not None and (
+                                p_year is None or p_year > year_end
+                            ):
+                                continue
+                            node = {
+                                "id": pid,
+                                "title": p.get("title"),
+                                "year": p_year,
+                                "citationCount": p_cites,
+                            }
+                            new_nodes.append((pid, node))
+                            edges.append(
+                                {
+                                    "source": paper_id,
+                                    "target": pid,
+                                    "direction": "cites",
                                 }
-                                new_nodes.append((pid, node))
-                                edges.append(
-                                    {
-                                        "source": paper_id,
-                                        "target": pid,
-                                        "direction": "cites",
-                                    }
-                                )
+                            )
                     except httpx.HTTPStatusError:
                         pass
 
