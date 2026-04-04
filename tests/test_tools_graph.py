@@ -1026,6 +1026,61 @@ async def test_get_citation_graph_citations_min_citations_filter(
     assert "c2" not in node_ids  # 2 < 50
 
 
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_citation_graph_citations_null_citation_count_excluded(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """Papers with citationCount=None are excluded when min_citations is set."""
+    respx_mock.post("/paper/batch").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {"paperId": "p1", "title": "Seed", "year": 2020, "citationCount": 10}
+            ],
+        )
+    )
+    respx_mock.get("/paper/p1/citations").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "citingPaper": {
+                            "paperId": "c1",
+                            "title": "Known Count",
+                            "year": 2023,
+                            "citationCount": 100,
+                        }
+                    },
+                    {
+                        "citingPaper": {
+                            "paperId": "c2",
+                            "title": "No Count",
+                            "year": 2023,
+                            "citationCount": None,
+                        }
+                    },
+                ]
+            },
+        )
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_citation_graph",
+            {
+                "seed_ids": ["p1"],
+                "direction": "citations",
+                "depth": 1,
+                "max_nodes": 50,
+                "min_citations": 10,
+            },
+        )
+    data = json.loads(result.content[0].text)
+    node_ids = {n["id"] for n in data["nodes"]}
+    assert "c1" in node_ids  # 100 >= 10
+    assert "c2" not in node_ids  # None excluded
+
+
 # --- get_citation_graph: client-side min_citations filter on references ---
 
 
