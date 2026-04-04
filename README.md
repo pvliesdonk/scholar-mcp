@@ -166,6 +166,15 @@ All settings are controlled via environment variables with the `SCHOLAR_MCP_` pr
 
 > PDF tools are write-tagged and hidden when `SCHOLAR_MCP_READ_ONLY=true` (the default).
 
+### Task Polling
+
+| Tool | Description |
+|---|---|
+| `get_task_result` | Poll for the result of a background task by ID. |
+| `list_tasks` | List all active background tasks. |
+
+> Long-running operations (PDF download/conversion) and rate-limited S2 requests return `{"queued": true, "task_id": "..."}` immediately. Use `get_task_result` to poll for the result.
+
 ## Docker Compose
 
 ```yaml
