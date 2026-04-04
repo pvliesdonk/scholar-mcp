@@ -72,11 +72,20 @@ async def test_stats(cache):
     stats = await cache.stats()
     assert stats["papers"] == 1
     assert stats["authors"] == 1
+    assert stats["citation_counts"] == 0
+    assert stats["citations"] == 0
+    assert stats["refs"] == 0
+    assert stats["openalex"] == 0
+    assert "db_size_bytes" in stats
+    assert isinstance(stats["db_size_bytes"], int)
 
 async def test_clear_all(cache):
     await cache.set_paper("p1", {"paperId": "p1"})
+    await cache.set_alias("DOI:10.1/keep", "s2preserved")
     await cache.clear()
     assert await cache.get_paper("p1") is None
+    # id_aliases must survive a full clear
+    assert await cache.get_alias("DOI:10.1/keep") == "s2preserved"
 
 async def test_clear_older_than(cache):
     await cache.set_paper("old", {"paperId": "old"})

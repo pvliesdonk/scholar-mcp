@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 # TTLs in seconds
 _PAPER_TTL = 30 * 86400       # 30 days
 _CITATION_TTL = 7 * 86400     # 7 days
+_REFERENCE_TTL = 7 * 86400    # 7 days
 _AUTHOR_TTL = 30 * 86400      # 30 days
 _OPENALEX_TTL = 30 * 86400    # 30 days
 
@@ -182,7 +183,7 @@ class ScholarCache:
             "SELECT referenced_ids, cached_at FROM refs WHERE paper_id = ?", (paper_id,)
         ) as cur:
             row = await cur.fetchone()
-        if row is None or time.time() - row[1] > _CITATION_TTL:
+        if row is None or time.time() - row[1] > _REFERENCE_TTL:
             return None
         return json.loads(row[0])  # type: ignore[no-any-return]
 
@@ -319,7 +320,7 @@ class ScholarCache:
         """
         assert self._db
         counts: dict[str, int] = {}
-        for table in ("papers", "citations", "refs", "authors", "openalex", "id_aliases"):
+        for table in ("papers", "citation_counts", "citations", "refs", "authors", "openalex"):
             async with self._db.execute(f"SELECT COUNT(*) FROM {table}") as cur:  # noqa: S608
                 row = await cur.fetchone()
                 counts[table] = row[0] if row else 0
