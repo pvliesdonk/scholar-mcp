@@ -1,6 +1,6 @@
 site_name: Scholar MCP Server
 site_url: https://pvliesdonk.github.io/scholar-mcp/
-site_description: Production-ready FastMCP server scaffold
+site_description: FastMCP server for Semantic Scholar with OpenAlex enrichment and docling PDF conversion
 repo_url: https://github.com/pvliesdonk/scholar-mcp
 repo_name: pvliesdonk/scholar-mcp
 edit_uri: edit/main/docs/
@@ -36,6 +36,30 @@ theme:
 
 plugins:
   - search
+  - llmstxt:
+      full_output: llms-full.txt
+      markdown_description: >
+        scholar-mcp is a FastMCP server for Semantic Scholar with OpenAlex
+        enrichment and docling PDF conversion. It exposes 13 tools for paper
+        search, citation graph traversal, recommendations, and PDF-to-Markdown
+        conversion over the Model Context Protocol.
+      sections:
+        Getting Started:
+          - index.md: Overview — features, architecture, and quick start
+          - installation.md: Installation from PyPI, uv, Docker, or Linux packages
+          - configuration.md: All environment variables with types and defaults
+        Guides:
+          - guides/index.md: Guide overview — which guide to read
+          - guides/claude-desktop.md: Claude Desktop setup (basic, API key, PDF, OpenAlex)
+          - guides/authentication.md: Authentication modes — bearer token, OIDC, and troubleshooting
+          - guides/pdf-conversion.md: PDF conversion with docling-serve and VLM enrichment
+          - guides/citation-graphs.md: Citation graph traversal, bridge papers, and caching
+        Tools:
+          - tools/index.md: All 13 MCP tools with parameters, return values, and usage tips
+        Deployment:
+          - deployment/docker.md: Docker Compose with docling-serve, Traefik, volumes, UID/GID
+          - deployment/systemd.md: systemd service — package install, security hardening
+          - deployment/oidc.md: OIDC authentication setup with Authelia
   - mkdocstrings:
       handlers:
         python:
@@ -67,10 +91,22 @@ markdown_extensions:
   - attr_list
   - md_in_html
 
+exclude_docs: |
+  superpowers/
+
 nav:
   - Home: index.md
+  - Installation: installation.md
+  - Configuration: configuration.md
+  - Tools:
+      - Overview: tools/index.md
   - Guides:
+      - Overview: guides/index.md
+      - Claude Desktop: guides/claude-desktop.md
       - Authentication: guides/authentication.md
+      - PDF Conversion: guides/pdf-conversion.md
+      - Citation Graphs: guides/citation-graphs.md
   - Deployment:
       - Docker: deployment/docker.md
+      - systemd: deployment/systemd.md
       - OIDC Authentication: deployment/oidc.md

@@ -1,7 +1,7 @@
 [project]
 name = "pvliesdonk-scholar-mcp"
 version = "1.0.1"
-description = "FastMCP server template — replace this with your description"
+description = "FastMCP server for Semantic Scholar with OpenAlex enrichment and docling PDF conversion"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
