@@ -242,8 +242,7 @@ class S2Client:
             r.raise_for_status()
             return r.json().get("recommendedPapers", [])  # type: ignore[no-any-return]
 
-        await self._limiter.acquire()
-        return await _call()
+        return await with_s2_retry(_call, self._limiter)  # type: ignore[return-value]
 
     async def batch_resolve(self, ids: list[str], *, fields: str) -> list[dict | None]:
         """Resolve a batch of paper IDs using the S2 batch endpoint.
@@ -265,5 +264,4 @@ class S2Client:
             r.raise_for_status()
             return r.json()  # type: ignore[no-any-return]
 
-        await self._limiter.acquire()
-        return await _call()
+        return await with_s2_retry(_call, self._limiter)  # type: ignore[return-value]
