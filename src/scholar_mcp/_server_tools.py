@@ -23,7 +23,10 @@ def register_tools(mcp: FastMCP, *, transport: str = "stdio") -> None:
 
     register_graph_tools(mcp)
 
+    from ._tools_recommendations import register_recommendation_tools
+
+    register_recommendation_tools(mcp)
+
     # Remaining categories added as tasks complete:
-    # from ._tools_recommendations import register_recommendation_tools; register_recommendation_tools(mcp)
     # from ._tools_pdf import register_pdf_tools; register_pdf_tools(mcp)
     # from ._tools_utility import register_utility_tools; register_utility_tools(mcp)
