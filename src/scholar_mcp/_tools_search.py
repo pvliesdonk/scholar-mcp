@@ -10,6 +10,7 @@ import httpx
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
 
+from ._rate_limiter import RateLimitedError
 from ._s2_client import FIELD_SETS
 from ._server_deps import ServiceBundle, get_bundle
 
@@ -23,7 +24,13 @@ def register_search_tools(mcp: FastMCP) -> None:
         mcp: FastMCP application instance.
     """
 
-    @mcp.tool()
+    @mcp.tool(
+        annotations={
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "openWorldHint": True,
+        },
+    )
     async def search_papers(
         query: str,
         fields: Literal["compact", "standard", "full"] = "compact",
@@ -69,31 +76,47 @@ def register_search_tools(mcp: FastMCP) -> None:
         }.get(sort)
         fos = ",".join(fields_of_study) if fields_of_study else None
 
-        try:
-            result = await bundle.s2.search_papers(
-                query,
-                fields=FIELD_SETS[fields],
-                limit=limit,
-                offset=offset,
-                year=year,
-                fieldsOfStudy=fos,
-                venue=venue,
-                minCitationCount=min_citations,
-                sort=s2_sort,
-            )
-        except httpx.HTTPStatusError as exc:
-            if exc.response.status_code == 404:
-                return json.dumps({"error": "not_found", "identifier": query})
-            return json.dumps(
-                {
-                    "error": "upstream_error",
-                    "status": exc.response.status_code,
-                    "detail": exc.response.text[:200],
-                }
-            )
-        return json.dumps(result)
+        async def _execute(*, retry: bool = True) -> str:
+            try:
+                result = await bundle.s2.search_papers(
+                    query,
+                    fields=FIELD_SETS[fields],
+                    limit=limit,
+                    offset=offset,
+                    year=year,
+                    fieldsOfStudy=fos,
+                    venue=venue,
+                    minCitationCount=min_citations,
+                    sort=s2_sort,
+                    retry=retry,
+                )
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code == 404:
+                    return json.dumps({"error": "not_found", "identifier": query})
+                return json.dumps(
+                    {
+                        "error": "upstream_error",
+                        "status": exc.response.status_code,
+                        "detail": exc.response.text[:200],
+                    }
+                )
+            return json.dumps(result)
 
-    @mcp.tool()
+        try:
+            return await _execute(retry=False)
+        except RateLimitedError:
+            task_id = bundle.tasks.submit(_execute(retry=True))
+            return json.dumps(
+                {"queued": True, "task_id": task_id, "tool": "search_papers"}
+            )
+
+    @mcp.tool(
+        annotations={
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "openWorldHint": True,
+        },
+    )
     async def get_paper(
         identifier: str,
         bundle: ServiceBundle = Depends(get_bundle),
@@ -115,28 +138,41 @@ def register_search_tools(mcp: FastMCP) -> None:
             logger.debug("cache_hit identifier=%s", identifier)
             return json.dumps(data)
 
+        async def _execute(*, retry: bool = True) -> str:
+            try:
+                fetched = await bundle.s2.get_paper(identifier, retry=retry)
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code == 404:
+                    return json.dumps({"error": "not_found", "identifier": identifier})
+                return json.dumps(
+                    {
+                        "error": "upstream_error",
+                        "status": exc.response.status_code,
+                        "detail": exc.response.text[:200],
+                    }
+                )
+
+            paper_id: str = fetched.get("paperId") or ""
+            if paper_id:
+                await bundle.cache.set_paper(paper_id, fetched)
+                if identifier != paper_id:
+                    await bundle.cache.set_alias(identifier, paper_id)
+
+            return json.dumps(fetched)
+
         try:
-            data = await bundle.s2.get_paper(identifier)
-        except httpx.HTTPStatusError as exc:
-            if exc.response.status_code == 404:
-                return json.dumps({"error": "not_found", "identifier": identifier})
-            return json.dumps(
-                {
-                    "error": "upstream_error",
-                    "status": exc.response.status_code,
-                    "detail": exc.response.text[:200],
-                }
-            )
+            return await _execute(retry=False)
+        except RateLimitedError:
+            task_id = bundle.tasks.submit(_execute(retry=True))
+            return json.dumps({"queued": True, "task_id": task_id, "tool": "get_paper"})
 
-        paper_id: str = data.get("paperId") or ""
-        if paper_id:
-            await bundle.cache.set_paper(paper_id, data)
-            if identifier != paper_id:
-                await bundle.cache.set_alias(identifier, paper_id)
-
-        return json.dumps(data)
-
-    @mcp.tool()
+    @mcp.tool(
+        annotations={
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "openWorldHint": True,
+        },
+    )
     async def get_author(
         identifier: str,
         limit: int = 20,
@@ -165,25 +201,48 @@ def register_search_tools(mcp: FastMCP) -> None:
                 cached = await bundle.cache.get_author(identifier)
                 if cached:
                     return json.dumps(cached)
+
+            async def _execute_author(*, retry: bool = True) -> str:
+                try:
+                    data = await bundle.s2.get_author(
+                        identifier, limit=limit, offset=offset, retry=retry
+                    )
+                except httpx.HTTPStatusError as exc:
+                    if exc.response.status_code == 404:
+                        return json.dumps(
+                            {"error": "not_found", "identifier": identifier}
+                        )
+                    return json.dumps(
+                        {"error": "upstream_error", "status": exc.response.status_code}
+                    )
+                if offset == 0:
+                    await bundle.cache.set_author(identifier, data)
+                return json.dumps(data)
+
             try:
-                data = await bundle.s2.get_author(
-                    identifier, limit=limit, offset=offset
+                return await _execute_author(retry=False)
+            except RateLimitedError:
+                task_id = bundle.tasks.submit(_execute_author(retry=True))
+                return json.dumps(
+                    {"queued": True, "task_id": task_id, "tool": "get_author"}
+                )
+
+        # Name search — return candidates for disambiguation
+        async def _execute_search(*, retry: bool = True) -> str:
+            try:
+                candidates = await bundle.s2.search_authors(
+                    identifier, limit=5, retry=retry
                 )
             except httpx.HTTPStatusError as exc:
-                if exc.response.status_code == 404:
-                    return json.dumps({"error": "not_found", "identifier": identifier})
                 return json.dumps(
                     {"error": "upstream_error", "status": exc.response.status_code}
                 )
-            if offset == 0:
-                await bundle.cache.set_author(identifier, data)
-            return json.dumps(data)
+            return json.dumps({"candidates": candidates})
 
-        # Name search — return candidates for disambiguation
         try:
-            candidates = await bundle.s2.search_authors(identifier, limit=5)
-        except httpx.HTTPStatusError as exc:
+            return await _execute_search(retry=False)
+        except RateLimitedError:
+            task_id = bundle.tasks.submit(_execute_search(retry=True))
             return json.dumps(
-                {"error": "upstream_error", "status": exc.response.status_code}
+                {"queued": True, "task_id": task_id, "tool": "get_author"}
             )
-        return json.dumps({"candidates": candidates})

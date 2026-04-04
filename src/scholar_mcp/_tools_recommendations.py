@@ -10,6 +10,7 @@ import httpx
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
 
+from ._rate_limiter import RateLimitedError
 from ._s2_client import FIELD_SETS
 from ._server_deps import ServiceBundle, get_bundle
 
@@ -23,7 +24,13 @@ def register_recommendation_tools(mcp: FastMCP) -> None:
         mcp: FastMCP application instance.
     """
 
-    @mcp.tool()
+    @mcp.tool(
+        annotations={
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "openWorldHint": True,
+        },
+    )
     async def recommend_papers(
         positive_ids: list[str],
         negative_ids: list[str] | None = None,
@@ -49,19 +56,34 @@ def register_recommendation_tools(mcp: FastMCP) -> None:
                     "detail": "positive_ids must contain at least 1 ID",
                 }
             )
+
+        async def _execute(*, retry: bool = True) -> str:
+            try:
+                result = await bundle.s2.recommend(
+                    positive_ids[:5],
+                    negative_ids=negative_ids,
+                    limit=limit,
+                    fields=FIELD_SETS[fields],
+                    retry=retry,
+                )
+            except httpx.HTTPStatusError as exc:
+                return json.dumps(
+                    {
+                        "error": "upstream_error",
+                        "status": exc.response.status_code,
+                        "detail": exc.response.text[:200],
+                    }
+                )
+            return json.dumps(result)
+
         try:
-            result = await bundle.s2.recommend(
-                positive_ids[:5],
-                negative_ids=negative_ids,
-                limit=limit,
-                fields=FIELD_SETS[fields],
-            )
-        except httpx.HTTPStatusError as exc:
+            return await _execute(retry=False)
+        except RateLimitedError:
+            task_id = bundle.tasks.submit(_execute(retry=True))
             return json.dumps(
                 {
-                    "error": "upstream_error",
-                    "status": exc.response.status_code,
-                    "detail": exc.response.text[:200],
+                    "queued": True,
+                    "task_id": task_id,
+                    "tool": "recommend_papers",
                 }
             )
-        return json.dumps(result)

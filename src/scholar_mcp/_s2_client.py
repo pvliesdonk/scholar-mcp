@@ -7,7 +7,7 @@ from typing import Any
 
 import httpx
 
-from ._rate_limiter import RateLimiter, with_s2_retry
+from ._rate_limiter import RateLimiter, with_s2_retry, with_s2_try_once
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +48,14 @@ class S2Client:
         """Close the underlying HTTP client."""
         await self._client.aclose()
 
-    async def _get(self, path: str, **params: Any) -> dict[str, Any]:
+    @property
+    def limiter(self) -> RateLimiter:
+        """Expose the rate limiter for external use (e.g. background tasks)."""
+        return self._limiter
+
+    async def _get(
+        self, path: str, *, retry: bool = True, **params: Any
+    ) -> dict[str, Any]:
         async def _call() -> dict[str, Any]:
             r = await self._client.get(
                 path, params={k: v for k, v in params.items() if v is not None}
@@ -56,21 +63,29 @@ class S2Client:
             r.raise_for_status()
             return r.json()  # type: ignore[no-any-return]
 
-        return await with_s2_retry(_call, self._limiter)  # type: ignore[no-any-return]
+        if retry:
+            return await with_s2_retry(_call, self._limiter)  # type: ignore[no-any-return]
+        return await with_s2_try_once(_call, self._limiter)  # type: ignore[no-any-return]
 
     async def get_paper(
-        self, identifier: str, fields: str = FIELD_SETS["full"]
+        self,
+        identifier: str,
+        fields: str = FIELD_SETS["full"],
+        *,
+        retry: bool = True,
     ) -> dict[str, Any]:
         """Fetch full metadata for a single paper.
 
         Args:
             identifier: DOI, S2 paper ID, arXiv ID (prefix ``ARXIV:``), etc.
             fields: Comma-separated S2 field names or a preset from FIELD_SETS.
+            retry: If False, raise :class:`RateLimitedError` on 429 instead
+                of retrying.
 
         Returns:
             Paper metadata dict.
         """
-        return await self._get(f"/paper/{identifier}", fields=fields)
+        return await self._get(f"/paper/{identifier}", retry=retry, fields=fields)
 
     async def search_papers(
         self,
@@ -84,6 +99,7 @@ class S2Client:
         venue: str | None = None,
         minCitationCount: int | None = None,
         sort: str | None = None,
+        retry: bool = True,
     ) -> dict[str, Any]:
         """Search the S2 corpus.
 
@@ -97,12 +113,14 @@ class S2Client:
             venue: Venue filter string.
             minCitationCount: Minimum citation count filter.
             sort: Sort order string.
+            retry: If False, raise :class:`RateLimitedError` on 429.
 
         Returns:
             Dict with ``data`` (list of paper dicts) and ``total``.
         """
         return await self._get(
             "/paper/search",
+            retry=retry,
             query=query,
             fields=fields,
             limit=limit,
@@ -124,6 +142,7 @@ class S2Client:
         year: str | None = None,
         fieldsOfStudy: str | None = None,
         minCitationCount: int | None = None,
+        retry: bool = True,
     ) -> dict[str, Any]:
         """Fetch papers that cite the given paper.
 
@@ -135,12 +154,14 @@ class S2Client:
             year: Year range filter.
             fieldsOfStudy: Fields of study filter.
             minCitationCount: Minimum citation count filter.
+            retry: If False, raise :class:`RateLimitedError` on 429.
 
         Returns:
             Dict with ``data`` (list of ``{"citingPaper": {...}}`` dicts).
         """
         return await self._get(
             f"/paper/{paper_id}/citations",
+            retry=retry,
             fields=f"citingPaper.{fields}",
             limit=limit,
             offset=offset,
@@ -156,6 +177,7 @@ class S2Client:
         fields: str,
         limit: int,
         offset: int,
+        retry: bool = True,
     ) -> dict[str, Any]:
         """Fetch papers referenced by the given paper.
 
@@ -164,29 +186,35 @@ class S2Client:
             fields: Comma-separated field names for cited papers.
             limit: Max results.
             offset: Pagination offset.
+            retry: If False, raise :class:`RateLimitedError` on 429.
 
         Returns:
             Dict with ``data`` (list of ``{"citedPaper": {...}}`` dicts).
         """
         return await self._get(
             f"/paper/{paper_id}/references",
+            retry=retry,
             fields=f"citedPaper.{fields}",
             limit=limit,
             offset=offset,
         )
 
-    async def search_authors(self, name: str, limit: int = 5) -> list[dict[str, Any]]:
+    async def search_authors(
+        self, name: str, limit: int = 5, *, retry: bool = True
+    ) -> list[dict[str, Any]]:
         """Search for authors by name.
 
         Args:
             name: Author name query.
             limit: Maximum number of candidates to return.
+            retry: If False, raise :class:`RateLimitedError` on 429.
 
         Returns:
             List of author dicts with name, affiliations, hIndex, paperCount.
         """
         result = await self._get(
             "/author/search",
+            retry=retry,
             query=name,
             fields="name,affiliations,hIndex,paperCount",
             limit=limit,
@@ -194,7 +222,12 @@ class S2Client:
         return result.get("data", [])  # type: ignore[no-any-return]
 
     async def get_author(
-        self, author_id: str, *, limit: int = 20, offset: int = 0
+        self,
+        author_id: str,
+        *,
+        limit: int = 20,
+        offset: int = 0,
+        retry: bool = True,
     ) -> dict[str, Any]:
         """Fetch author profile with paginated publications.
 
@@ -202,12 +235,14 @@ class S2Client:
             author_id: S2 author ID.
             limit: Publications per page.
             offset: Publication page offset.
+            retry: If False, raise :class:`RateLimitedError` on 429.
 
         Returns:
             Author dict with ``papers`` list.
         """
         return await self._get(
             f"/author/{author_id}",
+            retry=retry,
             fields="name,affiliations,hIndex,paperCount,papers.paperId,papers.title,papers.year,papers.citationCount",
             limit=limit,
             offset=offset,
@@ -220,6 +255,7 @@ class S2Client:
         negative_ids: list[str] | None = None,
         limit: int = 10,
         fields: str,
+        retry: bool = True,
     ) -> list[dict[str, Any]]:
         """Fetch paper recommendations from S2 recommendations endpoint.
 
@@ -228,6 +264,7 @@ class S2Client:
             negative_ids: Optional paper IDs to steer away from.
             limit: Number of recommendations.
             fields: Comma-separated field names.
+            retry: If False, raise :class:`RateLimitedError` on 429.
 
         Returns:
             List of recommended paper dicts.
@@ -246,16 +283,19 @@ class S2Client:
             r.raise_for_status()
             return r.json().get("recommendedPapers", [])  # type: ignore[no-any-return]
 
-        return await with_s2_retry(_call, self._limiter)  # type: ignore[no-any-return]
+        if retry:
+            return await with_s2_retry(_call, self._limiter)  # type: ignore[no-any-return]
+        return await with_s2_try_once(_call, self._limiter)  # type: ignore[no-any-return]
 
     async def batch_resolve(
-        self, ids: list[str], *, fields: str
+        self, ids: list[str], *, fields: str, retry: bool = True
     ) -> list[dict[str, Any] | None]:
         """Resolve a batch of paper IDs using the S2 batch endpoint.
 
         Args:
             ids: List of S2 paper IDs or DOIs (prefixed with ``DOI:``).
             fields: Comma-separated field names.
+            retry: If False, raise :class:`RateLimitedError` on 429.
 
         Returns:
             List of paper dicts (None for unresolved items, preserving order).
@@ -270,4 +310,6 @@ class S2Client:
             r.raise_for_status()
             return r.json()  # type: ignore[no-any-return]
 
-        return await with_s2_retry(_call, self._limiter)  # type: ignore[no-any-return]
+        if retry:
+            return await with_s2_retry(_call, self._limiter)  # type: ignore[no-any-return]
+        return await with_s2_try_once(_call, self._limiter)  # type: ignore[no-any-return]

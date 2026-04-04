@@ -34,3 +34,7 @@ def register_tools(mcp: FastMCP, *, transport: str = "stdio") -> None:
     from ._tools_pdf import register_pdf_tools
 
     register_pdf_tools(mcp)
+
+    from ._tools_tasks import register_task_tools
+
+    register_task_tools(mcp)

@@ -9,10 +9,12 @@ src/scholar_mcp/
   mcp_server.py        -- FastMCP server factory + auth wiring (don't modify)
   config.py            -- env var loading; add domain config fields here
   cli.py               -- CLI entry point (serve command)
-  _server_deps.py      -- lifespan + Depends() DI; replace placeholder service
-  _server_tools.py     -- MCP tools; replace example tools with domain tools
+  _server_deps.py      -- lifespan + Depends() DI; ServiceBundle holds all services
+  _server_tools.py     -- MCP tools; dispatches to category modules
   _server_resources.py -- MCP resources; add domain resources here
   _server_prompts.py   -- MCP prompts; add domain prompts here
+  _task_queue.py       -- In-memory task queue for background async operations
+  _rate_limiter.py     -- Rate limiter, retry, try-once + RateLimitedError
 ```
 
 ## Conventions
@@ -34,5 +36,8 @@ src/scholar_mcp/
 
 - Library is sync; MCP layer uses `asyncio.to_thread()` for blocking calls
 - Write tools tagged `tags={"write"}`, hidden via `mcp.disable(tags={"write"})` in read-only mode
+- All tools have MCP annotations (`readOnlyHint`, `destructiveHint`, `openWorldHint`)
 - Auth: `_build_bearer_auth()` + `_build_oidc_auth()` called in `create_server()`; MultiAuth when both set
 - `_ENV_PREFIX` in `config.py` controls all env var names — change once, affects everything
+- **Async task queue**: S2 tools try once (`retry=False`); on 429 `RateLimitedError`, queue with retries for background execution. PDF tools always queue (unless cache hit). `TaskQueue` lives in `ServiceBundle.tasks`.
+- **Tool queueing pattern**: extract tool logic into `async def _execute(*, retry=True) -> str`, try with `retry=False`, catch `RateLimitedError` and `bundle.tasks.submit(_execute(retry=True))`

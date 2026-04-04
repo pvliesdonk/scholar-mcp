@@ -12,6 +12,7 @@ from scholar_mcp._cache import ScholarCache
 from scholar_mcp._openalex_client import OpenAlexClient
 from scholar_mcp._s2_client import S2Client
 from scholar_mcp._server_deps import ServiceBundle
+from scholar_mcp._task_queue import TaskQueue
 from scholar_mcp.config import ServerConfig
 
 
@@ -53,6 +54,7 @@ async def bundle(cache: ScholarCache, test_config: ServerConfig) -> ServiceBundl
         docling=None,
         cache=cache,
         config=test_config,
+        tasks=TaskQueue(),
     )
     await openalex_http.aclose()
     await s2.aclose()

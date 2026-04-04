@@ -88,8 +88,20 @@ volumes:
   scholar-mcp-data:
 ```
 
+## Async task queue
+
+All PDF tools run in the background and return a task ID immediately:
+
+```json
+{"queued": true, "task_id": "a1b2c3d4e5f6", "tool": "fetch_paper_pdf"}
+```
+
+Use `get_task_result` with the `task_id` to poll for completion. PDF task results are retained for 1 hour.
+
+The only exception is `convert_pdf_to_markdown` when the markdown output file already exists locally — in that case, the cached result is returned directly.
+
 ## Limitations
 
 - **Open-access only**: `fetch_paper_pdf` uses the `openAccessPdf.url` field from Semantic Scholar. Papers without an OA URL cannot be downloaded.
 - **Conversion quality varies**: OCR quality depends on the PDF source. Scanned papers produce lower-quality results than born-digital PDFs.
-- **docling-serve polling**: Conversion is asynchronous. The server polls docling-serve for completion with a timeout of ~10 minutes (200 polls at 3-second intervals).
+- **docling-serve polling**: Conversion is asynchronous internally. The server polls docling-serve for completion with a timeout of ~10 minutes (200 polls at 3-second intervals). This happens in the background task, so the MCP client is not blocked.

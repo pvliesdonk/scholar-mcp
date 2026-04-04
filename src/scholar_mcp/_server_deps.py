@@ -16,6 +16,7 @@ from ._cache import ScholarCache
 from ._docling_client import DoclingClient
 from ._openalex_client import OpenAlexClient
 from ._s2_client import S2Client
+from ._task_queue import TaskQueue
 from .config import ServerConfig, load_config
 
 logger = logging.getLogger(__name__)
@@ -40,6 +41,7 @@ class ServiceBundle:
     docling: DoclingClient | None
     cache: ScholarCache
     config: ServerConfig
+    tasks: TaskQueue
 
 
 @asynccontextmanager
@@ -84,8 +86,15 @@ async def make_service_lifespan(
     cache = ScholarCache(config.cache_dir / "cache.db")
     await cache.open()
 
+    tasks = TaskQueue()
+
     bundle = ServiceBundle(
-        s2=s2, openalex=openalex, docling=docling, cache=cache, config=config
+        s2=s2,
+        openalex=openalex,
+        docling=docling,
+        cache=cache,
+        config=config,
+        tasks=tasks,
     )
     try:
         yield {"bundle": bundle}

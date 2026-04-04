@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from contextlib import asynccontextmanager
 
@@ -99,3 +100,55 @@ async def test_recommend_papers_upstream_error(mcp: FastMCP) -> None:
             )
     data = json.loads(result.content[0].text)
     assert data["error"] == "upstream_error"
+
+
+async def test_recommend_papers_queued_on_429(
+    bundle: ServiceBundle,
+) -> None:
+    """recommend_papers returns queued on 429, background completes."""
+    call_count = 0
+
+    def _side_effect(request: httpx.Request) -> httpx.Response:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return httpx.Response(429)
+        return httpx.Response(
+            200,
+            json={
+                "recommendedPapers": [{"paperId": "r1", "title": "Rec 1", "year": 2024}]
+            },
+        )
+
+    with respx.mock:
+        respx.post(f"{S2_REC}/papers").mock(side_effect=_side_effect)
+
+        @asynccontextmanager
+        async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+            yield {"bundle": bundle}
+
+        app = FastMCP("test", lifespan=lifespan)
+        register_recommendation_tools(app)
+        from scholar_mcp._tools_tasks import register_task_tools
+
+        register_task_tools(app)
+
+        async with Client(app) as client:
+            result = await client.call_tool(
+                "recommend_papers", {"positive_ids": ["p1"]}
+            )
+            data = json.loads(result.content[0].text)
+            assert data["queued"] is True
+            assert data["tool"] == "recommend_papers"
+
+            for _ in range(40):
+                poll = await client.call_tool(
+                    "get_task_result", {"task_id": data["task_id"]}
+                )
+                poll_data = json.loads(poll.content[0].text)
+                if poll_data["status"] in ("completed", "failed"):
+                    break
+                await asyncio.sleep(0.05)
+            assert poll_data["status"] == "completed"
+            inner = json.loads(poll_data["result"])
+            assert inner[0]["paperId"] == "r1"

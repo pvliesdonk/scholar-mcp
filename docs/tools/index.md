@@ -1,6 +1,27 @@
 # Tools
 
-Scholar MCP provides 13 tools across five categories. All tools return JSON.
+Scholar MCP provides 15 tools across six categories. All tools return JSON.
+
+All tools include [MCP tool annotations](https://spec.modelcontextprotocol.io/specification/2025-03-26/server/tools/#annotations):
+
+- Read-only tools: `readOnlyHint=true`, `destructiveHint=false`, `openWorldHint=true`
+- Write tools (PDF): `readOnlyHint=false`, `destructiveHint=false`, `openWorldHint=true`
+- Task polling tools: `readOnlyHint=true`, `destructiveHint=false`, `openWorldHint=false`
+
+## Async Task Queue
+
+Long-running operations return immediately with a task ID instead of blocking:
+
+- **PDF tools** always queue (unless the result is already cached locally)
+- **S2 tools** queue when the Semantic Scholar API responds with HTTP 429 (rate limited)
+
+When a tool queues an operation, it returns:
+
+```json
+{"queued": true, "task_id": "a1b2c3d4e5f6", "tool": "fetch_paper_pdf"}
+```
+
+Poll with `get_task_result` to check status and retrieve the result. Task results expire after 10 minutes (S2 tools) or 1 hour (PDF tools).
 
 ## Search & Retrieval
 
@@ -281,3 +302,31 @@ Full pipeline: resolve paper, download PDF, convert to Markdown.
 Partial results are returned if a later stage fails (e.g. metadata + error if no OA PDF is available).
 
 See [PDF Conversion guide](../guides/pdf-conversion.md) for setup instructions.
+
+---
+
+## Task Polling
+
+### `get_task_result`
+
+Poll for the result of a background task.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `task_id` | string | *(required)* | Task ID returned by a queued operation |
+
+**Returns:**
+
+```json
+{"task_id": "a1b2c3d4e5f6", "status": "completed", "result": "{...}"}
+```
+
+Status values: `pending`, `running`, `completed`, `failed`. The `result` field contains the original tool output as a JSON string (only present when `completed`). On `failed`, an `error` field describes the failure.
+
+---
+
+### `list_tasks`
+
+List all active (non-expired) background tasks.
+
+**Returns:** JSON list of `{"task_id": "...", "status": "..."}` dicts.

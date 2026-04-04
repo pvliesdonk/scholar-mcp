@@ -13,6 +13,13 @@ import httpx
 logger = logging.getLogger(__name__)
 
 
+class RateLimitedError(Exception):
+    """Raised on HTTP 429 in try-once mode.
+
+    Signals the caller to queue the operation for background retry.
+    """
+
+
 @dataclass
 class RateLimiter:
     """Inter-request delay enforcer.
@@ -73,3 +80,33 @@ async def with_s2_retry(
             else:
                 raise
     raise RuntimeError("unreachable")  # pragma: no cover
+
+
+async def with_s2_try_once(
+    coro_func: Callable[[], Awaitable[Any]],
+    limiter: RateLimiter,
+) -> Any:
+    """Call an async function once; raise :class:`RateLimitedError` on 429.
+
+    Unlike :func:`with_s2_retry`, this does **not** retry.  It is used
+    for the initial optimistic attempt before falling back to background
+    queueing.
+
+    Args:
+        coro_func: Zero-argument async callable to invoke.
+        limiter: Rate limiter to acquire before the attempt.
+
+    Returns:
+        The return value of ``coro_func`` on success.
+
+    Raises:
+        RateLimitedError: If the API responds with HTTP 429.
+        httpx.HTTPStatusError: For non-429 HTTP errors.
+    """
+    await limiter.acquire()
+    try:
+        return await coro_func()
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 429:
+            raise RateLimitedError() from exc
+        raise
