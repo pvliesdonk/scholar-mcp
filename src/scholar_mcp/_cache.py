@@ -315,8 +315,8 @@ class ScholarCache:
         """Return row counts and file size for all tables.
 
         Returns:
-            Dict with keys: papers, citations, refs, authors, openalex,
-            id_aliases, db_size_bytes.
+            Dict with keys: papers, citation_counts, citations, refs, authors,
+            openalex, db_size_bytes.
         """
         assert self._db
         counts: dict[str, int] = {}
