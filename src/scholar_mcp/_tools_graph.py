@@ -82,9 +82,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
                 )
             except httpx.HTTPStatusError as exc:
                 if exc.response.status_code == 404:
-                    return json.dumps(
-                        {"error": "not_found", "identifier": identifier}
-                    )
+                    return json.dumps({"error": "not_found", "identifier": identifier})
                 return json.dumps(
                     {"error": "upstream_error", "status": exc.response.status_code}
                 )
@@ -123,6 +121,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
         Returns:
             JSON with ``data`` list of ``{"citedPaper": {...}}`` dicts.
         """
+
         async def _execute(*, retry: bool = True) -> str:
             try:
                 result = await bundle.s2.get_references(
@@ -134,9 +133,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
                 )
             except httpx.HTTPStatusError as exc:
                 if exc.response.status_code == 404:
-                    return json.dumps(
-                        {"error": "not_found", "identifier": identifier}
-                    )
+                    return json.dumps({"error": "not_found", "identifier": identifier})
                 return json.dumps(
                     {"error": "upstream_error", "status": exc.response.status_code}
                 )
@@ -219,9 +216,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
                 paper_id, current_depth = bfs_queue.popleft()
                 if current_depth >= clamped_depth:
                     continue
-                actual_depth_reached = max(
-                    actual_depth_reached, current_depth + 1
-                )
+                actual_depth_reached = max(actual_depth_reached, current_depth + 1)
 
                 new_nodes: list[tuple[str, dict[str, object]]] = []
 
@@ -301,9 +296,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
             node_list = list(nodes.values())[:max_nodes]
             node_ids = {n["id"] for n in node_list}
             edge_list = [
-                e
-                for e in edges
-                if e["source"] in node_ids and e["target"] in node_ids
+                e for e in edges if e["source"] in node_ids and e["target"] in node_ids
             ]
 
             return json.dumps(
@@ -359,10 +352,9 @@ def register_graph_tools(mcp: FastMCP) -> None:
         Returns:
             JSON ``{"found": true, "path": [...]}`` or ``{"found": false}``.
         """
+
         async def _execute(*, retry: bool = True) -> str:
-            bfs_queue: deque[tuple[str, list[str]]] = deque(
-                [(source_id, [source_id])]
-            )
+            bfs_queue: deque[tuple[str, list[str]]] = deque([(source_id, [source_id])])
             visited: set[str] = {source_id}
 
             async def _get_neighbours(paper_id: str) -> list[str]:
@@ -403,9 +395,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
                                 for item in result.get("data", [])
                                 if item.get("citingPaper", {}).get("paperId")
                             ]
-                            await bundle.cache.set_citations(
-                                paper_id, cached_cit
-                            )
+                            await bundle.cache.set_citations(paper_id, cached_cit)
                         except httpx.HTTPStatusError:
                             cached_cit = []
                     neighbours.extend(cached_cit)
@@ -427,14 +417,10 @@ def register_graph_tools(mcp: FastMCP) -> None:
                                 path_records.append(cached_paper)
                             else:
                                 path_records.append({"paperId": pid})
-                        return json.dumps(
-                            {"found": True, "path": path_records}
-                        )
+                        return json.dumps({"found": True, "path": path_records})
                     if neighbour_id not in visited:
                         visited.add(neighbour_id)
-                        bfs_queue.append(
-                            (neighbour_id, [*path, neighbour_id])
-                        )
+                        bfs_queue.append((neighbour_id, [*path, neighbour_id]))
 
             return json.dumps({"found": False})
 

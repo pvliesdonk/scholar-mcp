@@ -39,7 +39,7 @@ async def test_failed_task() -> None:
     task = queue.get(task_id)
     assert task is not None
     assert task.status == "failed"
-    assert task.error == "internal_error"
+    assert task.error == "ValueError: boom"
 
 
 async def test_ttl_expiry() -> None:

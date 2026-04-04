@@ -127,6 +127,7 @@ def register_utility_tools(mcp: FastMCP) -> None:
         Returns:
             JSON dict with requested fields plus ``doi``, or an error dict.
         """
+
         async def _execute(*, retry: bool = True) -> str:
             doi: str | None = None
             if identifier.startswith("DOI:"):
@@ -138,23 +139,17 @@ def register_utility_tools(mcp: FastMCP) -> None:
                     )
                     doi = (paper.get("externalIds") or {}).get("DOI")
                 except httpx.HTTPStatusError:
-                    return json.dumps(
-                        {"error": "not_found", "identifier": identifier}
-                    )
+                    return json.dumps({"error": "not_found", "identifier": identifier})
 
             if not doi:
-                return json.dumps(
-                    {"error": "no_doi", "identifier": identifier}
-                )
+                return json.dumps({"error": "no_doi", "identifier": identifier})
 
             cached = await bundle.cache.get_openalex(doi)
             oa_data = cached
             if oa_data is None:
                 oa_data = await bundle.openalex.get_by_doi(doi)
                 if oa_data is None:
-                    return json.dumps(
-                        {"error": "not_found_in_openalex", "doi": doi}
-                    )
+                    return json.dumps({"error": "not_found_in_openalex", "doi": doi})
                 await bundle.cache.set_openalex(doi, oa_data)
 
             result: dict[str, Any] = {"doi": doi}
@@ -168,8 +163,7 @@ def register_utility_tools(mcp: FastMCP) -> None:
 
             if "funders" in fields:
                 result["funders"] = [
-                    g.get("funder_display_name")
-                    for g in oa_data.get("grants", [])
+                    g.get("funder_display_name") for g in oa_data.get("grants", [])
                 ]
 
             if "oa_status" in fields:

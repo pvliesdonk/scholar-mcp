@@ -7,7 +7,7 @@ import logging
 import time
 from collections.abc import Coroutine
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
 logger = logging.getLogger(__name__)
@@ -29,7 +29,7 @@ class TaskResult:
     """
 
     task_id: str
-    status: str  # "pending" | "running" | "completed" | "failed"
+    status: Literal["pending", "running", "completed", "failed"]
     result: str | None = None
     error: str | None = None
     created_at: float = field(default_factory=time.time)
@@ -49,6 +49,7 @@ class TaskQueue:
     def __init__(self, default_ttl: float = _DEFAULT_TTL) -> None:
         self._tasks: dict[str, TaskResult] = {}
         self._default_ttl = default_ttl
+        self._background_tasks: set[asyncio.Task[Any]] = set()
 
     def submit(
         self,
@@ -73,7 +74,8 @@ class TaskQueue:
         )
         self._tasks[task_id] = task
         bg = asyncio.create_task(self._run(task, coro))
-        bg.add_done_callback(lambda _: None)  # prevent unhandled warnings
+        self._background_tasks.add(bg)
+        bg.add_done_callback(self._background_tasks.discard)
         logger.info("task_submitted task_id=%s", task_id)
         return task_id
 
@@ -83,9 +85,9 @@ class TaskQueue:
             task.result = await coro
             task.status = "completed"
             logger.info("task_completed task_id=%s", task.task_id)
-        except Exception:
+        except Exception as exc:
             task.status = "failed"
-            task.error = "internal_error"
+            task.error = f"{type(exc).__name__}: {exc}"
             logger.exception("task_failed task_id=%s", task.task_id)
 
     def get(self, task_id: str) -> TaskResult | None:
@@ -111,10 +113,6 @@ class TaskQueue:
 
     def _cleanup(self) -> None:
         now = time.time()
-        expired = [
-            k
-            for k, v in self._tasks.items()
-            if now - v.created_at > v.ttl
-        ]
+        expired = [k for k, v in self._tasks.items() if now - v.created_at > v.ttl]
         for k in expired:
             del self._tasks[k]

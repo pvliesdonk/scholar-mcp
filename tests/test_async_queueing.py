@@ -138,6 +138,42 @@ async def test_search_papers_direct_on_success(
 
 
 @pytest.mark.respx(base_url=S2_BASE)
+async def test_get_paper_queued_on_429(
+    respx_mock: respx.MockRouter, bundle: ServiceBundle
+) -> None:
+    """get_paper returns queued response on 429, background task completes."""
+    call_count = 0
+
+    def _side_effect(request: httpx.Request) -> httpx.Response:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return httpx.Response(429)
+        return httpx.Response(200, json={"paperId": "x1", "title": "Delayed"})
+
+    respx_mock.get("/paper/x1").mock(side_effect=_side_effect)
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_search_tools(app)
+    register_task_tools(app)
+
+    async with Client(app) as client:
+        result = await client.call_tool("get_paper", {"identifier": "x1"})
+        data = json.loads(result.content[0].text)
+        assert data["queued"] is True
+        assert data["tool"] == "get_paper"
+
+        task_data = await _poll_task(client, data["task_id"])
+    assert task_data["status"] == "completed"
+    inner = json.loads(task_data["result"])
+    assert inner["title"] == "Delayed"
+
+
+@pytest.mark.respx(base_url=S2_BASE)
 async def test_get_paper_cached_returns_direct(
     respx_mock: respx.MockRouter, bundle: ServiceBundle
 ) -> None:

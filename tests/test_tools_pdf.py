@@ -72,13 +72,34 @@ async def _poll_task(client: Client, task_id: str, max_attempts: int = 40) -> di
 
 
 @pytest.mark.respx(base_url=S2_BASE)
-async def test_fetch_paper_pdf_queued(
+async def test_fetch_paper_pdf_no_oa(
     respx_mock: respx.MockRouter, mcp_no_docling: FastMCP
 ) -> None:
-    """fetch_paper_pdf always returns queued response."""
+    """fetch_paper_pdf returns no_oa_pdf directly when paper has no OA URL."""
+    respx_mock.get("/paper/p1").mock(
+        return_value=httpx.Response(200, json={"paperId": "p1", "openAccessPdf": None})
+    )
+    async with Client(mcp_no_docling) as client:
+        result = await client.call_tool("fetch_paper_pdf", {"identifier": "p1"})
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "no_oa_pdf"
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_fetch_paper_pdf_queued(
+    respx_mock: respx.MockRouter,
+    mcp_no_docling: FastMCP,
+    bundle: ServiceBundle,
+) -> None:
+    """fetch_paper_pdf queues download when PDF not cached."""
     respx_mock.get("/paper/p1").mock(
         return_value=httpx.Response(
-            200, json={"paperId": "p1", "openAccessPdf": None}
+            200,
+            json={
+                "paperId": "p1",
+                "openAccessPdf": {"url": "https://example.com/paper.pdf"},
+                "title": "Test Paper",
+            },
         )
     )
     async with Client(mcp_no_docling) as client:
@@ -86,10 +107,6 @@ async def test_fetch_paper_pdf_queued(
         queued = json.loads(result.content[0].text)
         assert queued["queued"] is True
         assert queued["tool"] == "fetch_paper_pdf"
-        task_data = await _poll_task(client, queued["task_id"])
-    assert task_data["status"] == "completed"
-    inner = json.loads(task_data["result"])
-    assert inner["error"] == "no_oa_pdf"
 
 
 async def test_convert_no_docling(mcp_no_docling: FastMCP, tmp_path: Path) -> None:
@@ -133,6 +150,33 @@ async def test_convert_standard(
     inner = json.loads(task_data["result"])
     assert "# Paper" in inner["markdown"]
     assert inner["vlm_used"] is False
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_fetch_paper_pdf_cache_hit(
+    respx_mock: respx.MockRouter, mcp_no_docling: FastMCP, bundle: ServiceBundle
+) -> None:
+    """fetch_paper_pdf returns cached path directly when PDF exists on disk."""
+    respx_mock.get("/paper/p1").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "paperId": "p1",
+                "openAccessPdf": {"url": "https://example.com/p.pdf"},
+                "title": "Test",
+            },
+        )
+    )
+    pdf_dir = bundle.config.cache_dir / "pdfs"
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+    pdf_path = pdf_dir / "p1.pdf"
+    pdf_path.write_bytes(b"%PDF cached")
+
+    async with Client(mcp_no_docling) as client:
+        result = await client.call_tool("fetch_paper_pdf", {"identifier": "p1"})
+    data = json.loads(result.content[0].text)
+    assert "queued" not in data
+    assert data["path"] == str(pdf_path)
 
 
 async def test_convert_cached_markdown(

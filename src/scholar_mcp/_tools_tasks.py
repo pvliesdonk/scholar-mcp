@@ -75,6 +75,4 @@ def register_task_tools(mcp: FastMCP) -> None:
             JSON list of ``{"task_id": ..., "status": ...}`` dicts.
         """
         tasks = bundle.tasks.list_active()
-        return json.dumps(
-            [{"task_id": t.task_id, "status": t.status} for t in tasks]
-        )
+        return json.dumps([{"task_id": t.task_id, "status": t.status} for t in tasks])

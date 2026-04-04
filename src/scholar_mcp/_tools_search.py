@@ -143,9 +143,7 @@ def register_search_tools(mcp: FastMCP) -> None:
                 fetched = await bundle.s2.get_paper(identifier, retry=retry)
             except httpx.HTTPStatusError as exc:
                 if exc.response.status_code == 404:
-                    return json.dumps(
-                        {"error": "not_found", "identifier": identifier}
-                    )
+                    return json.dumps({"error": "not_found", "identifier": identifier})
                 return json.dumps(
                     {
                         "error": "upstream_error",
@@ -166,9 +164,7 @@ def register_search_tools(mcp: FastMCP) -> None:
             return await _execute(retry=False)
         except RateLimitedError:
             task_id = bundle.tasks.submit(_execute(retry=True))
-            return json.dumps(
-                {"queued": True, "task_id": task_id, "tool": "get_paper"}
-            )
+            return json.dumps({"queued": True, "task_id": task_id, "tool": "get_paper"})
 
     @mcp.tool(
         annotations={
