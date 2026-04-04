@@ -41,7 +41,7 @@
         {
           "type": "named",
           "name": "--port",
-          "default": 8000,
+          "default": "8000",
           "description": "Port for the HTTP transport"
         }
       ],
