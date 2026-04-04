@@ -103,7 +103,7 @@ def serve(transport: str, host: str, port: int, path: str | None) -> None:
             import uvicorn
         except ImportError as exc:
             logger.error(
-                "HTTP transport requires uvicorn. Install with: pip install 'scholar-mcp[mcp]'"
+                "HTTP transport requires uvicorn. Install with: pip install 'pvliesdonk-scholar-mcp[mcp]'"
             )
             raise SystemExit(1) from exc
 
