@@ -1,80 +1,96 @@
-"""Shared dependency injection and lifespan for the MCP server.
-
-Provides :func:`get_service` and :func:`make_service_lifespan` which are
-imported by the tool, resource, and prompt registration modules.
-
-TODO: Replace ``MyService`` / the placeholder dict with your actual business
-object (database connection, API client, in-memory index, etc.).
-"""
+"""Service bundle lifespan and dependency injection for Scholar MCP Server."""
 
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from contextlib import asynccontextmanager
+from dataclasses import dataclass
+from typing import AsyncGenerator
 
+import httpx
 from fastmcp import FastMCP
-from fastmcp.dependencies import CurrentContext
+from fastmcp.dependencies import Depends
 from fastmcp.server.context import Context
-from fastmcp.server.lifespan import lifespan
 
-if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
-
-    from scholar_mcp.config import ServerConfig
+from ._cache import ScholarCache
+from ._s2_client import S2Client
+from .config import ServerConfig, load_config
 
 logger = logging.getLogger(__name__)
 
+_OPENALEX_BASE = "https://api.openalex.org"
 
-def make_service_lifespan(config: ServerConfig) -> Any:
-    """Create a lifespan function that closes over a pre-loaded config.
+
+@dataclass
+class ServiceBundle:
+    """All shared services passed to tools via FastMCP dependency injection.
+
+    Attributes:
+        s2: Semantic Scholar API client.
+        openalex: OpenAlex API client (httpx.AsyncClient pointed at OpenAlex).
+        docling: docling-serve httpx client, or None if not configured.
+        cache: SQLite cache.
+        config: Server configuration.
+    """
+
+    s2: S2Client
+    openalex: httpx.AsyncClient  # NOTE: refined to OpenAlexClient in Task 11
+    docling: httpx.AsyncClient | None  # NOTE: refined to DoclingClient in Task 12
+    cache: ScholarCache
+    config: ServerConfig
+
+
+@asynccontextmanager
+async def make_service_lifespan(
+    app: FastMCP,
+) -> AsyncGenerator[dict[str, ServiceBundle], None]:
+    """FastMCP lifespan: create all clients, open cache, yield bundle.
 
     Args:
-        config: A fully-loaded :class:`~scholar_mcp.config.ServerConfig`
-            instance produced by a single :func:`load_config` call in
-            :func:`~scholar_mcp.mcp_server.create_server`.
+        app: The FastMCP application instance (unused but required by protocol).
+
+    Yields:
+        Dict mapping ``"bundle"`` to the :class:`ServiceBundle`.
+    """
+    config = load_config()
+    config.cache_dir.mkdir(parents=True, exist_ok=True)
+
+    s2 = S2Client(api_key=config.s2_api_key)
+    openalex = httpx.AsyncClient(
+        base_url=_OPENALEX_BASE,
+        headers={"User-Agent": "scholar-mcp/0.1 (mailto:scholar-mcp@pvliesdonk.nl)"},
+        timeout=30.0,
+    )
+    docling: httpx.AsyncClient | None = None
+    if config.docling_url:
+        docling = httpx.AsyncClient(base_url=config.docling_url, timeout=300.0)
+        logger.info("docling_configured url=%s", config.docling_url)
+    else:
+        logger.info("docling_not_configured pdf_tools_disabled")
+
+    cache = ScholarCache(config.cache_dir / "cache.db")
+    await cache.open()
+
+    bundle = ServiceBundle(
+        s2=s2, openalex=openalex, docling=docling, cache=cache, config=config
+    )
+    try:
+        yield {"bundle": bundle}
+    finally:
+        await s2.aclose()
+        await openalex.aclose()
+        if docling:
+            await docling.aclose()
+        await cache.close()
+
+
+def get_bundle(ctx: Context = Depends(Context)) -> ServiceBundle:
+    """FastMCP dependency: extract ServiceBundle from lifespan context.
+
+    Args:
+        ctx: FastMCP request context (injected automatically).
 
     Returns:
-        A FastMCP lifespan coroutine that initialises the service object and
-        yields ``{"service": service, "config": config}`` to the lifespan
-        context.
+        The :class:`ServiceBundle` created during lifespan.
     """
-
-    @lifespan
-    async def _service_lifespan(
-        server: FastMCP,  # noqa: ARG001
-    ) -> AsyncIterator[dict[str, Any]]:
-        """Initialise the service at server startup, tear down on shutdown."""
-        logger.info("Service starting up (read_only=%s)", config.read_only)
-
-        # TODO: Replace this placeholder with your real service initialisation.
-        # Examples:
-        #   service = MyDatabase(config.data_dir)
-        #   await service.connect()
-        #   service = MyApiClient(api_key=config.api_key)
-        service: dict[str, Any] = {"ready": True}
-
-        try:
-            yield {"service": service, "config": config}
-        finally:
-            # TODO: Add teardown logic here.
-            # Examples:
-            #   await service.close()
-            #   service.flush()
-            logger.info("Service shut down")
-
-    return _service_lifespan
-
-
-def get_service(ctx: Context = CurrentContext()) -> Any:
-    """Resolve the service object from lifespan context.
-
-    Used as a ``Depends()`` default in tool/resource/prompt signatures.
-
-    Raises:
-        RuntimeError: If the server lifespan has not run.
-    """
-    service: Any = ctx.lifespan_context.get("service")
-    if service is None:
-        msg = "Service not initialised — server lifespan has not run"
-        raise RuntimeError(msg)
-    return service
+    return ctx.request_context.lifespan_context["bundle"]  # type: ignore[return-value]

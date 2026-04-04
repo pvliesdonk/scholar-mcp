@@ -278,7 +278,7 @@ def create_server(*, transport: str = "stdio") -> FastMCP:
     mcp = FastMCP(
         server_name,
         instructions=instructions,
-        lifespan=make_service_lifespan(config),
+        lifespan=make_service_lifespan,
         auth=auth,
     )
 
