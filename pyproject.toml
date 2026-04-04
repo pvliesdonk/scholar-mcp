@@ -16,11 +16,11 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
     "License :: OSI Approved :: MIT License",
 ]
-dependencies = []
+dependencies = ["httpx", "aiosqlite"]
 
 [project.optional-dependencies]
-mcp = ["fastmcp>=3.0,<4", "httpx", "uvicorn"]
-all = ["fastmcp>=3.0,<4", "httpx", "uvicorn"]
+mcp = ["fastmcp>=3.0,<4", "uvicorn"]
+all = ["fastmcp>=3.0,<4", "uvicorn"]
 dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21",
@@ -28,6 +28,7 @@ dev = [
     "ruff>=0.1",
     "mypy>=1.0",
     "pip-audit>=2.7",
+    "respx>=0.20",
 ]
 docs = [
     "mkdocs-material>=9.5",
