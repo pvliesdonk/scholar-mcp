@@ -42,6 +42,8 @@ def register_recommendation_tools(mcp: FastMCP) -> None:
         Returns:
             JSON list of recommended paper records, or an error dict.
         """
+        if not positive_ids:
+            return json.dumps({"error": "validation_error", "detail": "positive_ids must contain at least 1 ID"})
         try:
             result = await bundle.s2.recommend(
                 positive_ids[:5],

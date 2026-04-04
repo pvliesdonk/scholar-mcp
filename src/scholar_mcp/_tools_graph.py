@@ -151,6 +151,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
 
         visited: set[str] = set(seed_ids[:10])
         truncated = False
+        actual_depth_reached = 0
 
         year: str | None = None
         if year_start is not None and year_end is not None:
@@ -165,6 +166,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
             paper_id, current_depth = queue.popleft()
             if current_depth >= depth:
                 continue
+            actual_depth_reached = max(actual_depth_reached, current_depth + 1)
 
             new_nodes: list[tuple[str, dict]] = []
 
@@ -244,7 +246,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
                 "stats": {
                     "total_nodes": len(node_list),
                     "total_edges": len(edge_list),
-                    "depth_reached": depth,
+                    "depth_reached": actual_depth_reached,
                     "truncated": truncated,
                 },
             }
