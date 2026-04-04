@@ -41,14 +41,16 @@ def test_config(tmp_path: Path) -> ServerConfig:
 
 
 @pytest.fixture
-def bundle(cache: ScholarCache, test_config: ServerConfig) -> ServiceBundle:
+async def bundle(cache: ScholarCache, test_config: ServerConfig) -> ServiceBundle:
     """Provide a ServiceBundle wired to in-memory/temp test services."""
     s2 = S2Client(api_key=None, delay=0.0)
     openalex = httpx.AsyncClient(base_url="https://api.openalex.org")
-    return ServiceBundle(
+    yield ServiceBundle(
         s2=s2,
         openalex=openalex,
         docling=None,
         cache=cache,
         config=test_config,
     )
+    await openalex.aclose()
+    await s2.aclose()
