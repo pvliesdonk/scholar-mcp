@@ -175,6 +175,7 @@ jobs:
         run: uv export --all-extras --frozen --no-emit-project --no-hashes -o ${{ runner.temp }}/requirements.txt
 
       - name: Run pip-audit
+        # TODO: Remove ignore flags once upstreams patch — tracked at https://github.com/pvliesdonk/scholar-mcp/issues/25
         run: uvx pip-audit --strict --progress-spinner off --ignore-vuln CVE-2026-25990 --ignore-vuln CVE-2026-4539 -r ${{ runner.temp }}/requirements.txt
 
   secrets:
