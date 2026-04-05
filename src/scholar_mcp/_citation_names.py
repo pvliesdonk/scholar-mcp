@@ -30,9 +30,7 @@ _PREFIXES = frozenset(
 _SUFFIXES = frozenset(
     {
         "jr",
-        "jr.",
         "sr",
-        "sr.",
         "ii",
         "iii",
         "iv",
@@ -42,7 +40,17 @@ _SUFFIXES = frozenset(
 
 
 class AuthorName(NamedTuple):
-    """Parsed author name components."""
+    """Parsed author name components.
+
+    Attributes:
+        first: Given name(s), including hyphenated forms. Empty string when absent.
+        last: Family name (surname). Empty string when absent.
+        prefix: Nobiliary particle(s) preceding the surname (e.g. ``"van"``,
+            ``"de la"``). Empty string when absent. No trailing space.
+        suffix: Generational or ordinal suffix (e.g. ``"Jr."``, ``"III"``).
+            Empty string when absent. Preserves original casing and period if
+            present (e.g. ``"Jr."`` remains ``"Jr."``, ``"III"`` remains ``"III"``).
+    """
 
     first: str
     last: str
@@ -70,9 +78,10 @@ def parse_author_name(name: str) -> AuthorName:
     if len(parts) == 1:
         return AuthorName(first="", last=parts[0], prefix="", suffix="")
 
-    # Extract suffix from the end.
+    # Extract suffix from the end (only when at least 2 tokens remain after
+    # removal so there is still a first name and a last name).
     suffix = ""
-    if parts[-1].lower().rstrip(".") in {s.rstrip(".") for s in _SUFFIXES}:
+    if len(parts) >= 3 and parts[-1].lower().rstrip(".") in _SUFFIXES:
         suffix = parts.pop()
 
     if len(parts) == 1:
