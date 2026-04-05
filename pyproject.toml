@@ -16,7 +16,13 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
     "License :: OSI Approved :: MIT License",
 ]
-dependencies = ["httpx", "aiosqlite", "click>=8.0"]
+dependencies = [
+    "httpx",
+    "aiosqlite",
+    "click>=8.0",
+    "python-epo-ops-client>=4.2",
+    "lxml>=5.0",
+]
 
 [project.optional-dependencies]
 mcp = ["fastmcp>=3.2.0,<4", "uvicorn"]
