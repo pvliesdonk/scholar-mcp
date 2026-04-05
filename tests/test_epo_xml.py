@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from scholar_mcp._epo_xml import parse_biblio_xml, parse_search_xml
+from scholar_mcp._epo_xml import (
+    parse_biblio_xml,
+    parse_claims_xml,
+    parse_description_xml,
+    parse_family_xml,
+    parse_legal_xml,
+    parse_search_xml,
+)
 
 # ---------------------------------------------------------------------------
 # Fixtures — inline XML bytes
@@ -470,3 +477,195 @@ class TestParseSearchXmlOutputKeys:
         result = parse_search_xml(SEARCH_XML_FULL)
         ref = result["references"][0]
         assert set(ref.keys()) == {"country", "number", "kind"}
+
+
+# ---------------------------------------------------------------------------
+# Fixtures for claims and description parsers
+# ---------------------------------------------------------------------------
+
+CLAIMS_XML = b"""\
+<?xml version="1.0" encoding="UTF-8"?>
+<ops:world-patent-data xmlns:ops="http://ops.epo.org"
+    xmlns="http://www.epo.org/exchange">
+  <exchange-documents>
+    <exchange-document country="EP" doc-number="1234567" kind="A1">
+      <claims lang="en">
+        <claim>
+          <claim-text>1. A method for processing widgets comprising:
+            <claim-text>a) receiving input data;</claim-text>
+            <claim-text>b) transforming the input data.</claim-text>
+          </claim-text>
+        </claim>
+        <claim>
+          <claim-text>2. The method of claim 1, wherein the input data is digital.</claim-text>
+        </claim>
+      </claims>
+      <claims lang="de">
+        <claim>
+          <claim-text>1. Ein Verfahren zur Verarbeitung...</claim-text>
+        </claim>
+      </claims>
+    </exchange-document>
+  </exchange-documents>
+</ops:world-patent-data>"""
+
+DESCRIPTION_XML = b"""\
+<?xml version="1.0" encoding="UTF-8"?>
+<ops:world-patent-data xmlns:ops="http://ops.epo.org"
+    xmlns="http://www.epo.org/exchange">
+  <exchange-documents>
+    <exchange-document country="EP" doc-number="1234567" kind="A1">
+      <description lang="en">
+        <p num="0001">FIELD OF THE INVENTION</p>
+        <p num="0002">The present invention relates to widget processing.</p>
+        <p num="0003">BACKGROUND</p>
+        <p num="0004">Prior art widgets have limitations.</p>
+      </description>
+    </exchange-document>
+  </exchange-documents>
+</ops:world-patent-data>"""
+
+
+# ---------------------------------------------------------------------------
+# Tests for parse_claims_xml
+# ---------------------------------------------------------------------------
+
+
+class TestParseClaimsXml:
+    def test_english_preferred(self) -> None:
+        result = parse_claims_xml(CLAIMS_XML)
+        assert "processing widgets" in result
+        assert "Verfahren" not in result
+
+    def test_multiple_claims(self) -> None:
+        result = parse_claims_xml(CLAIMS_XML)
+        assert "1." in result
+        assert "2." in result
+
+    def test_empty_xml(self) -> None:
+        empty = b'<?xml version="1.0"?><ops:world-patent-data xmlns:ops="http://ops.epo.org"></ops:world-patent-data>'
+        result = parse_claims_xml(empty)
+        assert result == ""
+
+
+# ---------------------------------------------------------------------------
+# Tests for parse_description_xml
+# ---------------------------------------------------------------------------
+
+
+class TestParseDescriptionXml:
+    def test_paragraphs_joined(self) -> None:
+        result = parse_description_xml(DESCRIPTION_XML)
+        assert "FIELD OF THE INVENTION" in result
+        assert "widget processing" in result
+
+    def test_not_empty(self) -> None:
+        result = parse_description_xml(DESCRIPTION_XML)
+        assert len(result) > 50
+
+    def test_empty_xml(self) -> None:
+        empty = b'<?xml version="1.0"?><ops:world-patent-data xmlns:ops="http://ops.epo.org"></ops:world-patent-data>'
+        result = parse_description_xml(empty)
+        assert result == ""
+
+
+# ---------------------------------------------------------------------------
+# Fixtures for family and legal parsers
+# ---------------------------------------------------------------------------
+
+FAMILY_XML = b"""\
+<?xml version="1.0" encoding="UTF-8"?>
+<ops:world-patent-data xmlns:ops="http://ops.epo.org"
+    xmlns="http://www.epo.org/exchange">
+  <ops:patent-family>
+    <ops:family-member family-id="54321">
+      <publication-reference>
+        <document-id document-id-type="docdb">
+          <country>EP</country>
+          <doc-number>1234567</doc-number>
+          <kind>A1</kind>
+          <date>20200115</date>
+        </document-id>
+      </publication-reference>
+    </ops:family-member>
+    <ops:family-member family-id="54321">
+      <publication-reference>
+        <document-id document-id-type="docdb">
+          <country>US</country>
+          <doc-number>11234567</doc-number>
+          <kind>B2</kind>
+          <date>20210301</date>
+        </document-id>
+      </publication-reference>
+    </ops:family-member>
+  </ops:patent-family>
+</ops:world-patent-data>"""
+
+LEGAL_XML = b"""\
+<?xml version="1.0" encoding="UTF-8"?>
+<ops:world-patent-data xmlns:ops="http://ops.epo.org"
+    xmlns="http://www.epo.org/exchange">
+  <ops:register-documents>
+    <ops:register-document country="EP" doc-number="1234567" kind="A1">
+      <ops:legal>
+        <ops:legal-event>
+          <ops:event-date><ops:date>20190501</ops:date></ops:event-date>
+          <ops:event-code>APPLICATION</ops:event-code>
+          <ops:event-text>Application filed</ops:event-text>
+        </ops:legal-event>
+        <ops:legal-event>
+          <ops:event-date><ops:date>20200115</ops:date></ops:event-date>
+          <ops:event-code>PUBLICATION</ops:event-code>
+          <ops:event-text>Publication of application</ops:event-text>
+        </ops:legal-event>
+      </ops:legal>
+    </ops:register-document>
+  </ops:register-documents>
+</ops:world-patent-data>"""
+
+
+# ---------------------------------------------------------------------------
+# Tests for parse_family_xml
+# ---------------------------------------------------------------------------
+
+
+class TestParseFamilyXml:
+    def test_family_members(self) -> None:
+        result = parse_family_xml(FAMILY_XML)
+        assert len(result) == 2
+        assert result[0]["country"] == "EP"
+        assert result[1]["country"] == "US"
+
+    def test_family_member_fields(self) -> None:
+        result = parse_family_xml(FAMILY_XML)
+        ep = result[0]
+        assert ep["number"] == "1234567"
+        assert ep["kind"] == "A1"
+        assert ep["date"] == "2020-01-15"
+
+    def test_empty_xml(self) -> None:
+        empty = b'<?xml version="1.0"?><ops:world-patent-data xmlns:ops="http://ops.epo.org"></ops:world-patent-data>'
+        result = parse_family_xml(empty)
+        assert result == []
+
+
+# ---------------------------------------------------------------------------
+# Tests for parse_legal_xml
+# ---------------------------------------------------------------------------
+
+
+class TestParseLegalXml:
+    def test_legal_events(self) -> None:
+        result = parse_legal_xml(LEGAL_XML)
+        assert len(result) == 2
+
+    def test_event_fields(self) -> None:
+        result = parse_legal_xml(LEGAL_XML)
+        assert result[0]["date"] == "2019-05-01"
+        assert result[0]["code"] == "APPLICATION"
+        assert "filed" in result[0]["description"]
+
+    def test_empty_xml(self) -> None:
+        empty = b'<?xml version="1.0"?><ops:world-patent-data xmlns:ops="http://ops.epo.org"></ops:world-patent-data>'
+        result = parse_legal_xml(empty)
+        assert result == []
