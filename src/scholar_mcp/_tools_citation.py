@@ -71,7 +71,7 @@ def register_citation_tools(mcp: FastMCP) -> None:
     )
     async def generate_citations(
         paper_ids: list[str],
-        format: Literal["bibtex", "csl-json", "ris"] = "bibtex",
+        citation_format: Literal["bibtex", "csl-json", "ris"] = "bibtex",
         enrich: bool = True,
         bundle: ServiceBundle = Depends(get_bundle),
     ) -> str:
@@ -83,7 +83,7 @@ def register_citation_tools(mcp: FastMCP) -> None:
         Args:
             paper_ids: List of paper identifiers (S2 IDs, DOIs, arXiv IDs,
                 etc.). Maximum 100.
-            format: Output format — bibtex, csl-json, or ris.
+            citation_format: Output format — bibtex, csl-json, or ris.
             enrich: If True, attempt OpenAlex enrichment for missing venue
                 data when a DOI is available.
 
@@ -137,7 +137,7 @@ def register_citation_tools(mcp: FastMCP) -> None:
                     }
                 )
 
-            formatter = _FORMATTERS[format]
+            formatter = _FORMATTERS[citation_format]
             return formatter(papers, errors)
 
         try:

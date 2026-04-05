@@ -52,7 +52,7 @@ async def test_generate_bibtex_single(mcp: FastMCP) -> None:
         async with Client(mcp) as client:
             result = await client.call_tool(
                 "generate_citations",
-                {"paper_ids": ["abc123"], "format": "bibtex"},
+                {"paper_ids": ["abc123"], "citation_format": "bibtex"},
             )
     text = result.content[0].text
     assert "@article{vaswani2017," in text
@@ -67,7 +67,7 @@ async def test_generate_csl_json(mcp: FastMCP) -> None:
         async with Client(mcp) as client:
             result = await client.call_tool(
                 "generate_citations",
-                {"paper_ids": ["abc123"], "format": "csl-json"},
+                {"paper_ids": ["abc123"], "citation_format": "csl-json"},
             )
     data = json.loads(result.content[0].text)
     assert len(data["citations"]) == 1
@@ -82,7 +82,7 @@ async def test_generate_ris(mcp: FastMCP) -> None:
         async with Client(mcp) as client:
             result = await client.call_tool(
                 "generate_citations",
-                {"paper_ids": ["abc123"], "format": "ris"},
+                {"paper_ids": ["abc123"], "citation_format": "ris"},
             )
     text = result.content[0].text
     assert "TY  - JOUR" in text
@@ -97,7 +97,7 @@ async def test_partial_resolution(mcp: FastMCP) -> None:
         async with Client(mcp) as client:
             result = await client.call_tool(
                 "generate_citations",
-                {"paper_ids": ["abc123", "missing_id"], "format": "bibtex"},
+                {"paper_ids": ["abc123", "missing_id"], "citation_format": "bibtex"},
             )
     text = result.content[0].text
     assert "@article{vaswani2017," in text
@@ -127,7 +127,7 @@ async def test_enrich_fills_venue(mcp: FastMCP) -> None:
         async with Client(mcp) as client:
             result = await client.call_tool(
                 "generate_citations",
-                {"paper_ids": ["abc123"], "format": "bibtex", "enrich": True},
+                {"paper_ids": ["abc123"], "citation_format": "bibtex", "enrich": True},
             )
     text = result.content[0].text
     assert "Nature Machine Intelligence" in text
@@ -142,7 +142,7 @@ async def test_enrich_disabled(mcp: FastMCP) -> None:
         async with Client(mcp) as client:
             result = await client.call_tool(
                 "generate_citations",
-                {"paper_ids": ["abc123"], "format": "bibtex", "enrich": False},
+                {"paper_ids": ["abc123"], "citation_format": "bibtex", "enrich": False},
             )
     text = result.content[0].text
     assert "@" in text
@@ -152,7 +152,7 @@ async def test_empty_input_error(mcp: FastMCP) -> None:
     async with Client(mcp) as client:
         result = await client.call_tool(
             "generate_citations",
-            {"paper_ids": [], "format": "bibtex"},
+            {"paper_ids": [], "citation_format": "bibtex"},
         )
     data = json.loads(result.content[0].text)
     assert "error" in data
@@ -167,7 +167,7 @@ async def test_upstream_error(mcp: FastMCP) -> None:
         async with Client(mcp) as client:
             result = await client.call_tool(
                 "generate_citations",
-                {"paper_ids": ["abc123"], "format": "bibtex"},
+                {"paper_ids": ["abc123"], "citation_format": "bibtex"},
             )
     data = json.loads(result.content[0].text)
     assert data["error"] == "upstream_error"
@@ -179,7 +179,7 @@ async def test_too_many_ids_error(mcp: FastMCP) -> None:
     async with Client(mcp) as client:
         result = await client.call_tool(
             "generate_citations",
-            {"paper_ids": [f"id{i}" for i in range(101)], "format": "bibtex"},
+            {"paper_ids": [f"id{i}" for i in range(101)], "citation_format": "bibtex"},
         )
     data = json.loads(result.content[0].text)
     assert "error" in data
@@ -194,7 +194,7 @@ async def test_all_papers_unresolved(mcp: FastMCP) -> None:
         async with Client(mcp) as client:
             result = await client.call_tool(
                 "generate_citations",
-                {"paper_ids": ["bad1", "bad2"], "format": "bibtex"},
+                {"paper_ids": ["bad1", "bad2"], "citation_format": "bibtex"},
             )
     data = json.loads(result.content[0].text)
     assert data["error"] == "no_papers_resolved"
@@ -224,7 +224,7 @@ async def test_queued_on_429(bundle: ServiceBundle) -> None:
         async with Client(app) as client:
             result = await client.call_tool(
                 "generate_citations",
-                {"paper_ids": ["abc123"], "format": "bibtex"},
+                {"paper_ids": ["abc123"], "citation_format": "bibtex"},
             )
             data = json.loads(result.content[0].text)
             assert data["queued"] is True

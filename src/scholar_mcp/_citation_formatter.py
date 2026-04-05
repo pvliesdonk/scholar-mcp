@@ -158,14 +158,15 @@ def _format_bibtex_author(paper: dict[str, Any]) -> str:
     parts: list[str] = []
     for author in authors:
         parsed = parse_author_name(author.get("name", ""))
-        if parsed.prefix:
-            parts.append(f"{parsed.prefix} {parsed.last}, {parsed.first}")
-        elif parsed.first:
-            parts.append(f"{parsed.last}, {parsed.first}")
-        else:
-            parts.append(parsed.last)
+        # BibTeX name format: [von] Last, [Suffix,] First
+        surname = f"{parsed.prefix} {parsed.last}" if parsed.prefix else parsed.last
+        name_parts = [surname]
         if parsed.suffix:
-            parts[-1] += f", {parsed.suffix}"
+            name_parts.append(parsed.suffix)
+        if parsed.first:
+            name_parts.append(parsed.first)
+        if surname:
+            parts.append(", ".join(name_parts))
     return " and ".join(parts)
 
 
@@ -236,11 +237,11 @@ def format_bibtex(papers: list[dict[str, Any]], errors: list[dict[str, Any]]) ->
         external_ids = paper.get("externalIds") or {}
         doi = external_ids.get("DOI")
         if doi:
-            fields.append(f"  doi = {{{doi}}}")
+            fields.append(f"  doi = {{{escape_bibtex(doi)}}}")
 
         url = _paper_url(paper)
         if url:
-            fields.append(f"  url = {{{url}}}")
+            fields.append(f"  url = {{{escape_bibtex(url)}}}")
 
         abstract = paper.get("abstract")
         if abstract:
@@ -249,7 +250,7 @@ def format_bibtex(papers: list[dict[str, Any]], errors: list[dict[str, Any]]) ->
         arxiv = external_ids.get("ArXiv")
         if arxiv:
             fields.append(f"  eprint = {{{arxiv}}}")
-            fields.append("  archiveprefix = {arXiv}")
+            fields.append("  archivePrefix = {arXiv}")
 
         entry = f"@{entry_type}{{{key},\n"
         if fields:

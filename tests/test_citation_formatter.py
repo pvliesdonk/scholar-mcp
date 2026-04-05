@@ -155,7 +155,7 @@ class TestFormatBibtex:
         result = format_bibtex(papers, [])
         assert "@misc{doe2024," in result
         assert "eprint = {2401.00001}" in result
-        assert "archiveprefix = {arXiv}" in result
+        assert "archivePrefix = {arXiv}" in result
 
     def test_errors_as_comments(self) -> None:
         errors = [
