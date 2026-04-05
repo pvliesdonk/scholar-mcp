@@ -3,7 +3,7 @@
   "name": "io.github.pvliesdonk/scholar-mcp",
   "title": "Scholar MCP Server",
   "description": "Academic literature search, citation graphs, and PDF conversion via Semantic Scholar.",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "repository": {
     "url": "https://github.com/pvliesdonk/scholar-mcp",
     "source": "github"
@@ -12,7 +12,7 @@
     {
       "registryType": "pypi",
       "identifier": "pvliesdonk-scholar-mcp",
-      "version": "1.3.0",
+      "version": "1.4.0",
       "transport": {
         "type": "stdio"
       },
@@ -32,7 +32,7 @@
     },
     {
       "registryType": "oci",
-      "identifier": "ghcr.io/pvliesdonk/scholar-mcp:v1.3.0",
+      "identifier": "ghcr.io/pvliesdonk/scholar-mcp:v1.4.0",
       "transport": {
         "type": "streamable-http",
         "url": "http://localhost:{--port}/mcp"
