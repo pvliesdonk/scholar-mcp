@@ -333,6 +333,20 @@ Poll for the result of a background task.
 
 Status values: `pending`, `running`, `completed`, `failed`. The `result` field contains the original tool output as a JSON string (only present when `completed`). On `failed`, an `error` field describes the failure.
 
+While the task is in progress (`pending` or `running`), the response includes extra fields:
+
+```json
+{
+  "task_id": "a1b2c3d4e5f6",
+  "status": "running",
+  "elapsed_seconds": 45,
+  "tool": "convert_pdf_to_markdown",
+  "hint": "PDF conversion typically takes 1-5 minutes depending on page count."
+}
+```
+
+The `hint` field gives expected duration — keep polling until the task completes.
+
 ---
 
 ### `list_tasks`

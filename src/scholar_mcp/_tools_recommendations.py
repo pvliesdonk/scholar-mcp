@@ -79,7 +79,9 @@ def register_recommendation_tools(mcp: FastMCP) -> None:
         try:
             return await _execute(retry=False)
         except RateLimitedError:
-            task_id = bundle.tasks.submit(_execute(retry=True))
+            task_id = bundle.tasks.submit(
+                _execute(retry=True), tool="recommend_papers"
+            )
             return json.dumps(
                 {
                     "queued": True,

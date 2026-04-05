@@ -106,7 +106,9 @@ def register_pdf_tools(mcp: FastMCP) -> None:
                     )
                 return await _download(p)
 
-            task_id = bundle.tasks.submit(_execute_full(), ttl=_PDF_TASK_TTL)
+            task_id = bundle.tasks.submit(
+                _execute_full(), ttl=_PDF_TASK_TTL, tool="fetch_paper_pdf"
+            )
             return json.dumps(
                 {
                     "queued": True,
@@ -145,7 +147,9 @@ def register_pdf_tools(mcp: FastMCP) -> None:
             return json.dumps({"path": str(pdf_path)})
 
         # PDF not cached — queue the download
-        task_id = bundle.tasks.submit(_download(paper), ttl=_PDF_TASK_TTL)
+        task_id = bundle.tasks.submit(
+            _download(paper), ttl=_PDF_TASK_TTL, tool="fetch_paper_pdf"
+        )
         return json.dumps(
             {"queued": True, "task_id": task_id, "tool": "fetch_paper_pdf"}
         )
@@ -236,7 +240,9 @@ def register_pdf_tools(mcp: FastMCP) -> None:
                 result["vlm_skip_reason"] = skip_reason
             return json.dumps(result)
 
-        task_id = bundle.tasks.submit(_execute(), ttl=_PDF_TASK_TTL)
+        task_id = bundle.tasks.submit(
+            _execute(), ttl=_PDF_TASK_TTL, tool="convert_pdf_to_markdown"
+        )
         return json.dumps(
             {
                 "queued": True,
@@ -363,7 +369,9 @@ def register_pdf_tools(mcp: FastMCP) -> None:
                 result["vlm_skip_reason"] = skip_reason
             return json.dumps(result)
 
-        task_id = bundle.tasks.submit(_execute(), ttl=_PDF_TASK_TTL)
+        task_id = bundle.tasks.submit(
+            _execute(), ttl=_PDF_TASK_TTL, tool="fetch_and_convert"
+        )
         return json.dumps(
             {"queued": True, "task_id": task_id, "tool": "fetch_and_convert"}
         )

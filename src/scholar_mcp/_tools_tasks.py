@@ -12,6 +12,17 @@ from ._server_deps import ServiceBundle, get_bundle
 
 logger = logging.getLogger(__name__)
 
+# Expected duration hints per tool, shown while the task is in progress.
+_DURATION_HINTS: dict[str, str] = {
+    "fetch_paper_pdf": "PDF download usually completes in 10-30 seconds.",
+    "convert_pdf_to_markdown": (
+        "PDF conversion typically takes 1-5 minutes depending on page count."
+    ),
+    "fetch_and_convert": (
+        "Full pipeline (download + conversion) typically takes 1-5 minutes."
+    ),
+}
+
 
 def register_task_tools(mcp: FastMCP) -> None:
     """Register task polling tools on *mcp*.
@@ -37,6 +48,10 @@ def register_task_tools(mcp: FastMCP) -> None:
         the operation was submitted for background processing.  Call this
         tool with the ``task_id`` to check whether it has completed.
 
+        PDF conversion tasks typically take 1-5 minutes. Keep polling —
+        the response includes ``elapsed_seconds`` and a ``hint`` with
+        expected duration while the task is in progress.
+
         Args:
             task_id: The task ID returned by a queued operation.
 
@@ -44,7 +59,8 @@ def register_task_tools(mcp: FastMCP) -> None:
             JSON with ``status`` (``pending``, ``running``, ``completed``,
             or ``failed``).  When ``completed``, ``result`` contains the
             original tool output.  When ``failed``, ``error`` describes
-            the failure.
+            the failure.  While in progress, ``elapsed_seconds``, ``tool``,
+            and ``hint`` give context on expected wait time.
         """
         task = bundle.tasks.get(task_id)
         if task is None:
@@ -57,6 +73,14 @@ def register_task_tools(mcp: FastMCP) -> None:
             response["result"] = task.result
         elif task.status == "failed":
             response["error"] = task.error
+        else:
+            # Task still in progress — give the client context
+            response["elapsed_seconds"] = task.elapsed_seconds
+            if task.tool:
+                response["tool"] = task.tool
+                hint = _DURATION_HINTS.get(task.tool)
+                if hint:
+                    response["hint"] = hint
         return json.dumps(response)
 
     @mcp.tool(
@@ -75,4 +99,14 @@ def register_task_tools(mcp: FastMCP) -> None:
             JSON list of ``{"task_id": ..., "status": ...}`` dicts.
         """
         tasks = bundle.tasks.list_active()
-        return json.dumps([{"task_id": t.task_id, "status": t.status} for t in tasks])
+        return json.dumps(
+            [
+                {
+                    "task_id": t.task_id,
+                    "status": t.status,
+                    "tool": t.tool,
+                    "elapsed_seconds": t.elapsed_seconds,
+                }
+                for t in tasks
+            ]
+        )
