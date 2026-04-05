@@ -141,7 +141,6 @@ class S2Client:
         offset: int,
         year: str | None = None,
         fieldsOfStudy: str | None = None,
-        minCitationCount: int | None = None,
         retry: bool = True,
     ) -> dict[str, Any]:
         """Fetch papers that cite the given paper.
@@ -153,7 +152,6 @@ class S2Client:
             offset: Pagination offset.
             year: Year range filter.
             fieldsOfStudy: Fields of study filter.
-            minCitationCount: Minimum citation count filter.
             retry: If False, raise :class:`RateLimitedError` on 429.
 
         Returns:
@@ -167,7 +165,6 @@ class S2Client:
             offset=offset,
             year=year,
             fieldsOfStudy=fieldsOfStudy,
-            minCitationCount=minCitationCount,
         )
 
     async def get_references(

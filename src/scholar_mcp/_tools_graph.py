@@ -77,7 +77,6 @@ def register_graph_tools(mcp: FastMCP) -> None:
                     offset=offset,
                     year=year,
                     fieldsOfStudy=fos,
-                    minCitationCount=min_citations,
                     retry=retry,
                 )
             except httpx.HTTPStatusError as exc:
@@ -225,6 +224,16 @@ def register_graph_tools(mcp: FastMCP) -> None:
             truncated = False
             actual_depth_reached = 0
 
+            # When client-side filters are active, fetch more candidates
+            # per node so filtering doesn't exhaust the pool before
+            # reaching qualifying papers.  Applied to both citations
+            # (S2 returns newest-first) and references (all filters
+            # are client-side).
+            has_client_filters = (
+                min_citations is not None or year is not None or fos is not None
+            )
+            fetch_limit = 500 if has_client_filters else 50
+
             while bfs_queue:
                 paper_id, current_depth = bfs_queue.popleft()
                 if current_depth >= clamped_depth:
@@ -238,30 +247,38 @@ def register_graph_tools(mcp: FastMCP) -> None:
                         result = await bundle.s2.get_citations(
                             paper_id,
                             fields=FIELD_SETS["compact"],
-                            limit=50,
+                            limit=fetch_limit,
                             offset=0,
                             year=year,
                             fieldsOfStudy=fos,
-                            minCitationCount=min_citations,
                             retry=retry,
                         )
                         for item in result.get("data", []):
                             p = item.get("citingPaper", {})
-                            if pid := p.get("paperId"):
-                                node = {
-                                    "id": pid,
-                                    "title": p.get("title"),
-                                    "year": p.get("year"),
-                                    "citationCount": p.get("citationCount"),
+                            pid = p.get("paperId")
+                            if not pid:
+                                continue
+                            # S2 citations endpoint does not support
+                            # minCitationCount — apply client-side
+                            p_cites = p.get("citationCount")
+                            if min_citations is not None and (
+                                p_cites is None or p_cites < min_citations
+                            ):
+                                continue
+                            node = {
+                                "id": pid,
+                                "title": p.get("title"),
+                                "year": p.get("year"),
+                                "citationCount": p_cites,
+                            }
+                            new_nodes.append((pid, node))
+                            edges.append(
+                                {
+                                    "source": pid,
+                                    "target": paper_id,
+                                    "direction": "cites",
                                 }
-                                new_nodes.append((pid, node))
-                                edges.append(
-                                    {
-                                        "source": pid,
-                                        "target": paper_id,
-                                        "direction": "cites",
-                                    }
-                                )
+                            )
                     except httpx.HTTPError:
                         pass
 
@@ -270,7 +287,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
                         result = await bundle.s2.get_references(
                             paper_id,
                             fields=FIELD_SETS["compact"],
-                            limit=50,
+                            limit=fetch_limit,
                             offset=0,
                             retry=retry,
                         )
