@@ -1,14 +1,18 @@
 """EPO OPS XML response parsers.
 
 Parses raw XML bytes from the EPO Open Patent Services (OPS) API into plain
-Python dicts. Two endpoints are supported:
+Python dicts.  Supported endpoints:
 
 - ``published-data/biblio`` — bibliographic details for a single patent
 - ``published-data/search`` — search results with publication references
+- ``published-data/claims`` — patent claims text
+- ``published-data/description`` — full patent description text
+- ``family`` — patent family members across jurisdictions
+- ``register`` (legal) — legal status events
 
 The parsers use ``lxml.etree`` with XPath and namespace-aware element
-traversal.  All helper functions are module-private; only the two public
-``parse_*`` functions are part of the module's interface.
+traversal.  All helper functions are module-private; the public
+``parse_*`` functions are the module's interface.
 """
 
 from __future__ import annotations

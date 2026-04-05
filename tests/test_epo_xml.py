@@ -525,6 +525,37 @@ DESCRIPTION_XML = b"""\
   </exchange-documents>
 </ops:world-patent-data>"""
 
+DESCRIPTION_MULTILANG_XML = b"""\
+<?xml version="1.0" encoding="UTF-8"?>
+<ops:world-patent-data xmlns:ops="http://ops.epo.org"
+    xmlns="http://www.epo.org/exchange">
+  <exchange-documents>
+    <exchange-document country="EP" doc-number="1234567" kind="A1">
+      <description lang="de">
+        <p num="0001">GEBIET DER ERFINDUNG</p>
+        <p num="0002">Die vorliegende Erfindung betrifft die Widget-Verarbeitung.</p>
+      </description>
+      <description lang="en">
+        <p num="0001">FIELD OF THE INVENTION</p>
+        <p num="0002">The present invention relates to widget processing.</p>
+      </description>
+    </exchange-document>
+  </exchange-documents>
+</ops:world-patent-data>"""
+
+DESCRIPTION_FALLBACK_XML = b"""\
+<?xml version="1.0" encoding="UTF-8"?>
+<ops:world-patent-data xmlns:ops="http://ops.epo.org"
+    xmlns="http://www.epo.org/exchange">
+  <exchange-documents>
+    <exchange-document country="EP" doc-number="1234567" kind="A1">
+      <description lang="de">
+        <p num="0001">GEBIET DER ERFINDUNG</p>
+      </description>
+    </exchange-document>
+  </exchange-documents>
+</ops:world-patent-data>"""
+
 
 # ---------------------------------------------------------------------------
 # Tests for parse_claims_xml
@@ -562,6 +593,15 @@ class TestParseDescriptionXml:
     def test_not_empty(self) -> None:
         result = parse_description_xml(DESCRIPTION_XML)
         assert len(result) > 50
+
+    def test_english_preferred(self) -> None:
+        result = parse_description_xml(DESCRIPTION_MULTILANG_XML)
+        assert "widget processing" in result
+        assert "Erfindung" not in result
+
+    def test_fallback_to_non_english(self) -> None:
+        result = parse_description_xml(DESCRIPTION_FALLBACK_XML)
+        assert "GEBIET DER ERFINDUNG" in result
 
     def test_empty_xml(self) -> None:
         empty = b'<?xml version="1.0"?><ops:world-patent-data xmlns:ops="http://ops.epo.org"></ops:world-patent-data>'
