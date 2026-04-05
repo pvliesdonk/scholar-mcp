@@ -286,9 +286,8 @@ class TestParseBiblioXmlBasicFields:
 
     def test_url_contains_publication_number(self) -> None:
         result = parse_biblio_xml(BIBLIO_XML_FULL)
-        assert "EP1234567A1" in result["url"]
-        assert (
-            "espacenet" in result["url"].lower() or "epo.org" in result["url"].lower()
+        assert result["url"] == (
+            "https://worldwide.espacenet.com/patent/search/family/54321/publication/EP1234567A1"
         )
 
 
