@@ -1435,3 +1435,137 @@ async def test_get_citations_no_min_citations_returns_all(
     data = json.loads(result.content[0].text)
     assert len(data["data"]) == 1
     assert data["data"][0]["citingPaper"]["paperId"] == "c1"
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_citations_min_citations_strips_pagination_metadata(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """Upstream pagination metadata is stripped when min_citations filtering is active."""
+    respx_mock.get("/paper/p1/citations").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "offset": 0,
+                "next": 200,
+                "total": 5000,
+                "data": [
+                    {
+                        "citingPaper": {
+                            "paperId": "c1",
+                            "title": "Popular",
+                            "year": 2023,
+                            "citationCount": 100,
+                        }
+                    },
+                ],
+            },
+        )
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_citations", {"identifier": "p1", "min_citations": 50}
+        )
+    data = json.loads(result.content[0].text)
+    # Only "data" key should be present — offset/next/total are stripped
+    assert set(data.keys()) == {"data"}
+    assert len(data["data"]) == 1
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_citations_min_citations_pagination_applies_to_filtered(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """offset and limit apply to the filtered result set, not the raw S2 response."""
+    # Return 4 papers, 3 of which pass the filter.
+    # With offset=1, limit=1 we should get the second qualifying paper.
+    respx_mock.get("/paper/p1/citations").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "citingPaper": {
+                            "paperId": "c1",
+                            "title": "First qualifying",
+                            "year": 2023,
+                            "citationCount": 100,
+                        }
+                    },
+                    {
+                        "citingPaper": {
+                            "paperId": "c2",
+                            "title": "Below threshold",
+                            "year": 2024,
+                            "citationCount": 5,
+                        }
+                    },
+                    {
+                        "citingPaper": {
+                            "paperId": "c3",
+                            "title": "Second qualifying",
+                            "year": 2022,
+                            "citationCount": 200,
+                        }
+                    },
+                    {
+                        "citingPaper": {
+                            "paperId": "c4",
+                            "title": "Third qualifying",
+                            "year": 2021,
+                            "citationCount": 300,
+                        }
+                    },
+                ]
+            },
+        )
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_citations",
+            {"identifier": "p1", "min_citations": 50, "offset": 1, "limit": 1},
+        )
+    data = json.loads(result.content[0].text)
+    # Filtered set is [c1, c3, c4]; offset=1 limit=1 → [c3]
+    assert len(data["data"]) == 1
+    assert data["data"][0]["citingPaper"]["paperId"] == "c3"
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_citations_min_citations_zero_excludes_null_count(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """min_citations=0 still excludes papers with null citationCount."""
+    respx_mock.get("/paper/p1/citations").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "citingPaper": {
+                            "paperId": "c1",
+                            "title": "Zero count",
+                            "year": 2023,
+                            "citationCount": 0,
+                        }
+                    },
+                    {
+                        "citingPaper": {
+                            "paperId": "c2",
+                            "title": "Null count",
+                            "year": 2023,
+                            "citationCount": None,
+                        }
+                    },
+                ]
+            },
+        )
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_citations", {"identifier": "p1", "min_citations": 0}
+        )
+    data = json.loads(result.content[0].text)
+    ids = [item["citingPaper"]["paperId"] for item in data["data"]]
+    assert "c1" in ids  # 0 >= 0
+    assert "c2" not in ids  # None excluded
