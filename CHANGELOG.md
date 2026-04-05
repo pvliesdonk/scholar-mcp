@@ -2,6 +2,58 @@
 
 <!-- version list -->
 
+## v1.3.0 (2026-04-05)
+
+### Bug Fixes
+
+- Apply min_citations filter client-side for citations in graph BFS
+  ([`123b92e`](https://github.com/pvliesdonk/scholar-mcp/commit/123b92ee80c475fc38cda6395002255b7f3b4d6f))
+
+- Broaden client-filter check, add null citationCount test
+  ([`1bb7c16`](https://github.com/pvliesdonk/scholar-mcp/commit/1bb7c16f59d73ce068bbf517533a936726d8f5e3))
+
+- Expose VLM skip reason instead of silent fallback
+  ([`3306b09`](https://github.com/pvliesdonk/scholar-mcp/commit/3306b09a8113a1c2aee6d1771358d7e603fd746b))
+
+- Fetch larger candidate pool when client-side filters are active
+  ([`4758126`](https://github.com/pvliesdonk/scholar-mcp/commit/47581263bef407f9ee697050b56717278696b3db))
+
+- Remove misleading minCitationCount param from S2 citations client
+  ([`27d825a`](https://github.com/pvliesdonk/scholar-mcp/commit/27d825ab60e1f3b05b8fe99a965a48d5e098ee12))
+
+- Resolve CI lint and type check failures
+  ([`4e06568`](https://github.com/pvliesdonk/scholar-mcp/commit/4e06568e76eb2c195230cf53bdf2d0c25c7c19fb))
+
+- Return None from vlm_skip_reason when VLM not requested; add skip_reason to cache-hit path
+  ([`d7d7320`](https://github.com/pvliesdonk/scholar-mcp/commit/d7d732086e3c522c095e8508e799ab1317bcc11a))
+
+- Use separate cache paths for VLM vs standard markdown conversion
+  ([`31db91d`](https://github.com/pvliesdonk/scholar-mcp/commit/31db91d92cba1a5a9532a04a817efd8b9238bf08))
+
+### Chores
+
+- Update server.json and uv.lock to v1.2.2 [skip ci]
+  ([`3a1f4a7`](https://github.com/pvliesdonk/scholar-mcp/commit/3a1f4a7d2d86b4e4a948359c4f8be637d8df7bba))
+
+### Documentation
+
+- Document VLM caching convention and recommend standard-first usage
+  ([`5f6f641`](https://github.com/pvliesdonk/scholar-mcp/commit/5f6f64145b1c0ae67d9ae6c66a1b03e650389508))
+
+### Features
+
+- Add elapsed time and duration hints to task poll responses
+  ([`673ed5f`](https://github.com/pvliesdonk/scholar-mcp/commit/673ed5f02763ad8f7b8fdcc51571cbd1f312e9b2))
+
+### Testing
+
+- Add coverage for vlm_skip_reason and task poll context fields
+  ([`4627c25`](https://github.com/pvliesdonk/scholar-mcp/commit/4627c25add3e2941bf9b28c4eef1a685128e6aef))
+
+- Add unit tests for vlm_skip_reason and VLM-not-configured cache/non-cache paths
+  ([`4e56e0d`](https://github.com/pvliesdonk/scholar-mcp/commit/4e56e0daadb1aaaae29a3dffa969958b90aec0c6))
+
+
 ## v1.2.2 (2026-04-04)
 
 ### Bug Fixes
