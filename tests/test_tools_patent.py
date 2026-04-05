@@ -145,7 +145,7 @@ def test_build_cql_escapes_quotes() -> None:
 
 def test_build_cql_jurisdiction_escapes_injection() -> None:
     """Jurisdiction value is quoted and escaped to prevent CQL injection."""
-    cql = _build_cql("test", jurisdiction='EP OR ti=*')
+    cql = _build_cql("test", jurisdiction="EP OR ti=*")
     # The injected payload should be inside quotes, not a separate clause
     assert 'pn="EP OR ti=*"' in cql
 

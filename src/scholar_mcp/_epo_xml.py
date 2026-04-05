@@ -96,6 +96,7 @@ def _parse_classification(cls_el: etree._Element) -> str:
         CPC code string, or an empty string when required sub-elements are
         missing.
     """
+
     def _get(tag: str) -> str:
         return _text(cls_el.find(f"{{{_EXCH}}}{tag}"))
 
