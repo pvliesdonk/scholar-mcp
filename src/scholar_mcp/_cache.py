@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import time
@@ -18,6 +19,12 @@ _CITATION_TTL = 7 * 86400  # 7 days
 _REFERENCE_TTL = 7 * 86400  # 7 days
 _AUTHOR_TTL = 30 * 86400  # 30 days
 _OPENALEX_TTL = 30 * 86400  # 30 days
+_PATENT_TTL = 90 * 86400  # 90 days
+_PATENT_CLAIMS_TTL = 180 * 86400  # 180 days
+_PATENT_DESC_TTL = 180 * 86400  # 180 days
+_PATENT_FAMILY_TTL = 90 * 86400  # 90 days
+_PATENT_LEGAL_TTL = 7 * 86400  # 7 days
+_PATENT_SEARCH_TTL = 7 * 86400  # 7 days
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY);
@@ -62,9 +69,63 @@ CREATE TABLE IF NOT EXISTS id_aliases (
     raw_id      TEXT PRIMARY KEY,
     s2_paper_id TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS patents (
+    patent_id TEXT PRIMARY KEY,
+    data      TEXT NOT NULL,
+    cached_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_patents_cached ON patents(cached_at);
+
+CREATE TABLE IF NOT EXISTS patent_claims (
+    patent_id TEXT PRIMARY KEY,
+    data      TEXT NOT NULL,
+    cached_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_patent_claims_cached ON patent_claims(cached_at);
+
+CREATE TABLE IF NOT EXISTS patent_descriptions (
+    patent_id TEXT PRIMARY KEY,
+    data      TEXT NOT NULL,
+    cached_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_patent_desc_cached ON patent_descriptions(cached_at);
+
+CREATE TABLE IF NOT EXISTS patent_families (
+    patent_id TEXT PRIMARY KEY,
+    data      TEXT NOT NULL,
+    cached_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_patent_families_cached ON patent_families(cached_at);
+
+CREATE TABLE IF NOT EXISTS patent_legal (
+    patent_id TEXT PRIMARY KEY,
+    data      TEXT NOT NULL,
+    cached_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_patent_legal_cached ON patent_legal(cached_at);
+
+CREATE TABLE IF NOT EXISTS patent_search (
+    query_hash TEXT PRIMARY KEY,
+    data       TEXT NOT NULL,
+    cached_at  REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_patent_search_cached ON patent_search(cached_at);
 """
 
-_TTL_TABLES = ("papers", "citations", "refs", "authors", "openalex")
+_TTL_TABLES = (
+    "papers",
+    "citations",
+    "refs",
+    "authors",
+    "openalex",
+    "patents",
+    "patent_claims",
+    "patent_descriptions",
+    "patent_families",
+    "patent_legal",
+    "patent_search",
+)
 
 
 def _require_open(db: aiosqlite.Connection | None) -> aiosqlite.Connection:
@@ -323,6 +384,233 @@ class ScholarCache:
         await db.execute(
             "INSERT OR REPLACE INTO id_aliases (raw_id, s2_paper_id) VALUES (?, ?)",
             (raw_id, s2_paper_id),
+        )
+        await db.commit()
+
+    # ------------------------------------------------------------------
+    # Patents
+    # ------------------------------------------------------------------
+
+    async def get_patent(self, patent_id: str) -> dict[str, Any] | None:
+        """Return cached patent bibliographic data or None if missing/stale.
+
+        Args:
+            patent_id: Normalised patent ID (e.g. ``EP.1234567.A1``).
+
+        Returns:
+            Patent dict or None.
+        """
+        db = _require_open(self._db)
+        async with db.execute(
+            "SELECT data, cached_at FROM patents WHERE patent_id = ?", (patent_id,)
+        ) as cur:
+            row = await cur.fetchone()
+        if row is None or time.time() - row[1] > _PATENT_TTL:
+            return None
+        return json.loads(row[0])  # type: ignore[no-any-return]
+
+    async def set_patent(self, patent_id: str, data: dict[str, Any]) -> None:
+        """Cache patent bibliographic data.
+
+        Args:
+            patent_id: Normalised patent ID.
+            data: Patent metadata dict.
+        """
+        db = _require_open(self._db)
+        await db.execute(
+            "INSERT OR REPLACE INTO patents (patent_id, data, cached_at) VALUES (?, ?, ?)",
+            (patent_id, json.dumps(data), time.time()),
+        )
+        await db.commit()
+
+    # ------------------------------------------------------------------
+    # Patent claims
+    # ------------------------------------------------------------------
+
+    async def get_patent_claims(self, patent_id: str) -> str | None:
+        """Return cached patent claims text or None if missing/stale.
+
+        Args:
+            patent_id: Normalised patent ID.
+
+        Returns:
+            Claims text or None.
+        """
+        db = _require_open(self._db)
+        async with db.execute(
+            "SELECT data, cached_at FROM patent_claims WHERE patent_id = ?",
+            (patent_id,),
+        ) as cur:
+            row = await cur.fetchone()
+        if row is None or time.time() - row[1] > _PATENT_CLAIMS_TTL:
+            return None
+        return row[0]  # type: ignore[no-any-return]
+
+    async def set_patent_claims(self, patent_id: str, text: str) -> None:
+        """Cache patent claims text.
+
+        Args:
+            patent_id: Normalised patent ID.
+            text: Raw claims text.
+        """
+        db = _require_open(self._db)
+        await db.execute(
+            "INSERT OR REPLACE INTO patent_claims (patent_id, data, cached_at) VALUES (?, ?, ?)",
+            (patent_id, text, time.time()),
+        )
+        await db.commit()
+
+    # ------------------------------------------------------------------
+    # Patent descriptions
+    # ------------------------------------------------------------------
+
+    async def get_patent_description(self, patent_id: str) -> str | None:
+        """Return cached patent description text or None if missing/stale.
+
+        Args:
+            patent_id: Normalised patent ID.
+
+        Returns:
+            Description text or None.
+        """
+        db = _require_open(self._db)
+        async with db.execute(
+            "SELECT data, cached_at FROM patent_descriptions WHERE patent_id = ?",
+            (patent_id,),
+        ) as cur:
+            row = await cur.fetchone()
+        if row is None or time.time() - row[1] > _PATENT_DESC_TTL:
+            return None
+        return row[0]  # type: ignore[no-any-return]
+
+    async def set_patent_description(self, patent_id: str, text: str) -> None:
+        """Cache patent description text.
+
+        Args:
+            patent_id: Normalised patent ID.
+            text: Raw description text.
+        """
+        db = _require_open(self._db)
+        await db.execute(
+            "INSERT OR REPLACE INTO patent_descriptions (patent_id, data, cached_at) VALUES (?, ?, ?)",
+            (patent_id, text, time.time()),
+        )
+        await db.commit()
+
+    # ------------------------------------------------------------------
+    # Patent families
+    # ------------------------------------------------------------------
+
+    async def get_patent_family(self, patent_id: str) -> list[dict[str, Any]] | None:
+        """Return cached patent family members or None if missing/stale.
+
+        Args:
+            patent_id: Normalised patent ID.
+
+        Returns:
+            List of family member dicts or None.
+        """
+        db = _require_open(self._db)
+        async with db.execute(
+            "SELECT data, cached_at FROM patent_families WHERE patent_id = ?",
+            (patent_id,),
+        ) as cur:
+            row = await cur.fetchone()
+        if row is None or time.time() - row[1] > _PATENT_FAMILY_TTL:
+            return None
+        return json.loads(row[0])  # type: ignore[no-any-return]
+
+    async def set_patent_family(
+        self, patent_id: str, data: list[dict[str, Any]]
+    ) -> None:
+        """Cache patent family members.
+
+        Args:
+            patent_id: Normalised patent ID.
+            data: List of family member dicts.
+        """
+        db = _require_open(self._db)
+        await db.execute(
+            "INSERT OR REPLACE INTO patent_families (patent_id, data, cached_at) VALUES (?, ?, ?)",
+            (patent_id, json.dumps(data), time.time()),
+        )
+        await db.commit()
+
+    # ------------------------------------------------------------------
+    # Patent legal status
+    # ------------------------------------------------------------------
+
+    async def get_patent_legal(self, patent_id: str) -> list[dict[str, Any]] | None:
+        """Return cached patent legal status events or None if missing/stale.
+
+        Args:
+            patent_id: Normalised patent ID.
+
+        Returns:
+            List of legal status event dicts or None.
+        """
+        db = _require_open(self._db)
+        async with db.execute(
+            "SELECT data, cached_at FROM patent_legal WHERE patent_id = ?",
+            (patent_id,),
+        ) as cur:
+            row = await cur.fetchone()
+        if row is None or time.time() - row[1] > _PATENT_LEGAL_TTL:
+            return None
+        return json.loads(row[0])  # type: ignore[no-any-return]
+
+    async def set_patent_legal(
+        self, patent_id: str, data: list[dict[str, Any]]
+    ) -> None:
+        """Cache patent legal status events.
+
+        Args:
+            patent_id: Normalised patent ID.
+            data: List of legal status event dicts.
+        """
+        db = _require_open(self._db)
+        await db.execute(
+            "INSERT OR REPLACE INTO patent_legal (patent_id, data, cached_at) VALUES (?, ?, ?)",
+            (patent_id, json.dumps(data), time.time()),
+        )
+        await db.commit()
+
+    # ------------------------------------------------------------------
+    # Patent search results
+    # ------------------------------------------------------------------
+
+    async def get_patent_search(self, query: str) -> dict[str, Any] | None:
+        """Return cached patent search results or None if missing/stale.
+
+        Args:
+            query: EPO OPS query string; SHA-256 hash used as cache key.
+
+        Returns:
+            Search results dict or None.
+        """
+        db = _require_open(self._db)
+        query_hash = hashlib.sha256(query.encode()).hexdigest()
+        async with db.execute(
+            "SELECT data, cached_at FROM patent_search WHERE query_hash = ?",
+            (query_hash,),
+        ) as cur:
+            row = await cur.fetchone()
+        if row is None or time.time() - row[1] > _PATENT_SEARCH_TTL:
+            return None
+        return json.loads(row[0])  # type: ignore[no-any-return]
+
+    async def set_patent_search(self, query: str, data: dict[str, Any]) -> None:
+        """Cache patent search results.
+
+        Args:
+            query: EPO OPS query string; SHA-256 hash used as cache key.
+            data: Search results dict.
+        """
+        db = _require_open(self._db)
+        query_hash = hashlib.sha256(query.encode()).hexdigest()
+        await db.execute(
+            "INSERT OR REPLACE INTO patent_search (query_hash, data, cached_at) VALUES (?, ?, ?)",
+            (query_hash, json.dumps(data), time.time()),
         )
         await db.commit()
 

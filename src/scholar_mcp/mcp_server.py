@@ -235,16 +235,17 @@ def _build_oidc_auth() -> Any:
     client_secret = os.environ.get(f"{_ENV_PREFIX}_OIDC_CLIENT_SECRET", "").strip()
 
     if not all([base_url, config_url, client_id, client_secret]):
-        missing = [
-            name
-            for name, val in [
-                ("BASE_URL", base_url),
-                ("OIDC_CONFIG_URL", config_url),
-                ("OIDC_CLIENT_ID", client_id),
-                ("OIDC_CLIENT_SECRET", client_secret),
-            ]
-            if not val
-        ]
+        # Build the missing-names list without flowing secret values into the
+        # log call — keeps CodeQL's taint analysis happy.
+        missing: list[str] = []
+        if not base_url:
+            missing.append("BASE_URL")
+        if not config_url:
+            missing.append("OIDC_CONFIG_URL")
+        if not client_id:
+            missing.append("OIDC_CLIENT_ID")
+        if not client_secret:
+            missing.append("OIDC_CLIENT_SECRET")
         logger.debug("OIDC auth: disabled — missing env vars: %s", ", ".join(missing))
         return None
 
@@ -435,5 +436,8 @@ def create_server(*, transport: str = "stdio") -> FastMCP:
 
     if is_read_only:
         mcp.disable(tags={"write"})
+
+    if not config.epo_configured:
+        mcp.disable(tags={"patent"})
 
     return mcp

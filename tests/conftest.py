@@ -52,6 +52,7 @@ async def bundle(cache: ScholarCache, test_config: ServerConfig) -> ServiceBundl
         s2=s2,
         openalex=openalex,
         docling=None,
+        epo=None,
         cache=cache,
         config=test_config,
         tasks=TaskQueue(),

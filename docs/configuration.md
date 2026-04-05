@@ -26,6 +26,53 @@ These settings are only needed if you want to use the PDF conversion tools. They
 !!! tip "VLM enrichment"
     When both `SCHOLAR_MCP_VLM_API_URL` and `SCHOLAR_MCP_VLM_API_KEY` are set, tools can request VLM-enriched conversion that extracts LaTeX formulas and generates figure descriptions. This produces higher-quality Markdown but is slower and costs API calls.
 
+## EPO Open Patent Services
+
+These settings enable patent search via the [EPO Open Patent Services (OPS)](https://www.epo.org/en/searching-for-patents/data/web-services/ops) API. Both variables must be set for patent tools to be enabled; if either is missing, the `search_patents` and `get_patent` tools are automatically hidden.
+
+| Variable | Default | Description |
+|---|---|---|
+| `SCHOLAR_MCP_EPO_CONSUMER_KEY` | -- | EPO OPS consumer key. Optional -- patent tools are hidden when unset. |
+| `SCHOLAR_MCP_EPO_CONSUMER_SECRET` | -- | EPO OPS consumer secret. Optional -- patent tools are hidden when unset. |
+
+!!! info "Graceful degradation"
+    When credentials are not configured, patent tools are silently omitted from the tool list. Paper search and all other tools continue to work normally without EPO credentials.
+
+### Registering for EPO OPS access
+
+EPO OPS provides free access to bibliographic data for 100+ patent offices. Follow these steps to obtain credentials:
+
+1. Register at [https://developers.epo.org/user/register](https://developers.epo.org/user/register) -- fill in your name, email, and organisation.
+2. Wait for an email confirmation and click the verification link.
+3. Log in to the [EPO developer portal](https://developers.epo.org/).
+4. Navigate to **My Apps** in the top menu.
+5. Click **Add a new App** and choose a name (e.g. `scholar-mcp`).
+6. Select **Non-paying** as the access method (provides free access with standard rate limits).
+7. Copy the generated **Consumer Key** and **Consumer Secret** to your environment:
+
+```bash
+export SCHOLAR_MCP_EPO_CONSUMER_KEY="your-consumer-key"
+export SCHOLAR_MCP_EPO_CONSUMER_SECRET="your-consumer-secret"
+```
+
+Or in `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "scholar": {
+      "command": "uvx",
+      "args": ["--from", "pvliesdonk-scholar-mcp", "scholar-mcp", "serve"],
+      "env": {
+        "SCHOLAR_MCP_S2_API_KEY": "your-s2-key",
+        "SCHOLAR_MCP_EPO_CONSUMER_KEY": "your-consumer-key",
+        "SCHOLAR_MCP_EPO_CONSUMER_SECRET": "your-consumer-secret"
+      }
+    }
+  }
+}
+```
+
 ## Server
 
 | Variable | Default | Description |
