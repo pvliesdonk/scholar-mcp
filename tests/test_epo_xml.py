@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from scholar_mcp._epo_xml import (
     parse_biblio_xml,
+    parse_citations_from_biblio,
     parse_claims_xml,
     parse_description_xml,
     parse_family_xml,
@@ -709,3 +710,86 @@ class TestParseLegalXml:
         empty = b'<?xml version="1.0"?><ops:world-patent-data xmlns:ops="http://ops.epo.org"></ops:world-patent-data>'
         result = parse_legal_xml(empty)
         assert result == []
+
+
+# ---------------------------------------------------------------------------
+# Fixtures for citations parser
+# ---------------------------------------------------------------------------
+
+BIBLIO_WITH_CITATIONS_XML = b"""\
+<?xml version="1.0" encoding="UTF-8"?>
+<ops:world-patent-data xmlns:ops="http://ops.epo.org"
+    xmlns="http://www.epo.org/exchange">
+  <exchange-documents>
+    <exchange-document country="EP" doc-number="1234567" kind="A1" family-id="54321">
+      <bibliographic-data>
+        <references-cited>
+          <citation>
+            <patcit>
+              <document-id document-id-type="docdb">
+                <country>US</country>
+                <doc-number>9876543</doc-number>
+                <kind>B2</kind>
+              </document-id>
+            </patcit>
+          </citation>
+          <citation>
+            <nplcit>
+              <text>Smith et al., "Widget Processing", Journal of Widgets, 2018, doi:10.1234/widgets.2018</text>
+            </nplcit>
+          </citation>
+          <citation>
+            <nplcit>
+              <text>Doe, J., "Advanced Widgets", Conference on Widgets, 2019</text>
+            </nplcit>
+          </citation>
+        </references-cited>
+      </bibliographic-data>
+    </exchange-document>
+  </exchange-documents>
+</ops:world-patent-data>"""
+
+
+# ---------------------------------------------------------------------------
+# Tests for parse_citations_from_biblio
+# ---------------------------------------------------------------------------
+
+
+class TestParseCitationsFromBiblio:
+    def test_patent_citations(self) -> None:
+        result = parse_citations_from_biblio(BIBLIO_WITH_CITATIONS_XML)
+        assert len(result["patent_refs"]) == 1
+        assert result["patent_refs"][0]["country"] == "US"
+        assert result["patent_refs"][0]["number"] == "9876543"
+        assert result["patent_refs"][0]["kind"] == "B2"
+
+    def test_npl_citations(self) -> None:
+        result = parse_citations_from_biblio(BIBLIO_WITH_CITATIONS_XML)
+        assert len(result["npl_refs"]) == 2
+        assert "Widget Processing" in result["npl_refs"][0]["raw"]
+
+    def test_doi_extraction(self) -> None:
+        result = parse_citations_from_biblio(BIBLIO_WITH_CITATIONS_XML)
+        assert result["npl_refs"][0]["doi"] == "10.1234/widgets.2018"
+        assert result["npl_refs"][1]["doi"] is None
+
+    def test_no_citations(self) -> None:
+        xml = b"""\
+<?xml version="1.0" encoding="UTF-8"?>
+<ops:world-patent-data xmlns:ops="http://ops.epo.org"
+    xmlns="http://www.epo.org/exchange">
+  <exchange-documents>
+    <exchange-document country="EP" doc-number="1234567" kind="A1">
+      <bibliographic-data>
+      </bibliographic-data>
+    </exchange-document>
+  </exchange-documents>
+</ops:world-patent-data>"""
+        result = parse_citations_from_biblio(xml)
+        assert result["patent_refs"] == []
+        assert result["npl_refs"] == []
+
+    def test_empty_xml(self) -> None:
+        empty = b'<?xml version="1.0"?><ops:world-patent-data xmlns:ops="http://ops.epo.org"></ops:world-patent-data>'
+        result = parse_citations_from_biblio(empty)
+        assert result == {"patent_refs": [], "npl_refs": []}
