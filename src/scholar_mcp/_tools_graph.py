@@ -68,6 +68,14 @@ def register_graph_tools(mcp: FastMCP) -> None:
                 through up to 10 000 upstream results to find qualifying
                 papers.
 
+        Note:
+            High-citation seed papers (>1 000 citations) tend to attract
+            many survey and application-domain citing papers that reference
+            the work only tangentially.  To focus on direct research
+            lineage, combine ``min_citations`` with ``year_end`` to cap
+            the expansion period, or use ``fields_of_study`` to restrict
+            to a single discipline.
+
         Returns:
             JSON with ``data`` list of ``{"citingPaper": {...}}`` dicts.
         """
@@ -258,6 +266,14 @@ def register_graph_tools(mcp: FastMCP) -> None:
             year_end: Filter expanded papers to this year and earlier.
             fields_of_study: Filter by field.
             min_citations: Minimum citation count of expanded papers.
+
+        Note:
+            High-citation seed papers (>1 000 citations) tend to attract
+            many survey and application-domain citing papers that reference
+            the work only tangentially.  To focus on direct research
+            lineage, combine ``min_citations`` with ``year_end`` to cap
+            the expansion period, or use ``fields_of_study`` to restrict
+            to a single discipline.
 
         Returns:
             JSON ``{"nodes": [...], "edges": [...], "stats": {...}}``.
