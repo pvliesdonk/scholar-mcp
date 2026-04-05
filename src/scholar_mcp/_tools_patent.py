@@ -5,8 +5,10 @@ from __future__ import annotations
 import asyncio as _asyncio
 import json
 import logging
-from collections.abc import Sequence
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
