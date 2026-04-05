@@ -8,6 +8,7 @@ from scholar_mcp._citation_formatter import (
     escape_bibtex,
     format_bibtex,
     format_csl_json,
+    format_ris,
     generate_bibtex_key,
     infer_entry_type,
 )
@@ -250,3 +251,75 @@ class TestFormatCslJson:
         ]
         result = json.loads(format_csl_json(papers, []))
         assert "issued" not in result["citations"][0]
+
+
+class TestFormatRis:
+    def test_single_journal_article(self) -> None:
+        papers = [
+            {
+                "title": "Attention Is All You Need",
+                "year": 2017,
+                "venue": "Nature",
+                "authors": [
+                    {"name": "Ashish Vaswani"},
+                    {"name": "Noam Shazeer"},
+                ],
+                "externalIds": {"DOI": "10.5555/3295222.3295349"},
+                "openAccessPdf": {"url": "https://example.com/paper.pdf"},
+                "abstract": "The dominant sequence...",
+            }
+        ]
+        result = format_ris(papers, [])
+        assert "TY  - JOUR" in result
+        assert "AU  - Vaswani, Ashish" in result
+        assert "AU  - Shazeer, Noam" in result
+        assert "TI  - Attention Is All You Need" in result
+        assert "PY  - 2017///" in result
+        assert "JO  - Nature" in result
+        assert "DO  - 10.5555/3295222.3295349" in result
+        assert "ER  -" in result
+
+    def test_conference_paper(self) -> None:
+        papers = [
+            {
+                "title": "BERT",
+                "year": 2019,
+                "venue": "Conference on NLP",
+                "authors": [{"name": "Jacob Devlin"}],
+                "externalIds": {},
+                "openAccessPdf": None,
+                "abstract": None,
+            }
+        ]
+        result = format_ris(papers, [])
+        assert "TY  - CONF" in result
+        assert "BT  - Conference on NLP" in result
+
+    def test_errors_as_comments(self) -> None:
+        errors = [{"identifier": "bad_id", "reason": "not found"}]
+        result = format_ris([], errors)
+        assert "% Could not resolve: bad_id (not found)" in result
+
+    def test_multiple_papers_separated(self) -> None:
+        papers = [
+            {
+                "title": "Paper 1",
+                "year": 2024,
+                "venue": "",
+                "authors": [{"name": "Smith"}],
+                "externalIds": {},
+                "openAccessPdf": None,
+                "abstract": None,
+            },
+            {
+                "title": "Paper 2",
+                "year": 2024,
+                "venue": "",
+                "authors": [{"name": "Jones"}],
+                "externalIds": {},
+                "openAccessPdf": None,
+                "abstract": None,
+            },
+        ]
+        result = format_ris(papers, [])
+        assert result.count("ER  -") == 2

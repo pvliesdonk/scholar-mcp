@@ -351,3 +351,91 @@ def format_csl_json(papers: list[dict[str, Any]], errors: list[dict[str, Any]]) 
     ]
 
     return json.dumps({"citations": citations, "errors": error_list})
+
+
+_RIS_TYPE_MAP: dict[str, str] = {
+    "article": "JOUR",
+    "inproceedings": "CONF",
+    "misc": "GEN",
+}
+
+
+def _ris_author_line(paper: dict[str, Any]) -> list[str]:
+    """Format one AU tag per author for RIS.
+
+    Args:
+        paper: Paper metadata dict with an ``authors`` list.
+
+    Returns:
+        List of ``AU  - Last, First`` tag strings.
+    """
+    authors = paper.get("authors") or []
+    lines: list[str] = []
+    for author in authors:
+        parsed = parse_author_name(author.get("name", ""))
+        name = f"{parsed.prefix} {parsed.last}" if parsed.prefix else parsed.last
+        if parsed.first:
+            name = f"{name}, {parsed.first}"
+        if parsed.suffix:
+            name = f"{name}, {parsed.suffix}"
+        if name:
+            lines.append(f"AU  - {name}")
+    return lines
+
+
+def format_ris(papers: list[dict[str, Any]], errors: list[dict[str, Any]]) -> str:
+    """Format papers as RIS records.
+
+    Args:
+        papers: List of paper metadata dicts.
+        errors: List of error dicts with ``identifier`` and ``reason`` keys.
+
+    Returns:
+        RIS-formatted string with all records and error comments.
+    """
+    blocks: list[str] = []
+
+    for error in errors:
+        ident = error.get("identifier", "unknown")
+        reason = error.get("reason", "unknown error")
+        blocks.append(f"% Could not resolve: {ident} ({reason})")
+
+    for paper in papers:
+        entry_type = infer_entry_type(paper)
+        ris_type = _RIS_TYPE_MAP.get(entry_type, "GEN")
+        lines: list[str] = [f"TY  - {ris_type}"]
+
+        lines.extend(_ris_author_line(paper))
+
+        title = paper.get("title")
+        if title:
+            lines.append(f"TI  - {title}")
+
+        year = paper.get("year")
+        if year is not None:
+            lines.append(f"PY  - {year}///")
+
+        venue = paper.get("venue")
+        if venue:
+            if entry_type == "inproceedings":
+                lines.append(f"BT  - {venue}")
+            else:
+                lines.append(f"JO  - {venue}")
+
+        external_ids = paper.get("externalIds") or {}
+        doi = external_ids.get("DOI")
+        if doi:
+            lines.append(f"DO  - {doi}")
+
+        url = _paper_url(paper)
+        if url:
+            lines.append(f"UR  - {url}")
+
+        abstract = paper.get("abstract")
+        if abstract:
+            lines.append(f"AB  - {abstract}")
+
+        lines.append("ER  -")
+        blocks.append("\n".join(lines))
+
+    return "\n\n".join(blocks)
