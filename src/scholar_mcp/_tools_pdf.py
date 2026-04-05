@@ -190,13 +190,15 @@ def register_pdf_tools(mcp: FastMCP) -> None:
         md_path = md_dir / f"{path.stem}{vlm_suffix}.md"
         if md_path.exists():
             markdown = await asyncio.to_thread(md_path.read_text, encoding="utf-8")
-            return json.dumps(
-                {
-                    "markdown": markdown,
-                    "path": str(md_path),
-                    "vlm_used": bool(vlm_suffix),
-                }
-            )
+            result: dict[str, object] = {
+                "markdown": markdown,
+                "path": str(md_path),
+                "vlm_used": bool(vlm_suffix),
+            }
+            skip_reason = bundle.docling.vlm_skip_reason(use_vlm)  # type: ignore[union-attr]
+            if skip_reason:
+                result["vlm_skip_reason"] = skip_reason
+            return json.dumps(result)
 
         async def _execute() -> str:
             pdf_bytes = await asyncio.to_thread(path.read_bytes)

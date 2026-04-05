@@ -98,16 +98,16 @@ class DoclingClient:
         raise RuntimeError(f"docling task {task_id} timed out after {max_polls} polls")
 
     def vlm_skip_reason(self, use_vlm: bool) -> str | None:
-        """Return why VLM was not used, or None if it would be used.
+        """Return why VLM was skipped, or None if it was used or not requested.
 
         Args:
             use_vlm: Whether the caller requested VLM enrichment.
 
         Returns:
-            A human-readable reason string, or None if VLM will be used.
+            A reason string if VLM was requested but skipped, otherwise None.
         """
         if not use_vlm:
-            return "not_requested"
+            return None
         if not self.vlm_api_url:
             return "vlm_api_url_not_configured"
         if not self.vlm_api_key:
