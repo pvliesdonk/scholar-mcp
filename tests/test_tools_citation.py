@@ -158,6 +158,49 @@ async def test_empty_input_error(mcp: FastMCP) -> None:
     assert "error" in data
 
 
+async def test_upstream_error(mcp: FastMCP) -> None:
+    """generate_citations returns upstream_error when S2 fails."""
+    with respx.mock:
+        respx.post(f"{S2_BASE}/paper/batch").mock(
+            return_value=httpx.Response(500, text="Internal Server Error")
+        )
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "generate_citations",
+                {"paper_ids": ["abc123"], "format": "bibtex"},
+            )
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "upstream_error"
+    assert data["status"] == 500
+
+
+async def test_too_many_ids_error(mcp: FastMCP) -> None:
+    """generate_citations rejects more than 100 paper IDs."""
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "generate_citations",
+            {"paper_ids": [f"id{i}" for i in range(101)], "format": "bibtex"},
+        )
+    data = json.loads(result.content[0].text)
+    assert "error" in data
+
+
+async def test_all_papers_unresolved(mcp: FastMCP) -> None:
+    """generate_citations returns structured error when all papers fail."""
+    with respx.mock:
+        respx.post(f"{S2_BASE}/paper/batch").mock(
+            return_value=httpx.Response(200, json=[None, None])
+        )
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "generate_citations",
+                {"paper_ids": ["bad1", "bad2"], "format": "bibtex"},
+            )
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "no_papers_resolved"
+    assert set(data["failed"]) == {"bad1", "bad2"}
+
+
 async def test_queued_on_429(bundle: ServiceBundle) -> None:
     call_count = 0
 

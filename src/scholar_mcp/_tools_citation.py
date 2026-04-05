@@ -100,6 +100,8 @@ def register_citation_tools(mcp: FastMCP) -> None:
 
         async def _execute(*, retry: bool = True) -> str:
             try:
+                # batch_resolve does not pre-screen the cache (consistent
+                # with the batch_resolve tool in _tools_utility.py).
                 s2_results = await bundle.s2.batch_resolve(
                     paper_ids, fields=FIELD_SETS["full"], retry=retry
                 )
@@ -125,17 +127,13 @@ def register_citation_tools(mcp: FastMCP) -> None:
                 for paper in papers:
                     await _enrich_paper(paper, bundle)
 
-            if not papers and errors:
-                formatter = _FORMATTERS[format]
-                result = formatter([], errors)
-                if not result.strip():
-                    return json.dumps(
-                        {
-                            "error": "no_papers_resolved",
-                            "failed": [e["identifier"] for e in errors],
-                        }
-                    )
-                return result
+            if not papers:
+                return json.dumps(
+                    {
+                        "error": "no_papers_resolved",
+                        "failed": [e["identifier"] for e in errors],
+                    }
+                )
 
             formatter = _FORMATTERS[format]
             return formatter(papers, errors)
