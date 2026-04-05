@@ -168,10 +168,20 @@ def register_pdf_tools(mcp: FastMCP) -> None:
         Works on any local PDF, including manually placed paywalled papers.
         Returns an error if the server does not have PDF conversion configured.
 
+        Tip: start with ``use_vlm=false`` (the default). Standard conversion
+        handles most papers well. Only retry with ``use_vlm=true`` when the
+        result has garbled formulas or missing figure descriptions.
+
+        VLM and standard results are cached separately (``<stem>.md`` vs
+        ``<stem>_vlm.md``), so switching modes never overwrites a previous
+        conversion. When VLM is requested but not configured, the response
+        includes a ``vlm_skip_reason`` field explaining why.
+
         Args:
             file_path: Absolute path to the local PDF file.
             use_vlm: Use VLM enrichment for formulas and figures.
-                Falls back to standard conversion if VLM is not available.
+                Falls back to standard conversion if VLM is not configured
+                and reports the reason in ``vlm_skip_reason``.
 
         Returns:
             JSON ``{"markdown": "...", "path": "...", "vlm_used": bool}``.
@@ -253,9 +263,20 @@ def register_pdf_tools(mcp: FastMCP) -> None:
         Each stage fails gracefully: metadata is always returned if the paper
         resolves, even if PDF download or conversion fails.
 
+        Tip: start with ``use_vlm=false`` (the default). Standard conversion
+        handles most papers well. Only retry with ``use_vlm=true`` when the
+        result has garbled formulas or missing figure descriptions.
+
+        VLM and standard results are cached separately (``<id>.md`` vs
+        ``<id>_vlm.md``), so switching modes never overwrites a previous
+        conversion. When VLM is requested but not configured, the response
+        includes a ``vlm_skip_reason`` field explaining why.
+
         Args:
             identifier: Paper identifier (DOI, S2 ID, ARXIV:, etc.).
             use_vlm: Use VLM enrichment for formula/figure extraction.
+                Falls back to standard conversion if VLM is not configured
+                and reports the reason in ``vlm_skip_reason``.
 
         Returns:
             JSON with ``metadata`` and ``markdown`` on full success,

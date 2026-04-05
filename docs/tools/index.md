@@ -274,6 +274,13 @@ Convert a local PDF file to Markdown via docling-serve.
 
 **Returns:** `{"markdown": "...", "path": "/data/scholar-mcp/md/<name>.md", "vlm_used": true/false}`.
 
+When `use_vlm` is requested but VLM is not configured, the response includes a `vlm_skip_reason` field (e.g. `"vlm_api_url_not_configured"`).
+
+!!! tip "Start without VLM"
+    Standard conversion handles most papers well. Only retry with `use_vlm=true` when the result has garbled formulas or missing figure descriptions. VLM enrichment processes each formula and figure image individually via an external vision model, which is significantly slower.
+
+**Caching:** Standard and VLM conversions are cached separately (`<stem>.md` vs `<stem>_vlm.md`), so switching modes never overwrites a previous conversion.
+
 Requires `SCHOLAR_MCP_DOCLING_URL` to be set. VLM enrichment additionally requires `SCHOLAR_MCP_VLM_API_URL` and `SCHOLAR_MCP_VLM_API_KEY`.
 
 ---
@@ -299,7 +306,10 @@ Full pipeline: resolve paper, download PDF, convert to Markdown.
 }
 ```
 
-Partial results are returned if a later stage fails (e.g. metadata + error if no OA PDF is available).
+Partial results are returned if a later stage fails (e.g. metadata + error if no OA PDF is available). When VLM is requested but not configured, the response includes `vlm_skip_reason`.
+
+!!! tip "Start without VLM"
+    Same advice as `convert_pdf_to_markdown` — try standard first, add VLM only if formulas or figures are missing. VLM and standard conversions are cached separately (`<id>.md` vs `<id>_vlm.md`).
 
 See [PDF Conversion guide](../guides/pdf-conversion.md) for setup instructions.
 
