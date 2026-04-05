@@ -14,6 +14,7 @@ from fastmcp.server.context import Context
 
 from ._cache import ScholarCache
 from ._docling_client import DoclingClient
+from ._epo_client import EpoClient
 from ._openalex_client import OpenAlexClient
 from ._s2_client import S2Client
 from ._task_queue import TaskQueue
@@ -32,6 +33,7 @@ class ServiceBundle:
         s2: Semantic Scholar API client.
         openalex: OpenAlex API client (httpx.AsyncClient pointed at OpenAlex).
         docling: docling-serve httpx client, or None if not configured.
+        epo: EPO OPS API client, or None if not configured.
         cache: SQLite cache.
         config: Server configuration.
     """
@@ -39,6 +41,7 @@ class ServiceBundle:
     s2: S2Client
     openalex: OpenAlexClient
     docling: DoclingClient | None
+    epo: EpoClient | None
     cache: ScholarCache
     config: ServerConfig
     tasks: TaskQueue
@@ -88,6 +91,17 @@ async def make_service_lifespan(
     else:
         logger.info("docling_not_configured pdf_tools_disabled")
 
+    # EPO OPS (optional — patent tools only available when configured)
+    epo: EpoClient | None = None
+    if config.epo_configured:
+        epo = EpoClient(
+            consumer_key=config.epo_consumer_key,  # type: ignore[arg-type]
+            consumer_secret=config.epo_consumer_secret,  # type: ignore[arg-type]
+        )
+        logger.info("epo_ops status=configured")
+    else:
+        logger.info("epo_ops status=not_configured")
+
     cache = ScholarCache(config.cache_dir / "cache.db")
     await cache.open()
 
@@ -97,6 +111,7 @@ async def make_service_lifespan(
         s2=s2,
         openalex=openalex,
         docling=docling,
+        epo=epo,
         cache=cache,
         config=config,
         tasks=tasks,
@@ -108,6 +123,8 @@ async def make_service_lifespan(
         await openalex_http.aclose()
         if docling_http:
             await docling_http.aclose()
+        if epo is not None:
+            await epo.aclose()
         await cache.close()
 
 
