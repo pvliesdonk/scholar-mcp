@@ -14,7 +14,7 @@ papers and patents, enabling cross-referencing between the two document types.
 ### Design Decisions
 
 - **Approach 1 (Flat Module Addition)**: New modules follow existing patterns
-  (`_epo_client.py`, `_tools_patent_*.py`) rather than introducing a backend
+  (`_epo_client.py`, `_tools_patent.py`) rather than introducing a backend
   abstraction layer. Migration to a protocol-based abstraction (Approach 2) is
   straightforward if a third backend (e.g., PatentsView) is added later.
 - **Minimal tool surface**: 3 new tools + 1 extended, not the 10 from the
@@ -392,14 +392,13 @@ Patent-specific error cases:
 
 Tracked as GitHub issues:
 
-- Patent PDF retrieval (`fetch_patent_pdf`)
-- Patent-to-Markdown conversion (`convert_patent_to_markdown`)
-- USPTO PatentsView / Open Data Portal integration
-- Backend abstraction layer (Approach 2)
-- Patent landscape visualization
-- Patent-paper co-citation analysis
-- CPC classification browser
-- Obsidian Vault patent note integration
-- BibTeX/RIS export for patent citation formats
-- WIPO PATENTSCOPE integration
-- Patent monitoring / alerts
+- Patent PDF retrieval (`fetch_patent_pdf`) — #43
+- Patent-to-Markdown conversion (`convert_patent_to_markdown`) — #44
+- USPTO PatentsView / Open Data Portal integration — #45
+- Backend abstraction layer (Approach 2) — #46
+- Patent-paper co-citation analysis — #47
+- CPC classification browser — #48
+- Obsidian Vault patent note integration — #49
+- BibTeX/RIS export for patent citation formats — #50
+- WIPO PATENTSCOPE integration — #51
+- Patent monitoring / alerts — #52
