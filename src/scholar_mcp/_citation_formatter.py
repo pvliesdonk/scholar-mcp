@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import unicodedata
 from typing import Any
 
@@ -251,3 +252,102 @@ def format_bibtex(papers: list[dict[str, Any]], errors: list[dict[str, Any]]) ->
         lines.append(entry)
 
     return "\n\n".join(lines)
+
+
+_CSL_TYPE_MAP: dict[str, str] = {
+    "article": "article-journal",
+    "inproceedings": "paper-conference",
+    "misc": "article",
+}
+
+
+def _csl_author(paper: dict[str, Any]) -> list[dict[str, str]]:
+    """Format authors for CSL-JSON.
+
+    Args:
+        paper: Paper metadata dict with an ``authors`` list.
+
+    Returns:
+        List of CSL author dicts with ``family``, ``given``,
+        ``non-dropping-particle``, and ``suffix`` keys as applicable.
+    """
+    authors = paper.get("authors") or []
+    result: list[dict[str, str]] = []
+    for author in authors:
+        parsed = parse_author_name(author.get("name", ""))
+        entry: dict[str, str] = {}
+        if parsed.last:
+            entry["family"] = parsed.last
+        if parsed.first:
+            entry["given"] = parsed.first
+        if parsed.prefix:
+            entry["non-dropping-particle"] = parsed.prefix
+        if parsed.suffix:
+            entry["suffix"] = parsed.suffix
+        if entry:
+            result.append(entry)
+    return result
+
+
+def format_csl_json(papers: list[dict[str, Any]], errors: list[dict[str, Any]]) -> str:
+    """Format papers as CSL-JSON.
+
+    Args:
+        papers: List of paper metadata dicts.
+        errors: List of error dicts with ``identifier`` and ``reason`` keys.
+
+    Returns:
+        JSON string with ``citations`` array and ``errors`` array.
+    """
+    seen_keys: set[str] = set()
+    citations: list[dict[str, Any]] = []
+
+    for paper in papers:
+        entry_type = infer_entry_type(paper)
+        key = generate_bibtex_key(paper, seen_keys)
+
+        entry: dict[str, Any] = {
+            "id": key,
+            "type": _CSL_TYPE_MAP.get(entry_type, "article-journal"),
+        }
+
+        title = paper.get("title")
+        if title:
+            entry["title"] = title
+
+        csl_authors = _csl_author(paper)
+        if csl_authors:
+            entry["author"] = csl_authors
+
+        year = paper.get("year")
+        if year is not None:
+            entry["issued"] = {"date-parts": [[year]]}
+
+        venue = paper.get("venue")
+        if venue:
+            entry["container-title"] = venue
+
+        external_ids = paper.get("externalIds") or {}
+        doi = external_ids.get("DOI")
+        if doi:
+            entry["DOI"] = doi
+
+        url = _paper_url(paper)
+        if url:
+            entry["URL"] = url
+
+        abstract = paper.get("abstract")
+        if abstract:
+            entry["abstract"] = abstract
+
+        citations.append(entry)
+
+    error_list = [
+        {
+            "identifier": e.get("identifier", "unknown"),
+            "reason": e.get("reason", "unknown error"),
+        }
+        for e in errors
+    ]
+
+    return json.dumps({"citations": citations, "errors": error_list})

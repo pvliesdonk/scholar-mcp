@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import json
+
 from scholar_mcp._citation_formatter import (
     escape_bibtex,
     format_bibtex,
+    format_csl_json,
     generate_bibtex_key,
     infer_entry_type,
 )
@@ -194,3 +197,56 @@ class TestFormatBibtex:
         field_names = [line.split("=")[0].strip() for line in field_lines]
         assert "doi" not in field_names
         assert "url" not in field_names
+
+
+class TestFormatCslJson:
+    def test_single_paper(self) -> None:
+        papers = [
+            {
+                "title": "Attention Is All You Need",
+                "year": 2017,
+                "venue": "Neural Information Processing Systems",
+                "authors": [
+                    {"name": "Ashish Vaswani"},
+                    {"name": "Jan van Houten"},
+                ],
+                "externalIds": {"DOI": "10.5555/3295222.3295349"},
+                "openAccessPdf": {"url": "https://example.com/paper.pdf"},
+                "abstract": "The dominant sequence...",
+            }
+        ]
+        result = json.loads(format_csl_json(papers, []))
+        assert len(result["citations"]) == 1
+        assert result["errors"] == []
+        entry = result["citations"][0]
+        assert entry["title"] == "Attention Is All You Need"
+        assert entry["type"] == "article-journal"
+        assert entry["issued"] == {"date-parts": [[2017]]}
+        assert entry["author"][0] == {"family": "Vaswani", "given": "Ashish"}
+        assert entry["author"][1] == {
+            "family": "Houten",
+            "given": "Jan",
+            "non-dropping-particle": "van",
+        }
+
+    def test_errors_in_output(self) -> None:
+        errors = [{"identifier": "bad_id", "reason": "not found"}]
+        result = json.loads(format_csl_json([], errors))
+        assert result["citations"] == []
+        assert len(result["errors"]) == 1
+        assert result["errors"][0]["identifier"] == "bad_id"
+
+    def test_missing_year(self) -> None:
+        papers = [
+            {
+                "title": "No Year",
+                "year": None,
+                "venue": "",
+                "authors": [{"name": "Smith"}],
+                "externalIds": {},
+                "openAccessPdf": None,
+                "abstract": None,
+            }
+        ]
+        result = json.loads(format_csl_json(papers, []))
+        assert "issued" not in result["citations"][0]
