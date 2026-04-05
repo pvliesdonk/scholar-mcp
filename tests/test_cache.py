@@ -119,3 +119,47 @@ async def test_clear_older_than(cache):
     await cache.clear(older_than_days=7)
     assert await cache.get_paper("old") is None
     assert await cache.get_paper("new") is not None
+
+
+class TestPatentCache:
+    async def test_patent_roundtrip(self, cache) -> None:
+        data = {"title": "Test Patent", "publication_number": "EP.1234567.A1"}
+        await cache.set_patent("EP.1234567.A1", data)
+        result = await cache.get_patent("EP.1234567.A1")
+        assert result == data
+
+    async def test_patent_not_found(self, cache) -> None:
+        assert await cache.get_patent("EP.9999999.A1") is None
+
+    async def test_patent_search_roundtrip(self, cache) -> None:
+        data = {"total_count": 5, "references": [{"country": "EP"}]}
+        await cache.set_patent_search("ta=solar", data)
+        result = await cache.get_patent_search("ta=solar")
+        assert result == data
+
+    async def test_patent_claims_roundtrip(self, cache) -> None:
+        await cache.set_patent_claims("EP.1234567.A1", "Claim 1: A method...")
+        result = await cache.get_patent_claims("EP.1234567.A1")
+        assert result == "Claim 1: A method..."
+
+    async def test_patent_description_roundtrip(self, cache) -> None:
+        await cache.set_patent_description("EP.1234567.A1", "Description text")
+        result = await cache.get_patent_description("EP.1234567.A1")
+        assert result == "Description text"
+
+    async def test_patent_family_roundtrip(self, cache) -> None:
+        data = [{"country": "US", "number": "11234567"}]
+        await cache.set_patent_family("EP.1234567.A1", data)
+        result = await cache.get_patent_family("EP.1234567.A1")
+        assert result == data
+
+    async def test_patent_legal_roundtrip(self, cache) -> None:
+        data = [{"event": "grant", "date": "2020-01-15"}]
+        await cache.set_patent_legal("EP.1234567.A1", data)
+        result = await cache.get_patent_legal("EP.1234567.A1")
+        assert result == data
+
+    async def test_patent_stats(self, cache) -> None:
+        await cache.set_patent("EP.1234567.A1", {"title": "Test"})
+        stats = await cache.stats()
+        assert stats["patents"] >= 1
