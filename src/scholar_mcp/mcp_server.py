@@ -436,4 +436,7 @@ def create_server(*, transport: str = "stdio") -> FastMCP:
     if is_read_only:
         mcp.disable(tags={"write"})
 
+    if not config.epo_configured:
+        mcp.disable(tags={"patent"})
+
     return mcp
