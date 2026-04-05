@@ -183,16 +183,18 @@ def register_pdf_tools(mcp: FastMCP) -> None:
         if not path.exists():
             return json.dumps({"error": "file_not_found", "path": file_path})
 
-        # Return cached markdown if it already exists
+        # Return cached markdown if it already exists.
+        # VLM and standard conversions use separate cache files.
         md_dir = bundle.config.cache_dir / "md"
-        md_path = md_dir / f"{path.stem}.md"
+        vlm_suffix = "_vlm" if use_vlm and bundle.docling.vlm_available else ""
+        md_path = md_dir / f"{path.stem}{vlm_suffix}.md"
         if md_path.exists():
             markdown = await asyncio.to_thread(md_path.read_text, encoding="utf-8")
             return json.dumps(
                 {
                     "markdown": markdown,
                     "path": str(md_path),
-                    "vlm_used": False,
+                    "vlm_used": bool(vlm_suffix),
                 }
             )
 
@@ -320,12 +322,12 @@ def register_pdf_tools(mcp: FastMCP) -> None:
                     }
                 )
 
+            vlm_used = use_vlm and bundle.docling.vlm_available
+            vlm_suffix = "_vlm" if vlm_used else ""
             md_dir = bundle.config.cache_dir / "md"
             md_dir.mkdir(parents=True, exist_ok=True)
-            md_path = md_dir / f"{paper_id}.md"
+            md_path = md_dir / f"{paper_id}{vlm_suffix}.md"
             await asyncio.to_thread(md_path.write_text, markdown, encoding="utf-8")
-
-            vlm_used = use_vlm and bundle.docling.vlm_available
             result: dict[str, object] = {
                 "metadata": paper,
                 "markdown": markdown,
