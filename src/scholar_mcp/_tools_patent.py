@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+import asyncio as _asyncio
 import json
 import logging
+from collections.abc import Sequence
 from typing import Any, Literal
 
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
 
-from ._epo_client import EpoRateLimitedError
-from ._patent_numbers import normalize
+from ._epo_client import EpoClient, EpoRateLimitedError
+from ._patent_numbers import DocdbNumber, normalize
 from ._rate_limiter import RateLimitedError
 from ._server_deps import ServiceBundle, get_bundle
 
@@ -237,8 +239,8 @@ def register_patent_tools(mcp: FastMCP) -> None:
             patent_number: Patent number in any common format, e.g.
                 ``"EP1234567A1"``, ``"WO2024/123456"``, or ``"US11,234,567B2"``.
             sections: Sections to include in the response. Defaults to
-                ``["biblio"]``. Additional sections (claims, description,
-                family, legal, citations) are reserved for future phases.
+                ``["biblio"]``. Available sections: biblio, claims,
+                description, family, legal.  Citations reserved for Phase 3.
             bundle: Injected service bundle.
 
         Returns:
@@ -257,7 +259,6 @@ def register_patent_tools(mcp: FastMCP) -> None:
                 }
             )
 
-        # Normalise patent number
         try:
             doc = normalize(patent_number)
         except ValueError as exc:
@@ -270,60 +271,139 @@ def register_patent_tools(mcp: FastMCP) -> None:
 
         effective_sections = sections if sections is not None else ["biblio"]
 
-        if "biblio" in effective_sections:
-            # Check cache
-            cached_biblio = await bundle.cache.get_patent(doc.docdb)
-            if cached_biblio is not None:
-                logger.debug("patent_biblio_cache_hit patent_id=%s", doc.docdb)
-                result: dict[str, Any] = {
-                    "patent_number": doc.docdb,
-                    "biblio": cached_biblio,
-                }
-                unavailable = [s for s in effective_sections if s != "biblio"]
-                if unavailable:
-                    result["notice"] = (
-                        f"Sections {unavailable} are not yet available. Coming in Phase 2."
-                    )
-                return json.dumps(result)
-
-            async def _execute(*, retry: bool = True) -> str:
-                # Note: retry flag accepted for task queue compatibility;
-                # EPO client does not yet have a retry-aware path.
-                biblio = await bundle.epo.get_biblio(doc)  # type: ignore[union-attr]
-                # Detect empty/not-found biblio before caching
-                if not biblio.get("title") and not biblio.get("applicants"):
-                    return json.dumps(
-                        {
-                            "error": "patent_not_found",
-                            "detail": (
-                                f"Patent {doc.docdb} not found or has no data. "
-                                "Check the number format."
-                            ),
-                        }
-                    )
-                await bundle.cache.set_patent(doc.docdb, biblio)
-                # Build result dict entirely inside _execute to avoid outer-scope mutation
-                inner: dict[str, Any] = {"patent_number": doc.docdb, "biblio": biblio}
-                unavailable = [s for s in effective_sections if s != "biblio"]
-                if unavailable:
-                    inner["notice"] = (
-                        f"Sections {unavailable} are not yet available. Coming in Phase 2."
-                    )
-                return json.dumps(inner)
-
-            try:
-                return await _execute(retry=False)
-            except (RateLimitedError, EpoRateLimitedError):
-                task_id = bundle.tasks.submit(_execute(retry=True), tool="get_patent")
-                return json.dumps(
-                    {"queued": True, "task_id": task_id, "tool": "get_patent"}
-                )
-
-        # No biblio requested — only unavailable sections
-        unavailable = [s for s in effective_sections if s != "biblio"]
-        result_no_biblio: dict[str, Any] = {"patent_number": doc.docdb}
-        if unavailable:
-            result_no_biblio["notice"] = (
-                f"Sections {unavailable} are not yet available. Coming in Phase 2."
+        async def _execute(*, retry: bool = True) -> str:
+            # Note: retry flag accepted for task queue compatibility;
+            # EPO client does not yet have a retry-aware path.
+            return await _fetch_patent_sections(
+                doc=doc,
+                sections=effective_sections,
+                epo=bundle.epo,  # type: ignore[arg-type]
+                cache=bundle.cache,
             )
-        return json.dumps(result_no_biblio)
+
+        try:
+            return await _execute(retry=False)
+        except (RateLimitedError, EpoRateLimitedError):
+            task_id = bundle.tasks.submit(_execute(retry=True), tool="get_patent")
+            return json.dumps(
+                {"queued": True, "task_id": task_id, "tool": "get_patent"}
+            )
+
+
+# Sections available in Phase 2 (fetched concurrently).
+_AVAILABLE_SECTIONS = {"biblio", "claims", "description", "family", "legal"}
+
+# Maximum concurrent EPO requests per get_patent call.
+_SECTION_CONCURRENCY = 3
+
+
+async def _fetch_patent_sections(
+    *,
+    doc: DocdbNumber,
+    sections: Sequence[str],
+    epo: EpoClient,
+    cache: Any,
+) -> str:
+    """Fetch requested sections for a patent, with cache and concurrency.
+
+    Sections are fetched concurrently (bounded by a semaphore) and each
+    result is cached independently.  Sections not yet implemented
+    (e.g. ``"citations"``) produce a notice rather than an error.
+
+    Args:
+        doc: Normalised DOCDB patent number.
+        sections: List of section names to include.
+        epo: EPO client instance.
+        cache: Cache instance with patent get/set methods.
+
+    Returns:
+        JSON string with patent_number and requested section data.
+    """
+    patent_id = doc.docdb
+    result: dict[str, Any] = {"patent_number": patent_id}
+    sem = _asyncio.Semaphore(_SECTION_CONCURRENCY)
+
+    async def _fetch_biblio() -> None:
+        cached = await cache.get_patent(patent_id)
+        if cached is not None:
+            result["biblio"] = cached
+            return
+        async with sem:
+            biblio = await epo.get_biblio(doc)
+        if not biblio.get("title") and not biblio.get("applicants"):
+            result["_not_found"] = True
+            return
+        await cache.set_patent(patent_id, biblio)
+        result["biblio"] = biblio
+
+    async def _fetch_claims() -> None:
+        cached = await cache.get_patent_claims(patent_id)
+        if cached is not None:
+            result["claims"] = cached
+            return
+        async with sem:
+            claims = await epo.get_claims(doc)
+        await cache.set_patent_claims(patent_id, claims)
+        result["claims"] = claims
+
+    async def _fetch_description() -> None:
+        cached = await cache.get_patent_description(patent_id)
+        if cached is not None:
+            result["description"] = cached
+            return
+        async with sem:
+            desc = await epo.get_description(doc)
+        await cache.set_patent_description(patent_id, desc)
+        result["description"] = desc
+
+    async def _fetch_family() -> None:
+        cached = await cache.get_patent_family(patent_id)
+        if cached is not None:
+            result["family"] = cached
+            return
+        async with sem:
+            family = await epo.get_family(doc)
+        await cache.set_patent_family(patent_id, family)
+        result["family"] = family
+
+    async def _fetch_legal() -> None:
+        cached = await cache.get_patent_legal(patent_id)
+        if cached is not None:
+            result["legal"] = cached
+            return
+        async with sem:
+            legal = await epo.get_legal(doc)
+        await cache.set_patent_legal(patent_id, legal)
+        result["legal"] = legal
+
+    fetcher_map: dict[str, Any] = {
+        "biblio": _fetch_biblio,
+        "claims": _fetch_claims,
+        "description": _fetch_description,
+        "family": _fetch_family,
+        "legal": _fetch_legal,
+    }
+
+    fetchers = [fetcher_map[s]() for s in sections if s in fetcher_map]
+    await _asyncio.gather(*fetchers)
+
+    # Detect not-found from biblio fetch
+    if result.pop("_not_found", False):
+        return json.dumps(
+            {
+                "error": "patent_not_found",
+                "detail": (
+                    f"Patent {patent_id} not found or has no data. "
+                    "Check the number format."
+                ),
+            }
+        )
+
+    # Note any sections not yet available (e.g. citations)
+    unavailable = [s for s in sections if s not in _AVAILABLE_SECTIONS]
+    if unavailable:
+        result["notice"] = (
+            f"Sections {unavailable} are not yet available. Coming in Phase 3."
+        )
+
+    return json.dumps(result)
