@@ -130,6 +130,9 @@ def register_graph_tools(mcp: FastMCP) -> None:
                         exhausted = True
                         break
 
+                # When exhausted is True, S2 has no more data — an
+                # empty slice here simply means the offset is beyond
+                # the available filtered results (not a truncation).
                 result: dict[str, object] = {"data": filtered[offset : offset + limit]}
                 if (
                     not exhausted
@@ -331,7 +334,10 @@ def register_graph_tools(mcp: FastMCP) -> None:
                             else fetch_limit
                         )
                         s2_off = 0
-                        while s2_off < scan_cap:
+                        while (
+                            s2_off < scan_cap
+                            and len(nodes) + len(new_nodes) < max_nodes
+                        ):
                             batch = min(
                                 _S2_PAGE_SIZE
                                 if min_citations is not None

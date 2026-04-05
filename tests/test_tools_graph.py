@@ -1773,3 +1773,110 @@ async def test_get_citation_graph_citations_paginates_with_min_citations(
     node_ids = {n["id"] for n in data["nodes"]}
     assert "bgv" in node_ids, "High-citation paper on page 2 should be found"
     assert data["stats"]["total_edges"] >= 1
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_citations_min_citations_warning_on_scan_cap(
+    respx_mock: respx.MockRouter, mcp: FastMCP, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """get_citations includes a warning when the upstream scan cap is
+    reached without finding enough qualifying results."""
+    import scholar_mcp._tools_graph as tg
+
+    monkeypatch.setattr(tg, "_MAX_UPSTREAM_SCAN", 20)
+    monkeypatch.setattr(tg, "_S2_PAGE_SIZE", 10)
+
+    def _handler(request: httpx.Request) -> httpx.Response:
+        # Always return a full page of low-citation papers
+        limit = int(request.url.params.get("limit", 10))
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "citingPaper": {
+                            "paperId": f"low{i}",
+                            "title": f"Low {i}",
+                            "year": 2024,
+                            "citationCount": 1,
+                        }
+                    }
+                    for i in range(limit)
+                ]
+            },
+        )
+
+    respx_mock.get("/paper/p1/citations").mock(side_effect=_handler)
+
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_citations",
+            {"identifier": "p1", "min_citations": 500, "limit": 5},
+        )
+    data = json.loads(result.content[0].text)
+    assert data["data"] == []
+    assert "warning" in data
+    assert "20" in data["warning"]
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_citation_graph_bfs_stops_paginating_at_max_nodes(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """BFS pagination stops once max_nodes is saturated, avoiding
+    unnecessary API calls."""
+    respx_mock.post("/paper/batch").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {
+                    "paperId": "seed",
+                    "title": "Seed",
+                    "year": 2020,
+                    "citationCount": 100,
+                }
+            ],
+        )
+    )
+    call_count = 0
+
+    def _cit_handler(request: httpx.Request) -> httpx.Response:
+        nonlocal call_count
+        call_count += 1
+        limit = int(request.url.params.get("limit", 1000))
+        offset = int(request.url.params.get("offset", 0))
+        # Return a full page of qualifying papers every time
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "citingPaper": {
+                            "paperId": f"c{offset + i}",
+                            "title": f"Citer {offset + i}",
+                            "year": 2022,
+                            "citationCount": 500,
+                        }
+                    }
+                    for i in range(limit)
+                ]
+            },
+        )
+
+    respx_mock.get("/paper/seed/citations").mock(side_effect=_cit_handler)
+
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_citation_graph",
+            {
+                "seed_ids": ["seed"],
+                "direction": "citations",
+                "depth": 1,
+                "max_nodes": 5,
+                "min_citations": 100,
+            },
+        )
+    data = json.loads(result.content[0].text)
+    # 5 nodes = 1 seed + 4 expanded; should NOT fetch 5 pages of 1000
+    assert data["stats"]["total_nodes"] <= 5
+    assert call_count == 1
