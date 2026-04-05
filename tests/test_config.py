@@ -1,3 +1,5 @@
+import os
+
 from scholar_mcp.config import load_config
 
 
@@ -45,3 +47,36 @@ def test_read_only_true_values(monkeypatch):
     for truthy in ("1", "true", "True", "yes", "YES"):
         monkeypatch.setenv("SCHOLAR_MCP_READ_ONLY", truthy)
         assert load_config().read_only is True, f"expected True for {truthy!r}"
+
+
+def test_epo_keys_default_none(monkeypatch) -> None:
+    for key in list(os.environ):
+        if key.startswith("SCHOLAR_MCP_"):
+            monkeypatch.delenv(key, raising=False)
+    config = load_config()
+    assert config.epo_consumer_key is None
+    assert config.epo_consumer_secret is None
+
+
+def test_epo_keys_from_env(monkeypatch) -> None:
+    monkeypatch.setenv("SCHOLAR_MCP_EPO_CONSUMER_KEY", "test-key")
+    monkeypatch.setenv("SCHOLAR_MCP_EPO_CONSUMER_SECRET", "test-secret")
+    config = load_config()
+    assert config.epo_consumer_key == "test-key"
+    assert config.epo_consumer_secret == "test-secret"
+
+
+def test_epo_configured_both_set(monkeypatch) -> None:
+    monkeypatch.setenv("SCHOLAR_MCP_EPO_CONSUMER_KEY", "key")
+    monkeypatch.setenv("SCHOLAR_MCP_EPO_CONSUMER_SECRET", "secret")
+    config = load_config()
+    assert config.epo_configured is True
+
+
+def test_epo_configured_partial(monkeypatch) -> None:
+    monkeypatch.setenv("SCHOLAR_MCP_EPO_CONSUMER_KEY", "key")
+    for key in list(os.environ):
+        if key == "SCHOLAR_MCP_EPO_CONSUMER_SECRET":
+            monkeypatch.delenv(key, raising=False)
+    config = load_config()
+    assert config.epo_configured is False
