@@ -317,7 +317,7 @@ Fetch detailed information for a single patent by its publication number.
 | `legal` | Legal status events (date, code, description) | Available |
 | `citations` | Patent and non-patent literature citations | Coming in Phase 3 |
 
-Multiple sections are fetched concurrently (up to 3 parallel EPO requests) for optimal performance. Each section is cached independently with appropriate TTLs.
+Sections are fetched concurrently where possible (cache lookups run in parallel; EPO API calls are serialised by the client). Each section is cached independently with appropriate TTLs.
 
 **Returns:** A JSON object with keys matching the requested sections:
 

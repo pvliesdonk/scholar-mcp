@@ -271,7 +271,9 @@ def register_patent_tools(mcp: FastMCP) -> None:
                 }
             )
 
-        effective_sections = sections if sections is not None else ["biblio"]
+        effective_sections = (
+            list(dict.fromkeys(sections)) if sections is not None else ["biblio"]
+        )
 
         async def _execute(*, retry: bool = True) -> str:
             # Note: retry flag accepted for task queue compatibility;
@@ -295,9 +297,6 @@ def register_patent_tools(mcp: FastMCP) -> None:
 # Sections available in Phase 2 (fetched concurrently).
 _AVAILABLE_SECTIONS = {"biblio", "claims", "description", "family", "legal"}
 
-# Maximum concurrent EPO requests per get_patent call.
-_SECTION_CONCURRENCY = 3
-
 
 async def _fetch_patent_sections(
     *,
@@ -306,11 +305,13 @@ async def _fetch_patent_sections(
     epo: EpoClient,
     cache: Any,
 ) -> str:
-    """Fetch requested sections for a patent, with cache and concurrency.
+    """Fetch requested sections for a patent, with caching.
 
-    Sections are fetched concurrently (bounded by a semaphore) and each
-    result is cached independently.  Sections not yet implemented
-    (e.g. ``"citations"``) produce a notice rather than an error.
+    Cache lookups run concurrently via ``asyncio.gather``.  Actual EPO
+    API calls are serialised by the ``asyncio.Lock`` inside ``EpoClient``,
+    so no additional concurrency limiting is needed here.  Sections not
+    yet implemented (e.g. ``"citations"``) produce a notice rather than
+    an error.
 
     Args:
         doc: Normalised DOCDB patent number.
@@ -323,15 +324,13 @@ async def _fetch_patent_sections(
     """
     patent_id = doc.docdb
     result: dict[str, Any] = {"patent_number": patent_id}
-    sem = _asyncio.Semaphore(_SECTION_CONCURRENCY)
 
     async def _fetch_biblio() -> None:
         cached = await cache.get_patent(patent_id)
         if cached is not None:
             result["biblio"] = cached
             return
-        async with sem:
-            biblio = await epo.get_biblio(doc)
+        biblio = await epo.get_biblio(doc)
         if not biblio.get("title") and not biblio.get("applicants"):
             result["_not_found"] = True
             return
@@ -343,8 +342,7 @@ async def _fetch_patent_sections(
         if cached is not None:
             result["claims"] = cached
             return
-        async with sem:
-            claims = await epo.get_claims(doc)
+        claims = await epo.get_claims(doc)
         await cache.set_patent_claims(patent_id, claims)
         result["claims"] = claims
 
@@ -353,8 +351,7 @@ async def _fetch_patent_sections(
         if cached is not None:
             result["description"] = cached
             return
-        async with sem:
-            desc = await epo.get_description(doc)
+        desc = await epo.get_description(doc)
         await cache.set_patent_description(patent_id, desc)
         result["description"] = desc
 
@@ -363,8 +360,7 @@ async def _fetch_patent_sections(
         if cached is not None:
             result["family"] = cached
             return
-        async with sem:
-            family = await epo.get_family(doc)
+        family = await epo.get_family(doc)
         await cache.set_patent_family(patent_id, family)
         result["family"] = family
 
@@ -373,8 +369,7 @@ async def _fetch_patent_sections(
         if cached is not None:
             result["legal"] = cached
             return
-        async with sem:
-            legal = await epo.get_legal(doc)
+        legal = await epo.get_legal(doc)
         await cache.set_patent_legal(patent_id, legal)
         result["legal"] = legal
 
@@ -387,9 +382,12 @@ async def _fetch_patent_sections(
     }
 
     fetchers = [fetcher_map[s]() for s in sections if s in fetcher_map]
+    # Always probe biblio for not-found detection, even when not requested.
+    if "biblio" not in sections:
+        fetchers.append(_fetch_biblio())
     await _asyncio.gather(*fetchers)
 
-    # Detect not-found from biblio fetch
+    # Detect not-found from biblio probe
     if result.pop("_not_found", False):
         return json.dumps(
             {
@@ -400,6 +398,10 @@ async def _fetch_patent_sections(
                 ),
             }
         )
+
+    # Remove biblio if it was only fetched as a probe for not-found detection
+    if "biblio" not in sections:
+        result.pop("biblio", None)
 
     # Note any sections not yet available (e.g. citations)
     unavailable = [s for s in sections if s not in _AVAILABLE_SECTIONS]

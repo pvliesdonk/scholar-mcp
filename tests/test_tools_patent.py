@@ -576,6 +576,42 @@ async def test_get_patent_empty_biblio_returns_error(
     assert cached is None
 
 
+async def test_get_patent_not_found_without_biblio_section(
+    bundle: ServiceBundle,
+) -> None:
+    """get_patent returns not-found even when only non-biblio sections are requested."""
+    empty_biblio = {
+        "title": "",
+        "abstract": "",
+        "applicants": [],
+        "inventors": [],
+        "publication_number": "",
+        "publication_date": "",
+        "filing_date": "",
+        "priority_date": "",
+        "family_id": "",
+        "classifications": [],
+        "url": "",
+    }
+    epo = _make_epo_client(biblio_result=empty_biblio)
+    bundle.epo = epo
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_patent_tools(app)
+
+    async with Client(app) as client:
+        result = await client.call_tool(
+            "get_patent",
+            {"patent_number": "EP1234567A1", "sections": ["claims"]},
+        )
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "patent_not_found"
+
+
 async def test_get_patent_rate_limited_queues(
     bundle: ServiceBundle,
 ) -> None:

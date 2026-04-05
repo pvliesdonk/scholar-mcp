@@ -273,14 +273,17 @@ def parse_claims_xml(xml_data: bytes) -> str:
     if doc is None:
         return ""
 
-    # Prefer English claims
+    # Prefer English claims; fall back to first available language
     claims_el = None
+    fallback = None
     for c in doc.findall(f"{{{_EXCH}}}claims"):
         if c.get("lang", "") == "en":
             claims_el = c
             break
-        if claims_el is None:
-            claims_el = c  # fallback to first available
+        if fallback is None:
+            fallback = c
+    if claims_el is None:
+        claims_el = fallback
 
     if claims_el is None:
         return ""
@@ -308,14 +311,17 @@ def parse_description_xml(xml_data: bytes) -> str:
     if doc is None:
         return ""
 
-    # Prefer English description
+    # Prefer English description; fall back to first available language
     desc_el = None
+    fallback = None
     for d in doc.findall(f"{{{_EXCH}}}description"):
         if d.get("lang", "") == "en":
             desc_el = d
             break
-        if desc_el is None:
-            desc_el = d
+        if fallback is None:
+            fallback = d
+    if desc_el is None:
+        desc_el = fallback
 
     if desc_el is None:
         return ""
