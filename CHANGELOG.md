@@ -2,6 +2,86 @@
 
 <!-- version list -->
 
+## v1.4.0 (2026-04-05)
+
+### Bug Fixes
+
+- Address Gemini review feedback on citation generation
+  ([`d4d48f4`](https://github.com/pvliesdonk/scholar-mcp/commit/d4d48f41d04fa224b31dddb3fa9f22aafef6d23e))
+
+- Address PR #38 review feedback (suffix ordering, URL escaping, archivePrefix casing, parameter
+  rename)
+  ([`74997f9`](https://github.com/pvliesdonk/scholar-mcp/commit/74997f9b74084392c0943ed2b9e3ac1f5f386458))
+
+- Address PR review — max_nodes early-exit, warning test, comment
+  ([`954a1d1`](https://github.com/pvliesdonk/scholar-mcp/commit/954a1d1ed86c63c20bfe25f18d22de07858e1e81))
+
+- Address PR review — pagination, metadata stripping, null guard
+  ([`dff1b8d`](https://github.com/pvliesdonk/scholar-mcp/commit/dff1b8d88f71b41cca69a8890268a11a9531e475))
+
+- Address review feedback for BibTeX formatter
+  ([`74200eb`](https://github.com/pvliesdonk/scholar-mcp/commit/74200eb768a993e7d9fffb0cd819c88792f9e9db))
+
+- Address review feedback for citation formatter helpers
+  ([`747dfdc`](https://github.com/pvliesdonk/scholar-mcp/commit/747dfdc30098b5e419e09388e26cf7ad0b87ff64))
+
+- Address review feedback for citation tool
+  ([`2079f9e`](https://github.com/pvliesdonk/scholar-mcp/commit/2079f9e04a58d6759462b0e115242793e7fd9aae))
+
+- Address review feedback for name parser
+  ([`a20f723`](https://github.com/pvliesdonk/scholar-mcp/commit/a20f72386556a93272232c686d6414e09f1718cc))
+
+- Bound concurrent OpenAlex enrichment with semaphore
+  ([`91341b5`](https://github.com/pvliesdonk/scholar-mcp/commit/91341b56499f5bc116b0177248d487eb638ba54c))
+
+- Handle null S2 data and add client-side min_citations filter to get_citations
+  ([`b98c597`](https://github.com/pvliesdonk/scholar-mcp/commit/b98c59745356ad70cde3c630e5593acbb0debf68))
+
+- Paginate S2 citations when min_citations filter is active
+  ([`63614a3`](https://github.com/pvliesdonk/scholar-mcp/commit/63614a3f696ef9644b8b73ce6f7bb66aee88edaf))
+
+### Chores
+
+- Update server.json and uv.lock to v1.3.0 [skip ci]
+  ([`e997ab2`](https://github.com/pvliesdonk/scholar-mcp/commit/e997ab2c6ab69169fe8ba247d591ce23cecb698a))
+
+### Code Style
+
+- Fix ruff formatting in test_tools_graph.py
+  ([`166269b`](https://github.com/pvliesdonk/scholar-mcp/commit/166269b5b2fc12809055c9c8e0dbc249c73f0c70))
+
+### Documentation
+
+- Add generate_citations tool documentation
+  ([`f26e924`](https://github.com/pvliesdonk/scholar-mcp/commit/f26e924e3249aa64477981c345d49c7d099b49f9))
+
+- Add high-citation seed paper advisory to graph tool docstrings
+  ([`36a85cb`](https://github.com/pvliesdonk/scholar-mcp/commit/36a85cb9ebd8806563bb1c4eaf079297415e9442))
+
+- Fix parameter name in generate_citations docs (format -> citation_format)
+  ([`4ad1481`](https://github.com/pvliesdonk/scholar-mcp/commit/4ad1481519cc4aeea12be6b4d3dbd7bc3fbc5d3c))
+
+### Features
+
+- Add author name parser for citation formatting
+  ([`b232200`](https://github.com/pvliesdonk/scholar-mcp/commit/b2322007d461a1e6e8afb9c8a2d2dd6f6fcbfafa))
+
+- Add BibTeX citation formatter
+  ([`4954695`](https://github.com/pvliesdonk/scholar-mcp/commit/495469586940d99473b32ffb54e71047cbbb1bca))
+
+- Add BibTeX key generation, type inference, and escaping
+  ([`b34c63b`](https://github.com/pvliesdonk/scholar-mcp/commit/b34c63b9c9c24e46701ee8fec0623cac4fe324e7))
+
+- Add CSL-JSON citation formatter
+  ([`96998ef`](https://github.com/pvliesdonk/scholar-mcp/commit/96998efb74e996508b82156f4af00a80a3a03e4b))
+
+- Add generate_citations MCP tool
+  ([`00adb81`](https://github.com/pvliesdonk/scholar-mcp/commit/00adb8192764e0ed7e199a3167e663891e2b227d))
+
+- Add RIS citation formatter
+  ([`55f5c0b`](https://github.com/pvliesdonk/scholar-mcp/commit/55f5c0bdc282d23ee99863ed8866020c33a19f2d))
+
+
 ## v1.3.0 (2026-04-05)
 
 ### Bug Fixes

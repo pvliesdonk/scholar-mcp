@@ -1,6 +1,6 @@
 [project]
 name = "pvliesdonk-scholar-mcp"
-version = "1.3.0"
+version = "1.4.0"
 description = "FastMCP server for Semantic Scholar with OpenAlex enrichment and docling PDF conversion"
 readme = "README.md"
 license = "MIT"
