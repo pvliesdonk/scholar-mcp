@@ -279,24 +279,21 @@ Search for patents across 100+ patent offices via the EPO Open Patent Services (
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `query` | string | *(required)* | Patent search query (CQL/Lucene syntax supported) |
+| `query` | string | *(required)* | Natural language or keyword search query |
+| `cpc_classification` | string | -- | CPC classification code filter (e.g. `"H01M10/00"`) |
+| `applicant` | string | -- | Applicant (assignee) name filter |
+| `inventor` | string | -- | Inventor name filter |
+| `date_from` | string | -- | Earliest date (`YYYY-MM-DD`) |
+| `date_to` | string | -- | Latest date (`YYYY-MM-DD`) |
+| `date_type` | string | `"publication"` | Date field: `publication`, `filing`, or `priority` |
+| `jurisdiction` | string | -- | Country code filter (e.g. `EP`, `US`, `WO`) |
 | `limit` | int | `10` | Results per page (max 100) |
 | `offset` | int | `0` | Pagination offset |
 
-**Returns:** `{"data": [...], "total": N}` where each item contains bibliographic metadata for a matching patent.
-
-**Output fields per result:**
-
-- `patent_number` -- EPO-format publication number (e.g. `EP1234567A1`)
-- `title` -- Patent title
-- `applicants` -- List of applicant names
-- `inventors` -- List of inventor names
-- `filing_date` -- Filing date (ISO 8601)
-- `publication_date` -- Publication date (ISO 8601)
-- `abstract` -- Patent abstract text
+**Returns:** `{"total_count": N, "references": [...]}` where each reference has `country`, `number`, and `kind` fields.
 
 !!! tip "Query syntax"
-    EPO OPS supports CQL syntax for fielded queries. For example: `ti="machine learning" AND pa="Google"` searches for patents with "machine learning" in the title filed by Google. Plain keyword queries are also accepted.
+    The tool translates parameters into EPO CQL internally. The `query` parameter maps to title+abstract search. Use the filter parameters for structured queries — they are properly escaped and quoted.
 
 ---
 
@@ -306,36 +303,47 @@ Fetch detailed information for a single patent by its publication number.
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `patent_number` | string | *(required)* | Patent publication number (e.g. `EP1234567A1`, `US10000000B2`) |
+| `patent_number` | string | *(required)* | Patent number in any format (e.g. `EP1234567A1`, `WO2024/123456`, `US11,234,567B2`) |
 | `sections` | list[string] | `["biblio"]` | Sections to retrieve |
 
 **Available sections:**
 
-| Section | Description | Phase 1 |
+| Section | Description | Status |
 |---|---|---|
-| `biblio` | Bibliographic metadata (title, applicants, inventors, dates, abstract) | Available |
-| `claims` | Patent claims text | Coming soon |
-| `description` | Full patent description | Coming soon |
-| `family` | Patent family members across jurisdictions | Coming soon |
-| `legal` | Legal status events (grants, assignments, expirations) | Coming soon |
-| `citations` | Patent citations (prior art references) | Coming soon |
+| `biblio` | Bibliographic metadata (title, applicants, inventors, dates, classifications, abstract) | Available |
+| `claims` | Patent claims text (English preferred) | Available |
+| `description` | Full patent description text (English preferred) | Available |
+| `family` | Patent family members across jurisdictions (country, number, kind, date) | Available |
+| `legal` | Legal status events (date, code, description) | Available |
+| `citations` | Patent and non-patent literature citations | Coming in Phase 3 |
 
-!!! note "Phase 1 scope"
-    Only the `biblio` section is available in Phase 1. Requesting other sections will return a not-yet-available notice. Full section support is planned for a future release.
+Sections are fetched concurrently where possible (cache lookups run in parallel; EPO API calls are serialised by the client). Each section is cached independently with appropriate TTLs.
 
 **Returns:** A JSON object with keys matching the requested sections:
 
 ```json
 {
-  "patent_number": "EP1234567A1",
+  "patent_number": "EP.1234567.A1",
   "biblio": {
     "title": "...",
+    "abstract": "...",
     "applicants": ["..."],
     "inventors": ["..."],
-    "filing_date": "2020-01-15",
-    "publication_date": "2021-07-21",
-    "abstract": "..."
-  }
+    "publication_number": "EP.1234567.A1",
+    "publication_date": "2020-01-15",
+    "filing_date": "2019-06-01",
+    "priority_date": "2019-01-15",
+    "family_id": "12345678",
+    "classifications": ["H04L29/06"],
+    "url": "https://worldwide.espacenet.com/..."
+  },
+  "claims": "1. A method for...\n\n2. The method of claim 1...",
+  "family": [
+    {"country": "US", "number": "11234567", "kind": "B2", "date": "2021-03-01"}
+  ],
+  "legal": [
+    {"date": "2019-05-01", "code": "APPLICATION", "description": "Application filed"}
+  ]
 }
 ```
 

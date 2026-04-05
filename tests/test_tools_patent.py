@@ -13,7 +13,11 @@ from fastmcp.client import Client
 
 from scholar_mcp._epo_client import EpoClient, EpoRateLimitedError
 from scholar_mcp._server_deps import ServiceBundle
-from scholar_mcp._tools_patent import _build_cql, register_patent_tools
+from scholar_mcp._tools_patent import (
+    _build_cql,
+    _fetch_patent_sections,
+    register_patent_tools,
+)
 
 # ---------------------------------------------------------------------------
 # Inline fixtures
@@ -171,6 +175,10 @@ def _make_epo_client(
     *,
     search_result: dict | None = None,
     biblio_result: dict | None = None,
+    claims_result: str = "1. A method for testing.",
+    description_result: str = "Test description text.",
+    family_result: list[dict[str, str]] | None = None,
+    legal_result: list[dict[str, str]] | None = None,
     raise_on_search: Exception | None = None,
     raise_on_biblio: Exception | None = None,
 ) -> EpoClient:
@@ -185,6 +193,16 @@ def _make_epo_client(
         client.get_biblio = AsyncMock(side_effect=raise_on_biblio)
     else:
         client.get_biblio = AsyncMock(return_value=biblio_result or _BIBLIO_RESULT)
+    client.get_claims = AsyncMock(return_value=claims_result)
+    client.get_description = AsyncMock(return_value=description_result)
+    client.get_family = AsyncMock(
+        return_value=family_result
+        or [{"country": "EP", "number": "1234567", "kind": "A1", "date": "2020-01-15"}]
+    )
+    client.get_legal = AsyncMock(
+        return_value=legal_result
+        or [{"date": "2020-01-15", "code": "PUB", "description": "Published"}]
+    )
     return client
 
 
@@ -477,10 +495,10 @@ async def test_get_patent_default_sections_biblio_only(
     assert "description" not in data
 
 
-async def test_get_patent_unknown_sections_returns_notice(
+async def test_get_patent_with_claims_section(
     mcp_with_epo: FastMCP,
 ) -> None:
-    """Phase 1: non-biblio sections produce a notice in the result."""
+    """get_patent with sections=['biblio', 'claims'] returns both."""
     async with Client(mcp_with_epo) as client:
         result = await client.call_tool(
             "get_patent",
@@ -488,25 +506,37 @@ async def test_get_patent_unknown_sections_returns_notice(
         )
     data = json.loads(result.content[0].text)
     assert "biblio" in data
-    assert "claims" not in data
-    assert "notice" in data
-    assert "claims" in data["notice"]
+    assert "claims" in data
+    assert "method for testing" in data["claims"]
 
 
-async def test_get_patent_only_unavailable_sections_returns_notice(
+async def test_get_patent_claims_only(
     mcp_with_epo: FastMCP,
 ) -> None:
-    """Phase 1: requesting only non-biblio sections returns notice without biblio."""
+    """get_patent with sections=['claims'] returns claims without biblio."""
     async with Client(mcp_with_epo) as client:
         result = await client.call_tool(
             "get_patent",
-            {"patent_number": "EP1234567A1", "sections": ["claims", "description"]},
+            {"patent_number": "EP1234567A1", "sections": ["claims"]},
         )
     data = json.loads(result.content[0].text)
     assert "biblio" not in data
+    assert "claims" in data
+
+
+async def test_get_patent_citations_section_returns_notice(
+    mcp_with_epo: FastMCP,
+) -> None:
+    """citations section is not yet available and produces a notice."""
+    async with Client(mcp_with_epo) as client:
+        result = await client.call_tool(
+            "get_patent",
+            {"patent_number": "EP1234567A1", "sections": ["biblio", "citations"]},
+        )
+    data = json.loads(result.content[0].text)
+    assert "biblio" in data
     assert "notice" in data
-    assert "claims" in data["notice"]
-    assert "description" in data["notice"]
+    assert "citations" in data["notice"]
 
 
 async def test_get_patent_empty_biblio_returns_error(
@@ -544,6 +574,42 @@ async def test_get_patent_empty_biblio_returns_error(
     # Empty result should not be cached
     cached = await bundle.cache.get_patent("EP.1234567.A1")
     assert cached is None
+
+
+async def test_get_patent_not_found_without_biblio_section(
+    bundle: ServiceBundle,
+) -> None:
+    """get_patent returns not-found even when only non-biblio sections are requested."""
+    empty_biblio = {
+        "title": "",
+        "abstract": "",
+        "applicants": [],
+        "inventors": [],
+        "publication_number": "",
+        "publication_date": "",
+        "filing_date": "",
+        "priority_date": "",
+        "family_id": "",
+        "classifications": [],
+        "url": "",
+    }
+    epo = _make_epo_client(biblio_result=empty_biblio)
+    bundle.epo = epo
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_patent_tools(app)
+
+    async with Client(app) as client:
+        result = await client.call_tool(
+            "get_patent",
+            {"patent_number": "EP1234567A1", "sections": ["claims"]},
+        )
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "patent_not_found"
 
 
 async def test_get_patent_rate_limited_queues(
@@ -628,3 +694,95 @@ async def test_search_patents_no_epo_client_returns_error(
         result = await client.call_tool("search_patents", {"query": "test"})
     data = json.loads(result.content[0].text)
     assert data["error"] == "epo_not_configured"
+
+
+# ---------------------------------------------------------------------------
+# _fetch_patent_sections unit tests
+# ---------------------------------------------------------------------------
+
+
+async def test_fetch_all_sections(bundle: ServiceBundle) -> None:
+    """All five sections are fetched concurrently and returned."""
+    from scholar_mcp._patent_numbers import DocdbNumber
+
+    epo = _make_epo_client()
+    doc = DocdbNumber("EP", "1234567", "A1")
+    result_json = await _fetch_patent_sections(
+        doc=doc,
+        sections=["biblio", "claims", "description", "family", "legal"],
+        epo=epo,
+        cache=bundle.cache,
+    )
+    result = json.loads(result_json)
+    assert result["patent_number"] == "EP.1234567.A1"
+    assert result["biblio"]["title"] == "Test Patent"
+    assert "method for testing" in result["claims"]
+    assert "Test description" in result["description"]
+    assert len(result["family"]) == 1
+    assert len(result["legal"]) == 1
+
+
+async def test_fetch_sections_uses_cache(bundle: ServiceBundle) -> None:
+    """Cached sections are returned without calling EPO API."""
+    from scholar_mcp._patent_numbers import DocdbNumber
+
+    epo = _make_epo_client()
+    await bundle.cache.set_patent_claims("EP.1234567.A1", "Cached claims")
+    doc = DocdbNumber("EP", "1234567", "A1")
+    result_json = await _fetch_patent_sections(
+        doc=doc,
+        sections=["claims"],
+        epo=epo,
+        cache=bundle.cache,
+    )
+    result = json.loads(result_json)
+    assert result["claims"] == "Cached claims"
+    epo.get_claims.assert_not_called()  # type: ignore[union-attr]
+
+
+async def test_fetch_sections_caches_results(bundle: ServiceBundle) -> None:
+    """Fetched sections are stored in cache."""
+    from scholar_mcp._patent_numbers import DocdbNumber
+
+    epo = _make_epo_client()
+    doc = DocdbNumber("EP", "1234567", "A1")
+    await _fetch_patent_sections(
+        doc=doc,
+        sections=["claims", "description", "family", "legal"],
+        epo=epo,
+        cache=bundle.cache,
+    )
+    assert await bundle.cache.get_patent_claims("EP.1234567.A1") is not None
+    assert await bundle.cache.get_patent_description("EP.1234567.A1") is not None
+    assert await bundle.cache.get_patent_family("EP.1234567.A1") is not None
+    assert await bundle.cache.get_patent_legal("EP.1234567.A1") is not None
+
+
+async def test_get_patent_all_sections_via_tool(
+    bundle: ServiceBundle,
+) -> None:
+    """get_patent tool returns all five sections via MCP client."""
+    epo = _make_epo_client()
+    bundle.epo = epo
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_patent_tools(app)
+
+    async with Client(app) as client:
+        result = await client.call_tool(
+            "get_patent",
+            {
+                "patent_number": "EP1234567A1",
+                "sections": ["biblio", "claims", "description", "family", "legal"],
+            },
+        )
+    data = json.loads(result.content[0].text)
+    assert "biblio" in data
+    assert "claims" in data
+    assert "description" in data
+    assert "family" in data
+    assert "legal" in data

@@ -9,7 +9,14 @@ from typing import TYPE_CHECKING, Any
 import epo_ops
 import epo_ops.models
 
-from scholar_mcp._epo_xml import parse_biblio_xml, parse_search_xml
+from scholar_mcp._epo_xml import (
+    parse_biblio_xml,
+    parse_claims_xml,
+    parse_description_xml,
+    parse_family_xml,
+    parse_legal_xml,
+    parse_search_xml,
+)
 from scholar_mcp._rate_limiter import RateLimitedError
 
 if TYPE_CHECKING:
@@ -160,6 +167,96 @@ class EpoClient:
             )
         self._check_throttle(response)
         return parse_biblio_xml(response.content)
+
+    async def get_claims(self, doc: DocdbNumber) -> str:
+        """Fetch claims text for a patent.
+
+        Args:
+            doc: Patent number in DOCDB format.
+
+        Returns:
+            Claims text as a single string (see :func:`parse_claims_xml`).
+
+        Raises:
+            EpoRateLimitedError: When the EPO traffic light is not green.
+        """
+        inp = self._to_docdb_input(doc)
+        async with self._lock:
+            response = await asyncio.to_thread(
+                self._client.published_data,
+                "publication",
+                inp,
+                endpoint="claims",
+            )
+        self._check_throttle(response)
+        return parse_claims_xml(response.content)
+
+    async def get_description(self, doc: DocdbNumber) -> str:
+        """Fetch description text for a patent.
+
+        Args:
+            doc: Patent number in DOCDB format.
+
+        Returns:
+            Description text as a single string (see :func:`parse_description_xml`).
+
+        Raises:
+            EpoRateLimitedError: When the EPO traffic light is not green.
+        """
+        inp = self._to_docdb_input(doc)
+        async with self._lock:
+            response = await asyncio.to_thread(
+                self._client.published_data,
+                "publication",
+                inp,
+                endpoint="description",
+            )
+        self._check_throttle(response)
+        return parse_description_xml(response.content)
+
+    async def get_family(self, doc: DocdbNumber) -> list[dict[str, str]]:
+        """Fetch patent family members.
+
+        Args:
+            doc: Patent number in DOCDB format.
+
+        Returns:
+            List of family member dicts (see :func:`parse_family_xml`).
+
+        Raises:
+            EpoRateLimitedError: When the EPO traffic light is not green.
+        """
+        inp = self._to_docdb_input(doc)
+        async with self._lock:
+            response = await asyncio.to_thread(
+                self._client.family,
+                "publication",
+                inp,
+            )
+        self._check_throttle(response)
+        return parse_family_xml(response.content)
+
+    async def get_legal(self, doc: DocdbNumber) -> list[dict[str, str]]:
+        """Fetch legal status events for a patent.
+
+        Args:
+            doc: Patent number in DOCDB format.
+
+        Returns:
+            List of legal event dicts (see :func:`parse_legal_xml`).
+
+        Raises:
+            EpoRateLimitedError: When the EPO traffic light is not green.
+        """
+        inp = self._to_docdb_input(doc)
+        async with self._lock:
+            response = await asyncio.to_thread(
+                self._client.legal,
+                "publication",
+                inp,
+            )
+        self._check_throttle(response)
+        return parse_legal_xml(response.content)
 
     async def aclose(self) -> None:
         """No-op cleanup.

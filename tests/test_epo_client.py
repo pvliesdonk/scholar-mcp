@@ -47,6 +47,65 @@ _SEARCH_XML = b"""<?xml version="1.0" encoding="UTF-8"?>
   </ops:biblio-search>
 </ops:world-patent-data>"""
 
+_CLAIMS_RESPONSE_XML = b"""\
+<?xml version="1.0" encoding="UTF-8"?>
+<ops:world-patent-data xmlns:ops="http://ops.epo.org"
+    xmlns="http://www.epo.org/exchange">
+  <exchange-documents>
+    <exchange-document country="EP" doc-number="1234567" kind="A1">
+      <claims lang="en">
+        <claim><claim-text>1. A method for testing.</claim-text></claim>
+      </claims>
+    </exchange-document>
+  </exchange-documents>
+</ops:world-patent-data>"""
+
+_DESCRIPTION_RESPONSE_XML = b"""\
+<?xml version="1.0" encoding="UTF-8"?>
+<ops:world-patent-data xmlns:ops="http://ops.epo.org"
+    xmlns="http://www.epo.org/exchange">
+  <exchange-documents>
+    <exchange-document country="EP" doc-number="1234567" kind="A1">
+      <description lang="en">
+        <p num="0001">Test description.</p>
+      </description>
+    </exchange-document>
+  </exchange-documents>
+</ops:world-patent-data>"""
+
+_FAMILY_RESPONSE_XML = b"""\
+<?xml version="1.0" encoding="UTF-8"?>
+<ops:world-patent-data xmlns:ops="http://ops.epo.org"
+    xmlns="http://www.epo.org/exchange">
+  <ops:patent-family>
+    <ops:family-member family-id="54321">
+      <publication-reference xmlns="http://www.epo.org/exchange">
+        <document-id document-id-type="docdb">
+          <country>EP</country><doc-number>1234567</doc-number>
+          <kind>A1</kind><date>20200115</date>
+        </document-id>
+      </publication-reference>
+    </ops:family-member>
+  </ops:patent-family>
+</ops:world-patent-data>"""
+
+_LEGAL_RESPONSE_XML = b"""\
+<?xml version="1.0" encoding="UTF-8"?>
+<ops:world-patent-data xmlns:ops="http://ops.epo.org"
+    xmlns="http://www.epo.org/exchange">
+  <ops:register-documents>
+    <ops:register-document country="EP" doc-number="1234567" kind="A1">
+      <ops:legal>
+        <ops:legal-event>
+          <ops:event-date><ops:date>20200115</ops:date></ops:event-date>
+          <ops:event-code>PUB</ops:event-code>
+          <ops:event-text>Published</ops:event-text>
+        </ops:legal-event>
+      </ops:legal>
+    </ops:register-document>
+  </ops:register-documents>
+</ops:world-patent-data>"""
+
 
 # ---------------------------------------------------------------------------
 # Test helper
@@ -306,6 +365,126 @@ def test_epo_rate_limited_error_stores_color() -> None:
     err = EpoRateLimitedError("yellow")
     assert err.color == "yellow"
     assert "yellow" in str(err)
+
+
+# ---------------------------------------------------------------------------
+# get_claims() tests
+# ---------------------------------------------------------------------------
+
+
+async def test_get_claims_returns_text(
+    epo_client: EpoClient,
+    mock_ops_client: MagicMock,
+) -> None:
+    """get_claims() returns parsed claims text."""
+    mock_ops_client.published_data.return_value = _mock_response(_CLAIMS_RESPONSE_XML)
+    doc = DocdbNumber(country="EP", number="1234567", kind="A1")
+    result = await epo_client.get_claims(doc)
+    assert "method for testing" in result
+
+
+async def test_get_claims_calls_with_claims_endpoint(
+    epo_client: EpoClient,
+    mock_ops_client: MagicMock,
+) -> None:
+    """get_claims() passes endpoint='claims' to published_data."""
+    mock_ops_client.published_data.return_value = _mock_response(_CLAIMS_RESPONSE_XML)
+    doc = DocdbNumber(country="EP", number="1234567", kind="A1")
+    await epo_client.get_claims(doc)
+    call_args = mock_ops_client.published_data.call_args
+    assert call_args.kwargs.get("endpoint") == "claims"
+
+
+# ---------------------------------------------------------------------------
+# get_description() tests
+# ---------------------------------------------------------------------------
+
+
+async def test_get_description_returns_text(
+    epo_client: EpoClient,
+    mock_ops_client: MagicMock,
+) -> None:
+    """get_description() returns parsed description text."""
+    mock_ops_client.published_data.return_value = _mock_response(
+        _DESCRIPTION_RESPONSE_XML
+    )
+    doc = DocdbNumber(country="EP", number="1234567", kind="A1")
+    result = await epo_client.get_description(doc)
+    assert "Test description" in result
+
+
+async def test_get_description_calls_with_description_endpoint(
+    epo_client: EpoClient,
+    mock_ops_client: MagicMock,
+) -> None:
+    """get_description() passes endpoint='description' to published_data."""
+    mock_ops_client.published_data.return_value = _mock_response(
+        _DESCRIPTION_RESPONSE_XML
+    )
+    doc = DocdbNumber(country="EP", number="1234567", kind="A1")
+    await epo_client.get_description(doc)
+    call_args = mock_ops_client.published_data.call_args
+    assert call_args.kwargs.get("endpoint") == "description"
+
+
+# ---------------------------------------------------------------------------
+# get_family() tests
+# ---------------------------------------------------------------------------
+
+
+async def test_get_family_returns_members(
+    epo_client: EpoClient,
+    mock_ops_client: MagicMock,
+) -> None:
+    """get_family() returns parsed family member list."""
+    mock_ops_client.family.return_value = _mock_response(_FAMILY_RESPONSE_XML)
+    doc = DocdbNumber(country="EP", number="1234567", kind="A1")
+    result = await epo_client.get_family(doc)
+    assert len(result) == 1
+    assert result[0]["country"] == "EP"
+
+
+async def test_get_family_calls_family_method(
+    epo_client: EpoClient,
+    mock_ops_client: MagicMock,
+) -> None:
+    """get_family() calls client.family with 'publication' and Docdb input."""
+    mock_ops_client.family.return_value = _mock_response(_FAMILY_RESPONSE_XML)
+    doc = DocdbNumber(country="EP", number="1234567", kind="A1")
+    await epo_client.get_family(doc)
+    mock_ops_client.family.assert_called_once()
+    call_args = mock_ops_client.family.call_args
+    assert call_args.args[0] == "publication"
+
+
+# ---------------------------------------------------------------------------
+# get_legal() tests
+# ---------------------------------------------------------------------------
+
+
+async def test_get_legal_returns_events(
+    epo_client: EpoClient,
+    mock_ops_client: MagicMock,
+) -> None:
+    """get_legal() returns parsed legal event list."""
+    mock_ops_client.legal.return_value = _mock_response(_LEGAL_RESPONSE_XML)
+    doc = DocdbNumber(country="EP", number="1234567", kind="A1")
+    result = await epo_client.get_legal(doc)
+    assert len(result) == 1
+    assert result[0]["code"] == "PUB"
+
+
+async def test_get_legal_calls_legal_method(
+    epo_client: EpoClient,
+    mock_ops_client: MagicMock,
+) -> None:
+    """get_legal() calls client.legal with 'publication' and Docdb input."""
+    mock_ops_client.legal.return_value = _mock_response(_LEGAL_RESPONSE_XML)
+    doc = DocdbNumber(country="EP", number="1234567", kind="A1")
+    await epo_client.get_legal(doc)
+    mock_ops_client.legal.assert_called_once()
+    call_args = mock_ops_client.legal.call_args
+    assert call_args.args[0] == "publication"
 
 
 # ---------------------------------------------------------------------------

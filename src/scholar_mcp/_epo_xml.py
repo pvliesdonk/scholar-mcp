@@ -1,14 +1,18 @@
 """EPO OPS XML response parsers.
 
 Parses raw XML bytes from the EPO Open Patent Services (OPS) API into plain
-Python dicts. Two endpoints are supported:
+Python dicts.  Supported endpoints:
 
 - ``published-data/biblio`` — bibliographic details for a single patent
 - ``published-data/search`` — search results with publication references
+- ``published-data/claims`` — patent claims text
+- ``published-data/description`` — full patent description text
+- ``family`` — patent family members across jurisdictions
+- ``register`` (legal) — legal status events
 
 The parsers use ``lxml.etree`` with XPath and namespace-aware element
-traversal.  All helper functions are module-private; only the two public
-``parse_*`` functions are part of the module's interface.
+traversal.  All helper functions are module-private; the public
+``parse_*`` functions are the module's interface.
 """
 
 from __future__ import annotations
@@ -257,6 +261,84 @@ def parse_biblio_xml(xml_bytes: bytes) -> dict[str, Any]:
     }
 
 
+def parse_claims_xml(xml_data: bytes) -> str:
+    """Parse EPO OPS claims response into plain text.
+
+    Prefers English claims. Returns all claim text joined with newlines.
+
+    Args:
+        xml_data: Raw XML bytes from the published-data/claims endpoint.
+
+    Returns:
+        Claims text as a single string, or empty string if unavailable.
+    """
+    root = etree.fromstring(xml_data)
+    doc = root.find(f".//{{{_EXCH}}}exchange-document")
+    if doc is None:
+        return ""
+
+    # Prefer English claims; fall back to first available language
+    claims_el = None
+    fallback = None
+    for c in doc.findall(f"{{{_EXCH}}}claims"):
+        if c.get("lang", "") == "en":
+            claims_el = c
+            break
+        if fallback is None:
+            fallback = c
+    if claims_el is None:
+        claims_el = fallback
+
+    if claims_el is None:
+        return ""
+
+    parts: list[str] = []
+    for claim in claims_el.findall(f"{{{_EXCH}}}claim"):
+        text = etree.tostring(claim, method="text", encoding="unicode").strip()
+        if text:
+            parts.append(text)
+
+    return "\n\n".join(parts)
+
+
+def parse_description_xml(xml_data: bytes) -> str:
+    """Parse EPO OPS description response into plain text.
+
+    Args:
+        xml_data: Raw XML bytes from the published-data/description endpoint.
+
+    Returns:
+        Description text as a single string, or empty string if unavailable.
+    """
+    root = etree.fromstring(xml_data)
+    doc = root.find(f".//{{{_EXCH}}}exchange-document")
+    if doc is None:
+        return ""
+
+    # Prefer English description; fall back to first available language
+    desc_el = None
+    fallback = None
+    for d in doc.findall(f"{{{_EXCH}}}description"):
+        if d.get("lang", "") == "en":
+            desc_el = d
+            break
+        if fallback is None:
+            fallback = d
+    if desc_el is None:
+        desc_el = fallback
+
+    if desc_el is None:
+        return ""
+
+    paragraphs: list[str] = []
+    for p in desc_el.findall(f"{{{_EXCH}}}p"):
+        text = etree.tostring(p, method="text", encoding="unicode").strip()
+        if text:
+            paragraphs.append(text)
+
+    return "\n\n".join(paragraphs)
+
+
 def parse_search_xml(xml_bytes: bytes) -> dict[str, Any]:
     """Parse an EPO OPS search endpoint XML response.
 
@@ -299,6 +381,66 @@ def parse_search_xml(xml_bytes: bytes) -> dict[str, Any]:
                     )
 
     return {"total_count": total_count, "references": references}
+
+
+def parse_family_xml(xml_data: bytes) -> list[dict[str, str]]:
+    """Parse EPO OPS family response into a list of family members.
+
+    Args:
+        xml_data: Raw XML bytes from the family endpoint.
+
+    Returns:
+        List of dicts with ``country``, ``number``, ``kind``, ``date``
+        for each family member.
+    """
+    root = etree.fromstring(xml_data)
+    members: list[dict[str, str]] = []
+
+    for member in root.findall(".//ops:family-member", _NS):
+        pub_ref = member.find(f"{{{_EXCH}}}publication-reference")
+        if pub_ref is None:
+            continue
+        docdb_id = _find_docdb_id(pub_ref)
+        if docdb_id is None:
+            continue
+        members.append(
+            {
+                "country": _text(docdb_id.find(f"{{{_EXCH}}}country")),
+                "number": _text(docdb_id.find(f"{{{_EXCH}}}doc-number")),
+                "kind": _text(docdb_id.find(f"{{{_EXCH}}}kind")),
+                "date": _date_fmt(_text(docdb_id.find(f"{{{_EXCH}}}date"))),
+            }
+        )
+
+    return members
+
+
+def parse_legal_xml(xml_data: bytes) -> list[dict[str, str]]:
+    """Parse EPO OPS legal status response into event list.
+
+    Args:
+        xml_data: Raw XML bytes from the legal endpoint.
+
+    Returns:
+        List of dicts with ``date``, ``code``, ``description`` for each
+        legal event.
+    """
+    root = etree.fromstring(xml_data)
+    events: list[dict[str, str]] = []
+
+    for event in root.findall(".//ops:legal-event", _NS):
+        date_el = event.find("ops:event-date/ops:date", _NS)
+        code_el = event.find("ops:event-code", _NS)
+        text_el = event.find("ops:event-text", _NS)
+        events.append(
+            {
+                "date": _date_fmt(_text(date_el)),
+                "code": _text(code_el),
+                "description": _text(text_el),
+            }
+        )
+
+    return events
 
 
 # ---------------------------------------------------------------------------
