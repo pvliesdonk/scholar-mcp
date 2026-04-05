@@ -79,9 +79,9 @@ def parse_author_name(name: str) -> AuthorName:
         return AuthorName(first="", last=parts[0], prefix="", suffix="")
 
     # Extract suffix from the end (only when at least 2 tokens remain after
-    # removal so there is still a first name and a last name).
+    # removal so there is still a last name).
     suffix = ""
-    if len(parts) >= 3 and parts[-1].lower().rstrip(".") in _SUFFIXES:
+    if len(parts) >= 2 and parts[-1].lower().rstrip(".") in _SUFFIXES:
         suffix = parts.pop()
 
     if len(parts) == 1:

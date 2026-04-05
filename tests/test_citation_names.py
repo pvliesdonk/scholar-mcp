@@ -42,7 +42,11 @@ from scholar_mcp._citation_names import AuthorName, parse_author_name
         ),
         ("", AuthorName(first="", last="", prefix="", suffix="")),
         ("   ", AuthorName(first="", last="", prefix="", suffix="")),
-        ("Henry V", AuthorName(first="Henry", last="V", prefix="", suffix="")),
+        ("Henry V", AuthorName(first="", last="Henry", prefix="", suffix="V")),
+        (
+            "Smith Jr.",
+            AuthorName(first="", last="Smith", prefix="", suffix="Jr."),
+        ),
         (
             "Mary Jane Watson",
             AuthorName(first="Mary Jane", last="Watson", prefix="", suffix=""),

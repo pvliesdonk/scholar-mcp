@@ -10,6 +10,7 @@ from ._citation_names import parse_author_name
 
 # BibTeX special characters that must be escaped.
 _BIBTEX_ESCAPES: dict[str, str] = {
+    "\\": r"\textbackslash{}",
     "&": r"\&",
     "%": r"\%",
     "#": r"\#",
@@ -113,9 +114,14 @@ def generate_bibtex_key(paper: dict[str, Any], seen_keys: set[str]) -> str:
             seen_keys.add(candidate)
             return candidate
 
-    candidate = f"{base}_{len(seen_keys)}"
-    seen_keys.add(candidate)
-    return candidate
+    # Extremely unlikely fallback.
+    i = len(seen_keys)
+    while True:
+        candidate = f"{base}_{i}"
+        if candidate not in seen_keys:
+            seen_keys.add(candidate)
+            return candidate
+        i += 1
 
 
 def infer_entry_type(paper: dict[str, Any]) -> str:

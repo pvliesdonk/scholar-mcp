@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from typing import Any, Literal
@@ -124,8 +125,9 @@ def register_citation_tools(mcp: FastMCP) -> None:
                     errors.append({"identifier": raw_id, "reason": "not found"})
 
             if enrich:
-                for paper in papers:
-                    await _enrich_paper(paper, bundle)
+                await asyncio.gather(
+                    *(_enrich_paper(paper, bundle) for paper in papers)
+                )
 
             if not papers:
                 return json.dumps(
