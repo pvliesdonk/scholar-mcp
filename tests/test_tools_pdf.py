@@ -49,6 +49,7 @@ def test_vlm_skip_reason(
     )
     assert client.vlm_skip_reason(use_vlm) == expected
 
+
 S2_BASE = "https://api.semanticscholar.org/graph/v1"
 DOCLING_BASE = "http://docling:5001"
 

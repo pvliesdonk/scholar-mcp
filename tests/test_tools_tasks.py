@@ -66,9 +66,7 @@ async def test_get_task_result_in_progress_includes_context(
         await asyncio.sleep(10)
         return "{}"
 
-    task_id = bundle.tasks.submit(
-        _slow_coro(), tool="convert_pdf_to_markdown"
-    )
+    task_id = bundle.tasks.submit(_slow_coro(), tool="convert_pdf_to_markdown")
 
     async with Client(mcp) as client:
         result = await client.call_tool("get_task_result", {"task_id": task_id})

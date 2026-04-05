@@ -90,9 +90,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
         try:
             return await _execute(retry=False)
         except RateLimitedError:
-            task_id = bundle.tasks.submit(
-                _execute(retry=True), tool="get_citations"
-            )
+            task_id = bundle.tasks.submit(_execute(retry=True), tool="get_citations")
             return json.dumps(
                 {"queued": True, "task_id": task_id, "tool": "get_citations"}
             )
@@ -143,9 +141,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
         try:
             return await _execute(retry=False)
         except RateLimitedError:
-            task_id = bundle.tasks.submit(
-                _execute(retry=True), tool="get_references"
-            )
+            task_id = bundle.tasks.submit(_execute(retry=True), tool="get_references")
             return json.dumps(
                 {"queued": True, "task_id": task_id, "tool": "get_references"}
             )

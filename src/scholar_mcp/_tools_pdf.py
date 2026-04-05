@@ -209,7 +209,7 @@ def register_pdf_tools(mcp: FastMCP) -> None:
                 "path": str(md_path),
                 "vlm_used": bool(vlm_suffix),
             }
-            skip_reason = bundle.docling.vlm_skip_reason(use_vlm)  # type: ignore[union-attr]
+            skip_reason = bundle.docling.vlm_skip_reason(use_vlm)
             if skip_reason:
                 result["vlm_skip_reason"] = skip_reason
             return json.dumps(result)
