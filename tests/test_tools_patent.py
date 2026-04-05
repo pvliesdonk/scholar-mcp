@@ -26,9 +26,11 @@ _BIBLIO_RESULT = {
     "inventors": [],
     "publication_number": "EP.1234567.A1",
     "publication_date": "2020-01-15",
-    "ipc_classes": [],
-    "cpc_classes": [],
-    "priority_claims": [],
+    "filing_date": "2019-06-01",
+    "priority_date": "2019-01-15",
+    "family_id": "12345678",
+    "classifications": ["H04L29/06"],
+    "url": "https://worldwide.espacenet.com/patent/search/family/12345678/publication/EP1234567A1",
 }
 
 _SEARCH_RESULT = {
@@ -135,6 +137,12 @@ def test_build_cql_strips_dashes_from_dates() -> None:
     assert "-" not in cql.split("pd")[1]
 
 
+def test_build_cql_escapes_quotes() -> None:
+    """User-supplied values containing double quotes are escaped in CQL."""
+    result = _build_cql('solar "cell"')
+    assert '\\"' in result or "'" in result
+
+
 # ---------------------------------------------------------------------------
 # FastMCP fixture helpers
 # ---------------------------------------------------------------------------
@@ -191,9 +199,7 @@ async def test_search_patents_returns_results(
 ) -> None:
     """search_patents returns EPO search results as JSON."""
     async with Client(mcp_with_epo) as client:
-        result = await client.call_tool(
-            "search_patents", {"query": "machine learning"}
-        )
+        result = await client.call_tool("search_patents", {"query": "machine learning"})
     data = json.loads(result.content[0].text)
     assert data["total_count"] == 1
     assert data["references"][0]["country"] == "EP"
@@ -204,8 +210,10 @@ async def test_search_patents_uses_cache(
 ) -> None:
     """search_patents returns cached result without calling EPO API."""
     cql = 'ta="cached query"'
+    # Cache key includes CQL + range (default offset=0, limit=10 → range_begin=1, range_end=10)
+    cache_key = f"{cql}|1-10"
     cached_data = {"total_count": 99, "references": []}
-    await bundle.cache.set_patent_search(cql, cached_data)
+    await bundle.cache.set_patent_search(cache_key, cached_data)
 
     bundle.epo = epo_client
 
@@ -217,13 +225,37 @@ async def test_search_patents_uses_cache(
     register_patent_tools(app)
 
     async with Client(app) as client:
-        result = await client.call_tool(
-            "search_patents", {"query": "cached query"}
-        )
+        result = await client.call_tool("search_patents", {"query": "cached query"})
     data = json.loads(result.content[0].text)
     assert data["total_count"] == 99
     # EPO API should not have been called
     epo_client.search.assert_not_called()  # type: ignore[union-attr]
+
+
+async def test_search_patents_different_offsets_different_cache_entries(
+    bundle: ServiceBundle,
+) -> None:
+    """Different offsets produce distinct cache entries so pages don't collide."""
+    from scholar_mcp._tools_patent import _build_cql
+
+    cql = _build_cql("battery")
+    page1_key = f"{cql}|1-5"
+    page2_key = f"{cql}|6-10"
+    page1_data = {"total_count": 100, "references": [{"page": 1}]}
+    page2_data = {"total_count": 100, "references": [{"page": 2}]}
+
+    await bundle.cache.set_patent_search(page1_key, page1_data)
+    await bundle.cache.set_patent_search(page2_key, page2_data)
+
+    cached1 = await bundle.cache.get_patent_search(page1_key)
+    cached2 = await bundle.cache.get_patent_search(page2_key)
+
+    assert cached1 is not None
+    assert cached2 is not None
+    assert cached1["references"][0]["page"] == 1
+    assert cached2["references"][0]["page"] == 2
+    # They must be independent entries
+    assert cached1 != cached2
 
 
 async def test_search_patents_rate_limited_queues(
@@ -254,9 +286,7 @@ async def test_search_patents_rate_limited_queues(
     register_task_tools(app)
 
     async with Client(app) as client:
-        result = await client.call_tool(
-            "search_patents", {"query": "throttled query"}
-        )
+        result = await client.call_tool("search_patents", {"query": "throttled query"})
         data = json.loads(result.content[0].text)
         assert data["queued"] is True
         assert data["tool"] == "search_patents"
@@ -300,7 +330,9 @@ async def test_search_patents_with_filters(
         )
     # Verify that the CQL passed to the EPO client contains the expected clauses
     call_args = epo_client.search.call_args  # type: ignore[union-attr]
-    cql_used = call_args.args[0] if call_args.args else call_args.kwargs.get("cql_query", "")
+    cql_used = (
+        call_args.args[0] if call_args.args else call_args.kwargs.get("cql_query", "")
+    )
     assert 'ta="battery"' in cql_used
     assert 'pa="Tesla Inc"' in cql_used
     assert 'cpc="H01M10/00"' in cql_used
@@ -339,9 +371,7 @@ async def test_get_patent_returns_biblio(
 ) -> None:
     """get_patent returns bibliographic data as JSON."""
     async with Client(mcp_with_epo) as client:
-        result = await client.call_tool(
-            "get_patent", {"patent_number": "EP1234567A1"}
-        )
+        result = await client.call_tool("get_patent", {"patent_number": "EP1234567A1"})
     data = json.loads(result.content[0].text)
     assert data["patent_number"] == "EP.1234567.A1"
     assert data["biblio"]["title"] == "Test Patent"
@@ -389,9 +419,7 @@ async def test_get_patent_cache_hit_skips_api(
     register_patent_tools(app)
 
     async with Client(app) as client:
-        result = await client.call_tool(
-            "get_patent", {"patent_number": "EP9999999B1"}
-        )
+        result = await client.call_tool("get_patent", {"patent_number": "EP9999999B1"})
     data = json.loads(result.content[0].text)
     assert data["biblio"]["title"] == "Cached Patent"
     epo_client.get_biblio.assert_not_called()  # type: ignore[union-attr]
@@ -402,9 +430,7 @@ async def test_get_patent_invalid_number_returns_error(
 ) -> None:
     """get_patent returns error JSON for an unparseable patent number."""
     async with Client(mcp_with_epo) as client:
-        result = await client.call_tool(
-            "get_patent", {"patent_number": "NOT_A_PATENT"}
-        )
+        result = await client.call_tool("get_patent", {"patent_number": "NOT_A_PATENT"})
     data = json.loads(result.content[0].text)
     assert data["error"] == "invalid_patent_number"
     assert "detail" in data
@@ -424,9 +450,7 @@ async def test_get_patent_default_sections_biblio_only(
     register_patent_tools(app)
 
     async with Client(app) as client:
-        result = await client.call_tool(
-            "get_patent", {"patent_number": "EP1234567A1"}
-        )
+        result = await client.call_tool("get_patent", {"patent_number": "EP1234567A1"})
     data = json.loads(result.content[0].text)
     assert "biblio" in data
     # No other sections in Phase 1
@@ -434,10 +458,10 @@ async def test_get_patent_default_sections_biblio_only(
     assert "description" not in data
 
 
-async def test_get_patent_unknown_sections_silently_ignored(
+async def test_get_patent_unknown_sections_returns_notice(
     mcp_with_epo: FastMCP,
 ) -> None:
-    """Phase 1: non-biblio sections are silently ignored, result has biblio."""
+    """Phase 1: non-biblio sections produce a notice in the result."""
     async with Client(mcp_with_epo) as client:
         result = await client.call_tool(
             "get_patent",
@@ -446,6 +470,61 @@ async def test_get_patent_unknown_sections_silently_ignored(
     data = json.loads(result.content[0].text)
     assert "biblio" in data
     assert "claims" not in data
+    assert "notice" in data
+    assert "claims" in data["notice"]
+
+
+async def test_get_patent_only_unavailable_sections_returns_notice(
+    mcp_with_epo: FastMCP,
+) -> None:
+    """Phase 1: requesting only non-biblio sections returns notice without biblio."""
+    async with Client(mcp_with_epo) as client:
+        result = await client.call_tool(
+            "get_patent",
+            {"patent_number": "EP1234567A1", "sections": ["claims", "description"]},
+        )
+    data = json.loads(result.content[0].text)
+    assert "biblio" not in data
+    assert "notice" in data
+    assert "claims" in data["notice"]
+    assert "description" in data["notice"]
+
+
+async def test_get_patent_empty_biblio_returns_error(
+    bundle: ServiceBundle,
+) -> None:
+    """get_patent returns error JSON when EPO returns empty/minimal biblio."""
+    empty_biblio = {
+        "title": "",
+        "abstract": "",
+        "applicants": [],
+        "inventors": [],
+        "publication_number": "",
+        "publication_date": "",
+        "filing_date": "",
+        "priority_date": "",
+        "family_id": "",
+        "classifications": [],
+        "url": "",
+    }
+    epo = _make_epo_client(biblio_result=empty_biblio)
+    bundle.epo = epo
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_patent_tools(app)
+
+    async with Client(app) as client:
+        result = await client.call_tool("get_patent", {"patent_number": "EP1234567A1"})
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "patent_not_found"
+    assert "detail" in data
+    # Empty result should not be cached
+    cached = await bundle.cache.get_patent("EP.1234567.A1")
+    assert cached is None
 
 
 async def test_get_patent_rate_limited_queues(
@@ -476,9 +555,7 @@ async def test_get_patent_rate_limited_queues(
     register_task_tools(app)
 
     async with Client(app) as client:
-        result = await client.call_tool(
-            "get_patent", {"patent_number": "EP1234567A1"}
-        )
+        result = await client.call_tool("get_patent", {"patent_number": "EP1234567A1"})
         data = json.loads(result.content[0].text)
         assert data["queued"] is True
         assert data["tool"] == "get_patent"
@@ -510,9 +587,7 @@ async def test_get_patent_no_epo_client_returns_error(
     register_patent_tools(app)
 
     async with Client(app) as client:
-        result = await client.call_tool(
-            "get_patent", {"patent_number": "EP1234567A1"}
-        )
+        result = await client.call_tool("get_patent", {"patent_number": "EP1234567A1"})
     data = json.loads(result.content[0].text)
     assert data["error"] == "epo_not_configured"
 
@@ -531,8 +606,6 @@ async def test_search_patents_no_epo_client_returns_error(
     register_patent_tools(app)
 
     async with Client(app) as client:
-        result = await client.call_tool(
-            "search_patents", {"query": "test"}
-        )
+        result = await client.call_tool("search_patents", {"query": "test"})
     data = json.loads(result.content[0].text)
     assert data["error"] == "epo_not_configured"

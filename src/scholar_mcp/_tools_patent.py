@@ -24,6 +24,11 @@ _DATE_FIELDS: dict[str, str] = {
 }
 
 
+def _cql_escape(s: str) -> str:
+    """Escape special characters for EPO CQL double-quoted strings."""
+    return s.replace("\\", "\\\\").replace('"', '\\"')
+
+
 def _build_cql(
     query: str,
     *,
@@ -58,16 +63,16 @@ def _build_cql(
     Returns:
         A CQL expression string ready for the EPO OPS search endpoint.
     """
-    parts: list[str] = [f'ta="{query}"']
+    parts: list[str] = [f'ta="{_cql_escape(query)}"']
 
     if cpc_classification is not None:
-        parts.append(f'cpc="{cpc_classification}"')
+        parts.append(f'cpc="{_cql_escape(cpc_classification)}"')
 
     if applicant is not None:
-        parts.append(f'pa="{applicant}"')
+        parts.append(f'pa="{_cql_escape(applicant)}"')
 
     if inventor is not None:
-        parts.append(f'in="{inventor}"')
+        parts.append(f'in="{_cql_escape(inventor)}"')
 
     if date_from is not None or date_to is not None:
         field = _DATE_FIELDS.get(date_type, "pd")
@@ -166,9 +171,10 @@ def register_patent_tools(mcp: FastMCP) -> None:
         )
         range_begin = offset + 1  # EPO OPS uses 1-based ranges
         range_end = offset + limit
+        cache_key = f"{cql}|{range_begin}-{range_end}"
 
         # Check cache first
-        cached = await bundle.cache.get_patent_search(cql)
+        cached = await bundle.cache.get_patent_search(cache_key)
         if cached is not None:
             logger.debug("patent_search_cache_hit cql=%s", cql)
             return json.dumps(cached)
@@ -179,15 +185,13 @@ def register_patent_tools(mcp: FastMCP) -> None:
                 range_begin=range_begin,
                 range_end=range_end,
             )
-            await bundle.cache.set_patent_search(cql, result)
+            await bundle.cache.set_patent_search(cache_key, result)
             return json.dumps(result)
 
         try:
             return await _execute(retry=False)
         except (RateLimitedError, EpoRateLimitedError):
-            task_id = bundle.tasks.submit(
-                _execute(retry=True), tool="search_patents"
-            )
+            task_id = bundle.tasks.submit(_execute(retry=True), tool="search_patents")
             return json.dumps(
                 {"queued": True, "task_id": task_id, "tool": "search_patents"}
             )
@@ -258,31 +262,56 @@ def register_patent_tools(mcp: FastMCP) -> None:
             )
 
         effective_sections = sections if sections is not None else ["biblio"]
-        result: dict = {"patent_number": doc.docdb}
 
         if "biblio" in effective_sections:
             # Check cache
             cached_biblio = await bundle.cache.get_patent(doc.docdb)
             if cached_biblio is not None:
                 logger.debug("patent_biblio_cache_hit patent_id=%s", doc.docdb)
-                result["biblio"] = cached_biblio
-            else:
-
-                async def _execute(*, retry: bool = True) -> str:
-                    biblio = await bundle.epo.get_biblio(doc)  # type: ignore[union-attr]
-                    await bundle.cache.set_patent(doc.docdb, biblio)
-                    result["biblio"] = biblio
-                    return json.dumps(result)
-
-                try:
-                    return await _execute(retry=False)
-                except (RateLimitedError, EpoRateLimitedError):
-                    task_id = bundle.tasks.submit(
-                        _execute(retry=True), tool="get_patent"
+                result: dict = {"patent_number": doc.docdb, "biblio": cached_biblio}
+                unavailable = [s for s in effective_sections if s != "biblio"]
+                if unavailable:
+                    result["notice"] = (
+                        f"Sections {unavailable} are not yet available. Coming in Phase 2."
                     )
+                return json.dumps(result)
+
+            async def _execute(*, retry: bool = True) -> str:
+                biblio = await bundle.epo.get_biblio(doc)  # type: ignore[union-attr]
+                # Detect empty/not-found biblio before caching
+                if not biblio.get("title") and not biblio.get("applicants"):
                     return json.dumps(
-                        {"queued": True, "task_id": task_id, "tool": "get_patent"}
+                        {
+                            "error": "patent_not_found",
+                            "detail": (
+                                f"Patent {doc.docdb} not found or has no data. "
+                                "Check the number format."
+                            ),
+                        }
                     )
+                await bundle.cache.set_patent(doc.docdb, biblio)
+                # Build result dict entirely inside _execute to avoid outer-scope mutation
+                inner: dict = {"patent_number": doc.docdb, "biblio": biblio}
+                unavailable = [s for s in effective_sections if s != "biblio"]
+                if unavailable:
+                    inner["notice"] = (
+                        f"Sections {unavailable} are not yet available. Coming in Phase 2."
+                    )
+                return json.dumps(inner)
 
-        # Phase 1: silently ignore all other sections
-        return json.dumps(result)
+            try:
+                return await _execute(retry=False)
+            except (RateLimitedError, EpoRateLimitedError):
+                task_id = bundle.tasks.submit(_execute(retry=True), tool="get_patent")
+                return json.dumps(
+                    {"queued": True, "task_id": task_id, "tool": "get_patent"}
+                )
+
+        # No biblio requested — only unavailable sections
+        unavailable = [s for s in effective_sections if s != "biblio"]
+        result_no_biblio: dict = {"patent_number": doc.docdb}
+        if unavailable:
+            result_no_biblio["notice"] = (
+                f"Sections {unavailable} are not yet available. Coming in Phase 2."
+            )
+        return json.dumps(result_no_biblio)
