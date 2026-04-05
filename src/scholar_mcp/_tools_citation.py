@@ -125,9 +125,13 @@ def register_citation_tools(mcp: FastMCP) -> None:
                     errors.append({"identifier": raw_id, "reason": "not found"})
 
             if enrich:
-                await asyncio.gather(
-                    *(_enrich_paper(paper, bundle) for paper in papers)
-                )
+                sem = asyncio.Semaphore(10)
+
+                async def _bounded_enrich(p: dict[str, Any]) -> None:
+                    async with sem:
+                        await _enrich_paper(p, bundle)
+
+                await asyncio.gather(*(_bounded_enrich(p) for p in papers))
 
             if not papers:
                 return json.dumps(
