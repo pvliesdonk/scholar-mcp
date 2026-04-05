@@ -19,7 +19,7 @@ A [FastMCP](https://github.com/jlowin/fastmcp) server providing structured acade
 - **Recommendations** -- paper recommendations from positive (and optional negative) examples via the S2 recommendation API
 - **Citation generation** -- format paper metadata as BibTeX, CSL-JSON, or RIS citations with automatic entry type inference, author name parsing, and OpenAlex venue enrichment
 - **OpenAlex enrichment** -- augment paper metadata with open-access URLs, affiliations, funders, concepts, and OA status
-- **Patent search** -- search and retrieve patents via [EPO Open Patent Services](https://www.epo.org/en/searching-for-patents/data/web-services/ops) covering 100+ patent offices; EPO credentials are optional -- paper search works without them
+- **Patent search & cross-referencing** -- search and retrieve patents via [EPO Open Patent Services](https://www.epo.org/en/searching-for-patents/data/web-services/ops) covering 100+ patent offices, with cited reference extraction, NPL-to-paper resolution via Semantic Scholar, and paper-to-patent citation discovery; EPO credentials are optional -- paper search works without them
 - **PDF conversion** -- download open-access PDFs and convert to Markdown via [docling-serve](https://github.com/DS4SD/docling-serve), with optional VLM enrichment for formulas and figures; automatic fallback to ArXiv, PubMed Central, and Unpaywall when Semantic Scholar has no OA link; direct URL download for PDFs found elsewhere
 - **Intelligent caching** -- SQLite-backed cache with per-table TTLs (30 days for papers/authors, 7 days for citations/references) and identifier aliasing
 - **Authentication** -- bearer token, OIDC (OAuth 2.1), or both simultaneously (multi-auth)
