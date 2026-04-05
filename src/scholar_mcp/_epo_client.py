@@ -99,9 +99,7 @@ class EpoClient:
         parts = header.split()
         color = parts[0].lower() if parts else "green"
         if color == "black":
-            raise RuntimeError(
-                "EPO daily quota exhausted. Please try again tomorrow."
-            )
+            raise RuntimeError("EPO daily quota exhausted. Please try again tomorrow.")
         if color != "green":
             logger.warning("epo_throttle color=%s", color)
             raise EpoRateLimitedError(color)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Literal
+from typing import Any, Literal
 
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
@@ -79,6 +79,10 @@ def _build_cql(
         # Normalise YYYY-MM-DD → YYYYMMDD
         d_from = date_from.replace("-", "") if date_from else None
         d_to = date_to.replace("-", "") if date_to else None
+        if d_from and not d_from.isdigit():
+            raise ValueError(f"Invalid date_from: {date_from!r}")
+        if d_to and not d_to.isdigit():
+            raise ValueError(f"Invalid date_to: {date_to!r}")
         if d_from is not None and d_to is not None:
             parts.append(f"{field} within {d_from},{d_to}")
         elif d_from is not None:
@@ -87,7 +91,7 @@ def _build_cql(
             parts.append(f"{field} <= {d_to}")
 
     if jurisdiction is not None:
-        parts.append(f"pn={jurisdiction}")
+        parts.append(f'pn="{_cql_escape(jurisdiction)}"')
 
     return " AND ".join(parts)
 
@@ -180,6 +184,9 @@ def register_patent_tools(mcp: FastMCP) -> None:
             return json.dumps(cached)
 
         async def _execute(*, retry: bool = True) -> str:
+            # Note: retry flag is accepted for task queue compatibility but
+            # EPO client does not yet have a retry-aware path (unlike S2).
+            # The queued re-attempt still defers work away from the request.
             result = await bundle.epo.search(  # type: ignore[union-attr]
                 cql,
                 range_begin=range_begin,
@@ -268,7 +275,10 @@ def register_patent_tools(mcp: FastMCP) -> None:
             cached_biblio = await bundle.cache.get_patent(doc.docdb)
             if cached_biblio is not None:
                 logger.debug("patent_biblio_cache_hit patent_id=%s", doc.docdb)
-                result: dict = {"patent_number": doc.docdb, "biblio": cached_biblio}
+                result: dict[str, Any] = {
+                    "patent_number": doc.docdb,
+                    "biblio": cached_biblio,
+                }
                 unavailable = [s for s in effective_sections if s != "biblio"]
                 if unavailable:
                     result["notice"] = (
@@ -277,6 +287,8 @@ def register_patent_tools(mcp: FastMCP) -> None:
                 return json.dumps(result)
 
             async def _execute(*, retry: bool = True) -> str:
+                # Note: retry flag accepted for task queue compatibility;
+                # EPO client does not yet have a retry-aware path.
                 biblio = await bundle.epo.get_biblio(doc)  # type: ignore[union-attr]
                 # Detect empty/not-found biblio before caching
                 if not biblio.get("title") and not biblio.get("applicants"):
@@ -291,7 +303,7 @@ def register_patent_tools(mcp: FastMCP) -> None:
                     )
                 await bundle.cache.set_patent(doc.docdb, biblio)
                 # Build result dict entirely inside _execute to avoid outer-scope mutation
-                inner: dict = {"patent_number": doc.docdb, "biblio": biblio}
+                inner: dict[str, Any] = {"patent_number": doc.docdb, "biblio": biblio}
                 unavailable = [s for s in effective_sections if s != "biblio"]
                 if unavailable:
                     inner["notice"] = (
@@ -309,7 +321,7 @@ def register_patent_tools(mcp: FastMCP) -> None:
 
         # No biblio requested — only unavailable sections
         unavailable = [s for s in effective_sections if s != "biblio"]
-        result_no_biblio: dict = {"patent_number": doc.docdb}
+        result_no_biblio: dict[str, Any] = {"patent_number": doc.docdb}
         if unavailable:
             result_no_biblio["notice"] = (
                 f"Sections {unavailable} are not yet available. Coming in Phase 2."

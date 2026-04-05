@@ -73,9 +73,9 @@ def test_build_cql_with_cpc() -> None:
 
 
 def test_build_cql_with_jurisdiction() -> None:
-    """Jurisdiction code is appended as pn= field."""
+    """Jurisdiction code is appended as quoted pn= field."""
     cql = _build_cql("fuel cell", jurisdiction="EP")
-    assert "pn=EP" in cql
+    assert 'pn="EP"' in cql
 
 
 def test_build_cql_date_range_both() -> None:
@@ -127,7 +127,7 @@ def test_build_cql_all_params() -> None:
     assert any('pa="BioTech Inc"' in p for p in parts)
     assert any('in="Alice Smith"' in p for p in parts)
     assert any("pd within" in p for p in parts)
-    assert any("pn=WO" in p for p in parts)
+    assert any('pn="WO"' in p for p in parts)
 
 
 def test_build_cql_strips_dashes_from_dates() -> None:
@@ -141,6 +141,25 @@ def test_build_cql_escapes_quotes() -> None:
     """User-supplied values containing double quotes are escaped in CQL."""
     result = _build_cql('solar "cell"')
     assert '\\"' in result or "'" in result
+
+
+def test_build_cql_jurisdiction_escapes_injection() -> None:
+    """Jurisdiction value is quoted and escaped to prevent CQL injection."""
+    cql = _build_cql("test", jurisdiction='EP OR ti=*')
+    # The injected payload should be inside quotes, not a separate clause
+    assert 'pn="EP OR ti=*"' in cql
+
+
+def test_build_cql_date_from_rejects_non_numeric() -> None:
+    """date_from with non-numeric content raises ValueError."""
+    with pytest.raises(ValueError, match="Invalid date_from"):
+        _build_cql("test", date_from="20200101 OR ti=hack")
+
+
+def test_build_cql_date_to_rejects_non_numeric() -> None:
+    """date_to with non-numeric content raises ValueError."""
+    with pytest.raises(ValueError, match="Invalid date_to"):
+        _build_cql("test", date_to="not-a-date")
 
 
 # ---------------------------------------------------------------------------
@@ -336,7 +355,7 @@ async def test_search_patents_with_filters(
     assert 'ta="battery"' in cql_used
     assert 'pa="Tesla Inc"' in cql_used
     assert 'cpc="H01M10/00"' in cql_used
-    assert "pn=EP" in cql_used
+    assert 'pn="EP"' in cql_used
 
 
 async def test_search_patents_range_from_limit_offset(

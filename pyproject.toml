@@ -134,6 +134,14 @@ no_implicit_optional = true
 module = ["fastmcp", "fastmcp.*"]
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = ["epo_ops", "epo_ops.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["lxml", "lxml.*"]
+ignore_missing_imports = true
+
 [tool.semantic_release]
 version_toml = ["pyproject.toml:project.version"]
 commit_parser = "angular"

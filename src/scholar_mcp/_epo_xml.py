@@ -96,12 +96,14 @@ def _parse_classification(cls_el: etree._Element) -> str:
         CPC code string, or an empty string when required sub-elements are
         missing.
     """
-    get = lambda tag: _text(cls_el.find(f"{{{_EXCH}}}{tag}"))  # noqa: E731
-    section = get("section")
-    cls = get("class")
-    subclass = get("subclass")
-    main_group = get("main-group")
-    subgroup = get("subgroup")
+    def _get(tag: str) -> str:
+        return _text(cls_el.find(f"{{{_EXCH}}}{tag}"))
+
+    section = _get("section")
+    cls = _get("class")
+    subclass = _get("subclass")
+    main_group = _get("main-group")
+    subgroup = _get("subgroup")
     if not (section and cls and subclass and main_group and subgroup):
         return ""
     return f"{section}{cls}{subclass}{main_group}/{subgroup}"
