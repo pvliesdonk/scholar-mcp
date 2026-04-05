@@ -179,6 +179,7 @@ def _make_epo_client(
     description_result: str = "Test description text.",
     family_result: list[dict[str, str]] | None = None,
     legal_result: list[dict[str, str]] | None = None,
+    citations_result: dict | None = None,
     raise_on_search: Exception | None = None,
     raise_on_biblio: Exception | None = None,
 ) -> EpoClient:
@@ -202,6 +203,10 @@ def _make_epo_client(
     client.get_legal = AsyncMock(
         return_value=legal_result
         or [{"date": "2020-01-15", "code": "PUB", "description": "Published"}]
+    )
+    client.get_citations = AsyncMock(
+        return_value=citations_result
+        or {"patent_refs": [], "npl_refs": []}
     )
     return client
 
@@ -524,10 +529,10 @@ async def test_get_patent_claims_only(
     assert "claims" in data
 
 
-async def test_get_patent_citations_section_returns_notice(
+async def test_get_patent_citations_section_works(
     mcp_with_epo: FastMCP,
 ) -> None:
-    """citations section is not yet available and produces a notice."""
+    """citations section is now available and returns citation data."""
     async with Client(mcp_with_epo) as client:
         result = await client.call_tool(
             "get_patent",
@@ -535,8 +540,8 @@ async def test_get_patent_citations_section_returns_notice(
         )
     data = json.loads(result.content[0].text)
     assert "biblio" in data
-    assert "notice" in data
-    assert "citations" in data["notice"]
+    assert "citations" in data
+    assert "notice" not in data
 
 
 async def test_get_patent_empty_biblio_returns_error(
@@ -786,3 +791,83 @@ async def test_get_patent_all_sections_via_tool(
     assert "description" in data
     assert "family" in data
     assert "legal" in data
+
+
+# ---------------------------------------------------------------------------
+# citations section tests
+# ---------------------------------------------------------------------------
+
+
+async def test_get_patent_citations_section(
+    bundle: ServiceBundle,
+) -> None:
+    """get_patent with sections=['citations'] returns citation data."""
+    citations_data = {
+        "patent_refs": [{"country": "US", "number": "9876543", "kind": "B2"}],
+        "npl_refs": [
+            {"raw": "Smith, doi:10.1234/test", "doi": "10.1234/test"},
+            {"raw": "Unknown reference", "doi": None},
+        ],
+    }
+    epo = _make_epo_client(citations_result=citations_data)
+    bundle.epo = epo
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_patent_tools(app)
+
+    async with Client(app) as client:
+        result = await client.call_tool(
+            "get_patent",
+            {"patent_number": "EP1234567A1", "sections": ["citations"]},
+        )
+    data = json.loads(result.content[0].text)
+    assert "citations" in data
+    assert len(data["citations"]["patent_refs"]) == 1
+    assert len(data["citations"]["npl_refs"]) == 2
+    # Without S2 client configured on the bundle's s2 mock, NPL refs have no paper
+    assert data["citations"]["npl_refs"][0]["confidence"] is None
+
+
+async def test_citations_npl_resolution_with_s2(
+    bundle: ServiceBundle,
+) -> None:
+    """NPL references with DOIs are resolved via S2 when available."""
+    citations_data = {
+        "patent_refs": [],
+        "npl_refs": [
+            {"raw": "Smith, doi:10.1234/test", "doi": "10.1234/test"},
+            {"raw": "No DOI here", "doi": None},
+        ],
+    }
+    epo = _make_epo_client(citations_result=citations_data)
+    bundle.epo = epo
+
+    # Mock S2 batch_resolve to return a paper for the DOI
+    bundle.s2.batch_resolve = AsyncMock(  # type: ignore[assignment]
+        return_value=[{"paperId": "abc123", "title": "Smith Paper"}]
+    )
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_patent_tools(app)
+
+    async with Client(app) as client:
+        result = await client.call_tool(
+            "get_patent",
+            {"patent_number": "EP1234567A1", "sections": ["citations"]},
+        )
+    data = json.loads(result.content[0].text)
+    npl = data["citations"]["npl_refs"]
+    # First NPL had a DOI -> resolved with high confidence
+    assert npl[0]["confidence"] == "high"
+    assert npl[0]["paper"]["paperId"] == "abc123"
+    # Second NPL had no DOI -> unresolved
+    assert npl[1]["confidence"] is None
+    assert "paper" not in npl[1]

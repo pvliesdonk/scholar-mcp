@@ -242,7 +242,9 @@ def register_patent_tools(mcp: FastMCP) -> None:
                 ``"EP1234567A1"``, ``"WO2024/123456"``, or ``"US11,234,567B2"``.
             sections: Sections to include in the response. Defaults to
                 ``["biblio"]``. Available sections: biblio, claims,
-                description, family, legal.  Citations reserved for Phase 3.
+                description, family, legal, citations.  When citations
+                is included, NPL references are resolved via Semantic
+                Scholar on a best-effort basis.
             bundle: Injected service bundle.
 
         Returns:
@@ -283,6 +285,7 @@ def register_patent_tools(mcp: FastMCP) -> None:
                 sections=effective_sections,
                 epo=bundle.epo,  # type: ignore[arg-type]
                 cache=bundle.cache,
+                s2=bundle.s2,
             )
 
         try:
@@ -294,8 +297,15 @@ def register_patent_tools(mcp: FastMCP) -> None:
             )
 
 
-# Sections available in Phase 2 (fetched concurrently).
-_AVAILABLE_SECTIONS = {"biblio", "claims", "description", "family", "legal"}
+# All available patent sections.
+_AVAILABLE_SECTIONS = {
+    "biblio",
+    "claims",
+    "description",
+    "family",
+    "legal",
+    "citations",
+}
 
 
 async def _fetch_patent_sections(
@@ -304,20 +314,23 @@ async def _fetch_patent_sections(
     sections: Sequence[str],
     epo: EpoClient,
     cache: Any,
+    s2: Any = None,
 ) -> str:
     """Fetch requested sections for a patent, with caching.
 
     Cache lookups run concurrently via ``asyncio.gather``.  Actual EPO
     API calls are serialised by the ``asyncio.Lock`` inside ``EpoClient``,
-    so no additional concurrency limiting is needed here.  Sections not
-    yet implemented (e.g. ``"citations"``) produce a notice rather than
-    an error.
+    so no additional concurrency limiting is needed here.  When the
+    ``citations`` section is requested, non-patent literature (NPL)
+    references are resolved against Semantic Scholar on a best-effort
+    basis if an S2 client is provided.
 
     Args:
         doc: Normalised DOCDB patent number.
         sections: List of section names to include.
         epo: EPO client instance.
         cache: Cache instance with patent get/set methods.
+        s2: Optional S2 client for NPL resolution.
 
     Returns:
         JSON string with patent_number and requested section data.
@@ -373,12 +386,66 @@ async def _fetch_patent_sections(
         await cache.set_patent_legal(patent_id, legal)
         result["legal"] = legal
 
+    async def _fetch_citations() -> None:
+        citations = await epo.get_citations(doc)
+        patent_refs = citations["patent_refs"]
+        npl_refs = citations["npl_refs"]
+
+        # Resolve NPL references against Semantic Scholar
+        resolved_npl: list[dict[str, Any]] = []
+        if s2 is not None and npl_refs:
+            # Build batch of DOI identifiers
+            doi_indices: list[int] = []
+            doi_ids: list[str] = []
+            for i, npl in enumerate(npl_refs):
+                if npl["doi"]:
+                    doi_indices.append(i)
+                    doi_ids.append(f"DOI:{npl['doi']}")
+
+            # Batch resolve DOIs via S2
+            s2_results: list[dict[str, Any] | None] = [None] * len(doi_ids)
+            if doi_ids:
+                try:
+                    from ._s2_client import FIELD_SETS
+
+                    s2_results = await s2.batch_resolve(
+                        doi_ids, fields=FIELD_SETS["compact"]
+                    )
+                except Exception:
+                    logger.warning("npl_resolution_failed patent=%s", patent_id)
+                    s2_results = [None] * len(doi_ids)
+
+            # Build resolved NPL list
+            s2_map: dict[int, dict[str, Any] | None] = dict(
+                zip(doi_indices, s2_results, strict=True)
+            )
+            for i, npl in enumerate(npl_refs):
+                entry: dict[str, Any] = {"raw": npl["raw"]}
+                s2_paper = s2_map.get(i)
+                if s2_paper is not None:
+                    entry["paper"] = s2_paper
+                    entry["confidence"] = "high"
+                elif npl["doi"]:
+                    # Had DOI but resolution failed
+                    entry["confidence"] = None
+                else:
+                    entry["confidence"] = None
+                resolved_npl.append(entry)
+        else:
+            resolved_npl = [{"raw": n["raw"], "confidence": None} for n in npl_refs]
+
+        result["citations"] = {
+            "patent_refs": patent_refs,
+            "npl_refs": resolved_npl,
+        }
+
     fetcher_map: dict[str, Any] = {
         "biblio": _fetch_biblio,
         "claims": _fetch_claims,
         "description": _fetch_description,
         "family": _fetch_family,
         "legal": _fetch_legal,
+        "citations": _fetch_citations,
     }
 
     fetchers = [fetcher_map[s]() for s in sections if s in fetcher_map]
@@ -402,12 +469,5 @@ async def _fetch_patent_sections(
     # Remove biblio if it was only fetched as a probe for not-found detection
     if "biblio" not in sections:
         result.pop("biblio", None)
-
-    # Note any sections not yet available (e.g. citations)
-    unavailable = [s for s in sections if s not in _AVAILABLE_SECTIONS]
-    if unavailable:
-        result["notice"] = (
-            f"Sections {unavailable} are not yet available. Coming in Phase 3."
-        )
 
     return json.dumps(result)

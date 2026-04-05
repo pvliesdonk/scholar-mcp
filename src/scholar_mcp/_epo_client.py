@@ -11,6 +11,7 @@ import epo_ops.models
 
 from scholar_mcp._epo_xml import (
     parse_biblio_xml,
+    parse_citations_from_biblio,
     parse_claims_xml,
     parse_description_xml,
     parse_family_xml,
@@ -257,6 +258,30 @@ class EpoClient:
             )
         self._check_throttle(response)
         return parse_legal_xml(response.content)
+
+    async def get_citations(self, doc: DocdbNumber) -> dict[str, list[dict[str, Any]]]:
+        """Fetch cited references (patent and NPL) for a patent.
+
+        Args:
+            doc: Patent number in DOCDB format.
+
+        Returns:
+            Dict with ``patent_refs`` and ``npl_refs`` lists
+            (see :func:`parse_citations_from_biblio`).
+
+        Raises:
+            EpoRateLimitedError: When the EPO traffic light is not green.
+        """
+        inp = self._to_docdb_input(doc)
+        async with self._lock:
+            response = await asyncio.to_thread(
+                self._client.published_data,
+                "publication",
+                inp,
+                endpoint="biblio",
+            )
+        self._check_throttle(response)
+        return parse_citations_from_biblio(response.content)
 
     async def aclose(self) -> None:
         """No-op cleanup.
