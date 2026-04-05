@@ -17,6 +17,13 @@ from ._server_deps import ServiceBundle, get_bundle
 
 logger = logging.getLogger(__name__)
 
+# Pagination limits for client-side min_citations filtering.
+# S2 returns citations newest-first; high-citation papers are typically
+# older, so we must paginate deeply to reach them.
+_S2_PAGE_SIZE = 1000
+_MAX_UPSTREAM_SCAN = 10_000  # get_citations tool
+_MAX_PER_NODE_SCAN = 5_000  # get_citation_graph BFS per node
+
 
 def register_graph_tools(mcp: FastMCP) -> None:
     """Register citation graph tools on *mcp*.
@@ -57,8 +64,9 @@ def register_graph_tools(mcp: FastMCP) -> None:
                 Applied client-side (S2 does not support this filter on
                 the citations endpoint).  Papers with unknown citation
                 counts are excluded.  Pagination (``offset``/``limit``)
-                is applied to the filtered results, but the reachable
-                window is capped at ~1 000 upstream results.
+                is applied to the filtered results.  The tool paginates
+                through up to 10 000 upstream results to find qualifying
+                papers.
 
         Returns:
             JSON with ``data`` list of ``{"citingPaper": {...}}`` dicts.
@@ -73,21 +81,77 @@ def register_graph_tools(mcp: FastMCP) -> None:
 
         fos = ",".join(fields_of_study) if fields_of_study else None
 
-        # S2 citations endpoint does not support minCitationCount —
-        # over-fetch from offset 0 and filter client-side.  The user's
-        # offset/limit are applied to the *filtered* results so that
-        # pagination is consistent.
         filtering = min_citations is not None
-        fetch_limit = min(max((offset + limit) * 3, 200), 1000) if filtering else limit
-        fetch_offset = 0 if filtering else offset
 
         async def _execute(*, retry: bool = True) -> str:
+            if filtering:
+                # S2 citations endpoint does not support
+                # minCitationCount — paginate through upstream results
+                # and filter client-side.  S2 returns citations
+                # newest-first so high-citation papers (typically older)
+                # may be deep in the list.
+                needed = offset + limit
+                filtered: list[dict[str, object]] = []
+                s2_offset = 0
+                exhausted = False
+                while len(filtered) < needed and s2_offset < _MAX_UPSTREAM_SCAN:
+                    batch = min(_S2_PAGE_SIZE, _MAX_UPSTREAM_SCAN - s2_offset)
+                    try:
+                        page = await bundle.s2.get_citations(
+                            identifier,
+                            fields=FIELD_SETS[fields],
+                            limit=batch,
+                            offset=s2_offset,
+                            year=year,
+                            fieldsOfStudy=fos,
+                            retry=retry,
+                        )
+                    except httpx.HTTPStatusError as exc:
+                        if exc.response.status_code == 404:
+                            return json.dumps(
+                                {
+                                    "error": "not_found",
+                                    "identifier": identifier,
+                                }
+                            )
+                        return json.dumps(
+                            {
+                                "error": "upstream_error",
+                                "status": exc.response.status_code,
+                            }
+                        )
+                    data = page.get("data") or []
+                    for item in data:
+                        cc = item.get("citingPaper", {}).get("citationCount")
+                        if cc is not None and cc >= min_citations:
+                            filtered.append(item)
+                    s2_offset += len(data)
+                    if len(data) < batch:
+                        exhausted = True
+                        break
+
+                # When exhausted is True, S2 has no more data — an
+                # empty slice here simply means the offset is beyond
+                # the available filtered results (not a truncation).
+                result: dict[str, object] = {"data": filtered[offset : offset + limit]}
+                if (
+                    not exhausted
+                    and s2_offset >= _MAX_UPSTREAM_SCAN
+                    and len(filtered) < needed
+                ):
+                    result["warning"] = (
+                        f"Scanned {s2_offset} upstream results "
+                        f"(cap: {_MAX_UPSTREAM_SCAN}); some qualifying "
+                        "papers may exist beyond this window."
+                    )
+                return json.dumps(result)
+
             try:
                 result = await bundle.s2.get_citations(
                     identifier,
                     fields=FIELD_SETS[fields],
-                    limit=fetch_limit,
-                    offset=fetch_offset,
+                    limit=limit,
+                    offset=offset,
                     year=year,
                     fieldsOfStudy=fos,
                     retry=retry,
@@ -96,22 +160,11 @@ def register_graph_tools(mcp: FastMCP) -> None:
                 if exc.response.status_code == 404:
                     return json.dumps({"error": "not_found", "identifier": identifier})
                 return json.dumps(
-                    {"error": "upstream_error", "status": exc.response.status_code}
+                    {
+                        "error": "upstream_error",
+                        "status": exc.response.status_code,
+                    }
                 )
-
-            if filtering:
-                data = result.get("data") or []
-                filtered = [
-                    item
-                    for item in data
-                    if (cc := item.get("citingPaper", {}).get("citationCount"))
-                    is not None
-                    and cc >= min_citations
-                ]
-                # Strip upstream pagination metadata (offset/total/next)
-                # which is inaccurate after client-side filtering.
-                result = {"data": filtered[offset : offset + limit]}
-
             return json.dumps(result)
 
         try:
@@ -271,41 +324,63 @@ def register_graph_tools(mcp: FastMCP) -> None:
 
                 if direction in ("citations", "both"):
                     try:
-                        result = await bundle.s2.get_citations(
-                            paper_id,
-                            fields=FIELD_SETS["compact"],
-                            limit=fetch_limit,
-                            offset=0,
-                            year=year,
-                            fieldsOfStudy=fos,
-                            retry=retry,
+                        # When min_citations is set, paginate through
+                        # upstream results — S2 returns citations
+                        # newest-first and qualifying papers may be
+                        # deep in the list.
+                        scan_cap = (
+                            _MAX_PER_NODE_SCAN
+                            if min_citations is not None
+                            else fetch_limit
                         )
-                        for item in result.get("data") or []:
-                            p = item.get("citingPaper", {})
-                            pid = p.get("paperId")
-                            if not pid:
-                                continue
-                            # S2 citations endpoint does not support
-                            # minCitationCount — apply client-side
-                            p_cites = p.get("citationCount")
-                            if min_citations is not None and (
-                                p_cites is None or p_cites < min_citations
-                            ):
-                                continue
-                            node = {
-                                "id": pid,
-                                "title": p.get("title"),
-                                "year": p.get("year"),
-                                "citationCount": p_cites,
-                            }
-                            new_nodes.append((pid, node))
-                            edges.append(
-                                {
-                                    "source": pid,
-                                    "target": paper_id,
-                                    "direction": "cites",
-                                }
+                        s2_off = 0
+                        while (
+                            s2_off < scan_cap
+                            and len(nodes) + len(new_nodes) < max_nodes
+                        ):
+                            batch = min(
+                                _S2_PAGE_SIZE
+                                if min_citations is not None
+                                else fetch_limit,
+                                scan_cap - s2_off,
                             )
+                            result = await bundle.s2.get_citations(
+                                paper_id,
+                                fields=FIELD_SETS["compact"],
+                                limit=batch,
+                                offset=s2_off,
+                                year=year,
+                                fieldsOfStudy=fos,
+                                retry=retry,
+                            )
+                            data = result.get("data") or []
+                            for item in data:
+                                p = item.get("citingPaper", {})
+                                pid = p.get("paperId")
+                                if not pid:
+                                    continue
+                                p_cites = p.get("citationCount")
+                                if min_citations is not None and (
+                                    p_cites is None or p_cites < min_citations
+                                ):
+                                    continue
+                                node = {
+                                    "id": pid,
+                                    "title": p.get("title"),
+                                    "year": p.get("year"),
+                                    "citationCount": p_cites,
+                                }
+                                new_nodes.append((pid, node))
+                                edges.append(
+                                    {
+                                        "source": pid,
+                                        "target": paper_id,
+                                        "direction": "cites",
+                                    }
+                                )
+                            s2_off += len(data)
+                            if len(data) < batch or min_citations is None:
+                                break
                     except httpx.HTTPError:
                         pass
 
