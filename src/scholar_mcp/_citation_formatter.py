@@ -136,7 +136,10 @@ def infer_entry_type(paper: dict[str, Any]) -> str:
 
 
 def _format_bibtex_author(paper: dict[str, Any]) -> str:
-    """Format author list for BibTeX: {Last}, First and {Last}, First.
+    """Format author list for BibTeX using 'von Last, First' form.
+
+    Names with a nobiliary particle use 'von Last, First'
+    (e.g. 'van Houten, Jan'). Names are joined by ' and '.
 
     Args:
         paper: Paper metadata dict with an ``authors`` list.
@@ -170,7 +173,7 @@ def _paper_url(paper: dict[str, Any]) -> str | None:
     """
     oa = paper.get("openAccessPdf")
     if oa and isinstance(oa, dict) and oa.get("url"):
-        return oa["url"]
+        return str(oa["url"])
     doi = (paper.get("externalIds") or {}).get("DOI")
     if doi:
         return f"https://doi.org/{doi}"
@@ -242,8 +245,9 @@ def format_bibtex(papers: list[dict[str, Any]], errors: list[dict[str, Any]]) ->
             fields.append("  archiveprefix = {arXiv}")
 
         entry = f"@{entry_type}{{{key},\n"
-        entry += ",\n".join(fields)
-        entry += ",\n}"
+        if fields:
+            entry += ",\n".join(fields) + ",\n"
+        entry += "}"
         lines.append(entry)
 
     return "\n\n".join(lines)

@@ -160,6 +160,21 @@ class TestFormatBibtex:
         result = format_bibtex([], errors)
         assert "% Could not resolve: DOI:10.1/missing (not found)" in result
 
+    def test_prefix_author_formatting(self) -> None:
+        papers = [
+            {
+                "title": "Test",
+                "year": 2024,
+                "venue": "",
+                "authors": [{"name": "Jan van Houten"}],
+                "externalIds": {},
+                "openAccessPdf": None,
+                "abstract": None,
+            }
+        ]
+        result = format_bibtex(papers, [])
+        assert "author = {van Houten, Jan}" in result
+
     def test_missing_fields_omitted(self) -> None:
         papers = [
             {
