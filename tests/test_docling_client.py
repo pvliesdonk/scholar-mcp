@@ -21,6 +21,30 @@ def client() -> DoclingClient:
     )
 
 
+@pytest.mark.parametrize(
+    "use_vlm,vlm_api_url,vlm_api_key,expected",
+    [
+        (False, None, None, None),
+        (True, None, None, "vlm_api_url_not_configured"),
+        (True, "http://vlm", None, "vlm_api_key_not_configured"),
+        (True, "http://vlm", "key123", None),
+    ],
+)
+def test_vlm_skip_reason(
+    use_vlm: bool,
+    vlm_api_url: str | None,
+    vlm_api_key: str | None,
+    expected: str | None,
+) -> None:
+    c = DoclingClient(
+        http_client=httpx.AsyncClient(base_url=DOCLING_BASE, timeout=30.0),
+        vlm_api_url=vlm_api_url,
+        vlm_api_key=vlm_api_key,
+        vlm_model="gpt-4o",
+    )
+    assert c.vlm_skip_reason(use_vlm) == expected
+
+
 @pytest.mark.respx(base_url=DOCLING_BASE)
 async def test_standard_convert(
     respx_mock: respx.MockRouter, client: DoclingClient

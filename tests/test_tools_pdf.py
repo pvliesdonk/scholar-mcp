@@ -199,6 +199,62 @@ async def test_convert_cached_markdown(
     assert "# Cached" in data["markdown"]
 
 
+async def test_convert_cached_markdown_vlm_not_configured(
+    mcp_with_docling: FastMCP, bundle_with_docling: ServiceBundle, tmp_path: Path
+) -> None:
+    """Cache hit with use_vlm=True but VLM not configured includes vlm_skip_reason."""
+    # bundle_with_docling has vlm_api_url=None, so VLM is not available.
+    pdf = tmp_path / "paper.pdf"
+    pdf.write_bytes(b"%PDF fake")
+    md_dir = bundle_with_docling.config.cache_dir / "md"
+    md_dir.mkdir(parents=True, exist_ok=True)
+    # Standard cache path (no _vlm suffix — VLM not available so standard is used)
+    md_path = md_dir / "paper.md"
+    md_path.write_text("# Cached\n\nCached text.", encoding="utf-8")
+
+    async with Client(mcp_with_docling) as client:
+        result = await client.call_tool(
+            "convert_pdf_to_markdown", {"file_path": str(pdf), "use_vlm": True}
+        )
+    data = json.loads(result.content[0].text)
+    assert "queued" not in data
+    assert "# Cached" in data["markdown"]
+    assert data["vlm_used"] is False
+    assert data["vlm_skip_reason"] == "vlm_api_url_not_configured"
+
+
+async def test_convert_standard_vlm_not_configured_includes_skip_reason(
+    bundle_with_docling: ServiceBundle, tmp_path: Path
+) -> None:
+    """Non-cached conversion with use_vlm=True but VLM not configured includes vlm_skip_reason."""
+    pdf = tmp_path / "paper.pdf"
+    pdf.write_bytes(b"%PDF fake")
+    bundle_with_docling.docling.convert = AsyncMock(  # type: ignore[union-attr]
+        return_value="# Paper\n\nText."
+    )
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle_with_docling}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_pdf_tools(app)
+    register_task_tools(app)
+
+    async with Client(app) as client:
+        result = await client.call_tool(
+            "convert_pdf_to_markdown", {"file_path": str(pdf), "use_vlm": True}
+        )
+        queued = json.loads(result.content[0].text)
+        assert queued["queued"] is True
+        task_data = await _poll_task(client, queued["task_id"])
+
+    assert task_data["status"] == "completed"
+    inner = json.loads(task_data["result"])
+    assert inner["vlm_used"] is False
+    assert inner["vlm_skip_reason"] == "vlm_api_url_not_configured"
+
+
 @pytest.mark.respx(assert_all_called=False)
 async def test_fetch_paper_pdf_download_succeeds(
     bundle: ServiceBundle,
