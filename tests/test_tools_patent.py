@@ -871,3 +871,112 @@ async def test_citations_npl_resolution_with_s2(
     # Second NPL had no DOI -> unresolved
     assert npl[1]["confidence"] is None
     assert "paper" not in npl[1]
+
+
+# ---------------------------------------------------------------------------
+# get_citing_patents tests
+# ---------------------------------------------------------------------------
+
+
+async def test_get_citing_patents_returns_results(
+    bundle: ServiceBundle,
+) -> None:
+    """get_citing_patents finds patents citing a paper."""
+    epo = _make_epo_client(
+        search_result={
+            "total_count": 1,
+            "references": [{"country": "EP", "number": "9999999", "kind": "A1"}],
+        },
+    )
+    bundle.epo = epo
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_patent_tools(app)
+
+    async with Client(app) as client:
+        result = await client.call_tool(
+            "get_citing_patents",
+            {"paper_id": "10.1234/test"},
+        )
+    data = json.loads(result.content[0].text)
+    assert data["paper_id"] == "10.1234/test"
+    assert len(data["patents"]) == 1
+    assert data["patents"][0]["match_source"] == "epo_search"
+    assert data["total_count"] == 1
+    assert "note" in data
+
+
+async def test_get_citing_patents_empty_results(
+    bundle: ServiceBundle,
+) -> None:
+    """get_citing_patents returns empty list when no patents found."""
+    epo = _make_epo_client(
+        search_result={"total_count": 0, "references": []},
+    )
+    bundle.epo = epo
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_patent_tools(app)
+
+    async with Client(app) as client:
+        result = await client.call_tool(
+            "get_citing_patents",
+            {"paper_id": "10.9999/nonexistent"},
+        )
+    data = json.loads(result.content[0].text)
+    assert data["patents"] == []
+    assert data["total_count"] == 0
+
+
+async def test_get_citing_patents_no_epo_returns_error(
+    bundle: ServiceBundle,
+) -> None:
+    """get_citing_patents returns error when EPO not configured."""
+    bundle.epo = None
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_patent_tools(app)
+
+    async with Client(app) as client:
+        result = await client.call_tool(
+            "get_citing_patents",
+            {"paper_id": "10.1234/test"},
+        )
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "epo_not_configured"
+
+
+async def test_get_citing_patents_rate_limited_queues(
+    bundle: ServiceBundle,
+) -> None:
+    """get_citing_patents queues on rate limit."""
+    epo = _make_epo_client(raise_on_search=EpoRateLimitedError("red"))
+    bundle.epo = epo
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_patent_tools(app)
+
+    async with Client(app) as client:
+        result = await client.call_tool(
+            "get_citing_patents",
+            {"paper_id": "10.1234/test"},
+        )
+    data = json.loads(result.content[0].text)
+    assert data["queued"] is True
+    assert data["tool"] == "get_citing_patents"

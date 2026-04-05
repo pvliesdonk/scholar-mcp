@@ -296,6 +296,70 @@ def register_patent_tools(mcp: FastMCP) -> None:
                 {"queued": True, "task_id": task_id, "tool": "get_patent"}
             )
 
+    @mcp.tool(
+        tags={"patent"},
+        annotations={
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "openWorldHint": True,
+        },
+    )
+    async def get_citing_patents(
+        paper_id: str,
+        limit: int = 10,
+        bundle: ServiceBundle = Depends(get_bundle),
+    ) -> str:
+        """Find patents that cite a given academic paper.
+
+        Coverage is incomplete -- relies on EPO OPS citation search which
+        does not capture all patent-to-paper citations. Best results with
+        DOIs of well-known, highly-cited papers. Returns confirmed matches
+        only, not an exhaustive list.
+
+        Args:
+            paper_id: Paper identifier (DOI preferred, also accepts
+                title keywords).
+            limit: Maximum number of citing patents to return
+                (default 10, max 25).
+            bundle: Injected service bundle.
+
+        Returns:
+            JSON string with ``paper_id``, ``patents`` list (each with
+            biblio data and ``match_source``), ``total_count``, and a
+            ``note`` about coverage limitations.
+        """
+        if bundle.epo is None:
+            return json.dumps(
+                {
+                    "error": "epo_not_configured",
+                    "detail": (
+                        "EPO OPS credentials are not set. "
+                        "Configure SCHOLAR_MCP_EPO_CONSUMER_KEY and "
+                        "SCHOLAR_MCP_EPO_CONSUMER_SECRET."
+                    ),
+                }
+            )
+
+        effective_limit = min(limit, 25)
+
+        async def _execute(*, retry: bool = True) -> str:
+            # Note: retry flag for task queue compatibility.
+            return await _get_citing_patents(
+                paper_id=paper_id,
+                epo=bundle.epo,  # type: ignore[arg-type]
+                limit=effective_limit,
+            )
+
+        try:
+            return await _execute(retry=False)
+        except (RateLimitedError, EpoRateLimitedError):
+            task_id = bundle.tasks.submit(
+                _execute(retry=True), tool="get_citing_patents"
+            )
+            return json.dumps(
+                {"queued": True, "task_id": task_id, "tool": "get_citing_patents"}
+            )
+
 
 # All available patent sections.
 _AVAILABLE_SECTIONS = {
@@ -471,3 +535,62 @@ async def _fetch_patent_sections(
         result.pop("biblio", None)
 
     return json.dumps(result)
+
+
+async def _get_citing_patents(
+    *,
+    paper_id: str,
+    epo: EpoClient,
+    limit: int = 10,
+) -> str:
+    """Search EPO OPS for patents citing a paper.
+
+    Uses the ``ct=`` (cited document) CQL field to find patents whose
+    cited references mention the given identifier. Fetches biblio for
+    each result.
+
+    Args:
+        paper_id: Paper identifier (DOI or keywords).
+        epo: EPO client instance.
+        limit: Max results.
+
+    Returns:
+        JSON string with paper_id, patents list, total_count, and note.
+    """
+    cql = f'ct="{_cql_escape(paper_id)}"'
+    try:
+        search_result = await epo.search(cql, range_begin=1, range_end=limit)
+    except Exception as exc:
+        if isinstance(exc, (RateLimitedError, EpoRateLimitedError)):
+            raise
+        logger.warning("citing_patent_search_failed paper=%s", paper_id)
+        return json.dumps(
+            {
+                "paper_id": paper_id,
+                "patents": [],
+                "total_count": 0,
+                "note": "EPO citation search failed. Try a different identifier format.",
+            }
+        )
+
+    patents: list[dict[str, Any]] = []
+    for ref in search_result.get("references", []):
+        doc = DocdbNumber(ref["country"], ref["number"], ref.get("kind", ""))
+        try:
+            biblio = await epo.get_biblio(doc)
+            biblio["match_source"] = "epo_search"
+            patents.append(biblio)
+        except Exception:
+            logger.warning("citing_patent_biblio_failed patent=%s", doc.docdb)
+
+    return json.dumps(
+        {
+            "paper_id": paper_id,
+            "patents": patents,
+            "total_count": search_result.get("total_count", 0),
+            "note": (
+                "Coverage is incomplete. Results come from EPO OPS citation "
+                "search and may not capture all patent-to-paper citations."
+            ),
+        }
+    )
