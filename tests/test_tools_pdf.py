@@ -19,6 +19,36 @@ from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._tools_pdf import register_pdf_tools
 from scholar_mcp._tools_tasks import register_task_tools
 
+# ---------------------------------------------------------------------------
+# DoclingClient.vlm_skip_reason unit tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "use_vlm, api_url, api_key, expected",
+    [
+        (False, None, None, None),
+        (True, None, None, "vlm_api_url_not_configured"),
+        (True, "https://api.openai.com/v1", None, "vlm_api_key_not_configured"),
+        (True, "https://api.openai.com/v1", "sk-test", None),
+    ],
+    ids=["not_requested", "url_missing", "key_missing", "fully_configured"],
+)
+def test_vlm_skip_reason(
+    use_vlm: bool,
+    api_url: str | None,
+    api_key: str | None,
+    expected: str | None,
+) -> None:
+    """vlm_skip_reason returns the correct reason or None."""
+    client = DoclingClient(
+        http_client=httpx.AsyncClient(),
+        vlm_api_url=api_url,
+        vlm_api_key=api_key,
+        vlm_model="gpt-4o",
+    )
+    assert client.vlm_skip_reason(use_vlm) == expected
+
 S2_BASE = "https://api.semanticscholar.org/graph/v1"
 DOCLING_BASE = "http://docling:5001"
 
@@ -221,6 +251,26 @@ async def test_convert_cached_markdown_vlm_not_configured(
     assert "# Cached" in data["markdown"]
     assert data["vlm_used"] is False
     assert data["vlm_skip_reason"] == "vlm_api_url_not_configured"
+
+
+async def test_convert_cached_standard_no_vlm_skip_reason(
+    mcp_with_docling: FastMCP, bundle_with_docling: ServiceBundle, tmp_path: Path
+) -> None:
+    """Cache hit with use_vlm=False (default) does NOT include vlm_skip_reason."""
+    pdf = tmp_path / "paper.pdf"
+    pdf.write_bytes(b"%PDF fake")
+    md_dir = bundle_with_docling.config.cache_dir / "md"
+    md_dir.mkdir(parents=True, exist_ok=True)
+    md_path = md_dir / "paper.md"
+    md_path.write_text("# Standard\n\nText.", encoding="utf-8")
+
+    async with Client(mcp_with_docling) as client:
+        result = await client.call_tool(
+            "convert_pdf_to_markdown", {"file_path": str(pdf)}
+        )
+    data = json.loads(result.content[0].text)
+    assert "queued" not in data
+    assert "vlm_skip_reason" not in data
 
 
 async def test_convert_standard_vlm_not_configured_includes_skip_reason(

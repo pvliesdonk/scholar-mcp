@@ -57,19 +57,64 @@ async def test_get_task_result_failed_task(mcp: FastMCP, bundle: ServiceBundle) 
     assert "something went wrong" in data["error"]
 
 
-async def test_list_tasks(mcp: FastMCP, bundle: ServiceBundle) -> None:
-    """list_tasks returns all active tasks."""
+async def test_get_task_result_in_progress_includes_context(
+    mcp: FastMCP, bundle: ServiceBundle
+) -> None:
+    """get_task_result includes elapsed_seconds, tool, and hint while running."""
 
     async def _slow_coro() -> str:
         await asyncio.sleep(10)
         return "{}"
 
-    task_id = bundle.tasks.submit(_slow_coro())
+    task_id = bundle.tasks.submit(
+        _slow_coro(), tool="convert_pdf_to_markdown"
+    )
+
+    async with Client(mcp) as client:
+        result = await client.call_tool("get_task_result", {"task_id": task_id})
+    data = json.loads(result.content[0].text)
+    assert data["status"] in ("pending", "running")
+    assert "elapsed_seconds" in data
+    assert isinstance(data["elapsed_seconds"], int)
+    assert data["tool"] == "convert_pdf_to_markdown"
+    assert "hint" in data
+    assert "1-5 minutes" in data["hint"]
+
+
+async def test_get_task_result_no_hint_for_unknown_tool(
+    mcp: FastMCP, bundle: ServiceBundle
+) -> None:
+    """get_task_result includes elapsed_seconds but no hint for tools without hints."""
+
+    async def _slow_coro() -> str:
+        await asyncio.sleep(10)
+        return "{}"
+
+    task_id = bundle.tasks.submit(_slow_coro(), tool="search_papers")
+
+    async with Client(mcp) as client:
+        result = await client.call_tool("get_task_result", {"task_id": task_id})
+    data = json.loads(result.content[0].text)
+    assert data["status"] in ("pending", "running")
+    assert "elapsed_seconds" in data
+    assert data["tool"] == "search_papers"
+    assert "hint" not in data
+
+
+async def test_list_tasks(mcp: FastMCP, bundle: ServiceBundle) -> None:
+    """list_tasks returns all active tasks with tool and elapsed_seconds."""
+
+    async def _slow_coro() -> str:
+        await asyncio.sleep(10)
+        return "{}"
+
+    task_id = bundle.tasks.submit(_slow_coro(), tool="fetch_paper_pdf")
 
     async with Client(mcp) as client:
         result = await client.call_tool("list_tasks", {})
     data = json.loads(result.content[0].text)
     assert isinstance(data, list)
     assert len(data) >= 1
-    task_ids = [t["task_id"] for t in data]
-    assert task_id in task_ids
+    task_entry = next(t for t in data if t["task_id"] == task_id)
+    assert task_entry["tool"] == "fetch_paper_pdf"
+    assert "elapsed_seconds" in task_entry
