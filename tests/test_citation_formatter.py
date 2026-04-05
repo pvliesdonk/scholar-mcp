@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from scholar_mcp._citation_formatter import (
     escape_bibtex,
+    format_bibtex,
     generate_bibtex_key,
     infer_entry_type,
 )
@@ -93,3 +94,88 @@ class TestEscapeBibtex:
 
     def test_plain_text_unchanged(self) -> None:
         assert escape_bibtex("Hello World") == "Hello World"
+
+
+class TestFormatBibtex:
+    def test_single_article(self) -> None:
+        papers = [
+            {
+                "paperId": "abc123",
+                "title": "Attention Is All You Need",
+                "year": 2017,
+                "venue": "Neural Information Processing Systems",
+                "authors": [
+                    {"name": "Ashish Vaswani"},
+                    {"name": "Noam Shazeer"},
+                ],
+                "externalIds": {"DOI": "10.5555/3295222.3295349"},
+                "openAccessPdf": {"url": "https://example.com/paper.pdf"},
+                "abstract": "The dominant sequence transduction models...",
+            }
+        ]
+        result = format_bibtex(papers, [])
+        assert "@article{vaswani2017," in result
+        assert "author = {Vaswani, Ashish and Shazeer, Noam}" in result
+        assert "title = {{Attention Is All You Need}}" in result
+        assert "year = {2017}" in result
+        assert "doi = {10.5555/3295222.3295349}" in result
+
+    def test_conference_paper(self) -> None:
+        papers = [
+            {
+                "title": "BERT",
+                "year": 2019,
+                "venue": "Conference on NLP",
+                "authors": [{"name": "Jacob Devlin"}],
+                "externalIds": {},
+                "openAccessPdf": None,
+                "abstract": None,
+            }
+        ]
+        result = format_bibtex(papers, [])
+        assert "@inproceedings{devlin2019," in result
+        assert "booktitle = {Conference on NLP}" in result
+
+    def test_arxiv_preprint(self) -> None:
+        papers = [
+            {
+                "title": "Some Preprint",
+                "year": 2024,
+                "venue": "",
+                "authors": [{"name": "Jane Doe"}],
+                "externalIds": {"ArXiv": "2401.00001"},
+                "openAccessPdf": None,
+                "abstract": None,
+            }
+        ]
+        result = format_bibtex(papers, [])
+        assert "@misc{doe2024," in result
+        assert "eprint = {2401.00001}" in result
+        assert "archiveprefix = {arXiv}" in result
+
+    def test_errors_as_comments(self) -> None:
+        errors = [
+            {"identifier": "DOI:10.1/missing", "reason": "not found"},
+        ]
+        result = format_bibtex([], errors)
+        assert "% Could not resolve: DOI:10.1/missing (not found)" in result
+
+    def test_missing_fields_omitted(self) -> None:
+        papers = [
+            {
+                "title": "Minimal Paper",
+                "year": 2024,
+                "venue": "",
+                "authors": [{"name": "Smith"}],
+                "externalIds": {},
+                "openAccessPdf": None,
+                "abstract": None,
+            }
+        ]
+        result = format_bibtex(papers, [])
+        # Should not contain doi or url fields
+        lines = result.split("\n")
+        field_lines = [line.strip() for line in lines if "=" in line]
+        field_names = [line.split("=")[0].strip() for line in field_lines]
+        assert "doi" not in field_names
+        assert "url" not in field_names

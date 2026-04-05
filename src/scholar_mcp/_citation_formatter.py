@@ -133,3 +133,117 @@ def infer_entry_type(paper: dict[str, Any]) -> str:
     if external_ids.get("ArXiv") and not venue:
         return "misc"
     return "article"
+
+
+def _format_bibtex_author(paper: dict[str, Any]) -> str:
+    """Format author list for BibTeX: {Last}, First and {Last}, First.
+
+    Args:
+        paper: Paper metadata dict with an ``authors`` list.
+
+    Returns:
+        BibTeX author string with names joined by `` and ``.
+    """
+    authors = paper.get("authors") or []
+    parts: list[str] = []
+    for author in authors:
+        parsed = parse_author_name(author.get("name", ""))
+        if parsed.prefix:
+            parts.append(f"{parsed.prefix} {parsed.last}, {parsed.first}")
+        elif parsed.first:
+            parts.append(f"{parsed.last}, {parsed.first}")
+        else:
+            parts.append(parsed.last)
+        if parsed.suffix:
+            parts[-1] += f", {parsed.suffix}"
+    return " and ".join(parts)
+
+
+def _paper_url(paper: dict[str, Any]) -> str | None:
+    """Extract best URL from paper metadata.
+
+    Args:
+        paper: Paper metadata dict.
+
+    Returns:
+        Open-access PDF URL, DOI URL, or ``None`` if unavailable.
+    """
+    oa = paper.get("openAccessPdf")
+    if oa and isinstance(oa, dict) and oa.get("url"):
+        return oa["url"]
+    doi = (paper.get("externalIds") or {}).get("DOI")
+    if doi:
+        return f"https://doi.org/{doi}"
+    return None
+
+
+def format_bibtex(papers: list[dict[str, Any]], errors: list[dict[str, Any]]) -> str:
+    """Format papers as BibTeX entries.
+
+    Args:
+        papers: List of paper metadata dicts.
+        errors: List of error dicts with ``identifier`` and ``reason`` keys.
+
+    Returns:
+        BibTeX string with all entries and error comments.
+    """
+    lines: list[str] = []
+
+    for error in errors:
+        ident = error.get("identifier", "unknown")
+        reason = error.get("reason", "unknown error")
+        lines.append(f"% Could not resolve: {ident} ({reason})")
+
+    if errors and papers:
+        lines.append("")
+
+    seen_keys: set[str] = set()
+    for paper in papers:
+        entry_type = infer_entry_type(paper)
+        key = generate_bibtex_key(paper, seen_keys)
+
+        fields: list[str] = []
+
+        author_str = _format_bibtex_author(paper)
+        if author_str:
+            fields.append(f"  author = {{{author_str}}}")
+
+        title = paper.get("title")
+        if title:
+            fields.append(f"  title = {{{{{escape_bibtex(title)}}}}}")
+
+        year = paper.get("year")
+        if year is not None:
+            fields.append(f"  year = {{{year}}}")
+
+        venue = paper.get("venue")
+        if venue:
+            if entry_type == "inproceedings":
+                fields.append(f"  booktitle = {{{escape_bibtex(venue)}}}")
+            else:
+                fields.append(f"  journal = {{{escape_bibtex(venue)}}}")
+
+        external_ids = paper.get("externalIds") or {}
+        doi = external_ids.get("DOI")
+        if doi:
+            fields.append(f"  doi = {{{doi}}}")
+
+        url = _paper_url(paper)
+        if url:
+            fields.append(f"  url = {{{url}}}")
+
+        abstract = paper.get("abstract")
+        if abstract:
+            fields.append(f"  abstract = {{{escape_bibtex(abstract)}}}")
+
+        arxiv = external_ids.get("ArXiv")
+        if arxiv:
+            fields.append(f"  eprint = {{{arxiv}}}")
+            fields.append("  archiveprefix = {arXiv}")
+
+        entry = f"@{entry_type}{{{key},\n"
+        entry += ",\n".join(fields)
+        entry += ",\n}"
+        lines.append(entry)
+
+    return "\n\n".join(lines)
