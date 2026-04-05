@@ -1429,9 +1429,7 @@ async def test_get_citations_no_min_citations_returns_all(
         )
     )
     async with Client(mcp) as client:
-        result = await client.call_tool(
-            "get_citations", {"identifier": "p1"}
-        )
+        result = await client.call_tool("get_citations", {"identifier": "p1"})
     data = json.loads(result.content[0].text)
     assert len(data["data"]) == 1
     assert data["data"][0]["citingPaper"]["paperId"] == "c1"
