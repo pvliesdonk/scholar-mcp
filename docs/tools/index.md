@@ -1,6 +1,6 @@
 # Tools
 
-Scholar MCP provides 16 tools across seven categories. All tools return JSON.
+Scholar MCP provides 18 tools across eight categories. All tools return JSON.
 
 All tools include [MCP tool annotations](https://spec.modelcontextprotocol.io/specification/2025-03-26/server/tools/#annotations):
 
@@ -265,6 +265,79 @@ Papers that fail to resolve are reported inline (BibTeX/RIS: as comments, CSL-JS
 
 !!! tip "Enrichment"
     When `enrich` is enabled and a paper has no venue but has a DOI, the tool queries OpenAlex to fill in the venue name. This improves citation quality for papers where Semantic Scholar has incomplete metadata.
+
+---
+
+## Patent Search
+
+!!! note "Credentials required"
+    Patent tools require EPO OPS credentials. When `SCHOLAR_MCP_EPO_CONSUMER_KEY` and `SCHOLAR_MCP_EPO_CONSUMER_SECRET` are not set, these tools are automatically hidden. See [EPO OPS configuration](../configuration.md#epo-open-patent-services) for setup instructions.
+
+### `search_patents`
+
+Search for patents across 100+ patent offices via the EPO Open Patent Services (OPS) API.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `query` | string | *(required)* | Patent search query (CQL/Lucene syntax supported) |
+| `limit` | int | `10` | Results per page (max 100) |
+| `offset` | int | `0` | Pagination offset |
+
+**Returns:** `{"data": [...], "total": N}` where each item contains bibliographic metadata for a matching patent.
+
+**Output fields per result:**
+
+- `patent_number` -- EPO-format publication number (e.g. `EP1234567A1`)
+- `title` -- Patent title
+- `applicants` -- List of applicant names
+- `inventors` -- List of inventor names
+- `filing_date` -- Filing date (ISO 8601)
+- `publication_date` -- Publication date (ISO 8601)
+- `abstract` -- Patent abstract text
+
+!!! tip "Query syntax"
+    EPO OPS supports CQL syntax for fielded queries. For example: `ti="machine learning" AND pa="Google"` searches for patents with "machine learning" in the title filed by Google. Plain keyword queries are also accepted.
+
+---
+
+### `get_patent`
+
+Fetch detailed information for a single patent by its publication number.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `patent_number` | string | *(required)* | Patent publication number (e.g. `EP1234567A1`, `US10000000B2`) |
+| `sections` | list[string] | `["biblio"]` | Sections to retrieve |
+
+**Available sections:**
+
+| Section | Description | Phase 1 |
+|---|---|---|
+| `biblio` | Bibliographic metadata (title, applicants, inventors, dates, abstract) | Available |
+| `claims` | Patent claims text | Coming soon |
+| `description` | Full patent description | Coming soon |
+| `family` | Patent family members across jurisdictions | Coming soon |
+| `legal` | Legal status events (grants, assignments, expirations) | Coming soon |
+| `citations` | Patent citations (prior art references) | Coming soon |
+
+!!! note "Phase 1 scope"
+    Only the `biblio` section is available in Phase 1. Requesting other sections will return a not-yet-available notice. Full section support is planned for a future release.
+
+**Returns:** A JSON object with keys matching the requested sections:
+
+```json
+{
+  "patent_number": "EP1234567A1",
+  "biblio": {
+    "title": "...",
+    "applicants": ["..."],
+    "inventors": ["..."],
+    "filing_date": "2020-01-15",
+    "publication_date": "2021-07-21",
+    "abstract": "..."
+  }
+}
+```
 
 ---
 

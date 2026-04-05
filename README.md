@@ -19,6 +19,7 @@ A [FastMCP](https://github.com/jlowin/fastmcp) server providing structured acade
 - **Recommendations** -- paper recommendations from positive (and optional negative) examples via the S2 recommendation API
 - **Citation generation** -- format paper metadata as BibTeX, CSL-JSON, or RIS citations with automatic entry type inference, author name parsing, and OpenAlex venue enrichment
 - **OpenAlex enrichment** -- augment paper metadata with open-access URLs, affiliations, funders, concepts, and OA status
+- **Patent search** -- search and retrieve patents via [EPO Open Patent Services](https://www.epo.org/en/searching-for-patents/data/web-services/ops) covering 100+ patent offices; EPO credentials are optional -- paper search works without them
 - **PDF conversion** -- download open-access PDFs and convert to Markdown via [docling-serve](https://github.com/DS4SD/docling-serve), with optional VLM enrichment for formulas and figures
 - **Intelligent caching** -- SQLite-backed cache with per-table TTLs (30 days for papers/authors, 7 days for citations/references) and identifier aliasing
 - **Authentication** -- bearer token, OIDC (OAuth 2.1), or both simultaneously (multi-auth)
@@ -116,6 +117,13 @@ All settings are controlled via environment variables with the `SCHOLAR_MCP_` pr
 | `SCHOLAR_MCP_VLM_API_KEY` | -- | API key for the VLM endpoint |
 | `SCHOLAR_MCP_VLM_MODEL` | `gpt-4o` | Model name for VLM-enriched conversion |
 
+### Patent Search (optional)
+
+| Variable | Default | Description |
+|---|---|---|
+| `SCHOLAR_MCP_EPO_CONSUMER_KEY` | -- | EPO OPS consumer key ([register at developers.epo.org](https://developers.epo.org/user/register)); both key and secret must be set for patent tools to appear |
+| `SCHOLAR_MCP_EPO_CONSUMER_SECRET` | -- | EPO OPS consumer secret |
+
 ### Authentication (optional)
 
 | Variable | Default | Description |
@@ -164,6 +172,15 @@ All settings are controlled via environment variables with the `SCHOLAR_MCP_` pr
 | Tool | Description |
 |---|---|
 | `generate_citations` | Generate BibTeX, CSL-JSON, or RIS citations for up to 100 papers, with automatic entry type inference and optional OpenAlex venue enrichment. |
+
+### Patent Search (requires EPO OPS credentials)
+
+| Tool | Description |
+|---|---|
+| `search_patents` | Search patents across 100+ patent offices via EPO OPS. |
+| `get_patent` | Fetch bibliographic metadata for a single patent by publication number. |
+
+> Patent tools are hidden when `SCHOLAR_MCP_EPO_CONSUMER_KEY` and `SCHOLAR_MCP_EPO_CONSUMER_SECRET` are not set.
 
 ### PDF Conversion (requires docling-serve)
 
