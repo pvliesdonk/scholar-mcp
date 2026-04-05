@@ -208,17 +208,19 @@ def register_pdf_tools(mcp: FastMCP) -> None:
                 return json.dumps({"error": "docling_error", "detail": str(exc)})
 
             vlm_used = use_vlm and bundle.docling.vlm_available  # type: ignore[union-attr]
+            skip_reason = bundle.docling.vlm_skip_reason(use_vlm)  # type: ignore[union-attr]
 
             md_dir.mkdir(parents=True, exist_ok=True)
             await asyncio.to_thread(md_path.write_text, markdown, encoding="utf-8")
 
-            return json.dumps(
-                {
-                    "markdown": markdown,
-                    "path": str(md_path),
-                    "vlm_used": vlm_used,
-                }
-            )
+            result: dict[str, object] = {
+                "markdown": markdown,
+                "path": str(md_path),
+                "vlm_used": vlm_used,
+            }
+            if skip_reason:
+                result["vlm_skip_reason"] = skip_reason
+            return json.dumps(result)
 
         task_id = bundle.tasks.submit(_execute(), ttl=_PDF_TASK_TTL)
         return json.dumps(
@@ -323,15 +325,18 @@ def register_pdf_tools(mcp: FastMCP) -> None:
             md_path = md_dir / f"{paper_id}.md"
             await asyncio.to_thread(md_path.write_text, markdown, encoding="utf-8")
 
-            return json.dumps(
-                {
-                    "metadata": paper,
-                    "markdown": markdown,
-                    "pdf_path": str(pdf_path),
-                    "md_path": str(md_path),
-                    "vlm_used": use_vlm and bundle.docling.vlm_available,
-                }
-            )
+            vlm_used = use_vlm and bundle.docling.vlm_available
+            result: dict[str, object] = {
+                "metadata": paper,
+                "markdown": markdown,
+                "pdf_path": str(pdf_path),
+                "md_path": str(md_path),
+                "vlm_used": vlm_used,
+            }
+            skip_reason = bundle.docling.vlm_skip_reason(use_vlm)
+            if skip_reason:
+                result["vlm_skip_reason"] = skip_reason
+            return json.dumps(result)
 
         task_id = bundle.tasks.submit(_execute(), ttl=_PDF_TASK_TTL)
         return json.dumps(
