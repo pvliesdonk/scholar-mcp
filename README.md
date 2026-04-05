@@ -17,6 +17,7 @@ A [FastMCP](https://github.com/jlowin/fastmcp) server providing structured acade
 - **Search & retrieval** -- full-text paper search with year, venue, field-of-study, and citation-count filters; single-paper lookup by DOI, S2 ID, arXiv ID, and more; author profile and name search
 - **Citation graph** -- forward citations, backward references, BFS graph traversal up to configurable depth, and shortest-path bridge paper discovery
 - **Recommendations** -- paper recommendations from positive (and optional negative) examples via the S2 recommendation API
+- **Citation generation** -- format paper metadata as BibTeX, CSL-JSON, or RIS citations with automatic entry type inference, author name parsing, and OpenAlex venue enrichment
 - **OpenAlex enrichment** -- augment paper metadata with open-access URLs, affiliations, funders, concepts, and OA status
 - **PDF conversion** -- download open-access PDFs and convert to Markdown via [docling-serve](https://github.com/DS4SD/docling-serve), with optional VLM enrichment for formulas and figures
 - **Intelligent caching** -- SQLite-backed cache with per-table TTLs (30 days for papers/authors, 7 days for citations/references) and identifier aliasing
@@ -157,6 +158,12 @@ All settings are controlled via environment variables with the `SCHOLAR_MCP_` pr
 |---|---|
 | `batch_resolve` | Resolve up to 100 identifiers to full metadata in one call, with OpenAlex fallback. |
 | `enrich_paper` | Augment S2 metadata with OpenAlex fields (affiliations, funders, OA status, concepts). |
+
+### Citation Generation
+
+| Tool | Description |
+|---|---|
+| `generate_citations` | Generate BibTeX, CSL-JSON, or RIS citations for up to 100 papers, with automatic entry type inference and optional OpenAlex venue enrichment. |
 
 ### PDF Conversion (requires docling-serve)
 
