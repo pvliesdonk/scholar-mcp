@@ -1567,3 +1567,209 @@ async def test_get_citations_min_citations_zero_excludes_null_count(
     ids = [item["citingPaper"]["paperId"] for item in data["data"]]
     assert "c1" in ids  # 0 >= 0
     assert "c2" not in ids  # None excluded
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_citations_min_citations_paginates_to_find_results(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """get_citations paginates through S2 pages when min_citations filters
+    out all results on the first page — qualifying papers on later pages
+    are returned."""
+
+    def _handler(request: httpx.Request) -> httpx.Response:
+        offset = int(request.url.params.get("offset", 0))
+        limit = int(request.url.params.get("limit", 1000))
+        if offset == 0:
+            # First page: full page of low-citation papers (none pass)
+            return httpx.Response(
+                200,
+                json={
+                    "data": [
+                        {
+                            "citingPaper": {
+                                "paperId": f"low{i}",
+                                "title": f"Low {i}",
+                                "year": 2024,
+                                "citationCount": 5,
+                            }
+                        }
+                        for i in range(limit)
+                    ]
+                },
+            )
+        elif offset == limit:
+            # Second page: contains high-citation papers
+            return httpx.Response(
+                200,
+                json={
+                    "data": [
+                        {
+                            "citingPaper": {
+                                "paperId": "high1",
+                                "title": "High Citation A",
+                                "year": 2015,
+                                "citationCount": 600,
+                            }
+                        },
+                        {
+                            "citingPaper": {
+                                "paperId": "high2",
+                                "title": "High Citation B",
+                                "year": 2016,
+                                "citationCount": 800,
+                            }
+                        },
+                    ]
+                },
+            )
+        return httpx.Response(200, json={"data": []})
+
+    respx_mock.get("/paper/p1/citations").mock(side_effect=_handler)
+
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_citations",
+            {"identifier": "p1", "min_citations": 500, "limit": 5},
+        )
+    data = json.loads(result.content[0].text)
+    ids = [item["citingPaper"]["paperId"] for item in data["data"]]
+    assert "high1" in ids
+    assert "high2" in ids
+    assert len(ids) == 2
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_citations_min_citations_stops_when_enough_results(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """get_citations stops paginating once enough filtered results are
+    collected for the requested offset+limit window."""
+    call_count = 0
+
+    def _handler(request: httpx.Request) -> httpx.Response:
+        nonlocal call_count
+        call_count += 1
+        offset = int(request.url.params.get("offset", 0))
+        if offset == 0:
+            return httpx.Response(
+                200,
+                json={
+                    "data": [
+                        {
+                            "citingPaper": {
+                                "paperId": "q1",
+                                "title": "Qualifying",
+                                "year": 2020,
+                                "citationCount": 500,
+                            }
+                        },
+                    ]
+                    + [
+                        {
+                            "citingPaper": {
+                                "paperId": f"x{i}",
+                                "title": f"Filler {i}",
+                                "year": 2024,
+                                "citationCount": 1,
+                            }
+                        }
+                        for i in range(999)
+                    ],
+                },
+            )
+        # Should not reach here — 1 qualifying result already satisfies
+        # limit=1
+        return httpx.Response(200, json={"data": []})
+
+    respx_mock.get("/paper/p1/citations").mock(side_effect=_handler)
+
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_citations",
+            {"identifier": "p1", "min_citations": 100, "limit": 1},
+        )
+    data = json.loads(result.content[0].text)
+    assert len(data["data"]) == 1
+    assert data["data"][0]["citingPaper"]["paperId"] == "q1"
+    # Only 1 API call needed since we found enough results on page 1
+    assert call_count == 1
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_citation_graph_citations_paginates_with_min_citations(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """get_citation_graph BFS paginates citations when min_citations is
+    set, finding qualifying papers beyond the first page."""
+    respx_mock.post("/paper/batch").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {
+                    "paperId": "seed",
+                    "title": "Seed Paper",
+                    "year": 2009,
+                    "citationCount": 7000,
+                }
+            ],
+        )
+    )
+
+    def _cit_handler(request: httpx.Request) -> httpx.Response:
+        offset = int(request.url.params.get("offset", 0))
+        limit = int(request.url.params.get("limit", 1000))
+        if offset == 0:
+            # First page: full page of low-citation papers (none pass)
+            return httpx.Response(
+                200,
+                json={
+                    "data": [
+                        {
+                            "citingPaper": {
+                                "paperId": f"low{i}",
+                                "title": f"Low {i}",
+                                "year": 2024,
+                                "citationCount": 2,
+                            }
+                        }
+                        for i in range(limit)
+                    ]
+                },
+            )
+        elif offset == limit:
+            # Second page: high-citation paper
+            return httpx.Response(
+                200,
+                json={
+                    "data": [
+                        {
+                            "citingPaper": {
+                                "paperId": "bgv",
+                                "title": "BGV Scheme",
+                                "year": 2012,
+                                "citationCount": 1500,
+                            }
+                        },
+                    ]
+                },
+            )
+        return httpx.Response(200, json={"data": []})
+
+    respx_mock.get("/paper/seed/citations").mock(side_effect=_cit_handler)
+
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_citation_graph",
+            {
+                "seed_ids": ["seed"],
+                "direction": "citations",
+                "depth": 1,
+                "max_nodes": 20,
+                "min_citations": 200,
+            },
+        )
+    data = json.loads(result.content[0].text)
+    node_ids = {n["id"] for n in data["nodes"]}
+    assert "bgv" in node_ids, "High-citation paper on page 2 should be found"
+    assert data["stats"]["total_edges"] >= 1
