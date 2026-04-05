@@ -54,6 +54,11 @@ def register_graph_tools(mcp: FastMCP) -> None:
             year_end: Filter citing papers published up to this year.
             fields_of_study: Filter by field of study.
             min_citations: Minimum citation count of citing papers.
+                Applied client-side (S2 does not support this filter on
+                the citations endpoint).  Papers with unknown citation
+                counts are excluded.  Pagination (``offset``/``limit``)
+                is applied to the filtered results, but the reachable
+                window is capped at ~1 000 upstream results.
 
         Returns:
             JSON with ``data`` list of ``{"citingPaper": {...}}`` dicts.
@@ -68,13 +73,21 @@ def register_graph_tools(mcp: FastMCP) -> None:
 
         fos = ",".join(fields_of_study) if fields_of_study else None
 
+        # S2 citations endpoint does not support minCitationCount —
+        # over-fetch from offset 0 and filter client-side.  The user's
+        # offset/limit are applied to the *filtered* results so that
+        # pagination is consistent.
+        filtering = min_citations is not None
+        fetch_limit = min(max((offset + limit) * 3, 200), 1000) if filtering else limit
+        fetch_offset = 0 if filtering else offset
+
         async def _execute(*, retry: bool = True) -> str:
             try:
                 result = await bundle.s2.get_citations(
                     identifier,
                     fields=FIELD_SETS[fields],
-                    limit=limit,
-                    offset=offset,
+                    limit=fetch_limit,
+                    offset=fetch_offset,
                     year=year,
                     fieldsOfStudy=fos,
                     retry=retry,
@@ -85,6 +98,20 @@ def register_graph_tools(mcp: FastMCP) -> None:
                 return json.dumps(
                     {"error": "upstream_error", "status": exc.response.status_code}
                 )
+
+            if filtering:
+                data = result.get("data") or []
+                filtered = [
+                    item
+                    for item in data
+                    if (cc := item.get("citingPaper", {}).get("citationCount"))
+                    is not None
+                    and cc >= min_citations
+                ]
+                # Strip upstream pagination metadata (offset/total/next)
+                # which is inaccurate after client-side filtering.
+                result = {"data": filtered[offset : offset + limit]}
+
             return json.dumps(result)
 
         try:
@@ -253,7 +280,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
                             fieldsOfStudy=fos,
                             retry=retry,
                         )
-                        for item in result.get("data", []):
+                        for item in result.get("data") or []:
                             p = item.get("citingPaper", {})
                             pid = p.get("paperId")
                             if not pid:
@@ -291,7 +318,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
                             offset=0,
                             retry=retry,
                         )
-                        for item in result.get("data", []):
+                        for item in result.get("data") or []:
                             p = item.get("citedPaper", {})
                             pid = p.get("paperId")
                             if not pid:
@@ -422,7 +449,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
                             )
                             cached = [
                                 item["citedPaper"]["paperId"]
-                                for item in result.get("data", [])
+                                for item in (result.get("data") or [])
                                 if item.get("citedPaper", {}).get("paperId")
                             ]
                             await bundle.cache.set_references(paper_id, cached)
@@ -442,7 +469,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
                             )
                             cached_cit = [
                                 item["citingPaper"]["paperId"]
-                                for item in result.get("data", [])
+                                for item in (result.get("data") or [])
                                 if item.get("citingPaper", {}).get("paperId")
                             ]
                             await bundle.cache.set_citations(paper_id, cached_cit)
