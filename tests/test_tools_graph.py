@@ -1205,3 +1205,233 @@ async def test_get_citation_graph_references_year_filter(
     assert "r1" in node_ids  # 2019 in [2015, 2022]
     assert "r2" not in node_ids  # 2010 < 2015
     assert "r3" not in node_ids  # 2025 > 2022
+
+
+# --- Bug fix: find_bridge_papers handles null data from S2 API (#39) ---
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_find_bridge_papers_null_data_references(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """find_bridge_papers handles S2 returning {"data": null} for references."""
+    respx_mock.get("/paper/p1/references").mock(
+        return_value=httpx.Response(200, json={"data": None})
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "find_bridge_papers",
+            {
+                "source_id": "p1",
+                "target_id": "p2",
+                "max_depth": 1,
+                "direction": "references",
+            },
+        )
+    data = json.loads(result.content[0].text)
+    assert data["found"] is False
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_find_bridge_papers_null_data_citations(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """find_bridge_papers handles S2 returning {"data": null} for citations."""
+    respx_mock.get("/paper/p1/citations").mock(
+        return_value=httpx.Response(200, json={"data": None})
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "find_bridge_papers",
+            {
+                "source_id": "p1",
+                "target_id": "p2",
+                "max_depth": 1,
+                "direction": "citations",
+            },
+        )
+    data = json.loads(result.content[0].text)
+    assert data["found"] is False
+
+
+# --- Bug fix: get_citation_graph handles null data from S2 API (#40) ---
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_citation_graph_null_data_citations(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """get_citation_graph handles S2 returning {"data": null} for citations."""
+    respx_mock.post("/paper/batch").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {"paperId": "p1", "title": "Seed", "year": 2020, "citationCount": 10}
+            ],
+        )
+    )
+    respx_mock.get("/paper/p1/citations").mock(
+        return_value=httpx.Response(200, json={"data": None})
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_citation_graph",
+            {"seed_ids": ["p1"], "direction": "citations", "depth": 1, "max_nodes": 50},
+        )
+    data = json.loads(result.content[0].text)
+    assert data["stats"]["total_nodes"] == 1
+    assert data["nodes"][0]["id"] == "p1"
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_citation_graph_null_data_references(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """get_citation_graph handles S2 returning {"data": null} for references."""
+    respx_mock.post("/paper/batch").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {"paperId": "p1", "title": "Seed", "year": 2020, "citationCount": 10}
+            ],
+        )
+    )
+    respx_mock.get("/paper/p1/references").mock(
+        return_value=httpx.Response(200, json={"data": None})
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_citation_graph",
+            {
+                "seed_ids": ["p1"],
+                "direction": "references",
+                "depth": 1,
+                "max_nodes": 50,
+            },
+        )
+    data = json.loads(result.content[0].text)
+    assert data["stats"]["total_nodes"] == 1
+    assert data["nodes"][0]["id"] == "p1"
+
+
+# --- Bug fix: get_citations applies min_citations client-side (#37) ---
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_citations_min_citations_filters_results(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """get_citations applies min_citations as a client-side post-filter."""
+    respx_mock.get("/paper/p1/citations").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "citingPaper": {
+                            "paperId": "c1",
+                            "title": "Popular",
+                            "year": 2023,
+                            "citationCount": 500,
+                        }
+                    },
+                    {
+                        "citingPaper": {
+                            "paperId": "c2",
+                            "title": "Obscure",
+                            "year": 2024,
+                            "citationCount": 3,
+                        }
+                    },
+                    {
+                        "citingPaper": {
+                            "paperId": "c3",
+                            "title": "Medium",
+                            "year": 2022,
+                            "citationCount": 100,
+                        }
+                    },
+                ]
+            },
+        )
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_citations", {"identifier": "p1", "min_citations": 50}
+        )
+    data = json.loads(result.content[0].text)
+    ids = [item["citingPaper"]["paperId"] for item in data["data"]]
+    assert "c1" in ids  # 500 >= 50
+    assert "c3" in ids  # 100 >= 50
+    assert "c2" not in ids  # 3 < 50
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_citations_min_citations_excludes_null_count(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """get_citations excludes papers with null citationCount when min_citations is set."""
+    respx_mock.get("/paper/p1/citations").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "citingPaper": {
+                            "paperId": "c1",
+                            "title": "Has Count",
+                            "year": 2023,
+                            "citationCount": 200,
+                        }
+                    },
+                    {
+                        "citingPaper": {
+                            "paperId": "c2",
+                            "title": "No Count",
+                            "year": 2023,
+                            "citationCount": None,
+                        }
+                    },
+                ]
+            },
+        )
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_citations", {"identifier": "p1", "min_citations": 10}
+        )
+    data = json.loads(result.content[0].text)
+    ids = [item["citingPaper"]["paperId"] for item in data["data"]]
+    assert "c1" in ids
+    assert "c2" not in ids
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_citations_no_min_citations_returns_all(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """get_citations without min_citations returns all results unfiltered."""
+    respx_mock.get("/paper/p1/citations").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "citingPaper": {
+                            "paperId": "c1",
+                            "title": "C1",
+                            "year": 2023,
+                            "citationCount": 0,
+                        }
+                    },
+                ]
+            },
+        )
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_citations", {"identifier": "p1"}
+        )
+    data = json.loads(result.content[0].text)
+    assert len(data["data"]) == 1
+    assert data["data"][0]["citingPaper"]["paperId"] == "c1"

@@ -68,12 +68,16 @@ def register_graph_tools(mcp: FastMCP) -> None:
 
         fos = ",".join(fields_of_study) if fields_of_study else None
 
+        # S2 citations endpoint does not support minCitationCount —
+        # over-fetch and filter client-side when min_citations is set.
+        fetch_limit = limit if min_citations is None else min(max(limit * 5, 200), 1000)
+
         async def _execute(*, retry: bool = True) -> str:
             try:
                 result = await bundle.s2.get_citations(
                     identifier,
                     fields=FIELD_SETS[fields],
-                    limit=limit,
+                    limit=fetch_limit,
                     offset=offset,
                     year=year,
                     fieldsOfStudy=fos,
@@ -85,6 +89,17 @@ def register_graph_tools(mcp: FastMCP) -> None:
                 return json.dumps(
                     {"error": "upstream_error", "status": exc.response.status_code}
                 )
+
+            if min_citations is not None:
+                data = result.get("data") or []
+                filtered = [
+                    item
+                    for item in data
+                    if (item.get("citingPaper", {}).get("citationCount") or 0)
+                    >= min_citations
+                ]
+                result = {**result, "data": filtered[:limit]}
+
             return json.dumps(result)
 
         try:
@@ -253,7 +268,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
                             fieldsOfStudy=fos,
                             retry=retry,
                         )
-                        for item in result.get("data", []):
+                        for item in result.get("data") or []:
                             p = item.get("citingPaper", {})
                             pid = p.get("paperId")
                             if not pid:
@@ -291,7 +306,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
                             offset=0,
                             retry=retry,
                         )
-                        for item in result.get("data", []):
+                        for item in result.get("data") or []:
                             p = item.get("citedPaper", {})
                             pid = p.get("paperId")
                             if not pid:
@@ -422,7 +437,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
                             )
                             cached = [
                                 item["citedPaper"]["paperId"]
-                                for item in result.get("data", [])
+                                for item in (result.get("data") or [])
                                 if item.get("citedPaper", {}).get("paperId")
                             ]
                             await bundle.cache.set_references(paper_id, cached)
@@ -442,7 +457,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
                             )
                             cached_cit = [
                                 item["citingPaper"]["paperId"]
-                                for item in result.get("data", [])
+                                for item in (result.get("data") or [])
                                 if item.get("citingPaper", {}).get("paperId")
                             ]
                             await bundle.cache.set_citations(paper_id, cached_cit)
