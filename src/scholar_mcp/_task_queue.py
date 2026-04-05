@@ -26,6 +26,7 @@ class TaskResult:
         error: Error message when failed.
         created_at: Unix timestamp when the task was created.
         ttl: Time-to-live in seconds before auto-expiry.
+        tool: Originating tool name (for hints).
     """
 
     task_id: str
@@ -34,6 +35,12 @@ class TaskResult:
     error: str | None = None
     created_at: float = field(default_factory=time.time)
     ttl: float = _DEFAULT_TTL
+    tool: str | None = None
+
+    @property
+    def elapsed_seconds(self) -> int:
+        """Seconds since the task was created."""
+        return int(time.time() - self.created_at)
 
 
 class TaskQueue:
@@ -56,12 +63,14 @@ class TaskQueue:
         coro: Coroutine[Any, Any, str],
         *,
         ttl: float | None = None,
+        tool: str | None = None,
     ) -> str:
         """Submit a coroutine for background execution.
 
         Args:
             coro: Async callable that returns a JSON string.
             ttl: Optional per-task TTL override.
+            tool: Originating tool name (included in poll responses).
 
         Returns:
             Unique task ID for polling via :meth:`get`.
@@ -71,6 +80,7 @@ class TaskQueue:
             task_id=task_id,
             status="pending",
             ttl=ttl if ttl is not None else self._default_ttl,
+            tool=tool,
         )
         self._tasks[task_id] = task
         bg = asyncio.create_task(self._run(task, coro))

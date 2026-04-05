@@ -79,7 +79,12 @@ async def make_service_lifespan(
             vlm_api_key=config.vlm_api_key,
             vlm_model=config.vlm_model,
         )
-        logger.info("docling_configured url=%s", config.docling_url)
+        logger.info(
+            "docling_configured url=%s vlm_available=%s vlm_model=%s",
+            config.docling_url,
+            docling.vlm_available,
+            config.vlm_model if docling.vlm_available else "(n/a)",
+        )
     else:
         logger.info("docling_not_configured pdf_tools_disabled")
 

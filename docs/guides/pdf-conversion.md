@@ -58,12 +58,26 @@ export SCHOLAR_MCP_VLM_MODEL=gpt-4o
 
 When VLM is configured, tools accept a `use_vlm=true` parameter that:
 
-- Extracts LaTeX formulas from images
+- Extracts LaTeX formulas from formula images
 - Generates text descriptions of figures
-- Produces higher-quality Markdown output
+- Produces higher-quality Markdown for math-heavy and figure-heavy papers
+
+VLM enrichment runs on top of the standard OCR pipeline — it processes each extracted formula and figure image individually via the configured vision model, not full pages.
+
+!!! tip "Start without VLM"
+    Standard conversion handles most papers well. Only retry with `use_vlm=true` when the result has garbled formulas or missing figure descriptions.
 
 !!! note "Cost and speed"
-    VLM enrichment makes API calls to the configured endpoint for each page with formulas or figures. This is slower and incurs additional costs compared to standard conversion.
+    VLM enrichment makes API calls to the configured endpoint for each formula and figure. This is slower and incurs additional costs compared to standard conversion.
+
+### Caching
+
+VLM and standard conversions are cached separately:
+
+- Standard: `$SCHOLAR_MCP_CACHE_DIR/md/<name>.md`
+- VLM: `$SCHOLAR_MCP_CACHE_DIR/md/<name>_vlm.md`
+
+Switching between modes never overwrites a previous conversion. When VLM is requested but not configured, the response includes a `vlm_skip_reason` field explaining why (e.g. `"vlm_api_url_not_configured"`).
 
 ## Docker Compose with docling-serve
 

@@ -106,7 +106,9 @@ def register_pdf_tools(mcp: FastMCP) -> None:
                     )
                 return await _download(p)
 
-            task_id = bundle.tasks.submit(_execute_full(), ttl=_PDF_TASK_TTL)
+            task_id = bundle.tasks.submit(
+                _execute_full(), ttl=_PDF_TASK_TTL, tool="fetch_paper_pdf"
+            )
             return json.dumps(
                 {
                     "queued": True,
@@ -145,7 +147,9 @@ def register_pdf_tools(mcp: FastMCP) -> None:
             return json.dumps({"path": str(pdf_path)})
 
         # PDF not cached — queue the download
-        task_id = bundle.tasks.submit(_download(paper), ttl=_PDF_TASK_TTL)
+        task_id = bundle.tasks.submit(
+            _download(paper), ttl=_PDF_TASK_TTL, tool="fetch_paper_pdf"
+        )
         return json.dumps(
             {"queued": True, "task_id": task_id, "tool": "fetch_paper_pdf"}
         )
@@ -168,10 +172,20 @@ def register_pdf_tools(mcp: FastMCP) -> None:
         Works on any local PDF, including manually placed paywalled papers.
         Returns an error if the server does not have PDF conversion configured.
 
+        Tip: start with ``use_vlm=false`` (the default). Standard conversion
+        handles most papers well. Only retry with ``use_vlm=true`` when the
+        result has garbled formulas or missing figure descriptions.
+
+        VLM and standard results are cached separately (``<stem>.md`` vs
+        ``<stem>_vlm.md``), so switching modes never overwrites a previous
+        conversion. When VLM is requested but not configured, the response
+        includes a ``vlm_skip_reason`` field explaining why.
+
         Args:
             file_path: Absolute path to the local PDF file.
             use_vlm: Use VLM enrichment for formulas and figures.
-                Falls back to standard conversion if VLM is not available.
+                Falls back to standard conversion if VLM is not configured
+                and reports the reason in ``vlm_skip_reason``.
 
         Returns:
             JSON ``{"markdown": "...", "path": "...", "vlm_used": bool}``.
@@ -183,18 +197,22 @@ def register_pdf_tools(mcp: FastMCP) -> None:
         if not path.exists():
             return json.dumps({"error": "file_not_found", "path": file_path})
 
-        # Return cached markdown if it already exists
+        # Return cached markdown if it already exists.
+        # VLM and standard conversions use separate cache files.
         md_dir = bundle.config.cache_dir / "md"
-        md_path = md_dir / f"{path.stem}.md"
+        vlm_suffix = "_vlm" if use_vlm and bundle.docling.vlm_available else ""
+        md_path = md_dir / f"{path.stem}{vlm_suffix}.md"
         if md_path.exists():
             markdown = await asyncio.to_thread(md_path.read_text, encoding="utf-8")
-            return json.dumps(
-                {
-                    "markdown": markdown,
-                    "path": str(md_path),
-                    "vlm_used": False,
-                }
-            )
+            result: dict[str, object] = {
+                "markdown": markdown,
+                "path": str(md_path),
+                "vlm_used": bool(vlm_suffix),
+            }
+            skip_reason = bundle.docling.vlm_skip_reason(use_vlm)
+            if skip_reason:
+                result["vlm_skip_reason"] = skip_reason
+            return json.dumps(result)
 
         async def _execute() -> str:
             pdf_bytes = await asyncio.to_thread(path.read_bytes)
@@ -208,19 +226,23 @@ def register_pdf_tools(mcp: FastMCP) -> None:
                 return json.dumps({"error": "docling_error", "detail": str(exc)})
 
             vlm_used = use_vlm and bundle.docling.vlm_available  # type: ignore[union-attr]
+            skip_reason = bundle.docling.vlm_skip_reason(use_vlm)  # type: ignore[union-attr]
 
             md_dir.mkdir(parents=True, exist_ok=True)
             await asyncio.to_thread(md_path.write_text, markdown, encoding="utf-8")
 
-            return json.dumps(
-                {
-                    "markdown": markdown,
-                    "path": str(md_path),
-                    "vlm_used": vlm_used,
-                }
-            )
+            result: dict[str, object] = {
+                "markdown": markdown,
+                "path": str(md_path),
+                "vlm_used": vlm_used,
+            }
+            if skip_reason:
+                result["vlm_skip_reason"] = skip_reason
+            return json.dumps(result)
 
-        task_id = bundle.tasks.submit(_execute(), ttl=_PDF_TASK_TTL)
+        task_id = bundle.tasks.submit(
+            _execute(), ttl=_PDF_TASK_TTL, tool="convert_pdf_to_markdown"
+        )
         return json.dumps(
             {
                 "queued": True,
@@ -247,9 +269,20 @@ def register_pdf_tools(mcp: FastMCP) -> None:
         Each stage fails gracefully: metadata is always returned if the paper
         resolves, even if PDF download or conversion fails.
 
+        Tip: start with ``use_vlm=false`` (the default). Standard conversion
+        handles most papers well. Only retry with ``use_vlm=true`` when the
+        result has garbled formulas or missing figure descriptions.
+
+        VLM and standard results are cached separately (``<id>.md`` vs
+        ``<id>_vlm.md``), so switching modes never overwrites a previous
+        conversion. When VLM is requested but not configured, the response
+        includes a ``vlm_skip_reason`` field explaining why.
+
         Args:
             identifier: Paper identifier (DOI, S2 ID, ARXIV:, etc.).
             use_vlm: Use VLM enrichment for formula/figure extraction.
+                Falls back to standard conversion if VLM is not configured
+                and reports the reason in ``vlm_skip_reason``.
 
         Returns:
             JSON with ``metadata`` and ``markdown`` on full success,
@@ -318,22 +351,27 @@ def register_pdf_tools(mcp: FastMCP) -> None:
                     }
                 )
 
+            vlm_used = use_vlm and bundle.docling.vlm_available
+            vlm_suffix = "_vlm" if vlm_used else ""
             md_dir = bundle.config.cache_dir / "md"
             md_dir.mkdir(parents=True, exist_ok=True)
-            md_path = md_dir / f"{paper_id}.md"
+            md_path = md_dir / f"{paper_id}{vlm_suffix}.md"
             await asyncio.to_thread(md_path.write_text, markdown, encoding="utf-8")
+            result: dict[str, object] = {
+                "metadata": paper,
+                "markdown": markdown,
+                "pdf_path": str(pdf_path),
+                "md_path": str(md_path),
+                "vlm_used": vlm_used,
+            }
+            skip_reason = bundle.docling.vlm_skip_reason(use_vlm)
+            if skip_reason:
+                result["vlm_skip_reason"] = skip_reason
+            return json.dumps(result)
 
-            return json.dumps(
-                {
-                    "metadata": paper,
-                    "markdown": markdown,
-                    "pdf_path": str(pdf_path),
-                    "md_path": str(md_path),
-                    "vlm_used": use_vlm and bundle.docling.vlm_available,
-                }
-            )
-
-        task_id = bundle.tasks.submit(_execute(), ttl=_PDF_TASK_TTL)
+        task_id = bundle.tasks.submit(
+            _execute(), ttl=_PDF_TASK_TTL, tool="fetch_and_convert"
+        )
         return json.dumps(
             {"queued": True, "task_id": task_id, "tool": "fetch_and_convert"}
         )
