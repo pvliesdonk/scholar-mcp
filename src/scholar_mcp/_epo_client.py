@@ -90,11 +90,18 @@ class EpoClient:
                 dict attribute.
 
         Raises:
-            EpoRateLimitedError: When the traffic-light colour is anything
-                other than ``"green"``.
+            RuntimeError: When the traffic-light colour is ``"black"``
+                (daily quota exhausted — not retryable).
+            EpoRateLimitedError: When the traffic-light colour is yellow or
+                red (retryable rate limit).
         """
         header = response.headers.get("X-Throttling-Control", "green")
-        color = header.split()[0].lower() if header else "green"
+        parts = header.split()
+        color = parts[0].lower() if parts else "green"
+        if color == "black":
+            raise RuntimeError(
+                "EPO daily quota exhausted. Please try again tomorrow."
+            )
         if color != "green":
             logger.warning("epo_throttle color=%s", color)
             raise EpoRateLimitedError(color)

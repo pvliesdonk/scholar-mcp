@@ -246,17 +246,36 @@ async def test_red_throttle_raises_epo_rate_limited_error(
         await epo_client.search("ti=Test")
 
 
-async def test_black_throttle_raises_epo_rate_limited_error(
+async def test_black_throttle_raises_runtime_error(
     epo_client: EpoClient,
     mock_ops_client: MagicMock,
 ) -> None:
-    """Black traffic light raises EpoRateLimitedError."""
+    """Black traffic light raises RuntimeError (daily quota exhausted, not retryable)."""
     mock_ops_client.published_data_search.return_value = _mock_response(
         _SEARCH_XML, throttle="black"
     )
-    with pytest.raises(EpoRateLimitedError) as exc_info:
+    with pytest.raises(RuntimeError, match="daily quota exhausted"):
         await epo_client.search("ti=Test")
-    assert exc_info.value.color == "black"
+
+
+async def test_black_throttle_does_not_raise_epo_rate_limited_error(
+    epo_client: EpoClient,
+    mock_ops_client: MagicMock,
+) -> None:
+    """Black traffic light must NOT raise EpoRateLimitedError (it is not retryable)."""
+    mock_ops_client.published_data_search.return_value = _mock_response(
+        _SEARCH_XML, throttle="black"
+    )
+    with pytest.raises(RuntimeError):
+        await epo_client.search("ti=Test")
+    # If we reach here without EpoRateLimitedError, the test passes implicitly;
+    # but also confirm it's not an EpoRateLimitedError subclass
+    try:
+        await epo_client.search("ti=Test")
+    except RuntimeError:
+        pass  # expected
+    except EpoRateLimitedError:
+        pytest.fail("Black throttle should raise RuntimeError, not EpoRateLimitedError")
 
 
 async def test_throttle_on_get_biblio(

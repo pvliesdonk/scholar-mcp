@@ -124,6 +124,8 @@ def normalize(raw: str) -> DocdbNumber:
         raise ValueError(f"Cannot parse patent number: {raw!r}")
     country = m.group("country").upper()
     number = m.group("number").replace(",", "").replace("/", "")
+    if not number:
+        raise ValueError(f"Patent number has no numeric portion: {raw!r}")
     kind = m.group("kind") or ""
     return DocdbNumber(country=country, number=number, kind=kind)
 

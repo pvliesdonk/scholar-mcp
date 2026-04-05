@@ -65,6 +65,10 @@ class TestNormalize:
         with pytest.raises(ValueError, match="Cannot parse"):
             normalize("EPABCDEF")
 
+    def test_invalid_no_numeric_portion(self) -> None:
+        with pytest.raises(ValueError, match="no numeric portion"):
+            normalize("EP/A1")
+
 
 class TestIsPatentNumber:
     def test_ep_patent(self) -> None:
