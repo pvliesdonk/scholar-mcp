@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from scholar_mcp._citation_formatter import (
     escape_bibtex,
     generate_bibtex_key,
@@ -74,6 +72,9 @@ class TestInferEntryType:
 
     def test_empty_venue_no_arxiv(self) -> None:
         assert infer_entry_type({"venue": ""}) == "article"
+
+    def test_none_venue(self) -> None:
+        assert infer_entry_type({"venue": None}) == "article"
 
 
 class TestEscapeBibtex:

@@ -60,8 +60,19 @@ def escape_bibtex(text: str) -> str:
             result.append(f"{{\\{accent}{base}}}")
             i += 2
         else:
-            result.append(_BIBTEX_ESCAPES.get(ch, ch))
-            i += 1
+            # Check if this is a base char followed by an unmapped
+            # combining mark — normalise back to NFC to avoid orphaning.
+            if (
+                i + 1 < len(nfd)
+                and unicodedata.category(nfd[i + 1]) == "Mn"
+                and nfd[i + 1] not in _UNICODE_TO_LATEX
+            ):
+                composed = unicodedata.normalize("NFC", ch + nfd[i + 1])
+                result.append(composed)
+                i += 2
+            else:
+                result.append(_BIBTEX_ESCAPES.get(ch, ch))
+                i += 1
     return "".join(result)
 
 
@@ -89,7 +100,7 @@ def generate_bibtex_key(paper: dict[str, Any], seen_keys: set[str]) -> str:
         last = "anon"
 
     year = paper.get("year")
-    base = f"{last}{year}" if year else last
+    base = f"{last}{year}" if year is not None else last
 
     if base not in seen_keys:
         seen_keys.add(base)
