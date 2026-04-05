@@ -252,7 +252,7 @@ Generate formatted citations for one or more papers. Resolves papers via Semanti
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `paper_ids` | list[string] | *(required)* | Paper identifiers (S2 IDs, DOIs, arXiv IDs, etc.). Max 100. |
-| `format` | string | `"bibtex"` | Output format: `bibtex`, `csl-json`, or `ris` |
+| `citation_format` | string | `"bibtex"` | Output format: `bibtex`, `csl-json`, or `ris` |
 | `enrich` | boolean | `true` | Attempt OpenAlex enrichment for missing venue data |
 
 **BibTeX output** includes entry type inference (`@article`, `@inproceedings`, `@misc`), proper author formatting (`{Last}, First`), title casing preservation, DOI, arXiv eprint fields, and special character escaping.
