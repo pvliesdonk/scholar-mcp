@@ -36,13 +36,14 @@ INFO scholar_mcp._server_deps: docling_configured url=http://localhost:5001
 
 ## Tools
 
-Three tools are available once configured:
+Four tools are available once configured:
 
 | Tool | What it does |
 |---|---|
-| `fetch_paper_pdf` | Downloads the open-access PDF for a paper |
+| `fetch_paper_pdf` | Downloads the PDF for a paper (tries OA, then ArXiv/PMC/Unpaywall) |
 | `convert_pdf_to_markdown` | Converts a local PDF file to Markdown |
 | `fetch_and_convert` | Full pipeline: find paper, download PDF, convert to Markdown |
+| `fetch_pdf_by_url` | Downloads a PDF from any URL and optionally converts to Markdown |
 
 PDFs are stored in `$SCHOLAR_MCP_CACHE_DIR/pdfs/` and Markdown files in `$SCHOLAR_MCP_CACHE_DIR/md/`.
 
@@ -114,8 +115,23 @@ Use `get_task_result` with the `task_id` to poll for completion. PDF task result
 
 The only exception is `convert_pdf_to_markdown` when the markdown output file already exists locally — in that case, the cached result is returned directly.
 
+## Alternative PDF sources
+
+When a paper has no open-access PDF URL in Semantic Scholar, `fetch_paper_pdf` and `fetch_and_convert` automatically try alternative sources:
+
+1. **ArXiv** — If the paper has an `externalIds.ArXiv` field, the PDF is fetched from `arxiv.org/pdf/<id>.pdf`.
+2. **PubMed Central** — If the paper has a `PubMedCentral` external ID, the PDF is fetched from NCBI.
+3. **Unpaywall** — If the paper has a DOI and `SCHOLAR_MCP_CONTACT_EMAIL` is set, the [Unpaywall API](https://unpaywall.org/products/api) is queried for an OA PDF location.
+
+The `source` field in the response indicates where the PDF came from: `s2_oa`, `arxiv`, `pmc`, or `unpaywall`.
+
+For PDFs found through other means (author homepages, institutional repositories, etc.), use `fetch_pdf_by_url` with the direct URL.
+
+!!! tip "Enable Unpaywall"
+    Set `SCHOLAR_MCP_CONTACT_EMAIL` to your email address to enable Unpaywall lookups. This is also used for the OpenAlex polite pool.
+
 ## Limitations
 
-- **Open-access only**: `fetch_paper_pdf` uses the `openAccessPdf.url` field from Semantic Scholar. Papers without an OA URL cannot be downloaded.
+- **Paywalled papers**: Alternative resolution only finds openly available versions. Truly paywalled papers require manual download followed by `convert_pdf_to_markdown`, or use `fetch_pdf_by_url` if you find a link.
 - **Conversion quality varies**: OCR quality depends on the PDF source. Scanned papers produce lower-quality results than born-digital PDFs.
 - **docling-serve polling**: Conversion is asynchronous internally. The server polls docling-serve for completion with a timeout of ~10 minutes (200 polls at 3-second intervals). This happens in the background task, so the MCP client is not blocked.

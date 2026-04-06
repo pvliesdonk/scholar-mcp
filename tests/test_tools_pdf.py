@@ -108,7 +108,14 @@ async def test_fetch_paper_pdf_no_oa(
 ) -> None:
     """fetch_paper_pdf returns no_oa_pdf directly when paper has no OA URL."""
     respx_mock.get("/paper/p1").mock(
-        return_value=httpx.Response(200, json={"paperId": "p1", "openAccessPdf": None})
+        return_value=httpx.Response(
+            200,
+            json={
+                "paperId": "p1",
+                "openAccessPdf": None,
+                "externalIds": {},
+            },
+        )
     )
     async with Client(mcp_no_docling) as client:
         result = await client.call_tool("fetch_paper_pdf", {"identifier": "p1"})
@@ -208,6 +215,7 @@ async def test_fetch_paper_pdf_cache_hit(
     data = json.loads(result.content[0].text)
     assert "queued" not in data
     assert data["path"] == str(pdf_path)
+    assert data["source"] == "s2_oa"
 
 
 async def test_convert_cached_markdown(
@@ -402,6 +410,55 @@ async def test_fetch_paper_pdf_rate_limited_then_succeeds(
 
 
 @pytest.mark.respx(assert_all_called=False)
+async def test_fetch_paper_pdf_rate_limited_arxiv_fallback(
+    bundle: ServiceBundle,
+) -> None:
+    """Rate-limited path fetches externalIds and uses ArXiv fallback."""
+    arxiv_pdf_url = "https://arxiv.org/pdf/2301.55555.pdf"
+    paper_json = {
+        "paperId": "rl_arx",
+        "openAccessPdf": None,
+        "externalIds": {"ArXiv": "2301.55555"},
+        "title": "Rate Limited ArXiv Paper",
+    }
+
+    call_count = 0
+
+    def s2_side_effect(request: httpx.Request) -> httpx.Response:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return httpx.Response(429)
+        return httpx.Response(200, json=paper_json)
+
+    with respx.mock(assert_all_called=False) as router:
+        router.get(f"{S2_BASE}/paper/rl_arx").mock(side_effect=s2_side_effect)
+        router.get(arxiv_pdf_url).mock(
+            return_value=httpx.Response(200, content=b"%PDF arxiv rl")
+        )
+
+        @asynccontextmanager
+        async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+            yield {"bundle": bundle}
+
+        app = FastMCP("test", lifespan=lifespan)
+        register_pdf_tools(app)
+        register_task_tools(app)
+
+        async with Client(app) as client:
+            result = await client.call_tool("fetch_paper_pdf", {"identifier": "rl_arx"})
+            queued = json.loads(result.content[0].text)
+            assert queued["queued"] is True
+
+            task_data = await _poll_task(client, queued["task_id"])
+
+    assert task_data["status"] == "completed"
+    inner = json.loads(task_data["result"])
+    assert inner["source"] == "arxiv"
+    assert Path(inner["path"]).exists()
+
+
+@pytest.mark.respx(assert_all_called=False)
 async def test_fetch_and_convert_success(
     bundle_with_docling: ServiceBundle,
 ) -> None:
@@ -448,3 +505,201 @@ async def test_fetch_and_convert_success(
     assert inner["pdf_path"].endswith("fc1.pdf")
     assert inner["md_path"].endswith("fc1.md")
     assert inner["vlm_used"] is False
+    assert inner["pdf_source"] == "s2_oa"
+
+
+# ---------------------------------------------------------------------------
+# Alternative PDF resolution tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_fetch_paper_pdf_arxiv_fallback(
+    respx_mock: respx.MockRouter,
+    bundle: ServiceBundle,
+) -> None:
+    """fetch_paper_pdf falls back to arXiv when openAccessPdf is null."""
+    arxiv_pdf_url = "https://arxiv.org/pdf/2301.12345.pdf"
+    paper_json = {
+        "paperId": "arx1",
+        "openAccessPdf": None,
+        "externalIds": {"ArXiv": "2301.12345"},
+        "title": "ArXiv Fallback Test",
+    }
+
+    with respx.mock(assert_all_called=False) as router:
+        router.get(f"{S2_BASE}/paper/arx1").mock(
+            return_value=httpx.Response(200, json=paper_json)
+        )
+        router.get(arxiv_pdf_url).mock(
+            return_value=httpx.Response(200, content=b"%PDF arxiv content")
+        )
+
+        @asynccontextmanager
+        async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+            yield {"bundle": bundle}
+
+        app = FastMCP("test", lifespan=lifespan)
+        register_pdf_tools(app)
+        register_task_tools(app)
+
+        async with Client(app) as client:
+            result = await client.call_tool("fetch_paper_pdf", {"identifier": "arx1"})
+            queued = json.loads(result.content[0].text)
+            assert queued["queued"] is True
+
+            task_data = await _poll_task(client, queued["task_id"])
+
+    assert task_data["status"] == "completed"
+    inner = json.loads(task_data["result"])
+    assert "path" in inner
+    assert inner["source"] == "arxiv"
+    assert Path(inner["path"]).exists()
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_fetch_and_convert_arxiv_fallback(
+    bundle_with_docling: ServiceBundle,
+) -> None:
+    """fetch_and_convert uses arXiv fallback and reports pdf_source."""
+    arxiv_pdf_url = "https://arxiv.org/pdf/2301.99999.pdf"
+    paper_json = {
+        "paperId": "fca1",
+        "openAccessPdf": None,
+        "externalIds": {"ArXiv": "2301.99999"},
+        "title": "Fetch and Convert ArXiv Test",
+    }
+
+    bundle_with_docling.docling.convert = AsyncMock(  # type: ignore[union-attr]
+        return_value="# ArXiv Paper\n\nContent."
+    )
+
+    with respx.mock(assert_all_called=False) as router:
+        router.get(f"{S2_BASE}/paper/fca1").mock(
+            return_value=httpx.Response(200, json=paper_json)
+        )
+        router.get(arxiv_pdf_url).mock(
+            return_value=httpx.Response(200, content=b"%PDF arxiv fc")
+        )
+
+        @asynccontextmanager
+        async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+            yield {"bundle": bundle_with_docling}
+
+        app = FastMCP("test", lifespan=lifespan)
+        register_pdf_tools(app)
+        register_task_tools(app)
+
+        async with Client(app) as client:
+            result = await client.call_tool("fetch_and_convert", {"identifier": "fca1"})
+            queued = json.loads(result.content[0].text)
+            task_data = await _poll_task(client, queued["task_id"])
+
+    assert task_data["status"] == "completed"
+    inner = json.loads(task_data["result"])
+    assert inner["pdf_source"] == "arxiv"
+    assert "# ArXiv Paper" in inner["markdown"]
+
+
+# ---------------------------------------------------------------------------
+# fetch_pdf_by_url tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.respx(assert_all_called=False)
+async def test_fetch_pdf_by_url_download_and_convert(
+    bundle_with_docling: ServiceBundle,
+) -> None:
+    """fetch_pdf_by_url downloads a PDF and converts to markdown."""
+    pdf_url = "https://example.com/custom/paper.pdf"
+
+    bundle_with_docling.docling.convert = AsyncMock(  # type: ignore[union-attr]
+        return_value="# Custom Paper\n\nFrom URL."
+    )
+
+    with respx.mock(assert_all_called=False) as router:
+        router.get(pdf_url).mock(
+            return_value=httpx.Response(200, content=b"%PDF custom")
+        )
+
+        @asynccontextmanager
+        async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+            yield {"bundle": bundle_with_docling}
+
+        app = FastMCP("test", lifespan=lifespan)
+        register_pdf_tools(app)
+        register_task_tools(app)
+
+        async with Client(app) as client:
+            result = await client.call_tool(
+                "fetch_pdf_by_url",
+                {"url": pdf_url, "filename": "custom_paper"},
+            )
+            queued = json.loads(result.content[0].text)
+            assert queued["queued"] is True
+            assert queued["tool"] == "fetch_pdf_by_url"
+
+            task_data = await _poll_task(client, queued["task_id"])
+
+    assert task_data["status"] == "completed"
+    inner = json.loads(task_data["result"])
+    assert inner["pdf_path"].endswith("custom_paper.pdf")
+    assert "# Custom Paper" in inner["markdown"]
+    assert inner["vlm_used"] is False
+
+
+@pytest.mark.respx(assert_all_called=False)
+async def test_fetch_pdf_by_url_no_docling(
+    bundle: ServiceBundle,
+) -> None:
+    """fetch_pdf_by_url without docling returns just the pdf_path."""
+    pdf_url = "https://example.com/nodocling.pdf"
+
+    with respx.mock(assert_all_called=False) as router:
+        router.get(pdf_url).mock(
+            return_value=httpx.Response(200, content=b"%PDF no docling")
+        )
+
+        @asynccontextmanager
+        async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+            yield {"bundle": bundle}
+
+        app = FastMCP("test", lifespan=lifespan)
+        register_pdf_tools(app)
+        register_task_tools(app)
+
+        async with Client(app) as client:
+            result = await client.call_tool("fetch_pdf_by_url", {"url": pdf_url})
+            queued = json.loads(result.content[0].text)
+            task_data = await _poll_task(client, queued["task_id"])
+
+    assert task_data["status"] == "completed"
+    inner = json.loads(task_data["result"])
+    assert "pdf_path" in inner
+    assert "markdown" not in inner
+
+
+async def test_fetch_pdf_by_url_cached(
+    bundle: ServiceBundle,
+) -> None:
+    """fetch_pdf_by_url returns cached path immediately."""
+    pdf_dir = bundle.config.cache_dir / "pdfs"
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+    cached = pdf_dir / "cached_paper.pdf"
+    cached.write_bytes(b"%PDF cached")
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_pdf_tools(app)
+
+    async with Client(app) as client:
+        result = await client.call_tool(
+            "fetch_pdf_by_url",
+            {"url": "https://example.com/cached_paper.pdf", "filename": "cached_paper"},
+        )
+    data = json.loads(result.content[0].text)
+    assert "queued" not in data
+    assert data["pdf_path"] == str(cached)

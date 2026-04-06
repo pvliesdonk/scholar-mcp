@@ -1,6 +1,6 @@
 # Tools
 
-Scholar MCP provides 18 tools across eight categories. All tools return JSON.
+Scholar MCP provides 19 tools across eight categories. All tools return JSON.
 
 All tools include [MCP tool annotations](https://spec.modelcontextprotocol.io/specification/2025-03-26/server/tools/#annotations):
 
@@ -356,16 +356,18 @@ Sections are fetched concurrently where possible (cache lookups run in parallel;
 
 ### `fetch_paper_pdf`
 
-Download the open-access PDF for a paper.
+Download the PDF for a paper. Tries the Semantic Scholar open-access URL first, then falls back to alternative sources: ArXiv (from `externalIds`), PubMed Central, and Unpaywall (by DOI, requires `SCHOLAR_MCP_CONTACT_EMAIL`).
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `identifier` | string | *(required)* | Paper ID (DOI, S2 ID, etc.) |
 
-**Returns:** `{"path": "/data/scholar-mcp/pdfs/<id>.pdf"}` or an error:
+**Returns:** `{"path": "/data/scholar-mcp/pdfs/<id>.pdf", "source": "s2_oa"}` or an error:
 
-- `{"error": "no_oa_pdf"}` -- paper has no open-access PDF URL
+- `{"error": "no_oa_pdf"}` -- no PDF URL found from any source
 - `{"error": "download_failed"}` -- HTTP error downloading the PDF
+
+The `source` field indicates where the PDF was obtained: `s2_oa`, `arxiv`, `pmc`, or `unpaywall`.
 
 ---
 
@@ -393,7 +395,7 @@ Requires `SCHOLAR_MCP_DOCLING_URL` to be set. VLM enrichment additionally requir
 
 ### `fetch_and_convert`
 
-Full pipeline: resolve paper, download PDF, convert to Markdown.
+Full pipeline: resolve paper, download PDF, convert to Markdown. Uses the same alternative source fallback as `fetch_paper_pdf`.
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
@@ -408,16 +410,42 @@ Full pipeline: resolve paper, download PDF, convert to Markdown.
   "markdown": "# Paper Title\n...",
   "pdf_path": "/data/scholar-mcp/pdfs/<id>.pdf",
   "md_path": "/data/scholar-mcp/md/<id>.md",
+  "pdf_source": "s2_oa",
   "vlm_used": false
 }
 ```
 
-Partial results are returned if a later stage fails (e.g. metadata + error if no OA PDF is available). When VLM is requested but not configured, the response includes `vlm_skip_reason`.
+Partial results are returned if a later stage fails (e.g. metadata + error if no OA PDF is available). The `pdf_source` field indicates the download source. When VLM is requested but not configured, the response includes `vlm_skip_reason`.
 
 !!! tip "Start without VLM"
     Same advice as `convert_pdf_to_markdown` — try standard first, add VLM only if formulas or figures are missing. VLM and standard conversions are cached separately (`<id>.md` vs `<id>_vlm.md`).
 
 See [PDF Conversion guide](../guides/pdf-conversion.md) for setup instructions.
+
+---
+
+### `fetch_pdf_by_url`
+
+Download a PDF from any URL and optionally convert to Markdown. Use this when you have found an alternative PDF link (e.g. from an author's homepage, a preprint server, or an institutional repository).
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `url` | string | *(required)* | Direct URL to a PDF file |
+| `filename` | string | -- | Filename stem for caching (e.g. `"smith2024_attention"`). Derived from the URL if omitted. |
+| `use_vlm` | bool | `false` | Enable VLM enrichment for formulas and figures |
+
+**Returns:** On success (with docling configured):
+
+```json
+{
+  "pdf_path": "/data/scholar-mcp/pdfs/<filename>.pdf",
+  "markdown": "# Paper Title\n...",
+  "md_path": "/data/scholar-mcp/md/<filename>.md",
+  "vlm_used": false
+}
+```
+
+Without docling, only `pdf_path` is returned. The PDF is cached by filename, so subsequent calls with the same filename return immediately.
 
 ---
 
