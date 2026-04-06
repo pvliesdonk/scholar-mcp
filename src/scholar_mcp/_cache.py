@@ -24,6 +24,7 @@ _PATENT_CLAIMS_TTL = 180 * 86400  # 180 days
 _PATENT_DESC_TTL = 180 * 86400  # 180 days
 _PATENT_FAMILY_TTL = 90 * 86400  # 90 days
 _PATENT_LEGAL_TTL = 7 * 86400  # 7 days
+_PATENT_CITATIONS_TTL = 90 * 86400  # 90 days
 _PATENT_SEARCH_TTL = 7 * 86400  # 7 days
 
 _SCHEMA = """
@@ -105,6 +106,13 @@ CREATE TABLE IF NOT EXISTS patent_legal (
 );
 CREATE INDEX IF NOT EXISTS idx_patent_legal_cached ON patent_legal(cached_at);
 
+CREATE TABLE IF NOT EXISTS patent_citations (
+    patent_id TEXT PRIMARY KEY,
+    data      TEXT NOT NULL,
+    cached_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_patent_citations_cached ON patent_citations(cached_at);
+
 CREATE TABLE IF NOT EXISTS patent_search (
     query_hash TEXT PRIMARY KEY,
     data       TEXT NOT NULL,
@@ -124,6 +132,7 @@ _TTL_TABLES = (
     "patent_descriptions",
     "patent_families",
     "patent_legal",
+    "patent_citations",
     "patent_search",
 )
 
@@ -571,6 +580,43 @@ class ScholarCache:
         db = _require_open(self._db)
         await db.execute(
             "INSERT OR REPLACE INTO patent_legal (patent_id, data, cached_at) VALUES (?, ?, ?)",
+            (patent_id, json.dumps(data), time.time()),
+        )
+        await db.commit()
+
+    # ------------------------------------------------------------------
+    # Patent citations (cited references)
+    # ------------------------------------------------------------------
+
+    async def get_patent_citations(self, patent_id: str) -> dict[str, Any] | None:
+        """Return cached patent citations or None if missing/stale.
+
+        Args:
+            patent_id: Normalised patent ID (e.g. ``EP.1234567.A1``).
+
+        Returns:
+            Dict with ``patent_refs`` and ``npl_refs`` keys, or None.
+        """
+        db = _require_open(self._db)
+        async with db.execute(
+            "SELECT data, cached_at FROM patent_citations WHERE patent_id = ?",
+            (patent_id,),
+        ) as cur:
+            row = await cur.fetchone()
+        if row is None or time.time() - row[1] > _PATENT_CITATIONS_TTL:
+            return None
+        return json.loads(row[0])  # type: ignore[no-any-return]
+
+    async def set_patent_citations(self, patent_id: str, data: dict[str, Any]) -> None:
+        """Cache patent citations (cited references).
+
+        Args:
+            patent_id: Normalised patent ID.
+            data: Dict with ``patent_refs`` and ``npl_refs`` keys.
+        """
+        db = _require_open(self._db)
+        await db.execute(
+            "INSERT OR REPLACE INTO patent_citations (patent_id, data, cached_at) VALUES (?, ?, ?)",
             (patent_id, json.dumps(data), time.time()),
         )
         await db.commit()

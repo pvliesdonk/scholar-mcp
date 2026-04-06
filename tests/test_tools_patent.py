@@ -205,8 +205,7 @@ def _make_epo_client(
         or [{"date": "2020-01-15", "code": "PUB", "description": "Published"}]
     )
     client.get_citations = AsyncMock(
-        return_value=citations_result
-        or {"patent_refs": [], "npl_refs": []}
+        return_value=citations_result or {"patent_refs": [], "npl_refs": []}
     )
     return client
 

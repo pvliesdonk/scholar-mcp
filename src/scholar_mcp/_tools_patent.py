@@ -16,6 +16,7 @@ from fastmcp.dependencies import Depends
 from ._epo_client import EpoClient, EpoRateLimitedError
 from ._patent_numbers import DocdbNumber, normalize
 from ._rate_limiter import RateLimitedError
+from ._s2_client import FIELD_SETS
 from ._server_deps import ServiceBundle, get_bundle
 
 logger = logging.getLogger(__name__)
@@ -451,7 +452,13 @@ async def _fetch_patent_sections(
         result["legal"] = legal
 
     async def _fetch_citations() -> None:
-        citations = await epo.get_citations(doc)
+        cached = await cache.get_patent_citations(patent_id)
+        if cached is not None:
+            citations = cached
+        else:
+            citations = await epo.get_citations(doc)
+            await cache.set_patent_citations(patent_id, citations)
+
         patent_refs = citations["patent_refs"]
         npl_refs = citations["npl_refs"]
 
@@ -470,8 +477,6 @@ async def _fetch_patent_sections(
             s2_results: list[dict[str, Any] | None] = [None] * len(doi_ids)
             if doi_ids:
                 try:
-                    from ._s2_client import FIELD_SETS
-
                     s2_results = await s2.batch_resolve(
                         doi_ids, fields=FIELD_SETS["compact"]
                     )
@@ -580,6 +585,8 @@ async def _get_citing_patents(
             biblio = await epo.get_biblio(doc)
             biblio["match_source"] = "epo_search"
             patents.append(biblio)
+        except (RateLimitedError, EpoRateLimitedError):
+            raise
         except Exception:
             logger.warning("citing_patent_biblio_failed patent=%s", doc.docdb)
 

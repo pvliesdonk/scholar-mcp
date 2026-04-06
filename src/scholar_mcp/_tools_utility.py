@@ -11,6 +11,7 @@ import httpx
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
 
+from ._epo_client import EpoRateLimitedError
 from ._patent_numbers import is_patent_number, normalize
 from ._rate_limiter import RateLimitedError
 from ._s2_client import FIELD_SETS
@@ -129,6 +130,8 @@ def register_utility_tools(mcp: FastMCP) -> None:
                         "error": "invalid_patent_number",
                         "source_type": "patent",
                     }
+                except (RateLimitedError, EpoRateLimitedError):
+                    raise
                 except Exception:
                     logger.warning("batch_patent_resolve_failed id=%s", raw)
                     return idx, {
@@ -156,7 +159,7 @@ def register_utility_tools(mcp: FastMCP) -> None:
 
         try:
             return await _execute(retry=False)
-        except RateLimitedError:
+        except (RateLimitedError, EpoRateLimitedError):
             task_id = bundle.tasks.submit(_execute(retry=True), tool="batch_resolve")
             return json.dumps(
                 {"queued": True, "task_id": task_id, "tool": "batch_resolve"}
