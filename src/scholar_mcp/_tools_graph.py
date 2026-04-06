@@ -11,6 +11,7 @@ import httpx
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
 
+from ._book_enrichment import enrich_books
 from ._rate_limiter import RateLimitedError
 from ._s2_client import FIELD_SETS
 from ._server_deps import ServiceBundle, get_bundle
@@ -152,6 +153,12 @@ def register_graph_tools(mcp: FastMCP) -> None:
                         f"(cap: {_MAX_UPSTREAM_SCAN}); some qualifying "
                         "papers may exist beyond this window."
                     )
+                papers = [
+                    item.get("citingPaper", {})
+                    for item in result["data"]  # type: ignore[union-attr]
+                    if item.get("citingPaper")
+                ]
+                await enrich_books(papers, bundle)
                 return json.dumps(result)
 
             try:
@@ -173,6 +180,12 @@ def register_graph_tools(mcp: FastMCP) -> None:
                         "status": exc.response.status_code,
                     }
                 )
+            papers = [
+                item.get("citingPaper", {})
+                for item in result.get("data") or []
+                if item.get("citingPaper")
+            ]
+            await enrich_books(papers, bundle)
             return json.dumps(result)
 
         try:
@@ -224,6 +237,12 @@ def register_graph_tools(mcp: FastMCP) -> None:
                 return json.dumps(
                     {"error": "upstream_error", "status": exc.response.status_code}
                 )
+            papers = [
+                item.get("citedPaper", {})
+                for item in result.get("data") or []
+                if item.get("citedPaper")
+            ]
+            await enrich_books(papers, bundle)
             return json.dumps(result)
 
         try:
@@ -465,6 +484,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
                 e for e in edges if e["source"] in node_ids and e["target"] in node_ids
             ]
 
+            await enrich_books(node_list, bundle)
             return json.dumps(
                 {
                     "nodes": node_list,
