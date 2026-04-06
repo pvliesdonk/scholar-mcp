@@ -483,6 +483,8 @@ async def _fetch_patent_sections(
                     s2_results = await s2.batch_resolve(
                         doi_ids, fields=FIELD_SETS["compact"]
                     )
+                except RateLimitedError:
+                    raise
                 except Exception:
                     logger.warning("npl_resolution_failed patent=%s", patent_id)
                     s2_results = [None] * len(doi_ids)
@@ -499,6 +501,7 @@ async def _fetch_patent_sections(
                     entry["confidence"] = "high"
                 elif npl["doi"]:
                     # Had DOI but resolution failed
+                    entry["doi"] = npl["doi"]
                     entry["confidence"] = None
                 else:
                     entry["confidence"] = None

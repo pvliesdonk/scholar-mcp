@@ -547,3 +547,31 @@ async def test_batch_resolve_preserves_order_with_patents(
     assert data[1]["source_type"] == "patent"
     assert data[2]["identifier"] == "p2"
     assert "paper" in data[2]
+
+
+async def test_batch_resolve_patent_rate_limited_queues(
+    bundle: ServiceBundle,
+) -> None:
+    """batch_resolve queues when EPO rate-limits during patent resolution."""
+    from scholar_mcp._epo_client import EpoRateLimitedError
+
+    bundle.epo = _make_epo_client(raise_on_biblio=EpoRateLimitedError("red"))
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_utility_tools(app)
+    from scholar_mcp._tools_tasks import register_task_tools
+
+    register_task_tools(app)
+
+    async with Client(app) as client:
+        result = await client.call_tool(
+            "batch_resolve",
+            {"identifiers": ["EP1234567A1"]},
+        )
+    data = json.loads(result.content[0].text)
+    assert data["queued"] is True
+    assert data["tool"] == "batch_resolve"
