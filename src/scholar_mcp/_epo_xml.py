@@ -498,7 +498,7 @@ def parse_citations_from_biblio(xml_data: bytes) -> dict[str, list[dict[str, Any
             text_el = nplcit.find(f"{{{_EXCH}}}text")
             raw = _text(text_el)
             doi_match = _DOI_RE.search(raw)
-            doi = doi_match.group(1).rstrip(".,;") if doi_match else None
+            doi = doi_match.group(1).rstrip(".,;>)]") if doi_match else None
             npl_refs.append({"raw": raw, "doi": doi})
 
     return {"patent_refs": patent_refs, "npl_refs": npl_refs}

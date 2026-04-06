@@ -462,7 +462,10 @@ async def _fetch_patent_sections(
         patent_refs = citations["patent_refs"]
         npl_refs = citations["npl_refs"]
 
-        # Resolve NPL references against Semantic Scholar
+        # Resolve NPL references against Semantic Scholar.
+        # Intentionally re-runs on cache hits: the cache stores raw EPO
+        # citation data (patent_refs + unresolved npl_refs) so that S2
+        # resolution always reflects the latest paper index state.
         resolved_npl: list[dict[str, Any]] = []
         if s2 is not None and npl_refs:
             # Build batch of DOI identifiers
