@@ -61,6 +61,7 @@ def register_pdf_tools(mcp: FastMCP) -> None:
             paper_data: dict,  # type: ignore[type-arg]
             resolved: ResolvedPdf | None = None,
         ) -> str:
+            dl_url: str | None
             if resolved:
                 dl_url = resolved.url
                 pdf_source = resolved.source
