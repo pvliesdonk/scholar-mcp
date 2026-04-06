@@ -318,19 +318,26 @@ contains cited references split into patent refs and NPL refs. For NPL:
 
 1. Extract DOI from citation string (regex)
 2. If DOI found: resolve via `batch_resolve` → confidence `high`
-3. If no DOI: extract title, search via `batch_resolve` → confidence `medium`
-4. If unresolved: return raw citation string with confidence `null`
+3. If unresolved: return raw citation string (and DOI if extracted but
+   resolution failed) with confidence `null`
+
+> **Deferred:** Title-based S2 fallback (confidence `medium`) is not
+> implemented in Phase 3. Most NPL citations with DOIs resolve at high
+> confidence; title-based fuzzy matching adds complexity and false-positive
+> risk. Tracked as a future enhancement.
 
 ### Papers → Patents (`get_citing_patents`)
 
-Best-effort, two sources:
+Best-effort discovery via EPO OPS search: search for DOI or title terms
+in cited references (`ct=` CQL field). Each result includes a
+`match_source` field. Tool description explicitly states coverage
+limitations.
 
-1. **EPO OPS search**: search for DOI or title terms in cited references
-   (`ct=` CQL field)
-2. **OpenAlex**: query for patent citations of the work
-
-Combine results, deduplicate by patent number. Each result has a `match_source`
-field. Tool description explicitly states coverage limitations.
+> **Deferred:** OpenAlex patent citation integration (combining EPO + OA
+> results with deduplication by patent number) is not implemented in
+> Phase 3. EPO-only provides the primary discovery path; OpenAlex
+> integration would improve recall but adds API complexity. Tracked as
+> a future enhancement.
 
 ## Dependencies
 
