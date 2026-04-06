@@ -92,12 +92,32 @@ class OpenLibraryClient:
             logger.warning("openlibrary_work_error work_id=%s", work_id)
             return None
 
+    async def get_edition(self, edition_id: str) -> dict[str, Any] | None:
+        """Fetch edition-level metadata.
+
+        Args:
+            edition_id: Open Library edition ID (e.g. ``OL1429049M``).
+
+        Returns:
+            Open Library edition dict, or None if not found.
+        """
+        await self._limiter.acquire()
+        try:
+            r = await self._client.get(f"/books/{edition_id}.json")
+            if r.status_code == 404:
+                return None
+            r.raise_for_status()
+            return r.json()  # type: ignore[no-any-return]
+        except httpx.HTTPStatusError:
+            logger.warning("openlibrary_edition_error edition_id=%s", edition_id)
+            return None
+
     async def aclose(self) -> None:
         """Close the underlying HTTP client."""
         await self._client.aclose()
 
 
-def _normalize_book(
+def normalize_book(
     data: dict[str, Any], *, source: Literal["search", "edition"] = "search"
 ) -> dict[str, Any]:
     """Normalize an Open Library response to the standard book record shape.

@@ -82,7 +82,7 @@ async def test_search_books_caches_results(
     async with Client(mcp) as client:
         await client.call_tool("search_books", {"query": "design patterns"})
     # Second call should hit cache, not API
-    cached = await bundle.cache.get_book_search("design patterns")
+    cached = await bundle.cache.get_book_search("design patterns:limit=10")
     assert cached is not None
     assert len(cached) == 1
 
@@ -123,21 +123,15 @@ async def test_get_book_isbn_cache_hit(
 async def test_get_book_by_edition_id(
     respx_mock: respx.MockRouter, mcp: FastMCP
 ) -> None:
-    """get_book resolves OL edition IDs (OL...M) via work endpoint."""
-    respx_mock.get("/works/OL1429049M.json").mock(
-        return_value=httpx.Response(
-            200,
-            json={
-                "title": "Design Patterns",
-                "key": "/works/OL1429049M",
-                "subjects": ["Software patterns"],
-            },
-        )
+    """get_book resolves OL edition IDs (OL...M) via /books/ endpoint."""
+    respx_mock.get("/books/OL1429049M.json").mock(
+        return_value=httpx.Response(200, json=SAMPLE_EDITION_RESPONSE)
     )
     async with Client(mcp) as client:
         result = await client.call_tool("get_book", {"identifier": "OL1429049M"})
     data = json.loads(result.content[0].text)
     assert data["title"] == "Design Patterns"
+    assert data["isbn_13"] == "9780201633610"
 
 
 @pytest.mark.respx(base_url=OL_BASE)

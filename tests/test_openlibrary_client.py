@@ -8,7 +8,7 @@ import respx
 
 from scholar_mcp._openlibrary_client import (
     OpenLibraryClient,
-    _normalize_book,
+    normalize_book,
 )
 from scholar_mcp._rate_limiter import RateLimiter
 
@@ -146,9 +146,9 @@ async def test_get_by_isbn_server_error(
     assert result is None
 
 
-def test_normalize_book_from_search_doc() -> None:
+def testnormalize_book_from_search_doc() -> None:
     doc = SAMPLE_SEARCH["docs"][0]
-    book = _normalize_book(doc, source="search")
+    book = normalize_book(doc, source="search")
     assert book["title"] == "Design Patterns"
     assert book["authors"] == ["Erich Gamma", "Richard Helm"]
     assert book["publisher"] == "Addison-Wesley"
@@ -160,8 +160,8 @@ def test_normalize_book_from_search_doc() -> None:
     assert book["google_books_url"] is None
 
 
-def test_normalize_book_from_edition() -> None:
-    book = _normalize_book(SAMPLE_EDITION, source="edition")
+def testnormalize_book_from_edition() -> None:
+    book = normalize_book(SAMPLE_EDITION, source="edition")
     assert book["title"] == "Design Patterns"
     assert book["publisher"] == "Addison-Wesley"
     assert book["isbn_13"] == "9780201633610"

@@ -7,7 +7,8 @@ import logging
 from typing import Any
 
 from ._cache import normalize_isbn
-from ._openlibrary_client import _normalize_book
+from ._openlibrary_client import normalize_book
+from ._rate_limiter import RateLimitedError
 from ._server_deps import ServiceBundle
 
 logger = logging.getLogger(__name__)
@@ -63,11 +64,13 @@ async def _enrich_one(paper: dict[str, Any], bundle: ServiceBundle) -> None:
         if edition is None:
             return
 
-        book = _normalize_book(edition, source="edition")
+        book = normalize_book(edition, source="edition")
         await bundle.cache.set_book_by_isbn(isbn, book)
         if book.get("openlibrary_work_id"):
             await bundle.cache.set_book_by_work(book["openlibrary_work_id"], book)
         paper["book_metadata"] = _to_enrichment_dict(book)
+    except RateLimitedError:
+        raise
     except Exception:
         logger.debug(
             "book_enrich_failed paper=%s isbn=%s",

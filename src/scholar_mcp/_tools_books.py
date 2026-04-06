@@ -10,14 +10,13 @@ from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
 
 from ._cache import normalize_isbn
-from ._openlibrary_client import _normalize_book
+from ._openlibrary_client import normalize_book
 from ._rate_limiter import RateLimitedError
 from ._server_deps import ServiceBundle, get_bundle
 
 logger = logging.getLogger(__name__)
 
 # Patterns for detecting identifier types.
-_ISBN_RE = re.compile(r"^[\d\-]{10,17}$")
 _OL_WORK_RE = re.compile(r"^OL\d+W$")
 _OL_EDITION_RE = re.compile(r"^OL\d+M$")
 
@@ -56,15 +55,16 @@ def register_book_tools(mcp: FastMCP) -> None:
         """
         limit = max(1, min(limit, 50))
 
-        cached = await bundle.cache.get_book_search(query)
+        cache_key = f"{query}:limit={limit}"
+        cached = await bundle.cache.get_book_search(cache_key)
         if cached is not None:
             logger.debug("book_search_cache_hit query=%s", query[:60])
             return json.dumps(cached)
 
         async def _execute(*, retry: bool = True) -> str:
             docs = await bundle.openlibrary.search(query, limit=limit)
-            books = [_normalize_book(doc, source="search") for doc in docs]
-            await bundle.cache.set_book_search(query, books)
+            books = [normalize_book(doc, source="search") for doc in docs]
+            await bundle.cache.set_book_search(cache_key, books)
             return json.dumps(books)
 
         try:
@@ -104,7 +104,7 @@ def register_book_tools(mcp: FastMCP) -> None:
             if _OL_WORK_RE.match(cleaned):
                 return await _resolve_work(cleaned, bundle)
             if _OL_EDITION_RE.match(cleaned):
-                return await _resolve_work(cleaned, bundle)
+                return await _resolve_edition(cleaned, bundle)
             # Assume ISBN
             isbn = normalize_isbn(cleaned)
             return await _resolve_isbn(isbn, bundle)
@@ -134,7 +134,7 @@ async def _resolve_isbn(isbn: str, bundle: ServiceBundle) -> str:
     if edition is None:
         return json.dumps({"error": "not_found", "identifier": isbn})
 
-    book = _normalize_book(edition, source="edition")
+    book = normalize_book(edition, source="edition")
     await bundle.cache.set_book_by_isbn(isbn, book)
     if book.get("openlibrary_work_id"):
         await bundle.cache.set_book_by_work(book["openlibrary_work_id"], book)
@@ -179,4 +179,26 @@ async def _resolve_work(work_id: str, bundle: ServiceBundle) -> str:
         "description": description if isinstance(description, str) else None,
     }
     await bundle.cache.set_book_by_work(work_id, book)
+    return json.dumps(book)
+
+
+async def _resolve_edition(edition_id: str, bundle: ServiceBundle) -> str:
+    """Resolve a book by Open Library edition ID, checking cache first.
+
+    Args:
+        edition_id: Open Library edition ID (e.g. ``OL1429049M``).
+        bundle: Service bundle with cache and openlibrary client.
+
+    Returns:
+        JSON book record, or ``{"error": "not_found"}`` if not found.
+    """
+    edition = await bundle.openlibrary.get_edition(edition_id)
+    if edition is None:
+        return json.dumps({"error": "not_found", "identifier": edition_id})
+
+    book = normalize_book(edition, source="edition")
+    if book.get("isbn_13"):
+        await bundle.cache.set_book_by_isbn(book["isbn_13"], book)
+    if book.get("openlibrary_work_id"):
+        await bundle.cache.set_book_by_work(book["openlibrary_work_id"], book)
     return json.dumps(book)

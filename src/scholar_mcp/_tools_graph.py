@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 from collections import deque
-from typing import Literal
+from typing import Any, Literal
 
 import httpx
 from fastmcp import FastMCP
@@ -100,7 +100,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
                 # newest-first so high-citation papers (typically older)
                 # may be deep in the list.
                 needed = offset + limit
-                filtered: list[dict[str, object]] = []
+                filtered: list[dict[str, Any]] = []
                 s2_offset = 0
                 exhausted = False
                 while len(filtered) < needed and s2_offset < _MAX_UPSTREAM_SCAN:
@@ -158,7 +158,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
                     for item in filtered[offset : offset + limit]
                     if item.get("citingPaper")
                 ]
-                await enrich_books(papers, bundle)  # type: ignore[arg-type]
+                await enrich_books(papers, bundle)
                 return json.dumps(result)
 
             try:
@@ -180,13 +180,13 @@ def register_graph_tools(mcp: FastMCP) -> None:
                         "status": exc.response.status_code,
                     }
                 )
-            data_list: list[dict[str, object]] = result.get("data") or []  # type: ignore[assignment]
+            data_list: list[dict[str, Any]] = result.get("data") or []  # type: ignore[assignment]
             citing_papers = [
                 item.get("citingPaper", {})
                 for item in data_list
                 if item.get("citingPaper")
             ]
-            await enrich_books(citing_papers, bundle)  # type: ignore[arg-type]
+            await enrich_books(citing_papers, bundle)
             return json.dumps(result)
 
         try:

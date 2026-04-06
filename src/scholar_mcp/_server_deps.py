@@ -135,7 +135,7 @@ async def make_service_lifespan(
     finally:
         await s2.aclose()
         await openalex_http.aclose()
-        await openlibrary_http.aclose()
+        await openlibrary.aclose()
         if docling_http:
             await docling_http.aclose()
         if epo is not None:

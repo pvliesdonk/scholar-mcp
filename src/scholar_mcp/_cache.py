@@ -17,6 +17,9 @@ logger = logging.getLogger(__name__)
 def isbn10_to_isbn13(isbn10: str) -> str:
     """Convert an ISBN-10 to ISBN-13.
 
+    ISBN-10 always maps to the 978 EAN prefix. The 979 prefix only
+    exists as native ISBN-13 (no ISBN-10 equivalent).
+
     Args:
         isbn10: 10-digit ISBN string (digits only, no hyphens).
 
@@ -41,7 +44,9 @@ def normalize_isbn(isbn: str) -> str:
     cleaned = isbn.replace("-", "").replace(" ", "")
     if len(cleaned) == 13 and cleaned.isdigit():
         return cleaned
-    if len(cleaned) == 10 and cleaned[:9].isdigit():
+    if len(cleaned) == 10 and cleaned[:9].isdigit() and (
+        cleaned[9].isdigit() or cleaned[9].upper() == "X"
+    ):
         return isbn10_to_isbn13(cleaned)
     return isbn
 
