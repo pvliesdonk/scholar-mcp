@@ -10,6 +10,8 @@ import pytest
 
 from scholar_mcp._cache import ScholarCache
 from scholar_mcp._openalex_client import OpenAlexClient
+from scholar_mcp._openlibrary_client import OpenLibraryClient
+from scholar_mcp._rate_limiter import RateLimiter
 from scholar_mcp._s2_client import S2Client
 from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._task_queue import TaskQueue
@@ -48,14 +50,20 @@ async def bundle(cache: ScholarCache, test_config: ServerConfig) -> ServiceBundl
     s2 = S2Client(api_key=None, delay=0.0)
     openalex_http = httpx.AsyncClient(base_url="https://api.openalex.org")
     openalex = OpenAlexClient(openalex_http)
+    openlibrary_http = httpx.AsyncClient(
+        base_url="https://openlibrary.org", timeout=10.0
+    )
+    openlibrary = OpenLibraryClient(openlibrary_http, RateLimiter(delay=0.0))
     yield ServiceBundle(
         s2=s2,
         openalex=openalex,
         docling=None,
         epo=None,
+        openlibrary=openlibrary,
         cache=cache,
         config=test_config,
         tasks=TaskQueue(),
     )
+    await openlibrary_http.aclose()
     await openalex_http.aclose()
     await s2.aclose()
