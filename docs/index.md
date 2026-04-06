@@ -10,7 +10,7 @@ Scholar MCP exposes 15 tools that let LLM-powered applications search, explore, 
 - **Citation graph** -- traverse forward citations, backward references, build citation graphs, discover bridge papers between fields
 - **Recommendations** -- get paper suggestions from positive and negative examples
 - **OpenAlex enrichment** -- augment Semantic Scholar metadata with affiliations, funders, OA status, and concepts
-- **PDF conversion** -- download open-access PDFs and convert to Markdown via [docling-serve](https://github.com/DS4SD/docling-serve), with optional VLM enrichment for formulas and figures
+- **PDF conversion** -- download PDFs and convert to Markdown via [docling-serve](https://github.com/DS4SD/docling-serve), with optional VLM enrichment for formulas and figures; automatic fallback to ArXiv, PubMed Central, and Unpaywall; direct URL download for alternative versions
 - **Async task queue** -- long-running operations return immediately with a task ID; poll for results with `get_task_result`
 
 Results are cached in a local SQLite database with per-table TTLs to minimize API calls and speed up repeated lookups.

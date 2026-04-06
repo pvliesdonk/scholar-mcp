@@ -9,7 +9,7 @@ All settings are controlled via environment variables with the `SCHOLAR_MCP_` pr
 | `SCHOLAR_MCP_S2_API_KEY` | -- | [Semantic Scholar API key](https://www.semanticscholar.org/product/api#api-key-form). Optional, but strongly recommended: unauthenticated requests are limited to ~1 req/s while authenticated requests get ~10 req/s. |
 | `SCHOLAR_MCP_READ_ONLY` | `true` | When `true`, all write-tagged tools are hidden. Set to `false` to enable PDF download and conversion. |
 | `SCHOLAR_MCP_CACHE_DIR` | `/data/scholar-mcp` | Directory for the SQLite cache database (`cache.db`) and downloaded PDFs (`pdfs/`, `md/`). |
-| `SCHOLAR_MCP_CONTACT_EMAIL` | -- | Included in the OpenAlex `User-Agent` header. Setting this gives you access to the [polite pool](https://docs.openalex.org/how-to-use-the-api/rate-limits-and-authentication#the-polite-pool) with higher rate limits. |
+| `SCHOLAR_MCP_CONTACT_EMAIL` | -- | Included in the OpenAlex `User-Agent` header for [polite pool](https://docs.openalex.org/how-to-use-the-api/rate-limits-and-authentication#the-polite-pool) access. Also enables [Unpaywall](https://unpaywall.org/products/api) lookups as a PDF fallback source when a paper has no open-access URL in Semantic Scholar. |
 | `SCHOLAR_MCP_LOG_LEVEL` | `INFO` | Python logging level: `DEBUG`, `INFO`, `WARNING`, or `ERROR`. |
 
 ## PDF Conversion

@@ -20,7 +20,7 @@ A [FastMCP](https://github.com/jlowin/fastmcp) server providing structured acade
 - **Citation generation** -- format paper metadata as BibTeX, CSL-JSON, or RIS citations with automatic entry type inference, author name parsing, and OpenAlex venue enrichment
 - **OpenAlex enrichment** -- augment paper metadata with open-access URLs, affiliations, funders, concepts, and OA status
 - **Patent search** -- search and retrieve patents via [EPO Open Patent Services](https://www.epo.org/en/searching-for-patents/data/web-services/ops) covering 100+ patent offices; EPO credentials are optional -- paper search works without them
-- **PDF conversion** -- download open-access PDFs and convert to Markdown via [docling-serve](https://github.com/DS4SD/docling-serve), with optional VLM enrichment for formulas and figures
+- **PDF conversion** -- download open-access PDFs and convert to Markdown via [docling-serve](https://github.com/DS4SD/docling-serve), with optional VLM enrichment for formulas and figures; automatic fallback to ArXiv, PubMed Central, and Unpaywall when Semantic Scholar has no OA link; direct URL download for PDFs found elsewhere
 - **Intelligent caching** -- SQLite-backed cache with per-table TTLs (30 days for papers/authors, 7 days for citations/references) and identifier aliasing
 - **Authentication** -- bearer token, OIDC (OAuth 2.1), or both simultaneously (multi-auth)
 - **Multi-transport** -- stdio (Claude Desktop), HTTP (streamable-http), and SSE transports
@@ -103,9 +103,9 @@ All settings are controlled via environment variables with the `SCHOLAR_MCP_` pr
 | Variable | Default | Description |
 |---|---|---|
 | `SCHOLAR_MCP_S2_API_KEY` | -- | Semantic Scholar API key ([request one](https://www.semanticscholar.org/product/api#api-key-form)); optional but recommended for higher rate limits |
-| `SCHOLAR_MCP_READ_ONLY` | `true` | If `true`, write-tagged tools (`fetch_paper_pdf`, `convert_pdf_to_markdown`, `fetch_and_convert`) are hidden |
+| `SCHOLAR_MCP_READ_ONLY` | `true` | If `true`, write-tagged tools (`fetch_paper_pdf`, `convert_pdf_to_markdown`, `fetch_and_convert`, `fetch_pdf_by_url`) are hidden |
 | `SCHOLAR_MCP_CACHE_DIR` | `/data/scholar-mcp` | Directory for the SQLite cache database and downloaded PDFs |
-| `SCHOLAR_MCP_CONTACT_EMAIL` | -- | Included in the OpenAlex User-Agent for [polite pool](https://docs.openalex.org/how-to-use-the-api/rate-limits-and-authentication#the-polite-pool) access (faster rate limits) |
+| `SCHOLAR_MCP_CONTACT_EMAIL` | -- | Included in the OpenAlex User-Agent for [polite pool](https://docs.openalex.org/how-to-use-the-api/rate-limits-and-authentication#the-polite-pool) access (faster rate limits); also enables Unpaywall PDF lookups |
 | `SCHOLAR_MCP_LOG_LEVEL` | `INFO` | Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
 
 ### PDF Conversion (optional)
@@ -186,9 +186,10 @@ All settings are controlled via environment variables with the `SCHOLAR_MCP_` pr
 
 | Tool | Description |
 |---|---|
-| `fetch_paper_pdf` | Download open-access PDF for a paper. |
+| `fetch_paper_pdf` | Download PDF for a paper (S2 open-access, then ArXiv/PMC/Unpaywall fallback). |
 | `convert_pdf_to_markdown` | Convert a local PDF to Markdown via docling-serve. |
-| `fetch_and_convert` | Full pipeline: fetch OA PDF, convert to Markdown, return both. |
+| `fetch_and_convert` | Full pipeline: fetch PDF (with fallback), convert to Markdown, return both. |
+| `fetch_pdf_by_url` | Download a PDF from any URL and optionally convert to Markdown. |
 
 > PDF tools are write-tagged and hidden when `SCHOLAR_MCP_READ_ONLY=true` (the default).
 
