@@ -4,7 +4,7 @@ A [FastMCP](https://github.com/jlowin/fastmcp) server providing structured acade
 
 ## What it does
 
-Scholar MCP exposes 15 tools that let LLM-powered applications search, explore, and retrieve academic papers:
+Scholar MCP exposes 19 tools that let LLM-powered applications search, explore, and retrieve academic papers:
 
 - **Search & retrieval** -- find papers by keyword, look up by DOI/arXiv/S2 ID, search authors
 - **Citation graph** -- traverse forward citations, backward references, build citation graphs, discover bridge papers between fields

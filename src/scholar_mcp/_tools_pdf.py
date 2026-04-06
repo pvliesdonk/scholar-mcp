@@ -11,7 +11,7 @@ import httpx
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
 
-from ._pdf_url_resolver import resolve_alternative_pdf
+from ._pdf_url_resolver import ResolvedPdf, resolve_alternative_pdf
 from ._rate_limiter import RateLimitedError
 from ._server_deps import ServiceBundle, get_bundle
 
@@ -57,18 +57,25 @@ def register_pdf_tools(mcp: FastMCP) -> None:
             PDF was obtained (``s2_oa``, ``arxiv``, ``pmc``, ``unpaywall``).
         """
 
-        async def _download(paper_data: dict) -> str:  # type: ignore[type-arg]
-            oa = paper_data.get("openAccessPdf") or {}
-            dl_url = oa.get("url")
-            pdf_source = "s2_oa"
-            if not dl_url:
-                alt = await resolve_alternative_pdf(
-                    paper_data,
-                    contact_email=bundle.config.contact_email,
-                )
-                if alt:
-                    dl_url = alt.url
-                    pdf_source = alt.source
+        async def _download(
+            paper_data: dict,  # type: ignore[type-arg]
+            resolved: ResolvedPdf | None = None,
+        ) -> str:
+            if resolved:
+                dl_url = resolved.url
+                pdf_source = resolved.source
+            else:
+                oa = paper_data.get("openAccessPdf") or {}
+                dl_url = oa.get("url")
+                pdf_source = "s2_oa"
+                if not dl_url:
+                    alt = await resolve_alternative_pdf(
+                        paper_data,
+                        contact_email=bundle.config.contact_email,
+                    )
+                    if alt:
+                        dl_url = alt.url
+                        pdf_source = alt.source
             if not dl_url:
                 return json.dumps(
                     {
@@ -82,7 +89,7 @@ def register_pdf_tools(mcp: FastMCP) -> None:
             dl_dir.mkdir(parents=True, exist_ok=True)
             dl_path = dl_dir / f"{pid}.pdf"
             if dl_path.exists():
-                return json.dumps({"path": str(dl_path)})
+                return json.dumps({"path": str(dl_path), "source": pdf_source})
             async with httpx.AsyncClient(timeout=120.0) as client:
                 try:
                     r = await client.get(dl_url, follow_redirects=True)
@@ -112,7 +119,8 @@ def register_pdf_tools(mcp: FastMCP) -> None:
             async def _execute_full() -> str:
                 try:
                     p = await bundle.s2.get_paper(
-                        identifier, fields="paperId,openAccessPdf,title"
+                        identifier,
+                        fields="paperId,openAccessPdf,externalIds,title",
                     )
                 except httpx.HTTPStatusError as exc:
                     if exc.response.status_code == 404:
@@ -149,9 +157,8 @@ def register_pdf_tools(mcp: FastMCP) -> None:
 
         oa_pdf = paper.get("openAccessPdf") or {}
         url = oa_pdf.get("url")
+        alt: ResolvedPdf | None = None
         if not url:
-            # Try alternative sources before giving up — but these may
-            # involve a network call (Unpaywall), so queue the work.
             alt = await resolve_alternative_pdf(
                 paper,
                 contact_email=bundle.config.contact_email,
@@ -164,7 +171,6 @@ def register_pdf_tools(mcp: FastMCP) -> None:
                         "title": paper.get("title"),
                     }
                 )
-            # Alternative found — fall through to cache check / queue
 
         paper_id = paper.get("paperId", identifier.replace("/", "_"))
         pdf_dir = bundle.config.cache_dir / "pdfs"
@@ -173,11 +179,15 @@ def register_pdf_tools(mcp: FastMCP) -> None:
 
         if pdf_path.exists():
             logger.info("pdf_already_exists path=%s", pdf_path)
-            return json.dumps({"path": str(pdf_path)})
+            source = alt.source if alt else "s2_oa"
+            return json.dumps({"path": str(pdf_path), "source": source})
 
-        # PDF not cached — queue the download (resolver runs again inside)
+        # PDF not cached — queue the download, passing resolved alt to
+        # avoid a duplicate Unpaywall lookup inside _download.
         task_id = bundle.tasks.submit(
-            _download(paper), ttl=_PDF_TASK_TTL, tool="fetch_paper_pdf"
+            _download(paper, resolved=alt),
+            ttl=_PDF_TASK_TTL,
+            tool="fetch_paper_pdf",
         )
         return json.dumps(
             {"queued": True, "task_id": task_id, "tool": "fetch_paper_pdf"}
@@ -450,16 +460,21 @@ def register_pdf_tools(mcp: FastMCP) -> None:
         Returns:
             JSON with ``pdf_path`` and optionally ``markdown`` / ``md_path``.
         """
+        import hashlib
         import re
         from urllib.parse import urlparse
 
-        # Derive a safe filename stem
+        # Derive a safe filename stem.  When no explicit filename is
+        # given, incorporate a short URL hash to avoid collisions when
+        # different URLs share the same path component.
         if filename:
             stem = re.sub(r"[^\w\-]", "_", filename)
         else:
             path_part = urlparse(url).path.rsplit("/", 1)[-1]
-            stem = Path(path_part).stem or "download"
-            stem = re.sub(r"[^\w\-]", "_", stem)
+            base = Path(path_part).stem or "download"
+            base = re.sub(r"[^\w\-]", "_", base)
+            url_hash = hashlib.sha256(url.encode()).hexdigest()[:8]
+            stem = f"{base}_{url_hash}"
 
         pdf_dir = bundle.config.cache_dir / "pdfs"
         pdf_dir.mkdir(parents=True, exist_ok=True)

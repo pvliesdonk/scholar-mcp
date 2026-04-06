@@ -8,7 +8,6 @@ import respx
 
 from scholar_mcp._pdf_url_resolver import (
     _UNPAYWALL_BASE,
-    ResolvedPdf,
     _try_arxiv,
     _try_pmc,
     _try_unpaywall,
@@ -40,6 +39,7 @@ def test_try_pmc_with_id() -> None:
     assert result is not None
     assert result.source == "pmc"
     assert "PMC9876543" in result.url
+    assert not result.url.endswith("/")  # no trailing slash — direct PDF endpoint
 
 
 def test_try_pmc_missing() -> None:
@@ -111,3 +111,23 @@ async def test_resolve_skips_unpaywall_without_email() -> None:
     # No network mock — Unpaywall should be skipped entirely
     result = await resolve_alternative_pdf(paper, contact_email=None)
     assert result is None
+
+
+@pytest.mark.respx(base_url=_UNPAYWALL_BASE)
+async def test_try_unpaywall_with_shared_client(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """_try_unpaywall accepts an optional shared httpx client."""
+    respx_mock.get("/10.1234/shared").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "best_oa_location": {"url_for_pdf": "https://example.com/shared.pdf"}
+            },
+        )
+    )
+    paper = {"externalIds": {"DOI": "10.1234/shared"}}
+    async with httpx.AsyncClient(timeout=15.0) as shared:
+        result = await _try_unpaywall(paper, "test@example.com", http_client=shared)
+    assert result is not None
+    assert result.url == "https://example.com/shared.pdf"

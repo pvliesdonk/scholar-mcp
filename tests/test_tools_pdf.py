@@ -108,7 +108,14 @@ async def test_fetch_paper_pdf_no_oa(
 ) -> None:
     """fetch_paper_pdf returns no_oa_pdf directly when paper has no OA URL."""
     respx_mock.get("/paper/p1").mock(
-        return_value=httpx.Response(200, json={"paperId": "p1", "openAccessPdf": None})
+        return_value=httpx.Response(
+            200,
+            json={
+                "paperId": "p1",
+                "openAccessPdf": None,
+                "externalIds": {},
+            },
+        )
     )
     async with Client(mcp_no_docling) as client:
         result = await client.call_tool("fetch_paper_pdf", {"identifier": "p1"})
@@ -208,6 +215,7 @@ async def test_fetch_paper_pdf_cache_hit(
     data = json.loads(result.content[0].text)
     assert "queued" not in data
     assert data["path"] == str(pdf_path)
+    assert data["source"] == "s2_oa"
 
 
 async def test_convert_cached_markdown(
@@ -399,6 +407,55 @@ async def test_fetch_paper_pdf_rate_limited_then_succeeds(
     pdf_path = Path(inner["path"])
     assert pdf_path.exists()
     assert pdf_path.read_bytes() == b"%PDF rate limited ok"
+
+
+@pytest.mark.respx(assert_all_called=False)
+async def test_fetch_paper_pdf_rate_limited_arxiv_fallback(
+    bundle: ServiceBundle,
+) -> None:
+    """Rate-limited path fetches externalIds and uses ArXiv fallback."""
+    arxiv_pdf_url = "https://arxiv.org/pdf/2301.55555.pdf"
+    paper_json = {
+        "paperId": "rl_arx",
+        "openAccessPdf": None,
+        "externalIds": {"ArXiv": "2301.55555"},
+        "title": "Rate Limited ArXiv Paper",
+    }
+
+    call_count = 0
+
+    def s2_side_effect(request: httpx.Request) -> httpx.Response:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return httpx.Response(429)
+        return httpx.Response(200, json=paper_json)
+
+    with respx.mock(assert_all_called=False) as router:
+        router.get(f"{S2_BASE}/paper/rl_arx").mock(side_effect=s2_side_effect)
+        router.get(arxiv_pdf_url).mock(
+            return_value=httpx.Response(200, content=b"%PDF arxiv rl")
+        )
+
+        @asynccontextmanager
+        async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+            yield {"bundle": bundle}
+
+        app = FastMCP("test", lifespan=lifespan)
+        register_pdf_tools(app)
+        register_task_tools(app)
+
+        async with Client(app) as client:
+            result = await client.call_tool("fetch_paper_pdf", {"identifier": "rl_arx"})
+            queued = json.loads(result.content[0].text)
+            assert queued["queued"] is True
+
+            task_data = await _poll_task(client, queued["task_id"])
+
+    assert task_data["status"] == "completed"
+    inner = json.loads(task_data["result"])
+    assert inner["source"] == "arxiv"
+    assert Path(inner["path"]).exists()
 
 
 @pytest.mark.respx(assert_all_called=False)

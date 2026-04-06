@@ -51,32 +51,49 @@ def _try_pmc(paper: dict[str, Any]) -> ResolvedPdf | None:
     pmc_id = ext.get("PubMedCentral")
     if pmc_id:
         return ResolvedPdf(
-            url=(f"https://www.ncbi.nlm.nih.gov/pmc/articles/PMC{pmc_id}/pdf/"),
+            url=f"https://www.ncbi.nlm.nih.gov/pmc/articles/PMC{pmc_id}/pdf",
             source="pmc",
         )
     return None
 
 
-async def _try_unpaywall(paper: dict[str, Any], email: str) -> ResolvedPdf | None:
-    """Query Unpaywall API for an OA PDF location by DOI."""
+async def _try_unpaywall(
+    paper: dict[str, Any],
+    email: str,
+    http_client: httpx.AsyncClient | None = None,
+) -> ResolvedPdf | None:
+    """Query Unpaywall API for an OA PDF location by DOI.
+
+    Args:
+        paper: Paper metadata dict with ``externalIds.DOI``.
+        email: Contact email for the Unpaywall polite pool.
+        http_client: Optional shared httpx client for connection pooling.
+            A temporary client is created if not provided.
+    """
     ext = paper.get("externalIds") or {}
     doi = ext.get("DOI")
     if not doi:
         return None
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            r = await client.get(
+        if http_client is not None:
+            r = await http_client.get(
                 f"{_UNPAYWALL_BASE}/{doi}",
                 params={"email": email},
             )
-            if r.status_code != 200:
-                return None
-            data = r.json()
-            best = data.get("best_oa_location") or {}
-            pdf_url = best.get("url_for_pdf")
-            if pdf_url:
-                return ResolvedPdf(url=pdf_url, source="unpaywall")
-    except (httpx.HTTPError, Exception):
+        else:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                r = await client.get(
+                    f"{_UNPAYWALL_BASE}/{doi}",
+                    params={"email": email},
+                )
+        if r.status_code != 200:
+            return None
+        data = r.json()
+        best = data.get("best_oa_location") or {}
+        pdf_url = best.get("url_for_pdf")
+        if pdf_url:
+            return ResolvedPdf(url=pdf_url, source="unpaywall")
+    except Exception:
         logger.debug("unpaywall_lookup_failed doi=%s", doi, exc_info=True)
     return None
 
@@ -85,6 +102,7 @@ async def resolve_alternative_pdf(
     paper: dict[str, Any],
     *,
     contact_email: str | None = None,
+    http_client: httpx.AsyncClient | None = None,
 ) -> ResolvedPdf | None:
     """Try alternative sources for a PDF URL.
 
@@ -97,6 +115,7 @@ async def resolve_alternative_pdf(
             ``externalIds``).
         contact_email: Email for the Unpaywall polite pool. Unpaywall
             is skipped when not set.
+        http_client: Optional shared httpx client for Unpaywall requests.
 
     Returns:
         A :class:`ResolvedPdf` if a URL was found, else None.
@@ -114,7 +133,7 @@ async def resolve_alternative_pdf(
 
     # Network call — only if email configured
     if contact_email:
-        result = await _try_unpaywall(paper, contact_email)
+        result = await _try_unpaywall(paper, contact_email, http_client)
         if result:
             logger.info(
                 "alt_pdf_resolved source=unpaywall paper=%s", paper.get("paperId")
