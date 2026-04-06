@@ -51,7 +51,7 @@ async def bundle(cache: ScholarCache, test_config: ServerConfig) -> ServiceBundl
     openalex_http = httpx.AsyncClient(base_url="https://api.openalex.org")
     openalex = OpenAlexClient(openalex_http)
     openlibrary_http = httpx.AsyncClient(
-        base_url="https://openlibrary.org", timeout=10.0
+        base_url="https://openlibrary.org", timeout=10.0, follow_redirects=True
     )
     openlibrary = OpenLibraryClient(openlibrary_http, RateLimiter(delay=0.0))
     yield ServiceBundle(

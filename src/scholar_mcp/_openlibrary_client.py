@@ -19,6 +19,33 @@ _OL_WORK_RE = re.compile(r"OL\d+W")
 _OL_EDITION_RE = re.compile(r"OL\d+M")
 
 
+def _filter_by_author(docs: list[dict[str, Any]], author: str) -> list[dict[str, Any]]:
+    """Filter and rank docs by author name match quality.
+
+    OL's author search matches tokens independently, so "Frank Duffy"
+    returns books by anyone named Frank *or* Duffy.  This post-filter
+    scores each doc by how many query tokens appear in the best-matching
+    author name, drops docs with zero matches, and sorts best-first.
+    """
+    tokens = [t.lower() for t in author.split()]
+    if not tokens:
+        return docs
+
+    scored: list[tuple[int, dict[str, Any]]] = []
+    for doc in docs:
+        names: list[str] = doc.get("author_name") or []
+        best = 0
+        for name in names:
+            name_lower = name.lower()
+            hits = sum(1 for tok in tokens if tok in name_lower)
+            best = max(best, hits)
+        if best > 0:
+            scored.append((best, doc))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return [doc for _, doc in scored]
+
+
 class OpenLibraryClient:
     """Thin async client for the Open Library API.
 
@@ -31,26 +58,56 @@ class OpenLibraryClient:
         self._client = http_client
         self._limiter = limiter
 
-    async def search(self, query: str, *, limit: int = 10) -> list[dict[str, Any]]:
+    async def search(
+        self,
+        query: str | None = None,
+        *,
+        title: str | None = None,
+        author: str | None = None,
+        limit: int = 10,
+    ) -> list[dict[str, Any]]:
         """Search Open Library for books.
 
+        When *title* or *author* are provided they are sent as dedicated
+        Open Library search fields which produce much better relevance
+        than the free-text ``q`` parameter.
+
         Args:
-            query: Free-text search query.
+            query: Free-text search query (used as ``q``).
+            title: Search by title field.
+            author: Search by author field.
             limit: Maximum number of results.
 
         Returns:
             List of raw Open Library search doc dicts.
         """
+        params: dict[str, str | int] = {"limit": limit}
+        if title:
+            params["title"] = title
+        if author:
+            params["author"] = author
+        if query:
+            params["q"] = query
+        elif not title and not author:
+            return []
+
         await self._limiter.acquire()
         try:
-            r = await self._client.get(
-                "/search.json", params={"q": query, "limit": limit}
-            )
+            r = await self._client.get("/search.json", params=params)
             r.raise_for_status()
-            return r.json().get("docs", [])  # type: ignore[no-any-return]
+            docs: list[dict[str, Any]] = r.json().get("docs", [])
         except httpx.HTTPStatusError:
-            logger.warning("openlibrary_search_error query=%s", query[:80])
+            logger.warning("openlibrary_search_error params=%s", params)
             return []
+
+        # OL matches author tokens independently ("Frank Duffy" matches
+        # any book with "Frank" OR "Duffy" in any author).  Post-filter
+        # to require at least one token in an author name, ranked by
+        # how many tokens matched.
+        if author and docs:
+            docs = _filter_by_author(docs, author)
+
+        return docs
 
     async def get_by_isbn(self, isbn: str) -> dict[str, Any] | None:
         """Fetch book edition by ISBN.
@@ -91,6 +148,49 @@ class OpenLibraryClient:
         except httpx.HTTPStatusError:
             logger.warning("openlibrary_work_error work_id=%s", work_id)
             return None
+
+    async def get_author(self, author_id: str) -> dict[str, Any] | None:
+        """Fetch author metadata.
+
+        Args:
+            author_id: Open Library author ID (e.g. ``OL239963A``).
+
+        Returns:
+            Open Library author dict, or None if not found.
+        """
+        await self._limiter.acquire()
+        try:
+            r = await self._client.get(f"/authors/{author_id}.json")
+            if r.status_code == 404:
+                return None
+            r.raise_for_status()
+            return r.json()  # type: ignore[no-any-return]
+        except httpx.HTTPStatusError:
+            logger.warning("openlibrary_author_error author_id=%s", author_id)
+            return None
+
+    async def get_work_editions(
+        self, work_id: str, *, limit: int = 1
+    ) -> list[dict[str, Any]]:
+        """Fetch editions for a work.
+
+        Args:
+            work_id: Open Library work ID (e.g. ``OL1168083W``).
+            limit: Maximum editions to return.
+
+        Returns:
+            List of edition dicts.
+        """
+        await self._limiter.acquire()
+        try:
+            r = await self._client.get(
+                f"/works/{work_id}/editions.json", params={"limit": limit}
+            )
+            r.raise_for_status()
+            return r.json().get("entries", [])  # type: ignore[no-any-return]
+        except httpx.HTTPStatusError:
+            logger.warning("openlibrary_editions_error work_id=%s", work_id)
+            return []
 
     async def get_edition(self, edition_id: str) -> dict[str, Any] | None:
         """Fetch edition-level metadata.

@@ -82,6 +82,7 @@ async def make_service_lifespan(
         base_url=_OPENLIBRARY_BASE,
         headers={"User-Agent": ua},
         timeout=30.0,
+        follow_redirects=True,
     )
     openlibrary_limiter = RateLimiter(delay=_OPENLIBRARY_DELAY)
     openlibrary = OpenLibraryClient(openlibrary_http, openlibrary_limiter)

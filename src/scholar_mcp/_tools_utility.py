@@ -11,7 +11,9 @@ import httpx
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
 
+from ._cache import normalize_isbn
 from ._epo_client import EpoRateLimitedError
+from ._openlibrary_client import normalize_book
 from ._patent_numbers import is_patent_number, normalize
 from ._rate_limiter import RateLimitedError
 from ._s2_client import FIELD_SETS
@@ -39,31 +41,39 @@ def register_utility_tools(mcp: FastMCP) -> None:
         fields: Literal["compact", "standard", "full"] = "standard",
         bundle: ServiceBundle = Depends(get_bundle),
     ) -> str:
-        """Resolve a list of paper or patent identifiers to full records.
+        """Resolve a list of paper, patent, or book identifiers to full records.
 
         Uses the S2 batch endpoint for paper IDs/DOIs, with OpenAlex fallback.
         Patent numbers (e.g. EP1234567A1) are auto-detected and resolved via
-        the EPO OPS API when configured.
+        the EPO OPS API when configured. ISBNs (prefixed ``ISBN:``) are
+        resolved via Open Library.
 
         Args:
             identifiers: List of S2 IDs, DOIs (prefixed ``DOI:``), plain DOIs,
-                or patent numbers (e.g. ``EP1234567A1``, ``US11234567B2``).
+                patent numbers (e.g. ``EP1234567A1``, ``US11234567B2``),
+                or ISBNs (prefixed ``ISBN:``, e.g. ``ISBN:9780201633610``).
             fields: Field set preset (applies to paper results only).
 
         Returns:
             JSON list of resolved items. Paper results have a ``paper`` key,
-            patent results have a ``patent`` key and ``source_type: "patent"``.
+            patent results have a ``patent`` key and ``source_type: "patent"``,
+            book results have a ``book`` key and ``source_type: "book"``.
             Unresolved items have an ``error`` key.
         """
-        # Split identifiers into papers vs patents
+        # Split identifiers into papers vs patents vs books
         paper_indices: list[int] = []
         paper_ids: list[str] = []
         patent_indices: list[int] = []
         patent_raws: list[str] = []
+        isbn_indices: list[int] = []
+        isbn_raws: list[str] = []
         doi_map: dict[int, str] = {}  # original index -> raw DOI for OA fallback
 
         for i, raw in enumerate(identifiers):
-            if is_patent_number(raw):
+            if raw.startswith("ISBN:"):
+                isbn_indices.append(i)
+                isbn_raws.append(raw[5:])
+            elif is_patent_number(raw):
                 patent_indices.append(i)
                 patent_raws.append(raw)
             else:
@@ -140,7 +150,33 @@ def register_utility_tools(mcp: FastMCP) -> None:
                         "source_type": "patent",
                     }
 
-            # Resolve both groups concurrently
+            async def _resolve_isbn(
+                idx: int, raw_isbn: str
+            ) -> tuple[int, dict[str, Any]]:
+                isbn = normalize_isbn(raw_isbn)
+                cached = await bundle.cache.get_book_by_isbn(isbn)
+                if cached is not None:
+                    return idx, {
+                        "identifier": f"ISBN:{raw_isbn}",
+                        "book": cached,
+                        "source_type": "book",
+                    }
+                edition = await bundle.openlibrary.get_by_isbn(isbn)
+                if edition is None:
+                    return idx, {
+                        "identifier": f"ISBN:{raw_isbn}",
+                        "error": "not_found",
+                        "source_type": "book",
+                    }
+                book = normalize_book(edition, source="edition")
+                await bundle.cache.set_book_by_isbn(isbn, book)
+                return idx, {
+                    "identifier": f"ISBN:{raw_isbn}",
+                    "book": book,
+                    "source_type": "book",
+                }
+
+            # Resolve all groups concurrently
             paper_tasks = [
                 _resolve_paper(paper_indices[j], paper_ids[j], s2_data)
                 for j, s2_data in enumerate(s2_results)
@@ -149,8 +185,14 @@ def register_utility_tools(mcp: FastMCP) -> None:
                 _resolve_patent(patent_indices[j], patent_raws[j])
                 for j in range(len(patent_raws))
             ]
+            isbn_tasks = [
+                _resolve_isbn(isbn_indices[j], isbn_raws[j])
+                for j in range(len(isbn_raws))
+            ]
 
-            all_resolved = await asyncio.gather(*paper_tasks, *patent_tasks)
+            all_resolved = await asyncio.gather(
+                *paper_tasks, *patent_tasks, *isbn_tasks
+            )
 
             # Merge back in original order
             result_map: dict[int, dict[str, Any]] = dict(all_resolved)

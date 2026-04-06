@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -36,33 +37,93 @@ def register_book_tools(mcp: FastMCP) -> None:
         },
     )
     async def search_books(
-        query: str,
+        query: str | None = None,
+        title: str | None = None,
+        author: str | None = None,
         limit: int = 10,
         bundle: ServiceBundle = Depends(get_bundle),
     ) -> str:
-        """Search for books by title, author, ISBN, or free text.
+        """Search for books by title, author, or free text.
 
-        Uses Open Library as the data source. For academic paper search,
-        use search_papers instead.
+        Uses Open Library. Prefer ``title`` and ``author`` over ``query``
+        — they use dedicated indexes and return far better results.
+
+        Examples:
+            search_books(title="Planning Office Space", author="Francis Duffy")
+            search_books(title="Design Patterns")
+            search_books(author="Knuth")
+            search_books(query="machine learning textbook")  # fallback
 
         Args:
-            query: Search query — title, author name, ISBN, or keywords.
+            query: Free-text fallback. Use ``title``/``author`` when known.
+            title: Book title or partial title (recommended).
+            author: Author name (recommended).
             limit: Maximum results to return (max 50).
 
         Returns:
             JSON list of book records with title, authors, publisher, year,
             ISBNs, Open Library IDs, cover URL, and subjects.
         """
+        if not query and not title and not author:
+            return json.dumps(
+                {"error": "provide at least one of query, title, or author"}
+            )
+
         limit = max(1, min(limit, 50))
 
-        cache_key = f"{query}:limit={limit}"
+        cache_key = f"q={query!r}:t={title!r}:a={author!r}:limit={limit}"
         cached = await bundle.cache.get_book_search(cache_key)
         if cached is not None:
-            logger.debug("book_search_cache_hit query=%s", query[:60])
+            logger.debug("book_search_cache_hit key=%s", cache_key[:60])
             return json.dumps(cached)
 
         async def _execute(*, retry: bool = True) -> str:
-            docs = await bundle.openlibrary.search(query, limit=limit)
+            # When only query is given (no explicit title/author), try
+            # it as a title search first — OL's title index is far more
+            # relevant than the free-text q= parameter.  Fall back to
+            # q= if the title search returns nothing.
+            effective_title = title
+            effective_query = query
+            if query and not title and not author:
+                effective_title = query
+                effective_query = None
+
+            docs = await bundle.openlibrary.search(
+                effective_query,
+                title=effective_title,
+                author=author,
+                limit=limit,
+            )
+
+            # When author has multiple tokens (e.g. "Frank Duffy") and
+            # results are thin, retry with individual tokens concurrently
+            # to catch name variants (Frank→Francis).  The "Duffy" token
+            # search finds "Francis Duffy" even when "Frank Duffy" misses.
+            author_tokens = author.split() if author else []
+            if len(docs) < 3 and len(author_tokens) > 1:
+                seen_keys = {d.get("key") for d in docs}
+                extras = await asyncio.gather(
+                    *(
+                        bundle.openlibrary.search(
+                            effective_query,
+                            title=effective_title,
+                            author=token,
+                            limit=limit,
+                        )
+                        for token in author_tokens
+                    )
+                )
+                for extra in extras:
+                    for d in extra:
+                        key = d.get("key")
+                        if key not in seen_keys:
+                            docs.append(d)
+                            seen_keys.add(key)
+                docs = docs[:limit]
+
+            if not docs and effective_query != query:
+                # Title search returned nothing; fall back to free-text.
+                docs = await bundle.openlibrary.search(query, limit=limit)
             books = [normalize_book(doc, source="search") for doc in docs]
             await bundle.cache.set_book_search(cache_key, books)
             return json.dumps(books)
@@ -144,6 +205,9 @@ async def _resolve_isbn(isbn: str, bundle: ServiceBundle) -> str:
 async def _resolve_work(work_id: str, bundle: ServiceBundle) -> str:
     """Resolve a book by Open Library work ID, checking cache first.
 
+    Fetches the work, resolves author names from author references, and
+    pulls year/publisher/ISBN from the first edition.
+
     Args:
         work_id: Open Library work ID (e.g. ``OL1168083W``).
         bundle: Service bundle with cache and openlibrary client.
@@ -162,23 +226,58 @@ async def _resolve_work(work_id: str, bundle: ServiceBundle) -> str:
     description = work.get("description")
     if isinstance(description, dict):
         description = description.get("value")
+
+    # Resolve author names concurrently.
+    author_refs = work.get("authors") or []
+    author_keys: list[str] = []
+    for ref in author_refs:
+        key = (ref.get("author") or {}).get("key") or ""
+        # key looks like "/authors/OL239963A"
+        if key:
+            author_keys.append(key.rsplit("/", 1)[-1])
+
+    # Resolve authors and fetch first edition concurrently.
+    author_names: list[str] = []
+    if author_keys:
+        author_results, editions = await asyncio.gather(
+            asyncio.gather(
+                *(bundle.openlibrary.get_author(aid) for aid in author_keys)
+            ),
+            bundle.openlibrary.get_work_editions(work_id, limit=1),
+        )
+        author_names = [a["name"] for a in author_results if a and a.get("name")]
+    else:
+        editions = await bundle.openlibrary.get_work_editions(work_id, limit=1)
+
+    edition = normalize_book(editions[0], source="edition") if editions else {}
+
+    isbn_13 = edition.get("isbn_13")
+    isbn_10 = edition.get("isbn_10")
+    cover_url = edition.get("cover_url")
+    if not cover_url:
+        covers = work.get("covers") or []
+        if covers:
+            cover_url = f"https://covers.openlibrary.org/b/id/{covers[0]}-M.jpg"
+
     book = {
         "title": work.get("title", ""),
-        "authors": [],
-        "publisher": None,
-        "year": None,
-        "edition": None,
-        "isbn_10": None,
-        "isbn_13": None,
+        "authors": author_names,
+        "publisher": edition.get("publisher"),
+        "year": edition.get("year"),
+        "edition": edition.get("edition"),
+        "isbn_10": isbn_10,
+        "isbn_13": isbn_13,
         "openlibrary_work_id": work_id,
-        "openlibrary_edition_id": None,
-        "cover_url": None,
+        "openlibrary_edition_id": edition.get("openlibrary_edition_id"),
+        "cover_url": cover_url,
         "google_books_url": None,
         "subjects": work.get("subjects") or [],
-        "page_count": None,
+        "page_count": edition.get("page_count"),
         "description": description if isinstance(description, str) else None,
     }
     await bundle.cache.set_book_by_work(work_id, book)
+    if isbn_13:
+        await bundle.cache.set_book_by_isbn(isbn_13, book)
     return json.dumps(book)
 
 

@@ -8,6 +8,7 @@ import respx
 
 from scholar_mcp._openlibrary_client import (
     OpenLibraryClient,
+    _filter_by_author,
     normalize_book,
 )
 from scholar_mcp._rate_limiter import RateLimiter
@@ -22,7 +23,7 @@ def limiter() -> RateLimiter:
 
 @pytest.fixture
 def ol_client(limiter: RateLimiter) -> OpenLibraryClient:
-    http = httpx.AsyncClient(base_url=OL_BASE, timeout=10.0)
+    http = httpx.AsyncClient(base_url=OL_BASE, timeout=10.0, follow_redirects=True)
     return OpenLibraryClient(http, limiter)
 
 
@@ -138,6 +139,22 @@ async def test_get_work_not_found(
 
 
 @pytest.mark.respx(base_url=OL_BASE)
+async def test_get_by_isbn_redirect(
+    respx_mock: respx.MockRouter, ol_client: OpenLibraryClient
+) -> None:
+    """ISBN endpoint returns 302 to the edition path; client must follow."""
+    respx_mock.get("/isbn/9780201633610.json").mock(
+        return_value=httpx.Response(302, headers={"Location": "/books/OL1429049M.json"})
+    )
+    respx_mock.get("/books/OL1429049M.json").mock(
+        return_value=httpx.Response(200, json=SAMPLE_EDITION)
+    )
+    result = await ol_client.get_by_isbn("9780201633610")
+    assert result is not None
+    assert result["title"] == "Design Patterns"
+
+
+@pytest.mark.respx(base_url=OL_BASE)
 async def test_get_by_isbn_server_error(
     respx_mock: respx.MockRouter, ol_client: OpenLibraryClient
 ) -> None:
@@ -169,3 +186,136 @@ def test_normalize_book_from_edition() -> None:
     assert book["openlibrary_edition_id"] == "OL1429049M"
     assert book["openlibrary_work_id"] == "OL1168083W"
     assert book["page_count"] == 395
+
+
+@pytest.mark.respx(base_url=OL_BASE)
+async def test_search_structured_fields(
+    respx_mock: respx.MockRouter, ol_client: OpenLibraryClient
+) -> None:
+    """Structured title/author params are forwarded to OL search."""
+    route = respx_mock.get("/search.json").mock(
+        return_value=httpx.Response(200, json=SAMPLE_SEARCH)
+    )
+    results = await ol_client.search(title="Design Patterns", author="Gamma")
+    assert len(results) == 1
+    assert route.called
+    req = route.calls[0].request
+    query_str = str(req.url)
+    assert "title=Design" in query_str
+    assert "author=Gamma" in query_str
+
+
+async def test_search_no_params(ol_client: OpenLibraryClient) -> None:
+    """search() with no params returns empty list without hitting API."""
+    results = await ol_client.search()
+    assert results == []
+
+
+@pytest.mark.respx(base_url=OL_BASE)
+async def test_get_author(
+    respx_mock: respx.MockRouter, ol_client: OpenLibraryClient
+) -> None:
+    respx_mock.get("/authors/OL239963A.json").mock(
+        return_value=httpx.Response(200, json=SAMPLE_AUTHOR)
+    )
+    result = await ol_client.get_author("OL239963A")
+    assert result is not None
+    assert result["name"] == "Erich Gamma"
+
+
+@pytest.mark.respx(base_url=OL_BASE)
+async def test_get_author_not_found(
+    respx_mock: respx.MockRouter, ol_client: OpenLibraryClient
+) -> None:
+    respx_mock.get("/authors/OL0000000A.json").mock(return_value=httpx.Response(404))
+    result = await ol_client.get_author("OL0000000A")
+    assert result is None
+
+
+@pytest.mark.respx(base_url=OL_BASE)
+async def test_get_work_editions(
+    respx_mock: respx.MockRouter, ol_client: OpenLibraryClient
+) -> None:
+    respx_mock.get("/works/OL1168083W/editions.json").mock(
+        return_value=httpx.Response(200, json={"entries": [SAMPLE_EDITION], "size": 1})
+    )
+    editions = await ol_client.get_work_editions("OL1168083W", limit=1)
+    assert len(editions) == 1
+    assert editions[0]["title"] == "Design Patterns"
+
+
+@pytest.mark.respx(base_url=OL_BASE)
+async def test_get_work_editions_empty(
+    respx_mock: respx.MockRouter, ol_client: OpenLibraryClient
+) -> None:
+    respx_mock.get("/works/OL0000000W/editions.json").mock(
+        return_value=httpx.Response(200, json={"entries": [], "size": 0})
+    )
+    editions = await ol_client.get_work_editions("OL0000000W")
+    assert editions == []
+
+
+def test_filter_by_author_ranks_by_token_hits() -> None:
+    docs = [
+        {"title": "Book A", "author_name": ["Francis Duffy"]},
+        {"title": "Book B", "author_name": ["James Joyce"]},
+        {"title": "Book C", "author_name": ["Frank Duffy", "John Smith"]},
+        {"title": "Book D", "author_name": ["Karen Duffy", "Frank Wong"]},
+    ]
+    result = _filter_by_author(docs, "Frank Duffy")
+    # "Frank Duffy" (2 tokens in one name) > "Francis Duffy" (1) = "Karen Duffy"/"Frank Wong" (1 each)
+    # Joyce dropped (0 matches)
+    assert result[0]["title"] == "Book C"
+    assert "Book B" not in [d["title"] for d in result]
+    assert len(result) == 3
+
+
+def test_filter_by_author_case_insensitive() -> None:
+    docs = [{"title": "Book A", "author_name": ["FRANK DUFFY"]}]
+    result = _filter_by_author(docs, "frank duffy")
+    assert len(result) == 1
+
+
+def test_filter_by_author_rejects_no_surname_match() -> None:
+    """Books where no author shares the surname are filtered out."""
+    docs = [
+        {"title": "Ghostly", "author_name": ["Audrey Niffenegger", "Neil Gaiman"]},
+        {"title": "Office Landscaping", "author_name": ["Frank Duffy"]},
+    ]
+    result = _filter_by_author(docs, "Frank Duffy")
+    assert [d["title"] for d in result] == ["Office Landscaping"]
+
+
+def test_filter_by_author_empty_author_field() -> None:
+    docs = [{"title": "No Author", "author_name": []}]
+    result = _filter_by_author(docs, "Anyone")
+    assert result == []
+
+
+@pytest.mark.respx(base_url=OL_BASE)
+async def test_search_filters_author_results(
+    respx_mock: respx.MockRouter, ol_client: OpenLibraryClient
+) -> None:
+    """search() with author= post-filters noise from OL token matching."""
+    noisy_response = {
+        "numFound": 4,
+        "docs": [
+            {"title": "Ghostly", "author_name": ["Audrey Niffenegger"]},
+            {"title": "Office Landscaping", "author_name": ["Frank Duffy"]},
+            {"title": "Planning Office Space", "author_name": ["Francis Duffy"]},
+            {
+                "title": "Community Psychology",
+                "author_name": ["Karen Duffy", "Frank Wong"],
+            },
+        ],
+    }
+    respx_mock.get("/search.json").mock(
+        return_value=httpx.Response(200, json=noisy_response)
+    )
+    results = await ol_client.search(author="Frank Duffy")
+    # Keeps all with "Duffy" in an author; drops "Ghostly" (no Duffy)
+    titles = [r["title"] for r in results]
+    assert "Ghostly" not in titles
+    assert "Office Landscaping" in titles
+    assert "Planning Office Space" in titles
+    assert "Community Psychology" in titles
