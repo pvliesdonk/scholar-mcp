@@ -45,6 +45,21 @@ SAMPLE_EDITION_RESPONSE = {
     "subjects": ["Software patterns"],
 }
 
+SAMPLE_WORK_RESPONSE = {
+    "title": "Design Patterns",
+    "key": "/works/OL1168083W",
+    "description": "A book about patterns.",
+    "subjects": ["Software patterns"],
+    "authors": [
+        {"author": {"key": "/authors/OL239963A"}, "type": {"key": "/type/author_role"}},
+        {"author": {"key": "/authors/OL239964A"}, "type": {"key": "/type/author_role"}},
+    ],
+    "covers": [12345],
+}
+
+SAMPLE_AUTHOR_GAMMA = {"name": "Erich Gamma", "key": "/authors/OL239963A"}
+SAMPLE_AUTHOR_HELM = {"name": "Richard Helm", "key": "/authors/OL239964A"}
+
 
 @pytest.fixture
 def mcp(bundle: ServiceBundle) -> FastMCP:
@@ -82,7 +97,9 @@ async def test_search_books_caches_results(
     async with Client(mcp) as client:
         await client.call_tool("search_books", {"query": "design patterns"})
     # Second call should hit cache, not API
-    cached = await bundle.cache.get_book_search("design patterns:limit=10")
+    cached = await bundle.cache.get_book_search(
+        "q=design patterns:t=None:a=None:limit=10"
+    )
     assert cached is not None
     assert len(cached) == 1
 
@@ -170,15 +187,19 @@ async def test_get_book_by_isbn_not_found(
 
 @pytest.mark.respx(base_url=OL_BASE)
 async def test_get_book_by_work_id(respx_mock: respx.MockRouter, mcp: FastMCP) -> None:
+    """Work-level lookup resolves authors and pulls edition data."""
     respx_mock.get("/works/OL1168083W.json").mock(
+        return_value=httpx.Response(200, json=SAMPLE_WORK_RESPONSE)
+    )
+    respx_mock.get("/authors/OL239963A.json").mock(
+        return_value=httpx.Response(200, json=SAMPLE_AUTHOR_GAMMA)
+    )
+    respx_mock.get("/authors/OL239964A.json").mock(
+        return_value=httpx.Response(200, json=SAMPLE_AUTHOR_HELM)
+    )
+    respx_mock.get("/works/OL1168083W/editions.json").mock(
         return_value=httpx.Response(
-            200,
-            json={
-                "title": "Design Patterns",
-                "key": "/works/OL1168083W",
-                "description": "A book about patterns.",
-                "subjects": ["Software patterns"],
-            },
+            200, json={"entries": [SAMPLE_EDITION_RESPONSE], "size": 1}
         )
     )
     async with Client(mcp) as client:
@@ -186,3 +207,123 @@ async def test_get_book_by_work_id(respx_mock: respx.MockRouter, mcp: FastMCP) -
     data = json.loads(result.content[0].text)
     assert data["title"] == "Design Patterns"
     assert data["openlibrary_work_id"] == "OL1168083W"
+    assert data["authors"] == ["Erich Gamma", "Richard Helm"]
+    assert data["year"] == 1994
+    assert data["publisher"] == "Addison-Wesley"
+    assert data["isbn_13"] == "9780201633610"
+    assert data["openlibrary_edition_id"] == "OL1429049M"
+
+
+@pytest.mark.respx(base_url=OL_BASE)
+async def test_get_book_by_work_id_no_editions(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """Work with no editions still returns title, authors, description."""
+    respx_mock.get("/works/OL1168083W.json").mock(
+        return_value=httpx.Response(200, json=SAMPLE_WORK_RESPONSE)
+    )
+    respx_mock.get("/authors/OL239963A.json").mock(
+        return_value=httpx.Response(200, json=SAMPLE_AUTHOR_GAMMA)
+    )
+    respx_mock.get("/authors/OL239964A.json").mock(
+        return_value=httpx.Response(200, json=SAMPLE_AUTHOR_HELM)
+    )
+    respx_mock.get("/works/OL1168083W/editions.json").mock(
+        return_value=httpx.Response(200, json={"entries": [], "size": 0})
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool("get_book", {"identifier": "OL1168083W"})
+    data = json.loads(result.content[0].text)
+    assert data["title"] == "Design Patterns"
+    assert data["authors"] == ["Erich Gamma", "Richard Helm"]
+    assert data["isbn_13"] is None
+    assert data["cover_url"] == "https://covers.openlibrary.org/b/id/12345-M.jpg"
+
+
+@pytest.mark.respx(base_url=OL_BASE)
+async def test_search_books_structured_params(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """search_books with title/author uses structured OL search fields."""
+    respx_mock.get("/search.json").mock(
+        return_value=httpx.Response(200, json=SAMPLE_SEARCH_RESPONSE)
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "search_books", {"title": "Design Patterns", "author": "Gamma"}
+        )
+    data = json.loads(result.content[0].text)
+    assert len(data) == 1
+    assert data[0]["title"] == "Design Patterns"
+
+
+async def test_search_books_no_params(mcp: FastMCP) -> None:
+    """search_books with no params returns error."""
+    async with Client(mcp) as client:
+        result = await client.call_tool("search_books", {})
+    data = json.loads(result.content[0].text)
+    assert "error" in data
+
+
+@pytest.mark.respx(base_url=OL_BASE)
+async def test_search_books_author_broadening(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """When author+title returns <3 results, retries with individual tokens."""
+    # Initial search with full author returns nothing
+    respx_mock.get("/search.json").mock(
+        side_effect=[
+            httpx.Response(200, json={"numFound": 0, "docs": []}),
+            # Retry with token "Frank" — also nothing
+            httpx.Response(200, json={"numFound": 0, "docs": []}),
+            # Retry with token "Duffy" — finds the book under "Francis Duffy"
+            httpx.Response(
+                200,
+                json={
+                    "numFound": 1,
+                    "docs": [
+                        {
+                            "title": "Planning Office Space",
+                            "author_name": ["Francis Duffy"],
+                            "publisher": ["Architectural Press"],
+                            "first_publish_year": 1976,
+                            "isbn": ["9780750612920"],
+                            "key": "/works/OL9486737W",
+                            "edition_key": ["OL10808057M"],
+                            "subject": [],
+                        }
+                    ],
+                },
+            ),
+        ]
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "search_books",
+            {"title": "Planning Office Space", "author": "Frank Duffy"},
+        )
+    data = json.loads(result.content[0].text)
+    assert len(data) == 1
+    assert data[0]["title"] == "Planning Office Space"
+
+
+@pytest.mark.respx(base_url=OL_BASE)
+async def test_search_books_query_falls_back_to_q(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """When query-as-title returns nothing, falls back to free-text q=."""
+    respx_mock.get("/search.json").mock(
+        side_effect=[
+            # Title search returns nothing
+            httpx.Response(200, json={"numFound": 0, "docs": []}),
+            # Free-text fallback finds something
+            httpx.Response(200, json=SAMPLE_SEARCH_RESPONSE),
+        ]
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "search_books", {"query": "obscure keyword search"}
+        )
+    data = json.loads(result.content[0].text)
+    assert len(data) == 1
+    assert data[0]["title"] == "Design Patterns"
