@@ -11,6 +11,8 @@ import httpx
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
 
+from ._epo_client import EpoRateLimitedError
+from ._patent_numbers import is_patent_number, normalize
 from ._rate_limiter import RateLimitedError
 from ._s2_client import FIELD_SETS
 from ._server_deps import ServiceBundle, get_bundle
@@ -37,67 +39,127 @@ def register_utility_tools(mcp: FastMCP) -> None:
         fields: Literal["compact", "standard", "full"] = "standard",
         bundle: ServiceBundle = Depends(get_bundle),
     ) -> str:
-        """Resolve a list of paper identifiers to full records.
+        """Resolve a list of paper or patent identifiers to full records.
 
-        Uses the S2 batch endpoint for IDs/DOIs. Falls back to OpenAlex by DOI
-        for papers that S2 cannot resolve.
+        Uses the S2 batch endpoint for paper IDs/DOIs, with OpenAlex fallback.
+        Patent numbers (e.g. EP1234567A1) are auto-detected and resolved via
+        the EPO OPS API when configured.
 
         Args:
-            identifiers: List of S2 IDs, DOIs (prefixed ``DOI:``), or plain DOIs.
-            fields: Field set preset.
+            identifiers: List of S2 IDs, DOIs (prefixed ``DOI:``), plain DOIs,
+                or patent numbers (e.g. ``EP1234567A1``, ``US11234567B2``).
+            fields: Field set preset (applies to paper results only).
 
         Returns:
-            JSON list of ``{"identifier": ..., "paper": {...}}`` for resolved,
-            ``{"identifier": ..., "error": "not_found"}`` for unresolved,
-            ``{"identifier": ..., "paper": {...}, "source": "openalex"}`` for
-            OpenAlex fallbacks.
+            JSON list of resolved items. Paper results have a ``paper`` key,
+            patent results have a ``patent`` key and ``source_type: "patent"``.
+            Unresolved items have an ``error`` key.
         """
-        batch_ids: list[str] = []
-        doi_map: dict[int, str] = {}  # index -> raw DOI for OA fallback
+        # Split identifiers into papers vs patents
+        paper_indices: list[int] = []
+        paper_ids: list[str] = []
+        patent_indices: list[int] = []
+        patent_raws: list[str] = []
+        doi_map: dict[int, str] = {}  # original index -> raw DOI for OA fallback
 
         for i, raw in enumerate(identifiers):
-            batch_ids.append(raw)
-            if raw.startswith("DOI:"):
-                doi_map[i] = raw[4:]
+            if is_patent_number(raw):
+                patent_indices.append(i)
+                patent_raws.append(raw)
+            else:
+                paper_indices.append(i)
+                paper_ids.append(raw)
+                if raw.startswith("DOI:"):
+                    doi_map[i] = raw[4:]
 
         async def _execute(*, retry: bool = True) -> str:
-            try:
-                s2_results = await bundle.s2.batch_resolve(
-                    batch_ids, fields=FIELD_SETS[fields], retry=retry
-                )
-            except httpx.HTTPStatusError as exc:
-                return json.dumps(
-                    {"error": "upstream_error", "status": exc.response.status_code}
-                )
+            # Resolve papers via S2 (existing logic)
+            s2_results: list[dict[str, Any] | None] = []
+            if paper_ids:
+                try:
+                    s2_results = await bundle.s2.batch_resolve(
+                        paper_ids, fields=FIELD_SETS[fields], retry=retry
+                    )
+                except httpx.HTTPStatusError as exc:
+                    return json.dumps(
+                        {
+                            "error": "upstream_error",
+                            "status": exc.response.status_code,
+                        }
+                    )
 
-            async def _resolve_one(
-                i: int, raw: str, s2_data: dict[str, Any] | None
-            ) -> dict[str, Any]:
+            async def _resolve_paper(
+                idx: int, raw: str, s2_data: dict[str, Any] | None
+            ) -> tuple[int, dict[str, Any]]:
                 if s2_data is not None:
-                    return {"identifier": raw, "paper": s2_data}
-                if i in doi_map:
-                    oa = await bundle.openalex.get_by_doi(doi_map[i])
+                    return idx, {"identifier": raw, "paper": s2_data}
+                if idx in doi_map:
+                    oa = await bundle.openalex.get_by_doi(doi_map[idx])
                     if oa:
-                        return {
+                        return idx, {
                             "identifier": raw,
                             "paper": oa,
                             "source": "openalex",
                         }
-                return {"identifier": raw, "error": "not_found"}
+                return idx, {"identifier": raw, "error": "not_found"}
 
-            results = await asyncio.gather(
-                *[
-                    _resolve_one(i, raw, s2_data)
-                    for i, (raw, s2_data) in enumerate(
-                        zip(identifiers, s2_results, strict=True)
-                    )
-                ]
-            )
-            return json.dumps(list(results))
+            async def _resolve_patent(idx: int, raw: str) -> tuple[int, dict[str, Any]]:
+                if bundle.epo is None:
+                    return idx, {
+                        "identifier": raw,
+                        "error": "epo_not_configured",
+                        "source_type": "patent",
+                    }
+                try:
+                    doc = normalize(raw)
+                    biblio = await bundle.epo.get_biblio(doc)
+                    if not biblio.get("title") and not biblio.get("applicants"):
+                        return idx, {
+                            "identifier": raw,
+                            "error": "not_found",
+                            "source_type": "patent",
+                        }
+                    return idx, {
+                        "identifier": raw,
+                        "patent": biblio,
+                        "source_type": "patent",
+                    }
+                except ValueError:
+                    return idx, {
+                        "identifier": raw,
+                        "error": "invalid_patent_number",
+                        "source_type": "patent",
+                    }
+                except (RateLimitedError, EpoRateLimitedError):
+                    raise
+                except Exception:
+                    logger.warning("batch_patent_resolve_failed id=%s", raw)
+                    return idx, {
+                        "identifier": raw,
+                        "error": "resolve_failed",
+                        "source_type": "patent",
+                    }
+
+            # Resolve both groups concurrently
+            paper_tasks = [
+                _resolve_paper(paper_indices[j], paper_ids[j], s2_data)
+                for j, s2_data in enumerate(s2_results)
+            ]
+            patent_tasks = [
+                _resolve_patent(patent_indices[j], patent_raws[j])
+                for j in range(len(patent_raws))
+            ]
+
+            all_resolved = await asyncio.gather(*paper_tasks, *patent_tasks)
+
+            # Merge back in original order
+            result_map: dict[int, dict[str, Any]] = dict(all_resolved)
+            ordered = [result_map[i] for i in range(len(identifiers))]
+            return json.dumps(ordered)
 
         try:
             return await _execute(retry=False)
-        except RateLimitedError:
+        except (RateLimitedError, EpoRateLimitedError):
             task_id = bundle.tasks.submit(_execute(retry=True), tool="batch_resolve")
             return json.dumps(
                 {"queued": True, "task_id": task_id, "tool": "batch_resolve"}

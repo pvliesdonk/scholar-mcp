@@ -18,6 +18,7 @@ traversal.  All helper functions are module-private; the public
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from lxml import etree
@@ -32,6 +33,9 @@ _NS: dict[str, str] = {
 
 # Default namespace URI (used on exchange-document and most biblio elements).
 _EXCH = "http://www.epo.org/exchange"
+
+# Regex to extract DOIs from non-patent literature citation text.
+_DOI_RE = re.compile(r"\bdoi:\s*(10\.\S+)", re.IGNORECASE)
 
 
 # ---------------------------------------------------------------------------
@@ -441,6 +445,63 @@ def parse_legal_xml(xml_data: bytes) -> list[dict[str, str]]:
         )
 
     return events
+
+
+def parse_citations_from_biblio(xml_data: bytes) -> dict[str, list[dict[str, Any]]]:
+    """Parse cited references from EPO OPS biblio response.
+
+    Splits citations into patent references and non-patent literature (NPL).
+    Extracts DOIs from NPL citation strings where possible.
+
+    Args:
+        xml_data: Raw XML bytes from the published-data/biblio endpoint.
+
+    Returns:
+        Dict with ``patent_refs`` (list of dicts with ``country``, ``number``,
+        ``kind``) and ``npl_refs`` (list of dicts with ``raw``, ``doi``).
+    """
+    root = etree.fromstring(xml_data)
+
+    exchange_doc = root.find(".//exch:exchange-documents/exch:exchange-document", _NS)
+    if exchange_doc is None:
+        exchange_doc = root.find(f".//{{{_EXCH}}}exchange-document")
+    if exchange_doc is None:
+        return {"patent_refs": [], "npl_refs": []}
+
+    refs_cited = exchange_doc.find(
+        f"{{{_EXCH}}}bibliographic-data/{{{_EXCH}}}references-cited"
+    )
+    if refs_cited is None:
+        return {"patent_refs": [], "npl_refs": []}
+
+    patent_refs: list[dict[str, str]] = []
+    npl_refs: list[dict[str, Any]] = []
+
+    for citation in refs_cited.findall(f"{{{_EXCH}}}citation"):
+        # Patent citation
+        patcit = citation.find(f"{{{_EXCH}}}patcit")
+        if patcit is not None:
+            docdb_id = _find_docdb_id(patcit)
+            if docdb_id is not None:
+                patent_refs.append(
+                    {
+                        "country": _text(docdb_id.find(f"{{{_EXCH}}}country")),
+                        "number": _text(docdb_id.find(f"{{{_EXCH}}}doc-number")),
+                        "kind": _text(docdb_id.find(f"{{{_EXCH}}}kind")),
+                    }
+                )
+            continue
+
+        # Non-patent literature citation
+        nplcit = citation.find(f"{{{_EXCH}}}nplcit")
+        if nplcit is not None:
+            text_el = nplcit.find(f"{{{_EXCH}}}text")
+            raw = _text(text_el)
+            doi_match = _DOI_RE.search(raw)
+            doi = doi_match.group(1).rstrip(".,;>)]") if doi_match else None
+            npl_refs.append({"raw": raw, "doi": doi})
+
+    return {"patent_refs": patent_refs, "npl_refs": npl_refs}
 
 
 # ---------------------------------------------------------------------------

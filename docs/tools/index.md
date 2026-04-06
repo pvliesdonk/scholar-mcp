@@ -208,16 +208,16 @@ Paper recommendations based on positive (and optional negative) examples.
 
 ### `batch_resolve`
 
-Resolve up to 100 identifiers to full metadata in a single call.
+Resolve up to 100 paper or patent identifiers to full metadata in a single call.
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `identifiers` | list[string] | *(required)* | Up to 100 IDs: S2 paper IDs, `DOI:xxx`, or plain DOIs |
-| `fields` | string | `"standard"` | Field set |
+| `identifiers` | list[string] | *(required)* | Up to 100 IDs: S2 paper IDs, `DOI:xxx`, plain DOIs, or patent numbers (e.g. `EP1234567A1`) |
+| `fields` | string | `"standard"` | Field set (applies to paper results only) |
 
-**Returns:** JSON list of `{"identifier": "...", "paper": {...}}` or `{"identifier": "...", "error": "not_found"}`.
+**Returns:** JSON list of resolved items. Paper results have a `"paper"` key, patent results have a `"patent"` key and `"source_type": "patent"`. Unresolved items have an `"error"` key.
 
-Papers not found in Semantic Scholar are automatically tried via OpenAlex (by DOI). Results from OpenAlex include `"source": "openalex"`.
+Patent numbers are auto-detected by their two-letter country prefix (e.g. `EP`, `US`, `WO`) and routed to the EPO OPS API. Papers not found in Semantic Scholar are automatically tried via OpenAlex (by DOI). Results from OpenAlex include `"source": "openalex"`.
 
 ---
 
@@ -315,7 +315,7 @@ Fetch detailed information for a single patent by its publication number.
 | `description` | Full patent description text (English preferred) | Available |
 | `family` | Patent family members across jurisdictions (country, number, kind, date) | Available |
 | `legal` | Legal status events (date, code, description) | Available |
-| `citations` | Patent and non-patent literature citations | Coming in Phase 3 |
+| `citations` | Patent and non-patent literature citations, with Semantic Scholar resolution for NPL | Available |
 
 Sections are fetched concurrently where possible (cache lookups run in parallel; EPO API calls are serialised by the client). Each section is cached independently with appropriate TTLs.
 
@@ -343,9 +343,47 @@ Sections are fetched concurrently where possible (cache lookups run in parallel;
   ],
   "legal": [
     {"date": "2019-05-01", "code": "APPLICATION", "description": "Application filed"}
-  ]
+  ],
+  "citations": {
+    "patent_refs": [
+      {"country": "US", "number": "9876543", "kind": "B2"}
+    ],
+    "npl_refs": [
+      {"raw": "Smith et al., \"Widget Processing\", 2018, doi:10.1234/test", "paper": {"paperId": "abc123", "title": "Widget Processing"}, "confidence": "high"},
+      {"raw": "Doe, \"Advanced Widgets\", 2019", "confidence": null}
+    ]
+  }
 }
 ```
+
+When `citations` is requested, non-patent literature (NPL) references are resolved against Semantic Scholar on a best-effort basis. References with a DOI are resolved with `"confidence": "high"`. References without a DOI or that fail to resolve have `"confidence": null`.
+
+---
+
+### `get_citing_patents`
+
+Find patents that cite a given academic paper. Coverage is incomplete -- relies on EPO OPS citation search, which does not capture all patent-to-paper citations. Best results with DOIs of well-known papers.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `paper_id` | string | *(required)* | Paper identifier (DOI preferred) |
+| `limit` | int | `10` | Maximum citing patents to return (max 25) |
+
+**Returns:**
+
+```json
+{
+  "paper_id": "10.1234/test",
+  "patents": [
+    {"title": "...", "publication_number": "EP.9999999.A1", "match_source": "epo_search", ...}
+  ],
+  "total_count": 1,
+  "note": "Coverage is incomplete. Results come from EPO OPS citation search..."
+}
+```
+
+!!! warning "Incomplete coverage"
+    Not all patent-to-paper citations are captured by EPO OPS. Use this tool for discovery, not exhaustive analysis.
 
 ---
 

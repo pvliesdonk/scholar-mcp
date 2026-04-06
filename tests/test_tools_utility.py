@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 from contextlib import asynccontextmanager
+from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
@@ -12,15 +13,59 @@ import respx
 from fastmcp import FastMCP
 from fastmcp.client import Client
 
+from scholar_mcp._epo_client import EpoClient
 from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._tools_utility import register_utility_tools
 
 S2_BASE = "https://api.semanticscholar.org/graph/v1"
 OA_BASE = "https://api.openalex.org"
 
+_BIBLIO_RESULT = {
+    "title": "Test Patent",
+    "abstract": "Test abstract.",
+    "applicants": ["TEST CORP"],
+    "inventors": [],
+    "publication_number": "EP.1234567.A1",
+    "publication_date": "2020-01-15",
+    "filing_date": "2019-06-01",
+    "priority_date": "2019-01-15",
+    "family_id": "12345678",
+    "classifications": ["H04L29/06"],
+    "url": "https://worldwide.espacenet.com/patent/search/family/12345678/publication/EP1234567A1",
+}
+
+
+def _make_epo_client(
+    *,
+    biblio_result: dict | None = None,
+    raise_on_biblio: Exception | None = None,
+) -> EpoClient:
+    """Return a mock EpoClient with configurable responses."""
+    mock_ops = MagicMock()
+    client = EpoClient(consumer_key="k", consumer_secret="s", _client=mock_ops)
+    if raise_on_biblio is not None:
+        client.get_biblio = AsyncMock(side_effect=raise_on_biblio)
+    else:
+        client.get_biblio = AsyncMock(return_value=biblio_result or _BIBLIO_RESULT)
+    return client
+
 
 @pytest.fixture
 def mcp(bundle: ServiceBundle) -> FastMCP:
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_utility_tools(app)
+    return app
+
+
+@pytest.fixture
+def mcp_with_epo(bundle: ServiceBundle) -> FastMCP:
+    """FastMCP instance with utility tools and a mock EpoClient wired in."""
+    bundle.epo = _make_epo_client()
+
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
@@ -355,3 +400,178 @@ async def test_enrich_paper_queued_on_429(
                     break
                 await asyncio.sleep(0.05)
             assert poll_data["status"] == "completed"
+
+
+# ---------------------------------------------------------------------------
+# batch_resolve patent support tests
+# ---------------------------------------------------------------------------
+
+
+async def test_batch_resolve_detects_patent(
+    mcp_with_epo: FastMCP,
+) -> None:
+    """batch_resolve auto-detects patent numbers and routes to EPO."""
+    async with Client(mcp_with_epo) as client:
+        result = await client.call_tool(
+            "batch_resolve",
+            {"identifiers": ["EP1234567A1"]},
+        )
+    data = json.loads(result.content[0].text)
+    assert isinstance(data, list)
+    assert len(data) == 1
+    assert data[0]["source_type"] == "patent"
+    assert "patent" in data[0]
+    assert data[0]["patent"]["title"] == "Test Patent"
+
+
+async def test_batch_resolve_mixed_papers_and_patents(
+    mcp_with_epo: FastMCP,
+) -> None:
+    """batch_resolve handles mixed paper and patent identifiers."""
+    with respx.mock:
+        respx.post(f"{S2_BASE}/paper/batch").mock(
+            return_value=httpx.Response(
+                200,
+                json=[{"paperId": "p1", "title": "Paper 1"}],
+            )
+        )
+        async with Client(mcp_with_epo) as client:
+            result = await client.call_tool(
+                "batch_resolve",
+                {"identifiers": ["DOI:10.1234/test", "EP1234567A1"]},
+            )
+    data = json.loads(result.content[0].text)
+    assert len(data) == 2
+    # First is a paper (DOI)
+    assert "paper" in data[0]
+    assert data[0]["identifier"] == "DOI:10.1234/test"
+    # Second is a patent
+    assert data[1]["source_type"] == "patent"
+    assert "patent" in data[1]
+    assert data[1]["identifier"] == "EP1234567A1"
+
+
+async def test_batch_resolve_patent_epo_not_configured(
+    mcp: FastMCP,
+) -> None:
+    """batch_resolve returns epo_not_configured when EPO client is None."""
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "batch_resolve",
+            {"identifiers": ["EP1234567A1"]},
+        )
+    data = json.loads(result.content[0].text)
+    assert len(data) == 1
+    assert data[0]["error"] == "epo_not_configured"
+    assert data[0]["source_type"] == "patent"
+
+
+async def test_batch_resolve_patent_resolve_failed(
+    bundle: ServiceBundle,
+) -> None:
+    """batch_resolve returns resolve_failed when EPO raises an exception."""
+    bundle.epo = _make_epo_client(raise_on_biblio=RuntimeError("EPO down"))
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_utility_tools(app)
+
+    async with Client(app) as client:
+        result = await client.call_tool(
+            "batch_resolve",
+            {"identifiers": ["EP1234567A1"]},
+        )
+    data = json.loads(result.content[0].text)
+    assert len(data) == 1
+    assert data[0]["error"] == "resolve_failed"
+    assert data[0]["source_type"] == "patent"
+
+
+async def test_batch_resolve_patent_not_found_empty_biblio(
+    bundle: ServiceBundle,
+) -> None:
+    """batch_resolve returns not_found when biblio has no title or applicants."""
+    bundle.epo = _make_epo_client(biblio_result={"title": "", "applicants": []})
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_utility_tools(app)
+
+    async with Client(app) as client:
+        result = await client.call_tool(
+            "batch_resolve",
+            {"identifiers": ["EP1234567A1"]},
+        )
+    data = json.loads(result.content[0].text)
+    assert len(data) == 1
+    assert data[0]["error"] == "not_found"
+    assert data[0]["source_type"] == "patent"
+
+
+async def test_batch_resolve_preserves_order_with_patents(
+    mcp_with_epo: FastMCP,
+) -> None:
+    """batch_resolve preserves original order when mixing papers and patents."""
+    with respx.mock:
+        respx.post(f"{S2_BASE}/paper/batch").mock(
+            return_value=httpx.Response(
+                200,
+                json=[
+                    {"paperId": "p1", "title": "Paper 1"},
+                    {"paperId": "p2", "title": "Paper 2"},
+                ],
+            )
+        )
+        async with Client(mcp_with_epo) as client:
+            result = await client.call_tool(
+                "batch_resolve",
+                {
+                    "identifiers": [
+                        "p1",
+                        "EP1234567A1",
+                        "p2",
+                    ]
+                },
+            )
+    data = json.loads(result.content[0].text)
+    assert len(data) == 3
+    assert data[0]["identifier"] == "p1"
+    assert "paper" in data[0]
+    assert data[1]["identifier"] == "EP1234567A1"
+    assert data[1]["source_type"] == "patent"
+    assert data[2]["identifier"] == "p2"
+    assert "paper" in data[2]
+
+
+async def test_batch_resolve_patent_rate_limited_queues(
+    bundle: ServiceBundle,
+) -> None:
+    """batch_resolve queues when EPO rate-limits during patent resolution."""
+    from scholar_mcp._epo_client import EpoRateLimitedError
+
+    bundle.epo = _make_epo_client(raise_on_biblio=EpoRateLimitedError("red"))
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_utility_tools(app)
+    from scholar_mcp._tools_tasks import register_task_tools
+
+    register_task_tools(app)
+
+    async with Client(app) as client:
+        result = await client.call_tool(
+            "batch_resolve",
+            {"identifiers": ["EP1234567A1"]},
+        )
+    data = json.loads(result.content[0].text)
+    assert data["queued"] is True
+    assert data["tool"] == "batch_resolve"

@@ -16,6 +16,7 @@ from fastmcp.dependencies import Depends
 from ._epo_client import EpoClient, EpoRateLimitedError
 from ._patent_numbers import DocdbNumber, normalize
 from ._rate_limiter import RateLimitedError
+from ._s2_client import FIELD_SETS
 from ._server_deps import ServiceBundle, get_bundle
 
 logger = logging.getLogger(__name__)
@@ -242,7 +243,9 @@ def register_patent_tools(mcp: FastMCP) -> None:
                 ``"EP1234567A1"``, ``"WO2024/123456"``, or ``"US11,234,567B2"``.
             sections: Sections to include in the response. Defaults to
                 ``["biblio"]``. Available sections: biblio, claims,
-                description, family, legal.  Citations reserved for Phase 3.
+                description, family, legal, citations.  When citations
+                is included, NPL references are resolved via Semantic
+                Scholar on a best-effort basis.
             bundle: Injected service bundle.
 
         Returns:
@@ -283,6 +286,7 @@ def register_patent_tools(mcp: FastMCP) -> None:
                 sections=effective_sections,
                 epo=bundle.epo,  # type: ignore[arg-type]
                 cache=bundle.cache,
+                s2=bundle.s2,
             )
 
         try:
@@ -293,9 +297,80 @@ def register_patent_tools(mcp: FastMCP) -> None:
                 {"queued": True, "task_id": task_id, "tool": "get_patent"}
             )
 
+    @mcp.tool(
+        tags={"patent"},
+        annotations={
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "openWorldHint": True,
+        },
+    )
+    async def get_citing_patents(
+        paper_id: str,
+        limit: int = 10,
+        bundle: ServiceBundle = Depends(get_bundle),
+    ) -> str:
+        """Find patents that cite a given academic paper.
 
-# Sections available in Phase 2 (fetched concurrently).
-_AVAILABLE_SECTIONS = {"biblio", "claims", "description", "family", "legal"}
+        Coverage is incomplete -- relies on EPO OPS citation search which
+        does not capture all patent-to-paper citations. Best results with
+        DOIs of well-known, highly-cited papers. Returns confirmed matches
+        only, not an exhaustive list.
+
+        Args:
+            paper_id: Paper identifier (DOI preferred, also accepts
+                title keywords).
+            limit: Maximum number of citing patents to return
+                (default 10, max 25).
+            bundle: Injected service bundle.
+
+        Returns:
+            JSON string with ``paper_id``, ``patents`` list (each with
+            biblio data and ``match_source``), ``total_count``, and a
+            ``note`` about coverage limitations.
+        """
+        if bundle.epo is None:
+            return json.dumps(
+                {
+                    "error": "epo_not_configured",
+                    "detail": (
+                        "EPO OPS credentials are not set. "
+                        "Configure SCHOLAR_MCP_EPO_CONSUMER_KEY and "
+                        "SCHOLAR_MCP_EPO_CONSUMER_SECRET."
+                    ),
+                }
+            )
+
+        effective_limit = min(limit, 25)
+
+        async def _execute(*, retry: bool = True) -> str:
+            # Note: retry flag for task queue compatibility.
+            return await _get_citing_patents(
+                paper_id=paper_id,
+                epo=bundle.epo,  # type: ignore[arg-type]
+                limit=effective_limit,
+            )
+
+        try:
+            return await _execute(retry=False)
+        except (RateLimitedError, EpoRateLimitedError):
+            task_id = bundle.tasks.submit(
+                _execute(retry=True), tool="get_citing_patents"
+            )
+            return json.dumps(
+                {"queued": True, "task_id": task_id, "tool": "get_citing_patents"}
+            )
+
+
+# All available patent sections.
+_AVAILABLE_SECTIONS = {
+    "biblio",
+    "claims",
+    "description",
+    "family",
+    "legal",
+    "citations",
+}
 
 
 async def _fetch_patent_sections(
@@ -304,20 +379,23 @@ async def _fetch_patent_sections(
     sections: Sequence[str],
     epo: EpoClient,
     cache: Any,
+    s2: Any = None,
 ) -> str:
     """Fetch requested sections for a patent, with caching.
 
     Cache lookups run concurrently via ``asyncio.gather``.  Actual EPO
     API calls are serialised by the ``asyncio.Lock`` inside ``EpoClient``,
-    so no additional concurrency limiting is needed here.  Sections not
-    yet implemented (e.g. ``"citations"``) produce a notice rather than
-    an error.
+    so no additional concurrency limiting is needed here.  When the
+    ``citations`` section is requested, non-patent literature (NPL)
+    references are resolved against Semantic Scholar on a best-effort
+    basis if an S2 client is provided.
 
     Args:
         doc: Normalised DOCDB patent number.
         sections: List of section names to include.
         epo: EPO client instance.
         cache: Cache instance with patent get/set methods.
+        s2: Optional S2 client for NPL resolution.
 
     Returns:
         JSON string with patent_number and requested section data.
@@ -373,12 +451,76 @@ async def _fetch_patent_sections(
         await cache.set_patent_legal(patent_id, legal)
         result["legal"] = legal
 
+    async def _fetch_citations() -> None:
+        cached = await cache.get_patent_citations(patent_id)
+        if cached is not None:
+            citations = cached
+        else:
+            citations = await epo.get_citations(doc)
+            await cache.set_patent_citations(patent_id, citations)
+
+        patent_refs = citations["patent_refs"]
+        npl_refs = citations["npl_refs"]
+
+        # Resolve NPL references against Semantic Scholar.
+        # Intentionally re-runs on cache hits: the cache stores raw EPO
+        # citation data (patent_refs + unresolved npl_refs) so that S2
+        # resolution always reflects the latest paper index state.
+        resolved_npl: list[dict[str, Any]] = []
+        if s2 is not None and npl_refs:
+            # Build batch of DOI identifiers
+            doi_indices: list[int] = []
+            doi_ids: list[str] = []
+            for i, npl in enumerate(npl_refs):
+                if npl["doi"]:
+                    doi_indices.append(i)
+                    doi_ids.append(f"DOI:{npl['doi']}")
+
+            # Batch resolve DOIs via S2
+            s2_results: list[dict[str, Any] | None] = [None] * len(doi_ids)
+            if doi_ids:
+                try:
+                    s2_results = await s2.batch_resolve(
+                        doi_ids, fields=FIELD_SETS["compact"]
+                    )
+                except RateLimitedError:
+                    raise
+                except Exception:
+                    logger.warning("npl_resolution_failed patent=%s", patent_id)
+                    s2_results = [None] * len(doi_ids)
+
+            # Build resolved NPL list
+            s2_map: dict[int, dict[str, Any] | None] = dict(
+                zip(doi_indices, s2_results, strict=True)
+            )
+            for i, npl in enumerate(npl_refs):
+                entry: dict[str, Any] = {"raw": npl["raw"]}
+                s2_paper = s2_map.get(i)
+                if s2_paper is not None:
+                    entry["paper"] = s2_paper
+                    entry["confidence"] = "high"
+                elif npl["doi"]:
+                    # Had DOI but resolution failed
+                    entry["doi"] = npl["doi"]
+                    entry["confidence"] = None
+                else:
+                    entry["confidence"] = None
+                resolved_npl.append(entry)
+        else:
+            resolved_npl = [{"raw": n["raw"], "confidence": None} for n in npl_refs]
+
+        result["citations"] = {
+            "patent_refs": patent_refs,
+            "npl_refs": resolved_npl,
+        }
+
     fetcher_map: dict[str, Any] = {
         "biblio": _fetch_biblio,
         "claims": _fetch_claims,
         "description": _fetch_description,
         "family": _fetch_family,
         "legal": _fetch_legal,
+        "citations": _fetch_citations,
     }
 
     fetchers = [fetcher_map[s]() for s in sections if s in fetcher_map]
@@ -403,11 +545,65 @@ async def _fetch_patent_sections(
     if "biblio" not in sections:
         result.pop("biblio", None)
 
-    # Note any sections not yet available (e.g. citations)
-    unavailable = [s for s in sections if s not in _AVAILABLE_SECTIONS]
-    if unavailable:
-        result["notice"] = (
-            f"Sections {unavailable} are not yet available. Coming in Phase 3."
+    return json.dumps(result)
+
+
+async def _get_citing_patents(
+    *,
+    paper_id: str,
+    epo: EpoClient,
+    limit: int = 10,
+) -> str:
+    """Search EPO OPS for patents citing a paper.
+
+    Uses the ``ct=`` (cited document) CQL field to find patents whose
+    cited references mention the given identifier. Fetches biblio for
+    each result.
+
+    Args:
+        paper_id: Paper identifier (DOI or keywords).
+        epo: EPO client instance.
+        limit: Max results.
+
+    Returns:
+        JSON string with paper_id, patents list, total_count, and note.
+    """
+    cql = f'ct="{_cql_escape(paper_id)}"'
+    try:
+        search_result = await epo.search(cql, range_begin=1, range_end=limit)
+    except Exception as exc:
+        if isinstance(exc, (RateLimitedError, EpoRateLimitedError)):
+            raise
+        logger.warning("citing_patent_search_failed paper=%s", paper_id)
+        return json.dumps(
+            {
+                "paper_id": paper_id,
+                "patents": [],
+                "total_count": 0,
+                "note": "EPO citation search failed. Try a different identifier format.",
+            }
         )
 
-    return json.dumps(result)
+    patents: list[dict[str, Any]] = []
+    for ref in search_result.get("references", []):
+        doc = DocdbNumber(ref["country"], ref["number"], ref.get("kind", ""))
+        try:
+            biblio = await epo.get_biblio(doc)
+            biblio["match_source"] = "epo_search"
+            patents.append(biblio)
+        except (RateLimitedError, EpoRateLimitedError):
+            raise
+        except Exception:
+            logger.warning("citing_patent_biblio_failed patent=%s", doc.docdb)
+
+    return json.dumps(
+        {
+            "paper_id": paper_id,
+            "patents": patents,
+            "total_count": search_result.get("total_count", 0),
+            "note": (
+                "Coverage is incomplete. Results come from EPO OPS citation "
+                "search and may not capture all patent-to-paper citations."
+            ),
+        }
+    )
