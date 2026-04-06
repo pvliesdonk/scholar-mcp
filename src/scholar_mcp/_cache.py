@@ -13,6 +13,39 @@ import aiosqlite
 
 logger = logging.getLogger(__name__)
 
+
+def isbn10_to_isbn13(isbn10: str) -> str:
+    """Convert an ISBN-10 to ISBN-13.
+
+    Args:
+        isbn10: 10-digit ISBN string (digits only, no hyphens).
+
+    Returns:
+        13-digit ISBN string.
+    """
+    stem = "978" + isbn10[:9]
+    total = sum(int(d) * (1 if i % 2 == 0 else 3) for i, d in enumerate(stem))
+    check = (10 - total % 10) % 10
+    return stem + str(check)
+
+
+def normalize_isbn(isbn: str) -> str:
+    """Normalize ISBN to 13-digit form with no hyphens.
+
+    Args:
+        isbn: ISBN-10 or ISBN-13, optionally with hyphens.
+
+    Returns:
+        ISBN-13 string, or original string if not a valid ISBN.
+    """
+    cleaned = isbn.replace("-", "").replace(" ", "")
+    if len(cleaned) == 13 and cleaned.isdigit():
+        return cleaned
+    if len(cleaned) == 10 and cleaned[:9].isdigit():
+        return isbn10_to_isbn13(cleaned)
+    return isbn
+
+
 # TTLs in seconds
 _PAPER_TTL = 30 * 86400  # 30 days
 _CITATION_TTL = 7 * 86400  # 7 days
@@ -26,6 +59,9 @@ _PATENT_FAMILY_TTL = 90 * 86400  # 90 days
 _PATENT_LEGAL_TTL = 7 * 86400  # 7 days
 _PATENT_CITATIONS_TTL = 90 * 86400  # 90 days
 _PATENT_SEARCH_TTL = 7 * 86400  # 7 days
+_BOOK_ISBN_TTL = 30 * 86400  # 30 days
+_BOOK_WORK_TTL = 30 * 86400  # 30 days
+_BOOK_SEARCH_TTL = 7 * 86400  # 7 days
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY);
@@ -119,6 +155,27 @@ CREATE TABLE IF NOT EXISTS patent_search (
     cached_at  REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_patent_search_cached ON patent_search(cached_at);
+
+CREATE TABLE IF NOT EXISTS books_isbn (
+    isbn      TEXT PRIMARY KEY,
+    data      TEXT NOT NULL,
+    cached_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_books_isbn_cached ON books_isbn(cached_at);
+
+CREATE TABLE IF NOT EXISTS books_openlibrary (
+    work_id   TEXT PRIMARY KEY,
+    data      TEXT NOT NULL,
+    cached_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_books_ol_cached ON books_openlibrary(cached_at);
+
+CREATE TABLE IF NOT EXISTS books_search (
+    query_hash TEXT PRIMARY KEY,
+    data       TEXT NOT NULL,
+    cached_at  REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_books_search_cached ON books_search(cached_at);
 """
 
 _TTL_TABLES = (
@@ -134,6 +191,9 @@ _TTL_TABLES = (
     "patent_legal",
     "patent_citations",
     "patent_search",
+    "books_isbn",
+    "books_openlibrary",
+    "books_search",
 )
 
 
@@ -656,6 +716,110 @@ class ScholarCache:
         query_hash = hashlib.sha256(query.encode()).hexdigest()
         await db.execute(
             "INSERT OR REPLACE INTO patent_search (query_hash, data, cached_at) VALUES (?, ?, ?)",
+            (query_hash, json.dumps(data), time.time()),
+        )
+        await db.commit()
+
+    # ------------------------------------------------------------------
+    # Books (Open Library)
+    # ------------------------------------------------------------------
+
+    async def get_book_by_isbn(self, isbn: str) -> dict[str, Any] | None:
+        """Return cached book data by ISBN or None if missing/stale.
+
+        Args:
+            isbn: ISBN-13 string (already normalized).
+
+        Returns:
+            Book metadata dict or None.
+        """
+        db = _require_open(self._db)
+        async with db.execute(
+            "SELECT data, cached_at FROM books_isbn WHERE isbn = ?", (isbn,)
+        ) as cur:
+            row = await cur.fetchone()
+        if row is None or time.time() - row[1] > _BOOK_ISBN_TTL:
+            return None
+        return json.loads(row[0])  # type: ignore[no-any-return]
+
+    async def set_book_by_isbn(self, isbn: str, data: dict[str, Any]) -> None:
+        """Cache book data by ISBN.
+
+        Args:
+            isbn: ISBN-13 string (already normalized).
+            data: Book metadata dict.
+        """
+        db = _require_open(self._db)
+        await db.execute(
+            "INSERT OR REPLACE INTO books_isbn (isbn, data, cached_at) VALUES (?, ?, ?)",
+            (isbn, json.dumps(data), time.time()),
+        )
+        await db.commit()
+
+    async def get_book_by_work(self, work_id: str) -> dict[str, Any] | None:
+        """Return cached book data by Open Library work ID or None.
+
+        Args:
+            work_id: Open Library work ID (e.g. ``OL1168083W``).
+
+        Returns:
+            Book metadata dict or None.
+        """
+        db = _require_open(self._db)
+        async with db.execute(
+            "SELECT data, cached_at FROM books_openlibrary WHERE work_id = ?",
+            (work_id,),
+        ) as cur:
+            row = await cur.fetchone()
+        if row is None or time.time() - row[1] > _BOOK_WORK_TTL:
+            return None
+        return json.loads(row[0])  # type: ignore[no-any-return]
+
+    async def set_book_by_work(self, work_id: str, data: dict[str, Any]) -> None:
+        """Cache book data by Open Library work ID.
+
+        Args:
+            work_id: Open Library work ID.
+            data: Book metadata dict.
+        """
+        db = _require_open(self._db)
+        await db.execute(
+            "INSERT OR REPLACE INTO books_openlibrary (work_id, data, cached_at) VALUES (?, ?, ?)",
+            (work_id, json.dumps(data), time.time()),
+        )
+        await db.commit()
+
+    async def get_book_search(self, query: str) -> list[dict[str, Any]] | None:
+        """Return cached book search results or None if missing/stale.
+
+        Args:
+            query: Search query string; SHA-256 hash used as cache key.
+
+        Returns:
+            List of book metadata dicts or None.
+        """
+        db = _require_open(self._db)
+        query_hash = hashlib.sha256(query.encode()).hexdigest()
+        async with db.execute(
+            "SELECT data, cached_at FROM books_search WHERE query_hash = ?",
+            (query_hash,),
+        ) as cur:
+            row = await cur.fetchone()
+        if row is None or time.time() - row[1] > _BOOK_SEARCH_TTL:
+            return None
+        return json.loads(row[0])  # type: ignore[no-any-return]
+
+    async def set_book_search(self, query: str, data: list[dict[str, Any]]) -> None:
+        """Cache book search results.
+
+        Args:
+            query: Search query string; SHA-256 hash used as cache key.
+            data: List of book metadata dicts.
+        """
+        db = _require_open(self._db)
+        query_hash = hashlib.sha256(query.encode()).hexdigest()
+        await db.execute(
+            "INSERT OR REPLACE INTO books_search (query_hash, data, cached_at) VALUES (?, ?, ?)",
             (query_hash, json.dumps(data), time.time()),
         )
         await db.commit()
