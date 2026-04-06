@@ -20,18 +20,21 @@ RUN if [ "$APP_UID" -eq 0 ] || [ "$APP_GID" -eq 0 ]; then \
     && chown appuser:appuser /data /data/service /data/state /data/state/fastmcp
 
 WORKDIR /app
+RUN chown appuser:appuser /app
 
-# Install dependencies first (cache layer).
-RUN --mount=type=cache,target=/root/.cache/uv \
+# Install dependencies first as appuser (cache layer).
+RUN --mount=type=cache,target=/home/appuser/.cache/uv,uid=$APP_UID,gid=$APP_GID \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     --mount=type=bind,source=uv.lock,target=uv.lock \
-    uv sync --frozen --no-install-project --no-dev --extra all
+    chown appuser:appuser . \
+    && su appuser -s /bin/sh -c "uv sync --frozen --no-install-project --no-dev --extra all"
 
-# Copy source and install project.
+# Copy source and install project as appuser.
 COPY --chown=appuser:appuser . .
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --extra all \
-    && chown -R appuser:appuser .venv
+USER appuser
+RUN --mount=type=cache,target=/home/appuser/.cache/uv,uid=$APP_UID,gid=$APP_GID \
+    uv sync --frozen --no-dev --extra all
+USER root
 
 COPY --chmod=0755 docker-entrypoint.sh /usr/local/bin/
 ENV PATH="/app/.venv/bin:$PATH" \

@@ -98,7 +98,7 @@ async def test_search_books_caches_results(
         await client.call_tool("search_books", {"query": "design patterns"})
     # Second call should hit cache, not API
     cached = await bundle.cache.get_book_search(
-        "q=design patterns:t=None:a=None:limit=10"
+        "q='design patterns':t=None:a=None:limit=10"
     )
     assert cached is not None
     assert len(cached) == 1

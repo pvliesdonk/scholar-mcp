@@ -71,7 +71,7 @@ def register_book_tools(mcp: FastMCP) -> None:
 
         limit = max(1, min(limit, 50))
 
-        cache_key = f"q={query}:t={title}:a={author}:limit={limit}"
+        cache_key = f"q={query!r}:t={title!r}:a={author!r}:limit={limit}"
         cached = await bundle.cache.get_book_search(cache_key)
         if cached is not None:
             logger.debug("book_search_cache_hit key=%s", cache_key[:60])
@@ -96,24 +96,30 @@ def register_book_tools(mcp: FastMCP) -> None:
             )
 
             # When author has multiple tokens (e.g. "Frank Duffy") and
-            # results are thin, retry with a broadened author to catch
-            # name variants (Frank→Francis).  Split into individual
-            # tokens and search with each; the post-filter in the
-            # client deduplicates and re-ranks by match quality.
+            # results are thin, retry with individual tokens concurrently
+            # to catch name variants (Frank→Francis).  The "Duffy" token
+            # search finds "Francis Duffy" even when "Frank Duffy" misses.
             author_tokens = author.split() if author else []
             if len(docs) < 3 and len(author_tokens) > 1:
-                seen_titles = {d.get("title") for d in docs}
-                for token in author_tokens:
-                    extra = await bundle.openlibrary.search(
-                        effective_query,
-                        title=effective_title,
-                        author=token,
-                        limit=limit,
+                seen_keys = {d.get("key") for d in docs}
+                extras = await asyncio.gather(
+                    *(
+                        bundle.openlibrary.search(
+                            effective_query,
+                            title=effective_title,
+                            author=token,
+                            limit=limit,
+                        )
+                        for token in author_tokens
                     )
+                )
+                for extra in extras:
                     for d in extra:
-                        if d.get("title") not in seen_titles:
+                        key = d.get("key")
+                        if key not in seen_keys:
                             docs.append(d)
-                            seen_titles.add(d.get("title"))
+                            seen_keys.add(key)
+                docs = docs[:limit]
 
             if not docs and effective_query != query:
                 # Title search returned nothing; fall back to free-text.
@@ -230,15 +236,19 @@ async def _resolve_work(work_id: str, bundle: ServiceBundle) -> str:
         if key:
             author_keys.append(key.rsplit("/", 1)[-1])
 
+    # Resolve authors and fetch first edition concurrently.
     author_names: list[str] = []
     if author_keys:
-        author_results = await asyncio.gather(
-            *(bundle.openlibrary.get_author(aid) for aid in author_keys)
+        author_results, editions = await asyncio.gather(
+            asyncio.gather(
+                *(bundle.openlibrary.get_author(aid) for aid in author_keys)
+            ),
+            bundle.openlibrary.get_work_editions(work_id, limit=1),
         )
         author_names = [a["name"] for a in author_results if a and a.get("name")]
+    else:
+        editions = await bundle.openlibrary.get_work_editions(work_id, limit=1)
 
-    # Fetch first edition for year, publisher, ISBNs.
-    editions = await bundle.openlibrary.get_work_editions(work_id, limit=1)
     edition = normalize_book(editions[0], source="edition") if editions else {}
 
     isbn_13 = edition.get("isbn_13")

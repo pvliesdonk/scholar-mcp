@@ -102,7 +102,8 @@ class OpenLibraryClient:
 
         # OL matches author tokens independently ("Frank Duffy" matches
         # any book with "Frank" OR "Duffy" in any author).  Post-filter
-        # to require all tokens present in at least one author string.
+        # to require at least one token in an author name, ranked by
+        # how many tokens matched.
         if author and docs:
             docs = _filter_by_author(docs, author)
 
