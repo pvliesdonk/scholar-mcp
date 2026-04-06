@@ -16,6 +16,8 @@ from ._cache import ScholarCache
 from ._docling_client import DoclingClient
 from ._epo_client import EpoClient
 from ._openalex_client import OpenAlexClient
+from ._openlibrary_client import OpenLibraryClient
+from ._rate_limiter import RateLimiter
 from ._s2_client import S2Client
 from ._task_queue import TaskQueue
 from .config import ServerConfig, load_config
@@ -23,6 +25,8 @@ from .config import ServerConfig, load_config
 logger = logging.getLogger(__name__)
 
 _OPENALEX_BASE = "https://api.openalex.org"
+_OPENLIBRARY_BASE = "https://openlibrary.org"
+_OPENLIBRARY_DELAY = 0.6  # ~100 req/min politeness
 
 
 @dataclass
@@ -34,6 +38,7 @@ class ServiceBundle:
         openalex: OpenAlex API client (httpx.AsyncClient pointed at OpenAlex).
         docling: docling-serve httpx client, or None if not configured.
         epo: EPO OPS API client, or None if not configured.
+        openlibrary: Open Library API client (keyless, always available).
         cache: SQLite cache.
         config: Server configuration.
     """
@@ -42,6 +47,7 @@ class ServiceBundle:
     openalex: OpenAlexClient
     docling: DoclingClient | None
     epo: EpoClient | None
+    openlibrary: OpenLibraryClient
     cache: ScholarCache
     config: ServerConfig
     tasks: TaskQueue
@@ -72,6 +78,13 @@ async def make_service_lifespan(
         timeout=30.0,
     )
     openalex = OpenAlexClient(openalex_http)
+    openlibrary_http = httpx.AsyncClient(
+        base_url=_OPENLIBRARY_BASE,
+        headers={"User-Agent": ua},
+        timeout=30.0,
+    )
+    openlibrary_limiter = RateLimiter(delay=_OPENLIBRARY_DELAY)
+    openlibrary = OpenLibraryClient(openlibrary_http, openlibrary_limiter)
     docling_http: httpx.AsyncClient | None = None
     docling: DoclingClient | None = None
     if config.docling_url:
@@ -112,6 +125,7 @@ async def make_service_lifespan(
         openalex=openalex,
         docling=docling,
         epo=epo,
+        openlibrary=openlibrary,
         cache=cache,
         config=config,
         tasks=tasks,
@@ -121,6 +135,7 @@ async def make_service_lifespan(
     finally:
         await s2.aclose()
         await openalex_http.aclose()
+        await openlibrary.aclose()
         if docling_http:
             await docling_http.aclose()
         if epo is not None:

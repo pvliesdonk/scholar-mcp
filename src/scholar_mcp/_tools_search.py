@@ -10,6 +10,7 @@ import httpx
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
 
+from ._book_enrichment import enrich_books
 from ._rate_limiter import RateLimitedError
 from ._s2_client import FIELD_SETS
 from ._server_deps import ServiceBundle, get_bundle
@@ -136,6 +137,7 @@ def register_search_tools(mcp: FastMCP) -> None:
         data = await bundle.cache.get_paper(cached_id)
         if data:
             logger.debug("cache_hit identifier=%s", identifier)
+            await enrich_books([data], bundle)
             return json.dumps(data)
 
         async def _execute(*, retry: bool = True) -> str:
@@ -158,6 +160,7 @@ def register_search_tools(mcp: FastMCP) -> None:
                 if identifier != paper_id:
                     await bundle.cache.set_alias(identifier, paper_id)
 
+            await enrich_books([fetched], bundle)
             return json.dumps(fetched)
 
         try:

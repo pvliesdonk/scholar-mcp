@@ -18,6 +18,7 @@ A [FastMCP](https://github.com/jlowin/fastmcp) server providing structured acade
 - **Citation graph** -- forward citations, backward references, BFS graph traversal up to configurable depth, and shortest-path bridge paper discovery
 - **Recommendations** -- paper recommendations from positive (and optional negative) examples via the S2 recommendation API
 - **Citation generation** -- format paper metadata as BibTeX, CSL-JSON, or RIS citations with automatic entry type inference, author name parsing, and OpenAlex venue enrichment
+- **Book search** -- search and fetch book metadata via [Open Library](https://openlibrary.org/) (no API key required); papers with an ISBN are automatically enriched with publisher, edition, cover URL, and subject data
 - **OpenAlex enrichment** -- augment paper metadata with open-access URLs, affiliations, funders, concepts, and OA status
 - **Patent search & cross-referencing** -- search and retrieve patents via [EPO Open Patent Services](https://www.epo.org/en/searching-for-patents/data/web-services/ops) covering 100+ patent offices, with cited reference extraction, NPL-to-paper resolution via Semantic Scholar, and paper-to-patent citation discovery; EPO credentials are optional -- paper search works without them
 - **PDF conversion** -- download open-access PDFs and convert to Markdown via [docling-serve](https://github.com/DS4SD/docling-serve), with optional VLM enrichment for formulas and figures; automatic fallback to ArXiv, PubMed Central, and Unpaywall when Semantic Scholar has no OA link; direct URL download for PDFs found elsewhere
@@ -159,6 +160,15 @@ All settings are controlled via environment variables with the `SCHOLAR_MCP_` pr
 | Tool | Description |
 |---|---|
 | `recommend_papers` | Paper recommendations from 1--5 positive examples and optional negative examples. |
+
+### Book Search
+
+| Tool | Description |
+|---|---|
+| `search_books` | Search for books by title, author, ISBN, or keywords via Open Library. Returns up to 50 results. |
+| `get_book` | Fetch book metadata by ISBN-10, ISBN-13, Open Library work ID (`OL...W`), or edition ID (`OL...M`). |
+
+> Papers with an ISBN in their `externalIds` are automatically enriched with `book_metadata` (publisher, edition, cover URL, subjects, and more) from Open Library when fetched via `get_paper`, `get_citations`, `get_references`, or `get_citation_graph`.
 
 ### Utility
 

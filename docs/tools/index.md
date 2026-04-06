@@ -1,6 +1,6 @@
 # Tools
 
-Scholar MCP provides 19 tools across eight categories. All tools return JSON.
+Scholar MCP provides 21 tools across nine categories. All tools return JSON.
 
 All tools include [MCP tool annotations](https://spec.modelcontextprotocol.io/specification/2025-03-26/server/tools/#annotations):
 
@@ -201,6 +201,92 @@ Paper recommendations based on positive (and optional negative) examples.
 
 !!! tip
     Recommendations work best with 3--5 positive examples that represent the topic you're interested in. Adding 1--2 negative examples that are close but off-topic helps narrow results.
+
+---
+
+## Book Search
+
+Book tools use [Open Library](https://openlibrary.org/) as their data source. No API key is required. Rate limits are handled automatically; if the Open Library API is temporarily unavailable, calls queue and return a task ID (see [Async Task Queue](#async-task-queue)).
+
+### `search_books`
+
+Search for books by title, author, ISBN, or free text via Open Library.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `query` | string | *(required)* | Search query — title, author name, ISBN, or keywords |
+| `limit` | int | `10` | Maximum results to return (max 50) |
+
+**Returns:** JSON list of book records. Each record contains:
+
+```json
+[
+  {
+    "title": "Deep Learning",
+    "authors": ["Ian Goodfellow", "Yoshua Bengio", "Aaron Courville"],
+    "publisher": "MIT Press",
+    "year": 2016,
+    "edition": null,
+    "isbn_10": "0262035618",
+    "isbn_13": "9780262035613",
+    "openlibrary_work_id": "OL17953442W",
+    "openlibrary_edition_id": "OL26423929M",
+    "cover_url": "https://covers.openlibrary.org/b/isbn/9780262035613-M.jpg",
+    "google_books_url": null,
+    "subjects": ["Machine learning", "Artificial intelligence"],
+    "page_count": 800,
+    "description": null
+  }
+]
+```
+
+---
+
+### `get_book`
+
+Fetch full metadata for a single book by ISBN or Open Library identifier.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `identifier` | string | *(required)* | ISBN-10, ISBN-13, Open Library work ID, or edition ID |
+| `include_editions` | bool | `false` | If true, fetch work and list editions |
+
+**Identifier formats:**
+
+| Format | Example |
+|---|---|
+| ISBN-13 | `9780262035613` |
+| ISBN-10 | `0262035618` |
+| ISBN with hyphens | `978-0-262-03561-3` |
+| Open Library work ID | `OL17953442W` |
+| Open Library edition ID | `OL26423929M` |
+
+**Returns:** A single book record (same shape as items returned by `search_books`), or `{"error": "not_found", "identifier": "..."}` if not found.
+
+Results are cached. Work and edition lookups are cached by their respective Open Library IDs; ISBN lookups are also stored under the resolved ISBN-13.
+
+---
+
+## Auto-Enrichment
+
+When `get_paper`, `get_citations`, `get_references`, or `get_citation_graph` retrieves a paper that has an ISBN in its `externalIds` field, Open Library metadata is automatically fetched and attached as a `book_metadata` key on the paper record.
+
+**Trigger condition:** `externalIds.ISBN` is present and non-empty.
+
+**Added field:** `book_metadata` — a dict containing:
+
+| Field | Description |
+|---|---|
+| `publisher` | Publisher name |
+| `edition` | Edition string (e.g. `"2nd ed."`) |
+| `isbn_13` | ISBN-13 |
+| `cover_url` | Cover image URL (from Open Library covers) |
+| `openlibrary_work_id` | Open Library work ID (e.g. `OL17953442W`) |
+| `description` | Work description, if available |
+| `subjects` | List of subject strings |
+| `page_count` | Page count, if known |
+
+Enrichment failures are silently skipped — if Open Library is unreachable or the ISBN is not found, the paper record is returned without `book_metadata`. Up to 5 concurrent Open Library requests are made per batch.
 
 ---
 

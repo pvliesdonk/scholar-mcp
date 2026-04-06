@@ -46,3 +46,7 @@ def register_tools(mcp: FastMCP, *, transport: str = "stdio") -> None:
     from ._tools_patent import register_patent_tools
 
     register_patent_tools(mcp)
+
+    from ._tools_books import register_book_tools
+
+    register_book_tools(mcp)
