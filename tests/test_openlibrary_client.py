@@ -146,7 +146,7 @@ async def test_get_by_isbn_server_error(
     assert result is None
 
 
-def testnormalize_book_from_search_doc() -> None:
+def test_normalize_book_from_search_doc() -> None:
     doc = SAMPLE_SEARCH["docs"][0]
     book = normalize_book(doc, source="search")
     assert book["title"] == "Design Patterns"
@@ -160,7 +160,7 @@ def testnormalize_book_from_search_doc() -> None:
     assert book["google_books_url"] is None
 
 
-def testnormalize_book_from_edition() -> None:
+def test_normalize_book_from_edition() -> None:
     book = normalize_book(SAMPLE_EDITION, source="edition")
     assert book["title"] == "Design Patterns"
     assert book["publisher"] == "Addison-Wesley"

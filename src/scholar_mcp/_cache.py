@@ -44,8 +44,10 @@ def normalize_isbn(isbn: str) -> str:
     cleaned = isbn.replace("-", "").replace(" ", "")
     if len(cleaned) == 13 and cleaned.isdigit():
         return cleaned
-    if len(cleaned) == 10 and cleaned[:9].isdigit() and (
-        cleaned[9].isdigit() or cleaned[9].upper() == "X"
+    if (
+        len(cleaned) == 10
+        and cleaned[:9].isdigit()
+        and (cleaned[9].isdigit() or cleaned[9].upper() == "X")
     ):
         return isbn10_to_isbn13(cleaned)
     return isbn
