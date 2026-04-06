@@ -88,6 +88,70 @@ async def test_search_books_caches_results(
 
 
 @pytest.mark.respx(base_url=OL_BASE)
+async def test_search_books_uses_cache(
+    respx_mock: respx.MockRouter, mcp: FastMCP, bundle: ServiceBundle
+) -> None:
+    """Second search_books call for same query returns cached results."""
+    respx_mock.get("/search.json").mock(
+        return_value=httpx.Response(200, json=SAMPLE_SEARCH_RESPONSE)
+    )
+    async with Client(mcp) as client:
+        await client.call_tool("search_books", {"query": "cached query"})
+        # Second call — should come from cache
+        result = await client.call_tool("search_books", {"query": "cached query"})
+    data = json.loads(result.content[0].text)
+    assert len(data) == 1
+    assert data[0]["title"] == "Design Patterns"
+
+
+@pytest.mark.respx(base_url=OL_BASE)
+async def test_get_book_isbn_cache_hit(
+    respx_mock: respx.MockRouter, mcp: FastMCP, bundle: ServiceBundle
+) -> None:
+    """get_book returns cached result on second call for same ISBN."""
+    respx_mock.get("/isbn/9780201633610.json").mock(
+        return_value=httpx.Response(200, json=SAMPLE_EDITION_RESPONSE)
+    )
+    async with Client(mcp) as client:
+        await client.call_tool("get_book", {"identifier": "9780201633610"})
+        result = await client.call_tool("get_book", {"identifier": "9780201633610"})
+    data = json.loads(result.content[0].text)
+    assert data["title"] == "Design Patterns"
+
+
+@pytest.mark.respx(base_url=OL_BASE)
+async def test_get_book_by_edition_id(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """get_book resolves OL edition IDs (OL...M) via work endpoint."""
+    respx_mock.get("/works/OL1429049M.json").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "title": "Design Patterns",
+                "key": "/works/OL1429049M",
+                "subjects": ["Software patterns"],
+            },
+        )
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool("get_book", {"identifier": "OL1429049M"})
+    data = json.loads(result.content[0].text)
+    assert data["title"] == "Design Patterns"
+
+
+@pytest.mark.respx(base_url=OL_BASE)
+async def test_get_book_by_work_id_not_found(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    respx_mock.get("/works/OL0000000W.json").mock(return_value=httpx.Response(404))
+    async with Client(mcp) as client:
+        result = await client.call_tool("get_book", {"identifier": "OL0000000W"})
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "not_found"
+
+
+@pytest.mark.respx(base_url=OL_BASE)
 async def test_get_book_by_isbn(respx_mock: respx.MockRouter, mcp: FastMCP) -> None:
     respx_mock.get("/isbn/9780201633610.json").mock(
         return_value=httpx.Response(200, json=SAMPLE_EDITION_RESPONSE)

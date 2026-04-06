@@ -155,10 +155,10 @@ def register_graph_tools(mcp: FastMCP) -> None:
                     )
                 papers = [
                     item.get("citingPaper", {})
-                    for item in result["data"]  # type: ignore[union-attr]
+                    for item in filtered[offset : offset + limit]
                     if item.get("citingPaper")
                 ]
-                await enrich_books(papers, bundle)
+                await enrich_books(papers, bundle)  # type: ignore[arg-type]
                 return json.dumps(result)
 
             try:
@@ -180,12 +180,13 @@ def register_graph_tools(mcp: FastMCP) -> None:
                         "status": exc.response.status_code,
                     }
                 )
-            papers = [
+            data_list: list[dict[str, object]] = result.get("data") or []  # type: ignore[assignment]
+            citing_papers = [
                 item.get("citingPaper", {})
-                for item in result.get("data") or []
+                for item in data_list
                 if item.get("citingPaper")
             ]
-            await enrich_books(papers, bundle)
+            await enrich_books(citing_papers, bundle)  # type: ignore[arg-type]
             return json.dumps(result)
 
         try:
