@@ -2,6 +2,117 @@
 
 <!-- version list -->
 
+## v1.6.0 (2026-04-07)
+
+### Bug Fixes
+
+- Address PR #76 review feedback — imports, annotations, coverage
+  ([`5796ce4`](https://github.com/pvliesdonk/scholar-mcp/commit/5796ce4b2707f979681c11c552e65de4efd4a16d))
+
+- Address PR #78 review feedback
+  ([`5a75767`](https://github.com/pvliesdonk/scholar-mcp/commit/5a7576785b2bd23e421c82cd2eeb674881bbbf56))
+
+- Ruff format _book_enrichment.py
+  ([`1151aa7`](https://github.com/pvliesdonk/scholar-mcp/commit/1151aa773d4a13f2ff480db059842949455b040b))
+
+- Ruff format _tools_books.py line length
+  ([`a8921d3`](https://github.com/pvliesdonk/scholar-mcp/commit/a8921d36c9556b1ea9ca373eb9e88f7882d5feac))
+
+- Sort recommend_books by edition_count, include limit in cache key
+  ([`90f5069`](https://github.com/pvliesdonk/scholar-mcp/commit/90f5069134e4b891ae2d5fa3487b15ff3f0862cb))
+
+- Suppress venue tags for @book entries in CSL-JSON and RIS (#65)
+  ([#65](https://github.com/pvliesdonk/scholar-mcp/pull/65),
+  [`1e5e8c9`](https://github.com/pvliesdonk/scholar-mcp/commit/1e5e8c968bd8f5bf273ee96c0c2a0708eb9679ba))
+
+- Use _format_bibtex_author for book author fallback
+  ([`122569d`](https://github.com/pvliesdonk/scholar-mcp/commit/122569de98b79fc86d3a0c0956e7e7cbb2b67634))
+
+### Chores
+
+- Update server.json and uv.lock to v1.5.0 [skip ci]
+  ([`0ff41ca`](https://github.com/pvliesdonk/scholar-mcp/commit/0ff41cacae6d79e3c77f2386128aa9ab30e43538))
+
+### Documentation
+
+- Add authors field to book_metadata enrichment table (#74)
+  ([#74](https://github.com/pvliesdonk/scholar-mcp/pull/74),
+  [`3fced7f`](https://github.com/pvliesdonk/scholar-mcp/commit/3fced7f3b73fc3c29690ae690d4cf6ccd2b96f5c))
+
+- Add recommend_books tool documentation (#69)
+  ([#69](https://github.com/pvliesdonk/scholar-mcp/pull/69),
+  [`85bf04a`](https://github.com/pvliesdonk/scholar-mcp/commit/85bf04ae03dc433ae4e645e0645bcea24f957c42))
+
+- Document @book citation output in generate_citations (#65)
+  ([#65](https://github.com/pvliesdonk/scholar-mcp/pull/65),
+  [`c8dd33d`](https://github.com/pvliesdonk/scholar-mcp/commit/c8dd33d998f021ab1b394e08e80d0fd9574f6928))
+
+- Fix stale cache-key description for recommend_books
+  ([`5e5d982`](https://github.com/pvliesdonk/scholar-mcp/commit/5e5d982b981da2ec581be7d348ef51ecd50cdc08))
+
+### Features
+
+- Add book subject cache methods (#69) ([#69](https://github.com/pvliesdonk/scholar-mcp/pull/69),
+  [`39f4710`](https://github.com/pvliesdonk/scholar-mcp/commit/39f4710dedaf96780a9c0a519c9d5b2932fb2a1a))
+
+- Add OpenLibraryClient.get_author() (#74)
+  ([#74](https://github.com/pvliesdonk/scholar-mcp/pull/74),
+  [`0581929`](https://github.com/pvliesdonk/scholar-mcp/commit/058192914d9a88519bf5ea6d4e49b51b16475988))
+
+- Add OpenLibraryClient.get_subject() (#69)
+  ([#69](https://github.com/pvliesdonk/scholar-mcp/pull/69),
+  [`239c27f`](https://github.com/pvliesdonk/scholar-mcp/commit/239c27ff6ddb4d9eb4884d38c753f39fb70eac10))
+
+- Add recommend_books tool via Open Library subject API (#69)
+  ([#69](https://github.com/pvliesdonk/scholar-mcp/pull/69),
+  [`0e49719`](https://github.com/pvliesdonk/scholar-mcp/commit/0e49719d9fd1949d5f9f3cde7a03b805d0ec3ee8))
+
+- Add subject normalization and subject work → BookRecord (#69)
+  ([#69](https://github.com/pvliesdonk/scholar-mcp/pull/69),
+  [`e6a6b1e`](https://github.com/pvliesdonk/scholar-mcp/commit/e6a6b1e2f6efffadbce5561e25c35d20d7164ad8))
+
+- Detect @book entry type from book_metadata (#65)
+  ([#65](https://github.com/pvliesdonk/scholar-mcp/pull/65),
+  [`c0846c6`](https://github.com/pvliesdonk/scholar-mcp/commit/c0846c6a60a784aeb5e4c52c9e7c58cb3c8fa423))
+
+- Emit @book BibTeX entries with publisher/edition/isbn (#65)
+  ([#65](https://github.com/pvliesdonk/scholar-mcp/pull/65),
+  [`e60b6ea`](https://github.com/pvliesdonk/scholar-mcp/commit/e60b6eaba1ae38bf79b12117e50d3dc9ddc327d7))
+
+- Emit book type in CSL-JSON with publisher/ISBN (#65)
+  ([#65](https://github.com/pvliesdonk/scholar-mcp/pull/65),
+  [`ee6b4c6`](https://github.com/pvliesdonk/scholar-mcp/commit/ee6b4c682b857a93236fd5795c4a8c06d8e396ce))
+
+- Emit BOOK type in RIS with publisher/ISBN (#65)
+  ([#65](https://github.com/pvliesdonk/scholar-mcp/pull/65),
+  [`ecdd0c1`](https://github.com/pvliesdonk/scholar-mcp/commit/ecdd0c1c210ff1af5c41ae7846c7b90f9c4a7a71))
+
+- Enrich edition and work lookups with author names (#74)
+  ([#74](https://github.com/pvliesdonk/scholar-mcp/pull/74),
+  [`8742a71`](https://github.com/pvliesdonk/scholar-mcp/commit/8742a7107b1047ee5b85b20e83fa79bbba30e596))
+
+- Enrich ISBN book results with authors from work (#74)
+  ([#74](https://github.com/pvliesdonk/scholar-mcp/pull/74),
+  [`e49cba1`](https://github.com/pvliesdonk/scholar-mcp/commit/e49cba1db854f0e3914138211c4fe839f0facf32))
+
+- Include authors in book enrichment metadata (#74)
+  ([#74](https://github.com/pvliesdonk/scholar-mcp/pull/74),
+  [`f7156c5`](https://github.com/pvliesdonk/scholar-mcp/commit/f7156c5402204528b7cc92505c01bacbe7b50bb4))
+
+### Refactoring
+
+- Move author enrichment helpers to _book_enrichment.py
+  ([`f57c7d0`](https://github.com/pvliesdonk/scholar-mcp/commit/f57c7d0ca6568bc355f12355923504bfb62396ff))
+
+### Testing
+
+- Cover CSL/RIS author prefix+suffix branches, fix mypy errors
+  ([`13ff13f`](https://github.com/pvliesdonk/scholar-mcp/commit/13ff13f1c8aa9b78a0ea72ee39a9b8d0e31ef0fc))
+
+- Improve _book_enrichment branch coverage to 100% patch
+  ([`9c4736b`](https://github.com/pvliesdonk/scholar-mcp/commit/9c4736b2fbd7cffa382311e8d187b1b1fb3d3142))
+
+
 ## v1.5.0 (2026-04-06)
 
 ### Bug Fixes
