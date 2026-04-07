@@ -67,8 +67,9 @@ async def _enrich_one(paper: dict[str, Any], bundle: ServiceBundle) -> None:
 
         book: BookRecord = normalize_book(edition, source="edition")
         await bundle.cache.set_book_by_isbn(isbn, book)
-        if book.get("openlibrary_work_id"):
-            await bundle.cache.set_book_by_work(book["openlibrary_work_id"], book)
+        work_id = book.get("openlibrary_work_id")
+        if work_id:
+            await bundle.cache.set_book_by_work(work_id, book)
         paper["book_metadata"] = _to_enrichment_dict(book)
     except RateLimitedError:
         raise
