@@ -11,8 +11,8 @@ from fastmcp.dependencies import Depends
 
 from ._cache import normalize_isbn
 from ._openlibrary_client import normalize_book
-from ._record_types import BookRecord
 from ._rate_limiter import RateLimitedError
+from ._record_types import BookRecord
 from ._server_deps import ServiceBundle, get_bundle
 
 logger = logging.getLogger(__name__)
