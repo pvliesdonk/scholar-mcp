@@ -366,11 +366,11 @@ Generate formatted citations for one or more papers. Resolves papers via Semanti
 | `citation_format` | string | `"bibtex"` | Output format: `bibtex`, `csl-json`, or `ris` |
 | `enrich` | boolean | `true` | Attempt OpenAlex enrichment for missing venue data |
 
-**BibTeX output** includes entry type inference (`@article`, `@inproceedings`, `@misc`), proper author formatting (`{Last}, First`), title casing preservation, DOI, arXiv eprint fields, and special character escaping.
+**BibTeX output** includes entry type inference (`@article`, `@inproceedings`, `@misc`, `@book`), proper author formatting (`{Last}, First`), title casing preservation, DOI, arXiv eprint fields, and special character escaping. Papers with `book_metadata` (ISBN or publisher) are emitted as `@book` entries with `publisher`, `edition`, and `isbn` fields.
 
-**CSL-JSON output** returns `{"citations": [...], "errors": [...]}` -- the citations array contains standard CSL-JSON objects compatible with Zotero, Mendeley, Pandoc, and other CSL processors.
+**CSL-JSON output** returns `{"citations": [...], "errors": [...]}` -- the citations array contains standard CSL-JSON objects compatible with Zotero, Mendeley, Pandoc, and other CSL processors. Book entries use `type: "book"` with `publisher` and `ISBN` fields.
 
-**RIS output** uses standard RIS tags (`TY`, `AU`, `TI`, `PY`, `JO`/`BT`, `DO`, `UR`, `AB`, `ER`).
+**RIS output** uses standard RIS tags (`TY`, `AU`, `TI`, `PY`, `JO`/`BT`, `DO`, `UR`, `AB`, `ER`). Book entries use `TY - BOOK` with `PB` (publisher) and `SN` (ISBN) tags.
 
 Papers that fail to resolve are reported inline (BibTeX/RIS: as comments, CSL-JSON: in the errors array) rather than failing the entire request. When all papers fail, a structured error is returned: `{"error": "no_papers_resolved", "failed": [...]}`.
 
