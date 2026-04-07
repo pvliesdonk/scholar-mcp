@@ -289,6 +289,7 @@ _CSL_TYPE_MAP: dict[str, str] = {
     "article": "article-journal",
     "inproceedings": "paper-conference",
     "misc": "article",
+    "book": "book",
 }
 
 
@@ -347,6 +348,21 @@ def format_csl_json(papers: list[dict[str, Any]], errors: list[dict[str, Any]]) 
             entry["title"] = title
 
         csl_authors = _csl_author(paper)
+        if not csl_authors and entry_type == "book":
+            bm = paper.get("book_metadata") or {}
+            for author_name in bm.get("authors") or []:
+                parsed = parse_author_name(author_name)
+                ae: dict[str, str] = {}
+                if parsed.last:
+                    ae["family"] = parsed.last
+                if parsed.first:
+                    ae["given"] = parsed.first
+                if parsed.prefix:
+                    ae["non-dropping-particle"] = parsed.prefix
+                if parsed.suffix:
+                    ae["suffix"] = parsed.suffix
+                if ae:
+                    csl_authors.append(ae)
         if csl_authors:
             entry["author"] = csl_authors
 
@@ -370,6 +386,13 @@ def format_csl_json(papers: list[dict[str, Any]], errors: list[dict[str, Any]]) 
         abstract = paper.get("abstract")
         if abstract:
             entry["abstract"] = abstract
+
+        if entry_type == "book":
+            bm = paper.get("book_metadata") or {}
+            if bm.get("publisher"):
+                entry["publisher"] = bm["publisher"]
+            if bm.get("isbn_13"):
+                entry["ISBN"] = bm["isbn_13"]
 
         citations.append(entry)
 

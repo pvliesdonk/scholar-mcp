@@ -316,6 +316,51 @@ class TestFormatCslJson:
         assert "issued" not in result["citations"][0]
 
 
+class TestFormatCslJsonBook:
+    def test_book_type_and_fields(self) -> None:
+        papers = [
+            {
+                "title": "Deep Learning",
+                "authors": [{"name": "Ian Goodfellow"}],
+                "year": 2016,
+                "venue": "",
+                "externalIds": {},
+                "book_metadata": {
+                    "isbn_13": "9780262035613",
+                    "publisher": "MIT Press",
+                    "authors": [],
+                },
+            }
+        ]
+        result_str = format_csl_json(papers, [])
+        result = json.loads(result_str)
+        entry = result["citations"][0]
+        assert entry["type"] == "book"
+        assert entry["publisher"] == "MIT Press"
+        assert entry["ISBN"] == "9780262035613"
+
+    def test_book_author_fallback_csl(self) -> None:
+        papers = [
+            {
+                "title": "Some Book",
+                "authors": [],
+                "year": 2020,
+                "venue": "",
+                "externalIds": {},
+                "book_metadata": {
+                    "isbn_13": "9781234567890",
+                    "publisher": "Publisher",
+                    "authors": ["Alice Smith"],
+                },
+            }
+        ]
+        result_str = format_csl_json(papers, [])
+        result = json.loads(result_str)
+        entry = result["citations"][0]
+        assert entry["author"][0]["family"] == "Smith"
+        assert entry["author"][0]["given"] == "Alice"
+
+
 class TestFormatRis:
     def test_single_journal_article(self) -> None:
         papers = [
