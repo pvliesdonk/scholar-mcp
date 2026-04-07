@@ -152,3 +152,30 @@ async def test_enrichment_batch_multiple_papers(
     assert "book_metadata" in papers[0]
     assert "book_metadata" not in papers[1]
     assert "book_metadata" in papers[2]
+
+
+def test_to_enrichment_dict_includes_authors() -> None:
+    from scholar_mcp._book_enrichment import _to_enrichment_dict
+
+    book: dict = {
+        "title": "Test",
+        "authors": ["Alice", "Bob"],
+        "publisher": "Publisher",
+        "edition": None,
+        "isbn_13": "9781234567890",
+        "cover_url": None,
+        "openlibrary_work_id": "OL123W",
+        "description": None,
+        "subjects": [],
+        "page_count": None,
+    }
+    result = _to_enrichment_dict(book)
+    assert result["authors"] == ["Alice", "Bob"]
+
+
+def test_to_enrichment_dict_empty_authors_defaults_to_list() -> None:
+    from scholar_mcp._book_enrichment import _to_enrichment_dict
+
+    book: dict = {"title": "Test"}
+    result = _to_enrichment_dict(book)
+    assert result["authors"] == []

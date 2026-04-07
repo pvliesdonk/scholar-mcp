@@ -100,6 +100,7 @@ def _to_enrichment_dict(book: BookRecord) -> dict[str, Any]:
         "description": book.get("description"),
         "subjects": book.get("subjects") or [],
         "page_count": book.get("page_count"),
+        "authors": book.get("authors") or [],
     }
 
 

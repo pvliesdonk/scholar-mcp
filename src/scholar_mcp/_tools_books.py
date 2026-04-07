@@ -62,9 +62,7 @@ def _extract_author_keys(work: dict[str, Any]) -> list[str]:
     return keys
 
 
-async def _enrich_authors_from_work(
-    book: BookRecord, bundle: ServiceBundle
-) -> None:
+async def _enrich_authors_from_work(book: BookRecord, bundle: ServiceBundle) -> None:
     """Enrich book in-place with authors from its work record.
 
     Best-effort: failures are logged and silently skipped.
@@ -88,9 +86,7 @@ async def _enrich_authors_from_work(
             if names:
                 book["authors"] = names
     except Exception:
-        logger.debug(
-            "author_enrichment_failed work_id=%s", work_id, exc_info=True
-        )
+        logger.debug("author_enrichment_failed work_id=%s", work_id, exc_info=True)
 
 
 def register_book_tools(mcp: FastMCP) -> None:
