@@ -263,7 +263,7 @@ class TestFormatBibtexBook:
         ]
         result = format_bibtex(papers, [])
         assert "@book{" in result
-        assert "author = {Alice Smith and Bob Jones}" in result
+        assert "author = {Smith, Alice and Jones, Bob}" in result
 
 
 class TestFormatCslJson:

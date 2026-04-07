@@ -218,13 +218,17 @@ def format_bibtex(papers: list[dict[str, Any]], errors: list[dict[str, Any]]) ->
 
         fields: list[str] = []
 
-        # Author: prefer S2 authors, fall back to book_metadata authors
+        # Author: prefer S2 authors, fall back to book_metadata authors.
+        # Synthesise {"name": ...} entries so _format_bibtex_author applies
+        # parse_author_name and produces the {Last, First} BibTeX convention.
         author_str = _format_bibtex_author(paper)
         if not author_str and entry_type == "book":
             bm = paper.get("book_metadata") or {}
             bm_authors = bm.get("authors") or []
             if bm_authors:
-                author_str = " and ".join(escape_bibtex(a) for a in bm_authors)
+                author_str = _format_bibtex_author(
+                    {"authors": [{"name": a} for a in bm_authors]}
+                )
         if author_str:
             fields.append(f"  author = {{{author_str}}}")
 
