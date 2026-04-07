@@ -210,29 +210,22 @@ def register_book_tools(mcp: FastMCP) -> None:
         limit = max(1, min(limit, 50))
         slug = normalize_subject(subject)
 
-        cache_key = f"{slug}:limit={limit}"
-        cached = await bundle.cache.get_book_subject(cache_key)
+        cached = await bundle.cache.get_book_subject(slug)
         if cached is not None:
             logger.debug("book_subject_cache_hit subject=%s", slug)
             return json.dumps(cached[:limit])
 
-        async def _execute(*, retry: bool = True) -> str:
-            subject_data = await bundle.openlibrary.get_subject(slug, limit=limit)
-            if subject_data is None:
-                return json.dumps([])
-            works = subject_data.get("works") or []
-            works.sort(key=lambda w: w.get("edition_count", 0), reverse=True)
-            books = [normalize_subject_work(w) for w in works]
-            await bundle.cache.set_book_subject(cache_key, books)
-            return json.dumps(books)
-
-        try:
-            return await _execute(retry=False)
-        except RateLimitedError:
-            task_id = bundle.tasks.submit(_execute(retry=True), tool="recommend_books")
-            return json.dumps(
-                {"queued": True, "task_id": task_id, "tool": "recommend_books"}
-            )
+        # Fetch a fixed pool of 50 so the popularity sort covers more candidates
+        # than the caller's limit, and any future request for this subject is
+        # served from cache with just a slice.
+        subject_data = await bundle.openlibrary.get_subject(slug, limit=50)
+        if subject_data is None:
+            return json.dumps([])
+        works = subject_data.get("works") or []
+        works.sort(key=lambda w: w.get("edition_count", 0), reverse=True)
+        books = [normalize_subject_work(w) for w in works]
+        await bundle.cache.set_book_subject(slug, books)
+        return json.dumps(books[:limit])
 
 
 async def _resolve_isbn(isbn: str, bundle: ServiceBundle) -> str:

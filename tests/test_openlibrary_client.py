@@ -359,7 +359,7 @@ async def test_get_subject(
 
 
 @pytest.mark.respx(base_url=OL_BASE)
-async def test_get_subject_not_found(
+async def test_get_subject_empty_works(
     respx_mock: respx.MockRouter, ol_client: OpenLibraryClient
 ) -> None:
     respx_mock.get("/subjects/nonexistent_topic_xyz.json").mock(
@@ -372,11 +372,25 @@ async def test_get_subject_not_found(
     assert result["works"] == []
 
 
+@pytest.mark.respx(base_url=OL_BASE)
+async def test_get_subject_404(
+    respx_mock: respx.MockRouter, ol_client: OpenLibraryClient
+) -> None:
+    respx_mock.get("/subjects/no_such_subject.json").mock(
+        return_value=httpx.Response(404)
+    )
+    result = await ol_client.get_subject("no_such_subject")
+    assert result is None
+
+
 def test_normalize_subject() -> None:
     assert normalize_subject("Machine Learning") == "machine_learning"
     assert normalize_subject("  deep learning  ") == "deep_learning"
     assert normalize_subject("algorithms") == "algorithms"
-    assert normalize_subject("Natural Language Processing") == "natural_language_processing"
+    assert (
+        normalize_subject("Natural Language Processing")
+        == "natural_language_processing"
+    )
 
 
 def test_normalize_subject_work() -> None:

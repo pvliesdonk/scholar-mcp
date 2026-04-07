@@ -844,17 +844,17 @@ class ScholarCache:
         )
         await db.commit()
 
-    async def get_book_subject(self, subject: str) -> list[BookRecord] | None:
+    async def get_book_subject(self, cache_key: str) -> list[BookRecord] | None:
         """Return cached book subject results or None if missing/stale.
 
         Args:
-            subject: Normalized subject slug; SHA-256 hash used as cache key.
+            cache_key: Subject slug used as the cache key.
 
         Returns:
             List of BookRecord dicts or None.
         """
         db = _require_open(self._db)
-        query_hash = hashlib.sha256(subject.encode()).hexdigest()
+        query_hash = hashlib.sha256(cache_key.encode()).hexdigest()
         async with db.execute(
             "SELECT data, cached_at FROM books_subject WHERE query_hash = ?",
             (query_hash,),
@@ -864,15 +864,15 @@ class ScholarCache:
             return None
         return json.loads(row[0])  # type: ignore[no-any-return]
 
-    async def set_book_subject(self, subject: str, data: list[BookRecord]) -> None:
+    async def set_book_subject(self, cache_key: str, data: list[BookRecord]) -> None:
         """Cache book subject results.
 
         Args:
-            subject: Normalized subject slug; SHA-256 hash used as cache key.
+            cache_key: Subject slug used as the cache key.
             data: List of BookRecord dicts.
         """
         db = _require_open(self._db)
-        query_hash = hashlib.sha256(subject.encode()).hexdigest()
+        query_hash = hashlib.sha256(cache_key.encode()).hexdigest()
         await db.execute(
             "INSERT OR REPLACE INTO books_subject (query_hash, data, cached_at) VALUES (?, ?, ?)",
             (query_hash, json.dumps(data), time.time()),
