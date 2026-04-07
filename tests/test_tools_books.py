@@ -507,7 +507,7 @@ async def test_recommend_books_caches_results(
     )
     async with Client(mcp) as client:
         await client.call_tool("recommend_books", {"subject": "algorithms"})
-    cached = await bundle.cache.get_book_subject("algorithms")
+    cached = await bundle.cache.get_book_subject("algorithms:limit=10")
     assert cached is not None
     assert len(cached) == 2
 

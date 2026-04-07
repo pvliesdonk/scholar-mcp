@@ -210,7 +210,8 @@ def register_book_tools(mcp: FastMCP) -> None:
         limit = max(1, min(limit, 50))
         slug = normalize_subject(subject)
 
-        cached = await bundle.cache.get_book_subject(slug)
+        cache_key = f"{slug}:limit={limit}"
+        cached = await bundle.cache.get_book_subject(cache_key)
         if cached is not None:
             logger.debug("book_subject_cache_hit subject=%s", slug)
             return json.dumps(cached[:limit])
@@ -220,8 +221,9 @@ def register_book_tools(mcp: FastMCP) -> None:
             if subject_data is None:
                 return json.dumps([])
             works = subject_data.get("works") or []
+            works.sort(key=lambda w: w.get("edition_count", 0), reverse=True)
             books = [normalize_subject_work(w) for w in works]
-            await bundle.cache.set_book_subject(slug, books)
+            await bundle.cache.set_book_subject(cache_key, books)
             return json.dumps(books)
 
         try:
