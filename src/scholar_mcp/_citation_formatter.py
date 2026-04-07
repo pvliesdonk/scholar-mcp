@@ -224,9 +224,7 @@ def format_bibtex(papers: list[dict[str, Any]], errors: list[dict[str, Any]]) ->
             bm = paper.get("book_metadata") or {}
             bm_authors = bm.get("authors") or []
             if bm_authors:
-                author_str = " and ".join(
-                    escape_bibtex(a) for a in bm_authors
-                )
+                author_str = " and ".join(escape_bibtex(a) for a in bm_authors)
         if author_str:
             fields.append(f"  author = {{{author_str}}}")
 
@@ -411,6 +409,7 @@ _RIS_TYPE_MAP: dict[str, str] = {
     "article": "JOUR",
     "inproceedings": "CONF",
     "misc": "GEN",
+    "book": "BOOK",
 }
 
 
@@ -459,7 +458,21 @@ def format_ris(papers: list[dict[str, Any]], errors: list[dict[str, Any]]) -> st
         ris_type = _RIS_TYPE_MAP.get(entry_type, "GEN")
         lines: list[str] = [f"TY  - {ris_type}"]
 
-        lines.extend(_ris_author_line(paper))
+        author_lines = _ris_author_line(paper)
+        if not author_lines and entry_type == "book":
+            bm = paper.get("book_metadata") or {}
+            for author_name in bm.get("authors") or []:
+                parsed = parse_author_name(author_name)
+                name = (
+                    f"{parsed.prefix} {parsed.last}" if parsed.prefix else parsed.last
+                )
+                if parsed.first:
+                    name = f"{name}, {parsed.first}"
+                if parsed.suffix:
+                    name = f"{name}, {parsed.suffix}"
+                if name:
+                    author_lines.append(f"AU  - {name}")
+        lines.extend(author_lines)
 
         title = paper.get("title")
         if title:
@@ -488,6 +501,13 @@ def format_ris(papers: list[dict[str, Any]], errors: list[dict[str, Any]]) -> st
         abstract = paper.get("abstract")
         if abstract:
             lines.append(f"AB  - {abstract}")
+
+        if entry_type == "book":
+            bm = paper.get("book_metadata") or {}
+            if bm.get("publisher"):
+                lines.append(f"PB  - {bm['publisher']}")
+            if bm.get("isbn_13"):
+                lines.append(f"SN  - {bm['isbn_13']}")
 
         lines.append("ER  -")
         blocks.append("\n".join(lines))

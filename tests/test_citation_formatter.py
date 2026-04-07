@@ -431,3 +431,44 @@ class TestFormatRis:
         ]
         result = format_ris(papers, [])
         assert result.count("ER  -") == 2
+
+
+class TestFormatRisBook:
+    def test_book_type_and_fields(self) -> None:
+        papers = [
+            {
+                "title": "Deep Learning",
+                "authors": [{"name": "Ian Goodfellow"}],
+                "year": 2016,
+                "venue": "",
+                "externalIds": {},
+                "book_metadata": {
+                    "isbn_13": "9780262035613",
+                    "publisher": "MIT Press",
+                    "authors": [],
+                },
+            }
+        ]
+        result = format_ris(papers, [])
+        assert "TY  - BOOK" in result
+        assert "PB  - MIT Press" in result
+        assert "SN  - 9780262035613" in result
+
+    def test_book_author_fallback_ris(self) -> None:
+        papers = [
+            {
+                "title": "Some Book",
+                "authors": [],
+                "year": 2020,
+                "venue": "",
+                "externalIds": {},
+                "book_metadata": {
+                    "isbn_13": "9781234567890",
+                    "publisher": "Publisher",
+                    "authors": ["Alice Smith"],
+                },
+            }
+        ]
+        result = format_ris(papers, [])
+        assert "TY  - BOOK" in result
+        assert "AU  - Smith, Alice" in result
