@@ -73,6 +73,7 @@ _PATENT_SEARCH_TTL = 7 * 86400  # 7 days
 _BOOK_ISBN_TTL = 30 * 86400  # 30 days
 _BOOK_WORK_TTL = 30 * 86400  # 30 days
 _BOOK_SEARCH_TTL = 7 * 86400  # 7 days
+_BOOK_SUBJECT_TTL = 7 * 86400  # 7 days
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY);
@@ -187,6 +188,13 @@ CREATE TABLE IF NOT EXISTS books_search (
     cached_at  REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_books_search_cached ON books_search(cached_at);
+
+CREATE TABLE IF NOT EXISTS books_subject (
+    query_hash TEXT PRIMARY KEY,
+    data       TEXT NOT NULL,
+    cached_at  REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_books_subject_cached ON books_subject(cached_at);
 """
 
 _TTL_TABLES = (
@@ -205,6 +213,7 @@ _TTL_TABLES = (
     "books_isbn",
     "books_openlibrary",
     "books_search",
+    "books_subject",
 )
 
 
@@ -831,6 +840,41 @@ class ScholarCache:
         query_hash = hashlib.sha256(query.encode()).hexdigest()
         await db.execute(
             "INSERT OR REPLACE INTO books_search (query_hash, data, cached_at) VALUES (?, ?, ?)",
+            (query_hash, json.dumps(data), time.time()),
+        )
+        await db.commit()
+
+    async def get_book_subject(self, subject: str) -> list[BookRecord] | None:
+        """Return cached book subject results or None if missing/stale.
+
+        Args:
+            subject: Normalized subject slug; SHA-256 hash used as cache key.
+
+        Returns:
+            List of BookRecord dicts or None.
+        """
+        db = _require_open(self._db)
+        query_hash = hashlib.sha256(subject.encode()).hexdigest()
+        async with db.execute(
+            "SELECT data, cached_at FROM books_subject WHERE query_hash = ?",
+            (query_hash,),
+        ) as cur:
+            row = await cur.fetchone()
+        if row is None or time.time() - row[1] > _BOOK_SUBJECT_TTL:
+            return None
+        return json.loads(row[0])  # type: ignore[no-any-return]
+
+    async def set_book_subject(self, subject: str, data: list[BookRecord]) -> None:
+        """Cache book subject results.
+
+        Args:
+            subject: Normalized subject slug; SHA-256 hash used as cache key.
+            data: List of BookRecord dicts.
+        """
+        db = _require_open(self._db)
+        query_hash = hashlib.sha256(subject.encode()).hexdigest()
+        await db.execute(
+            "INSERT OR REPLACE INTO books_subject (query_hash, data, cached_at) VALUES (?, ?, ?)",
             (query_hash, json.dumps(data), time.time()),
         )
         await db.commit()
