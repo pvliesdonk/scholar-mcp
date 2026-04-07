@@ -218,7 +218,15 @@ def format_bibtex(papers: list[dict[str, Any]], errors: list[dict[str, Any]]) ->
 
         fields: list[str] = []
 
+        # Author: prefer S2 authors, fall back to book_metadata authors
         author_str = _format_bibtex_author(paper)
+        if not author_str and entry_type == "book":
+            bm = paper.get("book_metadata") or {}
+            bm_authors = bm.get("authors") or []
+            if bm_authors:
+                author_str = " and ".join(
+                    escape_bibtex(a) for a in bm_authors
+                )
         if author_str:
             fields.append(f"  author = {{{author_str}}}")
 
@@ -234,8 +242,21 @@ def format_bibtex(papers: list[dict[str, Any]], errors: list[dict[str, Any]]) ->
         if venue:
             if entry_type == "inproceedings":
                 fields.append(f"  booktitle = {{{escape_bibtex(venue)}}}")
-            else:
+            elif entry_type != "book":
                 fields.append(f"  journal = {{{escape_bibtex(venue)}}}")
+
+        # Book-specific fields from book_metadata
+        if entry_type == "book":
+            bm = paper.get("book_metadata") or {}
+            publisher = bm.get("publisher")
+            if publisher:
+                fields.append(f"  publisher = {{{escape_bibtex(publisher)}}}")
+            edition = bm.get("edition")
+            if edition:
+                fields.append(f"  edition = {{{escape_bibtex(edition)}}}")
+            isbn = bm.get("isbn_13")
+            if isbn:
+                fields.append(f"  isbn = {{{isbn}}}")
 
         external_ids = paper.get("externalIds") or {}
         doi = external_ids.get("DOI")

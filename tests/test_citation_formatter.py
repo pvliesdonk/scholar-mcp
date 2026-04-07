@@ -219,6 +219,50 @@ class TestFormatBibtex:
         assert "url" not in field_names
 
 
+class TestFormatBibtexBook:
+    def test_book_entry_type_and_fields(self) -> None:
+        papers = [
+            {
+                "title": "Deep Learning",
+                "authors": [{"name": "Ian Goodfellow"}],
+                "year": 2016,
+                "venue": "",
+                "externalIds": {},
+                "book_metadata": {
+                    "isbn_13": "9780262035613",
+                    "publisher": "MIT Press",
+                    "edition": "1st",
+                    "authors": [],
+                },
+            }
+        ]
+        result = format_bibtex(papers, [])
+        assert "@book{goodfellow2016," in result
+        assert "publisher = {MIT Press}" in result
+        assert "edition = {1st}" in result
+        assert "isbn = {9780262035613}" in result
+        assert "journal" not in result
+
+    def test_book_author_fallback(self) -> None:
+        papers = [
+            {
+                "title": "Some Book",
+                "authors": [],
+                "year": 2020,
+                "venue": "",
+                "externalIds": {},
+                "book_metadata": {
+                    "isbn_13": "9781234567890",
+                    "publisher": "Publisher",
+                    "authors": ["Alice Smith", "Bob Jones"],
+                },
+            }
+        ]
+        result = format_bibtex(papers, [])
+        assert "@book{" in result
+        assert "author = {Alice Smith and Bob Jones}" in result
+
+
 class TestFormatCslJson:
     def test_single_paper(self) -> None:
         papers = [
