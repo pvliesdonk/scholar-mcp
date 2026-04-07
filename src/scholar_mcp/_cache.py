@@ -11,6 +11,8 @@ from typing import Any
 
 import aiosqlite
 
+from ._record_types import BookRecord
+
 logger = logging.getLogger(__name__)
 
 
@@ -731,7 +733,7 @@ class ScholarCache:
     # Books (Open Library)
     # ------------------------------------------------------------------
 
-    async def get_book_by_isbn(self, isbn: str) -> dict[str, Any] | None:
+    async def get_book_by_isbn(self, isbn: str) -> BookRecord | None:
         """Return cached book data by ISBN or None if missing/stale.
 
         Args:
@@ -749,7 +751,7 @@ class ScholarCache:
             return None
         return json.loads(row[0])  # type: ignore[no-any-return]
 
-    async def set_book_by_isbn(self, isbn: str, data: dict[str, Any]) -> None:
+    async def set_book_by_isbn(self, isbn: str, data: BookRecord) -> None:
         """Cache book data by ISBN.
 
         Args:
@@ -763,7 +765,7 @@ class ScholarCache:
         )
         await db.commit()
 
-    async def get_book_by_work(self, work_id: str) -> dict[str, Any] | None:
+    async def get_book_by_work(self, work_id: str) -> BookRecord | None:
         """Return cached book data by Open Library work ID or None.
 
         Args:
@@ -782,7 +784,7 @@ class ScholarCache:
             return None
         return json.loads(row[0])  # type: ignore[no-any-return]
 
-    async def set_book_by_work(self, work_id: str, data: dict[str, Any]) -> None:
+    async def set_book_by_work(self, work_id: str, data: BookRecord) -> None:
         """Cache book data by Open Library work ID.
 
         Args:
@@ -796,7 +798,7 @@ class ScholarCache:
         )
         await db.commit()
 
-    async def get_book_search(self, query: str) -> list[dict[str, Any]] | None:
+    async def get_book_search(self, query: str) -> list[BookRecord] | None:
         """Return cached book search results or None if missing/stale.
 
         Args:
@@ -816,7 +818,7 @@ class ScholarCache:
             return None
         return json.loads(row[0])  # type: ignore[no-any-return]
 
-    async def set_book_search(self, query: str, data: list[dict[str, Any]]) -> None:
+    async def set_book_search(self, query: str, data: list[BookRecord]) -> None:
         """Cache book search results.
 
         Args:
