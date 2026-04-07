@@ -7,12 +7,13 @@ import json
 import logging
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import aiosqlite
 
-if TYPE_CHECKING:
-    from ._record_types import BookRecord
+from ._record_types import (
+    BookRecord,  # noqa: TC001 — runtime import needed for get_type_hints()
+)
 
 logger = logging.getLogger(__name__)
 

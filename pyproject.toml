@@ -121,6 +121,8 @@ exclude_lines = [
     "raise NotImplementedError",
     "if TYPE_CHECKING:",
     "if __name__ == .__main__.:",
+    "^\\s*\\.\\.\\.$",
+    "class .*\\bProtocol\\):",
 ]
 
 [tool.mypy]

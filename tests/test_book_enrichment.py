@@ -116,6 +116,27 @@ async def test_enrichment_uses_cache_on_second_call(
 
 
 @pytest.mark.respx(base_url=OL_BASE)
+async def test_enrichment_edition_without_work_id(
+    respx_mock: respx.MockRouter, bundle: ServiceBundle
+) -> None:
+    """Edition without a works key skips the work-cache write."""
+    edition_no_work = {
+        "title": "Standalone Edition",
+        "publishers": ["Publisher"],
+        "isbn_13": ["9781111111111"],
+        "key": "/books/OL8888888M",
+    }
+    respx_mock.get("/isbn/9781111111111.json").mock(
+        return_value=httpx.Response(200, json=edition_no_work)
+    )
+    paper = _make_paper(isbn="9781111111111")
+    await enrich_books([paper], bundle)
+    assert "book_metadata" in paper
+    assert paper["book_metadata"]["isbn_13"] == "9781111111111"
+    assert paper["book_metadata"]["openlibrary_work_id"] is None
+
+
+@pytest.mark.respx(base_url=OL_BASE)
 async def test_enrichment_batch_multiple_papers(
     respx_mock: respx.MockRouter, bundle: ServiceBundle
 ) -> None:
