@@ -251,7 +251,9 @@ async def _resolve_work(work_id: str, bundle: ServiceBundle) -> str:
     else:
         editions = await bundle.openlibrary.get_work_editions(work_id, limit=1)
 
-    edition: BookRecord = normalize_book(editions[0], source="edition") if editions else {}
+    edition: BookRecord = (
+        normalize_book(editions[0], source="edition") if editions else {}
+    )
 
     isbn_13 = edition.get("isbn_13")
     isbn_10 = edition.get("isbn_10")
