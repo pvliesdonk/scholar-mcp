@@ -213,6 +213,32 @@ class OpenLibraryClient:
             logger.warning("openlibrary_edition_error edition_id=%s", edition_id)
             return None
 
+    async def get_subject(
+        self, subject: str, *, limit: int = 10
+    ) -> dict[str, Any] | None:
+        """Fetch books for a subject.
+
+        Args:
+            subject: Subject slug (e.g. ``machine_learning``).
+            limit: Maximum number of works to return.
+
+        Returns:
+            Subject dict with ``name``, ``work_count``, and ``works`` list,
+            or None on HTTP error.
+        """
+        await self._limiter.acquire()
+        try:
+            r = await self._client.get(
+                f"/subjects/{subject}.json", params={"limit": limit}
+            )
+            if r.status_code == 404:
+                return None
+            r.raise_for_status()
+            return r.json()  # type: ignore[no-any-return]
+        except httpx.HTTPStatusError:
+            logger.warning("openlibrary_subject_error subject=%s", subject)
+            return None
+
     async def aclose(self) -> None:
         """Close the underlying HTTP client."""
         await self._client.aclose()
