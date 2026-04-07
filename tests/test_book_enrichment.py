@@ -6,7 +6,12 @@ import httpx
 import pytest
 import respx
 
-from scholar_mcp._book_enrichment import enrich_books
+from scholar_mcp._book_enrichment import (
+    _extract_author_keys,
+    enrich_authors_from_work,
+    enrich_books,
+)
+from scholar_mcp._rate_limiter import RateLimitedError
 from scholar_mcp._server_deps import ServiceBundle
 
 OL_BASE = "https://openlibrary.org"
@@ -152,3 +157,128 @@ async def test_enrichment_batch_multiple_papers(
     assert "book_metadata" in papers[0]
     assert "book_metadata" not in papers[1]
     assert "book_metadata" in papers[2]
+
+
+def test_to_enrichment_dict_includes_authors() -> None:
+    from scholar_mcp._book_enrichment import _to_enrichment_dict
+
+    book: dict = {
+        "title": "Test",
+        "authors": ["Alice", "Bob"],
+        "publisher": "Publisher",
+        "edition": None,
+        "isbn_13": "9781234567890",
+        "cover_url": None,
+        "openlibrary_work_id": "OL123W",
+        "description": None,
+        "subjects": [],
+        "page_count": None,
+    }
+    result = _to_enrichment_dict(book)
+    assert result["authors"] == ["Alice", "Bob"]
+
+
+def test_to_enrichment_dict_empty_authors_defaults_to_list() -> None:
+    from scholar_mcp._book_enrichment import _to_enrichment_dict
+
+    book: dict = {"title": "Test"}
+    result = _to_enrichment_dict(book)
+    assert result["authors"] == []
+
+
+# --- _extract_author_keys branch coverage ---
+
+
+def test_extract_author_keys_skips_non_dict_entries() -> None:
+    """Non-dict entries in work['authors'] are ignored."""
+    work = {"authors": ["not-a-dict", None, 42]}
+    assert _extract_author_keys(work) == []
+
+
+def test_extract_author_keys_skips_non_dict_author_value() -> None:
+    """Entry dict where 'author' is not a dict is ignored."""
+    work = {"authors": [{"author": "/authors/OL123A"}]}
+    assert _extract_author_keys(work) == []
+
+
+def test_extract_author_keys_happy_path() -> None:
+    work = {
+        "authors": [
+            {"author": {"key": "/authors/OL239963A"}},
+            {"author": {"key": "/authors/OL239964A"}},
+        ]
+    }
+    assert _extract_author_keys(work) == ["/authors/OL239963A", "/authors/OL239964A"]
+
+
+# --- enrich_authors_from_work branch coverage ---
+
+
+@pytest.mark.respx(base_url=OL_BASE)
+async def test_enrich_authors_already_populated(
+    respx_mock: respx.MockRouter, bundle: ServiceBundle
+) -> None:
+    """Early-returns without fetching when authors already set."""
+    book: dict = {"authors": ["Already Here"], "openlibrary_work_id": "OL1W"}
+    await enrich_authors_from_work(book, bundle)
+    assert book["authors"] == ["Already Here"]
+    assert not respx_mock.calls
+
+
+@pytest.mark.respx(base_url=OL_BASE)
+async def test_enrich_authors_work_returns_none(
+    respx_mock: respx.MockRouter, bundle: ServiceBundle
+) -> None:
+    """No-ops when the work endpoint returns 404."""
+    respx_mock.get("/works/OL999W.json").mock(return_value=httpx.Response(404))
+    book: dict = {"authors": [], "openlibrary_work_id": "OL999W"}
+    await enrich_authors_from_work(book, bundle)
+    assert book["authors"] == []
+
+
+@pytest.mark.respx(base_url=OL_BASE)
+async def test_enrich_authors_work_has_no_author_keys(
+    respx_mock: respx.MockRouter, bundle: ServiceBundle
+) -> None:
+    """No-ops when the work has no recognisable author entries."""
+    respx_mock.get("/works/OL1W.json").mock(
+        return_value=httpx.Response(200, json={"title": "Anon", "authors": []})
+    )
+    book: dict = {"authors": [], "openlibrary_work_id": "OL1W"}
+    await enrich_authors_from_work(book, bundle)
+    assert book["authors"] == []
+
+
+@pytest.mark.respx(base_url=OL_BASE)
+async def test_enrich_authors_all_author_fetches_return_none(
+    respx_mock: respx.MockRouter, bundle: ServiceBundle
+) -> None:
+    """No-ops when every get_author call returns None (404)."""
+    respx_mock.get("/works/OL1W.json").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "authors": [{"author": {"key": "/authors/OL999A"}}],
+            },
+        )
+    )
+    respx_mock.get("/authors/OL999A.json").mock(return_value=httpx.Response(404))
+    book: dict = {"authors": [], "openlibrary_work_id": "OL1W"}
+    await enrich_authors_from_work(book, bundle)
+    assert book["authors"] == []
+
+
+# --- _enrich_one RateLimitedError propagation ---
+
+
+@pytest.mark.respx(base_url=OL_BASE)
+async def test_enrichment_rate_limited_error_propagates(
+    respx_mock: respx.MockRouter, bundle: ServiceBundle
+) -> None:
+    """RateLimitedError is re-raised, not swallowed."""
+    respx_mock.get("/isbn/9780201633610.json").mock(
+        side_effect=RateLimitedError("rate limited")
+    )
+    paper = _make_paper(isbn="9780201633610")
+    with pytest.raises(RateLimitedError):
+        await enrich_books([paper], bundle)
