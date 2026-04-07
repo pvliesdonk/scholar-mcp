@@ -81,6 +81,25 @@ class TestInferEntryType:
     def test_none_venue(self) -> None:
         assert infer_entry_type({"venue": None}) == "article"
 
+    def test_book_with_isbn(self) -> None:
+        paper = {
+            "book_metadata": {"isbn_13": "9780201633610", "publisher": "Addison-Wesley"},
+        }
+        assert infer_entry_type(paper) == "book"
+
+    def test_book_with_publisher_only(self) -> None:
+        paper = {
+            "book_metadata": {"publisher": "MIT Press"},
+        }
+        assert infer_entry_type(paper) == "book"
+
+    def test_book_metadata_without_isbn_or_publisher_falls_through(self) -> None:
+        paper = {
+            "book_metadata": {"description": "A book"},
+            "venue": "Nature",
+        }
+        assert infer_entry_type(paper) == "article"
+
 
 class TestEscapeBibtex:
     def test_special_chars(self) -> None:

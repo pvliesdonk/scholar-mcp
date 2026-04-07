@@ -131,8 +131,11 @@ def infer_entry_type(paper: dict[str, Any]) -> str:
         paper: Paper metadata dict.
 
     Returns:
-        One of ``"article"``, ``"inproceedings"``, or ``"misc"``.
+        One of ``"book"``, ``"article"``, ``"inproceedings"``, or ``"misc"``.
     """
+    book_meta = paper.get("book_metadata")
+    if book_meta and (book_meta.get("isbn_13") or book_meta.get("publisher")):
+        return "book"
     venue = (paper.get("venue") or "").lower()
     if any(kw in venue for kw in _CONFERENCE_KEYWORDS):
         return "inproceedings"
