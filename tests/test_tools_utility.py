@@ -575,3 +575,77 @@ async def test_batch_resolve_patent_rate_limited_queues(
     data = json.loads(result.content[0].text)
     assert data["queued"] is True
     assert data["tool"] == "batch_resolve"
+
+
+OL_BASE = "https://openlibrary.org"
+
+_OL_EDITION = {
+    "title": "Design Patterns",
+    "publishers": ["Addison-Wesley"],
+    "publish_date": "1994",
+    "isbn_10": ["0201633612"],
+    "isbn_13": ["9780201633610"],
+    "number_of_pages": 395,
+    "works": [{"key": "/works/OL1168083W"}],
+    "key": "/books/OL1429049M",
+    "subjects": ["Software patterns"],
+}
+
+
+async def test_batch_resolve_isbn(mcp: FastMCP) -> None:
+    """ISBN: prefixed identifiers are routed to Open Library, not S2."""
+    with respx.mock:
+        respx.get(f"{OL_BASE}/isbn/9780201633610.json").mock(
+            return_value=httpx.Response(200, json=_OL_EDITION)
+        )
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "batch_resolve",
+                {"identifiers": ["ISBN:9780201633610"]},
+            )
+    data = json.loads(result.content[0].text)
+    assert len(data) == 1
+    assert data[0]["source_type"] == "book"
+    assert data[0]["book"]["title"] == "Design Patterns"
+    assert data[0]["book"]["isbn_13"] == "9780201633610"
+
+
+async def test_batch_resolve_isbn_not_found(mcp: FastMCP) -> None:
+    """ISBN: identifier returns not_found when Open Library has no match."""
+    with respx.mock:
+        respx.get(f"{OL_BASE}/isbn/9780000000000.json").mock(
+            return_value=httpx.Response(404)
+        )
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "batch_resolve",
+                {"identifiers": ["ISBN:9780000000000"]},
+            )
+    data = json.loads(result.content[0].text)
+    assert len(data) == 1
+    assert data[0]["error"] == "not_found"
+    assert data[0]["source_type"] == "book"
+
+
+async def test_batch_resolve_mixed_papers_and_isbn(mcp: FastMCP) -> None:
+    """batch_resolve handles a mix of paper IDs and ISBNs in correct order."""
+    with respx.mock:
+        respx.post(f"{S2_BASE}/paper/batch").mock(
+            return_value=httpx.Response(
+                200, json=[{"paperId": "abc", "title": "Paper A"}]
+            )
+        )
+        respx.get(f"{OL_BASE}/isbn/9780201633610.json").mock(
+            return_value=httpx.Response(200, json=_OL_EDITION)
+        )
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "batch_resolve",
+                {"identifiers": ["abc", "ISBN:9780201633610"]},
+            )
+    data = json.loads(result.content[0].text)
+    assert len(data) == 2
+    assert data[0]["identifier"] == "abc"
+    assert "paper" in data[0]
+    assert data[1]["identifier"] == "ISBN:9780201633610"
+    assert data[1]["source_type"] == "book"

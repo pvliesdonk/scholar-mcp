@@ -21,3 +21,4 @@ htmlcov/
 site/
 .worktrees/
 docs/superpowers/
+.claude/worktrees/

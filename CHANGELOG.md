@@ -2,6 +2,182 @@
 
 <!-- version list -->
 
+## v1.5.0 (2026-04-06)
+
+### Bug Fixes
+
+- Address CI failures and second-round review feedback
+  ([`b69d5db`](https://github.com/pvliesdonk/scholar-mcp/commit/b69d5db48f665782939025ade2686747cc22e6c5))
+
+- Address PR #54 review feedback
+  ([`58a0d4b`](https://github.com/pvliesdonk/scholar-mcp/commit/58a0d4bf8b1e0aab44c2c7e6f949156448502972))
+
+- Address PR #57 review feedback (caching, imports, rate limits, formatting)
+  ([`38122ec`](https://github.com/pvliesdonk/scholar-mcp/commit/38122ec81b568ece73eaf1989befaa44dee3ffb0))
+
+- Address PR #58 review feedback
+  ([`cbd17ce`](https://github.com/pvliesdonk/scholar-mcp/commit/cbd17ce5d5ed0a9b471a079cf1bfc3842fb802a7))
+
+- Address PR #71 review feedback
+  ([`2fd70fd`](https://github.com/pvliesdonk/scholar-mcp/commit/2fd70fded70cf0a88939ae72c1126857db9688bd))
+
+- Address PR #73 review feedback
+  ([`c82df24`](https://github.com/pvliesdonk/scholar-mcp/commit/c82df244ad247391b4fb4f4a3bac386919be29fa))
+
+- Address PR review feedback (CQL escaping, cache key, number validation, throttle parsing)
+  ([`ba27156`](https://github.com/pvliesdonk/scholar-mcp/commit/ba27156e40877e18b34b8776971b807c8d546742))
+
+- Address PR review feedback (test fixture, section notices, empty biblio, result mutation)
+  ([`838d660`](https://github.com/pvliesdonk/scholar-mcp/commit/838d660a47d569ddb086b63ee1eaff7ea85d2421))
+
+- Improve book search quality, ISBN redirect, batch_resolve ISBN routing
+  ([`06068d6`](https://github.com/pvliesdonk/scholar-mcp/commit/06068d6b112d4c49c945c50d86e9fb7121610b48))
+
+- Re-raise RateLimitedError in NPL resolution, preserve DOI on failure, add rate-limit queue test
+  ([`5b5250f`](https://github.com/pvliesdonk/scholar-mcp/commit/5b5250fdcc7d98bc52099ee6885e069f21ffced6))
+
+- Replace URL substring check with exact match to resolve CodeQL alert
+  ([`e0f0093`](https://github.com/pvliesdonk/scholar-mcp/commit/e0f00932468cc5df19294bdba1a5ab385f3f87c6))
+
+- Resolve CodeQL taint-flow alert and remaining ruff formatting
+  ([`88e5576`](https://github.com/pvliesdonk/scholar-mcp/commit/88e5576359a8049705fa6eccc11ce314ca9307e7))
+
+- Resolve mypy error in _download dl_url type annotation
+  ([`44d98be`](https://github.com/pvliesdonk/scholar-mcp/commit/44d98be68b55f611eb08d57b31431999854c4510))
+
+- Resolve mypy errors in enrichment hooks, add coverage tests for book tools
+  ([`1142009`](https://github.com/pvliesdonk/scholar-mcp/commit/114200995d0b67ae612a768842a577ad64c1aedb))
+
+- Ruff format _cache.py, restore test function name prefixes
+  ([`1720be4`](https://github.com/pvliesdonk/scholar-mcp/commit/1720be4ab0900715aedcb5f39d7e8ce2d3ffaaf0))
+
+- Tighten DOI regex rstrip and document S2 re-resolution trade-off
+  ([`27ab207`](https://github.com/pvliesdonk/scholar-mcp/commit/27ab207e0d3e76cfa31a67599f59cb2009d8d7ef))
+
+- Update epo_xml docstring and add description multilingual tests
+  ([`433c051`](https://github.com/pvliesdonk/scholar-mcp/commit/433c051648e9a1cf8531d0a8a7e70447b7c171aa))
+
+### Chores
+
+- Add python-epo-ops-client and lxml dependencies
+  ([`e5e1de6`](https://github.com/pvliesdonk/scholar-mcp/commit/e5e1de69e795f8117fb855afe0ed5bc997a26ddb))
+
+- Ignore worktrees directory in .gitignore
+  ([`3219a93`](https://github.com/pvliesdonk/scholar-mcp/commit/3219a9336367608059d078b866a297386127604d))
+
+- Remove accidentally staged worktree reference
+  ([`0fd7f4c`](https://github.com/pvliesdonk/scholar-mcp/commit/0fd7f4cfc04a8b85ba7ff59e44ba7f3bd5c40891))
+
+- Update server.json and uv.lock to v1.4.0 [skip ci]
+  ([`054c9ca`](https://github.com/pvliesdonk/scholar-mcp/commit/054c9ca6f433e9619f7952865a20a51aa2799f24))
+
+### Documentation
+
+- Add book support design spec
+  ([`2176c85`](https://github.com/pvliesdonk/scholar-mcp/commit/2176c8512beaca65dcb24e3af5886a81a96a43a2))
+
+- Add book support implementation plan
+  ([`5e6cca7`](https://github.com/pvliesdonk/scholar-mcp/commit/5e6cca7748876a435256c4172a3c74341b018751))
+
+- Add patent extension design spec
+  ([`c4e01ec`](https://github.com/pvliesdonk/scholar-mcp/commit/c4e01ec68154651b067bab8f38d4cb2012bbddf5))
+
+- Add patent extension implementation plan
+  ([`9fd4e2d`](https://github.com/pvliesdonk/scholar-mcp/commit/9fd4e2d4b73f2d3ab76d64253be58b8accd34e15))
+
+- Add patent tools and EPO configuration documentation
+  ([`d991d83`](https://github.com/pvliesdonk/scholar-mcp/commit/d991d836faafd6f14f7ac9ff42c58a25d54c6b5c))
+
+- Add Phase 3 cross-referencing documentation
+  ([`85acccc`](https://github.com/pvliesdonk/scholar-mcp/commit/85acccc2e734405fb09161fd904ba5137be8ca04))
+
+- Add search_books, get_book, and auto-enrichment documentation
+  ([`0b772d0`](https://github.com/pvliesdonk/scholar-mcp/commit/0b772d05f9e4b320e49609818aca0570a7acda96))
+
+- Fix spec inconsistency and add issue references
+  ([`7944630`](https://github.com/pvliesdonk/scholar-mcp/commit/79446301df76e751d217b2be02ae1d6461f802d1))
+
+- Update get_patent documentation with all available sections
+  ([`b3ec169`](https://github.com/pvliesdonk/scholar-mcp/commit/b3ec1696394ca37823317cd7ce410b444d06ee47))
+
+- Update README, docs index, and configuration for alternative PDF sources
+  ([`771060f`](https://github.com/pvliesdonk/scholar-mcp/commit/771060fc77354d024468cbc66aa4734ac3c45d68))
+
+- Update search_books and batch_resolve documentation
+  ([`b0c3bee`](https://github.com/pvliesdonk/scholar-mcp/commit/b0c3bee5560f310decac8804c5644c6cfdc295f9))
+
+- Update spec to reflect deferred NPL medium-confidence and OpenAlex citing patents
+  ([`56f149b`](https://github.com/pvliesdonk/scholar-mcp/commit/56f149b433b7d46383348e975eac6eb7c3297d98))
+
+### Features
+
+- Add alternative PDF source resolution and fetch_pdf_by_url tool
+  ([`7a5d549`](https://github.com/pvliesdonk/scholar-mcp/commit/7a5d549019fdccdb3a7517ab20301a8a7d22e6b6))
+
+- Add centralized book enrichment for paper records
+  ([`fb94837`](https://github.com/pvliesdonk/scholar-mcp/commit/fb9483737e9c2bb2a09f350564527b57696a7966))
+
+- Add citations section to get_patent with NPL resolution
+  ([`8fed911`](https://github.com/pvliesdonk/scholar-mcp/commit/8fed911ae7aea61068161a680075e6010cfcd217))
+
+- Add cited references parser with DOI extraction
+  ([`8f24b19`](https://github.com/pvliesdonk/scholar-mcp/commit/8f24b196f4970474ebc7b14bc05ae774fddc8422))
+
+- Add claims, description, family, and legal XML parsers
+  ([`7b48dbe`](https://github.com/pvliesdonk/scholar-mcp/commit/7b48dbecc3352f81e26ce9c7005ec3078b5e65d2))
+
+- Add claims, description, family, legal to EPO client
+  ([`14080d4`](https://github.com/pvliesdonk/scholar-mcp/commit/14080d4c0700b22b680c31ebe2636ab9f1b3610b))
+
+- Add EPO OPS client wrapper
+  ([`c53a9a4`](https://github.com/pvliesdonk/scholar-mcp/commit/c53a9a4724240a21c573d4bd58f1692b9c420001))
+
+- Add EPO OPS credential configuration
+  ([`9803496`](https://github.com/pvliesdonk/scholar-mcp/commit/9803496efa7a5636cfbcc78beb1aaeb7e3b97ed8))
+
+- Add EPO XML biblio and search parsers
+  ([`6dba5f0`](https://github.com/pvliesdonk/scholar-mcp/commit/6dba5f034e8d71b5b79024a05cad7763e7345215))
+
+- Add full section fetching to get_patent with concurrency
+  ([`1e0a7ef`](https://github.com/pvliesdonk/scholar-mcp/commit/1e0a7ef146633edc130496f3836728060124482a))
+
+- Add get_citing_patents tool with EPO citation search
+  ([`88552e4`](https://github.com/pvliesdonk/scholar-mcp/commit/88552e48db9eefacbdbdbfba8a2fa3d2419634ea))
+
+- Add ISBN utilities and book cache tables
+  ([`4fad498`](https://github.com/pvliesdonk/scholar-mcp/commit/4fad4983d4ac95c5c34f352e011c98389f673d28))
+
+- Add Open Library API client with normalization
+  ([`092e514`](https://github.com/pvliesdonk/scholar-mcp/commit/092e514effede0030e38d0ab5f3347d253008b60))
+
+- Add optional EpoClient to ServiceBundle
+  ([`f3e81a7`](https://github.com/pvliesdonk/scholar-mcp/commit/f3e81a706e7868b03f3c916a60282640ca5603ae))
+
+- Add patent cache tables with per-type TTLs
+  ([`6e51381`](https://github.com/pvliesdonk/scholar-mcp/commit/6e5138115650b98ead960449951fd31108f06278))
+
+- Add patent number normalization module
+  ([`4fc235e`](https://github.com/pvliesdonk/scholar-mcp/commit/4fc235ea4d218c99769d89ac3f6e9d19f9687933))
+
+- Add search_books and get_book MCP tools
+  ([`4f75fee`](https://github.com/pvliesdonk/scholar-mcp/commit/4f75fee1d0cffb9c2eb68eafe7db1e34b49b4d1d))
+
+- Add search_patents and get_patent tools
+  ([`d157efe`](https://github.com/pvliesdonk/scholar-mcp/commit/d157efebfbaaab95c8e0acd3e332e49fe8fa6234))
+
+- Disable patent tools when EPO credentials not configured
+  ([`1998805`](https://github.com/pvliesdonk/scholar-mcp/commit/199880528b293afeeb39f5899124bed5fb79a910))
+
+- Extend batch_resolve with patent number support
+  ([`cf97239`](https://github.com/pvliesdonk/scholar-mcp/commit/cf972399b58d0c8a4446047aa0c35f6052ec4c96))
+
+- Hook book enrichment into get_paper, get_citations, get_references, get_citation_graph
+  ([`6c1e5ec`](https://github.com/pvliesdonk/scholar-mcp/commit/6c1e5ec50ccf720a3438046d4189068d7a4dffba))
+
+- Wire OpenLibraryClient into ServiceBundle
+  ([`61b159b`](https://github.com/pvliesdonk/scholar-mcp/commit/61b159baa5fbf0661929d9a6d975c2c6473d9b0a))
+
+
 ## v1.4.0 (2026-04-05)
 
 ### Bug Fixes

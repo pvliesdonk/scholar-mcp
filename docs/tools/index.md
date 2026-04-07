@@ -210,12 +210,18 @@ Book tools use [Open Library](https://openlibrary.org/) as their data source. No
 
 ### `search_books`
 
-Search for books by title, author, ISBN, or free text via Open Library.
+Search for books by title, author, or free text via Open Library. For best results, use the `title` and `author` parameters rather than `query` — they use dedicated search indexes and return far better results.
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `query` | string | *(required)* | Search query — title, author name, ISBN, or keywords |
+| `query` | string | `null` | Free-text fallback. Use `title`/`author` when known. |
+| `title` | string | `null` | Book title or partial title (recommended). |
+| `author` | string | `null` | Author name (recommended). |
 | `limit` | int | `10` | Maximum results to return (max 50) |
+
+At least one of `query`, `title`, or `author` must be provided.
+
+When only `query` is given, it is first tried as a title search (better relevance) and falls back to free-text if no results are found. When `author` is given with multiple tokens (e.g. "Frank Duffy") and initial results are thin, a broadened search is automatically attempted to catch name variants (e.g. Frank → Francis).
 
 **Returns:** JSON list of book records. Each record contains:
 
@@ -294,16 +300,19 @@ Enrichment failures are silently skipped — if Open Library is unreachable or t
 
 ### `batch_resolve`
 
-Resolve up to 100 paper or patent identifiers to full metadata in a single call.
+Resolve up to 100 paper, patent, or book identifiers to full metadata in a single call.
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `identifiers` | list[string] | *(required)* | Up to 100 IDs: S2 paper IDs, `DOI:xxx`, plain DOIs, or patent numbers (e.g. `EP1234567A1`) |
+| `identifiers` | list[string] | *(required)* | Up to 100 IDs: S2 paper IDs, `DOI:xxx`, plain DOIs, patent numbers (e.g. `EP1234567A1`), or ISBNs (prefixed `ISBN:`, e.g. `ISBN:9780262035613`) |
 | `fields` | string | `"standard"` | Field set (applies to paper results only) |
 
-**Returns:** JSON list of resolved items. Paper results have a `"paper"` key, patent results have a `"patent"` key and `"source_type": "patent"`. Unresolved items have an `"error"` key.
+**Returns:** JSON list of resolved items:
 
-Patent numbers are auto-detected by their two-letter country prefix (e.g. `EP`, `US`, `WO`) and routed to the EPO OPS API. Papers not found in Semantic Scholar are automatically tried via OpenAlex (by DOI). Results from OpenAlex include `"source": "openalex"`.
+- **Paper results** have a `"paper"` key. Papers not found in Semantic Scholar are automatically tried via OpenAlex (by DOI); results from OpenAlex include `"source": "openalex"`.
+- **Patent results** have a `"patent"` key and `"source_type": "patent"`. Patent numbers are auto-detected by their two-letter country prefix (e.g. `EP`, `US`, `WO`) and routed to the EPO OPS API.
+- **Book results** have a `"book"` key and `"source_type": "book"`. ISBNs (prefixed with `ISBN:`) are routed to Open Library.
+- **Unresolved items** have an `"error"` key.
 
 ---
 
