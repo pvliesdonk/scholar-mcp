@@ -30,18 +30,18 @@ async def _resolve_author_keys(
     """Resolve Open Library author keys to author names.
 
     Args:
-        author_keys: List of Open Library author keys (e.g. ``/authors/OL34184A``).
+        author_keys: List of Open Library author keys (e.g. ``/authors/OL239963A``).
         bundle: Service bundle with openlibrary client.
 
     Returns:
         List of resolved author name strings.
     """
-    names: list[str] = []
-    for key in author_keys:
-        author_data = await bundle.openlibrary.get_author(key)
-        if author_data and author_data.get("name"):
-            names.append(author_data["name"])
-    return names
+    # Strip path prefix — get_author expects short IDs like "OL239963A"
+    ids = [k.rsplit("/", 1)[-1] for k in author_keys]
+    results = await asyncio.gather(
+        *(bundle.openlibrary.get_author(aid) for aid in ids)
+    )
+    return [a["name"] for a in results if a and a.get("name")]
 
 
 def _extract_author_keys(work: dict[str, Any]) -> list[str]:
@@ -371,6 +371,7 @@ async def _resolve_edition(edition_id: str, bundle: ServiceBundle) -> str:
         return json.dumps({"error": "not_found", "identifier": edition_id})
 
     book: BookRecord = normalize_book(edition, source="edition")
+    await _enrich_authors_from_work(book, bundle)
     isbn_13 = book.get("isbn_13")
     if isbn_13:
         await bundle.cache.set_book_by_isbn(isbn_13, book)

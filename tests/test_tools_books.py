@@ -153,6 +153,15 @@ async def test_get_book_by_edition_id(
     respx_mock.get("/books/OL1429049M.json").mock(
         return_value=httpx.Response(200, json=SAMPLE_EDITION_RESPONSE)
     )
+    respx_mock.get("/works/OL1168083W.json").mock(
+        return_value=httpx.Response(200, json=SAMPLE_WORK_RESPONSE)
+    )
+    respx_mock.get("/authors/OL239963A.json").mock(
+        return_value=httpx.Response(200, json=SAMPLE_AUTHOR_GAMMA)
+    )
+    respx_mock.get("/authors/OL239964A.json").mock(
+        return_value=httpx.Response(200, json=SAMPLE_AUTHOR_HELM)
+    )
     async with Client(mcp) as client:
         result = await client.call_tool("get_book", {"identifier": "OL1429049M"})
     data = json.loads(result.content[0].text)
@@ -331,6 +340,29 @@ async def test_get_book_isbn_enriches_authors(
     )
     async with Client(mcp) as client:
         result = await client.call_tool("get_book", {"identifier": "9780201633610"})
+    data = json.loads(result.content[0].text)
+    assert data["authors"] == ["Erich Gamma", "Richard Helm"]
+
+
+@pytest.mark.respx(base_url=OL_BASE)
+async def test_get_book_edition_enriches_authors(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """get_book by edition ID should resolve authors from the work record."""
+    respx_mock.get("/books/OL1429049M.json").mock(
+        return_value=httpx.Response(200, json=SAMPLE_EDITION_RESPONSE)
+    )
+    respx_mock.get("/works/OL1168083W.json").mock(
+        return_value=httpx.Response(200, json=SAMPLE_WORK_RESPONSE)
+    )
+    respx_mock.get("/authors/OL239963A.json").mock(
+        return_value=httpx.Response(200, json=SAMPLE_AUTHOR_GAMMA)
+    )
+    respx_mock.get("/authors/OL239964A.json").mock(
+        return_value=httpx.Response(200, json=SAMPLE_AUTHOR_HELM)
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool("get_book", {"identifier": "OL1429049M"})
     data = json.loads(result.content[0].text)
     assert data["authors"] == ["Erich Gamma", "Richard Helm"]
 

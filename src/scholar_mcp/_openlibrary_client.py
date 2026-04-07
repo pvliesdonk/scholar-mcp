@@ -213,26 +213,6 @@ class OpenLibraryClient:
             logger.warning("openlibrary_edition_error edition_id=%s", edition_id)
             return None
 
-    async def get_author(self, author_key: str) -> dict[str, Any] | None:
-        """Fetch author metadata by key.
-
-        Args:
-            author_key: Open Library author key (e.g. ``/authors/OL34184A``).
-
-        Returns:
-            Author dict with ``name`` field, or None if not found.
-        """
-        await self._limiter.acquire()
-        try:
-            r = await self._client.get(f"{author_key}.json")
-            if r.status_code == 404:
-                return None
-            r.raise_for_status()
-            return r.json()  # type: ignore[no-any-return]
-        except httpx.HTTPStatusError:
-            logger.warning("openlibrary_author_error key=%s", author_key)
-            return None
-
     async def aclose(self) -> None:
         """Close the underlying HTTP client."""
         await self._client.aclose()
