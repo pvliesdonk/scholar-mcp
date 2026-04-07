@@ -6,6 +6,7 @@ import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import httpx
 from fastmcp import FastMCP
@@ -21,6 +22,9 @@ from ._rate_limiter import RateLimiter
 from ._s2_client import S2Client
 from ._task_queue import TaskQueue
 from .config import ServerConfig, load_config
+
+if TYPE_CHECKING:
+    from ._protocols import CacheProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +52,7 @@ class ServiceBundle:
     docling: DoclingClient | None
     epo: EpoClient | None
     openlibrary: OpenLibraryClient
-    cache: ScholarCache
+    cache: CacheProtocol
     config: ServerConfig
     tasks: TaskQueue
 

@@ -15,8 +15,9 @@ from fastmcp.dependencies import Depends
 
 from ._epo_client import EpoClient, EpoRateLimitedError
 from ._patent_numbers import DocdbNumber, normalize
+from ._protocols import CacheProtocol
 from ._rate_limiter import RateLimitedError
-from ._s2_client import FIELD_SETS
+from ._s2_client import FIELD_SETS, S2Client
 from ._server_deps import ServiceBundle, get_bundle
 
 logger = logging.getLogger(__name__)
@@ -378,8 +379,8 @@ async def _fetch_patent_sections(
     doc: DocdbNumber,
     sections: Sequence[str],
     epo: EpoClient,
-    cache: Any,
-    s2: Any = None,
+    cache: CacheProtocol,
+    s2: S2Client | None = None,
 ) -> str:
     """Fetch requested sections for a patent, with caching.
 

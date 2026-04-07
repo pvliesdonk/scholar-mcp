@@ -9,6 +9,7 @@ from typing import Any, Literal
 import httpx
 
 from ._rate_limiter import RateLimiter
+from ._record_types import BookRecord
 
 logger = logging.getLogger(__name__)
 
@@ -219,7 +220,7 @@ class OpenLibraryClient:
 
 def normalize_book(
     data: dict[str, Any], *, source: Literal["search", "edition"] = "search"
-) -> dict[str, Any]:
+) -> BookRecord:
     """Normalize an Open Library response to the standard book record shape.
 
     Args:

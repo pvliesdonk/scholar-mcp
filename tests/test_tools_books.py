@@ -152,6 +152,39 @@ async def test_get_book_by_edition_id(
 
 
 @pytest.mark.respx(base_url=OL_BASE)
+async def test_get_book_by_edition_id_not_found(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    respx_mock.get("/books/OL0000000M.json").mock(return_value=httpx.Response(404))
+    async with Client(mcp) as client:
+        result = await client.call_tool("get_book", {"identifier": "OL0000000M"})
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "not_found"
+
+
+@pytest.mark.respx(base_url=OL_BASE)
+async def test_get_book_edition_no_isbn_no_work(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """Edition without ISBN or work ID still returns a valid record."""
+    edition = {
+        "title": "Rare Book",
+        "publishers": ["Obscure Press"],
+        "publish_date": "1900",
+        "key": "/books/OL9999999M",
+    }
+    respx_mock.get("/books/OL9999999M.json").mock(
+        return_value=httpx.Response(200, json=edition)
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool("get_book", {"identifier": "OL9999999M"})
+    data = json.loads(result.content[0].text)
+    assert data["title"] == "Rare Book"
+    assert data["isbn_13"] is None
+    assert data["openlibrary_work_id"] is None
+
+
+@pytest.mark.respx(base_url=OL_BASE)
 async def test_get_book_by_work_id_not_found(
     respx_mock: respx.MockRouter, mcp: FastMCP
 ) -> None:
@@ -172,6 +205,27 @@ async def test_get_book_by_isbn(respx_mock: respx.MockRouter, mcp: FastMCP) -> N
     data = json.loads(result.content[0].text)
     assert data["title"] == "Design Patterns"
     assert data["isbn_13"] == "9780201633610"
+
+
+@pytest.mark.respx(base_url=OL_BASE)
+async def test_get_book_isbn_no_work_id(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """ISBN edition without a works key skips work cache write."""
+    edition = {
+        "title": "Standalone Edition",
+        "publishers": ["Publisher"],
+        "isbn_13": ["9781111111111"],
+        "key": "/books/OL8888888M",
+    }
+    respx_mock.get("/isbn/9781111111111.json").mock(
+        return_value=httpx.Response(200, json=edition)
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool("get_book", {"identifier": "9781111111111"})
+    data = json.loads(result.content[0].text)
+    assert data["title"] == "Standalone Edition"
+    assert data["openlibrary_work_id"] is None
 
 
 @pytest.mark.respx(base_url=OL_BASE)

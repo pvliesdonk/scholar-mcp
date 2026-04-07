@@ -9,6 +9,7 @@ from typing import Any
 from ._cache import normalize_isbn
 from ._openlibrary_client import normalize_book
 from ._rate_limiter import RateLimitedError
+from ._record_types import BookRecord
 from ._server_deps import ServiceBundle
 
 logger = logging.getLogger(__name__)
@@ -64,10 +65,11 @@ async def _enrich_one(paper: dict[str, Any], bundle: ServiceBundle) -> None:
         if edition is None:
             return
 
-        book = normalize_book(edition, source="edition")
+        book: BookRecord = normalize_book(edition, source="edition")
         await bundle.cache.set_book_by_isbn(isbn, book)
-        if book.get("openlibrary_work_id"):
-            await bundle.cache.set_book_by_work(book["openlibrary_work_id"], book)
+        work_id = book.get("openlibrary_work_id")
+        if work_id:
+            await bundle.cache.set_book_by_work(work_id, book)
         paper["book_metadata"] = _to_enrichment_dict(book)
     except RateLimitedError:
         raise
@@ -80,7 +82,7 @@ async def _enrich_one(paper: dict[str, Any], bundle: ServiceBundle) -> None:
         )
 
 
-def _to_enrichment_dict(book: dict[str, Any]) -> dict[str, Any]:
+def _to_enrichment_dict(book: BookRecord) -> dict[str, Any]:
     """Extract the enrichment-relevant subset from a full book record.
 
     Args:
