@@ -369,7 +369,7 @@ def format_csl_json(papers: list[dict[str, Any]], errors: list[dict[str, Any]]) 
             entry["issued"] = {"date-parts": [[year]]}
 
         venue = paper.get("venue")
-        if venue:
+        if venue and entry_type != "book":
             entry["container-title"] = venue
 
         external_ids = paper.get("externalIds") or {}
@@ -486,7 +486,7 @@ def format_ris(papers: list[dict[str, Any]], errors: list[dict[str, Any]]) -> st
         if venue:
             if entry_type == "inproceedings":
                 lines.append(f"BT  - {venue}")
-            else:
+            elif entry_type != "book":
                 lines.append(f"JO  - {venue}")
 
         external_ids = paper.get("externalIds") or {}

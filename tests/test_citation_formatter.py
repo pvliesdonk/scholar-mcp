@@ -83,7 +83,10 @@ class TestInferEntryType:
 
     def test_book_with_isbn(self) -> None:
         paper = {
-            "book_metadata": {"isbn_13": "9780201633610", "publisher": "Addison-Wesley"},
+            "book_metadata": {
+                "isbn_13": "9780201633610",
+                "publisher": "Addison-Wesley",
+            },
         }
         assert infer_entry_type(paper) == "book"
 
