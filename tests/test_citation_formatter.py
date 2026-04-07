@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
 from scholar_mcp._citation_formatter import (
     escape_bibtex,
@@ -43,7 +44,7 @@ class TestGenerateBibtexKey:
         assert generate_bibtex_key(paper, set()) == "houten2020"
 
     def test_no_authors(self) -> None:
-        paper: dict = {"authors": [], "year": 2024}
+        paper: dict[str, Any] = {"authors": [], "year": 2024}
         assert generate_bibtex_key(paper, set()) == "anon2024"
 
     def test_no_year(self) -> None:
@@ -80,6 +81,28 @@ class TestInferEntryType:
 
     def test_none_venue(self) -> None:
         assert infer_entry_type({"venue": None}) == "article"
+
+    def test_book_with_isbn(self) -> None:
+        paper = {
+            "book_metadata": {
+                "isbn_13": "9780201633610",
+                "publisher": "Addison-Wesley",
+            },
+        }
+        assert infer_entry_type(paper) == "book"
+
+    def test_book_with_publisher_only(self) -> None:
+        paper = {
+            "book_metadata": {"publisher": "MIT Press"},
+        }
+        assert infer_entry_type(paper) == "book"
+
+    def test_book_metadata_without_isbn_or_publisher_falls_through(self) -> None:
+        paper = {
+            "book_metadata": {"description": "A book"},
+            "venue": "Nature",
+        }
+        assert infer_entry_type(paper) == "article"
 
 
 class TestEscapeBibtex:
@@ -200,6 +223,50 @@ class TestFormatBibtex:
         assert "url" not in field_names
 
 
+class TestFormatBibtexBook:
+    def test_book_entry_type_and_fields(self) -> None:
+        papers = [
+            {
+                "title": "Deep Learning",
+                "authors": [{"name": "Ian Goodfellow"}],
+                "year": 2016,
+                "venue": "",
+                "externalIds": {},
+                "book_metadata": {
+                    "isbn_13": "9780262035613",
+                    "publisher": "MIT Press",
+                    "edition": "1st",
+                    "authors": [],
+                },
+            }
+        ]
+        result = format_bibtex(papers, [])
+        assert "@book{goodfellow2016," in result
+        assert "publisher = {MIT Press}" in result
+        assert "edition = {1st}" in result
+        assert "isbn = {9780262035613}" in result
+        assert "journal" not in result
+
+    def test_book_author_fallback(self) -> None:
+        papers = [
+            {
+                "title": "Some Book",
+                "authors": [],
+                "year": 2020,
+                "venue": "",
+                "externalIds": {},
+                "book_metadata": {
+                    "isbn_13": "9781234567890",
+                    "publisher": "Publisher",
+                    "authors": ["Alice Smith", "Bob Jones"],
+                },
+            }
+        ]
+        result = format_bibtex(papers, [])
+        assert "@book{" in result
+        assert "author = {Smith, Alice and Jones, Bob}" in result
+
+
 class TestFormatCslJson:
     def test_single_paper(self) -> None:
         papers = [
@@ -238,7 +305,7 @@ class TestFormatCslJson:
         assert result["errors"][0]["identifier"] == "bad_id"
 
     def test_missing_year(self) -> None:
-        papers = [
+        papers: list[dict[str, Any]] = [
             {
                 "title": "No Year",
                 "year": None,
@@ -251,6 +318,75 @@ class TestFormatCslJson:
         ]
         result = json.loads(format_csl_json(papers, []))
         assert "issued" not in result["citations"][0]
+
+
+class TestFormatCslJsonBook:
+    def test_book_type_and_fields(self) -> None:
+        papers = [
+            {
+                "title": "Deep Learning",
+                "authors": [{"name": "Ian Goodfellow"}],
+                "year": 2016,
+                "venue": "",
+                "externalIds": {},
+                "book_metadata": {
+                    "isbn_13": "9780262035613",
+                    "publisher": "MIT Press",
+                    "authors": [],
+                },
+            }
+        ]
+        result_str = format_csl_json(papers, [])
+        result = json.loads(result_str)
+        entry = result["citations"][0]
+        assert entry["type"] == "book"
+        assert entry["publisher"] == "MIT Press"
+        assert entry["ISBN"] == "9780262035613"
+
+    def test_book_author_fallback_csl(self) -> None:
+        papers = [
+            {
+                "title": "Some Book",
+                "authors": [],
+                "year": 2020,
+                "venue": "",
+                "externalIds": {},
+                "book_metadata": {
+                    "isbn_13": "9781234567890",
+                    "publisher": "Publisher",
+                    "authors": ["Alice Smith"],
+                },
+            }
+        ]
+        result_str = format_csl_json(papers, [])
+        result = json.loads(result_str)
+        entry = result["citations"][0]
+        assert entry["author"][0]["family"] == "Smith"
+        assert entry["author"][0]["given"] == "Alice"
+
+    def test_book_author_prefix_and_suffix_csl(self) -> None:
+        """Authors with von-prefix and suffix map to CSL non-dropping-particle and suffix."""
+        papers = [
+            {
+                "title": "Some Book",
+                "authors": [],
+                "year": 2020,
+                "venue": "",
+                "externalIds": {},
+                "book_metadata": {
+                    "isbn_13": "9781234567890",
+                    "publisher": "Publisher",
+                    "authors": ["Jan van Houten Jr."],
+                },
+            }
+        ]
+        result_str = format_csl_json(papers, [])
+        result = json.loads(result_str)
+        author = result["citations"][0]["author"][0]
+        assert author["family"] == "Houten"
+        assert author["given"] == "Jan"
+        assert author["non-dropping-particle"] == "van"
+        assert author["suffix"] == "Jr."
 
 
 class TestFormatRis:
@@ -323,3 +459,63 @@ class TestFormatRis:
         ]
         result = format_ris(papers, [])
         assert result.count("ER  -") == 2
+
+
+class TestFormatRisBook:
+    def test_book_type_and_fields(self) -> None:
+        papers = [
+            {
+                "title": "Deep Learning",
+                "authors": [{"name": "Ian Goodfellow"}],
+                "year": 2016,
+                "venue": "",
+                "externalIds": {},
+                "book_metadata": {
+                    "isbn_13": "9780262035613",
+                    "publisher": "MIT Press",
+                    "authors": [],
+                },
+            }
+        ]
+        result = format_ris(papers, [])
+        assert "TY  - BOOK" in result
+        assert "PB  - MIT Press" in result
+        assert "SN  - 9780262035613" in result
+
+    def test_book_author_fallback_ris(self) -> None:
+        papers = [
+            {
+                "title": "Some Book",
+                "authors": [],
+                "year": 2020,
+                "venue": "",
+                "externalIds": {},
+                "book_metadata": {
+                    "isbn_13": "9781234567890",
+                    "publisher": "Publisher",
+                    "authors": ["Alice Smith"],
+                },
+            }
+        ]
+        result = format_ris(papers, [])
+        assert "TY  - BOOK" in result
+        assert "AU  - Smith, Alice" in result
+
+    def test_book_author_suffix_ris(self) -> None:
+        """Authors with a suffix emit Last, First, Suffix in RIS AU field."""
+        papers = [
+            {
+                "title": "Some Book",
+                "authors": [],
+                "year": 2020,
+                "venue": "",
+                "externalIds": {},
+                "book_metadata": {
+                    "isbn_13": "9781234567890",
+                    "publisher": "Publisher",
+                    "authors": ["Martin Luther King Jr."],
+                },
+            }
+        ]
+        result = format_ris(papers, [])
+        assert "AU  - King, Martin Luther, Jr." in result

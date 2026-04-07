@@ -131,8 +131,11 @@ def infer_entry_type(paper: dict[str, Any]) -> str:
         paper: Paper metadata dict.
 
     Returns:
-        One of ``"article"``, ``"inproceedings"``, or ``"misc"``.
+        One of ``"book"``, ``"article"``, ``"inproceedings"``, or ``"misc"``.
     """
+    book_meta = paper.get("book_metadata")
+    if book_meta and (book_meta.get("isbn_13") or book_meta.get("publisher")):
+        return "book"
     venue = (paper.get("venue") or "").lower()
     if any(kw in venue for kw in _CONFERENCE_KEYWORDS):
         return "inproceedings"
@@ -215,7 +218,17 @@ def format_bibtex(papers: list[dict[str, Any]], errors: list[dict[str, Any]]) ->
 
         fields: list[str] = []
 
+        # Author: prefer S2 authors, fall back to book_metadata authors.
+        # Synthesise {"name": ...} entries so _format_bibtex_author applies
+        # parse_author_name and produces the {Last, First} BibTeX convention.
         author_str = _format_bibtex_author(paper)
+        if not author_str and entry_type == "book":
+            bm = paper.get("book_metadata") or {}
+            bm_authors = bm.get("authors") or []
+            if bm_authors:
+                author_str = _format_bibtex_author(
+                    {"authors": [{"name": a} for a in bm_authors]}
+                )
         if author_str:
             fields.append(f"  author = {{{author_str}}}")
 
@@ -231,8 +244,21 @@ def format_bibtex(papers: list[dict[str, Any]], errors: list[dict[str, Any]]) ->
         if venue:
             if entry_type == "inproceedings":
                 fields.append(f"  booktitle = {{{escape_bibtex(venue)}}}")
-            else:
+            elif entry_type != "book":
                 fields.append(f"  journal = {{{escape_bibtex(venue)}}}")
+
+        # Book-specific fields from book_metadata
+        if entry_type == "book":
+            bm = paper.get("book_metadata") or {}
+            publisher = bm.get("publisher")
+            if publisher:
+                fields.append(f"  publisher = {{{escape_bibtex(publisher)}}}")
+            edition = bm.get("edition")
+            if edition:
+                fields.append(f"  edition = {{{escape_bibtex(edition)}}}")
+            isbn = bm.get("isbn_13")
+            if isbn:
+                fields.append(f"  isbn = {{{isbn}}}")
 
         external_ids = paper.get("externalIds") or {}
         doi = external_ids.get("DOI")
@@ -265,6 +291,7 @@ _CSL_TYPE_MAP: dict[str, str] = {
     "article": "article-journal",
     "inproceedings": "paper-conference",
     "misc": "article",
+    "book": "book",
 }
 
 
@@ -323,6 +350,21 @@ def format_csl_json(papers: list[dict[str, Any]], errors: list[dict[str, Any]]) 
             entry["title"] = title
 
         csl_authors = _csl_author(paper)
+        if not csl_authors and entry_type == "book":
+            bm = paper.get("book_metadata") or {}
+            for author_name in bm.get("authors") or []:
+                parsed = parse_author_name(author_name)
+                ae: dict[str, str] = {}
+                if parsed.last:
+                    ae["family"] = parsed.last
+                if parsed.first:
+                    ae["given"] = parsed.first
+                if parsed.prefix:
+                    ae["non-dropping-particle"] = parsed.prefix
+                if parsed.suffix:
+                    ae["suffix"] = parsed.suffix
+                if ae:
+                    csl_authors.append(ae)
         if csl_authors:
             entry["author"] = csl_authors
 
@@ -331,7 +373,7 @@ def format_csl_json(papers: list[dict[str, Any]], errors: list[dict[str, Any]]) 
             entry["issued"] = {"date-parts": [[year]]}
 
         venue = paper.get("venue")
-        if venue:
+        if venue and entry_type != "book":
             entry["container-title"] = venue
 
         external_ids = paper.get("externalIds") or {}
@@ -346,6 +388,13 @@ def format_csl_json(papers: list[dict[str, Any]], errors: list[dict[str, Any]]) 
         abstract = paper.get("abstract")
         if abstract:
             entry["abstract"] = abstract
+
+        if entry_type == "book":
+            bm = paper.get("book_metadata") or {}
+            if bm.get("publisher"):
+                entry["publisher"] = bm["publisher"]
+            if bm.get("isbn_13"):
+                entry["ISBN"] = bm["isbn_13"]
 
         citations.append(entry)
 
@@ -364,6 +413,7 @@ _RIS_TYPE_MAP: dict[str, str] = {
     "article": "JOUR",
     "inproceedings": "CONF",
     "misc": "GEN",
+    "book": "BOOK",
 }
 
 
@@ -412,7 +462,21 @@ def format_ris(papers: list[dict[str, Any]], errors: list[dict[str, Any]]) -> st
         ris_type = _RIS_TYPE_MAP.get(entry_type, "GEN")
         lines: list[str] = [f"TY  - {ris_type}"]
 
-        lines.extend(_ris_author_line(paper))
+        author_lines = _ris_author_line(paper)
+        if not author_lines and entry_type == "book":
+            bm = paper.get("book_metadata") or {}
+            for author_name in bm.get("authors") or []:
+                parsed = parse_author_name(author_name)
+                name = (
+                    f"{parsed.prefix} {parsed.last}" if parsed.prefix else parsed.last
+                )
+                if parsed.first:
+                    name = f"{name}, {parsed.first}"
+                if parsed.suffix:
+                    name = f"{name}, {parsed.suffix}"
+                if name:
+                    author_lines.append(f"AU  - {name}")
+        lines.extend(author_lines)
 
         title = paper.get("title")
         if title:
@@ -426,7 +490,7 @@ def format_ris(papers: list[dict[str, Any]], errors: list[dict[str, Any]]) -> st
         if venue:
             if entry_type == "inproceedings":
                 lines.append(f"BT  - {venue}")
-            else:
+            elif entry_type != "book":
                 lines.append(f"JO  - {venue}")
 
         external_ids = paper.get("externalIds") or {}
@@ -441,6 +505,13 @@ def format_ris(papers: list[dict[str, Any]], errors: list[dict[str, Any]]) -> st
         abstract = paper.get("abstract")
         if abstract:
             lines.append(f"AB  - {abstract}")
+
+        if entry_type == "book":
+            bm = paper.get("book_metadata") or {}
+            if bm.get("publisher"):
+                lines.append(f"PB  - {bm['publisher']}")
+            if bm.get("isbn_13"):
+                lines.append(f"SN  - {bm['isbn_13']}")
 
         lines.append("ER  -")
         blocks.append("\n".join(lines))
