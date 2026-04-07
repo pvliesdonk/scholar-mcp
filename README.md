@@ -167,6 +167,7 @@ All settings are controlled via environment variables with the `SCHOLAR_MCP_` pr
 |---|---|
 | `search_books` | Search for books by title, author, ISBN, or keywords via Open Library. Returns up to 50 results. |
 | `get_book` | Fetch book metadata by ISBN-10, ISBN-13, Open Library work ID (`OL...W`), or edition ID (`OL...M`). |
+| `recommend_books` | Recommend books for a subject via Open Library, sorted by popularity. |
 
 > Papers with an ISBN in their `externalIds` are automatically enriched with `book_metadata` (publisher, edition, cover URL, subjects, and more) from Open Library when fetched via `get_paper`, `get_citations`, `get_references`, or `get_citation_graph`.
 
