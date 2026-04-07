@@ -10,6 +10,8 @@ from scholar_mcp._openlibrary_client import (
     OpenLibraryClient,
     _filter_by_author,
     normalize_book,
+    normalize_subject,
+    normalize_subject_work,
 )
 from scholar_mcp._rate_limiter import RateLimiter
 
@@ -368,3 +370,27 @@ async def test_get_subject_not_found(
     result = await ol_client.get_subject("nonexistent_topic_xyz")
     assert result is not None
     assert result["works"] == []
+
+
+def test_normalize_subject() -> None:
+    assert normalize_subject("Machine Learning") == "machine_learning"
+    assert normalize_subject("  deep learning  ") == "deep_learning"
+    assert normalize_subject("algorithms") == "algorithms"
+    assert normalize_subject("Natural Language Processing") == "natural_language_processing"
+
+
+def test_normalize_subject_work() -> None:
+    work = {
+        "title": "Deep Learning",
+        "key": "/works/OL17930368W",
+        "authors": [{"name": "Ian Goodfellow"}],
+        "edition_count": 8,
+        "cover_id": 67890,
+    }
+    book = normalize_subject_work(work)
+    assert book["title"] == "Deep Learning"
+    assert book["authors"] == ["Ian Goodfellow"]
+    assert book["openlibrary_work_id"] == "OL17930368W"
+    assert book["cover_url"] == "https://covers.openlibrary.org/b/id/67890-M.jpg"
+    assert book["isbn_13"] is None
+    assert book["publisher"] is None
