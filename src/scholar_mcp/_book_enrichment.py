@@ -29,9 +29,7 @@ async def _resolve_author_keys(
     """
     # Strip path prefix — get_author expects short IDs like "OL239963A"
     ids = [k.rsplit("/", 1)[-1] for k in author_keys]
-    results = await asyncio.gather(
-        *(bundle.openlibrary.get_author(aid) for aid in ids)
-    )
+    results = await asyncio.gather(*(bundle.openlibrary.get_author(aid) for aid in ids))
     return [a["name"] for a in results if a and a.get("name")]
 
 
