@@ -73,3 +73,20 @@ async def test_set_and_get_book_search(cache: ScholarCache) -> None:
     assert result is not None
     assert len(result) == 1
     assert result[0]["title"] == "Design Patterns"
+
+
+async def test_book_subject_roundtrip(cache: ScholarCache) -> None:
+    books = [
+        {"title": "Book A", "authors": ["Author A"]},
+        {"title": "Book B", "authors": ["Author B"]},
+    ]
+    await cache.set_book_subject("machine_learning", books)
+    result = await cache.get_book_subject("machine_learning")
+    assert result is not None
+    assert len(result) == 2
+    assert result[0]["title"] == "Book A"
+
+
+async def test_book_subject_returns_none_when_missing(cache: ScholarCache) -> None:
+    result = await cache.get_book_subject("nonexistent")
+    assert result is None

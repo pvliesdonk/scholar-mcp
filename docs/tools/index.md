@@ -1,6 +1,6 @@
 # Tools
 
-Scholar MCP provides 21 tools across nine categories. All tools return JSON.
+Scholar MCP provides 22 tools across nine categories. All tools return JSON.
 
 All tools include [MCP tool annotations](https://spec.modelcontextprotocol.io/specification/2025-03-26/server/tools/#annotations):
 
@@ -270,6 +270,21 @@ Fetch full metadata for a single book by ISBN or Open Library identifier.
 **Returns:** A single book record (same shape as items returned by `search_books`), or `{"error": "not_found", "identifier": "..."}` if not found.
 
 Results are cached. Work and edition lookups are cached by their respective Open Library IDs; ISBN lookups are also stored under the resolved ISBN-13.
+
+---
+
+### `recommend_books`
+
+Recommend books for a subject via the Open Library subject API. Results are sorted by edition count (a proxy for popularity).
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `subject` | string | *(required)* | Subject or topic (e.g. "machine learning", "algorithms", "computer vision") |
+| `limit` | int | `10` | Maximum results to return (max 50) |
+
+**Returns:** A JSON list of book records. Each record has the same shape as `search_books` results, with fields populated from the Open Library subject API (title, authors, Open Library work ID, cover URL). ISBN and edition fields are `null` since subject results are work-level.
+
+Results are cached for 7 days, keyed by the normalized subject slug. Up to 50 results are fetched and cached; the `limit` parameter slices the cached pool on return.
 
 ---
 

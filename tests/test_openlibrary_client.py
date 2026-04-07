@@ -10,6 +10,8 @@ from scholar_mcp._openlibrary_client import (
     OpenLibraryClient,
     _filter_by_author,
     normalize_book,
+    normalize_subject,
+    normalize_subject_work,
 )
 from scholar_mcp._rate_limiter import RateLimiter
 
@@ -319,3 +321,90 @@ async def test_search_filters_author_results(
     assert "Office Landscaping" in titles
     assert "Planning Office Space" in titles
     assert "Community Psychology" in titles
+
+
+SAMPLE_SUBJECT_RESPONSE = {
+    "name": "Machine learning",
+    "work_count": 1234,
+    "works": [
+        {
+            "title": "Pattern Recognition and Machine Learning",
+            "key": "/works/OL8173450W",
+            "authors": [{"name": "Christopher M. Bishop", "key": "/authors/OL123A"}],
+            "edition_count": 15,
+            "cover_id": 12345,
+        },
+        {
+            "title": "Deep Learning",
+            "key": "/works/OL17930368W",
+            "authors": [{"name": "Ian Goodfellow", "key": "/authors/OL456A"}],
+            "edition_count": 8,
+            "cover_id": 67890,
+        },
+    ],
+}
+
+
+@pytest.mark.respx(base_url=OL_BASE)
+async def test_get_subject(
+    respx_mock: respx.MockRouter, ol_client: OpenLibraryClient
+) -> None:
+    respx_mock.get("/subjects/machine_learning.json").mock(
+        return_value=httpx.Response(200, json=SAMPLE_SUBJECT_RESPONSE)
+    )
+    result = await ol_client.get_subject("machine_learning", limit=10)
+    assert result is not None
+    assert result["name"] == "Machine learning"
+    assert len(result["works"]) == 2
+
+
+@pytest.mark.respx(base_url=OL_BASE)
+async def test_get_subject_empty_works(
+    respx_mock: respx.MockRouter, ol_client: OpenLibraryClient
+) -> None:
+    respx_mock.get("/subjects/nonexistent_topic_xyz.json").mock(
+        return_value=httpx.Response(
+            200, json={"name": "nonexistent_topic_xyz", "work_count": 0, "works": []}
+        )
+    )
+    result = await ol_client.get_subject("nonexistent_topic_xyz")
+    assert result is not None
+    assert result["works"] == []
+
+
+@pytest.mark.respx(base_url=OL_BASE)
+async def test_get_subject_404(
+    respx_mock: respx.MockRouter, ol_client: OpenLibraryClient
+) -> None:
+    respx_mock.get("/subjects/no_such_subject.json").mock(
+        return_value=httpx.Response(404)
+    )
+    result = await ol_client.get_subject("no_such_subject")
+    assert result is None
+
+
+def test_normalize_subject() -> None:
+    assert normalize_subject("Machine Learning") == "machine_learning"
+    assert normalize_subject("  deep learning  ") == "deep_learning"
+    assert normalize_subject("algorithms") == "algorithms"
+    assert (
+        normalize_subject("Natural Language Processing")
+        == "natural_language_processing"
+    )
+
+
+def test_normalize_subject_work() -> None:
+    work = {
+        "title": "Deep Learning",
+        "key": "/works/OL17930368W",
+        "authors": [{"name": "Ian Goodfellow"}],
+        "edition_count": 8,
+        "cover_id": 67890,
+    }
+    book = normalize_subject_work(work)
+    assert book["title"] == "Deep Learning"
+    assert book["authors"] == ["Ian Goodfellow"]
+    assert book["openlibrary_work_id"] == "OL17930368W"
+    assert book["cover_url"] == "https://covers.openlibrary.org/b/id/67890-M.jpg"
+    assert book["isbn_13"] is None
+    assert book["publisher"] is None

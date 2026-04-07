@@ -60,6 +60,27 @@ SAMPLE_WORK_RESPONSE = {
 SAMPLE_AUTHOR_GAMMA = {"name": "Erich Gamma", "key": "/authors/OL239963A"}
 SAMPLE_AUTHOR_HELM = {"name": "Richard Helm", "key": "/authors/OL239964A"}
 
+SAMPLE_SUBJECT_RESPONSE = {
+    "name": "Machine learning",
+    "work_count": 100,
+    "works": [
+        {
+            "title": "Pattern Recognition",
+            "key": "/works/OL8173450W",
+            "authors": [{"name": "Christopher Bishop"}],
+            "edition_count": 15,
+            "cover_id": 12345,
+        },
+        {
+            "title": "Deep Learning",
+            "key": "/works/OL17930368W",
+            "authors": [{"name": "Ian Goodfellow"}],
+            "edition_count": 8,
+            "cover_id": None,
+        },
+    ],
+}
+
 
 @pytest.fixture
 def mcp(bundle: ServiceBundle) -> FastMCP:
@@ -454,3 +475,50 @@ async def test_search_books_query_falls_back_to_q(
     data = json.loads(result.content[0].text)
     assert len(data) == 1
     assert data[0]["title"] == "Design Patterns"
+
+
+@pytest.mark.respx(base_url=OL_BASE)
+async def test_recommend_books_returns_results(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    respx_mock.get("/subjects/machine_learning.json").mock(
+        return_value=httpx.Response(200, json=SAMPLE_SUBJECT_RESPONSE)
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "recommend_books", {"subject": "machine learning"}
+        )
+    data = json.loads(result.content[0].text)
+    assert len(data) == 2
+    assert data[0]["title"] == "Pattern Recognition"
+    assert data[0]["authors"] == ["Christopher Bishop"]
+    assert data[0]["openlibrary_work_id"] == "OL8173450W"
+
+
+@pytest.mark.respx(base_url=OL_BASE)
+async def test_recommend_books_caches_results(
+    respx_mock: respx.MockRouter, mcp: FastMCP, bundle: ServiceBundle
+) -> None:
+    respx_mock.get("/subjects/algorithms.json").mock(
+        return_value=httpx.Response(200, json=SAMPLE_SUBJECT_RESPONSE)
+    )
+    async with Client(mcp) as client:
+        await client.call_tool("recommend_books", {"subject": "algorithms"})
+    cached = await bundle.cache.get_book_subject("algorithms")
+    assert cached is not None
+    assert len(cached) == 2
+
+
+@pytest.mark.respx(base_url=OL_BASE)
+async def test_recommend_books_empty_subject(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    respx_mock.get("/subjects/nonexistent.json").mock(
+        return_value=httpx.Response(
+            200, json={"name": "nonexistent", "work_count": 0, "works": []}
+        )
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool("recommend_books", {"subject": "nonexistent"})
+    data = json.loads(result.content[0].text)
+    assert data == []

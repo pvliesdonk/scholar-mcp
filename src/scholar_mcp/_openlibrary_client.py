@@ -213,9 +213,86 @@ class OpenLibraryClient:
             logger.warning("openlibrary_edition_error edition_id=%s", edition_id)
             return None
 
+    async def get_subject(
+        self, subject: str, *, limit: int = 10
+    ) -> dict[str, Any] | None:
+        """Fetch books for a subject.
+
+        Args:
+            subject: Subject slug (e.g. ``machine_learning``).
+            limit: Maximum number of works to return.
+
+        Returns:
+            Subject dict with ``name``, ``work_count``, and ``works`` list,
+            or None on HTTP error.
+        """
+        await self._limiter.acquire()
+        try:
+            r = await self._client.get(
+                f"/subjects/{subject}.json", params={"limit": limit}
+            )
+            if r.status_code == 404:
+                return None
+            r.raise_for_status()
+            return r.json()  # type: ignore[no-any-return]
+        except httpx.HTTPStatusError:
+            logger.warning("openlibrary_subject_error subject=%s", subject)
+            return None
+
     async def aclose(self) -> None:
         """Close the underlying HTTP client."""
         await self._client.aclose()
+
+
+def normalize_subject(subject: str) -> str:
+    """Normalize a subject string for the Open Library subject API.
+
+    Args:
+        subject: Free-text subject (e.g. ``"Machine Learning"``).
+
+    Returns:
+        Lowercase slug with spaces replaced by underscores.
+    """
+    return subject.strip().lower().replace(" ", "_")
+
+
+def normalize_subject_work(work: dict[str, Any]) -> BookRecord:
+    """Convert an Open Library subject API work entry to a BookRecord.
+
+    Args:
+        work: Work dict from the ``/subjects/{subject}.json`` response.
+
+    Returns:
+        Normalized BookRecord (ISBN and edition fields are None).
+    """
+    work_key = work.get("key") or ""
+    work_match = _OL_WORK_RE.search(work_key)
+    cover_id = work.get("cover_id")
+    authors = [
+        a["name"]
+        for a in (work.get("authors") or [])
+        if isinstance(a, dict) and a.get("name")
+    ]
+    return BookRecord(
+        title=work.get("title", ""),
+        authors=authors,
+        publisher=None,
+        year=None,
+        edition=None,
+        isbn_10=None,
+        isbn_13=None,
+        openlibrary_work_id=work_match.group(0) if work_match else None,
+        openlibrary_edition_id=None,
+        cover_url=(
+            f"https://covers.openlibrary.org/b/id/{cover_id}-M.jpg"
+            if cover_id
+            else None
+        ),
+        google_books_url=None,
+        subjects=[],
+        page_count=None,
+        description=None,
+    )
 
 
 def normalize_book(
