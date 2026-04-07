@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import re
+from typing import Any
 
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
@@ -21,6 +22,75 @@ logger = logging.getLogger(__name__)
 # Patterns for detecting identifier types.
 _OL_WORK_RE = re.compile(r"^OL\d+W$")
 _OL_EDITION_RE = re.compile(r"^OL\d+M$")
+
+
+async def _resolve_author_keys(
+    author_keys: list[str], bundle: ServiceBundle
+) -> list[str]:
+    """Resolve Open Library author keys to author names.
+
+    Args:
+        author_keys: List of Open Library author keys (e.g. ``/authors/OL34184A``).
+        bundle: Service bundle with openlibrary client.
+
+    Returns:
+        List of resolved author name strings.
+    """
+    names: list[str] = []
+    for key in author_keys:
+        author_data = await bundle.openlibrary.get_author(key)
+        if author_data and author_data.get("name"):
+            names.append(author_data["name"])
+    return names
+
+
+def _extract_author_keys(work: dict[str, Any]) -> list[str]:
+    """Extract author keys from a work record.
+
+    Args:
+        work: Open Library work dict.
+
+    Returns:
+        List of author key strings.
+    """
+    keys: list[str] = []
+    for entry in work.get("authors") or []:
+        if isinstance(entry, dict):
+            author = entry.get("author")
+            if isinstance(author, dict) and author.get("key"):
+                keys.append(author["key"])
+    return keys
+
+
+async def _enrich_authors_from_work(
+    book: BookRecord, bundle: ServiceBundle
+) -> None:
+    """Enrich book in-place with authors from its work record.
+
+    Best-effort: failures are logged and silently skipped.
+
+    Args:
+        book: Book record to enrich in-place.
+        bundle: Service bundle with openlibrary client.
+    """
+    if book.get("authors"):
+        return
+    work_id = book.get("openlibrary_work_id")
+    if not work_id:
+        return
+    try:
+        work = await bundle.openlibrary.get_work(work_id)
+        if work is None:
+            return
+        author_keys = _extract_author_keys(work)
+        if author_keys:
+            names = await _resolve_author_keys(author_keys, bundle)
+            if names:
+                book["authors"] = names
+    except Exception:
+        logger.debug(
+            "author_enrichment_failed work_id=%s", work_id, exc_info=True
+        )
 
 
 def register_book_tools(mcp: FastMCP) -> None:
@@ -197,6 +267,7 @@ async def _resolve_isbn(isbn: str, bundle: ServiceBundle) -> str:
         return json.dumps({"error": "not_found", "identifier": isbn})
 
     book: BookRecord = normalize_book(edition, source="edition")
+    await _enrich_authors_from_work(book, bundle)
     await bundle.cache.set_book_by_isbn(isbn, book)
     work_id = book.get("openlibrary_work_id")
     if work_id:
