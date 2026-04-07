@@ -27,3 +27,30 @@ class BookRecord(TypedDict, total=False):
     subjects: list[str]
     page_count: int | None
     description: str | None
+
+
+class StandardRecord(TypedDict, total=False):
+    """Typed representation of a normalised standards record.
+
+    All fields use ``total=False`` because records are JSON-serialised
+    and may have absent fields from partial API responses or cache.
+    """
+
+    identifier: str  # canonical: "NIST SP 800-53 Rev. 5", "RFC 9000"
+    aliases: list[str]  # alt forms seen in citations
+    title: str
+    body: str  # "NIST" | "IETF" | "W3C" | "ETSI"
+    number: str  # "800-53", "9000", "2.1"
+    revision: str | None  # "Rev. 5", "2022", "3rd edition"
+    status: str  # "published" | "withdrawn" | "superseded" | "draft"
+    published_date: str | None
+    withdrawn_date: str | None
+    superseded_by: str | None
+    supersedes: list[str]
+    scope: str | None  # abstract / scope statement
+    committee: str | None
+    url: str  # canonical catalogue URL
+    full_text_url: str | None  # direct PDF/HTML link if freely available
+    full_text_available: bool  # True for all Tier 1 sources
+    price: str | None  # None for Tier 1; populated for Tier 2
+    related: list[str]  # related standard identifiers

@@ -75,6 +75,11 @@ _BOOK_WORK_TTL = 30 * 86400  # 30 days
 _BOOK_SEARCH_TTL = 7 * 86400  # 7 days
 _BOOK_SUBJECT_TTL = 7 * 86400  # 7 days
 
+_STANDARD_TTL = 90 * 86400        # 90 days — standards rarely change
+_STANDARD_ALIAS_TTL = 90 * 86400  # 90 days
+_STANDARD_SEARCH_TTL = 7 * 86400  # 7 days
+_STANDARD_INDEX_TTL = 7 * 86400   # 7 days — re-scrape weekly
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY);
 INSERT OR IGNORE INTO schema_version VALUES (1);
@@ -195,6 +200,34 @@ CREATE TABLE IF NOT EXISTS books_subject (
     cached_at  REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_books_subject_cached ON books_subject(cached_at);
+
+CREATE TABLE IF NOT EXISTS standards (
+    identifier TEXT PRIMARY KEY,
+    data       TEXT NOT NULL,
+    cached_at  REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_standards_cached ON standards(cached_at);
+
+CREATE TABLE IF NOT EXISTS standards_aliases (
+    raw_id     TEXT PRIMARY KEY,
+    canonical  TEXT NOT NULL,
+    cached_at  REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_standards_aliases_cached ON standards_aliases(cached_at);
+
+CREATE TABLE IF NOT EXISTS standards_search (
+    query_hash TEXT PRIMARY KEY,
+    data       TEXT NOT NULL,
+    cached_at  REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_standards_search_cached ON standards_search(cached_at);
+
+CREATE TABLE IF NOT EXISTS standards_index (
+    body      TEXT PRIMARY KEY,
+    data      TEXT NOT NULL,
+    cached_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_standards_index_cached ON standards_index(cached_at);
 """
 
 _TTL_TABLES = (
@@ -214,6 +247,10 @@ _TTL_TABLES = (
     "books_openlibrary",
     "books_search",
     "books_subject",
+    "standards",
+    "standards_aliases",
+    "standards_search",
+    "standards_index",
 )
 
 
@@ -876,6 +913,141 @@ class ScholarCache:
         await db.execute(
             "INSERT OR REPLACE INTO books_subject (query_hash, data, cached_at) VALUES (?, ?, ?)",
             (query_hash, json.dumps(data), time.time()),
+        )
+        await db.commit()
+
+    # ------------------------------------------------------------------
+    # Standards
+    # ------------------------------------------------------------------
+
+    async def get_standard(self, identifier: str) -> dict[str, Any] | None:
+        """Return cached standard record or None if missing/stale.
+
+        Args:
+            identifier: Canonical standard identifier.
+
+        Returns:
+            StandardRecord dict or None.
+        """
+        db = _require_open(self._db)
+        async with db.execute(
+            "SELECT data, cached_at FROM standards WHERE identifier = ?", (identifier,)
+        ) as cur:
+            row = await cur.fetchone()
+        if row is None or time.time() - row[1] > _STANDARD_TTL:
+            return None
+        return json.loads(row[0])  # type: ignore[no-any-return]
+
+    async def set_standard(self, identifier: str, data: dict[str, Any]) -> None:
+        """Cache a standard record.
+
+        Args:
+            identifier: Canonical standard identifier.
+            data: StandardRecord dict.
+        """
+        db = _require_open(self._db)
+        await db.execute(
+            "INSERT OR REPLACE INTO standards (identifier, data, cached_at) VALUES (?, ?, ?)",
+            (identifier, json.dumps(data), time.time()),
+        )
+        await db.commit()
+
+    async def get_standard_alias(self, raw: str) -> str | None:
+        """Return canonical identifier for a raw alias string, or None.
+
+        Args:
+            raw: Raw alias string (e.g. ``"rfc9000"``).
+
+        Returns:
+            Canonical identifier string or None.
+        """
+        db = _require_open(self._db)
+        async with db.execute(
+            "SELECT canonical, cached_at FROM standards_aliases WHERE raw_id = ?", (raw,)
+        ) as cur:
+            row = await cur.fetchone()
+        if row is None or time.time() - row[1] > _STANDARD_ALIAS_TTL:
+            return None
+        return row[0]  # type: ignore[no-any-return]
+
+    async def set_standard_alias(self, raw: str, canonical: str) -> None:
+        """Cache a raw-to-canonical alias mapping.
+
+        Args:
+            raw: Raw alias string.
+            canonical: Canonical identifier.
+        """
+        db = _require_open(self._db)
+        await db.execute(
+            "INSERT OR REPLACE INTO standards_aliases (raw_id, canonical, cached_at) VALUES (?, ?, ?)",
+            (raw, canonical, time.time()),
+        )
+        await db.commit()
+
+    async def get_standards_search(self, query: str) -> list[dict[str, Any]] | None:
+        """Return cached standards search results or None if missing/stale.
+
+        Args:
+            query: Search query string; SHA-256 hash used as cache key.
+
+        Returns:
+            List of StandardRecord dicts or None.
+        """
+        db = _require_open(self._db)
+        query_hash = hashlib.sha256(query.encode()).hexdigest()
+        async with db.execute(
+            "SELECT data, cached_at FROM standards_search WHERE query_hash = ?",
+            (query_hash,),
+        ) as cur:
+            row = await cur.fetchone()
+        if row is None or time.time() - row[1] > _STANDARD_SEARCH_TTL:
+            return None
+        return json.loads(row[0])  # type: ignore[no-any-return]
+
+    async def set_standards_search(self, query: str, data: list[dict[str, Any]]) -> None:
+        """Cache standards search results.
+
+        Args:
+            query: Search query string.
+            data: List of StandardRecord dicts.
+        """
+        db = _require_open(self._db)
+        query_hash = hashlib.sha256(query.encode()).hexdigest()
+        await db.execute(
+            "INSERT OR REPLACE INTO standards_search (query_hash, data, cached_at) VALUES (?, ?, ?)",
+            (query_hash, json.dumps(data), time.time()),
+        )
+        await db.commit()
+
+    async def get_standards_index(self, body: str) -> list[dict[str, Any]] | None:
+        """Return cached standards catalogue index for a body, or None if stale.
+
+        Args:
+            body: Standards body name (e.g. ``"ETSI"``).
+
+        Returns:
+            List of stub dicts (identifier, title, url) or None.
+        """
+        db = _require_open(self._db)
+        async with db.execute(
+            "SELECT data, cached_at FROM standards_index WHERE body = ?", (body,)
+        ) as cur:
+            row = await cur.fetchone()
+        if row is None or time.time() - row[1] > _STANDARD_INDEX_TTL:
+            return None
+        return json.loads(row[0])  # type: ignore[no-any-return]
+
+    async def set_standards_index(self, body: str, data: list[dict[str, Any]]) -> None:
+        """Cache a standards catalogue index for a body.
+
+        Args:
+            body: Standards body name.
+            data: List of stub dicts (identifier, title, url).
+        """
+        db = _require_open(self._db)
+        await db.execute(
+            "INSERT OR REPLACE INTO standards_index (body, data, cached_at) VALUES (?, ?, ?)",
+            (body, json.dumps(data), time.time()),
         )
         await db.commit()
 
