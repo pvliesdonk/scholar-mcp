@@ -11,6 +11,7 @@ from fastmcp.dependencies import Depends
 
 from ._cache import normalize_isbn
 from ._openlibrary_client import normalize_book
+from ._record_types import BookRecord
 from ._rate_limiter import RateLimitedError
 from ._server_deps import ServiceBundle, get_bundle
 
@@ -134,7 +135,7 @@ async def _resolve_isbn(isbn: str, bundle: ServiceBundle) -> str:
     if edition is None:
         return json.dumps({"error": "not_found", "identifier": isbn})
 
-    book = normalize_book(edition, source="edition")
+    book: BookRecord = normalize_book(edition, source="edition")
     await bundle.cache.set_book_by_isbn(isbn, book)
     if book.get("openlibrary_work_id"):
         await bundle.cache.set_book_by_work(book["openlibrary_work_id"], book)
@@ -162,7 +163,7 @@ async def _resolve_work(work_id: str, bundle: ServiceBundle) -> str:
     description = work.get("description")
     if isinstance(description, dict):
         description = description.get("value")
-    book = {
+    book: BookRecord = {
         "title": work.get("title", ""),
         "authors": [],
         "publisher": None,
