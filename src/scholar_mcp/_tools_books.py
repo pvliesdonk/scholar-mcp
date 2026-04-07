@@ -12,7 +12,11 @@ from fastmcp.dependencies import Depends
 
 from ._book_enrichment import enrich_authors_from_work
 from ._cache import normalize_isbn
-from ._openlibrary_client import normalize_book
+from ._openlibrary_client import (
+    normalize_book,
+    normalize_subject,
+    normalize_subject_work,
+)
 from ._rate_limiter import RateLimitedError
 from ._record_types import BookRecord
 from ._server_deps import ServiceBundle, get_bundle
@@ -177,6 +181,56 @@ def register_book_tools(mcp: FastMCP) -> None:
         except RateLimitedError:
             task_id = bundle.tasks.submit(_execute(retry=True), tool="get_book")
             return json.dumps({"queued": True, "task_id": task_id, "tool": "get_book"})
+
+    @mcp.tool(
+        annotations={
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "openWorldHint": True,
+        },
+    )
+    async def recommend_books(
+        subject: str,
+        limit: int = 10,
+        bundle: ServiceBundle = Depends(get_bundle),
+    ) -> str:
+        """Recommend books for a subject via Open Library.
+
+        Uses the Open Library subject API to find popular books on a
+        topic, sorted by edition count (a proxy for popularity).
+
+        Args:
+            subject: Subject or topic (e.g. "machine learning",
+                "algorithms", "computer vision").
+            limit: Maximum results to return (max 50).
+
+        Returns:
+            JSON list of book records sorted by popularity.
+        """
+        limit = max(1, min(limit, 50))
+        slug = normalize_subject(subject)
+
+        cached = await bundle.cache.get_book_subject(slug)
+        if cached is not None:
+            logger.debug("book_subject_cache_hit subject=%s", slug)
+            return json.dumps(cached[:limit])
+
+        async def _execute(*, retry: bool = True) -> str:
+            subject_data = await bundle.openlibrary.get_subject(slug, limit=limit)
+            if subject_data is None:
+                return json.dumps([])
+            works = subject_data.get("works") or []
+            books = [normalize_subject_work(w) for w in works]
+            await bundle.cache.set_book_subject(slug, books)
+            return json.dumps(books)
+
+        try:
+            return await _execute(retry=False)
+        except RateLimitedError:
+            task_id = bundle.tasks.submit(_execute(retry=True), tool="recommend_books")
+            return json.dumps(
+                {"queued": True, "task_id": task_id, "tool": "recommend_books"}
+            )
 
 
 async def _resolve_isbn(isbn: str, bundle: ServiceBundle) -> str:

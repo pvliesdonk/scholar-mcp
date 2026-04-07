@@ -269,7 +269,8 @@ def normalize_subject_work(work: dict[str, Any]) -> BookRecord:
     work_match = _OL_WORK_RE.search(work_key)
     cover_id = work.get("cover_id")
     authors = [
-        a["name"] for a in (work.get("authors") or [])
+        a["name"]
+        for a in (work.get("authors") or [])
         if isinstance(a, dict) and a.get("name")
     ]
     return BookRecord(
