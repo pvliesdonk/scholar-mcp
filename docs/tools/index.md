@@ -291,6 +291,7 @@ When `get_paper`, `get_citations`, `get_references`, or `get_citation_graph` ret
 | `description` | Work description, if available |
 | `subjects` | List of subject strings |
 | `page_count` | Page count, if known |
+| `authors` | List of author name strings (resolved from Open Library work metadata) |
 
 Enrichment failures are silently skipped — if Open Library is unreachable or the ISBN is not found, the paper record is returned without `book_metadata`. Up to 5 concurrent Open Library requests are made per batch.
 
