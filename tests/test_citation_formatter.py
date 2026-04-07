@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
 from scholar_mcp._citation_formatter import (
     escape_bibtex,
@@ -43,7 +44,7 @@ class TestGenerateBibtexKey:
         assert generate_bibtex_key(paper, set()) == "houten2020"
 
     def test_no_authors(self) -> None:
-        paper: dict = {"authors": [], "year": 2024}
+        paper: dict[str, Any] = {"authors": [], "year": 2024}
         assert generate_bibtex_key(paper, set()) == "anon2024"
 
     def test_no_year(self) -> None:
@@ -304,7 +305,7 @@ class TestFormatCslJson:
         assert result["errors"][0]["identifier"] == "bad_id"
 
     def test_missing_year(self) -> None:
-        papers = [
+        papers: list[dict[str, Any]] = [
             {
                 "title": "No Year",
                 "year": None,
@@ -362,6 +363,30 @@ class TestFormatCslJsonBook:
         entry = result["citations"][0]
         assert entry["author"][0]["family"] == "Smith"
         assert entry["author"][0]["given"] == "Alice"
+
+    def test_book_author_prefix_and_suffix_csl(self) -> None:
+        """Authors with von-prefix and suffix map to CSL non-dropping-particle and suffix."""
+        papers = [
+            {
+                "title": "Some Book",
+                "authors": [],
+                "year": 2020,
+                "venue": "",
+                "externalIds": {},
+                "book_metadata": {
+                    "isbn_13": "9781234567890",
+                    "publisher": "Publisher",
+                    "authors": ["Jan van Houten Jr."],
+                },
+            }
+        ]
+        result_str = format_csl_json(papers, [])
+        result = json.loads(result_str)
+        author = result["citations"][0]["author"][0]
+        assert author["family"] == "Houten"
+        assert author["given"] == "Jan"
+        assert author["non-dropping-particle"] == "van"
+        assert author["suffix"] == "Jr."
 
 
 class TestFormatRis:
@@ -475,3 +500,22 @@ class TestFormatRisBook:
         result = format_ris(papers, [])
         assert "TY  - BOOK" in result
         assert "AU  - Smith, Alice" in result
+
+    def test_book_author_suffix_ris(self) -> None:
+        """Authors with a suffix emit Last, First, Suffix in RIS AU field."""
+        papers = [
+            {
+                "title": "Some Book",
+                "authors": [],
+                "year": 2020,
+                "venue": "",
+                "externalIds": {},
+                "book_metadata": {
+                    "isbn_13": "9781234567890",
+                    "publisher": "Publisher",
+                    "authors": ["Martin Luther King Jr."],
+                },
+            }
+        ]
+        result = format_ris(papers, [])
+        assert "AU  - King, Martin Luther, Jr." in result
