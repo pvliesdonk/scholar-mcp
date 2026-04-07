@@ -284,7 +284,7 @@ Recommend books for a subject via the Open Library subject API. Results are sort
 
 **Returns:** A JSON list of book records. Each record has the same shape as `search_books` results, with fields populated from the Open Library subject API (title, authors, Open Library work ID, cover URL). ISBN and edition fields are `null` since subject results are work-level.
 
-Results are cached for 7 days, keyed by the normalized subject slug and limit.
+Results are cached for 7 days, keyed by the normalized subject slug. Up to 50 results are fetched and cached; the `limit` parameter slices the cached pool on return.
 
 ---
 
