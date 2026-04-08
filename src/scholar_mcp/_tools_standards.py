@@ -252,6 +252,7 @@ async def _handle_full_text(
     try:
         return await _convert()
     except RateLimitedError:
+        logger.debug("rate_limited_queued tool=%s", "get_standard")
         task_id = bundle.tasks.submit(_convert(), tool="get_standard")
         return json.dumps({"queued": True, "task_id": task_id, "tool": "get_standard"})
     except Exception as exc:

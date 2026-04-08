@@ -147,6 +147,7 @@ def register_citation_tools(mcp: FastMCP) -> None:
         try:
             return await _execute(retry=False)
         except RateLimitedError:
+            logger.debug("rate_limited_queued tool=%s", "generate_citations")
             task_id = bundle.tasks.submit(
                 _execute(retry=True), tool="generate_citations"
             )

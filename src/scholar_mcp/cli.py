@@ -13,7 +13,7 @@ from pathlib import Path
 
 import click
 
-from scholar_mcp.config import _ENV_PREFIX, get_log_level
+from scholar_mcp.config import _ENV_PREFIX
 
 logger = logging.getLogger(__name__)
 
@@ -50,11 +50,25 @@ def _normalise_http_path(path: str | None) -> str:
 @click.pass_context
 def cli(ctx: click.Context, verbose: bool) -> None:
     """Scholar MCP — academic literature server."""
-    level = logging.DEBUG if verbose else get_log_level()
-    logging.basicConfig(
-        level=level,
-        format="%(levelname)s %(name)s: %(message)s",
-    )
+    # The -v flag overrides FASTMCP_LOG_LEVEL for convenience.
+    if verbose:
+        os.environ["FASTMCP_LOG_LEVEL"] = "DEBUG"
+    from fastmcp.utilities.logging import configure_logging
+
+    level_name = os.environ.get("FASTMCP_LOG_LEVEL", "INFO").upper()
+    level = getattr(logging, level_name, logging.INFO)
+    configure_logging(level=level)
+    # Attach FastMCP's handler to the root logger so application
+    # loggers (scholar_mcp.*) share the same output format.
+    # configure_logging() sets propagate=False on the fastmcp logger,
+    # so fastmcp.* records won't double-fire through root.
+    fastmcp_logger = logging.getLogger("fastmcp")
+    root = logging.getLogger()
+    root.setLevel(level)
+    if fastmcp_logger.handlers and not fastmcp_logger.propagate:
+        handler = fastmcp_logger.handlers[0]
+        if handler not in root.handlers:
+            root.addHandler(handler)
     if level == logging.DEBUG:
         logging.getLogger("httpx").setLevel(logging.WARNING)
         logging.getLogger("httpcore").setLevel(logging.WARNING)

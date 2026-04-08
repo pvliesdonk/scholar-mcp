@@ -47,21 +47,6 @@ class ServerConfig:
         )
 
 
-def get_log_level() -> int:
-    """Return the configured log level from the environment.
-
-    Reads ``SCHOLAR_MCP_LOG_LEVEL`` (e.g. ``DEBUG``, ``INFO``).
-    Defaults to ``INFO``.
-
-    Returns:
-        Integer log level constant from :mod:`logging`.
-    """
-    import logging
-
-    raw = os.environ.get(f"{_ENV_PREFIX}_LOG_LEVEL", "INFO").upper()
-    return getattr(logging, raw, logging.INFO)
-
-
 def load_config() -> ServerConfig:
     """Load :class:`ServerConfig` from environment variables.
 

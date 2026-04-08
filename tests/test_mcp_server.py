@@ -6,6 +6,12 @@ import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
+from fastmcp.server.middleware.error_handling import ErrorHandlingMiddleware
+from fastmcp.server.middleware.logging import (
+    LoggingMiddleware,
+    StructuredLoggingMiddleware,
+)
+from fastmcp.server.middleware.timing import TimingMiddleware
 
 from scholar_mcp.mcp_server import (
     _build_remote_auth,
@@ -267,3 +273,35 @@ class TestBuildRemoteAuth:
             pytest.raises(RuntimeError, match="failed to fetch"),
         ):
             create_server(transport="http")
+
+
+class TestMiddlewareStack:
+    """Tests for logging/timing/error middleware wiring."""
+
+    def test_default_middleware_stack(self) -> None:
+        """Default config wires ErrorHandling + Timing + LoggingMiddleware."""
+        server = create_server()
+        types = [type(m) for m in server.middleware]
+        assert ErrorHandlingMiddleware in types
+        assert TimingMiddleware in types
+        assert LoggingMiddleware in types
+        assert StructuredLoggingMiddleware not in types
+
+    def test_rich_disabled_uses_structured_logging(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """FASTMCP_ENABLE_RICH_LOGGING=false wires StructuredLoggingMiddleware."""
+        monkeypatch.setenv("FASTMCP_ENABLE_RICH_LOGGING", "false")
+        server = create_server()
+        types = [type(m) for m in server.middleware]
+        assert StructuredLoggingMiddleware in types
+        assert LoggingMiddleware not in types
+
+    def test_middleware_order(self) -> None:
+        """ErrorHandling is first, Timing second, Logging third."""
+        server = create_server()
+        types = [type(m) for m in server.middleware]
+        err_idx = types.index(ErrorHandlingMiddleware)
+        time_idx = types.index(TimingMiddleware)
+        log_idx = types.index(LoggingMiddleware)
+        assert err_idx < time_idx < log_idx

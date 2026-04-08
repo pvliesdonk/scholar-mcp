@@ -17,6 +17,12 @@ import sys
 from typing import Any
 
 from fastmcp import FastMCP
+from fastmcp.server.middleware.error_handling import ErrorHandlingMiddleware
+from fastmcp.server.middleware.logging import (
+    LoggingMiddleware,
+    StructuredLoggingMiddleware,
+)
+from fastmcp.server.middleware.timing import TimingMiddleware
 
 from scholar_mcp.config import _ENV_PREFIX, load_config
 
@@ -427,6 +433,32 @@ def create_server(*, transport: str = "stdio") -> FastMCP:
         lifespan=make_service_lifespan,
         auth=auth,
     )
+
+    # --- Middleware: error handling, timing, logging ---
+    mcp.add_middleware(
+        ErrorHandlingMiddleware(
+            include_traceback=(
+                os.environ.get("FASTMCP_LOG_LEVEL", "INFO").upper() == "DEBUG"
+            ),
+            transform_errors=True,
+        )
+    )
+    mcp.add_middleware(TimingMiddleware())
+    rich_logging = os.environ.get("FASTMCP_ENABLE_RICH_LOGGING", "true").lower()
+    if rich_logging in ("0", "false", "no", "off"):
+        mcp.add_middleware(
+            StructuredLoggingMiddleware(
+                include_payloads=True,
+                include_payload_length=True,
+            )
+        )
+    else:
+        mcp.add_middleware(
+            LoggingMiddleware(
+                include_payloads=True,
+                max_payload_length=500,
+            )
+        )
 
     register_tools(mcp, transport=transport)
     register_resources(mcp)

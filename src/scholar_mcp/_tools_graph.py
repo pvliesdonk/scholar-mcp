@@ -192,6 +192,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
         try:
             return await _execute(retry=False)
         except RateLimitedError:
+            logger.debug("rate_limited_queued tool=%s", "get_citations")
             task_id = bundle.tasks.submit(_execute(retry=True), tool="get_citations")
             return json.dumps(
                 {"queued": True, "task_id": task_id, "tool": "get_citations"}
@@ -249,6 +250,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
         try:
             return await _execute(retry=False)
         except RateLimitedError:
+            logger.debug("rate_limited_queued tool=%s", "get_references")
             task_id = bundle.tasks.submit(_execute(retry=True), tool="get_references")
             return json.dumps(
                 {"queued": True, "task_id": task_id, "tool": "get_references"}
@@ -502,6 +504,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
         try:
             return await _execute(retry=False)
         except RateLimitedError:
+            logger.debug("rate_limited_queued tool=%s", "get_citation_graph")
             task_id = bundle.tasks.submit(
                 _execute(retry=True), tool="get_citation_graph"
             )
@@ -616,6 +619,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
         try:
             return await _execute(retry=False)
         except RateLimitedError:
+            logger.debug("rate_limited_queued tool=%s", "find_bridge_papers")
             task_id = bundle.tasks.submit(
                 _execute(retry=True), tool="find_bridge_papers"
             )

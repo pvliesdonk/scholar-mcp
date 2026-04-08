@@ -106,6 +106,7 @@ def register_search_tools(mcp: FastMCP) -> None:
         try:
             return await _execute(retry=False)
         except RateLimitedError:
+            logger.debug("rate_limited_queued tool=%s", "search_papers")
             task_id = bundle.tasks.submit(_execute(retry=True), tool="search_papers")
             return json.dumps(
                 {"queued": True, "task_id": task_id, "tool": "search_papers"}
@@ -166,6 +167,7 @@ def register_search_tools(mcp: FastMCP) -> None:
         try:
             return await _execute(retry=False)
         except RateLimitedError:
+            logger.debug("rate_limited_queued tool=%s", "get_paper")
             task_id = bundle.tasks.submit(_execute(retry=True), tool="get_paper")
             return json.dumps({"queued": True, "task_id": task_id, "tool": "get_paper"})
 
@@ -225,6 +227,7 @@ def register_search_tools(mcp: FastMCP) -> None:
             try:
                 return await _execute_author(retry=False)
             except RateLimitedError:
+                logger.debug("rate_limited_queued tool=%s", "get_author")
                 task_id = bundle.tasks.submit(
                     _execute_author(retry=True), tool="get_author"
                 )
@@ -247,6 +250,7 @@ def register_search_tools(mcp: FastMCP) -> None:
         try:
             return await _execute_search(retry=False)
         except RateLimitedError:
+            logger.debug("rate_limited_queued tool=%s", "get_author")
             task_id = bundle.tasks.submit(
                 _execute_search(retry=True), tool="get_author"
             )
