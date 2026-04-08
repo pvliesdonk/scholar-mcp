@@ -110,31 +110,25 @@ class EpoClient:
             kind_code=doc.kind or "A",
         )
 
-    def _check_throttle(self, response: Any) -> None:
-        """Inspect the X-Throttling-Control header and raise if not green.
-
-        The header format is:
-        ``green (search=green:30, retrieval=green:200, ...)``.
-        The first word is the overall traffic-light colour.
+    def _check_throttle(self, response: Any, service: str = "_overall") -> None:
+        """Check the throttle header and raise if the relevant service is throttled.
 
         Args:
-            response: A ``requests.Response``-like object with a ``headers``
-                dict attribute.
+            response: The HTTP response object with a ``headers`` dict-like attribute.
+            service: The EPO service to check (e.g. ``"search"``, ``"retrieval"``,
+                ``"inpadoc"``). Defaults to ``"_overall"``.
 
         Raises:
-            RuntimeError: When the traffic-light colour is ``"black"``
-                (daily quota exhausted — not retryable).
-            EpoRateLimitedError: When the traffic-light colour is yellow or
-                red (retryable rate limit).
+            RuntimeError: If the daily quota is exhausted.
+            EpoRateLimitedError: If the service color is not green or idle.
         """
         header = response.headers.get("X-Throttling-Control", "green")
-        parts = header.split()
-        color = parts[0].lower() if parts else "green"
+        throttle = _parse_throttle_header(header)
+        color = throttle.get(service, throttle["_overall"])
         if color == "black":
             raise RuntimeError("EPO daily quota exhausted. Please try again tomorrow.")
-        # "idle" and "green" are both non-throttled states; only warn on yellow/red.
         if color not in ("green", "idle"):
-            logger.warning("epo_throttle color=%s", color)
+            logger.warning("epo_throttle service=%s color=%s", service, color)
             raise EpoRateLimitedError(color)
 
     # ------------------------------------------------------------------

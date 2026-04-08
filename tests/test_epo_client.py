@@ -136,6 +136,30 @@ def _mock_response(
     return resp
 
 
+def _mock_throttle_response(
+    color: str, *, service_colors: dict[str, str] | None = None
+) -> MagicMock:
+    """Create a fake response with a configurable X-Throttling-Control header.
+
+    Args:
+        color: The overall traffic-light colour (e.g. ``"green"``, ``"busy"``).
+        service_colors: Optional mapping of service name to colour, used to
+            build the per-service section of the header (e.g.
+            ``{"search": "green", "retrieval": "green"}``).
+
+    Returns:
+        MagicMock with ``headers`` dict containing the constructed header.
+    """
+    response = MagicMock()
+    if service_colors:
+        parts = ", ".join(f"{svc}={c}:100" for svc, c in service_colors.items())
+        header_value = f"{color} ({parts})"
+    else:
+        header_value = color
+    response.headers = {"X-Throttling-Control": header_value}
+    return response
+
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -392,6 +416,23 @@ async def test_throttle_on_get_biblio(
     doc = DocdbNumber(country="EP", number="1234567", kind="A1")
     with pytest.raises(EpoRateLimitedError):
         await epo_client.get_biblio(doc)
+
+
+def test_check_throttle_overall_busy_search_green_does_not_raise() -> None:
+    """overall=busy but search=green: search calls should NOT raise."""
+    response = _mock_throttle_response(
+        "busy", service_colors={"search": "green", "retrieval": "green"}
+    )
+    epo = EpoClient(consumer_key="key", consumer_secret="secret", _client=MagicMock())
+    epo._check_throttle(response, service="search")  # must not raise
+
+
+def test_check_throttle_overall_green_search_yellow_raises() -> None:
+    """overall=green but search=yellow: search calls SHOULD raise."""
+    response = _mock_throttle_response("green", service_colors={"search": "yellow"})
+    epo = EpoClient(consumer_key="key", consumer_secret="secret", _client=MagicMock())
+    with pytest.raises(EpoRateLimitedError):
+        epo._check_throttle(response, service="search")
 
 
 # ---------------------------------------------------------------------------
