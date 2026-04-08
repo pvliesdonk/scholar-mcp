@@ -71,4 +71,4 @@ async def bundle(cache: ScholarCache, test_config: ServerConfig) -> ServiceBundl
     await openlibrary_http.aclose()
     await openalex_http.aclose()
     await s2.aclose()
-    await standards_http.aclose()
+    await standards.aclose()

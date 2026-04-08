@@ -144,22 +144,25 @@ class _IETFFetcher:
         self._limiter = limiter
 
     async def get(self, identifier: str) -> StandardRecord | None:
-        """Fetch a single RFC by identifier (e.g. "RFC 9000").
+        """Fetch a single IETF document by identifier (RFC, BCP, STD, FYI).
 
         Args:
-            identifier: Canonical RFC identifier.
+            identifier: Canonical IETF identifier (e.g. "RFC 9000", "BCP 47").
 
         Returns:
             Populated StandardRecord or None if not found.
         """
-        m = re.match(r"(?i)rfc\s*(\d+)", identifier)
+        m = re.match(r"(?i)(rfc|bcp|std|fyi)\s*(\d+)", identifier)
         if not m:
             return None
-        n = int(m.group(1))
+        doc_type = m.group(1).lower()
+        n = int(m.group(2))
+        # Datatracker uses zero-padded names for RFC, bare numbers for BCP/STD/FYI
+        name = f"rfc{n:04d}" if doc_type == "rfc" else f"{doc_type}{n}"
         await self._limiter.acquire()
         resp = await self._http.get(
             f"{_IETF_DATATRACKER}/api/v1/doc/document/",
-            params={"name": f"rfc{n:04d}", "format": "json"},
+            params={"name": name, "format": "json"},
         )
         if resp.status_code != 200:
             logger.warning(
@@ -215,20 +218,27 @@ def _normalize_ietf(obj: dict) -> StandardRecord:  # type: ignore[type-arg]
     # BCP/STD/FYI names must not be prefixed with "RFC"
     identifier = f"RFC {int(n)}" if re.match(r"(?i)^rfc\d+$", name) else name.upper()
 
+    is_rfc = bool(re.match(r"(?i)^rfc\d+$", name))
     if n:
-        url = f"{_RFC_EDITOR_BASE}/info/rfc{int(n)}"
-        full_text_url: str | None = f"{_RFC_EDITOR_BASE}/rfc/rfc{int(n)}.html"
-        full_text_available = True
-        number = str(int(n))
+        # Use the original `name` in the URL so BCP/STD get correct RFC Editor pages
+        url = f"{_RFC_EDITOR_BASE}/info/{name}"
+        # Only RFCs have a plain-text HTML page; BCP/STD are index pages
+        full_text_url: str | None = (
+            f"{_RFC_EDITOR_BASE}/rfc/{name}.html" if is_rfc else None
+        )
+        full_text_available = is_rfc
+        number = str(int(n)) if is_rfc else name
     else:
         url = ""
         full_text_url = None
         full_text_available = False
         number = ""
 
+    # Build alias list, excluding the canonical identifier itself
+    _raw_aliases = [name, name.upper().replace("RFC", "RFC ")]
     return StandardRecord(
         identifier=identifier,
-        aliases=[name, name.upper().replace("RFC", "RFC ")],
+        aliases=[a for a in _raw_aliases if a != identifier],
         title=obj.get("title", ""),
         body="IETF",
         number=number,
@@ -297,13 +307,16 @@ class _NISTFetcher:
     def __init__(self, http: httpx.AsyncClient, limiter: RateLimiter) -> None:
         self._http = http
         self._limiter = limiter
+        self._catalogue: list[dict] | None = None  # type: ignore[type-arg]
 
     async def _fetch_all(self) -> list[dict]:  # type: ignore[type-arg]
-        """Fetch the full NIST publications JSON catalogue.
+        """Fetch the full NIST publications JSON catalogue with in-memory caching.
 
         Returns:
             Raw list of publication objects from CSRC.
         """
+        if self._catalogue is not None:
+            return self._catalogue
         await self._limiter.acquire()
         resp = await self._http.get(f"{_NIST_BASE}{_NIST_PUBLICATIONS_JSON}")
         if resp.status_code != 200:
@@ -313,8 +326,10 @@ class _NISTFetcher:
             return []
         data = resp.json()
         if isinstance(data, list):
-            return data
-        return data.get("response", data.get("publications", []))  # type: ignore[no-any-return]
+            self._catalogue = data
+        else:
+            self._catalogue = data.get("response", data.get("publications", []))
+        return self._catalogue
 
     async def search(self, query: str, *, limit: int = 10) -> list[StandardRecord]:
         """Search NIST publications by keyword in identifier or title.
@@ -548,7 +563,7 @@ def _normalize_w3c(spec: dict) -> StandardRecord:  # type: ignore[type-arg]
         supersedes=[],
         scope=spec.get("description"),
         committee=None,
-        url=f"{_W3C_API}/specifications/{shortname}",
+        url=latest_url or f"{_W3C_TR}/{shortname}/",
         full_text_url=latest_url,
         full_text_available=bool(latest_url),
         price=None,
@@ -580,16 +595,23 @@ class _ETSIFetcher:
         self._http = http
         self._limiter = limiter
         self._index: list[StandardRecord] | None = None
+        self._lock = asyncio.Lock()
 
     async def _ensure_index(self) -> list[StandardRecord]:
         """Return in-memory index, building it from the ETSI catalogue if needed.
+
+        Uses double-checked locking to prevent concurrent scrapes when multiple
+        coroutines call this before the first scrape completes.
 
         Returns:
             List of stub StandardRecord dicts covering the ETSI catalogue.
         """
         if self._index is not None:
             return self._index
-        self._index = await self._scrape_catalogue()
+        async with self._lock:
+            if self._index is not None:  # re-check after acquiring
+                return self._index
+            self._index = await self._scrape_catalogue()
         return self._index
 
     async def _scrape_catalogue(self) -> list[StandardRecord]:
@@ -649,7 +671,13 @@ class _ETSIFetcher:
                 )
             )
 
-        logger.info("etsi_catalogue_indexed count=%d", len(records))
+        if not records:
+            logger.warning(
+                "etsi_catalogue_empty — page may be a JS SPA or returned no table rows; "
+                "ETSI lookups will return no results until the index is rebuilt"
+            )
+        else:
+            logger.info("etsi_catalogue_indexed count=%d", len(records))
         return records
 
     async def search(self, query: str, *, limit: int = 10) -> list[StandardRecord]:
@@ -704,7 +732,7 @@ class StandardsClient:
     maintains an in-memory catalogue index to avoid per-query scraping.
 
     Args:
-        http: Shared httpx async client (created externally, closed externally).
+        http: Shared httpx async client. Closed by ``aclose()``.
     """
 
     def __init__(self, http: httpx.AsyncClient) -> None:
@@ -799,7 +827,11 @@ class StandardsClient:
                 record = await fetcher.get(canonical)
                 if record is not None:
                     return [record]
-            # Return a stub if fetcher fails
+            # Identifier resolved locally but source fetch failed — return minimal stub
+            # so callers can still surface the canonical form rather than "not found"
+            logger.warning(
+                "standards_fetch_failed canonical=%s body=%s", canonical, body
+            )
             return [
                 StandardRecord(
                     identifier=canonical, body=body, title="", full_text_available=False

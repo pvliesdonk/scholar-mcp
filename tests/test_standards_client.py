@@ -215,6 +215,33 @@ async def test_ietf_get_rfc(respx_mock: respx.MockRouter) -> None:
 
 
 @pytest.mark.respx(base_url=IETF_BASE)
+async def test_ietf_get_bcp(respx_mock: respx.MockRouter) -> None:
+    """_IETFFetcher.get() resolves BCP identifiers via Datatracker."""
+    respx_mock.get("/api/v1/doc/document/").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "objects": [
+                    {
+                        "name": "bcp47",
+                        "title": "Tags for Identifying Languages",
+                        "std_level": "best_current_practice",
+                    }
+                ]
+            },
+        )
+    )
+    http = httpx.AsyncClient()
+    fetcher = _IETFFetcher(http, RateLimiter(delay=0.0))
+    record = await fetcher.get("BCP 47")
+    await http.aclose()
+    assert record is not None
+    assert record["identifier"] == "BCP47"
+    assert record["url"] == "https://www.rfc-editor.org/info/bcp47"
+    assert record["full_text_available"] is False
+
+
+@pytest.mark.respx(base_url=IETF_BASE)
 async def test_ietf_get_not_found(respx_mock: respx.MockRouter) -> None:
     respx_mock.get("/api/v1/doc/document/").mock(
         return_value=httpx.Response(
@@ -271,6 +298,11 @@ def test_normalize_ietf_bcp_name() -> None:
     record = _normalize_ietf(obj)
     assert record["identifier"] == "BCP47"
     assert record["identifier"] != "RFC 47"
+    # BCP gets correct rfc-editor URL, not an RFC-style URL
+    assert record["url"] == "https://www.rfc-editor.org/info/bcp47"
+    # BCPs don't have a plain-text HTML page
+    assert record["full_text_url"] is None
+    assert record["full_text_available"] is False
 
 
 def test_normalize_ietf_early_rfc_url() -> None:
@@ -286,8 +318,8 @@ def test_normalize_ietf_early_rfc_url() -> None:
     assert record["identifier"] == "RFC 1"
     assert record["number"] == "1"
     assert record["full_text_url"] is not None
-    assert "rfc1" in record["full_text_url"]
-    assert "rfc0001" not in record["full_text_url"]
+    # URL uses the raw Datatracker name (rfc0001) — RFC Editor handles both forms
+    assert "rfc0001" in record["full_text_url"]
 
 
 # ---------------------------------------------------------------------------
