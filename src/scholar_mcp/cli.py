@@ -55,6 +55,9 @@ def cli(ctx: click.Context, verbose: bool) -> None:
         level=level,
         format="%(levelname)s %(name)s: %(message)s",
     )
+    # Sync FastMCP's logger to the same level so SCHOLAR_MCP_LOG_LEVEL
+    # (or -v) is the single knob controlling all logging output.
+    os.environ.setdefault("FASTMCP_LOG_LEVEL", logging.getLevelName(level))
     if level == logging.DEBUG:
         logging.getLogger("httpx").setLevel(logging.WARNING)
         logging.getLogger("httpcore").setLevel(logging.WARNING)

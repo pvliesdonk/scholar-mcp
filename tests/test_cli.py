@@ -79,6 +79,27 @@ def test_cache_clear_older_than(tmp_path: Path) -> None:
     assert "30" in result.output
 
 
+def test_verbose_syncs_fastmcp_log_level(monkeypatch) -> None:
+    """The -v flag sets FASTMCP_LOG_LEVEL so middleware logs at DEBUG too."""
+    monkeypatch.delenv("FASTMCP_LOG_LEVEL", raising=False)
+    runner = CliRunner()
+    # --help exits before serve, but cli() still runs and sets the env var
+    runner.invoke(cli, ["-v", "serve", "--help"])
+    import os
+
+    assert os.environ.get("FASTMCP_LOG_LEVEL") == "DEBUG"
+
+
+def test_fastmcp_log_level_not_overridden_if_explicit(monkeypatch) -> None:
+    """Explicit FASTMCP_LOG_LEVEL is respected (setdefault, not setenv)."""
+    monkeypatch.setenv("FASTMCP_LOG_LEVEL", "WARNING")
+    runner = CliRunner()
+    runner.invoke(cli, ["-v", "serve", "--help"])
+    import os
+
+    assert os.environ.get("FASTMCP_LOG_LEVEL") == "WARNING"
+
+
 def test_serve_help() -> None:
     """Existing serve command still works."""
     runner = CliRunner()
