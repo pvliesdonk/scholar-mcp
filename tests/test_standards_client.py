@@ -699,72 +699,116 @@ async def test_w3c_search_non200_returns_empty(respx_mock: respx.MockRouter) -> 
 
 
 # ---------------------------------------------------------------------------
-# ETSI fetcher tests
+# ETSI fetcher tests (Joomla JSON API backend)
 # ---------------------------------------------------------------------------
 
 ETSI_BASE = "https://www.etsi.org"
 
-SAMPLE_ETSI_HTML = """
-<html><body>
-<table class="table">
-<tr>
-  <td><a href="/deliver/etsi_en/303600_303699/303645/02.01.01_60/en_303645v020101p.pdf">ETSI EN 303 645</a></td>
-  <td>Cyber Security for Consumer Internet of Things: Baseline Requirements</td>
-  <td>V2.1.1 (2020-06)</td>
-  <td>2020-06-30</td>
-</tr>
-</table>
-</body></html>
-"""
+SAMPLE_ETSI_JSON = [
+    {
+        "RowNum": "1",
+        "total_count": "2",
+        "wki_id": "69970",
+        "TITLE": "CYBER; Cyber Security for Consumer Internet of Things: Baseline Requirements",
+        "WKI_REFERENCE": "REN/CYBER-00127",
+        "EDSpathname": "etsi_en/303600_303699/303645/03.01.03_60/",
+        "EDSPDFfilename": "en_303645v030103p.pdf",
+        "EDSARCfilename": "",
+        "ETSI_DELIVERABLE": "ETSI EN 303 645 V3.1.3 (2024-09)",
+        "STATUS_CODE": "12",
+        "ACTION_TYPE": "PU",
+        "IsCurrent": "0",
+        "superseded": "0",
+        "ReviewDate": None,
+        "new_versions": "",
+        "Scope": "Transposition of TS 103 645 v3.1.1 into an updated version.",
+        "TB": "Cyber Security",
+        "Keywords": "Cybersecurity,IoT,privacy",
+    },
+    {
+        "RowNum": "2",
+        "total_count": "2",
+        "wki_id": "73702",
+        "TITLE": "Cyber Security (CYBER); Guide to Cyber Security for Consumer IoT",
+        "WKI_REFERENCE": "RTR/CYBER-00142",
+        "EDSpathname": "etsi_tr/103600_103699/103621/02.01.01_60/",
+        "EDSPDFfilename": "tr_103621v020101p.pdf",
+        "EDSARCfilename": "",
+        "ETSI_DELIVERABLE": "ETSI TR 103 621 V2.1.1 (2025-07)",
+        "STATUS_CODE": "12",
+        "ACTION_TYPE": "PU",
+        "IsCurrent": "0",
+        "superseded": "0",
+        "ReviewDate": None,
+        "new_versions": "",
+        "Scope": None,
+        "TB": "Cyber Security",
+        "Keywords": "Cybersecurity,IoT",
+    },
+]
 
 
 @pytest.mark.respx(base_url=ETSI_BASE)
-async def test_etsi_index_built_on_first_search(respx_mock: respx.MockRouter) -> None:
-    respx_mock.get("/standards-search/").mock(
-        return_value=httpx.Response(200, text=SAMPLE_ETSI_HTML)
-    )
-    http = httpx.AsyncClient()
+async def test_etsi_search(respx_mock: respx.MockRouter) -> None:
+    """search() calls Joomla JSON API and returns parsed records."""
+    respx_mock.get("/").mock(return_value=httpx.Response(200, json=SAMPLE_ETSI_JSON))
+    http = httpx.AsyncClient(base_url=ETSI_BASE)
     fetcher = _ETSIFetcher(http, RateLimiter(delay=0.0))
     results = await fetcher.search("303 645", limit=5)
     await http.aclose()
     assert len(results) >= 1
     assert results[0]["body"] == "ETSI"
     assert "303 645" in results[0]["identifier"]
+    assert results[0]["full_text_available"] is True
+    assert "etsi.org/deliver" in (results[0]["full_text_url"] or "")
 
 
 @pytest.mark.respx(base_url=ETSI_BASE)
-async def test_etsi_search_cached_index_skips_network(
-    respx_mock: respx.MockRouter,
-) -> None:
-    """Second search with warm index should not call ETSI network."""
-    call_count = 0
-
-    def side_effect(request):  # type: ignore[no-untyped-def]
-        nonlocal call_count
-        call_count += 1
-        return httpx.Response(200, text=SAMPLE_ETSI_HTML)
-
-    respx_mock.get("/standards-search/").mock(side_effect=side_effect)
-    http = httpx.AsyncClient()
+async def test_etsi_search_non200_returns_empty(respx_mock: respx.MockRouter) -> None:
+    """search() returns [] on non-200."""
+    respx_mock.get("/").mock(return_value=httpx.Response(403))
+    http = httpx.AsyncClient(base_url=ETSI_BASE)
     fetcher = _ETSIFetcher(http, RateLimiter(delay=0.0))
-    await fetcher.search("303 645", limit=5)
-    await fetcher.search("303 645", limit=5)  # second call — should use in-memory index
+    results = await fetcher.search("303 645", limit=5)
     await http.aclose()
-    assert call_count == 1  # network called only once
+    assert results == []
 
 
 @pytest.mark.respx(base_url=ETSI_BASE)
 async def test_etsi_get(respx_mock: respx.MockRouter) -> None:
-    respx_mock.get("/standards-search/").mock(
-        return_value=httpx.Response(200, text=SAMPLE_ETSI_HTML)
-    )
-    http = httpx.AsyncClient()
+    """get() returns first result matching identifier."""
+    respx_mock.get("/").mock(return_value=httpx.Response(200, json=SAMPLE_ETSI_JSON))
+    http = httpx.AsyncClient(base_url=ETSI_BASE)
     fetcher = _ETSIFetcher(http, RateLimiter(delay=0.0))
     record = await fetcher.get("ETSI EN 303 645")
     await http.aclose()
     assert record is not None
     assert record["body"] == "ETSI"
     assert record["full_text_available"] is True
+
+
+@pytest.mark.respx(base_url=ETSI_BASE)
+async def test_etsi_get_not_found(respx_mock: respx.MockRouter) -> None:
+    """get() returns None when no match."""
+    respx_mock.get("/").mock(return_value=httpx.Response(200, json=[]))
+    http = httpx.AsyncClient(base_url=ETSI_BASE)
+    fetcher = _ETSIFetcher(http, RateLimiter(delay=0.0))
+    record = await fetcher.get("ETSI EN 999 999")
+    await http.aclose()
+    assert record is None
+
+
+@pytest.mark.respx(base_url=ETSI_BASE)
+async def test_etsi_normalize_pdf_url(respx_mock: respx.MockRouter) -> None:
+    """PDF URL constructed from EDSpathname + EDSPDFfilename."""
+    respx_mock.get("/").mock(return_value=httpx.Response(200, json=SAMPLE_ETSI_JSON))
+    http = httpx.AsyncClient(base_url=ETSI_BASE)
+    fetcher = _ETSIFetcher(http, RateLimiter(delay=0.0))
+    results = await fetcher.search("303 645", limit=1)
+    await http.aclose()
+    expected_pdf = "https://www.etsi.org/deliver/etsi_en/303600_303699/303645/03.01.03_60/en_303645v030103p.pdf"
+    assert results[0]["full_text_url"] == expected_pdf
+    assert results[0]["url"] == expected_pdf
 
 
 # ---------------------------------------------------------------------------
@@ -822,44 +866,16 @@ async def test_standards_client_search_unknown_body() -> None:
 
 
 @pytest.mark.respx(base_url=ETSI_BASE)
-async def test_etsi_scrape_non200_returns_empty(
+async def test_etsi_search_unexpected_response_type(
     respx_mock: respx.MockRouter,
 ) -> None:
-    respx_mock.get("/standards-search/").mock(return_value=httpx.Response(503))
-    http = httpx.AsyncClient()
+    """search() returns [] when API returns a non-list JSON body."""
+    respx_mock.get("/").mock(return_value=httpx.Response(200, json={"error": "bad"}))
+    http = httpx.AsyncClient(base_url=ETSI_BASE)
     fetcher = _ETSIFetcher(http, RateLimiter(delay=0.0))
     results = await fetcher.search("303 645", limit=5)
     await http.aclose()
     assert results == []
-
-
-@pytest.mark.respx(base_url=ETSI_BASE)
-async def test_etsi_scrape_empty_table_returns_empty(
-    respx_mock: respx.MockRouter,
-) -> None:
-    """HTML with no matching table rows logs warning and returns empty list."""
-    respx_mock.get("/standards-search/").mock(
-        return_value=httpx.Response(
-            200, text="<html><body><p>No results</p></body></html>"
-        )
-    )
-    http = httpx.AsyncClient()
-    fetcher = _ETSIFetcher(http, RateLimiter(delay=0.0))
-    results = await fetcher.search("303 645", limit=5)
-    await http.aclose()
-    assert results == []
-
-
-@pytest.mark.respx(base_url=ETSI_BASE)
-async def test_etsi_get_not_found(respx_mock: respx.MockRouter) -> None:
-    respx_mock.get("/standards-search/").mock(
-        return_value=httpx.Response(200, text=SAMPLE_ETSI_HTML)
-    )
-    http = httpx.AsyncClient()
-    fetcher = _ETSIFetcher(http, RateLimiter(delay=0.0))
-    record = await fetcher.get("ETSI EN 999 000")
-    await http.aclose()
-    assert record is None
 
 
 # ---------------------------------------------------------------------------
@@ -986,7 +1002,7 @@ async def test_standards_client_search_all_bodies() -> None:
             return_value=httpx.Response(200, json={"results": []})
         )
         mock.get(url__regex=r"www\.etsi\.org").mock(
-            return_value=httpx.Response(200, text="<html><body></body></html>")
+            return_value=httpx.Response(200, json=[])
         )
         http = httpx.AsyncClient()
         client = StandardsClient(http)
@@ -1006,7 +1022,7 @@ async def test_standards_client_get_fallback_to_fetchers() -> None:
         mock.get(url__regex=r"api\.github\.com").mock(return_value=httpx.Response(503))
         mock.get(url__regex=r"api\.w3\.org").mock(return_value=httpx.Response(404))
         mock.get(url__regex=r"www\.etsi\.org").mock(
-            return_value=httpx.Response(200, text="<html><body></body></html>")
+            return_value=httpx.Response(200, json=[])
         )
         http = httpx.AsyncClient()
         client = StandardsClient(http)

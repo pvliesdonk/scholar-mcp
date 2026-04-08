@@ -809,137 +809,76 @@ def _normalize_w3c(spec: dict) -> StandardRecord:  # type: ignore[type-arg]
 
 
 # ---------------------------------------------------------------------------
-# ETSI source fetcher (catalogue index + scraping)
+# ETSI source fetcher (Joomla JSON API)
 # ---------------------------------------------------------------------------
 
 _ETSI_BASE = "https://www.etsi.org"
-_ETSI_SEARCH = "/standards-search/"
+_ETSI_JOOMLA_PARAMS: dict[str, str | int] = {
+    "option": "com_standardssearch",
+    "view": "data",
+    "format": "json",
+    "version": "0",
+    "published": "1",
+    "onApproval": "1",
+    "withdrawn": "0",
+    "historical": "0",
+    "isCurrent": "1",
+    "superseded": "0",
+    "startDate": "1988-01-15",
+    "sort": "1",
+    "title": "1",
+    "etsiNumber": "1",
+    "content": "1",
+}
 
 
 class _ETSIFetcher:
-    """Fetches ETSI standard metadata by scraping the ETSI standards search page.
+    """Fetches ETSI standard metadata via the ETSI website Joomla JSON endpoint.
 
-    On first call, builds an in-memory index from the catalogue page (a few
-    seconds). Subsequent calls search the in-memory index without network I/O.
-    The index is rebuilt when ``_index`` is None (e.g. after process restart).
+    Calls ``https://www.etsi.org/?option=com_standardssearch&view=data&format=json``
+    which is the server-side AJAX endpoint backing the ETSI standards search page.
+    This endpoint is not behind Cloudflare bot protection.
 
     Args:
         http: Shared httpx async client.
-        limiter: Rate limiter enforcing ~2s between requests.
+        limiter: Rate limiter enforcing ~1s between requests.
     """
 
     def __init__(self, http: httpx.AsyncClient, limiter: RateLimiter) -> None:
         self._http = http
         self._limiter = limiter
-        self._index: list[StandardRecord] | None = None
-        self._lock = asyncio.Lock()
-
-    async def _ensure_index(self) -> list[StandardRecord]:
-        """Return in-memory index, building it from the ETSI catalogue if needed.
-
-        Uses double-checked locking to prevent concurrent scrapes when multiple
-        coroutines call this before the first scrape completes.
-
-        Returns:
-            List of stub StandardRecord dicts covering the ETSI catalogue.
-        """
-        if self._index is not None:
-            return self._index
-        async with self._lock:
-            if self._index is not None:  # re-check after acquiring
-                return self._index
-            self._index = await self._scrape_catalogue()
-        return self._index
-
-    async def _scrape_catalogue(self) -> list[StandardRecord]:
-        """Scrape the ETSI standards search page to build a catalogue index.
-
-        Returns:
-            List of StandardRecord stubs (identifier, title, url).
-        """
-        from bs4 import BeautifulSoup
-
-        await self._limiter.acquire()
-        resp = await self._http.get(f"{_ETSI_BASE}{_ETSI_SEARCH}")
-        if resp.status_code != 200:
-            logger.warning("etsi_catalogue_scrape_failed status=%d", resp.status_code)
-            return []
-
-        soup = BeautifulSoup(resp.text, "html.parser")
-        records: list[StandardRecord] = []
-
-        for row in soup.select("table tr"):
-            cells = row.find_all("td")
-            if len(cells) < 2:
-                continue
-            link = cells[0].find("a")
-            if not link:
-                continue
-            raw_id = link.get_text(strip=True)
-            title = cells[1].get_text(strip=True)
-            href = str(link.get("href") or "")
-            pdf_url = f"{_ETSI_BASE}{href}" if href.startswith("/") else href
-            m = _ETSI_RE.search(raw_id)
-            if not m:
-                continue
-            canonical = f"ETSI {m.group(1).upper()} {m.group(2)} {m.group(3)}"
-            records.append(
-                StandardRecord(
-                    identifier=canonical,
-                    aliases=[raw_id] if raw_id != canonical else [],
-                    title=title,
-                    body="ETSI",
-                    number=f"{m.group(2)} {m.group(3)}",
-                    revision=None,
-                    status="published",
-                    published_date=(
-                        cells[3].get_text(strip=True) if len(cells) > 3 else None
-                    ),
-                    withdrawn_date=None,
-                    superseded_by=None,
-                    supersedes=[],
-                    scope=None,
-                    committee=None,
-                    url=f"{_ETSI_BASE}{_ETSI_SEARCH}",
-                    full_text_url=pdf_url if pdf_url.endswith(".pdf") else None,
-                    full_text_available=pdf_url.endswith(".pdf"),
-                    price=None,
-                    related=[],
-                )
-            )
-
-        if not records:
-            logger.warning(
-                "etsi_catalogue_empty — page may be a JS SPA or returned no table rows; "
-                "ETSI lookups will return no results until the index is rebuilt"
-            )
-        else:
-            logger.info("etsi_catalogue_indexed count=%d", len(records))
-        return records
 
     async def search(self, query: str, *, limit: int = 10) -> list[StandardRecord]:
-        """Search the ETSI catalogue index by keyword.
-
-        Builds the index on first call (inline scrape). Subsequent calls use
-        the in-memory cache.
+        """Search ETSI standards by keyword.
 
         Args:
-            query: Search string.
+            query: Search string (e.g. "303 645", "IoT security").
             limit: Maximum results.
 
         Returns:
             List of matching StandardRecord dicts.
         """
-        index = await self._ensure_index()
-        q = query.lower().replace(" ", "").replace("-", "")
-        matches = [
-            r
-            for r in index
-            if q
-            in (r.get("identifier") or "").lower().replace(" ", "").replace("-", "")
-            or q in (r.get("title") or "").lower()
-        ]
-        return matches[:limit]
+        await self._limiter.acquire()
+        params = {**_ETSI_JOOMLA_PARAMS, "search": query, "page": 1}
+        try:
+            resp = await self._http.get(f"{_ETSI_BASE}/", params=params)
+        except httpx.HTTPError as exc:
+            logger.warning("etsi_api_request_failed error=%s", exc)
+            return []
+        if resp.status_code != 200:
+            logger.warning(
+                "etsi_api_error status=%d url=%s", resp.status_code, str(resp.url)
+            )
+            return []
+        try:
+            items: list[dict] = resp.json()  # type: ignore[type-arg]
+        except Exception:
+            logger.warning("etsi_api_json_decode_error url=%s", str(resp.url))
+            return []
+        if not isinstance(items, list):
+            logger.warning("etsi_api_unexpected_response type=%s", type(items).__name__)
+            return []
+        return [_normalize_etsi(item) for item in items[:limit]]
 
     async def get(self, identifier: str) -> StandardRecord | None:
         """Fetch a single ETSI standard by canonical identifier.
@@ -952,6 +891,60 @@ class _ETSIFetcher:
         """
         results = await self.search(identifier, limit=1)
         return results[0] if results else None
+
+
+def _normalize_etsi(item: dict) -> StandardRecord:  # type: ignore[type-arg]
+    """Normalise a single ETSI Joomla API result item to a StandardRecord.
+
+    Args:
+        item: A single dict from the Joomla JSON API response array.
+
+    Returns:
+        Populated StandardRecord.
+    """
+    deliverable = item.get("ETSI_DELIVERABLE", "")
+    title = item.get("TITLE", "")
+    pathname = item.get("EDSpathname", "")
+    pdffile = item.get("EDSPDFfilename", "")
+    scope = item.get("Scope") or None
+    tb = item.get("TB") or None
+
+    # Canonical identifier: "ETSI EN 303 645" from "ETSI EN 303 645 V3.1.3 (2024-09)"
+    m = re.match(r"(ETSI\s+\w+\s+\d+\s+\d+)", deliverable)
+    canonical = m.group(1) if m else deliverable.split(" V")[0].strip()
+
+    # Version from deliverable string
+    vm = re.search(r"V([\d.]+)\s+\((\d{4}-\d{2})\)", deliverable)
+    version = vm.group(1) if vm else None
+    pub_date = vm.group(2) if vm else None
+
+    action_type = (item.get("ACTION_TYPE") or "").upper()
+    status = "withdrawn" if action_type == "WD" else "published"
+
+    pdf_url: str | None = None
+    if pathname and pdffile:
+        pdf_url = f"{_ETSI_BASE}/deliver/{pathname}{pdffile}"
+
+    return StandardRecord(
+        identifier=canonical,
+        aliases=[deliverable] if deliverable != canonical else [],
+        title=title,
+        body="ETSI",
+        number=re.sub(r"^ETSI\s+\w+\s+", "", canonical),
+        revision=version,
+        status=status,
+        published_date=pub_date,
+        withdrawn_date=None,
+        superseded_by=None,
+        supersedes=[],
+        scope=scope,
+        committee=tb,
+        url=pdf_url or f"{_ETSI_BASE}/standards",
+        full_text_url=pdf_url,
+        full_text_available=pdf_url is not None,
+        price=None,
+        related=[],
+    )
 
 
 # ---------------------------------------------------------------------------
