@@ -27,6 +27,26 @@ def test_resolve_rfc_tls() -> None:
     assert result == ("RFC 8446", "IETF")
 
 
+def test_resolve_bcp_with_space() -> None:
+    result = _resolve_identifier_local("BCP 47")
+    assert result == ("BCP 47", "IETF")
+
+
+def test_resolve_bcp_no_space() -> None:
+    result = _resolve_identifier_local("BCP47")
+    assert result == ("BCP 47", "IETF")
+
+
+def test_resolve_std_with_space() -> None:
+    result = _resolve_identifier_local("STD 66")
+    assert result == ("STD 66", "IETF")
+
+
+def test_resolve_std_no_space() -> None:
+    result = _resolve_identifier_local("STD66")
+    assert result == ("STD 66", "IETF")
+
+
 # --- Resolver: NIST SP ---
 
 
