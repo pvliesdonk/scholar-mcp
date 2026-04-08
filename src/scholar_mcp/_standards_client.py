@@ -631,6 +631,11 @@ _W3C_SHORTNAME_MAP: dict[str, str] = {
 class _W3CFetcher:
     """Fetches W3C specification metadata from the W3C API.
 
+    On first search, downloads all specification stubs (paginated, ~1682 total)
+    and caches them in memory as ``{shortname, title}`` pairs. Subsequent
+    searches filter in-memory without network I/O.  Individual spec fetches
+    via ``get()`` always hit the API directly.
+
     Args:
         http: Shared httpx async client.
         limiter: Rate limiter enforcing ~0.5s between requests.
@@ -639,6 +644,8 @@ class _W3CFetcher:
     def __init__(self, http: httpx.AsyncClient, limiter: RateLimiter) -> None:
         self._http = http
         self._limiter = limiter
+        self._stubs: list[dict[str, str]] | None = None  # [{shortname, title}]
+        self._lock = asyncio.Lock()
 
     def _to_shortname(self, identifier: str) -> str:
         """Convert a human-readable W3C identifier to an API shortname.
@@ -651,8 +658,47 @@ class _W3CFetcher:
         """
         if identifier in _W3C_SHORTNAME_MAP:
             return _W3C_SHORTNAME_MAP[identifier]
-        # Fallback: strip spaces and dots
         return re.sub(r"[\s.]", "", identifier)
+
+    async def _ensure_stubs(self) -> list[dict[str, str]]:
+        """Download all spec stubs (paginated) and cache in memory.
+
+        Returns:
+            List of ``{shortname, title}`` dicts.
+        """
+        if self._stubs is not None:
+            return self._stubs
+        async with self._lock:
+            if self._stubs is not None:
+                return self._stubs
+            stubs: list[dict[str, str]] = []
+            page = 1
+            while True:
+                await self._limiter.acquire()
+                resp = await self._http.get(
+                    f"{_W3C_API}/specifications",
+                    params={"page": page, "limit": 100},
+                )
+                if resp.status_code != 200:
+                    logger.warning(
+                        "w3c_stubs_error status=%d page=%d", resp.status_code, page
+                    )
+                    break
+                data = resp.json()
+                page_specs = data.get("_links", {}).get("specifications") or []
+                for spec in page_specs:
+                    href = spec.get("href", "")
+                    shortname = href.rstrip("/").rsplit("/", 1)[-1]
+                    title = spec.get("title", "")
+                    if shortname:
+                        stubs.append({"shortname": shortname, "title": title})
+                pages = data.get("pages", 1)
+                if page >= pages:
+                    break
+                page += 1
+            self._stubs = stubs
+            logger.info("w3c_stubs_cached count=%d", len(stubs))
+        return self._stubs
 
     async def get(self, identifier: str) -> StandardRecord | None:
         """Fetch a single W3C specification by identifier.
@@ -674,7 +720,10 @@ class _W3CFetcher:
         return _normalize_w3c(resp.json())
 
     async def search(self, query: str, *, limit: int = 10) -> list[StandardRecord]:
-        """Search W3C specifications by keyword.
+        """Search W3C specifications by keyword against cached stubs.
+
+        Downloads all stubs on first call (paginated). Filters by title
+        client-side, then fetches full spec objects for the top matches.
 
         Args:
             query: Search string.
@@ -683,24 +732,29 @@ class _W3CFetcher:
         Returns:
             List of matching StandardRecord dicts.
         """
-        await self._limiter.acquire()
-        resp = await self._http.get(
-            f"{_W3C_API}/specifications",
-            params={"q": query, "limit": limit},
-        )
-        if resp.status_code != 200:
-            logger.warning(
-                "w3c_api_error status=%d url=%s", resp.status_code, str(resp.url)
-            )
+        stubs = await self._ensure_stubs()
+        if not stubs:
             return []
-        data = resp.json()
-        results_list = data.get("results")
-        specs = (
-            results_list
-            if results_list is not None
-            else data.get("_embedded", {}).get("specifications", [])
-        )[:limit]
-        return [_normalize_w3c(s) for s in specs]
+        q = query.lower()
+        matches = [
+            s for s in stubs if q in s["title"].lower() or q in s["shortname"].lower()
+        ][:limit]
+
+        results: list[StandardRecord] = []
+        for stub in matches:
+            await self._limiter.acquire()
+            resp = await self._http.get(
+                f"{_W3C_API}/specifications/{stub['shortname']}"
+            )
+            if resp.status_code == 200:
+                results.append(_normalize_w3c(resp.json()))
+            else:
+                logger.debug(
+                    "w3c_spec_fetch_failed shortname=%s status=%d",
+                    stub["shortname"],
+                    resp.status_code,
+                )
+        return results
 
 
 def _normalize_w3c(spec: dict) -> StandardRecord:  # type: ignore[type-arg]

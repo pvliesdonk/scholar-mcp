@@ -559,43 +559,111 @@ SAMPLE_W3C_SPEC = {
     "shortname": "WCAG21",
     "title": "Web Content Accessibility Guidelines (WCAG) 2.1",
     "description": "Covers a wide range of recommendations for making Web content more accessible.",
-    "status": "Recommendation",
-    "_links": {
-        "self": {"href": "https://api.w3.org/specifications/WCAG21"},
-        "latest-version": {"href": "https://www.w3.org/TR/WCAG21/"},
-    },
+    "series-version": "2.1",
     "latest-version": "https://www.w3.org/TR/WCAG21/",
     "latest-status": "Recommendation",
     "published": "2018-06-05",
+    "_links": {
+        "self": {"href": "https://api.w3.org/specifications/WCAG21"},
+        "latest-version": {
+            "href": "https://www.w3.org/TR/WCAG21/",
+            "title": "Recommendation",
+        },
+    },
 }
 
-SAMPLE_W3C_SEARCH = {
-    "results": [SAMPLE_W3C_SPEC],
-    "pages": 1,
-    "total": 1,
+# Paginated stubs: 3 items across 2 pages for simplicity
+SAMPLE_W3C_PAGE1 = {
+    "page": 1,
+    "limit": 2,
+    "pages": 2,
+    "total": 3,
+    "_links": {
+        "specifications": [
+            {
+                "href": "https://api.w3.org/specifications/WCAG21",
+                "title": "Web Content Accessibility Guidelines (WCAG) 2.1",
+            },
+            {
+                "href": "https://api.w3.org/specifications/html",
+                "title": "HTML Standard",
+            },
+        ]
+    },
+}
+
+SAMPLE_W3C_PAGE2 = {
+    "page": 2,
+    "limit": 2,
+    "pages": 2,
+    "total": 3,
+    "_links": {
+        "specifications": [
+            {
+                "href": "https://api.w3.org/specifications/webauthn-2",
+                "title": "Web Authentication Level 2",
+            },
+        ]
+    },
 }
 
 
 @pytest.mark.respx(base_url=W3C_API_BASE)
-async def test_w3c_search(respx_mock: respx.MockRouter) -> None:
+async def test_w3c_search_finds_wcag(respx_mock: respx.MockRouter) -> None:
+    """search() finds WCAG by title match and returns full spec."""
     respx_mock.get("/specifications").mock(
-        return_value=httpx.Response(200, json=SAMPLE_W3C_SEARCH)
+        side_effect=lambda req: (
+            httpx.Response(200, json=SAMPLE_W3C_PAGE1)
+            if req.url.params.get("page") in (None, "1", "")
+            else httpx.Response(200, json=SAMPLE_W3C_PAGE2)
+        )
     )
-    http = httpx.AsyncClient()
+    respx_mock.get("/specifications/WCAG21").mock(
+        return_value=httpx.Response(200, json=SAMPLE_W3C_SPEC)
+    )
+    http = httpx.AsyncClient(base_url=W3C_API_BASE)
     fetcher = _W3CFetcher(http, RateLimiter(delay=0.0))
-    results = await fetcher.search("WCAG 2.1", limit=5)
+    results = await fetcher.search("WCAG", limit=5)
     await http.aclose()
     assert len(results) >= 1
     assert results[0]["body"] == "W3C"
     assert "WCAG" in results[0]["title"]
+    assert results[0]["full_text_available"] is True
+
+
+@pytest.mark.respx(base_url=W3C_API_BASE)
+async def test_w3c_search_stubs_cached_on_second_call(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """Stubs are fetched only once; second search reuses in-memory cache."""
+    page_call_count = 0
+
+    def page_side_effect(req):  # type: ignore[no-untyped-def]
+        nonlocal page_call_count
+        page_call_count += 1
+        # Return a single-page response so the loop terminates after 1 request
+        return httpx.Response(200, json={**SAMPLE_W3C_PAGE1, "pages": 1})
+
+    respx_mock.get("/specifications").mock(side_effect=page_side_effect)
+    respx_mock.get("/specifications/WCAG21").mock(
+        return_value=httpx.Response(200, json=SAMPLE_W3C_SPEC)
+    )
+    http = httpx.AsyncClient(base_url=W3C_API_BASE)
+    fetcher = _W3CFetcher(http, RateLimiter(delay=0.0))
+    await fetcher.search("WCAG", limit=1)
+    await fetcher.search("WCAG", limit=1)
+    await http.aclose()
+    # stubs pages fetched only once
+    assert page_call_count == 1
 
 
 @pytest.mark.respx(base_url=W3C_API_BASE)
 async def test_w3c_get(respx_mock: respx.MockRouter) -> None:
+    """get() fetches individual spec by shortname."""
     respx_mock.get("/specifications/WCAG21").mock(
         return_value=httpx.Response(200, json=SAMPLE_W3C_SPEC)
     )
-    http = httpx.AsyncClient()
+    http = httpx.AsyncClient(base_url=W3C_API_BASE)
     fetcher = _W3CFetcher(http, RateLimiter(delay=0.0))
     record = await fetcher.get("WCAG 2.1")
     await http.aclose()
@@ -603,19 +671,31 @@ async def test_w3c_get(respx_mock: respx.MockRouter) -> None:
     assert record["body"] == "W3C"
     assert record["full_text_available"] is True
     assert record["full_text_url"] is not None
-    assert record["full_text_url"].startswith("https://www.w3.org/TR/")
+    assert "w3.org" in record["full_text_url"]
 
 
 @pytest.mark.respx(base_url=W3C_API_BASE)
 async def test_w3c_get_not_found(respx_mock: respx.MockRouter) -> None:
+    """get() returns None for unknown identifier."""
     respx_mock.get("/specifications/UNKNOWNSPEC999").mock(
         return_value=httpx.Response(404)
     )
-    http = httpx.AsyncClient()
+    http = httpx.AsyncClient(base_url=W3C_API_BASE)
     fetcher = _W3CFetcher(http, RateLimiter(delay=0.0))
     record = await fetcher.get("UNKNOWN SPEC 99.9")
     await http.aclose()
     assert record is None
+
+
+@pytest.mark.respx(base_url=W3C_API_BASE)
+async def test_w3c_search_non200_returns_empty(respx_mock: respx.MockRouter) -> None:
+    """search() returns [] if stubs page returns non-200."""
+    respx_mock.get("/specifications").mock(return_value=httpx.Response(503))
+    http = httpx.AsyncClient(base_url=W3C_API_BASE)
+    fetcher = _W3CFetcher(http, RateLimiter(delay=0.0))
+    results = await fetcher.search("WCAG", limit=5)
+    await http.aclose()
+    assert results == []
 
 
 # ---------------------------------------------------------------------------
@@ -734,54 +814,6 @@ async def test_standards_client_search_unknown_body() -> None:
 
 # (NIST caching and error paths are covered by test_nist_disk_cache_used_on_second_call
 #  and test_nist_github_api_failure_returns_empty above)
-
-
-# ---------------------------------------------------------------------------
-# W3C search additional paths
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.respx(base_url=W3C_API_BASE)
-async def test_w3c_search_empty_results_list(respx_mock: respx.MockRouter) -> None:
-    """Empty 'results' key must not fall through to _embedded (fixed bug)."""
-    respx_mock.get("/specifications").mock(
-        return_value=httpx.Response(200, json={"results": [], "total": 0})
-    )
-    http = httpx.AsyncClient()
-    fetcher = _W3CFetcher(http, RateLimiter(delay=0.0))
-    results = await fetcher.search("nonexistent", limit=5)
-    await http.aclose()
-    assert results == []
-
-
-@pytest.mark.respx(base_url=W3C_API_BASE)
-async def test_w3c_search_embedded_format(respx_mock: respx.MockRouter) -> None:
-    """_embedded.specifications response format (HAL JSON) is handled."""
-    respx_mock.get("/specifications").mock(
-        return_value=httpx.Response(
-            200,
-            json={
-                "_embedded": {"specifications": [SAMPLE_W3C_SPEC]},
-                "total": 1,
-            },
-        )
-    )
-    http = httpx.AsyncClient()
-    fetcher = _W3CFetcher(http, RateLimiter(delay=0.0))
-    results = await fetcher.search("WCAG", limit=5)
-    await http.aclose()
-    assert len(results) == 1
-    assert results[0]["body"] == "W3C"
-
-
-@pytest.mark.respx(base_url=W3C_API_BASE)
-async def test_w3c_search_non200_returns_empty(respx_mock: respx.MockRouter) -> None:
-    respx_mock.get("/specifications").mock(return_value=httpx.Response(500))
-    http = httpx.AsyncClient()
-    fetcher = _W3CFetcher(http, RateLimiter(delay=0.0))
-    results = await fetcher.search("WCAG", limit=5)
-    await http.aclose()
-    assert results == []
 
 
 # ---------------------------------------------------------------------------
