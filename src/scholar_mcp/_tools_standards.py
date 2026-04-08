@@ -8,6 +8,7 @@ import logging
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
 
+from ._record_types import StandardRecord
 from ._server_deps import ServiceBundle, get_bundle
 from ._standards_client import _resolve_identifier_local
 
@@ -73,7 +74,8 @@ def register_standards_tools(mcp: FastMCP) -> None:
             record = await bundle.standards.get(canonical)
             if record is not None:
                 await bundle.cache.set_standard_alias(raw, canonical)
-                await bundle.cache.set_standard(canonical, record)  # type: ignore[arg-type]
+                await bundle.cache.set_standard_alias(raw, canonical)
+                await bundle.cache.set_standard(canonical, record)
                 return json.dumps(
                     {"canonical": canonical, "body": body, "record": record}
                 )
@@ -88,7 +90,7 @@ def register_standards_tools(mcp: FastMCP) -> None:
             canonical = record.get("identifier", "")
             body = record.get("body", "")
             await bundle.cache.set_standard_alias(raw, canonical)
-            await bundle.cache.set_standard(canonical, record)  # type: ignore[arg-type]
+            await bundle.cache.set_standard(canonical, record)
             return json.dumps({"canonical": canonical, "body": body, "record": record})
 
         return json.dumps({"ambiguous": True, "candidates": candidates})
@@ -134,7 +136,7 @@ def register_standards_tools(mcp: FastMCP) -> None:
             return json.dumps(cached)
 
         results = await bundle.standards.search(query, body=body, limit=limit)
-        await bundle.cache.set_standards_search(cache_key, results)  # type: ignore[arg-type]
+        await bundle.cache.set_standards_search(cache_key, results)
         return json.dumps(results)
 
     @mcp.tool(
@@ -189,17 +191,17 @@ def register_standards_tools(mcp: FastMCP) -> None:
             return json.dumps({"error": "not_found", "identifier": identifier})
 
         # 4. Cache result
-        await bundle.cache.set_standard(canonical, record)  # type: ignore[arg-type]
+        await bundle.cache.set_standard(canonical, record)
         if resolved:
             await bundle.cache.set_standard_alias(identifier, canonical)
 
         if fetch_full_text:
-            return await _handle_full_text(record, bundle)  # type: ignore[arg-type]
+            return await _handle_full_text(record, bundle)
         return json.dumps(record)
 
 
 async def _handle_full_text(
-    record: dict,  # type: ignore[type-arg]
+    record: StandardRecord,
     bundle: ServiceBundle,
 ) -> str:
     """Download and convert full text via docling if available.
@@ -228,7 +230,7 @@ async def _handle_full_text(
         )
         return json.dumps(record)
 
-    url: str = record["full_text_url"]
+    url: str = record["full_text_url"] or ""
     filename = url.rsplit("/", 1)[-1] or "standard.pdf"
 
     async def _convert() -> str:
