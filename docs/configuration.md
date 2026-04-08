@@ -11,6 +11,7 @@ All settings are controlled via environment variables with the `SCHOLAR_MCP_` pr
 | `SCHOLAR_MCP_CACHE_DIR` | `/data/scholar-mcp` | Directory for the SQLite cache database (`cache.db`) and downloaded PDFs (`pdfs/`, `md/`). |
 | `SCHOLAR_MCP_CONTACT_EMAIL` | -- | Included in the OpenAlex `User-Agent` header for [polite pool](https://docs.openalex.org/how-to-use-the-api/rate-limits-and-authentication#the-polite-pool) access. Also enables [Unpaywall](https://unpaywall.org/products/api) lookups as a PDF fallback source when a paper has no open-access URL in Semantic Scholar. |
 | `SCHOLAR_MCP_LOG_LEVEL` | `INFO` | Python logging level: `DEBUG`, `INFO`, `WARNING`, or `ERROR`. |
+| `SCHOLAR_MCP_LOG_FORMAT` | `console` | Log output format. `console` produces human-readable output; `json` produces structured JSON lines for log aggregation tools (Loki, Datadog, Splunk). |
 
 ## PDF Conversion
 

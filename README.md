@@ -108,6 +108,7 @@ All settings are controlled via environment variables with the `SCHOLAR_MCP_` pr
 | `SCHOLAR_MCP_CACHE_DIR` | `/data/scholar-mcp` | Directory for the SQLite cache database and downloaded PDFs |
 | `SCHOLAR_MCP_CONTACT_EMAIL` | -- | Included in the OpenAlex User-Agent for [polite pool](https://docs.openalex.org/how-to-use-the-api/rate-limits-and-authentication#the-polite-pool) access (faster rate limits); also enables Unpaywall PDF lookups |
 | `SCHOLAR_MCP_LOG_LEVEL` | `INFO` | Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
+| `SCHOLAR_MCP_LOG_FORMAT` | `console` | Log output format: `console` (human-readable) or `json` (structured, for log aggregators) |
 
 ### PDF Conversion (optional)
 

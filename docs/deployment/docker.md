@@ -96,6 +96,7 @@ See [Configuration](../configuration.md) for the full reference. Key variables f
 | `SCHOLAR_MCP_DOCLING_URL` | -- | docling-serve URL (e.g. `http://docling-serve:5001`) |
 | `SCHOLAR_MCP_BEARER_TOKEN` | -- | Bearer token for HTTP auth |
 | `SCHOLAR_MCP_LOG_LEVEL` | `INFO` | Logging level |
+| `SCHOLAR_MCP_LOG_FORMAT` | `console` | `json` for structured logging with aggregators |
 
 For OIDC authentication, see [OIDC deployment](oidc.md).
 
