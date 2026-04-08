@@ -80,3 +80,21 @@ def test_epo_configured_partial(monkeypatch) -> None:
             monkeypatch.delenv(key, raising=False)
     config = load_config()
     assert config.epo_configured is False
+
+
+def test_log_format_default(monkeypatch):
+    monkeypatch.delenv("SCHOLAR_MCP_LOG_FORMAT", raising=False)
+    cfg = load_config()
+    assert cfg.log_format == "console"
+
+
+def test_log_format_json(monkeypatch):
+    monkeypatch.setenv("SCHOLAR_MCP_LOG_FORMAT", "json")
+    cfg = load_config()
+    assert cfg.log_format == "json"
+
+
+def test_log_format_console_explicit(monkeypatch):
+    monkeypatch.setenv("SCHOLAR_MCP_LOG_FORMAT", "console")
+    cfg = load_config()
+    assert cfg.log_format == "console"
