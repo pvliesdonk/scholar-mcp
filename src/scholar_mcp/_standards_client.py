@@ -5,6 +5,11 @@ from __future__ import annotations
 import logging
 import re
 
+import httpx
+
+from ._rate_limiter import RateLimiter
+from ._record_types import StandardRecord
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -115,3 +120,156 @@ def _resolve_identifier_local(raw: str) -> tuple[str, str] | None:
         return f"ETSI {m.group(1).upper()} {m.group(2)} {m.group(3)}", "ETSI"
 
     return None
+
+
+# ---------------------------------------------------------------------------
+# IETF source fetcher
+# ---------------------------------------------------------------------------
+
+_IETF_DATATRACKER = "https://datatracker.ietf.org"
+_RFC_EDITOR_BASE = "https://www.rfc-editor.org"
+
+
+class _IETFFetcher:
+    """Fetches RFC metadata from the IETF Datatracker REST API.
+
+    Args:
+        http: Shared httpx async client.
+        limiter: Rate limiter enforcing ~0.5s between requests.
+    """
+
+    def __init__(self, http: httpx.AsyncClient, limiter: RateLimiter) -> None:
+        self._http = http
+        self._limiter = limiter
+
+    async def get(self, identifier: str) -> StandardRecord | None:
+        """Fetch a single RFC by identifier (e.g. "RFC 9000").
+
+        Args:
+            identifier: Canonical RFC identifier.
+
+        Returns:
+            Populated StandardRecord or None if not found.
+        """
+        m = re.match(r"(?i)rfc\s*(\d+)", identifier)
+        if not m:
+            return None
+        n = int(m.group(1))
+        await self._limiter.acquire()
+        resp = await self._http.get(
+            f"{_IETF_DATATRACKER}/api/v1/doc/document/",
+            params={"name": f"rfc{n:04d}", "format": "json"},
+        )
+        if resp.status_code != 200:
+            logger.warning(
+                "ietf_api_error status=%d url=%s", resp.status_code, str(resp.url)
+            )
+            return None
+        data = resp.json()
+        objects = data.get("objects") or []
+        if not objects:
+            return None
+        return _normalize_ietf(objects[0])
+
+    async def search(self, query: str, *, limit: int = 10) -> list[StandardRecord]:
+        """Search RFCs by title keyword.
+
+        Args:
+            query: Search string.
+            limit: Maximum results.
+
+        Returns:
+            List of matching StandardRecord dicts.
+        """
+        await self._limiter.acquire()
+        resp = await self._http.get(
+            f"{_IETF_DATATRACKER}/api/v1/doc/document/",
+            params={
+                "type": "rfc",
+                "title__icontains": query,
+                "format": "json",
+                "limit": limit,
+            },
+        )
+        if resp.status_code != 200:
+            logger.warning(
+                "ietf_api_error status=%d url=%s", resp.status_code, str(resp.url)
+            )
+            return []
+        objects = (resp.json().get("objects") or [])[:limit]
+        return [_normalize_ietf(obj) for obj in objects]
+
+
+def _normalize_ietf(obj: dict) -> StandardRecord:  # type: ignore[type-arg]
+    """Normalise a Datatracker document object to a StandardRecord.
+
+    Args:
+        obj: Raw Datatracker ``/api/v1/doc/document/`` object.
+
+    Returns:
+        Populated StandardRecord.
+    """
+    name = obj.get("name", "")  # e.g. "rfc9000"
+    n = re.sub(r"[^\d]", "", name)
+    # BCP/STD/FYI names must not be prefixed with "RFC"
+    identifier = f"RFC {int(n)}" if re.match(r"(?i)^rfc\d+$", name) else name.upper()
+
+    if n:
+        url = f"{_RFC_EDITOR_BASE}/info/rfc{int(n)}"
+        full_text_url: str | None = f"{_RFC_EDITOR_BASE}/rfc/rfc{int(n)}.html"
+        full_text_available = True
+        number = str(int(n))
+    else:
+        url = ""
+        full_text_url = None
+        full_text_available = False
+        number = ""
+
+    return StandardRecord(
+        identifier=identifier,
+        aliases=[name, name.upper().replace("RFC", "RFC ")],
+        title=obj.get("title", ""),
+        body="IETF",
+        number=number,
+        revision=None,
+        status=_map_ietf_status(obj.get("std_level") or ""),
+        published_date=obj.get("pub_date"),
+        withdrawn_date=None,
+        superseded_by=None,
+        supersedes=[],
+        scope=obj.get("abstract"),
+        committee=(
+            obj.get("group", {}).get("acronym")
+            if isinstance(obj.get("group"), dict)
+            else None
+        ),
+        url=url,
+        full_text_url=full_text_url,
+        full_text_available=full_text_available,
+        price=None,
+        related=[],
+    )
+
+
+def _map_ietf_status(std_level: str | None) -> str:
+    """Map IETF std_level to a human-readable status string.
+
+    Args:
+        std_level: Datatracker std_level value (may be None when API returns null).
+
+    Returns:
+        Status string: "published", "withdrawn", etc.
+    """
+    mapping = {
+        "proposed_standard": "published",
+        "draft_standard": "published",
+        "internet_standard": "published",
+        "informational": "published",
+        "experimental": "published",
+        "best_current_practice": "published",
+        "historic": "withdrawn",
+        "unknown": "draft",
+        "": "published",
+    }
+    key = (std_level or "").lower()
+    return mapping.get(key, "published")
