@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import time
 from unittest.mock import MagicMock
 
 import pytest
 import requests
+from requests.exceptions import HTTPError
 
-from scholar_mcp._epo_client import EpoClient, EpoRateLimitedError
+from scholar_mcp._epo_client import (
+    EpoClient,
+    EpoRateLimitedError,
+    _parse_throttle_header,
+)
 from scholar_mcp._patent_numbers import DocdbNumber
 from scholar_mcp._rate_limiter import RateLimitedError
 
@@ -135,6 +141,30 @@ def _mock_response(
     return resp
 
 
+def _mock_throttle_response(
+    color: str, *, service_colors: dict[str, str] | None = None
+) -> MagicMock:
+    """Create a fake response with a configurable X-Throttling-Control header.
+
+    Args:
+        color: The overall traffic-light colour (e.g. ``"green"``, ``"busy"``).
+        service_colors: Optional mapping of service name to colour, used to
+            build the per-service section of the header (e.g.
+            ``{"search": "green", "retrieval": "green"}``).
+
+    Returns:
+        MagicMock with ``headers`` dict containing the constructed header.
+    """
+    response = MagicMock()
+    if service_colors:
+        parts = ", ".join(f"{svc}={c}:100" for svc, c in service_colors.items())
+        header_value = f"{color} ({parts})"
+    else:
+        header_value = color
+    response.headers = {"X-Throttling-Control": header_value}
+    return response
+
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -154,6 +184,13 @@ def epo_client(mock_ops_client: MagicMock) -> EpoClient:
         consumer_secret="secret",
         _client=mock_ops_client,
     )
+
+
+@pytest.fixture
+def mock_epo_client() -> EpoClient:
+    """EpoClient with a mocked underlying ops client."""
+    epo = EpoClient(consumer_key="key", consumer_secret="secret", _client=MagicMock())
+    return epo
 
 
 # ---------------------------------------------------------------------------
@@ -201,6 +238,37 @@ async def test_search_default_range(
     mock_ops_client.published_data_search.assert_called_once_with(
         "ti=Test", range_begin=1, range_end=25
     )
+
+
+async def test_search_returns_empty_on_404(
+    epo_client: EpoClient,
+    mock_ops_client: MagicMock,
+) -> None:
+    """search() returns empty results when EPO returns 404 (no results found)."""
+    fake_response = MagicMock(spec=requests.Response)
+    fake_response.status_code = 404
+    mock_ops_client.published_data_search.side_effect = HTTPError(
+        response=fake_response
+    )
+
+    result = await epo_client.search('ct="doi:nonexistent"')
+
+    assert result == {"total_count": 0, "references": []}
+
+
+async def test_search_re_raises_non_404_http_errors(
+    epo_client: EpoClient,
+    mock_ops_client: MagicMock,
+) -> None:
+    """search() re-raises HTTPError for non-404 status codes."""
+    fake_response = MagicMock(spec=requests.Response)
+    fake_response.status_code = 500
+    mock_ops_client.published_data_search.side_effect = HTTPError(
+        response=fake_response
+    )
+
+    with pytest.raises(HTTPError):
+        await epo_client.search("ti=Test")
 
 
 # ---------------------------------------------------------------------------
@@ -280,6 +348,18 @@ async def test_green_throttle_does_not_raise(
     await epo_client.search("ti=Test")
 
 
+async def test_idle_throttle_does_not_raise(
+    epo_client: EpoClient,
+    mock_ops_client: MagicMock,
+) -> None:
+    """Idle traffic light (API at rest) does not raise any error."""
+    mock_ops_client.published_data_search.return_value = _mock_response(
+        _SEARCH_XML, throttle="idle"
+    )
+    # Should not raise
+    await epo_client.search("ti=Test")
+
+
 async def test_yellow_throttle_raises_epo_rate_limited_error(
     epo_client: EpoClient,
     mock_ops_client: MagicMock,
@@ -348,6 +428,23 @@ async def test_throttle_on_get_biblio(
     doc = DocdbNumber(country="EP", number="1234567", kind="A1")
     with pytest.raises(EpoRateLimitedError):
         await epo_client.get_biblio(doc)
+
+
+def test_check_throttle_overall_busy_search_green_does_not_raise() -> None:
+    """overall=busy but search=green: search calls should NOT raise."""
+    response = _mock_throttle_response(
+        "busy", service_colors={"search": "green", "retrieval": "green"}
+    )
+    epo = EpoClient(consumer_key="key", consumer_secret="secret", _client=MagicMock())
+    epo._check_throttle(response, service="search")  # must not raise
+
+
+def test_check_throttle_overall_green_search_yellow_raises() -> None:
+    """overall=green but search=yellow: search calls SHOULD raise."""
+    response = _mock_throttle_response("green", service_colors={"search": "yellow"})
+    epo = EpoClient(consumer_key="key", consumer_secret="secret", _client=MagicMock())
+    with pytest.raises(EpoRateLimitedError):
+        epo._check_throttle(response, service="search")
 
 
 # ---------------------------------------------------------------------------
@@ -495,3 +592,296 @@ async def test_get_legal_calls_legal_method(
 async def test_aclose_is_noop(epo_client: EpoClient) -> None:
     """aclose() completes without error (no-op cleanup)."""
     await epo_client.aclose()  # Must not raise
+
+
+# ---------------------------------------------------------------------------
+# _parse_throttle_header tests
+# ---------------------------------------------------------------------------
+
+
+def test_parse_throttle_header_full() -> None:
+    """Full header with overall and per-service breakdown is parsed correctly."""
+    header = "busy (images=green:100, search=yellow:2, retrieval=green:50)"
+    result = _parse_throttle_header(header)
+    assert result["_overall"] == "busy"
+    assert result["search"] == "yellow"
+    assert result["retrieval"] == "green"
+    assert result["images"] == "green"
+
+
+def test_parse_throttle_header_no_subservices() -> None:
+    """Header with only an overall color (no parenthesised section) is handled."""
+    result = _parse_throttle_header("green")
+    assert result == {"_overall": "green"}
+
+
+def test_parse_throttle_header_missing_header() -> None:
+    """Empty string defaults to _overall=green."""
+    result = _parse_throttle_header("")
+    assert result == {"_overall": "green"}
+
+
+def test_parse_throttle_header_all_colors() -> None:
+    """All known EPO throttle colors are preserved verbatim."""
+    for color in ("green", "yellow", "red", "black", "idle"):
+        result = _parse_throttle_header(color)
+        assert result["_overall"] == color
+
+
+# ---------------------------------------------------------------------------
+# EpoRateLimitedError.service tests
+# ---------------------------------------------------------------------------
+
+
+def test_rate_limited_error_has_service_attribute() -> None:
+    """EpoRateLimitedError stores service as a keyword-only attribute."""
+    err = EpoRateLimitedError("yellow", service="search")
+    assert err.service == "search"
+    assert err.color == "yellow"
+    assert "search=yellow" in str(err)
+
+
+def test_rate_limited_error_default_service() -> None:
+    """EpoRateLimitedError defaults to _overall when service not specified."""
+    err = EpoRateLimitedError("red")
+    assert err.service == "_overall"
+
+
+# ---------------------------------------------------------------------------
+# Pre-flight throttle cache tests
+# ---------------------------------------------------------------------------
+
+
+async def test_preflight_cache_prevents_second_search_call(
+    mock_epo_client: EpoClient,
+) -> None:
+    """After a throttled search response, the next call raises from cache without network."""
+    # Simulate a throttled search response being returned by the EPO search endpoint
+    throttled_response = _mock_throttle_response(
+        "green", service_colors={"search": "yellow"}
+    )
+    mock_epo_client._client.published_data_search.return_value = throttled_response
+
+    with pytest.raises(EpoRateLimitedError):
+        await mock_epo_client.search("ti=test")
+
+    # Second call should raise from cache, not touch the network again
+    mock_epo_client._client.published_data_search.reset_mock()
+    with pytest.raises(EpoRateLimitedError):
+        await mock_epo_client.search("ti=test")
+
+    mock_epo_client._client.published_data_search.assert_not_called()
+
+
+async def test_preflight_retrieval_blocks_get_biblio(
+    mock_epo_client: EpoClient,
+) -> None:
+    """Pre-flight blocks get_biblio when retrieval service is throttled."""
+    # Seed the cache with a throttled retrieval color
+    mock_epo_client._throttle_cache = {"_overall": "green", "retrieval": "yellow"}
+    mock_epo_client._throttle_cache_ts = time.monotonic()
+
+    doc = DocdbNumber(country="EP", number="1000000", kind="A1")
+    with pytest.raises(EpoRateLimitedError) as exc_info:
+        await mock_epo_client.get_biblio(doc)
+    assert exc_info.value.service == "retrieval"
+    mock_epo_client._client.published_data.assert_not_called()
+
+
+async def test_preflight_retrieval_blocks_get_claims(
+    mock_epo_client: EpoClient,
+) -> None:
+    """Pre-flight blocks get_claims when retrieval service is throttled."""
+    mock_epo_client._throttle_cache = {"_overall": "green", "retrieval": "yellow"}
+    mock_epo_client._throttle_cache_ts = time.monotonic()
+
+    doc = DocdbNumber(country="EP", number="1000000", kind="A1")
+    with pytest.raises(EpoRateLimitedError) as exc_info:
+        await mock_epo_client.get_claims(doc)
+    assert exc_info.value.service == "retrieval"
+    mock_epo_client._client.published_data.assert_not_called()
+
+
+async def test_preflight_retrieval_blocks_get_description(
+    mock_epo_client: EpoClient,
+) -> None:
+    """Pre-flight blocks get_description when retrieval service is throttled."""
+    mock_epo_client._throttle_cache = {"_overall": "green", "retrieval": "yellow"}
+    mock_epo_client._throttle_cache_ts = time.monotonic()
+
+    doc = DocdbNumber(country="EP", number="1000000", kind="A1")
+    with pytest.raises(EpoRateLimitedError) as exc_info:
+        await mock_epo_client.get_description(doc)
+    assert exc_info.value.service == "retrieval"
+    mock_epo_client._client.published_data.assert_not_called()
+
+
+async def test_preflight_retrieval_blocks_get_citations(
+    mock_epo_client: EpoClient,
+) -> None:
+    """Pre-flight blocks get_citations when retrieval service is throttled."""
+    mock_epo_client._throttle_cache = {"_overall": "green", "retrieval": "yellow"}
+    mock_epo_client._throttle_cache_ts = time.monotonic()
+
+    doc = DocdbNumber(country="EP", number="1000000", kind="A1")
+    with pytest.raises(EpoRateLimitedError) as exc_info:
+        await mock_epo_client.get_citations(doc)
+    assert exc_info.value.service == "retrieval"
+    mock_epo_client._client.published_data.assert_not_called()
+
+
+async def test_preflight_inpadoc_blocks_get_legal(
+    mock_epo_client: EpoClient,
+) -> None:
+    """Pre-flight blocks get_legal when inpadoc service is throttled."""
+    mock_epo_client._throttle_cache = {"_overall": "green", "inpadoc": "yellow"}
+    mock_epo_client._throttle_cache_ts = time.monotonic()
+
+    doc = DocdbNumber(country="EP", number="1000000", kind="A1")
+    with pytest.raises(EpoRateLimitedError) as exc_info:
+        await mock_epo_client.get_legal(doc)
+    assert exc_info.value.service == "inpadoc"
+    mock_epo_client._client.legal.assert_not_called()
+
+
+async def test_preflight_inpadoc_blocks_get_family(
+    mock_epo_client: EpoClient,
+) -> None:
+    """Pre-flight blocks get_family when inpadoc service is throttled."""
+    mock_epo_client._throttle_cache = {"_overall": "green", "inpadoc": "yellow"}
+    mock_epo_client._throttle_cache_ts = time.monotonic()
+
+    doc = DocdbNumber(country="EP", number="1000000", kind="A1")
+    with pytest.raises(EpoRateLimitedError) as exc_info:
+        await mock_epo_client.get_family(doc)
+    assert exc_info.value.service == "inpadoc"
+    mock_epo_client._client.family.assert_not_called()
+
+
+async def test_preflight_retrieval_black_raises_runtime_error(
+    mock_epo_client: EpoClient,
+) -> None:
+    """Pre-flight raises RuntimeError (not EpoRateLimitedError) for retrieval=black."""
+    mock_epo_client._throttle_cache = {"_overall": "green", "retrieval": "black"}
+    mock_epo_client._throttle_cache_ts = time.monotonic()
+
+    doc = DocdbNumber(country="EP", number="1000000", kind="A1")
+    with pytest.raises(RuntimeError, match="daily quota"):
+        await mock_epo_client.get_biblio(doc)
+
+    mock_epo_client._client.published_data.assert_not_called()
+
+
+async def test_preflight_retrieval_black_raises_runtime_error_claims(
+    mock_epo_client: EpoClient,
+) -> None:
+    """Pre-flight raises RuntimeError for retrieval=black on get_claims."""
+    mock_epo_client._throttle_cache = {"_overall": "green", "retrieval": "black"}
+    mock_epo_client._throttle_cache_ts = time.monotonic()
+
+    doc = DocdbNumber(country="EP", number="1000000", kind="A1")
+    with pytest.raises(RuntimeError, match="daily quota"):
+        await mock_epo_client.get_claims(doc)
+
+    mock_epo_client._client.published_data.assert_not_called()
+
+
+async def test_preflight_retrieval_black_raises_runtime_error_description(
+    mock_epo_client: EpoClient,
+) -> None:
+    """Pre-flight raises RuntimeError for retrieval=black on get_description."""
+    mock_epo_client._throttle_cache = {"_overall": "green", "retrieval": "black"}
+    mock_epo_client._throttle_cache_ts = time.monotonic()
+
+    doc = DocdbNumber(country="EP", number="1000000", kind="A1")
+    with pytest.raises(RuntimeError, match="daily quota"):
+        await mock_epo_client.get_description(doc)
+
+    mock_epo_client._client.published_data.assert_not_called()
+
+
+async def test_preflight_retrieval_black_raises_runtime_error_citations(
+    mock_epo_client: EpoClient,
+) -> None:
+    """Pre-flight raises RuntimeError for retrieval=black on get_citations."""
+    mock_epo_client._throttle_cache = {"_overall": "green", "retrieval": "black"}
+    mock_epo_client._throttle_cache_ts = time.monotonic()
+
+    doc = DocdbNumber(country="EP", number="1000000", kind="A1")
+    with pytest.raises(RuntimeError, match="daily quota"):
+        await mock_epo_client.get_citations(doc)
+
+    mock_epo_client._client.published_data.assert_not_called()
+
+
+async def test_preflight_inpadoc_black_raises_runtime_error(
+    mock_epo_client: EpoClient,
+) -> None:
+    """Pre-flight raises RuntimeError (not EpoRateLimitedError) for inpadoc=black."""
+    mock_epo_client._throttle_cache = {"_overall": "green", "inpadoc": "black"}
+    mock_epo_client._throttle_cache_ts = time.monotonic()
+
+    doc = DocdbNumber(country="EP", number="1000000", kind="A1")
+    with pytest.raises(RuntimeError, match="daily quota"):
+        await mock_epo_client.get_family(doc)
+
+    mock_epo_client._client.family.assert_not_called()
+
+
+async def test_preflight_inpadoc_black_raises_runtime_error_legal(
+    mock_epo_client: EpoClient,
+) -> None:
+    """Pre-flight raises RuntimeError for inpadoc=black on get_legal."""
+    mock_epo_client._throttle_cache = {"_overall": "green", "inpadoc": "black"}
+    mock_epo_client._throttle_cache_ts = time.monotonic()
+
+    doc = DocdbNumber(country="EP", number="1000000", kind="A1")
+    with pytest.raises(RuntimeError, match="daily quota"):
+        await mock_epo_client.get_legal(doc)
+
+    mock_epo_client._client.legal.assert_not_called()
+
+
+def test_is_service_throttled_falls_back_to_overall(
+    mock_epo_client: EpoClient,
+) -> None:
+    """_is_service_throttled returns True when service absent but _overall is throttled."""
+    # Cache has only _overall=red, no service-specific key
+    mock_epo_client._throttle_cache = {"_overall": "red"}
+    mock_epo_client._throttle_cache_ts = time.monotonic()
+
+    assert mock_epo_client._is_service_throttled("search") is True
+
+
+def test_is_service_throttled_overall_green_no_service_key(
+    mock_epo_client: EpoClient,
+) -> None:
+    """_is_service_throttled returns False when _overall=green and service key absent."""
+    mock_epo_client._throttle_cache = {"_overall": "green"}
+    mock_epo_client._throttle_cache_ts = time.monotonic()
+
+    assert mock_epo_client._is_service_throttled("search") is False
+
+
+async def test_preflight_cache_expires_after_60s(
+    mock_epo_client: EpoClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pre-flight cache expires after 60 seconds and lets the next call through."""
+    throttled_response = _mock_throttle_response(
+        "green", service_colors={"search": "yellow"}
+    )
+    mock_epo_client._client.published_data_search.return_value = throttled_response
+
+    with pytest.raises(EpoRateLimitedError):
+        await mock_epo_client.search("ti=test")
+
+    # Advance monotonic time by 61 seconds
+    original_monotonic = time.monotonic
+    monkeypatch.setattr(time, "monotonic", lambda: original_monotonic() + 61)
+
+    # The cache is now stale — call goes through (hits network again)
+    mock_epo_client._client.published_data_search.reset_mock()
+    with pytest.raises(EpoRateLimitedError):  # still fails but from network, not cache
+        await mock_epo_client.search("ti=test")
+
+    mock_epo_client._client.published_data_search.assert_called_once()

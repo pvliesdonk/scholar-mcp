@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
+import time
 from typing import TYPE_CHECKING, Any
 
 import epo_ops
 import epo_ops.models
+from requests.exceptions import HTTPError
 
 from scholar_mcp._epo_xml import (
     parse_biblio_xml,
@@ -26,12 +29,35 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class EpoRateLimitedError(RateLimitedError):
-    """Raised when EPO traffic light is yellow, red, or black."""
+def _parse_throttle_header(header: str) -> dict[str, str]:
+    """Parse X-Throttling-Control into {service: color, '_overall': color}.
 
-    def __init__(self, color: str) -> None:
+    Args:
+        header: The X-Throttling-Control header value, e.g.
+            ``"busy (images=green:100, search=yellow:2, retrieval=green:50)"``.
+            Pass an empty string to get the green default.
+
+    Returns:
+        Dict with ``"_overall"`` key holding the first token, plus one entry
+        per ``name=color:count`` pair found in the parenthesised section.
+        Colors are lowercased. Missing header defaults to
+        ``{"_overall": "green"}``.
+    """
+    parts = header.strip().split(None, 1)
+    result: dict[str, str] = {"_overall": parts[0].lower() if parts else "green"}
+    if len(parts) > 1:
+        for match in re.finditer(r"(\w+)=(\w+):\d+", parts[1]):
+            result[match.group(1).lower()] = match.group(2).lower()
+    return result
+
+
+class EpoRateLimitedError(RateLimitedError):
+    """Raised when the EPO OPS API throttles a request."""
+
+    def __init__(self, color: str, *, service: str = "_overall") -> None:
         self.color = color
-        super().__init__(f"EPO rate limited: traffic light is {color}")
+        self.service = service
+        super().__init__(f"EPO rate limited: {service}={color}")
 
 
 class EpoClient:
@@ -65,6 +91,8 @@ class EpoClient:
                 middlewares=[],
             )
         self._lock = asyncio.Lock()
+        self._throttle_cache: dict[str, str] = {}
+        self._throttle_cache_ts: float = 0.0
 
     # ------------------------------------------------------------------
     # Private helpers
@@ -86,31 +114,46 @@ class EpoClient:
             kind_code=doc.kind or "A",
         )
 
-    def _check_throttle(self, response: Any) -> None:
-        """Inspect the X-Throttling-Control header and raise if not green.
-
-        The header format is:
-        ``green (search=green:30, retrieval=green:200, ...)``.
-        The first word is the overall traffic-light colour.
+    def _is_service_throttled(self, service: str) -> bool:
+        """Check if a service is known to be throttled from the cache.
 
         Args:
-            response: A ``requests.Response``-like object with a ``headers``
-                dict attribute.
+            service: The EPO service name, e.g. ``"search"``.
+
+        Returns:
+            ``True`` if the cache is fresh (< 60 s old) and the service color
+            is not green or idle. ``False`` if the cache is stale or the service
+            is not throttled.
+        """
+        if time.monotonic() - self._throttle_cache_ts > 60:
+            return False
+        cached = self._throttle_cache
+        color = cached.get(service, cached.get("_overall", "green"))
+        return color not in ("green", "idle")
+
+    def _check_throttle(self, response: Any, service: str = "_overall") -> None:
+        """Check the throttle header and raise if the relevant service is throttled.
+
+        Args:
+            response: The HTTP response object with a ``headers`` dict-like attribute.
+            service: The EPO service to check (e.g. ``"search"``, ``"retrieval"``,
+                ``"inpadoc"``). Defaults to ``"_overall"``.
 
         Raises:
-            RuntimeError: When the traffic-light colour is ``"black"``
-                (daily quota exhausted — not retryable).
-            EpoRateLimitedError: When the traffic-light colour is yellow or
-                red (retryable rate limit).
+            RuntimeError: If the daily quota is exhausted.
+            EpoRateLimitedError: If the service color is not green or idle.
         """
         header = response.headers.get("X-Throttling-Control", "green")
-        parts = header.split()
-        color = parts[0].lower() if parts else "green"
+        throttle = _parse_throttle_header(header)
+        # Update cache
+        self._throttle_cache = throttle
+        self._throttle_cache_ts = time.monotonic()
+        color = throttle.get(service, throttle["_overall"])
         if color == "black":
             raise RuntimeError("EPO daily quota exhausted. Please try again tomorrow.")
-        if color != "green":
-            logger.warning("epo_throttle color=%s", color)
-            raise EpoRateLimitedError(color)
+        if color not in ("green", "idle"):
+            logger.warning("epo_throttle service=%s color=%s", service, color)
+            raise EpoRateLimitedError(color, service=service)
 
     # ------------------------------------------------------------------
     # Public API
@@ -136,14 +179,30 @@ class EpoClient:
         Raises:
             EpoRateLimitedError: When the EPO traffic light is not green.
         """
-        async with self._lock:
-            response = await asyncio.to_thread(
-                self._client.published_data_search,
-                cql_query,
-                range_begin=range_begin,
-                range_end=range_end,
+        if self._is_service_throttled("search"):
+            cached_color = self._throttle_cache.get(
+                "search", self._throttle_cache.get("_overall", "red")
             )
-        self._check_throttle(response)
+            if cached_color == "black":
+                raise RuntimeError(
+                    "EPO daily quota exhausted. Please try again tomorrow."
+                )
+            raise EpoRateLimitedError(cached_color, service="search")
+        try:
+            async with self._lock:
+                response = await asyncio.to_thread(
+                    self._client.published_data_search,
+                    cql_query,
+                    range_begin=range_begin,
+                    range_end=range_end,
+                )
+        except HTTPError as exc:
+            if exc.response is not None and exc.response.status_code == 404:
+                # EPO returns 404 with SERVER.EntityNotFound when no results match.
+                logger.debug("epo_search_no_results cql=%s", cql_query)
+                return {"total_count": 0, "references": []}
+            raise
+        self._check_throttle(response, service="search")
         return parse_search_xml(response.content)
 
     async def get_biblio(self, doc: DocdbNumber) -> dict[str, Any]:
@@ -158,6 +217,14 @@ class EpoClient:
         Raises:
             EpoRateLimitedError: When the EPO traffic light is not green.
         """
+        if self._is_service_throttled("retrieval"):
+            cached = self._throttle_cache
+            color = cached.get("retrieval", cached.get("_overall", "red"))
+            if color == "black":
+                raise RuntimeError(
+                    "EPO daily quota exhausted. Please try again tomorrow."
+                )
+            raise EpoRateLimitedError(color, service="retrieval")
         inp = self._to_docdb_input(doc)
         async with self._lock:
             response = await asyncio.to_thread(
@@ -166,7 +233,7 @@ class EpoClient:
                 inp,
                 endpoint="biblio",
             )
-        self._check_throttle(response)
+        self._check_throttle(response, service="retrieval")
         return parse_biblio_xml(response.content)
 
     async def get_claims(self, doc: DocdbNumber) -> str:
@@ -181,6 +248,14 @@ class EpoClient:
         Raises:
             EpoRateLimitedError: When the EPO traffic light is not green.
         """
+        if self._is_service_throttled("retrieval"):
+            cached = self._throttle_cache
+            color = cached.get("retrieval", cached.get("_overall", "red"))
+            if color == "black":
+                raise RuntimeError(
+                    "EPO daily quota exhausted. Please try again tomorrow."
+                )
+            raise EpoRateLimitedError(color, service="retrieval")
         inp = self._to_docdb_input(doc)
         async with self._lock:
             response = await asyncio.to_thread(
@@ -189,7 +264,7 @@ class EpoClient:
                 inp,
                 endpoint="claims",
             )
-        self._check_throttle(response)
+        self._check_throttle(response, service="retrieval")
         return parse_claims_xml(response.content)
 
     async def get_description(self, doc: DocdbNumber) -> str:
@@ -204,6 +279,14 @@ class EpoClient:
         Raises:
             EpoRateLimitedError: When the EPO traffic light is not green.
         """
+        if self._is_service_throttled("retrieval"):
+            cached = self._throttle_cache
+            color = cached.get("retrieval", cached.get("_overall", "red"))
+            if color == "black":
+                raise RuntimeError(
+                    "EPO daily quota exhausted. Please try again tomorrow."
+                )
+            raise EpoRateLimitedError(color, service="retrieval")
         inp = self._to_docdb_input(doc)
         async with self._lock:
             response = await asyncio.to_thread(
@@ -212,7 +295,7 @@ class EpoClient:
                 inp,
                 endpoint="description",
             )
-        self._check_throttle(response)
+        self._check_throttle(response, service="retrieval")
         return parse_description_xml(response.content)
 
     async def get_family(self, doc: DocdbNumber) -> list[dict[str, str]]:
@@ -227,6 +310,14 @@ class EpoClient:
         Raises:
             EpoRateLimitedError: When the EPO traffic light is not green.
         """
+        if self._is_service_throttled("inpadoc"):
+            cached = self._throttle_cache
+            color = cached.get("inpadoc", cached.get("_overall", "red"))
+            if color == "black":
+                raise RuntimeError(
+                    "EPO daily quota exhausted. Please try again tomorrow."
+                )
+            raise EpoRateLimitedError(color, service="inpadoc")
         inp = self._to_docdb_input(doc)
         async with self._lock:
             response = await asyncio.to_thread(
@@ -234,7 +325,7 @@ class EpoClient:
                 "publication",
                 inp,
             )
-        self._check_throttle(response)
+        self._check_throttle(response, service="inpadoc")
         return parse_family_xml(response.content)
 
     async def get_legal(self, doc: DocdbNumber) -> list[dict[str, str]]:
@@ -249,6 +340,14 @@ class EpoClient:
         Raises:
             EpoRateLimitedError: When the EPO traffic light is not green.
         """
+        if self._is_service_throttled("inpadoc"):
+            cached = self._throttle_cache
+            color = cached.get("inpadoc", cached.get("_overall", "red"))
+            if color == "black":
+                raise RuntimeError(
+                    "EPO daily quota exhausted. Please try again tomorrow."
+                )
+            raise EpoRateLimitedError(color, service="inpadoc")
         inp = self._to_docdb_input(doc)
         async with self._lock:
             response = await asyncio.to_thread(
@@ -256,7 +355,7 @@ class EpoClient:
                 "publication",
                 inp,
             )
-        self._check_throttle(response)
+        self._check_throttle(response, service="inpadoc")
         return parse_legal_xml(response.content)
 
     async def get_citations(self, doc: DocdbNumber) -> dict[str, list[dict[str, Any]]]:
@@ -272,6 +371,14 @@ class EpoClient:
         Raises:
             EpoRateLimitedError: When the EPO traffic light is not green.
         """
+        if self._is_service_throttled("retrieval"):
+            cached = self._throttle_cache
+            color = cached.get("retrieval", cached.get("_overall", "red"))
+            if color == "black":
+                raise RuntimeError(
+                    "EPO daily quota exhausted. Please try again tomorrow."
+                )
+            raise EpoRateLimitedError(color, service="retrieval")
         inp = self._to_docdb_input(doc)
         async with self._lock:
             response = await asyncio.to_thread(
@@ -280,7 +387,7 @@ class EpoClient:
                 inp,
                 endpoint="biblio",
             )
-        self._check_throttle(response)
+        self._check_throttle(response, service="retrieval")
         return parse_citations_from_biblio(response.content)
 
     async def aclose(self) -> None:

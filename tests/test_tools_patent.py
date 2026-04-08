@@ -85,7 +85,7 @@ def test_build_cql_with_jurisdiction() -> None:
 def test_build_cql_date_range_both() -> None:
     """Both date_from and date_to produce 'within' expression."""
     cql = _build_cql("solar panel", date_from="2020-01-01", date_to="2023-12-31")
-    assert "pd within 20200101,20231231" in cql
+    assert 'pd within "20200101,20231231"' in cql
 
 
 def test_build_cql_date_range_from_only() -> None:
@@ -166,6 +166,26 @@ def test_build_cql_date_to_rejects_non_numeric() -> None:
         _build_cql("test", date_to="not-a-date")
 
 
+def test_build_cql_inventor_only_omits_ta() -> None:
+    """Inventor-only search produces just in= without a ta= clause."""
+    cql = _build_cql(inventor="Smith")
+    assert cql == 'in="Smith"'
+    assert "ta=" not in cql
+
+
+def test_build_cql_applicant_only_omits_ta() -> None:
+    """Applicant-only search produces just pa= without a ta= clause."""
+    cql = _build_cql(applicant="ACME Corp")
+    assert cql == 'pa="ACME Corp"'
+    assert "ta=" not in cql
+
+
+def test_build_cql_no_criteria_raises() -> None:
+    """Calling _build_cql with no criteria raises ValueError."""
+    with pytest.raises(ValueError, match="At least one search criterion"):
+        _build_cql()
+
+
 # ---------------------------------------------------------------------------
 # FastMCP fixture helpers
 # ---------------------------------------------------------------------------
@@ -244,6 +264,16 @@ async def test_search_patents_returns_results(
     data = json.loads(result.content[0].text)
     assert data["total_count"] == 1
     assert data["references"][0]["country"] == "EP"
+
+
+async def test_search_patents_no_criteria_returns_error(
+    mcp_with_epo: FastMCP,
+) -> None:
+    """search_patents with no criteria returns an invalid_query error."""
+    async with Client(mcp_with_epo) as client:
+        result = await client.call_tool("search_patents", {})
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "invalid_query"
 
 
 async def test_search_patents_uses_cache(

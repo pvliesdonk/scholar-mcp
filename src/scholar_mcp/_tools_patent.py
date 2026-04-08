@@ -36,7 +36,7 @@ def _cql_escape(s: str) -> str:
 
 
 def _build_cql(
-    query: str,
+    query: str | None = None,
     *,
     cpc_classification: str | None = None,
     applicant: str | None = None,
@@ -49,11 +49,13 @@ def _build_cql(
     """Build an EPO CQL query string from individual filter parameters.
 
     Translates tool parameters into Contextual Query Language (CQL) clauses
-    joined with ``AND``.  The *query* text is always mapped to a title+abstract
-    search (``ta=`` field).
+    joined with ``AND``.  When *query* is provided it is mapped to a
+    title+abstract search (``ta=`` field); omitting it allows searching purely
+    by structured filters (inventor, applicant, CPC, date, jurisdiction).
 
     Args:
-        query: Free-text search string — mapped to ``ta="query"``.
+        query: Free-text search string — mapped to ``ta="query"``.  Optional;
+            when omitted the search relies entirely on the filter parameters.
         cpc_classification: CPC classification code, e.g. ``"H01M10/00"``.
         applicant: Applicant name, mapped to ``pa=``.
         inventor: Inventor name, mapped to ``in=``.
@@ -68,8 +70,13 @@ def _build_cql(
 
     Returns:
         A CQL expression string ready for the EPO OPS search endpoint.
+
+    Raises:
+        ValueError: When no search criteria are provided at all.
     """
-    parts: list[str] = [f'ta="{_cql_escape(query)}"']
+    parts: list[str] = []
+    if query is not None:
+        parts.append(f'ta="{_cql_escape(query)}"')
 
     if cpc_classification is not None:
         parts.append(f'cpc="{_cql_escape(cpc_classification)}"')
@@ -90,7 +97,7 @@ def _build_cql(
         if d_to and not d_to.isdigit():
             raise ValueError(f"Invalid date_to: {date_to!r}")
         if d_from is not None and d_to is not None:
-            parts.append(f"{field} within {d_from},{d_to}")
+            parts.append(f'{field} within "{d_from},{d_to}"')
         elif d_from is not None:
             parts.append(f"{field} >= {d_from}")
         else:
@@ -98,6 +105,12 @@ def _build_cql(
 
     if jurisdiction is not None:
         parts.append(f'pn="{_cql_escape(jurisdiction)}"')
+
+    if not parts:
+        raise ValueError(
+            "At least one search criterion is required: query, inventor, applicant, "
+            "cpc_classification, jurisdiction, or a date range."
+        )
 
     return " AND ".join(parts)
 
@@ -118,7 +131,7 @@ def register_patent_tools(mcp: FastMCP) -> None:
         },
     )
     async def search_patents(
-        query: str,
+        query: str | None = None,
         cpc_classification: str | None = None,
         applicant: str | None = None,
         inventor: str | None = None,
@@ -133,12 +146,15 @@ def register_patent_tools(mcp: FastMCP) -> None:
         """Search for patents in the European Patent Office database.
 
         Covers European patents and global patents via INPADOC (100+ patent
-        offices). Accepts natural language queries. Use CPC classification
-        codes, applicant names, or date ranges to narrow results. For
-        academic paper search, use search_papers instead.
+        offices). At least one parameter must be provided. For keyword search,
+        ``query`` searches titles and abstracts. To find all patents by an
+        inventor or applicant, omit ``query`` and use only the structured
+        filters. For academic paper search, use search_papers instead.
 
         Args:
-            query: Natural language or keyword search query.
+            query: Keyword search — searches patent titles and abstracts.
+                Optional; omit when searching purely by inventor, applicant,
+                CPC code, or date.
             cpc_classification: CPC classification code to filter by,
                 e.g. ``"H01M10/00"`` for lithium-ion batteries.
             applicant: Applicant (assignee) name to filter by.
@@ -156,6 +172,12 @@ def register_patent_tools(mcp: FastMCP) -> None:
         Returns:
             JSON string with ``total_count`` and ``references`` list, or an
             error dict if the EPO client is not configured or the API fails.
+            If the EPO service is busy, the request is automatically retried
+            once and ``{"queued": true, "task_id": "..."}`` is returned. Use
+            ``get_task_result`` to retrieve the result. If the retry also
+            fails, ``get_task_result`` returns ``status: failed`` — call this
+            tool again after about 60 seconds. Do not attempt to manage or
+            reason about EPO throttle states directly.
         """
         if bundle.epo is None:
             return json.dumps(
@@ -169,16 +191,19 @@ def register_patent_tools(mcp: FastMCP) -> None:
                 }
             )
 
-        cql = _build_cql(
-            query,
-            cpc_classification=cpc_classification,
-            applicant=applicant,
-            inventor=inventor,
-            date_from=date_from,
-            date_to=date_to,
-            date_type=date_type,
-            jurisdiction=jurisdiction,
-        )
+        try:
+            cql = _build_cql(
+                query,
+                cpc_classification=cpc_classification,
+                applicant=applicant,
+                inventor=inventor,
+                date_from=date_from,
+                date_to=date_to,
+                date_type=date_type,
+                jurisdiction=jurisdiction,
+            )
+        except ValueError as exc:
+            return json.dumps({"error": "invalid_query", "detail": str(exc)})
         range_begin = offset + 1  # EPO OPS uses 1-based ranges
         range_end = offset + limit
         cache_key = f"{cql}|{range_begin}-{range_end}"
@@ -252,6 +277,12 @@ def register_patent_tools(mcp: FastMCP) -> None:
         Returns:
             JSON string with ``patent_number`` (normalised DOCDB format) and
             the requested section data, or an error dict on failure.
+            If the EPO service is busy, the request is automatically retried
+            once and ``{"queued": true, "task_id": "..."}`` is returned. Use
+            ``get_task_result`` to retrieve the result. If the retry also
+            fails, ``get_task_result`` returns ``status: failed`` — call this
+            tool again after about 60 seconds. Do not attempt to manage or
+            reason about EPO throttle states directly.
         """
         if bundle.epo is None:
             return json.dumps(
@@ -329,6 +360,12 @@ def register_patent_tools(mcp: FastMCP) -> None:
             JSON string with ``paper_id``, ``patents`` list (each with
             biblio data and ``match_source``), ``total_count``, and a
             ``note`` about coverage limitations.
+            If the EPO service is busy, the request is automatically retried
+            once and ``{"queued": true, "task_id": "..."}`` is returned. Use
+            ``get_task_result`` to retrieve the result. If the retry also
+            fails, ``get_task_result`` returns ``status: failed`` — call this
+            tool again after about 60 seconds. Do not attempt to manage or
+            reason about EPO throttle states directly.
         """
         if bundle.epo is None:
             return json.dumps(

@@ -21,6 +21,9 @@ _DURATION_HINTS: dict[str, str] = {
     "fetch_and_convert": (
         "Full pipeline (download + conversion) typically takes 1-5 minutes."
     ),
+    "search_patents": "Patent searches usually complete in 5-15 seconds.",
+    "get_patent": "Patent data retrieval usually completes in 5-20 seconds.",
+    "get_citing_patents": "Citing patent lookup usually completes in 10-30 seconds.",
 }
 
 
@@ -72,7 +75,20 @@ def register_task_tools(mcp: FastMCP) -> None:
         if task.status == "completed":
             response["result"] = task.result
         elif task.status == "failed":
-            response["error"] = task.error
+            error = task.error or ""
+            if "daily quota" in error:
+                response["error"] = (
+                    "The service has reached its daily quota. Try again tomorrow."
+                )
+                response["retryable"] = False
+            elif "EPO rate limited" in error:
+                response["error"] = (
+                    "The service was busy and could not complete the request. "
+                    "Try calling the tool again in about 60 seconds."
+                )
+                response["retryable"] = True
+            else:
+                response["error"] = error
         else:
             # Task still in progress — give the client context
             response["elapsed_seconds"] = task.elapsed_seconds
