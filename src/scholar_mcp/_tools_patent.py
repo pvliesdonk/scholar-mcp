@@ -75,7 +75,7 @@ def _build_cql(
         ValueError: When no search criteria are provided at all.
     """
     parts: list[str] = []
-    if query:
+    if query is not None:
         parts.append(f'ta="{_cql_escape(query)}"')
 
     if cpc_classification is not None:

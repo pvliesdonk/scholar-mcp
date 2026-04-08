@@ -81,7 +81,7 @@ def register_task_tools(mcp: FastMCP) -> None:
                     "The service has reached its daily quota. Try again tomorrow."
                 )
                 response["retryable"] = False
-            elif "RateLimitedError" in error:
+            elif "EPO rate limited" in error:
                 response["error"] = (
                     "The service was busy and could not complete the request. "
                     "Try calling the tool again in about 60 seconds."

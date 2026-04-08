@@ -9,7 +9,11 @@ import pytest
 import requests
 from requests.exceptions import HTTPError
 
-from scholar_mcp._epo_client import EpoClient, EpoRateLimitedError, _parse_throttle_header
+from scholar_mcp._epo_client import (
+    EpoClient,
+    EpoRateLimitedError,
+    _parse_throttle_header,
+)
 from scholar_mcp._patent_numbers import DocdbNumber
 from scholar_mcp._rate_limiter import RateLimitedError
 
@@ -247,7 +251,7 @@ async def test_search_returns_empty_on_404(
         response=fake_response
     )
 
-    result = await epo_client.search("ct=\"doi:nonexistent\"")
+    result = await epo_client.search('ct="doi:nonexistent"')
 
     assert result == {"total_count": 0, "references": []}
 

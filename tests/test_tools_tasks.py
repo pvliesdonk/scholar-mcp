@@ -126,7 +126,9 @@ async def test_get_task_result_daily_quota_error_is_sanitised(
     mcp: FastMCP, bundle: ServiceBundle
 ) -> None:
     """daily quota error string is replaced with a user-friendly message."""
-    task_id = bundle.tasks.submit(_instant_fail("EPO daily quota exhausted."), tool="search_patents")
+    task_id = bundle.tasks.submit(
+        _instant_fail("EPO daily quota exhausted."), tool="search_patents"
+    )
 
     async with Client(mcp) as client:
         result = await client.call_tool("get_task_result", {"task_id": task_id})
@@ -159,7 +161,9 @@ async def test_get_task_result_other_error_unchanged(
     mcp: FastMCP, bundle: ServiceBundle
 ) -> None:
     """Non-rate-limit errors are returned verbatim."""
-    task_id = bundle.tasks.submit(_instant_fail("Some other error"), tool="search_patents")
+    task_id = bundle.tasks.submit(
+        _instant_fail("Some other error"), tool="search_patents"
+    )
 
     async with Client(mcp) as client:
         result = await client.call_tool("get_task_result", {"task_id": task_id})
