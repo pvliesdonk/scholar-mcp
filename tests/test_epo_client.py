@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 import requests
+from requests.exceptions import HTTPError
 
 from scholar_mcp._epo_client import EpoClient, EpoRateLimitedError
 from scholar_mcp._patent_numbers import DocdbNumber
@@ -203,6 +204,37 @@ async def test_search_default_range(
     )
 
 
+async def test_search_returns_empty_on_404(
+    epo_client: EpoClient,
+    mock_ops_client: MagicMock,
+) -> None:
+    """search() returns empty results when EPO returns 404 (no results found)."""
+    fake_response = MagicMock(spec=requests.Response)
+    fake_response.status_code = 404
+    mock_ops_client.published_data_search.side_effect = HTTPError(
+        response=fake_response
+    )
+
+    result = await epo_client.search("ct=\"doi:nonexistent\"")
+
+    assert result == {"total_count": 0, "references": []}
+
+
+async def test_search_re_raises_non_404_http_errors(
+    epo_client: EpoClient,
+    mock_ops_client: MagicMock,
+) -> None:
+    """search() re-raises HTTPError for non-404 status codes."""
+    fake_response = MagicMock(spec=requests.Response)
+    fake_response.status_code = 500
+    mock_ops_client.published_data_search.side_effect = HTTPError(
+        response=fake_response
+    )
+
+    with pytest.raises(HTTPError):
+        await epo_client.search("ti=Test")
+
+
 # ---------------------------------------------------------------------------
 # get_biblio() tests
 # ---------------------------------------------------------------------------
@@ -275,6 +307,18 @@ async def test_green_throttle_does_not_raise(
     """Green traffic light does not raise any error."""
     mock_ops_client.published_data_search.return_value = _mock_response(
         _SEARCH_XML, throttle="green"
+    )
+    # Should not raise
+    await epo_client.search("ti=Test")
+
+
+async def test_idle_throttle_does_not_raise(
+    epo_client: EpoClient,
+    mock_ops_client: MagicMock,
+) -> None:
+    """Idle traffic light (API at rest) does not raise any error."""
+    mock_ops_client.published_data_search.return_value = _mock_response(
+        _SEARCH_XML, throttle="idle"
     )
     # Should not raise
     await epo_client.search("ti=Test")

@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 import epo_ops
 import epo_ops.models
+from requests.exceptions import HTTPError
 
 from scholar_mcp._epo_xml import (
     parse_biblio_xml,
@@ -108,7 +109,8 @@ class EpoClient:
         color = parts[0].lower() if parts else "green"
         if color == "black":
             raise RuntimeError("EPO daily quota exhausted. Please try again tomorrow.")
-        if color != "green":
+        # "idle" and "green" are both non-throttled states; only warn on yellow/red.
+        if color not in ("green", "idle"):
             logger.warning("epo_throttle color=%s", color)
             raise EpoRateLimitedError(color)
 
@@ -136,13 +138,20 @@ class EpoClient:
         Raises:
             EpoRateLimitedError: When the EPO traffic light is not green.
         """
-        async with self._lock:
-            response = await asyncio.to_thread(
-                self._client.published_data_search,
-                cql_query,
-                range_begin=range_begin,
-                range_end=range_end,
-            )
+        try:
+            async with self._lock:
+                response = await asyncio.to_thread(
+                    self._client.published_data_search,
+                    cql_query,
+                    range_begin=range_begin,
+                    range_end=range_end,
+                )
+        except HTTPError as exc:
+            if exc.response is not None and exc.response.status_code == 404:
+                # EPO returns 404 with SERVER.EntityNotFound when no results match.
+                logger.debug("epo_search_no_results cql=%s", cql_query)
+                return {"total_count": 0, "references": []}
+            raise
         self._check_throttle(response)
         return parse_search_xml(response.content)
 

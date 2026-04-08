@@ -390,7 +390,7 @@ Search for patents across 100+ patent offices via the EPO Open Patent Services (
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `query` | string | *(required)* | Natural language or keyword search query |
+| `query` | string | -- | Keyword search — searches patent titles and abstracts. Optional when using structured filters. |
 | `cpc_classification` | string | -- | CPC classification code filter (e.g. `"H01M10/00"`) |
 | `applicant` | string | -- | Applicant (assignee) name filter |
 | `inventor` | string | -- | Inventor name filter |
@@ -401,10 +401,12 @@ Search for patents across 100+ patent offices via the EPO Open Patent Services (
 | `limit` | int | `10` | Results per page (max 100) |
 | `offset` | int | `0` | Pagination offset |
 
+At least one parameter must be provided.
+
 **Returns:** `{"total_count": N, "references": [...]}` where each reference has `country`, `number`, and `kind` fields.
 
 !!! tip "Query syntax"
-    The tool translates parameters into EPO CQL internally. The `query` parameter maps to title+abstract search. Use the filter parameters for structured queries — they are properly escaped and quoted.
+    The tool translates parameters into EPO CQL internally. `query` searches titles and abstracts only — it will not find patents where the keyword appears only in inventor/applicant names. To find all patents by an inventor or from an applicant, omit `query` and use only the structured filters (e.g. `inventor="Smith"`). Combining `query` with filters applies both constraints.
 
 ---
 
