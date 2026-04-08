@@ -24,7 +24,7 @@ src/scholar_mcp/
 - `hatchling` build backend
 - Conventional commits: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`
 - Google-style docstrings on all public functions
-- `logging.getLogger(__name__)` throughout, no `print()`
+- `logging.getLogger(__name__)` throughout, no `print()` — see **Logging Standard** below
 - Type hints everywhere
 
 ## Documentation
@@ -60,3 +60,30 @@ Always fetch both before declaring a review round complete.
 - `_ENV_PREFIX` in `config.py` controls all env var names — change once, affects everything
 - **Async task queue**: S2 tools try once (`retry=False`); on 429 `RateLimitedError`, queue with retries for background execution. PDF tools always queue (unless cache hit). `TaskQueue` lives in `ServiceBundle.tasks`.
 - **Tool queueing pattern**: extract tool logic into `async def _execute(*, retry=True) -> str`, try with `retry=False`, catch `RateLimitedError` and `bundle.tasks.submit(_execute(retry=True))`
+
+## Logging Standard
+
+### Framework
+- Standard library `logging` throughout. Every module: `logger = logging.getLogger(__name__)`.
+- No `print()` for operational output. No third-party logging libraries.
+- FastMCP middleware handles tool invocation, timing, and error logging automatically.
+
+### Log Levels
+| Level | Use for |
+|-------|---------|
+| `DEBUG` | Detailed internals: cache hits, parameter values, enrichment attempts, rate-limit queueing |
+| `INFO` | Significant operations: service startup, configuration decisions (tool calls logged by middleware) |
+| `WARNING` | Degraded but continuing: API errors with fallback, missing optional config, unexpected data |
+| `ERROR` | Failures affecting the primary result. Use `logger.error(..., exc_info=True)` when traceback is needed |
+
+### Exception Handling
+- All exceptions must be caught and handled. No bare `except:`. Always specify the exception type.
+- Expected errors (HTTP 4xx, rate limits, missing data): catch, log, return user-facing error string.
+- Optional enrichment failures (OpenAlex, Unpaywall): catch, log at `DEBUG` with `exc_info=True`, continue.
+- Primary result errors: catch, log at `WARNING` or `ERROR`, return error string.
+- `ErrorHandlingMiddleware` is a safety net. If it catches something, that's a bug to fix.
+
+### Message Format
+- Pseudo-structured: `logger.info("event_name key=%s", value)`
+- Event name as first token (snake_case), then key=value pairs via `%s` formatting.
+- Never use f-strings in log calls (defeats lazy evaluation).
