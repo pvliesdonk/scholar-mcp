@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from contextlib import asynccontextmanager
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
@@ -223,6 +223,173 @@ async def test_get_standard_cache_hit_skips_network(
     assert data["title"] == "QUIC"
 
 
+async def test_get_standard_alias_cache_hit(
+    mcp: FastMCP, bundle: ServiceBundle
+) -> None:
+    """get_standard resolves via alias cache when alias was previously stored."""
+    await bundle.cache.set_standard_alias("rfc9000", "RFC 9000")
+    await bundle.cache.set_standard(
+        "RFC 9000",
+        {
+            "identifier": "RFC 9000",
+            "title": "QUIC cached",
+            "body": "IETF",
+            "full_text_available": False,
+            "url": "https://www.rfc-editor.org/info/rfc9000",
+        },
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool("get_standard", {"identifier": "rfc9000"})
+    data = json.loads(result.content[0].text)
+    assert data["title"] == "QUIC cached"
+
+
+@pytest.mark.respx(base_url=IETF_BASE)
+async def test_get_standard_fetch_full_text_after_fresh_fetch(
+    respx_mock: respx.MockRouter, mcp: FastMCP, bundle: ServiceBundle
+) -> None:
+    """get_standard with fetch_full_text=True works when record is not yet cached."""
+    respx_mock.get("/api/v1/doc/document/").mock(
+        return_value=httpx.Response(200, json=SAMPLE_RFC_DOC)
+    )
+    mock_docling = MagicMock(spec=DoclingClient)
+    mock_docling.convert = AsyncMock(return_value="# RFC 9000\n...")
+    bundle.docling = mock_docling  # type: ignore[assignment]
+
+    with respx.mock(assert_all_called=False) as mock:
+        mock.get("https://www.rfc-editor.org/rfc/rfc9000.html").mock(
+            return_value=httpx.Response(200, content=b"<html>content</html>")
+        )
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "get_standard", {"identifier": "RFC 9000", "fetch_full_text": True}
+            )
+    data = json.loads(result.content[0].text)
+    assert data.get("full_text") == "# RFC 9000\n..."
+
+
+async def test_resolve_locally_resolved_but_not_found(
+    mcp: FastMCP, bundle: ServiceBundle
+) -> None:
+    """resolve_standard_identifier: regex resolves but source fetch returns None."""
+    with patch(
+        "scholar_mcp._tools_standards.resolve_identifier_local",
+        return_value=("RFC 99998", "IETF"),
+    ), patch.object(bundle.standards, "get", return_value=None):
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "resolve_standard_identifier", {"raw": "RFC 99998"}
+            )
+    data = json.loads(result.content[0].text)
+    assert data["canonical"] == "RFC 99998"
+    assert data["record"] is None
+
+
+async def test_resolve_api_fallback_single_candidate(
+    mcp: FastMCP, bundle: ServiceBundle
+) -> None:
+    """resolve_standard_identifier: API fallback returns a single unambiguous result."""
+    candidate = {
+        "identifier": "ETSI EN 303 645",
+        "body": "ETSI",
+        "title": "IoT Security",
+        "full_text_available": False,
+    }
+    with patch.object(bundle.standards, "resolve", return_value=[candidate]):
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "resolve_standard_identifier", {"raw": "iot security etsi"}
+            )
+    data = json.loads(result.content[0].text)
+    assert data["canonical"] == "ETSI EN 303 645"
+    assert data["body"] == "ETSI"
+
+
+async def test_resolve_api_fallback_ambiguous(
+    mcp: FastMCP, bundle: ServiceBundle
+) -> None:
+    """resolve_standard_identifier: multiple API candidates returns ambiguous response."""
+    candidates = [
+        {
+            "identifier": "RFC 1",
+            "body": "IETF",
+            "title": "A",
+            "full_text_available": False,
+        },
+        {
+            "identifier": "RFC 2",
+            "body": "IETF",
+            "title": "B",
+            "full_text_available": False,
+        },
+    ]
+    with patch.object(bundle.standards, "resolve", return_value=candidates):
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "resolve_standard_identifier", {"raw": "some ambiguous string"}
+            )
+    data = json.loads(result.content[0].text)
+    assert data["ambiguous"] is True
+    assert len(data["candidates"]) == 2
+
+
+async def test_handle_full_text_already_present(
+    mcp: FastMCP, bundle: ServiceBundle
+) -> None:
+    """_handle_full_text short-circuits when full_text is already in the record."""
+    record = {
+        "identifier": "RFC 9000",
+        "title": "QUIC",
+        "body": "IETF",
+        "full_text_available": True,
+        "full_text_url": "https://www.rfc-editor.org/rfc/rfc9000.html",
+        "full_text": "# already converted",
+        "url": "https://www.rfc-editor.org/info/rfc9000",
+    }
+    await bundle.cache.set_standard("RFC 9000", record)
+    mock_docling = MagicMock(spec=DoclingClient)
+    mock_docling.convert = AsyncMock(return_value="# should not be called")
+    bundle.docling = mock_docling  # type: ignore[assignment]
+
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_standard", {"identifier": "RFC 9000", "fetch_full_text": True}
+        )
+    data = json.loads(result.content[0].text)
+    assert data["full_text"] == "# already converted"
+    mock_docling.convert.assert_not_called()
+
+
+async def test_handle_full_text_download_error_returns_record(
+    mcp: FastMCP, bundle: ServiceBundle
+) -> None:
+    """_handle_full_text returns the plain record when the download raises."""
+    record = {
+        "identifier": "RFC 9000",
+        "title": "QUIC",
+        "body": "IETF",
+        "full_text_available": True,
+        "full_text_url": "https://www.rfc-editor.org/rfc/rfc9000.html",
+        "url": "https://www.rfc-editor.org/info/rfc9000",
+    }
+    await bundle.cache.set_standard("RFC 9000", record)
+    mock_docling = MagicMock(spec=DoclingClient)
+    mock_docling.convert = AsyncMock(side_effect=RuntimeError("timeout"))
+    bundle.docling = mock_docling  # type: ignore[assignment]
+
+    with respx.mock(assert_all_called=False) as mock:
+        mock.get("https://www.rfc-editor.org/rfc/rfc9000.html").mock(
+            side_effect=RuntimeError("connection failed")
+        )
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "get_standard", {"identifier": "RFC 9000", "fetch_full_text": True}
+            )
+    data = json.loads(result.content[0].text)
+    assert data["identifier"] == "RFC 9000"
+    assert "full_text" not in data
+
+
 # ---------------------------------------------------------------------------
 # Full-text via docling tests
 # ---------------------------------------------------------------------------
@@ -281,3 +448,71 @@ async def test_get_standard_fetch_full_text_no_docling(
     data = json.loads(result.content[0].text)
     assert data["identifier"] == "RFC 9000"
     assert "full_text_url" in data
+
+
+async def test_resolve_alias_cache_hit_but_record_cache_miss(
+    mcp: FastMCP, bundle: ServiceBundle
+) -> None:
+    """resolve_standard_identifier: alias in cache but record expired — falls through to regex."""
+    # Alias entry exists but the record was evicted from cache
+    await bundle.cache.set_standard_alias("rfc9000", "RFC 9000")
+    # No record stored — the alias-cache branch falls through at line 63
+
+    with patch.object(bundle.standards, "get", return_value=None):
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "resolve_standard_identifier", {"raw": "rfc9000"}
+            )
+    data = json.loads(result.content[0].text)
+    # Falls through to regex which also gets None from standards.get
+    assert data["canonical"] == "RFC 9000"
+    assert data["record"] is None
+
+
+@pytest.mark.respx(base_url=IETF_BASE)
+async def test_get_standard_alias_cache_hit_record_not_cached(
+    respx_mock: respx.MockRouter, mcp: FastMCP, bundle: ServiceBundle
+) -> None:
+    """get_standard: alias resolves but record not cached — fetches fresh from source."""
+    respx_mock.get("/api/v1/doc/document/").mock(
+        return_value=httpx.Response(200, json=SAMPLE_RFC_DOC)
+    )
+    await bundle.cache.set_standard_alias("rfc9000", "RFC 9000")
+    # No record in cache — goes to step 3 (API fetch)
+
+    async with Client(mcp) as client:
+        result = await client.call_tool("get_standard", {"identifier": "rfc9000"})
+    data = json.loads(result.content[0].text)
+    assert data["identifier"] == "RFC 9000"
+
+
+async def test_handle_full_text_rate_limited_queues_task(
+    mcp: FastMCP, bundle: ServiceBundle
+) -> None:
+    """_handle_full_text queues a background task when docling is rate-limited."""
+    from scholar_mcp._rate_limiter import RateLimitedError
+
+    record = {
+        "identifier": "RFC 9000",
+        "title": "QUIC",
+        "body": "IETF",
+        "full_text_available": True,
+        "full_text_url": "https://www.rfc-editor.org/rfc/rfc9000.html",
+        "url": "https://www.rfc-editor.org/info/rfc9000",
+    }
+    await bundle.cache.set_standard("RFC 9000", record)
+    mock_docling = MagicMock(spec=DoclingClient)
+    mock_docling.convert = AsyncMock(side_effect=RateLimitedError("rate limited"))
+    bundle.docling = mock_docling  # type: ignore[assignment]
+
+    with respx.mock(assert_all_called=False) as mock:
+        mock.get("https://www.rfc-editor.org/rfc/rfc9000.html").mock(
+            return_value=httpx.Response(200, content=b"<html>content</html>")
+        )
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "get_standard", {"identifier": "RFC 9000", "fetch_full_text": True}
+            )
+    data = json.loads(result.content[0].text)
+    assert data.get("queued") is True
+    assert "task_id" in data
