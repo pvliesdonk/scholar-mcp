@@ -272,10 +272,13 @@ async def test_resolve_locally_resolved_but_not_found(
     mcp: FastMCP, bundle: ServiceBundle
 ) -> None:
     """resolve_standard_identifier: regex resolves but source fetch returns None."""
-    with patch(
-        "scholar_mcp._tools_standards.resolve_identifier_local",
-        return_value=("RFC 99998", "IETF"),
-    ), patch.object(bundle.standards, "get", return_value=None):
+    with (
+        patch(
+            "scholar_mcp._tools_standards.resolve_identifier_local",
+            return_value=("RFC 99998", "IETF"),
+        ),
+        patch.object(bundle.standards, "get", return_value=None),
+    ):
         async with Client(mcp) as client:
             result = await client.call_tool(
                 "resolve_standard_identifier", {"raw": "RFC 99998"}
