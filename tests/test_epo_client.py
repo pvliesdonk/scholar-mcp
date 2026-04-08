@@ -702,6 +702,55 @@ async def test_preflight_inpadoc_blocks_get_family(
     mock_epo_client._client.family.assert_not_called()
 
 
+async def test_preflight_retrieval_black_raises_runtime_error(
+    mock_epo_client: EpoClient,
+) -> None:
+    """Pre-flight raises RuntimeError (not EpoRateLimitedError) for retrieval=black."""
+    mock_epo_client._throttle_cache = {"_overall": "green", "retrieval": "black"}
+    mock_epo_client._throttle_cache_ts = time.monotonic()
+
+    doc = DocdbNumber(country="EP", number="1000000", kind="A1")
+    with pytest.raises(RuntimeError, match="daily quota"):
+        await mock_epo_client.get_biblio(doc)
+
+    mock_epo_client._client.published_data.assert_not_called()
+
+
+async def test_preflight_inpadoc_black_raises_runtime_error(
+    mock_epo_client: EpoClient,
+) -> None:
+    """Pre-flight raises RuntimeError (not EpoRateLimitedError) for inpadoc=black."""
+    mock_epo_client._throttle_cache = {"_overall": "green", "inpadoc": "black"}
+    mock_epo_client._throttle_cache_ts = time.monotonic()
+
+    doc = DocdbNumber(country="EP", number="1000000", kind="A1")
+    with pytest.raises(RuntimeError, match="daily quota"):
+        await mock_epo_client.get_family(doc)
+
+    mock_epo_client._client.family.assert_not_called()
+
+
+def test_is_service_throttled_falls_back_to_overall(
+    mock_epo_client: EpoClient,
+) -> None:
+    """_is_service_throttled returns True when service absent but _overall is throttled."""
+    # Cache has only _overall=red, no service-specific key
+    mock_epo_client._throttle_cache = {"_overall": "red"}
+    mock_epo_client._throttle_cache_ts = time.monotonic()
+
+    assert mock_epo_client._is_service_throttled("search") is True
+
+
+def test_is_service_throttled_overall_green_no_service_key(
+    mock_epo_client: EpoClient,
+) -> None:
+    """_is_service_throttled returns False when _overall=green and service key absent."""
+    mock_epo_client._throttle_cache = {"_overall": "green"}
+    mock_epo_client._throttle_cache_ts = time.monotonic()
+
+    assert mock_epo_client._is_service_throttled("search") is False
+
+
 async def test_preflight_cache_expires_after_60s(
     mock_epo_client: EpoClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:

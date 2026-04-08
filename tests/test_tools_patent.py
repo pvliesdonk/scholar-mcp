@@ -266,6 +266,16 @@ async def test_search_patents_returns_results(
     assert data["references"][0]["country"] == "EP"
 
 
+async def test_search_patents_no_criteria_returns_error(
+    mcp_with_epo: FastMCP,
+) -> None:
+    """search_patents with no criteria returns an invalid_query error."""
+    async with Client(mcp_with_epo) as client:
+        result = await client.call_tool("search_patents", {})
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "invalid_query"
+
+
 async def test_search_patents_uses_cache(
     bundle: ServiceBundle, epo_client: EpoClient
 ) -> None:
