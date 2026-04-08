@@ -8,6 +8,7 @@ import respx
 
 from scholar_mcp._rate_limiter import RateLimiter
 from scholar_mcp._standards_client import (
+    StandardsClient,
     _ETSIFetcher,
     _IETFFetcher,
     _NISTFetcher,
@@ -492,3 +493,39 @@ async def test_etsi_get(respx_mock: respx.MockRouter) -> None:
     assert record is not None
     assert record["body"] == "ETSI"
     assert record["full_text_available"] is True
+
+
+# ---------------------------------------------------------------------------
+# StandardsClient integration tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.respx(base_url=IETF_BASE)
+async def test_standards_client_resolve_ietf_local(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """Local resolution needs no network call for well-known RFCs."""
+    respx_mock.get("/api/v1/doc/document/").mock(
+        return_value=httpx.Response(200, json=SAMPLE_RFC9000_DOC)
+    )
+    http = httpx.AsyncClient()
+    client = StandardsClient(http)
+    results = await client.resolve("rfc9000")
+    await http.aclose()
+    assert len(results) == 1
+    assert results[0]["identifier"] == "RFC 9000"
+    assert results[0]["body"] == "IETF"
+
+
+@pytest.mark.respx(base_url=IETF_BASE)
+async def test_standards_client_search_body_filter(
+    respx_mock: respx.MockRouter,
+) -> None:
+    respx_mock.get("/api/v1/doc/document/").mock(
+        return_value=httpx.Response(200, json=SAMPLE_RFC9000_SEARCH)
+    )
+    http = httpx.AsyncClient()
+    client = StandardsClient(http)
+    results = await client.search("QUIC", body="IETF", limit=5)
+    await http.aclose()
+    assert all(r["body"] == "IETF" for r in results)

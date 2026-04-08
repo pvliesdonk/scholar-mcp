@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 
@@ -686,3 +687,125 @@ class _ETSIFetcher:
         """
         results = await self.search(identifier, limit=1)
         return results[0] if results else None
+
+
+# ---------------------------------------------------------------------------
+# StandardsClient — public orchestrator
+# ---------------------------------------------------------------------------
+
+
+class StandardsClient:
+    """Unified client for Tier 1 standards sources.
+
+    Routes search and lookup requests to the appropriate source fetcher
+    (IETF, NIST, W3C, ETSI) based on the body parameter or identifier prefix.
+
+    All four source fetchers share a single ``httpx.AsyncClient``. ETSI
+    maintains an in-memory catalogue index to avoid per-query scraping.
+
+    Args:
+        http: Shared httpx async client (created externally, closed externally).
+    """
+
+    def __init__(self, http: httpx.AsyncClient) -> None:
+        self._http = http
+        self._fetchers: dict[
+            str, _IETFFetcher | _NISTFetcher | _W3CFetcher | _ETSIFetcher
+        ] = {
+            "IETF": _IETFFetcher(http, RateLimiter(delay=0.5)),
+            "NIST": _NISTFetcher(http, RateLimiter(delay=1.0)),
+            "W3C": _W3CFetcher(http, RateLimiter(delay=0.5)),
+            "ETSI": _ETSIFetcher(http, RateLimiter(delay=2.0)),
+        }
+
+    async def search(
+        self,
+        query: str,
+        *,
+        body: str | None = None,
+        limit: int = 10,
+    ) -> list[StandardRecord]:
+        """Search standards by query string, optionally filtered to one body.
+
+        Args:
+            query: Identifier, title, or free text.
+            body: Optional body filter: "NIST", "IETF", "W3C", or "ETSI".
+            limit: Maximum results.
+
+        Returns:
+            List of StandardRecord dicts.
+        """
+        if body is not None:
+            fetcher = self._fetchers.get(body.upper())
+            if fetcher is None:
+                return []
+            return await fetcher.search(query, limit=limit)
+
+        # Search all sources concurrently and merge
+        results_per_body = await asyncio.gather(
+            *(f.search(query, limit=limit) for f in self._fetchers.values()),
+            return_exceptions=True,
+        )
+        merged: list[StandardRecord] = []
+        for r in results_per_body:
+            if isinstance(r, list):
+                merged.extend(r)
+        return merged[:limit]
+
+    async def get(self, identifier: str) -> StandardRecord | None:
+        """Resolve and fetch a single standard by identifier.
+
+        Attempts local regex resolution first; if unambiguous, routes to the
+        matching source fetcher. Falls back to searching all fetchers.
+
+        Args:
+            identifier: Canonical or fuzzy identifier.
+
+        Returns:
+            Populated StandardRecord or None.
+        """
+        resolved = _resolve_identifier_local(identifier)
+        if resolved is not None:
+            canonical, body = resolved
+            fetcher = self._fetchers.get(body)
+            if fetcher:
+                return await fetcher.get(canonical)
+
+        # No local resolution — try each fetcher
+        for fetcher in self._fetchers.values():
+            result = await fetcher.get(identifier)
+            if result is not None:
+                return result
+        return None
+
+    async def resolve(self, raw: str) -> list[StandardRecord]:
+        """Resolve a raw citation string to one or more StandardRecords.
+
+        Returns a single-item list when unambiguous, multiple items when
+        the raw string matches multiple standards, or an empty list when
+        unresolvable.
+
+        Args:
+            raw: Raw citation string.
+
+        Returns:
+            List of matching StandardRecord dicts.
+        """
+        resolved = _resolve_identifier_local(raw)
+        if resolved is not None:
+            canonical, body = resolved
+            fetcher = self._fetchers.get(body)
+            if fetcher:
+                record = await fetcher.get(canonical)
+                if record is not None:
+                    return [record]
+            # Return a stub if fetcher fails
+            return [StandardRecord(identifier=canonical, body=body, title="", full_text_available=False)]
+
+        # No local resolution — fall back to API search across all bodies
+        results = await self.search(raw, limit=5)
+        return results
+
+    async def aclose(self) -> None:
+        """Close the underlying HTTP client."""
+        await self._http.aclose()

@@ -14,6 +14,7 @@ from scholar_mcp._openlibrary_client import OpenLibraryClient
 from scholar_mcp._rate_limiter import RateLimiter
 from scholar_mcp._s2_client import S2Client
 from scholar_mcp._server_deps import ServiceBundle
+from scholar_mcp._standards_client import StandardsClient
 from scholar_mcp._task_queue import TaskQueue
 from scholar_mcp.config import ServerConfig
 
@@ -54,6 +55,8 @@ async def bundle(cache: ScholarCache, test_config: ServerConfig) -> ServiceBundl
         base_url="https://openlibrary.org", timeout=10.0, follow_redirects=True
     )
     openlibrary = OpenLibraryClient(openlibrary_http, RateLimiter(delay=0.0))
+    standards_http = httpx.AsyncClient(timeout=10.0)
+    standards = StandardsClient(standards_http)
     yield ServiceBundle(
         s2=s2,
         openalex=openalex,
@@ -63,7 +66,9 @@ async def bundle(cache: ScholarCache, test_config: ServerConfig) -> ServiceBundl
         cache=cache,
         config=test_config,
         tasks=TaskQueue(),
+        standards=standards,
     )
     await openlibrary_http.aclose()
     await openalex_http.aclose()
     await s2.aclose()
+    await standards_http.aclose()
