@@ -437,7 +437,9 @@ def create_server(*, transport: str = "stdio") -> FastMCP:
     # --- Middleware: error handling, timing, logging ---
     mcp.add_middleware(
         ErrorHandlingMiddleware(
-            include_traceback=True,
+            include_traceback=(
+                os.environ.get("FASTMCP_LOG_LEVEL", "INFO").upper() == "DEBUG"
+            ),
             transform_errors=True,
         )
     )

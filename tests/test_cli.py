@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from pathlib import Path
 
 from click.testing import CliRunner
@@ -84,8 +85,6 @@ def test_verbose_sets_fastmcp_log_level(monkeypatch) -> None:
     monkeypatch.delenv("FASTMCP_LOG_LEVEL", raising=False)
     runner = CliRunner()
     runner.invoke(cli, ["-v", "serve", "--help"])
-    import os
-
     assert os.environ.get("FASTMCP_LOG_LEVEL") == "DEBUG"
 
 
@@ -94,8 +93,6 @@ def test_verbose_overrides_fastmcp_log_level(monkeypatch) -> None:
     monkeypatch.setenv("FASTMCP_LOG_LEVEL", "WARNING")
     runner = CliRunner()
     runner.invoke(cli, ["-v", "serve", "--help"])
-    import os
-
     assert os.environ.get("FASTMCP_LOG_LEVEL") == "DEBUG"
 
 

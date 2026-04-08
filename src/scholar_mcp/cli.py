@@ -60,11 +60,15 @@ def cli(ctx: click.Context, verbose: bool) -> None:
     configure_logging(level=level)
     # Attach FastMCP's handler to the root logger so application
     # loggers (scholar_mcp.*) share the same output format.
+    # configure_logging() sets propagate=False on the fastmcp logger,
+    # so fastmcp.* records won't double-fire through root.
     fastmcp_logger = logging.getLogger("fastmcp")
     root = logging.getLogger()
     root.setLevel(level)
-    if fastmcp_logger.handlers:
-        root.addHandler(fastmcp_logger.handlers[0])
+    if fastmcp_logger.handlers and not fastmcp_logger.propagate:
+        handler = fastmcp_logger.handlers[0]
+        if handler not in root.handlers:
+            root.addHandler(handler)
     if level == logging.DEBUG:
         logging.getLogger("httpx").setLevel(logging.WARNING)
         logging.getLogger("httpcore").setLevel(logging.WARNING)

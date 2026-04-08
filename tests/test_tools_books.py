@@ -522,3 +522,51 @@ async def test_recommend_books_empty_subject(
         result = await client.call_tool("recommend_books", {"subject": "nonexistent"})
     data = json.loads(result.content[0].text)
     assert data == []
+
+
+async def test_search_books_queued_on_rate_limit(
+    bundle: ServiceBundle,
+) -> None:
+    """search_books returns queued response when rate-limited."""
+    from unittest.mock import AsyncMock
+
+    from scholar_mcp._rate_limiter import RateLimitedError
+
+    bundle.openlibrary.search = AsyncMock(side_effect=RateLimitedError())
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_book_tools(app)
+
+    async with Client(app) as client:
+        result = await client.call_tool("search_books", {"query": "test"})
+    data = json.loads(result.content[0].text)
+    assert data["queued"] is True
+    assert data["tool"] == "search_books"
+
+
+async def test_get_book_queued_on_rate_limit(
+    bundle: ServiceBundle,
+) -> None:
+    """get_book returns queued response when rate-limited."""
+    from unittest.mock import AsyncMock
+
+    from scholar_mcp._rate_limiter import RateLimitedError
+
+    bundle.openlibrary.get_by_isbn = AsyncMock(side_effect=RateLimitedError())
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_book_tools(app)
+
+    async with Client(app) as client:
+        result = await client.call_tool("get_book", {"identifier": "9780201633610"})
+    data = json.loads(result.content[0].text)
+    assert data["queued"] is True
+    assert data["tool"] == "get_book"
