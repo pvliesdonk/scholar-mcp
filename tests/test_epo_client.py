@@ -688,6 +688,62 @@ async def test_preflight_retrieval_blocks_get_biblio(
     mock_epo_client._client.published_data.assert_not_called()
 
 
+async def test_preflight_retrieval_blocks_get_claims(
+    mock_epo_client: EpoClient,
+) -> None:
+    """Pre-flight blocks get_claims when retrieval service is throttled."""
+    mock_epo_client._throttle_cache = {"_overall": "green", "retrieval": "yellow"}
+    mock_epo_client._throttle_cache_ts = time.monotonic()
+
+    doc = DocdbNumber(country="EP", number="1000000", kind="A1")
+    with pytest.raises(EpoRateLimitedError) as exc_info:
+        await mock_epo_client.get_claims(doc)
+    assert exc_info.value.service == "retrieval"
+    mock_epo_client._client.published_data.assert_not_called()
+
+
+async def test_preflight_retrieval_blocks_get_description(
+    mock_epo_client: EpoClient,
+) -> None:
+    """Pre-flight blocks get_description when retrieval service is throttled."""
+    mock_epo_client._throttle_cache = {"_overall": "green", "retrieval": "yellow"}
+    mock_epo_client._throttle_cache_ts = time.monotonic()
+
+    doc = DocdbNumber(country="EP", number="1000000", kind="A1")
+    with pytest.raises(EpoRateLimitedError) as exc_info:
+        await mock_epo_client.get_description(doc)
+    assert exc_info.value.service == "retrieval"
+    mock_epo_client._client.published_data.assert_not_called()
+
+
+async def test_preflight_retrieval_blocks_get_citations(
+    mock_epo_client: EpoClient,
+) -> None:
+    """Pre-flight blocks get_citations when retrieval service is throttled."""
+    mock_epo_client._throttle_cache = {"_overall": "green", "retrieval": "yellow"}
+    mock_epo_client._throttle_cache_ts = time.monotonic()
+
+    doc = DocdbNumber(country="EP", number="1000000", kind="A1")
+    with pytest.raises(EpoRateLimitedError) as exc_info:
+        await mock_epo_client.get_citations(doc)
+    assert exc_info.value.service == "retrieval"
+    mock_epo_client._client.published_data.assert_not_called()
+
+
+async def test_preflight_inpadoc_blocks_get_legal(
+    mock_epo_client: EpoClient,
+) -> None:
+    """Pre-flight blocks get_legal when inpadoc service is throttled."""
+    mock_epo_client._throttle_cache = {"_overall": "green", "inpadoc": "yellow"}
+    mock_epo_client._throttle_cache_ts = time.monotonic()
+
+    doc = DocdbNumber(country="EP", number="1000000", kind="A1")
+    with pytest.raises(EpoRateLimitedError) as exc_info:
+        await mock_epo_client.get_legal(doc)
+    assert exc_info.value.service == "inpadoc"
+    mock_epo_client._client.legal.assert_not_called()
+
+
 async def test_preflight_inpadoc_blocks_get_family(
     mock_epo_client: EpoClient,
 ) -> None:
@@ -716,6 +772,48 @@ async def test_preflight_retrieval_black_raises_runtime_error(
     mock_epo_client._client.published_data.assert_not_called()
 
 
+async def test_preflight_retrieval_black_raises_runtime_error_claims(
+    mock_epo_client: EpoClient,
+) -> None:
+    """Pre-flight raises RuntimeError for retrieval=black on get_claims."""
+    mock_epo_client._throttle_cache = {"_overall": "green", "retrieval": "black"}
+    mock_epo_client._throttle_cache_ts = time.monotonic()
+
+    doc = DocdbNumber(country="EP", number="1000000", kind="A1")
+    with pytest.raises(RuntimeError, match="daily quota"):
+        await mock_epo_client.get_claims(doc)
+
+    mock_epo_client._client.published_data.assert_not_called()
+
+
+async def test_preflight_retrieval_black_raises_runtime_error_description(
+    mock_epo_client: EpoClient,
+) -> None:
+    """Pre-flight raises RuntimeError for retrieval=black on get_description."""
+    mock_epo_client._throttle_cache = {"_overall": "green", "retrieval": "black"}
+    mock_epo_client._throttle_cache_ts = time.monotonic()
+
+    doc = DocdbNumber(country="EP", number="1000000", kind="A1")
+    with pytest.raises(RuntimeError, match="daily quota"):
+        await mock_epo_client.get_description(doc)
+
+    mock_epo_client._client.published_data.assert_not_called()
+
+
+async def test_preflight_retrieval_black_raises_runtime_error_citations(
+    mock_epo_client: EpoClient,
+) -> None:
+    """Pre-flight raises RuntimeError for retrieval=black on get_citations."""
+    mock_epo_client._throttle_cache = {"_overall": "green", "retrieval": "black"}
+    mock_epo_client._throttle_cache_ts = time.monotonic()
+
+    doc = DocdbNumber(country="EP", number="1000000", kind="A1")
+    with pytest.raises(RuntimeError, match="daily quota"):
+        await mock_epo_client.get_citations(doc)
+
+    mock_epo_client._client.published_data.assert_not_called()
+
+
 async def test_preflight_inpadoc_black_raises_runtime_error(
     mock_epo_client: EpoClient,
 ) -> None:
@@ -728,6 +826,20 @@ async def test_preflight_inpadoc_black_raises_runtime_error(
         await mock_epo_client.get_family(doc)
 
     mock_epo_client._client.family.assert_not_called()
+
+
+async def test_preflight_inpadoc_black_raises_runtime_error_legal(
+    mock_epo_client: EpoClient,
+) -> None:
+    """Pre-flight raises RuntimeError for inpadoc=black on get_legal."""
+    mock_epo_client._throttle_cache = {"_overall": "green", "inpadoc": "black"}
+    mock_epo_client._throttle_cache_ts = time.monotonic()
+
+    doc = DocdbNumber(country="EP", number="1000000", kind="A1")
+    with pytest.raises(RuntimeError, match="daily quota"):
+        await mock_epo_client.get_legal(doc)
+
+    mock_epo_client._client.legal.assert_not_called()
 
 
 def test_is_service_throttled_falls_back_to_overall(
