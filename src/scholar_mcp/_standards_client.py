@@ -800,7 +800,11 @@ class StandardsClient:
                 if record is not None:
                     return [record]
             # Return a stub if fetcher fails
-            return [StandardRecord(identifier=canonical, body=body, title="", full_text_available=False)]
+            return [
+                StandardRecord(
+                    identifier=canonical, body=body, title="", full_text_available=False
+                )
+            ]
 
         # No local resolution — fall back to API search across all bodies
         results = await self.search(raw, limit=5)
