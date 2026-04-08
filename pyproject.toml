@@ -22,6 +22,7 @@ dependencies = [
     "click>=8.0",
     "python-epo-ops-client>=4.2",
     "lxml>=5.0",
+    "beautifulsoup4>=4.14.3",
 ]
 
 [project.optional-dependencies]
@@ -92,6 +93,7 @@ ignore = ["E501"]
 "src/scholar_mcp/_book_enrichment.py" = ["TCH001"]
 "src/scholar_mcp/_task_queue.py" = ["TCH003"]
 "src/scholar_mcp/_openlibrary_client.py" = ["TCH001"]
+"src/scholar_mcp/_standards_client.py" = ["TCH001", "TCH002"]
 "src/scholar_mcp/_server_resources.py" = ["B008", "TCH001", "TCH002"]
 "src/scholar_mcp/_server_prompts.py" = ["B008", "TCH002"]
 # pytest fixtures need runtime imports; Path used in signatures needs to be importable at runtime.

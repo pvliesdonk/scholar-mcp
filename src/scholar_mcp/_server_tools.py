@@ -50,3 +50,7 @@ def register_tools(mcp: FastMCP, *, transport: str = "stdio") -> None:
     from ._tools_books import register_book_tools
 
     register_book_tools(mcp)
+
+    from ._tools_standards import register_standards_tools
+
+    register_standards_tools(mcp)

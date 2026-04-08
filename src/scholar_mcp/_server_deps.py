@@ -20,6 +20,7 @@ from ._openalex_client import OpenAlexClient
 from ._openlibrary_client import OpenLibraryClient
 from ._rate_limiter import RateLimiter
 from ._s2_client import S2Client
+from ._standards_client import StandardsClient
 from ._task_queue import TaskQueue
 from .config import ServerConfig, load_config
 
@@ -55,6 +56,7 @@ class ServiceBundle:
     cache: CacheProtocol
     config: ServerConfig
     tasks: TaskQueue
+    standards: StandardsClient
 
 
 @asynccontextmanager
@@ -125,6 +127,9 @@ async def make_service_lifespan(
 
     tasks = TaskQueue()
 
+    standards_http = httpx.AsyncClient(timeout=30.0)
+    standards = StandardsClient(standards_http)
+
     bundle = ServiceBundle(
         s2=s2,
         openalex=openalex,
@@ -134,6 +139,7 @@ async def make_service_lifespan(
         cache=cache,
         config=config,
         tasks=tasks,
+        standards=standards,
     )
     try:
         yield {"bundle": bundle}
@@ -145,6 +151,7 @@ async def make_service_lifespan(
             await docling_http.aclose()
         if epo is not None:
             await epo.aclose()
+        await standards.aclose()
         await cache.close()
 
 
