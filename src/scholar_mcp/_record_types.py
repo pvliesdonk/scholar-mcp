@@ -30,7 +30,7 @@ class BookRecord(TypedDict, total=False):
 
 
 class StandardRecord(TypedDict, total=False):
-    """Typed representation of a normalised standards record.
+    """Typed representation of a normalized standards record.
 
     All fields use ``total=False`` because records are JSON-serialised
     and may have absent fields from partial API responses or cache.

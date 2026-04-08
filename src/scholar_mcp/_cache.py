@@ -13,6 +13,7 @@ import aiosqlite
 
 from ._record_types import (
     BookRecord,  # noqa: TC001 — runtime import needed for get_type_hints()
+    StandardRecord,  # noqa: TC001 — runtime import needed for get_type_hints()
 )
 
 logger = logging.getLogger(__name__)
@@ -75,10 +76,10 @@ _BOOK_WORK_TTL = 30 * 86400  # 30 days
 _BOOK_SEARCH_TTL = 7 * 86400  # 7 days
 _BOOK_SUBJECT_TTL = 7 * 86400  # 7 days
 
-_STANDARD_TTL = 90 * 86400        # 90 days — standards rarely change
+_STANDARD_TTL = 90 * 86400  # 90 days — standards rarely change
 _STANDARD_ALIAS_TTL = 90 * 86400  # 90 days
 _STANDARD_SEARCH_TTL = 7 * 86400  # 7 days
-_STANDARD_INDEX_TTL = 7 * 86400   # 7 days — re-scrape weekly
+_STANDARD_INDEX_TTL = 7 * 86400  # 7 days — re-scrape weekly
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY);
@@ -920,7 +921,7 @@ class ScholarCache:
     # Standards
     # ------------------------------------------------------------------
 
-    async def get_standard(self, identifier: str) -> dict[str, Any] | None:
+    async def get_standard(self, identifier: str) -> StandardRecord | None:
         """Return cached standard record or None if missing/stale.
 
         Args:
@@ -938,7 +939,7 @@ class ScholarCache:
             return None
         return json.loads(row[0])  # type: ignore[no-any-return]
 
-    async def set_standard(self, identifier: str, data: dict[str, Any]) -> None:
+    async def set_standard(self, identifier: str, data: StandardRecord) -> None:
         """Cache a standard record.
 
         Args:
@@ -963,7 +964,8 @@ class ScholarCache:
         """
         db = _require_open(self._db)
         async with db.execute(
-            "SELECT canonical, cached_at FROM standards_aliases WHERE raw_id = ?", (raw,)
+            "SELECT canonical, cached_at FROM standards_aliases WHERE raw_id = ?",
+            (raw,),
         ) as cur:
             row = await cur.fetchone()
         if row is None or time.time() - row[1] > _STANDARD_ALIAS_TTL:
@@ -984,7 +986,7 @@ class ScholarCache:
         )
         await db.commit()
 
-    async def get_standards_search(self, query: str) -> list[dict[str, Any]] | None:
+    async def get_standards_search(self, query: str) -> list[StandardRecord] | None:
         """Return cached standards search results or None if missing/stale.
 
         Args:
@@ -1004,7 +1006,9 @@ class ScholarCache:
             return None
         return json.loads(row[0])  # type: ignore[no-any-return]
 
-    async def set_standards_search(self, query: str, data: list[dict[str, Any]]) -> None:
+    async def set_standards_search(
+        self, query: str, data: list[StandardRecord]
+    ) -> None:
         """Cache standards search results.
 
         Args:

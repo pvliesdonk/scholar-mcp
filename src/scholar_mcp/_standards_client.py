@@ -13,6 +13,10 @@ logger = logging.getLogger(__name__)
 
 # IETF RFC: "RFC 9000", "rfc9000", "rfc-9000", "RFC9000"
 _IETF_RFC_RE = re.compile(r"(?i)\brfc[-\s]?(\d+)\b")
+# IETF BCP: "BCP 47", "BCP47"
+_IETF_BCP_RE = re.compile(r"(?i)\bbcp[-\s]?(\d+)\b")
+# IETF STD: "STD 66", "STD66"
+_IETF_STD_RE = re.compile(r"(?i)\bstd[-\s]?(\d+)\b")
 
 # NIST SP with optional revision: "SP 800-53 Rev. 5", "SP800-53r5", "NIST SP 800-53 Rev 5"
 _NIST_SP_REV_RE = re.compile(
@@ -24,7 +28,7 @@ _NIST_SP_RE = re.compile(r"(?i)\b(?:nist\s+)?sp\s*(\d{3,4}(?:-\d+)?[A-Z]?)\b")
 _NIST_NUM_REV_RE = re.compile(r"(?i)\bnist\s+(\d{3,4}(?:-\d+)?)\s+r(?:ev\.?\s*)?(\d)\b")
 _NIST_NUM_RE = re.compile(r"(?i)\bnist\s+(\d{3,4}(?:-\d+)?)\b")
 # NIST FIPS: "FIPS 140-3", "FIPS140-3", "FIPS PUB 140-3"
-_NIST_FIPS_RE = re.compile(r"(?i)\bfips(?:\s+pub)?\s*(\d{2,3}(?:-\d+)?)\b")
+_NIST_FIPS_RE = re.compile(r"(?i)\bfips(?:\s+pub)?\s*(\d{1,3}(?:-\d+)?)\b")
 # NIST IR: "NISTIR 8259A", "NISTIR8259A"
 _NIST_IR_RE = re.compile(r"(?i)\bnistir\s*(\d{4}[A-Z]?)\b")
 
@@ -33,8 +37,9 @@ _W3C_WCAG_RE = re.compile(r"(?i)\bwcag\s*(\d+\.\d+)\b")
 _W3C_WEBAUTHN_RE = re.compile(r"(?i)\bwebauthn\s+level\s+(\d+)\b")
 
 # ETSI: "ETSI EN 303 645", "etsi en 303645", "ETSI TS 102 165"
+# Require explicit "etsi" prefix to avoid false positives with other European bodies (CEN, CENELEC)
 _ETSI_RE = re.compile(
-    r"(?i)\b(?:etsi\s+)?(EN|TS|TR|ES|EG)\s*(\d{3})\s*[\s-]?\s*(\d{3})\b"
+    r"(?i)\betsi\s+(EN|TS|TR|ES|EG)\s*(\d{3})\s*[\s-]?\s*(\d{3})\b"
 )
 
 
@@ -55,6 +60,16 @@ def _resolve_identifier_local(raw: str) -> tuple[str, str] | None:
     m = _IETF_RFC_RE.search(s)
     if m:
         return f"RFC {int(m.group(1))}", "IETF"
+
+    # IETF BCP
+    m = _IETF_BCP_RE.search(s)
+    if m:
+        return f"BCP {int(m.group(1))}", "IETF"
+
+    # IETF STD
+    m = _IETF_STD_RE.search(s)
+    if m:
+        return f"STD {int(m.group(1))}", "IETF"
 
     # NIST FIPS
     m = _NIST_FIPS_RE.search(s)
