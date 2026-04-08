@@ -419,6 +419,9 @@ class _NISTFetcher:
                 logger.warning("nist_mods_download_error status=%d", resp.status_code)
                 return []
             records = _parse_nist_mods(resp.content)
+            if not records:
+                logger.warning("nist_mods_empty_after_parse url=%s", mods_url)
+                return []
             logger.info("nist_catalogue_parsed count=%d", len(records))
             self._save_to_disk(records)
             self._catalogue = records

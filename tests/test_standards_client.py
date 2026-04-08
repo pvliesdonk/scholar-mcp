@@ -509,6 +509,32 @@ async def test_nist_disk_cache_used_on_second_call(
 
 
 @pytest.mark.respx(base_url=GITHUB_RELEASES_URL)
+async def test_nist_in_memory_cache_used_on_second_search(
+    respx_mock: respx.MockRouter, tmp_path
+) -> None:
+    """Second search on same fetcher uses in-memory cache, no extra network call."""
+    call_count = 0
+
+    def side_effect(request):
+        nonlocal call_count
+        call_count += 1
+        return httpx.Response(200, content=SAMPLE_MODS_XML)
+
+    respx_mock.get("/repos/usnistgov/NIST-Tech-Pubs/releases/latest").mock(
+        return_value=httpx.Response(200, json=SAMPLE_GITHUB_RELEASE)
+    )
+    respx_mock.get(re.compile(r".*allrecords-MODS\.xml.*")).mock(
+        side_effect=side_effect
+    )
+    http = httpx.AsyncClient(base_url=GITHUB_RELEASES_URL)
+    fetcher = _NISTFetcher(http, RateLimiter(delay=0.0), cache_dir=tmp_path)
+    await fetcher.search("800-53", limit=1)
+    await fetcher.search("FIPS", limit=1)
+    await http.aclose()
+    assert call_count == 1  # MODS XML downloaded only once
+
+
+@pytest.mark.respx(base_url=GITHUB_RELEASES_URL)
 async def test_nist_github_api_failure_returns_empty(
     respx_mock: respx.MockRouter, tmp_path
 ) -> None:
