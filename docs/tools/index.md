@@ -1,6 +1,6 @@
 # Tools
 
-Scholar MCP provides 22 tools across nine categories. All tools return JSON.
+Scholar MCP provides 25 tools across ten categories. All tools return JSON.
 
 All tools include [MCP tool annotations](https://spec.modelcontextprotocol.io/specification/2025-03-26/server/tools/#annotations):
 
@@ -637,3 +637,38 @@ The `hint` field gives expected duration — keep polling until the task complet
 List all active (non-expired) background tasks.
 
 **Returns:** JSON list of `{"task_id": "...", "status": "..."}` dicts.
+
+---
+
+## Standards
+
+Scholar MCP supports Tier 1 standards bodies (NIST, IETF, W3C, ETSI) with full metadata and
+optional full-text conversion. Tier 2 paywalled bodies (ISO, IEC, IEEE) are planned for v0.9.0.
+
+### `search_standards`
+
+Search standards by identifier, title, or free text.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `query` | string | — | Identifier, title, or free text |
+| `body` | string | null | Filter to one body: `NIST`, `IETF`, `W3C`, `ETSI` |
+| `limit` | integer | 10 | Max results (max 50) |
+
+### `get_standard`
+
+Retrieve a standard by identifier (canonical or fuzzy). Optionally fetches and converts
+full text via docling.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `identifier` | string | — | Canonical or fuzzy identifier |
+| `fetch_full_text` | boolean | false | Fetch and convert full text via docling |
+
+### `resolve_standard_identifier`
+
+Normalise a messy citation string to its canonical form and body.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `raw` | string | — | Messy citation string (e.g. `"rfc9000"`, `"nist 800-53"`) |
