@@ -11,6 +11,7 @@ from scholar_mcp._standards_client import (
     _IETFFetcher,
     _NISTFetcher,
     _resolve_identifier_local,
+    _W3CFetcher,
 )
 
 # --- Resolver: IETF ---
@@ -350,5 +351,74 @@ async def test_nist_get_not_found(respx_mock: respx.MockRouter) -> None:
     http = httpx.AsyncClient()
     fetcher = _NISTFetcher(http, RateLimiter(delay=0.0))
     record = await fetcher.get("NIST SP 999-99")
+    await http.aclose()
+    assert record is None
+
+
+# ---------------------------------------------------------------------------
+# W3C fetcher tests
+# ---------------------------------------------------------------------------
+
+W3C_API_BASE = "https://api.w3.org"
+
+SAMPLE_W3C_SPEC = {
+    "shortname": "WCAG21",
+    "title": "Web Content Accessibility Guidelines (WCAG) 2.1",
+    "description": "Covers a wide range of recommendations for making Web content more accessible.",
+    "status": "Recommendation",
+    "_links": {
+        "self": {"href": "https://api.w3.org/specifications/WCAG21"},
+        "latest-version": {"href": "https://www.w3.org/TR/WCAG21/"},
+    },
+    "latest-version": "https://www.w3.org/TR/WCAG21/",
+    "latest-status": "Recommendation",
+    "published": "2018-06-05",
+}
+
+SAMPLE_W3C_SEARCH = {
+    "results": [SAMPLE_W3C_SPEC],
+    "pages": 1,
+    "total": 1,
+}
+
+
+@pytest.mark.respx(base_url=W3C_API_BASE)
+async def test_w3c_search(respx_mock: respx.MockRouter) -> None:
+    respx_mock.get("/specifications").mock(
+        return_value=httpx.Response(200, json=SAMPLE_W3C_SEARCH)
+    )
+    http = httpx.AsyncClient()
+    fetcher = _W3CFetcher(http, RateLimiter(delay=0.0))
+    results = await fetcher.search("WCAG 2.1", limit=5)
+    await http.aclose()
+    assert len(results) >= 1
+    assert results[0]["body"] == "W3C"
+    assert "WCAG" in results[0]["title"]
+
+
+@pytest.mark.respx(base_url=W3C_API_BASE)
+async def test_w3c_get(respx_mock: respx.MockRouter) -> None:
+    respx_mock.get("/specifications/WCAG21").mock(
+        return_value=httpx.Response(200, json=SAMPLE_W3C_SPEC)
+    )
+    http = httpx.AsyncClient()
+    fetcher = _W3CFetcher(http, RateLimiter(delay=0.0))
+    record = await fetcher.get("WCAG 2.1")
+    await http.aclose()
+    assert record is not None
+    assert record["body"] == "W3C"
+    assert record["full_text_available"] is True
+    assert record["full_text_url"] is not None
+    assert "w3.org/TR" in record["full_text_url"]
+
+
+@pytest.mark.respx(base_url=W3C_API_BASE)
+async def test_w3c_get_not_found(respx_mock: respx.MockRouter) -> None:
+    respx_mock.get("/specifications/UNKNOWNSPEC999").mock(
+        return_value=httpx.Response(404)
+    )
+    http = httpx.AsyncClient()
+    fetcher = _W3CFetcher(http, RateLimiter(delay=0.0))
+    record = await fetcher.get("UNKNOWN SPEC 99.9")
     await http.aclose()
     assert record is None

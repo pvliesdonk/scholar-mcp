@@ -410,3 +410,146 @@ def _normalize_nist(pub: dict) -> StandardRecord:  # type: ignore[type-arg]
         price=None,
         related=[],
     )
+
+
+# ---------------------------------------------------------------------------
+# W3C source fetcher
+# ---------------------------------------------------------------------------
+
+_W3C_API = "https://api.w3.org"
+_W3C_TR = "https://www.w3.org/TR"
+
+# Map common W3C spec names to their shortname for the API
+_W3C_SHORTNAME_MAP: dict[str, str] = {
+    "WCAG 2.1": "WCAG21",
+    "WCAG 2.2": "WCAG22",
+    "WCAG 2.0": "WCAG20",
+    "WCAG 3.0": "wcag-3.0",
+    "WebAuthn Level 1": "webauthn-1",
+    "WebAuthn Level 2": "webauthn-2",
+    "HTML5": "html5",
+    "HTML Living Standard": "html",
+}
+
+
+class _W3CFetcher:
+    """Fetches W3C specification metadata from the W3C API.
+
+    Args:
+        http: Shared httpx async client.
+        limiter: Rate limiter enforcing ~0.5s between requests.
+    """
+
+    def __init__(self, http: httpx.AsyncClient, limiter: RateLimiter) -> None:
+        self._http = http
+        self._limiter = limiter
+
+    def _to_shortname(self, identifier: str) -> str:
+        """Convert a human-readable W3C identifier to an API shortname.
+
+        Args:
+            identifier: Human-readable identifier like "WCAG 2.1".
+
+        Returns:
+            API shortname like "WCAG21".
+        """
+        if identifier in _W3C_SHORTNAME_MAP:
+            return _W3C_SHORTNAME_MAP[identifier]
+        # Fallback: strip spaces and dots
+        return re.sub(r"[\s.]", "", identifier)
+
+    async def get(self, identifier: str) -> StandardRecord | None:
+        """Fetch a single W3C specification by identifier.
+
+        Args:
+            identifier: Human-readable identifier (e.g. "WCAG 2.1").
+
+        Returns:
+            Populated StandardRecord or None if not found.
+        """
+        shortname = self._to_shortname(identifier)
+        await self._limiter.acquire()
+        resp = await self._http.get(f"{_W3C_API}/specifications/{shortname}")
+        if resp.status_code != 200:
+            logger.warning(
+                "w3c_api_error status=%d url=%s", resp.status_code, str(resp.url)
+            )
+            return None
+        return _normalize_w3c(resp.json())
+
+    async def search(self, query: str, *, limit: int = 10) -> list[StandardRecord]:
+        """Search W3C specifications by keyword.
+
+        Args:
+            query: Search string.
+            limit: Maximum results.
+
+        Returns:
+            List of matching StandardRecord dicts.
+        """
+        await self._limiter.acquire()
+        resp = await self._http.get(
+            f"{_W3C_API}/specifications",
+            params={"q": query, "limit": limit},
+        )
+        if resp.status_code != 200:
+            logger.warning(
+                "w3c_api_error status=%d url=%s", resp.status_code, str(resp.url)
+            )
+            return []
+        data = resp.json()
+        specs = (
+            data.get("results") or data.get("_embedded", {}).get("specifications", [])
+        )[:limit]
+        return [_normalize_w3c(s) for s in specs]
+
+
+def _normalize_w3c(spec: dict) -> StandardRecord:  # type: ignore[type-arg]
+    """Normalise a W3C API specification object to a StandardRecord.
+
+    Args:
+        spec: Raw W3C API specification object.
+
+    Returns:
+        Populated StandardRecord.
+    """
+    title = spec.get("title", "")
+    shortname = spec.get("shortname", "")
+    latest_url: str | None = (
+        spec.get("latest-version")
+        or ((spec.get("_links") or {}).get("latest-version", {}).get("href", ""))
+        or None
+    )
+    if not latest_url:
+        latest_url = f"{_W3C_TR}/{shortname}/"
+
+    status_raw = (spec.get("latest-status") or spec.get("status") or "").lower()
+    if "recommendation" in status_raw:
+        status = "published"
+    elif "draft" in status_raw or "working" in status_raw:
+        status = "draft"
+    elif "retired" in status_raw or "superseded" in status_raw:
+        status = "superseded"
+    else:
+        status = "published"
+
+    return StandardRecord(
+        identifier=title,
+        aliases=[shortname],
+        title=title,
+        body="W3C",
+        number=shortname,
+        revision=None,
+        status=status,
+        published_date=spec.get("published"),
+        withdrawn_date=None,
+        superseded_by=None,
+        supersedes=[],
+        scope=spec.get("description"),
+        committee=None,
+        url=f"{_W3C_API}/specifications/{shortname}",
+        full_text_url=latest_url,
+        full_text_available=bool(latest_url),
+        price=None,
+        related=[],
+    )
