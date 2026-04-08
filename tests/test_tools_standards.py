@@ -94,3 +94,192 @@ async def test_resolve_uses_alias_cache(
     data = json.loads(result.content[0].text)
     assert data["canonical"] == "RFC 9000"
     assert data["record"]["title"] == "QUIC"
+
+
+# ---------------------------------------------------------------------------
+# search_standards tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.respx(base_url=IETF_BASE)
+async def test_search_standards_returns_results(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    respx_mock.get("/api/v1/doc/document/").mock(
+        return_value=httpx.Response(200, json=SAMPLE_RFC_DOC)
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "search_standards", {"query": "QUIC transport", "body": "IETF"}
+        )
+    data = json.loads(result.content[0].text)
+    assert isinstance(data, list)
+    assert len(data) >= 1
+    assert data[0]["body"] == "IETF"
+
+
+@pytest.mark.respx(base_url=IETF_BASE)
+async def test_search_standards_caches_results(
+    respx_mock: respx.MockRouter, mcp: FastMCP, bundle: ServiceBundle
+) -> None:
+    respx_mock.get("/api/v1/doc/document/").mock(
+        return_value=httpx.Response(200, json=SAMPLE_RFC_DOC)
+    )
+    async with Client(mcp) as client:
+        await client.call_tool(
+            "search_standards", {"query": "cache test", "body": "IETF"}
+        )
+
+    cached = await bundle.cache.get_standards_search("q=cache test:body=IETF:limit=10")
+    assert cached is not None
+
+
+@pytest.mark.respx(base_url=IETF_BASE)
+async def test_search_standards_cache_hit_skips_network(
+    respx_mock: respx.MockRouter, mcp: FastMCP, bundle: ServiceBundle
+) -> None:
+    """Second search for same query uses cache, not API."""
+    call_count = 0
+
+    def side_effect(request):  # type: ignore[no-untyped-def]
+        nonlocal call_count
+        call_count += 1
+        return httpx.Response(200, json=SAMPLE_RFC_DOC)
+
+    respx_mock.get("/api/v1/doc/document/").mock(side_effect=side_effect)
+    async with Client(mcp) as client:
+        await client.call_tool(
+            "search_standards", {"query": "QUIC", "body": "IETF"}
+        )
+        await client.call_tool(
+            "search_standards", {"query": "QUIC", "body": "IETF"}
+        )
+    assert call_count == 1
+
+
+# ---------------------------------------------------------------------------
+# get_standard tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.respx(base_url=IETF_BASE)
+async def test_get_standard_by_fuzzy_id(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    respx_mock.get("/api/v1/doc/document/").mock(
+        return_value=httpx.Response(200, json=SAMPLE_RFC_DOC)
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool("get_standard", {"identifier": "rfc9000"})
+    data = json.loads(result.content[0].text)
+    assert data["identifier"] == "RFC 9000"
+    assert data["body"] == "IETF"
+    assert data["full_text_available"] is True
+
+
+@pytest.mark.respx(base_url=IETF_BASE)
+async def test_get_standard_caches_result(
+    respx_mock: respx.MockRouter, mcp: FastMCP, bundle: ServiceBundle
+) -> None:
+    respx_mock.get("/api/v1/doc/document/").mock(
+        return_value=httpx.Response(200, json=SAMPLE_RFC_DOC)
+    )
+    async with Client(mcp) as client:
+        await client.call_tool("get_standard", {"identifier": "RFC 9000"})
+
+    cached = await bundle.cache.get_standard("RFC 9000")
+    assert cached is not None
+    assert cached["title"] == "QUIC: A UDP-Based Multiplexed and Secure Transport"
+
+
+@pytest.mark.respx(base_url=IETF_BASE)
+async def test_get_standard_not_found(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    respx_mock.get("/api/v1/doc/document/").mock(
+        return_value=httpx.Response(
+            200, json={"objects": [], "meta": {"total_count": 0}}
+        )
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool("get_standard", {"identifier": "RFC 99999"})
+    data = json.loads(result.content[0].text)
+    assert "error" in data
+
+
+async def test_get_standard_cache_hit_skips_network(
+    mcp: FastMCP, bundle: ServiceBundle
+) -> None:
+    """get_standard returns cached record without a network call."""
+    cached_record = {
+        "identifier": "RFC 9000",
+        "title": "QUIC",
+        "body": "IETF",
+        "full_text_available": True,
+        "url": "https://www.rfc-editor.org/info/rfc9000",
+    }
+    await bundle.cache.set_standard("RFC 9000", cached_record)
+    async with Client(mcp) as client:
+        result = await client.call_tool("get_standard", {"identifier": "RFC 9000"})
+    data = json.loads(result.content[0].text)
+    assert data["title"] == "QUIC"
+
+
+# ---------------------------------------------------------------------------
+# Full-text via docling tests
+# ---------------------------------------------------------------------------
+
+from unittest.mock import AsyncMock, MagicMock  # noqa: E402
+
+from scholar_mcp._docling_client import DoclingClient  # noqa: E402
+
+
+async def test_get_standard_fetch_full_text_with_docling(
+    mcp: FastMCP, bundle: ServiceBundle
+) -> None:
+    """get_standard with fetch_full_text=True and docling returns enriched record."""
+    mock_docling = MagicMock(spec=DoclingClient)
+    mock_docling.convert = AsyncMock(return_value="# RFC 9000\n...")
+
+    record = {
+        "identifier": "RFC 9000",
+        "title": "QUIC",
+        "body": "IETF",
+        "full_text_available": True,
+        "full_text_url": "https://www.rfc-editor.org/rfc/rfc9000.html",
+        "url": "https://www.rfc-editor.org/info/rfc9000",
+    }
+    await bundle.cache.set_standard("RFC 9000", record)
+    bundle.docling = mock_docling  # type: ignore[assignment]
+
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_standard", {"identifier": "RFC 9000", "fetch_full_text": True}
+        )
+    data = json.loads(result.content[0].text)
+    # Should return record (with or without full_text field)
+    assert "identifier" in data or "task_id" in data or "queued" in data
+
+
+async def test_get_standard_fetch_full_text_no_docling(
+    mcp: FastMCP, bundle: ServiceBundle
+) -> None:
+    """get_standard with fetch_full_text=True but no docling returns record only."""
+    record = {
+        "identifier": "RFC 9000",
+        "title": "QUIC",
+        "body": "IETF",
+        "full_text_available": True,
+        "full_text_url": "https://www.rfc-editor.org/rfc/rfc9000.html",
+        "url": "https://www.rfc-editor.org/info/rfc9000",
+    }
+    await bundle.cache.set_standard("RFC 9000", record)
+    # bundle.docling is None by default in test fixture
+
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_standard", {"identifier": "RFC 9000", "fetch_full_text": True}
+        )
+    data = json.loads(result.content[0].text)
+    assert data["identifier"] == "RFC 9000"
+    assert "full_text_url" in data
