@@ -229,6 +229,7 @@ def register_patent_tools(mcp: FastMCP) -> None:
         try:
             return await _execute(retry=False)
         except (RateLimitedError, EpoRateLimitedError):
+            logger.debug("rate_limited_queued tool=%s", "search_patents")
             task_id = bundle.tasks.submit(_execute(retry=True), tool="search_patents")
             return json.dumps(
                 {"queued": True, "task_id": task_id, "tool": "search_patents"}
@@ -324,6 +325,7 @@ def register_patent_tools(mcp: FastMCP) -> None:
         try:
             return await _execute(retry=False)
         except (RateLimitedError, EpoRateLimitedError):
+            logger.debug("rate_limited_queued tool=%s", "get_patent")
             task_id = bundle.tasks.submit(_execute(retry=True), tool="get_patent")
             return json.dumps(
                 {"queued": True, "task_id": task_id, "tool": "get_patent"}
@@ -392,6 +394,7 @@ def register_patent_tools(mcp: FastMCP) -> None:
         try:
             return await _execute(retry=False)
         except (RateLimitedError, EpoRateLimitedError):
+            logger.debug("rate_limited_queued tool=%s", "get_citing_patents")
             task_id = bundle.tasks.submit(
                 _execute(retry=True), tool="get_citing_patents"
             )

@@ -117,6 +117,8 @@ def register_pdf_tools(mcp: FastMCP) -> None:
             )
         except RateLimitedError:
             # S2 rate-limited; queue entire operation for background
+            logger.debug("rate_limited_queued tool=%s", "fetch_paper_pdf")
+
             async def _execute_full() -> str:
                 try:
                     p = await bundle.s2.get_paper(

@@ -202,6 +202,7 @@ def register_utility_tools(mcp: FastMCP) -> None:
         try:
             return await _execute(retry=False)
         except (RateLimitedError, EpoRateLimitedError):
+            logger.debug("rate_limited_queued tool=%s", "batch_resolve")
             task_id = bundle.tasks.submit(_execute(retry=True), tool="batch_resolve")
             return json.dumps(
                 {"queued": True, "task_id": task_id, "tool": "batch_resolve"}
@@ -286,6 +287,7 @@ def register_utility_tools(mcp: FastMCP) -> None:
         try:
             return await _execute(retry=False)
         except RateLimitedError:
+            logger.debug("rate_limited_queued tool=%s", "enrich_paper")
             task_id = bundle.tasks.submit(_execute(retry=True), tool="enrich_paper")
             return json.dumps(
                 {"queued": True, "task_id": task_id, "tool": "enrich_paper"}

@@ -137,6 +137,7 @@ def register_book_tools(mcp: FastMCP) -> None:
         try:
             return await _execute(retry=False)
         except RateLimitedError:
+            logger.debug("rate_limited_queued tool=%s", "search_books")
             task_id = bundle.tasks.submit(_execute(retry=True), tool="search_books")
             return json.dumps(
                 {"queued": True, "task_id": task_id, "tool": "search_books"}
@@ -179,6 +180,7 @@ def register_book_tools(mcp: FastMCP) -> None:
         try:
             return await _execute(retry=False)
         except RateLimitedError:
+            logger.debug("rate_limited_queued tool=%s", "get_book")
             task_id = bundle.tasks.submit(_execute(retry=True), tool="get_book")
             return json.dumps({"queued": True, "task_id": task_id, "tool": "get_book"})
 
