@@ -561,3 +561,318 @@ async def test_standards_client_search_body_filter(
     results = await client.search("QUIC", body="IETF", limit=5)
     await http.aclose()
     assert all(r["body"] == "IETF" for r in results)
+
+
+async def test_standards_client_search_unknown_body() -> None:
+    """Unknown body filter returns empty list without network calls."""
+    http = httpx.AsyncClient()
+    client = StandardsClient(http)
+    results = await client.search("anything", body="UNKNOWN")
+    await http.aclose()
+    assert results == []
+
+
+# ---------------------------------------------------------------------------
+# NIST caching and error paths
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.respx(base_url=NIST_BASE)
+async def test_nist_catalogue_cached_on_second_call(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """_fetch_all() returns cached data on second invocation without network."""
+    call_count = 0
+
+    def side_effect(request):  # type: ignore[no-untyped-def]
+        nonlocal call_count
+        call_count += 1
+        return httpx.Response(200, json=SAMPLE_NIST_SEARCH)
+
+    respx_mock.get("/CSRC/media/Publications/search-results-json-file/json").mock(
+        side_effect=side_effect
+    )
+    http = httpx.AsyncClient()
+    fetcher = _NISTFetcher(http, RateLimiter(delay=0.0))
+    await fetcher.search("800-53", limit=5)
+    await fetcher.search("800-53", limit=5)
+    await http.aclose()
+    assert call_count == 1
+
+
+@pytest.mark.respx(base_url=NIST_BASE)
+async def test_nist_fetch_all_non200_returns_empty(
+    respx_mock: respx.MockRouter,
+) -> None:
+    respx_mock.get("/CSRC/media/Publications/search-results-json-file/json").mock(
+        return_value=httpx.Response(503)
+    )
+    http = httpx.AsyncClient()
+    fetcher = _NISTFetcher(http, RateLimiter(delay=0.0))
+    results = await fetcher.search("800-53", limit=5)
+    await http.aclose()
+    assert results == []
+
+
+@pytest.mark.respx(base_url=NIST_BASE)
+async def test_nist_fetch_all_dict_response(respx_mock: respx.MockRouter) -> None:
+    """_fetch_all() handles wrapped dict response via 'response' key."""
+    respx_mock.get("/CSRC/media/Publications/search-results-json-file/json").mock(
+        return_value=httpx.Response(200, json={"response": SAMPLE_NIST_SEARCH})
+    )
+    http = httpx.AsyncClient()
+    fetcher = _NISTFetcher(http, RateLimiter(delay=0.0))
+    results = await fetcher.search("800-53", limit=5)
+    await http.aclose()
+    assert len(results) == 1
+
+
+# ---------------------------------------------------------------------------
+# W3C search additional paths
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.respx(base_url=W3C_API_BASE)
+async def test_w3c_search_empty_results_list(respx_mock: respx.MockRouter) -> None:
+    """Empty 'results' key must not fall through to _embedded (fixed bug)."""
+    respx_mock.get("/specifications").mock(
+        return_value=httpx.Response(200, json={"results": [], "total": 0})
+    )
+    http = httpx.AsyncClient()
+    fetcher = _W3CFetcher(http, RateLimiter(delay=0.0))
+    results = await fetcher.search("nonexistent", limit=5)
+    await http.aclose()
+    assert results == []
+
+
+@pytest.mark.respx(base_url=W3C_API_BASE)
+async def test_w3c_search_embedded_format(respx_mock: respx.MockRouter) -> None:
+    """_embedded.specifications response format (HAL JSON) is handled."""
+    respx_mock.get("/specifications").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "_embedded": {"specifications": [SAMPLE_W3C_SPEC]},
+                "total": 1,
+            },
+        )
+    )
+    http = httpx.AsyncClient()
+    fetcher = _W3CFetcher(http, RateLimiter(delay=0.0))
+    results = await fetcher.search("WCAG", limit=5)
+    await http.aclose()
+    assert len(results) == 1
+    assert results[0]["body"] == "W3C"
+
+
+@pytest.mark.respx(base_url=W3C_API_BASE)
+async def test_w3c_search_non200_returns_empty(respx_mock: respx.MockRouter) -> None:
+    respx_mock.get("/specifications").mock(return_value=httpx.Response(500))
+    http = httpx.AsyncClient()
+    fetcher = _W3CFetcher(http, RateLimiter(delay=0.0))
+    results = await fetcher.search("WCAG", limit=5)
+    await http.aclose()
+    assert results == []
+
+
+# ---------------------------------------------------------------------------
+# ETSI additional paths
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.respx(base_url=ETSI_BASE)
+async def test_etsi_scrape_non200_returns_empty(
+    respx_mock: respx.MockRouter,
+) -> None:
+    respx_mock.get("/standards-search/").mock(return_value=httpx.Response(503))
+    http = httpx.AsyncClient()
+    fetcher = _ETSIFetcher(http, RateLimiter(delay=0.0))
+    results = await fetcher.search("303 645", limit=5)
+    await http.aclose()
+    assert results == []
+
+
+@pytest.mark.respx(base_url=ETSI_BASE)
+async def test_etsi_scrape_empty_table_returns_empty(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """HTML with no matching table rows logs warning and returns empty list."""
+    respx_mock.get("/standards-search/").mock(
+        return_value=httpx.Response(
+            200, text="<html><body><p>No results</p></body></html>"
+        )
+    )
+    http = httpx.AsyncClient()
+    fetcher = _ETSIFetcher(http, RateLimiter(delay=0.0))
+    results = await fetcher.search("303 645", limit=5)
+    await http.aclose()
+    assert results == []
+
+
+@pytest.mark.respx(base_url=ETSI_BASE)
+async def test_etsi_get_not_found(respx_mock: respx.MockRouter) -> None:
+    respx_mock.get("/standards-search/").mock(
+        return_value=httpx.Response(200, text=SAMPLE_ETSI_HTML)
+    )
+    http = httpx.AsyncClient()
+    fetcher = _ETSIFetcher(http, RateLimiter(delay=0.0))
+    record = await fetcher.get("ETSI EN 999 000")
+    await http.aclose()
+    assert record is None
+
+
+# ---------------------------------------------------------------------------
+# StandardsClient.resolve() stub path
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.respx(base_url=IETF_BASE)
+async def test_standards_client_resolve_stub_on_fetch_fail(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """resolve() returns a stub when local resolution succeeds but API fails."""
+    respx_mock.get("/api/v1/doc/document/").mock(
+        return_value=httpx.Response(
+            200, json={"objects": [], "meta": {"total_count": 0}}
+        )
+    )
+    http = httpx.AsyncClient()
+    client = StandardsClient(http)
+    results = await client.resolve("RFC 99999")
+    await http.aclose()
+    assert len(results) == 1
+    assert results[0]["identifier"] == "RFC 99999"
+    assert results[0]["body"] == "IETF"
+
+
+# ---------------------------------------------------------------------------
+# IETF fetcher error paths
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.respx(base_url=IETF_BASE)
+async def test_ietf_get_non200_returns_none(respx_mock: respx.MockRouter) -> None:
+    respx_mock.get("/api/v1/doc/document/").mock(return_value=httpx.Response(503))
+    http = httpx.AsyncClient()
+    fetcher = _IETFFetcher(http, RateLimiter(delay=0.0))
+    record = await fetcher.get("RFC 9000")
+    await http.aclose()
+    assert record is None
+
+
+async def test_ietf_get_unrecognised_identifier_returns_none() -> None:
+    """Identifiers that don't match RFC/BCP/STD/FYI pattern return None immediately."""
+    http = httpx.AsyncClient()
+    fetcher = _IETFFetcher(http, RateLimiter(delay=0.0))
+    record = await fetcher.get("some random text")
+    await http.aclose()
+    assert record is None
+
+
+@pytest.mark.respx(base_url=IETF_BASE)
+async def test_ietf_search_non200_returns_empty(respx_mock: respx.MockRouter) -> None:
+    respx_mock.get("/api/v1/doc/document/").mock(return_value=httpx.Response(503))
+    http = httpx.AsyncClient()
+    fetcher = _IETFFetcher(http, RateLimiter(delay=0.0))
+    results = await fetcher.search("QUIC", limit=5)
+    await http.aclose()
+    assert results == []
+
+
+def test_normalize_ietf_empty_name() -> None:
+    """_normalize_ietf handles objects with empty/missing name gracefully."""
+    from scholar_mcp._standards_client import _normalize_ietf
+
+    obj = {"name": "", "title": "Unknown", "std_level": ""}
+    record = _normalize_ietf(obj)
+    assert record["url"] == ""
+    assert record["full_text_url"] is None
+    assert record["number"] == ""
+
+
+# ---------------------------------------------------------------------------
+# W3C normalization status branches
+# ---------------------------------------------------------------------------
+
+
+def test_normalize_w3c_draft_status() -> None:
+    from scholar_mcp._standards_client import _normalize_w3c
+
+    spec = {
+        "shortname": "foo-1",
+        "title": "Foo Working Draft",
+        "latest-status": "Working Draft",
+        "latest-version": "https://www.w3.org/TR/foo-1/",
+    }
+    record = _normalize_w3c(spec)
+    assert record["status"] == "draft"
+
+
+def test_normalize_w3c_retired_status() -> None:
+    from scholar_mcp._standards_client import _normalize_w3c
+
+    spec = {
+        "shortname": "foo-0",
+        "title": "Foo Retired",
+        "latest-status": "Retired",
+        "latest-version": "https://www.w3.org/TR/foo-0/",
+    }
+    record = _normalize_w3c(spec)
+    assert record["status"] == "superseded"
+
+
+def test_normalize_w3c_no_latest_url_falls_back_to_tr() -> None:
+    from scholar_mcp._standards_client import _normalize_w3c
+
+    spec = {"shortname": "myspec", "title": "My Spec", "status": "Recommendation"}
+    record = _normalize_w3c(spec)
+    assert "w3.org/TR/myspec/" in record["url"]
+
+
+# ---------------------------------------------------------------------------
+# StandardsClient concurrent search and get fallback
+# ---------------------------------------------------------------------------
+
+
+async def test_standards_client_search_all_bodies() -> None:
+    """search() without body filter runs concurrent gather across all fetchers."""
+    with respx.mock(assert_all_called=False) as mock:
+        mock.get(url__regex=r"datatracker\.ietf\.org").mock(
+            return_value=httpx.Response(200, json=SAMPLE_RFC9000_SEARCH)
+        )
+        mock.get(url__regex=r"csrc\.nist\.gov").mock(
+            return_value=httpx.Response(200, json=[])
+        )
+        mock.get(url__regex=r"api\.w3\.org").mock(
+            return_value=httpx.Response(200, json={"results": []})
+        )
+        mock.get(url__regex=r"www\.etsi\.org").mock(
+            return_value=httpx.Response(200, text="<html><body></body></html>")
+        )
+        http = httpx.AsyncClient()
+        client = StandardsClient(http)
+        results = await client.search("QUIC", limit=5)
+        await http.aclose()
+    assert isinstance(results, list)
+
+
+async def test_standards_client_get_fallback_to_fetchers() -> None:
+    """get() with unresolvable identifier falls back to each fetcher in turn."""
+    with respx.mock(assert_all_called=False) as mock:
+        mock.get(url__regex=r"datatracker\.ietf\.org").mock(
+            return_value=httpx.Response(
+                200, json={"objects": [], "meta": {"total_count": 0}}
+            )
+        )
+        mock.get(url__regex=r"csrc\.nist\.gov").mock(
+            return_value=httpx.Response(200, json=[])
+        )
+        mock.get(url__regex=r"api\.w3\.org").mock(return_value=httpx.Response(404))
+        mock.get(url__regex=r"www\.etsi\.org").mock(
+            return_value=httpx.Response(200, text="<html><body></body></html>")
+        )
+        http = httpx.AsyncClient()
+        client = StandardsClient(http)
+        result = await client.get("some-unknown-standard-xyz")
+        await http.aclose()
+    assert result is None

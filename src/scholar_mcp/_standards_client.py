@@ -249,11 +249,7 @@ def _normalize_ietf(obj: dict) -> StandardRecord:  # type: ignore[type-arg]
         superseded_by=None,
         supersedes=[],
         scope=obj.get("abstract"),
-        committee=(
-            obj.get("group", {}).get("acronym")
-            if isinstance(obj.get("group"), dict)
-            else None
-        ),
+        committee=None,
         url=url,
         full_text_url=full_text_url,
         full_text_available=full_text_available,
@@ -514,8 +510,11 @@ class _W3CFetcher:
             )
             return []
         data = resp.json()
+        results_list = data.get("results")
         specs = (
-            data.get("results") or data.get("_embedded", {}).get("specifications", [])
+            results_list
+            if results_list is not None
+            else data.get("_embedded", {}).get("specifications", [])
         )[:limit]
         return [_normalize_w3c(s) for s in specs]
 
