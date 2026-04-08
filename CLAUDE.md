@@ -37,7 +37,7 @@ src/scholar_mcp/
 Every PR must pass **all** of the following before merge. Do not open or push a PR until these are green locally:
 
 1. **CI passes** — `uv run pytest -x -q` all tests pass
-2. **Lint passes** — `uv run ruff format --check .` and `uv run ruff check .` both clean
+2. **Lint passes** — run in this exact order: `uv run ruff check --fix .` then `uv run ruff format .` then verify with `uv run ruff format --check .`. Always run format *after* check --fix because check --fix can leave files needing reformatting.
 3. **Type-check passes** — `uv run mypy src/` reports no errors
 4. **Patch coverage ≥ 80%** — Codecov measures only lines added/changed in the PR diff. Run `uv run pytest --cov=<changed_module> --cov-report=term-missing` and verify new code is exercised. Add tests for every uncovered branch before pushing.
 5. **Docs updated** — `README.md` and `docs/**` reflect any user-facing changes in the same commit
