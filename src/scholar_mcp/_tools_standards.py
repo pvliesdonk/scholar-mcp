@@ -202,13 +202,51 @@ async def _handle_full_text(
     record: dict,  # type: ignore[type-arg]
     bundle: ServiceBundle,
 ) -> str:
-    """Return record JSON; full-text conversion via docling added in Task 11.
+    """Download and convert full text via docling if available.
+
+    If docling is not configured, no full_text_url is present, or the
+    download fails, returns the record as-is so the caller can use
+    full_text_url to fetch manually.
 
     Args:
         record: StandardRecord dict.
-        bundle: Service bundle (unused until Task 11 wires in docling).
+        bundle: Service bundle with optional docling client and task queue.
 
     Returns:
-        JSON StandardRecord.
+        JSON StandardRecord, possibly with ``full_text`` field populated,
+        or ``{"queued": true, "task_id": "..."}`` if conversion was queued.
     """
-    return json.dumps(record)
+    from ._rate_limiter import RateLimitedError
+
+    if not record.get("full_text_available") or not record.get("full_text_url"):
+        return json.dumps(record)
+
+    if bundle.docling is None:
+        logger.debug(
+            "full_text_requested_but_docling_not_configured id=%s",
+            record.get("identifier"),
+        )
+        return json.dumps(record)
+
+    url: str = record["full_text_url"]
+    filename = url.rsplit("/", 1)[-1] or "standard.pdf"
+
+    async def _convert() -> str:
+        resp = await bundle.standards._http.get(url, follow_redirects=True)
+        resp.raise_for_status()
+        markdown = await bundle.docling.convert(resp.content, filename)  # type: ignore[union-attr]
+        enriched = {**record, "full_text": markdown}
+        return json.dumps(enriched)
+
+    try:
+        return await _convert()
+    except RateLimitedError:
+        task_id = bundle.tasks.submit(_convert(), tool="get_standard")
+        return json.dumps(
+            {"queued": True, "task_id": task_id, "tool": "get_standard"}
+        )
+    except Exception as exc:
+        logger.warning(
+            "full_text_conversion_failed id=%s err=%s", record.get("identifier"), exc
+        )
+        return json.dumps(record)
