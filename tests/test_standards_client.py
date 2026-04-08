@@ -211,7 +211,7 @@ async def test_ietf_get_rfc(respx_mock: respx.MockRouter) -> None:
     assert record["body"] == "IETF"
     assert record["number"] == "9000"
     assert record["full_text_available"] is True
-    assert "rfc-editor.org" in record["full_text_url"]
+    assert record["full_text_url"].startswith("https://www.rfc-editor.org/")
 
 
 @pytest.mark.respx(base_url=IETF_BASE)
@@ -236,7 +236,7 @@ async def test_ietf_get_bcp(respx_mock: respx.MockRouter) -> None:
     record = await fetcher.get("BCP 47")
     await http.aclose()
     assert record is not None
-    assert record["identifier"] == "BCP47"
+    assert record["identifier"] == "BCP 47"
     assert record["url"] == "https://www.rfc-editor.org/info/bcp47"
     assert record["full_text_available"] is False
 
@@ -296,7 +296,7 @@ def test_normalize_ietf_bcp_name() -> None:
         "pub_date": "2009-09-01",
     }
     record = _normalize_ietf(obj)
-    assert record["identifier"] == "BCP47"
+    assert record["identifier"] == "BCP 47"
     assert record["identifier"] != "RFC 47"
     # BCP gets correct rfc-editor URL, not an RFC-style URL
     assert record["url"] == "https://www.rfc-editor.org/info/bcp47"
@@ -319,7 +319,7 @@ def test_normalize_ietf_early_rfc_url() -> None:
     assert record["number"] == "1"
     assert record["full_text_url"] is not None
     # URL uses the raw Datatracker name (rfc0001) — RFC Editor handles both forms
-    assert "rfc0001" in record["full_text_url"]
+    assert record["full_text_url"].startswith("https://www.rfc-editor.org/rfc/rfc0001")
 
 
 # ---------------------------------------------------------------------------
@@ -374,7 +374,7 @@ async def test_nist_get(respx_mock: respx.MockRouter) -> None:
     assert record["number"] == "800-53"
     assert record["revision"] == "Rev. 5"
     assert record["full_text_url"] is not None
-    assert "nvlpubs.nist.gov" in record["full_text_url"]
+    assert record["full_text_url"].startswith("https://nvlpubs.nist.gov/")
 
 
 @pytest.mark.respx(base_url=NIST_BASE)
@@ -443,7 +443,7 @@ async def test_w3c_get(respx_mock: respx.MockRouter) -> None:
     assert record["body"] == "W3C"
     assert record["full_text_available"] is True
     assert record["full_text_url"] is not None
-    assert "w3.org/TR" in record["full_text_url"]
+    assert record["full_text_url"].startswith("https://www.w3.org/TR/")
 
 
 @pytest.mark.respx(base_url=W3C_API_BASE)
@@ -826,7 +826,7 @@ def test_normalize_w3c_no_latest_url_falls_back_to_tr() -> None:
 
     spec = {"shortname": "myspec", "title": "My Spec", "status": "Recommendation"}
     record = _normalize_w3c(spec)
-    assert "w3.org/TR/myspec/" in record["url"]
+    assert record["url"] == "https://www.w3.org/TR/myspec/"
 
 
 # ---------------------------------------------------------------------------

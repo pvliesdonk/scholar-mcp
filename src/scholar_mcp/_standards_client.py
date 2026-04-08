@@ -215,10 +215,16 @@ def _normalize_ietf(obj: dict) -> StandardRecord:  # type: ignore[type-arg]
     """
     name = obj.get("name", "")  # e.g. "rfc9000"
     n = re.sub(r"[^\d]", "", name)
-    # BCP/STD/FYI names must not be prefixed with "RFC"
-    identifier = f"RFC {int(n)}" if re.match(r"(?i)^rfc\d+$", name) else name.upper()
-
     is_rfc = bool(re.match(r"(?i)^rfc\d+$", name))
+    if is_rfc:
+        identifier = f"RFC {int(n)}" if n else name.upper()
+    elif n:
+        # BCP/STD/FYI: produce "PREFIX NUMBER" to match _resolve_identifier_local
+        prefix = re.sub(r"\d.*", "", name).upper()
+        identifier = f"{prefix} {int(n)}"
+    else:
+        identifier = name.upper()
+
     if n:
         # Use the original `name` in the URL so BCP/STD get correct RFC Editor pages
         url = f"{_RFC_EDITOR_BASE}/info/{name}"
@@ -304,27 +310,35 @@ class _NISTFetcher:
         self._http = http
         self._limiter = limiter
         self._catalogue: list[dict] | None = None  # type: ignore[type-arg]
+        self._lock = asyncio.Lock()
 
     async def _fetch_all(self) -> list[dict]:  # type: ignore[type-arg]
         """Fetch the full NIST publications JSON catalogue with in-memory caching.
+
+        Uses double-checked locking to prevent concurrent full-catalogue
+        downloads when multiple coroutines call this before the first fetch
+        completes.
 
         Returns:
             Raw list of publication objects from CSRC.
         """
         if self._catalogue is not None:
             return self._catalogue
-        await self._limiter.acquire()
-        resp = await self._http.get(f"{_NIST_BASE}{_NIST_PUBLICATIONS_JSON}")
-        if resp.status_code != 200:
-            logger.warning(
-                "nist_api_error status=%d url=%s", resp.status_code, str(resp.url)
-            )
-            return []
-        data = resp.json()
-        if isinstance(data, list):
-            self._catalogue = data
-        else:
-            self._catalogue = data.get("response", data.get("publications", []))
+        async with self._lock:
+            if self._catalogue is not None:  # re-check after acquiring
+                return self._catalogue
+            await self._limiter.acquire()
+            resp = await self._http.get(f"{_NIST_BASE}{_NIST_PUBLICATIONS_JSON}")
+            if resp.status_code != 200:
+                logger.warning(
+                    "nist_api_error status=%d url=%s", resp.status_code, str(resp.url)
+                )
+                return []
+            data = resp.json()
+            if isinstance(data, list):
+                self._catalogue = data
+            else:
+                self._catalogue = data.get("response", data.get("publications", []))
         return self._catalogue
 
     async def search(self, query: str, *, limit: int = 10) -> list[StandardRecord]:
@@ -809,8 +823,9 @@ class StandardsClient:
         """Resolve a raw citation string to one or more StandardRecords.
 
         Returns a single-item list when unambiguous, multiple items when
-        the raw string matches multiple standards, or an empty list when
-        unresolvable.
+        the raw string matches multiple standards, a stub record (title="")
+        when locally resolved but the source fetch failed, or an empty list
+        when completely unresolvable.
 
         Args:
             raw: Raw citation string.
