@@ -116,3 +116,91 @@ async def test_list_tasks(mcp: FastMCP, bundle: ServiceBundle) -> None:
     task_entry = next(t for t in data if t["task_id"] == task_id)
     assert task_entry["tool"] == "fetch_paper_pdf"
     assert "elapsed_seconds" in task_entry
+
+
+async def _instant_fail(msg: str) -> str:
+    raise RuntimeError(msg)
+
+
+async def test_get_task_result_daily_quota_error_is_sanitised(
+    mcp: FastMCP, bundle: ServiceBundle
+) -> None:
+    """daily quota error string is replaced with a user-friendly message."""
+    task_id = bundle.tasks.submit(_instant_fail("EPO daily quota exhausted."), tool="search_patents")
+
+    async with Client(mcp) as client:
+        result = await client.call_tool("get_task_result", {"task_id": task_id})
+    data = json.loads(result.content[0].text)
+    assert data["status"] == "failed"
+    assert "daily quota" in data["error"].lower()
+    assert data["retryable"] is False
+    assert "EpoRateLimitedError" not in data["error"]
+
+
+async def test_get_task_result_rate_limit_error_is_sanitised(
+    mcp: FastMCP, bundle: ServiceBundle
+) -> None:
+    """RateLimitedError string is replaced with a generic retry message."""
+    task_id = bundle.tasks.submit(
+        _instant_fail("EpoRateLimitedError: EPO rate limited: search=yellow"),
+        tool="search_patents",
+    )
+
+    async with Client(mcp) as client:
+        result = await client.call_tool("get_task_result", {"task_id": task_id})
+    data = json.loads(result.content[0].text)
+    assert data["status"] == "failed"
+    assert "60 seconds" in data["error"]
+    assert data["retryable"] is True
+    assert "EpoRateLimitedError" not in data["error"]
+
+
+async def test_get_task_result_other_error_unchanged(
+    mcp: FastMCP, bundle: ServiceBundle
+) -> None:
+    """Non-rate-limit errors are returned verbatim."""
+    task_id = bundle.tasks.submit(_instant_fail("Some other error"), tool="search_patents")
+
+    async with Client(mcp) as client:
+        result = await client.call_tool("get_task_result", {"task_id": task_id})
+    data = json.loads(result.content[0].text)
+    assert data["status"] == "failed"
+    assert "Some other error" in data["error"]
+    assert "retryable" not in data
+
+
+async def test_get_task_result_search_patents_hint(
+    mcp: FastMCP, bundle: ServiceBundle
+) -> None:
+    """get_task_result includes a hint for queued search_patents tasks."""
+
+    async def _slow_coro() -> str:
+        await asyncio.sleep(10)
+        return "{}"
+
+    task_id = bundle.tasks.submit(_slow_coro(), tool="search_patents")
+
+    async with Client(mcp) as client:
+        result = await client.call_tool("get_task_result", {"task_id": task_id})
+    data = json.loads(result.content[0].text)
+    assert data["status"] in ("pending", "running")
+    assert "hint" in data
+    assert "5-15 seconds" in data["hint"]
+
+
+async def test_get_task_result_get_patent_hint(
+    mcp: FastMCP, bundle: ServiceBundle
+) -> None:
+    """get_task_result includes a hint for queued get_patent tasks."""
+
+    async def _slow_coro() -> str:
+        await asyncio.sleep(10)
+        return "{}"
+
+    task_id = bundle.tasks.submit(_slow_coro(), tool="get_patent")
+
+    async with Client(mcp) as client:
+        result = await client.call_tool("get_task_result", {"task_id": task_id})
+    data = json.loads(result.content[0].text)
+    assert "hint" in data
+    assert "5-20 seconds" in data["hint"]
