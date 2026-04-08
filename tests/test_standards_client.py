@@ -8,6 +8,7 @@ import respx
 
 from scholar_mcp._rate_limiter import RateLimiter
 from scholar_mcp._standards_client import (
+    _ETSIFetcher,
     _IETFFetcher,
     _NISTFetcher,
     _resolve_identifier_local,
@@ -422,3 +423,72 @@ async def test_w3c_get_not_found(respx_mock: respx.MockRouter) -> None:
     record = await fetcher.get("UNKNOWN SPEC 99.9")
     await http.aclose()
     assert record is None
+
+
+# ---------------------------------------------------------------------------
+# ETSI fetcher tests
+# ---------------------------------------------------------------------------
+
+ETSI_BASE = "https://www.etsi.org"
+
+SAMPLE_ETSI_HTML = """
+<html><body>
+<table class="table">
+<tr>
+  <td><a href="/deliver/etsi_en/303600_303699/303645/02.01.01_60/en_303645v020101p.pdf">ETSI EN 303 645</a></td>
+  <td>Cyber Security for Consumer Internet of Things: Baseline Requirements</td>
+  <td>V2.1.1 (2020-06)</td>
+  <td>2020-06-30</td>
+</tr>
+</table>
+</body></html>
+"""
+
+
+@pytest.mark.respx(base_url=ETSI_BASE)
+async def test_etsi_index_built_on_first_search(respx_mock: respx.MockRouter) -> None:
+    respx_mock.get("/standards-search/").mock(
+        return_value=httpx.Response(200, text=SAMPLE_ETSI_HTML)
+    )
+    http = httpx.AsyncClient()
+    fetcher = _ETSIFetcher(http, RateLimiter(delay=0.0))
+    results = await fetcher.search("303 645", limit=5)
+    await http.aclose()
+    assert len(results) >= 1
+    assert results[0]["body"] == "ETSI"
+    assert "303 645" in results[0]["identifier"]
+
+
+@pytest.mark.respx(base_url=ETSI_BASE)
+async def test_etsi_search_cached_index_skips_network(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """Second search with warm index should not call ETSI network."""
+    call_count = 0
+
+    def side_effect(request):  # type: ignore[no-untyped-def]
+        nonlocal call_count
+        call_count += 1
+        return httpx.Response(200, text=SAMPLE_ETSI_HTML)
+
+    respx_mock.get("/standards-search/").mock(side_effect=side_effect)
+    http = httpx.AsyncClient()
+    fetcher = _ETSIFetcher(http, RateLimiter(delay=0.0))
+    await fetcher.search("303 645", limit=5)
+    await fetcher.search("303 645", limit=5)  # second call — should use in-memory index
+    await http.aclose()
+    assert call_count == 1  # network called only once
+
+
+@pytest.mark.respx(base_url=ETSI_BASE)
+async def test_etsi_get(respx_mock: respx.MockRouter) -> None:
+    respx_mock.get("/standards-search/").mock(
+        return_value=httpx.Response(200, text=SAMPLE_ETSI_HTML)
+    )
+    http = httpx.AsyncClient()
+    fetcher = _ETSIFetcher(http, RateLimiter(delay=0.0))
+    record = await fetcher.get("ETSI EN 303 645")
+    await http.aclose()
+    assert record is not None
+    assert record["body"] == "ETSI"
+    assert record["full_text_available"] is True

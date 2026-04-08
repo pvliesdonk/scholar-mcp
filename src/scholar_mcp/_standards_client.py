@@ -553,3 +553,136 @@ def _normalize_w3c(spec: dict) -> StandardRecord:  # type: ignore[type-arg]
         price=None,
         related=[],
     )
+
+
+# ---------------------------------------------------------------------------
+# ETSI source fetcher (catalogue index + scraping)
+# ---------------------------------------------------------------------------
+
+_ETSI_BASE = "https://www.etsi.org"
+_ETSI_SEARCH = "/standards-search/"
+
+
+class _ETSIFetcher:
+    """Fetches ETSI standard metadata by scraping the ETSI standards search page.
+
+    On first call, builds an in-memory index from the catalogue page (a few
+    seconds). Subsequent calls search the in-memory index without network I/O.
+    The index is rebuilt when ``_index`` is None (e.g. after process restart).
+
+    Args:
+        http: Shared httpx async client.
+        limiter: Rate limiter enforcing ~2s between requests.
+    """
+
+    def __init__(self, http: httpx.AsyncClient, limiter: RateLimiter) -> None:
+        self._http = http
+        self._limiter = limiter
+        self._index: list[StandardRecord] | None = None
+
+    async def _ensure_index(self) -> list[StandardRecord]:
+        """Return in-memory index, building it from the ETSI catalogue if needed.
+
+        Returns:
+            List of stub StandardRecord dicts covering the ETSI catalogue.
+        """
+        if self._index is not None:
+            return self._index
+        self._index = await self._scrape_catalogue()
+        return self._index
+
+    async def _scrape_catalogue(self) -> list[StandardRecord]:
+        """Scrape the ETSI standards search page to build a catalogue index.
+
+        Returns:
+            List of StandardRecord stubs (identifier, title, url).
+        """
+        from bs4 import BeautifulSoup
+
+        await self._limiter.acquire()
+        resp = await self._http.get(f"{_ETSI_BASE}{_ETSI_SEARCH}")
+        if resp.status_code != 200:
+            logger.warning("etsi_catalogue_scrape_failed status=%d", resp.status_code)
+            return []
+
+        soup = BeautifulSoup(resp.text, "html.parser")
+        records: list[StandardRecord] = []
+
+        for row in soup.select("table tr"):
+            cells = row.find_all("td")
+            if len(cells) < 2:
+                continue
+            link = cells[0].find("a")
+            if not link:
+                continue
+            raw_id = link.get_text(strip=True)
+            title = cells[1].get_text(strip=True)
+            href = str(link.get("href") or "")
+            pdf_url = f"{_ETSI_BASE}{href}" if href.startswith("/") else href
+            m = _ETSI_RE.search(raw_id)
+            if not m:
+                continue
+            canonical = f"ETSI {m.group(1).upper()} {m.group(2)} {m.group(3)}"
+            records.append(
+                StandardRecord(
+                    identifier=canonical,
+                    aliases=[raw_id] if raw_id != canonical else [],
+                    title=title,
+                    body="ETSI",
+                    number=f"{m.group(2)} {m.group(3)}",
+                    revision=None,
+                    status="published",
+                    published_date=(
+                        cells[3].get_text(strip=True) if len(cells) > 3 else None
+                    ),
+                    withdrawn_date=None,
+                    superseded_by=None,
+                    supersedes=[],
+                    scope=None,
+                    committee=None,
+                    url=f"{_ETSI_BASE}{_ETSI_SEARCH}",
+                    full_text_url=pdf_url if pdf_url.endswith(".pdf") else None,
+                    full_text_available=pdf_url.endswith(".pdf"),
+                    price=None,
+                    related=[],
+                )
+            )
+
+        logger.info("etsi_catalogue_indexed count=%d", len(records))
+        return records
+
+    async def search(self, query: str, *, limit: int = 10) -> list[StandardRecord]:
+        """Search the ETSI catalogue index by keyword.
+
+        Builds the index on first call (inline scrape). Subsequent calls use
+        the in-memory cache.
+
+        Args:
+            query: Search string.
+            limit: Maximum results.
+
+        Returns:
+            List of matching StandardRecord dicts.
+        """
+        index = await self._ensure_index()
+        q = query.lower().replace(" ", "").replace("-", "")
+        matches = [
+            r
+            for r in index
+            if q
+            in (r.get("identifier") or "").lower().replace(" ", "").replace("-", "")
+            or q in (r.get("title") or "").lower()
+        ]
+        return matches[:limit]
+
+    async def get(self, identifier: str) -> StandardRecord | None:
+        """Fetch a single ETSI standard by canonical identifier.
+
+        Args:
+            identifier: Canonical identifier (e.g. "ETSI EN 303 645").
+
+        Returns:
+            Populated StandardRecord or None if not found.
+        """
+        results = await self.search(identifier, limit=1)
+        return results[0] if results else None
