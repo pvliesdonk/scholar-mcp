@@ -51,13 +51,20 @@ def _normalise_http_path(path: str | None) -> str:
 def cli(ctx: click.Context, verbose: bool) -> None:
     """Scholar MCP — academic literature server."""
     level = logging.DEBUG if verbose else get_log_level()
-    logging.basicConfig(
-        level=level,
-        format="%(levelname)s %(name)s: %(message)s",
-    )
-    # Sync FastMCP's logger to the same level so SCHOLAR_MCP_LOG_LEVEL
-    # (or -v) is the single knob controlling all logging output.
-    os.environ.setdefault("FASTMCP_LOG_LEVEL", logging.getLevelName(level))
+    level_name = logging.getLevelName(level)
+    # Set FASTMCP_LOG_LEVEL *before* FastMCP is imported so its
+    # internal configure_logging() picks up the same level.
+    os.environ.setdefault("FASTMCP_LOG_LEVEL", level_name)
+    from fastmcp.utilities.logging import configure_logging
+
+    configure_logging(level=level)
+    # Attach FastMCP's RichHandler to the root logger so all
+    # application loggers (scholar_mcp.*) share the same format.
+    fastmcp_logger = logging.getLogger("fastmcp")
+    root = logging.getLogger()
+    root.setLevel(level)
+    if fastmcp_logger.handlers:
+        root.addHandler(fastmcp_logger.handlers[0])
     if level == logging.DEBUG:
         logging.getLogger("httpx").setLevel(logging.WARNING)
         logging.getLogger("httpcore").setLevel(logging.WARNING)
