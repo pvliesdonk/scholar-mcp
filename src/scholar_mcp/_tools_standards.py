@@ -244,9 +244,7 @@ async def _handle_full_text(
         return await _convert()
     except RateLimitedError:
         task_id = bundle.tasks.submit(_convert(), tool="get_standard")
-        return json.dumps(
-            {"queued": True, "task_id": task_id, "tool": "get_standard"}
-        )
+        return json.dumps({"queued": True, "task_id": task_id, "tool": "get_standard"})
     except Exception as exc:
         logger.warning(
             "full_text_conversion_failed id=%s err=%s", record.get("identifier"), exc

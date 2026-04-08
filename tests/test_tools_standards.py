@@ -42,9 +42,7 @@ def mcp(bundle: ServiceBundle) -> FastMCP:
 
 
 @pytest.mark.respx(base_url=IETF_BASE)
-async def test_resolve_unambiguous(
-    respx_mock: respx.MockRouter, mcp: FastMCP
-) -> None:
+async def test_resolve_unambiguous(respx_mock: respx.MockRouter, mcp: FastMCP) -> None:
     """resolve_standard_identifier returns canonical + record for known RFC."""
     respx_mock.get("/api/v1/doc/document/").mock(
         return_value=httpx.Response(200, json=SAMPLE_RFC_DOC)
@@ -57,7 +55,9 @@ async def test_resolve_unambiguous(
     assert data["canonical"] == "RFC 9000"
     assert data["body"] == "IETF"
     assert data["record"] is not None
-    assert data["record"]["title"] == "QUIC: A UDP-Based Multiplexed and Secure Transport"
+    assert (
+        data["record"]["title"] == "QUIC: A UDP-Based Multiplexed and Secure Transport"
+    )
 
 
 async def test_resolve_unknown_returns_null(mcp: FastMCP) -> None:
@@ -72,9 +72,7 @@ async def test_resolve_unknown_returns_null(mcp: FastMCP) -> None:
     assert data["record"] is None
 
 
-async def test_resolve_uses_alias_cache(
-    mcp: FastMCP, bundle: ServiceBundle
-) -> None:
+async def test_resolve_uses_alias_cache(mcp: FastMCP, bundle: ServiceBundle) -> None:
     """resolve_standard_identifier uses alias cache on repeated calls."""
     await bundle.cache.set_standard_alias("rfc9000", "RFC 9000")
     await bundle.cache.set_standard(
@@ -148,12 +146,8 @@ async def test_search_standards_cache_hit_skips_network(
 
     respx_mock.get("/api/v1/doc/document/").mock(side_effect=side_effect)
     async with Client(mcp) as client:
-        await client.call_tool(
-            "search_standards", {"query": "QUIC", "body": "IETF"}
-        )
-        await client.call_tool(
-            "search_standards", {"query": "QUIC", "body": "IETF"}
-        )
+        await client.call_tool("search_standards", {"query": "QUIC", "body": "IETF"})
+        await client.call_tool("search_standards", {"query": "QUIC", "body": "IETF"})
     assert call_count == 1
 
 
