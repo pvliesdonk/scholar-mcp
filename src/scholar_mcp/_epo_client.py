@@ -216,6 +216,11 @@ class EpoClient:
         Raises:
             EpoRateLimitedError: When the EPO traffic light is not green.
         """
+        if self._is_service_throttled("retrieval"):
+            raise EpoRateLimitedError(
+                self._throttle_cache.get("retrieval", self._throttle_cache.get("_overall", "red")),
+                service="retrieval",
+            )
         inp = self._to_docdb_input(doc)
         async with self._lock:
             response = await asyncio.to_thread(
@@ -224,7 +229,7 @@ class EpoClient:
                 inp,
                 endpoint="biblio",
             )
-        self._check_throttle(response)
+        self._check_throttle(response, service="retrieval")
         return parse_biblio_xml(response.content)
 
     async def get_claims(self, doc: DocdbNumber) -> str:
@@ -239,6 +244,11 @@ class EpoClient:
         Raises:
             EpoRateLimitedError: When the EPO traffic light is not green.
         """
+        if self._is_service_throttled("retrieval"):
+            raise EpoRateLimitedError(
+                self._throttle_cache.get("retrieval", self._throttle_cache.get("_overall", "red")),
+                service="retrieval",
+            )
         inp = self._to_docdb_input(doc)
         async with self._lock:
             response = await asyncio.to_thread(
@@ -247,7 +257,7 @@ class EpoClient:
                 inp,
                 endpoint="claims",
             )
-        self._check_throttle(response)
+        self._check_throttle(response, service="retrieval")
         return parse_claims_xml(response.content)
 
     async def get_description(self, doc: DocdbNumber) -> str:
@@ -262,6 +272,11 @@ class EpoClient:
         Raises:
             EpoRateLimitedError: When the EPO traffic light is not green.
         """
+        if self._is_service_throttled("retrieval"):
+            raise EpoRateLimitedError(
+                self._throttle_cache.get("retrieval", self._throttle_cache.get("_overall", "red")),
+                service="retrieval",
+            )
         inp = self._to_docdb_input(doc)
         async with self._lock:
             response = await asyncio.to_thread(
@@ -270,7 +285,7 @@ class EpoClient:
                 inp,
                 endpoint="description",
             )
-        self._check_throttle(response)
+        self._check_throttle(response, service="retrieval")
         return parse_description_xml(response.content)
 
     async def get_family(self, doc: DocdbNumber) -> list[dict[str, str]]:
@@ -285,6 +300,11 @@ class EpoClient:
         Raises:
             EpoRateLimitedError: When the EPO traffic light is not green.
         """
+        if self._is_service_throttled("inpadoc"):
+            raise EpoRateLimitedError(
+                self._throttle_cache.get("inpadoc", self._throttle_cache.get("_overall", "red")),
+                service="inpadoc",
+            )
         inp = self._to_docdb_input(doc)
         async with self._lock:
             response = await asyncio.to_thread(
@@ -292,7 +312,7 @@ class EpoClient:
                 "publication",
                 inp,
             )
-        self._check_throttle(response)
+        self._check_throttle(response, service="inpadoc")
         return parse_family_xml(response.content)
 
     async def get_legal(self, doc: DocdbNumber) -> list[dict[str, str]]:
@@ -307,6 +327,11 @@ class EpoClient:
         Raises:
             EpoRateLimitedError: When the EPO traffic light is not green.
         """
+        if self._is_service_throttled("inpadoc"):
+            raise EpoRateLimitedError(
+                self._throttle_cache.get("inpadoc", self._throttle_cache.get("_overall", "red")),
+                service="inpadoc",
+            )
         inp = self._to_docdb_input(doc)
         async with self._lock:
             response = await asyncio.to_thread(
@@ -314,7 +339,7 @@ class EpoClient:
                 "publication",
                 inp,
             )
-        self._check_throttle(response)
+        self._check_throttle(response, service="inpadoc")
         return parse_legal_xml(response.content)
 
     async def get_citations(self, doc: DocdbNumber) -> dict[str, list[dict[str, Any]]]:
@@ -330,6 +355,11 @@ class EpoClient:
         Raises:
             EpoRateLimitedError: When the EPO traffic light is not green.
         """
+        if self._is_service_throttled("retrieval"):
+            raise EpoRateLimitedError(
+                self._throttle_cache.get("retrieval", self._throttle_cache.get("_overall", "red")),
+                service="retrieval",
+            )
         inp = self._to_docdb_input(doc)
         async with self._lock:
             response = await asyncio.to_thread(
@@ -338,7 +368,7 @@ class EpoClient:
                 inp,
                 endpoint="biblio",
             )
-        self._check_throttle(response)
+        self._check_throttle(response, service="retrieval")
         return parse_citations_from_biblio(response.content)
 
     async def aclose(self) -> None:

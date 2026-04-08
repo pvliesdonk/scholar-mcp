@@ -669,6 +669,35 @@ async def test_preflight_cache_prevents_second_search_call(
     mock_epo_client._client.published_data_search.assert_not_called()
 
 
+async def test_preflight_retrieval_blocks_get_biblio(
+    mock_epo_client: EpoClient,
+) -> None:
+    """Pre-flight blocks get_biblio when retrieval service is throttled."""
+    # Seed the cache with a throttled retrieval color
+    mock_epo_client._throttle_cache = {"_overall": "green", "retrieval": "yellow"}
+    mock_epo_client._throttle_cache_ts = time.monotonic()
+
+    doc = DocdbNumber(country="EP", number="1000000", kind="A1")
+    with pytest.raises(EpoRateLimitedError) as exc_info:
+        await mock_epo_client.get_biblio(doc)
+    assert exc_info.value.service == "retrieval"
+    mock_epo_client._client.published_data.assert_not_called()
+
+
+async def test_preflight_inpadoc_blocks_get_family(
+    mock_epo_client: EpoClient,
+) -> None:
+    """Pre-flight blocks get_family when inpadoc service is throttled."""
+    mock_epo_client._throttle_cache = {"_overall": "green", "inpadoc": "yellow"}
+    mock_epo_client._throttle_cache_ts = time.monotonic()
+
+    doc = DocdbNumber(country="EP", number="1000000", kind="A1")
+    with pytest.raises(EpoRateLimitedError) as exc_info:
+        await mock_epo_client.get_family(doc)
+    assert exc_info.value.service == "inpadoc"
+    mock_epo_client._client.family.assert_not_called()
+
+
 async def test_preflight_cache_expires_after_60s(
     mock_epo_client: EpoClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
