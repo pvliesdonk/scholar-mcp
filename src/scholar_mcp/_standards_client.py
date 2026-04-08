@@ -273,3 +273,140 @@ def _map_ietf_status(std_level: str | None) -> str:
     }
     key = (std_level or "").lower()
     return mapping.get(key, "published")
+
+
+# ---------------------------------------------------------------------------
+# NIST source fetcher
+# ---------------------------------------------------------------------------
+
+_NIST_BASE = "https://csrc.nist.gov"
+_NIST_PUBLICATIONS_JSON = "/CSRC/media/Publications/search-results-json-file/json"
+
+
+class _NISTFetcher:
+    """Fetches NIST CSRC publication metadata.
+
+    Uses the NIST CSRC publications JSON endpoint as a searchable catalogue.
+
+    Args:
+        http: Shared httpx async client.
+        limiter: Rate limiter enforcing ~1s between requests.
+    """
+
+    def __init__(self, http: httpx.AsyncClient, limiter: RateLimiter) -> None:
+        self._http = http
+        self._limiter = limiter
+
+    async def _fetch_all(self) -> list[dict]:  # type: ignore[type-arg]
+        """Fetch the full NIST publications JSON catalogue.
+
+        Returns:
+            Raw list of publication objects from CSRC.
+        """
+        await self._limiter.acquire()
+        resp = await self._http.get(f"{_NIST_BASE}{_NIST_PUBLICATIONS_JSON}")
+        if resp.status_code != 200:
+            logger.warning(
+                "nist_api_error status=%d url=%s", resp.status_code, str(resp.url)
+            )
+            return []
+        data = resp.json()
+        if isinstance(data, list):
+            return data
+        return data.get("response", data.get("publications", []))  # type: ignore[no-any-return]
+
+    async def search(self, query: str, *, limit: int = 10) -> list[StandardRecord]:
+        """Search NIST publications by keyword in identifier or title.
+
+        Args:
+            query: Search string (e.g. "800-53", "FIPS 140").
+            limit: Maximum results.
+
+        Returns:
+            List of matching StandardRecord dicts.
+        """
+        all_pubs = await self._fetch_all()
+        q = query.lower()
+        matches = [
+            p
+            for p in all_pubs
+            if q in (p.get("docIdentifier") or "").lower()
+            or q in (p.get("title") or "").lower()
+            or q in (p.get("number") or "").lower()
+        ]
+        return [_normalize_nist(p) for p in matches[:limit]]
+
+    async def get(self, identifier: str) -> StandardRecord | None:
+        """Fetch a single NIST publication by canonical identifier.
+
+        Searches the catalogue and returns the first exact or close match.
+
+        Args:
+            identifier: Canonical NIST identifier (e.g. "NIST SP 800-53 Rev. 5").
+
+        Returns:
+            Populated StandardRecord or None if not found.
+        """
+        all_pubs = await self._fetch_all()
+        id_lower = identifier.lower()
+        for pub in all_pubs:
+            doc_id = (pub.get("docIdentifier") or "").lower()
+            if doc_id == id_lower or doc_id in id_lower or id_lower in doc_id:
+                return _normalize_nist(pub)
+        return None
+
+
+def _normalize_nist(pub: dict) -> StandardRecord:  # type: ignore[type-arg]
+    """Normalise a NIST CSRC publication object to a StandardRecord.
+
+    Args:
+        pub: Raw publication object from the CSRC JSON feed.
+
+    Returns:
+        Populated StandardRecord.
+    """
+    doc_id = pub.get("docIdentifier", "")
+    series = pub.get("series", "")
+    number = pub.get("number", "")
+    rev = pub.get("revisionNumber", "")
+
+    if "SP" in series or "Special Publication" in series:
+        canonical = f"NIST SP {number}"
+        if rev:
+            canonical += f" Rev. {rev}"
+    elif "FIPS" in series:
+        canonical = f"FIPS {number}"
+    elif "NISTIR" in series or "Interagency" in series:
+        canonical = f"NISTIR {number}"
+    else:
+        canonical = doc_id or f"NIST {number}"
+
+    pdf_url: str | None = pub.get("pdfUrl") or pub.get("doiUrl")
+    status_raw = (pub.get("status") or "").lower()
+    if "final" in status_raw:
+        status = "published"
+    elif "draft" in status_raw:
+        status = "draft"
+    else:
+        status = "published"
+
+    return StandardRecord(
+        identifier=canonical,
+        aliases=[doc_id] if doc_id and doc_id != canonical else [],
+        title=pub.get("title", ""),
+        body="NIST",
+        number=number,
+        revision=f"Rev. {rev}" if rev else None,
+        status=status,
+        published_date=pub.get("publicationDate"),
+        withdrawn_date=None,
+        superseded_by=None,
+        supersedes=[],
+        scope=pub.get("abstract"),
+        committee=None,
+        url=pub.get("doiUrl") or f"{_NIST_BASE}/publications/detail/{number}",
+        full_text_url=pdf_url,
+        full_text_available=pdf_url is not None,
+        price=None,
+        related=[],
+    )

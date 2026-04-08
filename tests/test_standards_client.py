@@ -7,7 +7,11 @@ import pytest
 import respx
 
 from scholar_mcp._rate_limiter import RateLimiter
-from scholar_mcp._standards_client import _IETFFetcher, _resolve_identifier_local
+from scholar_mcp._standards_client import (
+    _IETFFetcher,
+    _NISTFetcher,
+    _resolve_identifier_local,
+)
 
 # --- Resolver: IETF ---
 
@@ -281,3 +285,70 @@ def test_normalize_ietf_early_rfc_url() -> None:
     assert record["full_text_url"] is not None
     assert "rfc1" in record["full_text_url"]
     assert "rfc0001" not in record["full_text_url"]
+
+
+# ---------------------------------------------------------------------------
+# NIST fetcher tests
+# ---------------------------------------------------------------------------
+
+NIST_BASE = "https://csrc.nist.gov"
+
+SAMPLE_NIST_SEARCH = [
+    {
+        "docIdentifier": "SP 800-53 Rev. 5",
+        "title": "Security and Privacy Controls for Information Systems and Organizations",
+        "abstract": "This publication provides a catalog of security and privacy controls.",
+        "status": "Final",
+        "publicationDate": "2020-09-23",
+        "doiUrl": "https://doi.org/10.6028/NIST.SP.800-53r5",
+        "doi": "10.6028/NIST.SP.800-53r5",
+        "pdfUrl": "https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-53r5.pdf",
+        "series": "Special Publication (SP)",
+        "number": "800-53",
+        "revisionNumber": "5",
+        "family": "",
+    }
+]
+
+
+@pytest.mark.respx(base_url=NIST_BASE)
+async def test_nist_search(respx_mock: respx.MockRouter) -> None:
+    respx_mock.get("/CSRC/media/Publications/search-results-json-file/json").mock(
+        return_value=httpx.Response(200, json=SAMPLE_NIST_SEARCH)
+    )
+    http = httpx.AsyncClient()
+    fetcher = _NISTFetcher(http, RateLimiter(delay=0.0))
+    results = await fetcher.search("800-53", limit=5)
+    await http.aclose()
+    assert len(results) == 1
+    assert results[0]["identifier"] == "NIST SP 800-53 Rev. 5"
+    assert results[0]["body"] == "NIST"
+    assert results[0]["full_text_available"] is True
+
+
+@pytest.mark.respx(base_url=NIST_BASE)
+async def test_nist_get(respx_mock: respx.MockRouter) -> None:
+    respx_mock.get("/CSRC/media/Publications/search-results-json-file/json").mock(
+        return_value=httpx.Response(200, json=SAMPLE_NIST_SEARCH)
+    )
+    http = httpx.AsyncClient()
+    fetcher = _NISTFetcher(http, RateLimiter(delay=0.0))
+    record = await fetcher.get("NIST SP 800-53 Rev. 5")
+    await http.aclose()
+    assert record is not None
+    assert record["number"] == "800-53"
+    assert record["revision"] == "Rev. 5"
+    assert record["full_text_url"] is not None
+    assert "nvlpubs.nist.gov" in record["full_text_url"]
+
+
+@pytest.mark.respx(base_url=NIST_BASE)
+async def test_nist_get_not_found(respx_mock: respx.MockRouter) -> None:
+    respx_mock.get("/CSRC/media/Publications/search-results-json-file/json").mock(
+        return_value=httpx.Response(200, json=[])
+    )
+    http = httpx.AsyncClient()
+    fetcher = _NISTFetcher(http, RateLimiter(delay=0.0))
+    record = await fetcher.get("NIST SP 999-99")
+    await http.aclose()
+    assert record is None
