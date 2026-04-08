@@ -8,7 +8,7 @@ import pytest
 import requests
 from requests.exceptions import HTTPError
 
-from scholar_mcp._epo_client import EpoClient, EpoRateLimitedError
+from scholar_mcp._epo_client import EpoClient, EpoRateLimitedError, _parse_throttle_header
 from scholar_mcp._patent_numbers import DocdbNumber
 from scholar_mcp._rate_limiter import RateLimitedError
 
@@ -539,3 +539,37 @@ async def test_get_legal_calls_legal_method(
 async def test_aclose_is_noop(epo_client: EpoClient) -> None:
     """aclose() completes without error (no-op cleanup)."""
     await epo_client.aclose()  # Must not raise
+
+
+# ---------------------------------------------------------------------------
+# _parse_throttle_header tests
+# ---------------------------------------------------------------------------
+
+
+def test_parse_throttle_header_full() -> None:
+    """Full header with overall and per-service breakdown is parsed correctly."""
+    header = "busy (images=green:100, search=yellow:2, retrieval=green:50)"
+    result = _parse_throttle_header(header)
+    assert result["_overall"] == "busy"
+    assert result["search"] == "yellow"
+    assert result["retrieval"] == "green"
+    assert result["images"] == "green"
+
+
+def test_parse_throttle_header_no_subservices() -> None:
+    """Header with only an overall color (no parenthesised section) is handled."""
+    result = _parse_throttle_header("green")
+    assert result == {"_overall": "green"}
+
+
+def test_parse_throttle_header_missing_header() -> None:
+    """Empty string defaults to _overall=green."""
+    result = _parse_throttle_header("")
+    assert result == {"_overall": "green"}
+
+
+def test_parse_throttle_header_all_colors() -> None:
+    """All known EPO throttle colors are preserved verbatim."""
+    for color in ("green", "yellow", "red", "black", "idle"):
+        result = _parse_throttle_header(color)
+        assert result["_overall"] == color

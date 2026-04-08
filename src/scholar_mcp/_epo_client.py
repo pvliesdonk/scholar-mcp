@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from typing import TYPE_CHECKING, Any
 
 import epo_ops
@@ -25,6 +26,28 @@ if TYPE_CHECKING:
     from scholar_mcp._patent_numbers import DocdbNumber
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_throttle_header(header: str) -> dict[str, str]:
+    """Parse X-Throttling-Control into {service: color, '_overall': color}.
+
+    Args:
+        header: The X-Throttling-Control header value, e.g.
+            ``"busy (images=green:100, search=yellow:2, retrieval=green:50)"``.
+            Pass an empty string to get the green default.
+
+    Returns:
+        Dict with ``"_overall"`` key holding the first token, plus one entry
+        per ``name=color:count`` pair found in the parenthesised section.
+        Colors are lowercased. Missing header defaults to
+        ``{"_overall": "green"}``.
+    """
+    parts = header.strip().split(None, 1)
+    result: dict[str, str] = {"_overall": parts[0].lower() if parts else "green"}
+    if len(parts) > 1:
+        for match in re.finditer(r"(\w+)=(\w+):\d+", parts[1]):
+            result[match.group(1).lower()] = match.group(2).lower()
+    return result
 
 
 class EpoRateLimitedError(RateLimitedError):
