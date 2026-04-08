@@ -172,6 +172,12 @@ def register_patent_tools(mcp: FastMCP) -> None:
         Returns:
             JSON string with ``total_count`` and ``references`` list, or an
             error dict if the EPO client is not configured or the API fails.
+            If the EPO service is busy, the request is automatically retried
+            once and ``{"queued": true, "task_id": "..."}`` is returned. Use
+            ``get_task_result`` to retrieve the result. If the retry also
+            fails, ``get_task_result`` returns ``status: failed`` — call this
+            tool again after about 60 seconds. Do not attempt to manage or
+            reason about EPO throttle states directly.
         """
         if bundle.epo is None:
             return json.dumps(
@@ -271,6 +277,12 @@ def register_patent_tools(mcp: FastMCP) -> None:
         Returns:
             JSON string with ``patent_number`` (normalised DOCDB format) and
             the requested section data, or an error dict on failure.
+            If the EPO service is busy, the request is automatically retried
+            once and ``{"queued": true, "task_id": "..."}`` is returned. Use
+            ``get_task_result`` to retrieve the result. If the retry also
+            fails, ``get_task_result`` returns ``status: failed`` — call this
+            tool again after about 60 seconds. Do not attempt to manage or
+            reason about EPO throttle states directly.
         """
         if bundle.epo is None:
             return json.dumps(
@@ -348,6 +360,12 @@ def register_patent_tools(mcp: FastMCP) -> None:
             JSON string with ``paper_id``, ``patents`` list (each with
             biblio data and ``match_source``), ``total_count``, and a
             ``note`` about coverage limitations.
+            If the EPO service is busy, the request is automatically retried
+            once and ``{"queued": true, "task_id": "..."}`` is returned. Use
+            ``get_task_result`` to retrieve the result. If the retry also
+            fails, ``get_task_result`` returns ``status: failed`` — call this
+            tool again after about 60 seconds. Do not attempt to manage or
+            reason about EPO throttle states directly.
         """
         if bundle.epo is None:
             return json.dumps(
