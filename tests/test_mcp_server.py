@@ -287,11 +287,11 @@ class TestMiddlewareStack:
         assert LoggingMiddleware in types
         assert StructuredLoggingMiddleware not in types
 
-    def test_json_format_uses_structured_logging(
+    def test_rich_disabled_uses_structured_logging(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """LOG_FORMAT=json wires StructuredLoggingMiddleware."""
-        monkeypatch.setenv("SCHOLAR_MCP_LOG_FORMAT", "json")
+        """FASTMCP_ENABLE_RICH_LOGGING=false wires StructuredLoggingMiddleware."""
+        monkeypatch.setenv("FASTMCP_ENABLE_RICH_LOGGING", "false")
         server = create_server()
         types = [type(m) for m in server.middleware]
         assert StructuredLoggingMiddleware in types

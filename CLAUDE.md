@@ -67,7 +67,7 @@ Always fetch both before declaring a review round complete.
 - Standard library `logging` throughout. Every module: `logger = logging.getLogger(__name__)`.
 - No `print()` for operational output. No third-party logging libraries.
 - FastMCP middleware handles tool invocation, timing, and error logging automatically.
-- All logging goes through FastMCP's `configure_logging()` + RichHandler for uniform output. `cli.py` syncs `SCHOLAR_MCP_LOG_LEVEL` to `FASTMCP_LOG_LEVEL` so there is a single log level control.
+- All logging goes through FastMCP's `configure_logging()` for uniform output. `FASTMCP_LOG_LEVEL` is the single log level control; the `-v` CLI flag sets it to `DEBUG`. `FASTMCP_ENABLE_RICH_LOGGING=false` switches to plain/JSON output.
 
 ### Log Levels
 | Level | Use for |

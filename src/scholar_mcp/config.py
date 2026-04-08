@@ -26,8 +26,6 @@ class ServerConfig:
             for the polite pool. Set ``SCHOLAR_MCP_CONTACT_EMAIL`` to opt in.
         epo_consumer_key: EPO OPS API consumer key.
         epo_consumer_secret: EPO OPS API consumer secret.
-        log_format: Logging output format. ``"console"`` for human-readable,
-            ``"json"`` for structured JSON (e.g. for log aggregators).
     """
 
     read_only: bool = True
@@ -40,7 +38,6 @@ class ServerConfig:
     contact_email: str | None = None
     epo_consumer_key: str | None = None
     epo_consumer_secret: str | None = None
-    log_format: str = "console"
 
     @property
     def epo_configured(self) -> bool:
@@ -48,21 +45,6 @@ class ServerConfig:
         return (
             self.epo_consumer_key is not None and self.epo_consumer_secret is not None
         )
-
-
-def get_log_level() -> int:
-    """Return the configured log level from the environment.
-
-    Reads ``SCHOLAR_MCP_LOG_LEVEL`` (e.g. ``DEBUG``, ``INFO``).
-    Defaults to ``INFO``.
-
-    Returns:
-        Integer log level constant from :mod:`logging`.
-    """
-    import logging
-
-    raw = os.environ.get(f"{_ENV_PREFIX}_LOG_LEVEL", "INFO").upper()
-    return getattr(logging, raw, logging.INFO)
 
 
 def load_config() -> ServerConfig:
@@ -93,5 +75,4 @@ def load_config() -> ServerConfig:
         contact_email=_str("CONTACT_EMAIL"),
         epo_consumer_key=_str("EPO_CONSUMER_KEY"),
         epo_consumer_secret=_str("EPO_CONSUMER_SECRET"),
-        log_format=os.environ.get(f"{p}_LOG_FORMAT", "console").lower(),
     )

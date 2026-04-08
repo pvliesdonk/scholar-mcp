@@ -442,7 +442,8 @@ def create_server(*, transport: str = "stdio") -> FastMCP:
         )
     )
     mcp.add_middleware(TimingMiddleware())
-    if config.log_format == "json":
+    rich_logging = os.environ.get("FASTMCP_ENABLE_RICH_LOGGING", "true").lower()
+    if rich_logging in ("0", "false", "no", "off"):
         mcp.add_middleware(
             StructuredLoggingMiddleware(
                 include_payloads=True,
