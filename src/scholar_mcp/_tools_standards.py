@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
 
+from ._rate_limiter import RateLimitedError
 from ._record_types import StandardRecord
 from ._server_deps import ServiceBundle, get_bundle
-from ._standards_client import _resolve_identifier_local
+from ._standards_client import resolve_identifier_local
 
 logger = logging.getLogger(__name__)
 
@@ -68,12 +70,11 @@ def register_standards_tools(mcp: FastMCP) -> None:
                 )
 
         # 2. Try local regex
-        resolved = _resolve_identifier_local(raw)
+        resolved = resolve_identifier_local(raw)
         if resolved is not None:
             canonical, body = resolved
             record = await bundle.standards.get(canonical)
             if record is not None:
-                await bundle.cache.set_standard_alias(raw, canonical)
                 await bundle.cache.set_standard_alias(raw, canonical)
                 await bundle.cache.set_standard(canonical, record)
                 return json.dumps(
@@ -128,11 +129,11 @@ def register_standards_tools(mcp: FastMCP) -> None:
             JSON list of StandardRecord dicts.
         """
         limit = max(1, min(limit, 50))
-        cache_key = f"q={query}:body={body}:limit={limit}"
+        cache_key = hashlib.sha256(f"{query}:{body}:{limit}".encode()).hexdigest()
 
         cached = await bundle.cache.get_standards_search(cache_key)
         if cached is not None:
-            logger.debug("standards_search_cache_hit key=%s", cache_key[:80])
+            logger.debug("standards_search_cache_hit key=%s", cache_key[:16])
             return json.dumps(cached)
 
         results = await bundle.standards.search(query, body=body, limit=limit)
@@ -173,9 +174,13 @@ def register_standards_tools(mcp: FastMCP) -> None:
         """
         identifier = identifier.strip()
 
-        # 1. Resolve identifier to canonical form
-        resolved = _resolve_identifier_local(identifier)
-        canonical = resolved[0] if resolved else identifier
+        # 1. Resolve identifier to canonical form (alias cache → regex → passthrough)
+        cached_canonical = await bundle.cache.get_standard_alias(identifier)
+        if cached_canonical is not None:
+            canonical = cached_canonical
+        else:
+            resolved = resolve_identifier_local(identifier)
+            canonical = resolved[0] if resolved else identifier
 
         # 2. Check cache
         cached = await bundle.cache.get_standard(canonical)
@@ -192,7 +197,7 @@ def register_standards_tools(mcp: FastMCP) -> None:
 
         # 4. Cache result
         await bundle.cache.set_standard(canonical, record)
-        if resolved:
+        if cached_canonical is None:
             await bundle.cache.set_standard_alias(identifier, canonical)
 
         if fetch_full_text:
@@ -206,9 +211,9 @@ async def _handle_full_text(
 ) -> str:
     """Download and convert full text via docling if available.
 
-    If docling is not configured, no full_text_url is present, or the
-    download fails, returns the record as-is so the caller can use
-    full_text_url to fetch manually.
+    If docling is not configured, no full_text_url is present, full_text is
+    already populated, or the download fails, returns the record as-is so the
+    caller can use full_text_url to fetch manually.
 
     Args:
         record: StandardRecord dict.
@@ -218,9 +223,11 @@ async def _handle_full_text(
         JSON StandardRecord, possibly with ``full_text`` field populated,
         or ``{"queued": true, "task_id": "..."}`` if conversion was queued.
     """
-    from ._rate_limiter import RateLimitedError
-
-    if not record.get("full_text_available") or not record.get("full_text_url"):
+    if (
+        not record.get("full_text_available")
+        or not record.get("full_text_url")
+        or record.get("full_text")
+    ):
         return json.dumps(record)
 
     if bundle.docling is None:
@@ -234,10 +241,12 @@ async def _handle_full_text(
     filename = url.rsplit("/", 1)[-1] or "standard.pdf"
 
     async def _convert() -> str:
-        resp = await bundle.standards._http.get(url, follow_redirects=True)
-        resp.raise_for_status()
-        markdown = await bundle.docling.convert(resp.content, filename)  # type: ignore[union-attr]
+        content = await bundle.standards.download(url)
+        markdown = await bundle.docling.convert(content, filename)  # type: ignore[union-attr]
         enriched = {**record, "full_text": markdown}
+        identifier = enriched.get("identifier")
+        if identifier:
+            await bundle.cache.set_standard(identifier, enriched)  # type: ignore[arg-type]
         return json.dumps(enriched)
 
     try:

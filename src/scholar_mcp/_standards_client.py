@@ -47,7 +47,7 @@ _W3C_WEBAUTHN_RE = re.compile(r"(?i)\bwebauthn\s+level\s+(\d+)\b")
 _ETSI_RE = re.compile(r"(?i)\betsi\s+(EN|TS|TR|ES|EG)\s*(\d{3})\s*[\s-]?\s*(\d{3})\b")
 
 
-def _resolve_identifier_local(raw: str) -> tuple[str, str] | None:
+def resolve_identifier_local(raw: str) -> tuple[str, str] | None:
     """Attempt to resolve *raw* to (canonical_identifier, body) using only regex.
 
     Returns ``None`` when no Tier 1 pattern matches.
@@ -219,7 +219,7 @@ def _normalize_ietf(obj: dict) -> StandardRecord:  # type: ignore[type-arg]
     if is_rfc:
         identifier = f"RFC {int(n)}" if n else name.upper()
     elif n:
-        # BCP/STD/FYI: produce "PREFIX NUMBER" to match _resolve_identifier_local
+        # BCP/STD/FYI: produce "PREFIX NUMBER" to match resolve_identifier_local
         prefix = re.sub(r"\d.*", "", name).upper()
         identifier = f"{prefix} {int(n)}"
     else:
@@ -805,7 +805,7 @@ class StandardsClient:
         Returns:
             Populated StandardRecord or None.
         """
-        resolved = _resolve_identifier_local(identifier)
+        resolved = resolve_identifier_local(identifier)
         if resolved is not None:
             canonical, body = resolved
             fetcher = self._fetchers.get(body)
@@ -833,7 +833,7 @@ class StandardsClient:
         Returns:
             List of matching StandardRecord dicts.
         """
-        resolved = _resolve_identifier_local(raw)
+        resolved = resolve_identifier_local(raw)
         if resolved is not None:
             canonical, body = resolved
             fetcher = self._fetchers.get(body)
@@ -855,6 +855,24 @@ class StandardsClient:
         # No local resolution — fall back to API search across all bodies
         results = await self.search(raw, limit=5)
         return results
+
+    async def download(self, url: str) -> bytes:
+        """Download a URL and return the raw content bytes.
+
+        Encapsulates the HTTP client so callers do not access ``_http`` directly.
+
+        Args:
+            url: URL to fetch (follows redirects).
+
+        Returns:
+            Raw response body bytes.
+
+        Raises:
+            httpx.HTTPStatusError: If the response status indicates an error.
+        """
+        resp = await self._http.get(url, follow_redirects=True)
+        resp.raise_for_status()
+        return resp.content
 
     async def aclose(self) -> None:
         """Close the underlying HTTP client."""

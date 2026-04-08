@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from contextlib import asynccontextmanager
+from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
@@ -11,6 +13,7 @@ import respx
 from fastmcp import FastMCP
 from fastmcp.client import Client
 
+from scholar_mcp._docling_client import DoclingClient
 from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._tools_standards import register_standards_tools
 
@@ -128,7 +131,8 @@ async def test_search_standards_caches_results(
             "search_standards", {"query": "cache test", "body": "IETF"}
         )
 
-    cached = await bundle.cache.get_standards_search("q=cache test:body=IETF:limit=10")
+    cache_key = hashlib.sha256(b"cache test:IETF:10").hexdigest()
+    cached = await bundle.cache.get_standards_search(cache_key)
     assert cached is not None
 
 
@@ -223,10 +227,6 @@ async def test_get_standard_cache_hit_skips_network(
 # Full-text via docling tests
 # ---------------------------------------------------------------------------
 
-from unittest.mock import AsyncMock, MagicMock  # noqa: E402
-
-from scholar_mcp._docling_client import DoclingClient  # noqa: E402
-
 
 async def test_get_standard_fetch_full_text_with_docling(
     mcp: FastMCP, bundle: ServiceBundle
@@ -246,13 +246,17 @@ async def test_get_standard_fetch_full_text_with_docling(
     await bundle.cache.set_standard("RFC 9000", record)
     bundle.docling = mock_docling  # type: ignore[assignment]
 
-    async with Client(mcp) as client:
-        result = await client.call_tool(
-            "get_standard", {"identifier": "RFC 9000", "fetch_full_text": True}
+    with respx.mock(assert_all_called=False) as mock:
+        mock.get("https://www.rfc-editor.org/rfc/rfc9000.html").mock(
+            return_value=httpx.Response(200, content=b"<html>RFC content</html>")
         )
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "get_standard", {"identifier": "RFC 9000", "fetch_full_text": True}
+            )
     data = json.loads(result.content[0].text)
-    # Should return record (with or without full_text field)
-    assert "identifier" in data or "task_id" in data or "queued" in data
+    assert data.get("full_text") == "# RFC 9000\n..."
+    assert data["identifier"] == "RFC 9000"
 
 
 async def test_get_standard_fetch_full_text_no_docling(
