@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import re
+import time
+from pathlib import Path
+from typing import Any
+from xml.etree import ElementTree as ET
 
 import httpx
 
@@ -292,53 +297,131 @@ def _map_ietf_status(std_level: str | None) -> str:
 # NIST source fetcher
 # ---------------------------------------------------------------------------
 
-_NIST_BASE = "https://csrc.nist.gov"
-_NIST_PUBLICATIONS_JSON = "/CSRC/media/Publications/search-results-json-file/json"
+_NIST_GITHUB_API = "https://api.github.com"
+_NIST_MODS_RELEASE_URL = (
+    f"{_NIST_GITHUB_API}/repos/usnistgov/NIST-Tech-Pubs/releases/latest"
+)
+_NIST_MODS_ASSET_NAME = "allrecords-MODS.xml"
+_NIST_MODS_NS = "http://www.loc.gov/mods/v3"
+_NIST_CACHE_MAX_AGE_DAYS = 90
 
 
 class _NISTFetcher:
-    """Fetches NIST CSRC publication metadata.
+    """Fetches NIST publication metadata from NIST-Tech-Pubs MODS XML releases.
 
-    Uses the NIST CSRC publications JSON endpoint as a searchable catalogue.
+    Downloads the MODS XML catalogue from the latest GitHub release of
+    https://github.com/usnistgov/NIST-Tech-Pubs on first use, parses it,
+    and caches parsed records to disk as JSON. Subsequent calls within 90 days
+    load from disk without network I/O.
 
     Args:
         http: Shared httpx async client.
-        limiter: Rate limiter enforcing ~1s between requests.
+        limiter: Rate limiter.
+        cache_dir: Directory for persistent JSON cache. If None, no disk
+            caching is used (data is re-downloaded every process restart).
     """
 
-    def __init__(self, http: httpx.AsyncClient, limiter: RateLimiter) -> None:
+    def __init__(
+        self,
+        http: httpx.AsyncClient,
+        limiter: RateLimiter,
+        *,
+        cache_dir: Path | None = None,
+    ) -> None:
         self._http = http
         self._limiter = limiter
-        self._catalogue: list[dict] | None = None  # type: ignore[type-arg]
+        self._cache_dir = cache_dir
+        self._catalogue: list[Any] | None = None
         self._lock = asyncio.Lock()
 
-    async def _fetch_all(self) -> list[dict]:  # type: ignore[type-arg]
-        """Fetch the full NIST publications JSON catalogue with in-memory caching.
+    def _cache_path(self) -> Path | None:
+        if self._cache_dir is None:
+            return None
+        return self._cache_dir / "nist_catalogue.json"
 
-        Uses double-checked locking to prevent concurrent full-catalogue
-        downloads when multiple coroutines call this before the first fetch
-        completes.
+    def _load_from_disk(self) -> list[Any] | None:
+        """Load cached catalogue from disk if it exists and is fresh."""
+        path = self._cache_path()
+        if path is None or not path.exists():
+            return None
+        age_days = (time.time() - path.stat().st_mtime) / 86400
+        if age_days > _NIST_CACHE_MAX_AGE_DAYS:
+            logger.info(
+                "nist_catalogue_stale age_days=%.0f threshold=%d — re-downloading",
+                age_days,
+                _NIST_CACHE_MAX_AGE_DAYS,
+            )
+            return None
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))  # type: ignore[no-any-return]
+        except (json.JSONDecodeError, OSError) as exc:
+            logger.warning("nist_catalogue_disk_load_failed err=%s", exc)
+            return None
 
-        Returns:
-            Raw list of publication objects from CSRC.
-        """
+    def _save_to_disk(self, records: list[Any]) -> None:
+        path = self._cache_path()
+        if path is None:
+            return
+        try:
+            path.write_text(json.dumps(records), encoding="utf-8")
+            logger.info("nist_catalogue_cached path=%s count=%d", path, len(records))
+        except OSError as exc:
+            logger.warning("nist_catalogue_disk_save_failed err=%s", exc)
+
+    async def _fetch_mods_url(self) -> str | None:
+        """Get the download URL for the latest MODS XML asset from GitHub releases."""
+        await self._limiter.acquire()
+        resp = await self._http.get(
+            _NIST_MODS_RELEASE_URL,
+            headers={"Accept": "application/vnd.github+json"},
+        )
+        if resp.status_code != 200:
+            logger.warning(
+                "nist_github_api_error status=%d url=%s",
+                resp.status_code,
+                str(resp.url),
+            )
+            return None
+        data = resp.json()
+        for asset in data.get("assets", []):
+            if asset.get("name") == _NIST_MODS_ASSET_NAME:
+                # Prefer the GitHub API asset URL (api.github.com) so we can
+                # request it with Accept: application/octet-stream and follow
+                # the redirect; fall back to browser_download_url.
+                return str(asset.get("url") or asset["browser_download_url"])
+        logger.warning("nist_mods_asset_not_found release=%s", data.get("tag_name"))
+        return None
+
+    async def _fetch_all(self) -> list[Any]:
+        """Return parsed NIST catalogue, using disk cache when available."""
         if self._catalogue is not None:
             return self._catalogue
         async with self._lock:
-            if self._catalogue is not None:  # re-check after acquiring
+            if self._catalogue is not None:
                 return self._catalogue
-            await self._limiter.acquire()
-            resp = await self._http.get(f"{_NIST_BASE}{_NIST_PUBLICATIONS_JSON}")
-            if resp.status_code != 200:
-                logger.warning(
-                    "nist_api_error status=%d url=%s", resp.status_code, str(resp.url)
-                )
+            cached = self._load_from_disk()
+            if cached is not None:
+                self._catalogue = cached
+                logger.debug("nist_catalogue_loaded_from_disk count=%d", len(cached))
+                return self._catalogue
+
+            mods_url = await self._fetch_mods_url()
+            if mods_url is None:
                 return []
-            data = resp.json()
-            if isinstance(data, list):
-                self._catalogue = data
-            else:
-                self._catalogue = data.get("response", data.get("publications", []))
+
+            await self._limiter.acquire()
+            resp = await self._http.get(
+                mods_url,
+                headers={"Accept": "application/octet-stream"},
+                follow_redirects=True,
+            )
+            if resp.status_code != 200:
+                logger.warning("nist_mods_download_error status=%d", resp.status_code)
+                return []
+            records = _parse_nist_mods(resp.content)
+            logger.info("nist_catalogue_parsed count=%d", len(records))
+            self._save_to_disk(records)
+            self._catalogue = records
         return self._catalogue
 
     async def search(self, query: str, *, limit: int = 10) -> list[StandardRecord]:
@@ -356,16 +439,14 @@ class _NISTFetcher:
         matches = [
             p
             for p in all_pubs
-            if q in (p.get("docIdentifier") or "").lower()
+            if q in (p.get("identifier") or "").lower()
             or q in (p.get("title") or "").lower()
             or q in (p.get("number") or "").lower()
         ]
-        return [_normalize_nist(p) for p in matches[:limit]]
+        return matches[:limit]
 
     async def get(self, identifier: str) -> StandardRecord | None:
         """Fetch a single NIST publication by canonical identifier.
-
-        Searches the catalogue and returns the first exact or close match.
 
         Args:
             identifier: Canonical NIST identifier (e.g. "NIST SP 800-53 Rev. 5").
@@ -376,63 +457,149 @@ class _NISTFetcher:
         all_pubs = await self._fetch_all()
         id_lower = identifier.lower()
         for pub in all_pubs:
-            doc_id = (pub.get("docIdentifier") or "").lower()
-            if doc_id == id_lower or doc_id in id_lower or id_lower in doc_id:
-                return _normalize_nist(pub)
+            pub_id = (pub.get("identifier") or "").lower()
+            if pub_id == id_lower or id_lower in pub_id or pub_id in id_lower:
+                return pub  # type: ignore[no-any-return]
         return None
 
 
-def _normalize_nist(pub: dict) -> StandardRecord:  # type: ignore[type-arg]
-    """Normalise a NIST CSRC publication object to a StandardRecord.
+def _parse_nist_mods(xml_bytes: bytes) -> list[StandardRecord]:
+    """Parse a NIST-Tech-Pubs MODS XML file into a list of StandardRecords.
+
+    Only records belonging to recognised NIST series (SP, FIPS, NISTIR) are
+    returned. Other series (internal reports, white papers without a series
+    label) are skipped.
 
     Args:
-        pub: Raw publication object from the CSRC JSON feed.
+        xml_bytes: Raw bytes of allrecords-MODS.xml.
 
     Returns:
-        Populated StandardRecord.
+        List of populated StandardRecord dicts.
     """
-    doc_id = pub.get("docIdentifier", "")
-    series = pub.get("series", "")
-    number = pub.get("number", "")
-    rev = pub.get("revisionNumber", "")
+    ns = f"{{{_NIST_MODS_NS}}}"
+    records: list[StandardRecord] = []
+    try:
+        root = ET.fromstring(xml_bytes)
+    except ET.ParseError as exc:
+        logger.warning("nist_mods_parse_error err=%s", exc)
+        return []
 
-    if "SP" in series or "Special Publication" in series:
+    for mods in root.findall(f"{ns}mods"):
+        record = _normalize_nist_mods(mods, ns)
+        if record is not None:
+            records.append(record)
+    return records
+
+
+def _normalize_nist_mods(mods: ET.Element, ns: str) -> StandardRecord | None:
+    """Normalise a single <mods> element to a StandardRecord.
+
+    Args:
+        mods: A ``<mods>`` XML element.
+        ns: Namespace prefix string, e.g. ``"{http://www.loc.gov/mods/v3}"``.
+
+    Returns:
+        Populated StandardRecord or None if the record is not a recognised
+        NIST series publication.
+    """
+    # Series metadata
+    series_el = None
+    for ri in mods.findall(f"{ns}relatedItem"):
+        if ri.get("type") == "series":
+            series_el = ri
+            break
+    if series_el is None:
+        return None
+
+    series_title_el = series_el.find(f"{ns}titleInfo/{ns}title")
+    part_el = series_el.find(f"{ns}titleInfo/{ns}partNumber")
+    series_title = (
+        (series_title_el.text or "").lower() if series_title_el is not None else ""
+    )
+    part_number = part_el.text.strip() if part_el is not None and part_el.text else ""
+
+    if "special publication" in series_title or "nist sp" in series_title:
+        body_prefix = "NIST SP"
+    elif (
+        "nistir" in series_title
+        or "interagency" in series_title
+        or "internal report" in series_title
+    ):
+        body_prefix = "NISTIR"
+    elif "fips" in series_title:
+        body_prefix = "FIPS"
+    else:
+        return None  # skip unrecognised series
+
+    # partNumber → number + optional revision (e.g. "800-53r5" → "800-53", "5")
+    m = re.match(r"^(.*?)r(\d+)$", part_number)
+    if m:
+        number = m.group(1)
+        revision = m.group(2)
+    else:
+        number = part_number
+        revision = None
+
+    # Canonical identifier
+    if body_prefix == "NIST SP":
         canonical = f"NIST SP {number}"
-        if rev:
-            canonical += f" Rev. {rev}"
-    elif "FIPS" in series:
+        if revision:
+            canonical += f" Rev. {revision}"
+    elif body_prefix == "NISTIR":
+        canonical = f"NISTIR {number.upper()}"
+    else:
         canonical = f"FIPS {number}"
-    elif "NISTIR" in series or "Interagency" in series:
-        canonical = f"NISTIR {number}"
-    else:
-        canonical = doc_id or f"NIST {number}"
 
-    pdf_url: str | None = pub.get("pdfUrl") or pub.get("doiUrl")
-    status_raw = (pub.get("status") or "").lower()
-    if "final" in status_raw:
-        status = "published"
-    elif "draft" in status_raw:
-        status = "draft"
-    else:
-        status = "published"
+    # Title
+    title_el = mods.find(f"{ns}titleInfo/{ns}title")
+    subtitle_el = mods.find(f"{ns}titleInfo/{ns}subTitle")
+    title = (title_el.text or "").strip() if title_el is not None else ""
+    if subtitle_el is not None and subtitle_el.text:
+        title = f"{title}: {subtitle_el.text.strip()}"
+
+    # Abstract
+    abstract_el = mods.find(f"{ns}abstract")
+    scope = (
+        abstract_el.text.strip()
+        if abstract_el is not None and abstract_el.text
+        else None
+    )
+
+    # URL (primary display location)
+    url = ""
+    for url_el in mods.findall(f"{ns}location/{ns}url"):
+        if url_el.get("usage") == "primary display":
+            url = (url_el.text or "").strip()
+            break
+    if not url:
+        url_el_fallback = mods.find(f"{ns}location/{ns}url")
+        if url_el_fallback is not None:
+            url = (url_el_fallback.text or "").strip()
+
+    # Publication date (strip trailing dot)
+    pub_date = None
+    for date_el in mods.iter(f"{ns}dateIssued"):
+        if date_el.text:
+            pub_date = date_el.text.strip().rstrip(".")
+            break
 
     return StandardRecord(
         identifier=canonical,
-        aliases=[doc_id] if doc_id and doc_id != canonical else [],
-        title=pub.get("title", ""),
+        aliases=[],
+        title=title,
         body="NIST",
         number=number,
-        revision=f"Rev. {rev}" if rev else None,
-        status=status,
-        published_date=pub.get("publicationDate"),
+        revision=f"Rev. {revision}" if revision else None,
+        status="published",
+        published_date=pub_date,
         withdrawn_date=None,
         superseded_by=None,
         supersedes=[],
-        scope=pub.get("abstract"),
+        scope=scope,
         committee=None,
-        url=pub.get("doiUrl") or f"{_NIST_BASE}/publications/detail/{number}",
-        full_text_url=pdf_url,
-        full_text_available=pdf_url is not None,
+        url=url,
+        full_text_url=url or None,
+        full_text_available=bool(url),
         price=None,
         related=[],
     )
@@ -748,15 +915,17 @@ class StandardsClient:
         http: Shared httpx async client. Closed by ``aclose()``.
     """
 
-    def __init__(self, http: httpx.AsyncClient) -> None:
+    def __init__(
+        self, http: httpx.AsyncClient, *, cache_dir: Path | None = None
+    ) -> None:
         self._http = http
         self._fetchers: dict[
             str, _IETFFetcher | _NISTFetcher | _W3CFetcher | _ETSIFetcher
         ] = {
             "IETF": _IETFFetcher(http, RateLimiter(delay=0.5)),
-            "NIST": _NISTFetcher(http, RateLimiter(delay=1.0)),
+            "NIST": _NISTFetcher(http, RateLimiter(delay=1.0), cache_dir=cache_dir),
             "W3C": _W3CFetcher(http, RateLimiter(delay=0.5)),
-            "ETSI": _ETSIFetcher(http, RateLimiter(delay=2.0)),
+            "ETSI": _ETSIFetcher(http, RateLimiter(delay=1.0)),
         }
 
     async def search(

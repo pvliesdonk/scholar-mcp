@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import httpx
 import pytest
 import respx
@@ -323,70 +325,202 @@ def test_normalize_ietf_early_rfc_url() -> None:
 
 
 # ---------------------------------------------------------------------------
-# NIST fetcher tests
+# NIST fetcher tests (MODS XML backend)
 # ---------------------------------------------------------------------------
 
-NIST_BASE = "https://csrc.nist.gov"
+GITHUB_RELEASES_URL = "https://api.github.com"
+GITHUB_RELEASES_CDN = "https://objects.githubusercontent.com"  # redirect target
 
-SAMPLE_NIST_SEARCH = [
-    {
-        "docIdentifier": "SP 800-53 Rev. 5",
-        "title": "Security and Privacy Controls for Information Systems and Organizations",
-        "abstract": "This publication provides a catalog of security and privacy controls.",
-        "status": "Final",
-        "publicationDate": "2020-09-23",
-        "doiUrl": "https://doi.org/10.6028/NIST.SP.800-53r5",
-        "doi": "10.6028/NIST.SP.800-53r5",
-        "pdfUrl": "https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-53r5.pdf",
-        "series": "Special Publication (SP)",
-        "number": "800-53",
-        "revisionNumber": "5",
-        "family": "",
-    }
-]
+SAMPLE_GITHUB_RELEASE = {
+    "tag_name": "Jan2026",
+    "assets": [
+        {
+            "name": "allrecords-MODS.xml",
+            "url": "https://api.github.com/repos/usnistgov/NIST-Tech-Pubs/releases/assets/allrecords-MODS.xml",
+            "browser_download_url": "https://github.com/usnistgov/NIST-Tech-Pubs/releases/download/Jan2026/allrecords-MODS.xml",
+        }
+    ],
+}
+
+SAMPLE_MODS_XML = b"""<?xml version="1.0" encoding="UTF-8"?>
+<modsCollection xmlns="http://www.loc.gov/mods/v3">
+  <mods version="3.7">
+    <titleInfo>
+      <title>Security and Privacy Controls for Information Systems and Organizations</title>
+    </titleInfo>
+    <abstract displayLabel="Abstract">A catalog of security and privacy controls.</abstract>
+    <originInfo eventType="publisher">
+      <dateIssued>2020-09.</dateIssued>
+    </originInfo>
+    <location>
+      <url displayLabel="electronic resource" usage="primary display">https://doi.org/10.6028/NIST.SP.800-53r5</url>
+    </location>
+    <relatedItem type="series">
+      <titleInfo>
+        <title>NIST special publication; NIST special pub; NIST SP</title>
+        <partNumber>800-53r5</partNumber>
+      </titleInfo>
+    </relatedItem>
+    <identifier type="doi">10.6028/NIST.SP.800-53r5</identifier>
+  </mods>
+  <mods version="3.7">
+    <titleInfo>
+      <title>Minimum Security Requirements for Federal Information and Information Systems</title>
+    </titleInfo>
+    <originInfo eventType="publisher">
+      <dateIssued>2006-03.</dateIssued>
+    </originInfo>
+    <location>
+      <url displayLabel="electronic resource" usage="primary display">https://doi.org/10.6028/NIST.FIPS.200</url>
+    </location>
+    <relatedItem type="series">
+      <titleInfo>
+        <title>Federal information processing standards publication; FIPS</title>
+        <partNumber>200</partNumber>
+      </titleInfo>
+    </relatedItem>
+    <identifier type="doi">10.6028/NIST.FIPS.200</identifier>
+  </mods>
+  <mods version="3.7">
+    <titleInfo>
+      <title>Cybersecurity Framework Version 2.0</title>
+    </titleInfo>
+    <originInfo eventType="publisher">
+      <dateIssued>2024-02.</dateIssued>
+    </originInfo>
+    <location>
+      <url displayLabel="electronic resource" usage="primary display">https://doi.org/10.6028/NIST.CSWP.29</url>
+    </location>
+    <relatedItem type="series">
+      <titleInfo>
+        <title>NIST cybersecurity white paper; NIST CSWP</title>
+        <partNumber>29</partNumber>
+      </titleInfo>
+    </relatedItem>
+    <identifier type="doi">10.6028/NIST.CSWP.29</identifier>
+  </mods>
+</modsCollection>
+"""
 
 
-@pytest.mark.respx(base_url=NIST_BASE)
-async def test_nist_search(respx_mock: respx.MockRouter) -> None:
-    respx_mock.get("/CSRC/media/Publications/search-results-json-file/json").mock(
-        return_value=httpx.Response(200, json=SAMPLE_NIST_SEARCH)
+@pytest.mark.respx(base_url=GITHUB_RELEASES_URL)
+async def test_nist_search_sp(respx_mock: respx.MockRouter, tmp_path) -> None:
+    """search() finds SP 800-53 from MODS XML."""
+    respx_mock.get("/repos/usnistgov/NIST-Tech-Pubs/releases/latest").mock(
+        return_value=httpx.Response(200, json=SAMPLE_GITHUB_RELEASE)
     )
-    http = httpx.AsyncClient()
-    fetcher = _NISTFetcher(http, RateLimiter(delay=0.0))
+    respx_mock.get(re.compile(r".*allrecords-MODS\.xml.*")).mock(
+        return_value=httpx.Response(200, content=SAMPLE_MODS_XML)
+    )
+    http = httpx.AsyncClient(base_url=GITHUB_RELEASES_URL)
+    fetcher = _NISTFetcher(http, RateLimiter(delay=0.0), cache_dir=tmp_path)
     results = await fetcher.search("800-53", limit=5)
     await http.aclose()
     assert len(results) == 1
     assert results[0]["identifier"] == "NIST SP 800-53 Rev. 5"
     assert results[0]["body"] == "NIST"
+    assert results[0]["number"] == "800-53"
+    assert results[0]["revision"] == "Rev. 5"
     assert results[0]["full_text_available"] is True
 
 
-@pytest.mark.respx(base_url=NIST_BASE)
-async def test_nist_get(respx_mock: respx.MockRouter) -> None:
-    respx_mock.get("/CSRC/media/Publications/search-results-json-file/json").mock(
-        return_value=httpx.Response(200, json=SAMPLE_NIST_SEARCH)
+@pytest.mark.respx(base_url=GITHUB_RELEASES_URL)
+async def test_nist_search_fips(respx_mock: respx.MockRouter, tmp_path) -> None:
+    """search() finds FIPS 200."""
+    respx_mock.get("/repos/usnistgov/NIST-Tech-Pubs/releases/latest").mock(
+        return_value=httpx.Response(200, json=SAMPLE_GITHUB_RELEASE)
     )
-    http = httpx.AsyncClient()
-    fetcher = _NISTFetcher(http, RateLimiter(delay=0.0))
+    respx_mock.get(re.compile(r".*allrecords-MODS\.xml.*")).mock(
+        return_value=httpx.Response(200, content=SAMPLE_MODS_XML)
+    )
+    http = httpx.AsyncClient(base_url=GITHUB_RELEASES_URL)
+    fetcher = _NISTFetcher(http, RateLimiter(delay=0.0), cache_dir=tmp_path)
+    results = await fetcher.search("FIPS 200", limit=5)
+    await http.aclose()
+    assert len(results) == 1
+    assert results[0]["identifier"] == "FIPS 200"
+    assert results[0]["body"] == "NIST"
+
+
+@pytest.mark.respx(base_url=GITHUB_RELEASES_URL)
+async def test_nist_get(respx_mock: respx.MockRouter, tmp_path) -> None:
+    """get() returns exact match."""
+    respx_mock.get("/repos/usnistgov/NIST-Tech-Pubs/releases/latest").mock(
+        return_value=httpx.Response(200, json=SAMPLE_GITHUB_RELEASE)
+    )
+    respx_mock.get(re.compile(r".*allrecords-MODS\.xml.*")).mock(
+        return_value=httpx.Response(200, content=SAMPLE_MODS_XML)
+    )
+    http = httpx.AsyncClient(base_url=GITHUB_RELEASES_URL)
+    fetcher = _NISTFetcher(http, RateLimiter(delay=0.0), cache_dir=tmp_path)
     record = await fetcher.get("NIST SP 800-53 Rev. 5")
     await http.aclose()
     assert record is not None
-    assert record["number"] == "800-53"
-    assert record["revision"] == "Rev. 5"
-    assert record["full_text_url"] is not None
-    assert record["full_text_url"].startswith("https://nvlpubs.nist.gov/")
+    assert record["title"].startswith("Security and Privacy")
+    assert record["scope"] is not None
 
 
-@pytest.mark.respx(base_url=NIST_BASE)
-async def test_nist_get_not_found(respx_mock: respx.MockRouter) -> None:
-    respx_mock.get("/CSRC/media/Publications/search-results-json-file/json").mock(
-        return_value=httpx.Response(200, json=[])
+@pytest.mark.respx(base_url=GITHUB_RELEASES_URL)
+async def test_nist_get_not_found(respx_mock: respx.MockRouter, tmp_path) -> None:
+    """get() returns None for unknown identifier."""
+    respx_mock.get("/repos/usnistgov/NIST-Tech-Pubs/releases/latest").mock(
+        return_value=httpx.Response(200, json=SAMPLE_GITHUB_RELEASE)
     )
-    http = httpx.AsyncClient()
-    fetcher = _NISTFetcher(http, RateLimiter(delay=0.0))
+    respx_mock.get(re.compile(r".*allrecords-MODS\.xml.*")).mock(
+        return_value=httpx.Response(200, content=SAMPLE_MODS_XML)
+    )
+    http = httpx.AsyncClient(base_url=GITHUB_RELEASES_URL)
+    fetcher = _NISTFetcher(http, RateLimiter(delay=0.0), cache_dir=tmp_path)
     record = await fetcher.get("NIST SP 999-99")
     await http.aclose()
     assert record is None
+
+
+@pytest.mark.respx(base_url=GITHUB_RELEASES_URL)
+async def test_nist_disk_cache_used_on_second_call(
+    respx_mock: respx.MockRouter, tmp_path
+) -> None:
+    """Second fetcher instance loads from disk cache, no network call."""
+    call_count = 0
+
+    def side_effect(request):
+        nonlocal call_count
+        call_count += 1
+        return httpx.Response(200, content=SAMPLE_MODS_XML)
+
+    respx_mock.get("/repos/usnistgov/NIST-Tech-Pubs/releases/latest").mock(
+        return_value=httpx.Response(200, json=SAMPLE_GITHUB_RELEASE)
+    )
+    respx_mock.get(re.compile(r".*allrecords-MODS\.xml.*")).mock(
+        side_effect=side_effect
+    )
+    http = httpx.AsyncClient(base_url=GITHUB_RELEASES_URL)
+
+    # First fetcher: downloads XML, saves to disk
+    fetcher1 = _NISTFetcher(http, RateLimiter(delay=0.0), cache_dir=tmp_path)
+    await fetcher1.search("800-53", limit=1)
+    assert call_count == 1
+
+    # Second fetcher: should load from disk, not download again
+    fetcher2 = _NISTFetcher(http, RateLimiter(delay=0.0), cache_dir=tmp_path)
+    await fetcher2.search("800-53", limit=1)
+    await http.aclose()
+    assert call_count == 1  # no new download
+
+
+@pytest.mark.respx(base_url=GITHUB_RELEASES_URL)
+async def test_nist_github_api_failure_returns_empty(
+    respx_mock: respx.MockRouter, tmp_path
+) -> None:
+    """GitHub API failure logs warning and returns empty list."""
+    respx_mock.get("/repos/usnistgov/NIST-Tech-Pubs/releases/latest").mock(
+        return_value=httpx.Response(503)
+    )
+    http = httpx.AsyncClient(base_url=GITHUB_RELEASES_URL)
+    fetcher = _NISTFetcher(http, RateLimiter(delay=0.0), cache_dir=tmp_path)
+    results = await fetcher.search("800-53", limit=5)
+    await http.aclose()
+    assert results == []
 
 
 # ---------------------------------------------------------------------------
@@ -572,59 +706,8 @@ async def test_standards_client_search_unknown_body() -> None:
     assert results == []
 
 
-# ---------------------------------------------------------------------------
-# NIST caching and error paths
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.respx(base_url=NIST_BASE)
-async def test_nist_catalogue_cached_on_second_call(
-    respx_mock: respx.MockRouter,
-) -> None:
-    """_fetch_all() returns cached data on second invocation without network."""
-    call_count = 0
-
-    def side_effect(request):  # type: ignore[no-untyped-def]
-        nonlocal call_count
-        call_count += 1
-        return httpx.Response(200, json=SAMPLE_NIST_SEARCH)
-
-    respx_mock.get("/CSRC/media/Publications/search-results-json-file/json").mock(
-        side_effect=side_effect
-    )
-    http = httpx.AsyncClient()
-    fetcher = _NISTFetcher(http, RateLimiter(delay=0.0))
-    await fetcher.search("800-53", limit=5)
-    await fetcher.search("800-53", limit=5)
-    await http.aclose()
-    assert call_count == 1
-
-
-@pytest.mark.respx(base_url=NIST_BASE)
-async def test_nist_fetch_all_non200_returns_empty(
-    respx_mock: respx.MockRouter,
-) -> None:
-    respx_mock.get("/CSRC/media/Publications/search-results-json-file/json").mock(
-        return_value=httpx.Response(503)
-    )
-    http = httpx.AsyncClient()
-    fetcher = _NISTFetcher(http, RateLimiter(delay=0.0))
-    results = await fetcher.search("800-53", limit=5)
-    await http.aclose()
-    assert results == []
-
-
-@pytest.mark.respx(base_url=NIST_BASE)
-async def test_nist_fetch_all_dict_response(respx_mock: respx.MockRouter) -> None:
-    """_fetch_all() handles wrapped dict response via 'response' key."""
-    respx_mock.get("/CSRC/media/Publications/search-results-json-file/json").mock(
-        return_value=httpx.Response(200, json={"response": SAMPLE_NIST_SEARCH})
-    )
-    http = httpx.AsyncClient()
-    fetcher = _NISTFetcher(http, RateLimiter(delay=0.0))
-    results = await fetcher.search("800-53", limit=5)
-    await http.aclose()
-    assert len(results) == 1
+# (NIST caching and error paths are covered by test_nist_disk_cache_used_on_second_call
+#  and test_nist_github_api_failure_returns_empty above)
 
 
 # ---------------------------------------------------------------------------
@@ -840,9 +923,7 @@ async def test_standards_client_search_all_bodies() -> None:
         mock.get(url__regex=r"datatracker\.ietf\.org").mock(
             return_value=httpx.Response(200, json=SAMPLE_RFC9000_SEARCH)
         )
-        mock.get(url__regex=r"csrc\.nist\.gov").mock(
-            return_value=httpx.Response(200, json=[])
-        )
+        mock.get(url__regex=r"api\.github\.com").mock(return_value=httpx.Response(503))
         mock.get(url__regex=r"api\.w3\.org").mock(
             return_value=httpx.Response(200, json={"results": []})
         )
@@ -864,9 +945,7 @@ async def test_standards_client_get_fallback_to_fetchers() -> None:
                 200, json={"objects": [], "meta": {"total_count": 0}}
             )
         )
-        mock.get(url__regex=r"csrc\.nist\.gov").mock(
-            return_value=httpx.Response(200, json=[])
-        )
+        mock.get(url__regex=r"api\.github\.com").mock(return_value=httpx.Response(503))
         mock.get(url__regex=r"api\.w3\.org").mock(return_value=httpx.Response(404))
         mock.get(url__regex=r"www\.etsi\.org").mock(
             return_value=httpx.Response(200, text="<html><body></body></html>")
