@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import time
 from typing import TYPE_CHECKING, Any
 
 import epo_ops
@@ -51,11 +52,12 @@ def _parse_throttle_header(header: str) -> dict[str, str]:
 
 
 class EpoRateLimitedError(RateLimitedError):
-    """Raised when EPO traffic light is yellow, red, or black."""
+    """Raised when the EPO OPS API throttles a request."""
 
-    def __init__(self, color: str) -> None:
+    def __init__(self, color: str, *, service: str = "_overall") -> None:
         self.color = color
-        super().__init__(f"EPO rate limited: traffic light is {color}")
+        self.service = service
+        super().__init__(f"EPO rate limited: {service}={color}")
 
 
 class EpoClient:
@@ -89,6 +91,8 @@ class EpoClient:
                 middlewares=[],
             )
         self._lock = asyncio.Lock()
+        self._throttle_cache: dict[str, str] = {}
+        self._throttle_cache_ts: float = 0.0
 
     # ------------------------------------------------------------------
     # Private helpers
@@ -110,6 +114,22 @@ class EpoClient:
             kind_code=doc.kind or "A",
         )
 
+    def _is_service_throttled(self, service: str) -> bool:
+        """Check if a service is known to be throttled from the cache.
+
+        Args:
+            service: The EPO service name, e.g. ``"search"``.
+
+        Returns:
+            ``True`` if the cache is fresh (< 60 s old) and the service color
+            is not green or idle. ``False`` if the cache is stale or the service
+            is not throttled.
+        """
+        if time.monotonic() - self._throttle_cache_ts > 60:
+            return False
+        color = self._throttle_cache.get(service, "green")
+        return color not in ("green", "idle")
+
     def _check_throttle(self, response: Any, service: str = "_overall") -> None:
         """Check the throttle header and raise if the relevant service is throttled.
 
@@ -124,12 +144,15 @@ class EpoClient:
         """
         header = response.headers.get("X-Throttling-Control", "green")
         throttle = _parse_throttle_header(header)
+        # Update cache
+        self._throttle_cache = throttle
+        self._throttle_cache_ts = time.monotonic()
         color = throttle.get(service, throttle["_overall"])
         if color == "black":
             raise RuntimeError("EPO daily quota exhausted. Please try again tomorrow.")
         if color not in ("green", "idle"):
             logger.warning("epo_throttle service=%s color=%s", service, color)
-            raise EpoRateLimitedError(color)
+            raise EpoRateLimitedError(color, service=service)
 
     # ------------------------------------------------------------------
     # Public API
@@ -155,6 +178,15 @@ class EpoClient:
         Raises:
             EpoRateLimitedError: When the EPO traffic light is not green.
         """
+        if self._is_service_throttled("search"):
+            cached_color = self._throttle_cache.get(
+                "search", self._throttle_cache.get("_overall", "red")
+            )
+            if cached_color == "black":
+                raise RuntimeError(
+                    "EPO daily quota exhausted. Please try again tomorrow."
+                )
+            raise EpoRateLimitedError(cached_color, service="search")
         try:
             async with self._lock:
                 response = await asyncio.to_thread(
@@ -169,7 +201,7 @@ class EpoClient:
                 logger.debug("epo_search_no_results cql=%s", cql_query)
                 return {"total_count": 0, "references": []}
             raise
-        self._check_throttle(response)
+        self._check_throttle(response, service="search")
         return parse_search_xml(response.content)
 
     async def get_biblio(self, doc: DocdbNumber) -> dict[str, Any]:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from unittest.mock import MagicMock
 
 import pytest
@@ -179,6 +180,13 @@ def epo_client(mock_ops_client: MagicMock) -> EpoClient:
         consumer_secret="secret",
         _client=mock_ops_client,
     )
+
+
+@pytest.fixture
+def mock_epo_client() -> EpoClient:
+    """EpoClient with a mocked underlying ops client."""
+    epo = EpoClient(consumer_key="key", consumer_secret="secret", _client=MagicMock())
+    return epo
 
 
 # ---------------------------------------------------------------------------
@@ -614,3 +622,72 @@ def test_parse_throttle_header_all_colors() -> None:
     for color in ("green", "yellow", "red", "black", "idle"):
         result = _parse_throttle_header(color)
         assert result["_overall"] == color
+
+
+# ---------------------------------------------------------------------------
+# EpoRateLimitedError.service tests
+# ---------------------------------------------------------------------------
+
+
+def test_rate_limited_error_has_service_attribute() -> None:
+    """EpoRateLimitedError stores service as a keyword-only attribute."""
+    err = EpoRateLimitedError("yellow", service="search")
+    assert err.service == "search"
+    assert err.color == "yellow"
+    assert "search=yellow" in str(err)
+
+
+def test_rate_limited_error_default_service() -> None:
+    """EpoRateLimitedError defaults to _overall when service not specified."""
+    err = EpoRateLimitedError("red")
+    assert err.service == "_overall"
+
+
+# ---------------------------------------------------------------------------
+# Pre-flight throttle cache tests
+# ---------------------------------------------------------------------------
+
+
+async def test_preflight_cache_prevents_second_search_call(
+    mock_epo_client: EpoClient,
+) -> None:
+    """After a throttled search response, the next call raises from cache without network."""
+    # Simulate a throttled search response being returned by the EPO search endpoint
+    throttled_response = _mock_throttle_response(
+        "green", service_colors={"search": "yellow"}
+    )
+    mock_epo_client._client.published_data_search.return_value = throttled_response
+
+    with pytest.raises(EpoRateLimitedError):
+        await mock_epo_client.search("ti=test")
+
+    # Second call should raise from cache, not touch the network again
+    mock_epo_client._client.published_data_search.reset_mock()
+    with pytest.raises(EpoRateLimitedError):
+        await mock_epo_client.search("ti=test")
+
+    mock_epo_client._client.published_data_search.assert_not_called()
+
+
+async def test_preflight_cache_expires_after_60s(
+    mock_epo_client: EpoClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pre-flight cache expires after 60 seconds and lets the next call through."""
+    throttled_response = _mock_throttle_response(
+        "green", service_colors={"search": "yellow"}
+    )
+    mock_epo_client._client.published_data_search.return_value = throttled_response
+
+    with pytest.raises(EpoRateLimitedError):
+        await mock_epo_client.search("ti=test")
+
+    # Advance monotonic time by 61 seconds
+    original_monotonic = time.monotonic
+    monkeypatch.setattr(time, "monotonic", lambda: original_monotonic() + 61)
+
+    # The cache is now stale — call goes through (hits network again)
+    mock_epo_client._client.published_data_search.reset_mock()
+    with pytest.raises(EpoRateLimitedError):  # still fails but from network, not cache
+        await mock_epo_client.search("ti=test")
+
+    mock_epo_client._client.published_data_search.assert_called_once()
