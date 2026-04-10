@@ -104,7 +104,7 @@ All settings are controlled via environment variables with the `SCHOLAR_MCP_` pr
 | Variable | Default | Description |
 |---|---|---|
 | `SCHOLAR_MCP_S2_API_KEY` | -- | Semantic Scholar API key ([request one](https://www.semanticscholar.org/product/api#api-key-form)); optional but recommended for higher rate limits |
-| `SCHOLAR_MCP_READ_ONLY` | `true` | If `true`, write-tagged tools (`fetch_paper_pdf`, `convert_pdf_to_markdown`, `fetch_and_convert`, `fetch_pdf_by_url`) are hidden |
+| `SCHOLAR_MCP_READ_ONLY` | `true` | If `true`, write-tagged tools (`fetch_paper_pdf`, `convert_pdf_to_markdown`, `fetch_and_convert`, `fetch_pdf_by_url`, `fetch_patent_pdf`) are hidden |
 | `SCHOLAR_MCP_CACHE_DIR` | `/data/scholar-mcp` | Directory for the SQLite cache database and downloaded PDFs |
 | `SCHOLAR_MCP_CONTACT_EMAIL` | -- | Included in the OpenAlex User-Agent for [polite pool](https://docs.openalex.org/how-to-use-the-api/rate-limits-and-authentication#the-polite-pool) access (faster rate limits); also enables Unpaywall PDF lookups |
 | `FASTMCP_LOG_LEVEL` | `INFO` | Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`). Controls all output (app + middleware). The `-v` CLI flag sets this to `DEBUG`. |
@@ -191,8 +191,9 @@ All settings are controlled via environment variables with the `SCHOLAR_MCP_` pr
 |---|---|
 | `search_patents` | Search patents across 100+ patent offices via EPO OPS. |
 | `get_patent` | Fetch bibliographic metadata for a single patent by publication number. |
+| `fetch_patent_pdf` | Download a patent PDF via authenticated EPO OPS and optionally convert to Markdown. |
 
-> Patent tools are hidden when `SCHOLAR_MCP_EPO_CONSUMER_KEY` and `SCHOLAR_MCP_EPO_CONSUMER_SECRET` are not set.
+> Patent tools are hidden when `SCHOLAR_MCP_EPO_CONSUMER_KEY` and `SCHOLAR_MCP_EPO_CONSUMER_SECRET` are not set. `fetch_patent_pdf` is also write-tagged and hidden when `SCHOLAR_MCP_READ_ONLY=true`.
 
 ### PDF Conversion (requires docling-serve)
 
