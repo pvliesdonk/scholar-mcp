@@ -788,7 +788,7 @@ async def test_w3c_get(respx_mock: respx.MockRouter) -> None:
     assert record["body"] == "W3C"
     assert record["full_text_available"] is True
     assert record["full_text_url"] is not None
-    assert "w3.org" in record["full_text_url"]
+    assert record["full_text_url"].startswith("https://www.w3.org/")
 
 
 @pytest.mark.respx(base_url=W3C_API_BASE)
@@ -877,7 +877,9 @@ async def test_etsi_search(respx_mock: respx.MockRouter) -> None:
     assert results[0]["body"] == "ETSI"
     assert "303 645" in results[0]["identifier"]
     assert results[0]["full_text_available"] is True
-    assert "etsi.org/deliver" in (results[0]["full_text_url"] or "")
+    assert (results[0]["full_text_url"] or "").startswith(
+        "https://www.etsi.org/deliver/"
+    )
 
 
 @pytest.mark.respx(base_url=ETSI_BASE)
