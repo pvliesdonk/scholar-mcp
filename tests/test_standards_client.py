@@ -555,6 +555,117 @@ async def test_nist_github_api_failure_returns_empty(
     assert results == []
 
 
+@pytest.mark.respx(base_url=GITHUB_RELEASES_URL)
+async def test_nist_stale_disk_cache_triggers_re_download(
+    respx_mock: respx.MockRouter, tmp_path
+) -> None:
+    """Disk cache older than 90 days is ignored and MODS XML is re-downloaded."""
+    import time
+
+    from scholar_mcp._standards_client import _NIST_CACHE_MAX_AGE_DAYS
+
+    # Write a stale cache file (mtime > 90 days ago)
+    cache_path = tmp_path / "nist_catalogue.json"
+    cache_path.write_text("[]", encoding="utf-8")
+    stale_ts = time.time() - (_NIST_CACHE_MAX_AGE_DAYS + 1) * 86400
+    import os
+
+    os.utime(cache_path, (stale_ts, stale_ts))
+
+    respx_mock.get("/repos/usnistgov/NIST-Tech-Pubs/releases/latest").mock(
+        return_value=httpx.Response(200, json=SAMPLE_GITHUB_RELEASE)
+    )
+    respx_mock.get(re.compile(r".*allrecords-MODS\.xml.*")).mock(
+        return_value=httpx.Response(200, content=SAMPLE_MODS_XML)
+    )
+    http = httpx.AsyncClient(base_url=GITHUB_RELEASES_URL)
+    fetcher = _NISTFetcher(http, RateLimiter(delay=0.0), cache_dir=tmp_path)
+    results = await fetcher.search("800-53", limit=5)
+    await http.aclose()
+    # Stale cache was bypassed; MODS XML fetched and found the record
+    assert len(results) == 1
+    assert results[0]["identifier"] == "NIST SP 800-53 Rev. 5"
+
+
+@pytest.mark.respx(base_url=GITHUB_RELEASES_URL)
+async def test_nist_corrupted_disk_cache_triggers_re_download(
+    respx_mock: respx.MockRouter, tmp_path
+) -> None:
+    """Corrupted JSON in disk cache falls back to fresh download."""
+    cache_path = tmp_path / "nist_catalogue.json"
+    cache_path.write_text("not valid json {{", encoding="utf-8")
+
+    respx_mock.get("/repos/usnistgov/NIST-Tech-Pubs/releases/latest").mock(
+        return_value=httpx.Response(200, json=SAMPLE_GITHUB_RELEASE)
+    )
+    respx_mock.get(re.compile(r".*allrecords-MODS\.xml.*")).mock(
+        return_value=httpx.Response(200, content=SAMPLE_MODS_XML)
+    )
+    http = httpx.AsyncClient(base_url=GITHUB_RELEASES_URL)
+    fetcher = _NISTFetcher(http, RateLimiter(delay=0.0), cache_dir=tmp_path)
+    results = await fetcher.search("800-53", limit=5)
+    await http.aclose()
+    assert len(results) == 1
+
+
+@pytest.mark.respx(base_url=GITHUB_RELEASES_URL)
+async def test_nist_invalid_mods_xml_returns_empty(
+    respx_mock: respx.MockRouter, tmp_path
+) -> None:
+    """Malformed MODS XML logs warning and returns empty list."""
+    respx_mock.get("/repos/usnistgov/NIST-Tech-Pubs/releases/latest").mock(
+        return_value=httpx.Response(200, json=SAMPLE_GITHUB_RELEASE)
+    )
+    respx_mock.get(re.compile(r".*allrecords-MODS\.xml.*")).mock(
+        return_value=httpx.Response(200, content=b"<not valid xml <<")
+    )
+    http = httpx.AsyncClient(base_url=GITHUB_RELEASES_URL)
+    fetcher = _NISTFetcher(http, RateLimiter(delay=0.0), cache_dir=tmp_path)
+    results = await fetcher.search("800-53", limit=5)
+    await http.aclose()
+    assert results == []
+
+
+@pytest.mark.respx(base_url=GITHUB_RELEASES_URL)
+async def test_nist_search_nistir(respx_mock: respx.MockRouter, tmp_path) -> None:
+    """search() finds NISTIR series publications."""
+    nistir_mods_xml = b"""<?xml version="1.0" encoding="UTF-8"?>
+<modsCollection xmlns="http://www.loc.gov/mods/v3">
+  <mods version="3.7">
+    <titleInfo>
+      <title>Usability and Security Considerations for Public Safety Mobile Authentication</title>
+    </titleInfo>
+    <abstract displayLabel="Abstract">This report examines usability and security.</abstract>
+    <originInfo eventType="publisher">
+      <dateIssued>2018-09.</dateIssued>
+    </originInfo>
+    <location>
+      <url displayLabel="electronic resource" usage="primary display">https://doi.org/10.6028/NIST.IR.8166</url>
+    </location>
+    <relatedItem type="series">
+      <titleInfo>
+        <title>NISTIR; NIST interagency report</title>
+        <partNumber>8166</partNumber>
+      </titleInfo>
+    </relatedItem>
+    <identifier type="doi">10.6028/NIST.IR.8166</identifier>
+  </mods>
+</modsCollection>"""
+    respx_mock.get("/repos/usnistgov/NIST-Tech-Pubs/releases/latest").mock(
+        return_value=httpx.Response(200, json=SAMPLE_GITHUB_RELEASE)
+    )
+    respx_mock.get(re.compile(r".*allrecords-MODS\.xml.*")).mock(
+        return_value=httpx.Response(200, content=nistir_mods_xml)
+    )
+    http = httpx.AsyncClient(base_url=GITHUB_RELEASES_URL)
+    fetcher = _NISTFetcher(http, RateLimiter(delay=0.0), cache_dir=tmp_path)
+    results = await fetcher.search("8166", limit=5)
+    await http.aclose()
+    assert len(results) == 1
+    assert results[0]["identifier"] == "NISTIR 8166"
+    assert results[0]["body"] == "NIST"
+
+
 # ---------------------------------------------------------------------------
 # W3C fetcher tests
 # ---------------------------------------------------------------------------

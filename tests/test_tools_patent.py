@@ -11,6 +11,7 @@ import pytest
 from fastmcp import FastMCP
 from fastmcp.client import Client
 
+from scholar_mcp._docling_client import DoclingClient
 from scholar_mcp._epo_client import EpoClient, EpoRateLimitedError
 from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._tools_patent import (
@@ -1212,3 +1213,346 @@ def test_fetch_patent_pdf_execute_pdf_not_available(bundle: ServiceBundle) -> No
     result_json = asyncio.run(run())
     result = json.loads(result_json)
     assert result.get("error") == "pdf_not_available"
+
+
+def _make_mock_docling(
+    *,
+    convert_result: str = "# Patent\n\nMarkdown content.",
+    vlm_available: bool = False,
+) -> MagicMock:
+    """Return a MagicMock DoclingClient for use in patent PDF tests."""
+    mock = MagicMock(spec=DoclingClient)
+    mock.vlm_available = vlm_available
+    mock.convert = AsyncMock(return_value=convert_result)
+    mock.vlm_skip_reason = MagicMock(return_value=None)
+    return mock
+
+
+def test_fetch_patent_pdf_cache_hit_with_docling_and_cached_md(
+    bundle: ServiceBundle,
+) -> None:
+    """Cache hit returns markdown inline when both PDF and MD are already cached."""
+    epo = _make_epo_client()
+    bundle.epo = epo
+    bundle.docling = _make_mock_docling()  # type: ignore[assignment]
+
+    pdf_dir = bundle.config.cache_dir / "pdfs"
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+    md_dir = bundle.config.cache_dir / "md"
+    md_dir.mkdir(parents=True, exist_ok=True)
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_patent_tools(app)
+
+    async def run() -> dict:
+        import hashlib
+        import re
+
+        patent_number = "EP3491801B1"
+        from scholar_mcp._patent_numbers import normalize
+
+        doc = normalize(patent_number)
+        stem = re.sub(r"[^\w\-]", "_", f"{doc.country}{doc.number}{doc.kind or ''}")
+        url_hash = hashlib.sha256(patent_number.encode()).hexdigest()[:8]
+        stem = f"patent_{stem}_{url_hash}"
+
+        (pdf_dir / f"{stem}.pdf").write_bytes(b"%PDF-1.4 cached")
+        (md_dir / f"{stem}.md").write_text("# Cached Markdown", encoding="utf-8")
+
+        async with Client(app) as client:
+            result = await client.call_tool(
+                "fetch_patent_pdf", {"patent_number": patent_number}
+            )
+        return json.loads(result.content[0].text)
+
+    data = asyncio.run(run())
+    assert "pdf_path" in data
+    assert data.get("markdown") == "# Cached Markdown"
+    assert data.get("vlm_used") is False
+    assert data.get("queued") is not True
+    # No EPO call and no docling conversion — both were cached
+    bundle.docling.convert.assert_not_called()  # type: ignore[union-attr]
+
+
+def test_fetch_patent_pdf_execute_with_docling_converts_to_markdown(
+    bundle: ServiceBundle,
+) -> None:
+    """_execute() downloads PDF and converts it to markdown via docling."""
+    epo = _make_epo_client()
+    epo.get_pdf = AsyncMock(return_value=b"%PDF-1.4 fresh")  # type: ignore[method-assign]
+    bundle.epo = epo
+    bundle.docling = _make_mock_docling(convert_result="# Patent Markdown")  # type: ignore[assignment]
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_patent_tools(app)
+
+    async def run() -> str:
+        async with Client(app) as client:
+            result = await client.call_tool(
+                "fetch_patent_pdf", {"patent_number": "EP3491801B1"}
+            )
+        queued_data = json.loads(result.content[0].text)
+        task_id = queued_data["task_id"]
+
+        tasks = bundle.tasks
+        for _ in range(50):
+            task = tasks.get(task_id)
+            if task and task.status == "completed":
+                return task.result or ""
+            await asyncio.sleep(0.05)
+        return ""
+
+    result_json = asyncio.run(run())
+    result = json.loads(result_json)
+    assert "pdf_path" in result
+    assert result.get("markdown") == "# Patent Markdown"
+    assert result.get("vlm_used") is False
+    bundle.docling.convert.assert_called_once()  # type: ignore[union-attr]
+
+
+def test_fetch_patent_pdf_cache_hit_docling_no_md_falls_through_to_queue(
+    bundle: ServiceBundle,
+) -> None:
+    """Cache hit with docling but no cached md queues _execute() to convert."""
+    epo = _make_epo_client()
+    epo.get_pdf = AsyncMock(return_value=b"%PDF-1.4 fresh")  # type: ignore[method-assign]
+    bundle.epo = epo
+    bundle.docling = _make_mock_docling(convert_result="# Freshly Converted")  # type: ignore[assignment]
+
+    pdf_dir = bundle.config.cache_dir / "pdfs"
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_patent_tools(app)
+
+    async def run() -> str:
+        import hashlib
+        import re
+
+        patent_number = "EP3491801B1"
+        from scholar_mcp._patent_numbers import normalize
+
+        doc = normalize(patent_number)
+        stem = re.sub(r"[^\w\-]", "_", f"{doc.country}{doc.number}{doc.kind or ''}")
+        url_hash = hashlib.sha256(patent_number.encode()).hexdigest()[:8]
+        stem = f"patent_{stem}_{url_hash}"
+
+        # PDF exists, but no md file — so it falls through to queue
+        (pdf_dir / f"{stem}.pdf").write_bytes(b"%PDF-1.4 cached")
+
+        async with Client(app) as client:
+            result = await client.call_tool(
+                "fetch_patent_pdf", {"patent_number": patent_number}
+            )
+        queued_data = json.loads(result.content[0].text)
+        assert queued_data.get("queued") is True
+        task_id = queued_data["task_id"]
+
+        tasks = bundle.tasks
+        for _ in range(50):
+            task = tasks.get(task_id)
+            if task and task.status == "completed":
+                return task.result or ""
+            await asyncio.sleep(0.05)
+        return ""
+
+    result_json = asyncio.run(run())
+    result = json.loads(result_json)
+    assert result.get("markdown") == "# Freshly Converted"
+    # PDF was not re-downloaded (already existed); docling was called
+    epo.get_pdf.assert_not_called()  # type: ignore[attr-defined]
+    bundle.docling.convert.assert_called_once()  # type: ignore[union-attr]
+
+
+def test_fetch_patent_pdf_cache_hit_with_vlm_skip_reason(
+    bundle: ServiceBundle,
+) -> None:
+    """Cache hit includes vlm_skip_reason when VLM is not available."""
+    epo = _make_epo_client()
+    bundle.epo = epo
+    mock_docling = _make_mock_docling()
+    mock_docling.vlm_skip_reason = MagicMock(return_value="VLM not configured")
+    bundle.docling = mock_docling  # type: ignore[assignment]
+
+    pdf_dir = bundle.config.cache_dir / "pdfs"
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+    md_dir = bundle.config.cache_dir / "md"
+    md_dir.mkdir(parents=True, exist_ok=True)
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_patent_tools(app)
+
+    async def run() -> dict:
+        import hashlib
+        import re
+
+        patent_number = "EP3491801B1"
+        from scholar_mcp._patent_numbers import normalize
+
+        doc = normalize(patent_number)
+        stem = re.sub(r"[^\w\-]", "_", f"{doc.country}{doc.number}{doc.kind or ''}")
+        url_hash = hashlib.sha256(patent_number.encode()).hexdigest()[:8]
+        stem = f"patent_{stem}_{url_hash}"
+
+        (pdf_dir / f"{stem}.pdf").write_bytes(b"%PDF-1.4")
+        (md_dir / f"{stem}.md").write_text("# Cached", encoding="utf-8")
+
+        async with Client(app) as client:
+            result = await client.call_tool(
+                "fetch_patent_pdf", {"patent_number": patent_number}
+            )
+        return json.loads(result.content[0].text)
+
+    data = asyncio.run(run())
+    assert data.get("vlm_skip_reason") == "VLM not configured"
+
+
+def test_fetch_patent_pdf_execute_docling_convert_exception(
+    bundle: ServiceBundle,
+) -> None:
+    """_execute() returns pdf_path only when docling conversion raises."""
+    epo = _make_epo_client()
+    epo.get_pdf = AsyncMock(return_value=b"%PDF-1.4 fresh")  # type: ignore[method-assign]
+    bundle.epo = epo
+    mock_docling = _make_mock_docling()
+    mock_docling.convert = AsyncMock(side_effect=RuntimeError("docling timeout"))
+    bundle.docling = mock_docling  # type: ignore[assignment]
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_patent_tools(app)
+
+    async def run() -> str:
+        async with Client(app) as client:
+            result = await client.call_tool(
+                "fetch_patent_pdf", {"patent_number": "EP3491801B1"}
+            )
+        queued_data = json.loads(result.content[0].text)
+        task_id = queued_data["task_id"]
+
+        tasks = bundle.tasks
+        for _ in range(50):
+            task = tasks.get(task_id)
+            if task and task.status == "completed":
+                return task.result or ""
+            await asyncio.sleep(0.05)
+        return ""
+
+    result_json = asyncio.run(run())
+    result = json.loads(result_json)
+    # Falls back to just pdf_path when docling fails
+    assert "pdf_path" in result
+    assert "markdown" not in result
+
+
+def test_fetch_patent_pdf_execute_with_vlm_skip_reason(
+    bundle: ServiceBundle,
+) -> None:
+    """_execute() includes vlm_skip_reason in result when VLM is not available."""
+    epo = _make_epo_client()
+    epo.get_pdf = AsyncMock(return_value=b"%PDF-1.4 fresh")  # type: ignore[method-assign]
+    bundle.epo = epo
+    mock_docling = _make_mock_docling(convert_result="# Patent content")
+    mock_docling.vlm_skip_reason = MagicMock(return_value="VLM not configured")
+    bundle.docling = mock_docling  # type: ignore[assignment]
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_patent_tools(app)
+
+    async def run() -> str:
+        async with Client(app) as client:
+            result = await client.call_tool(
+                "fetch_patent_pdf", {"patent_number": "EP3491801B1"}
+            )
+        queued_data = json.loads(result.content[0].text)
+        task_id = queued_data["task_id"]
+
+        tasks = bundle.tasks
+        for _ in range(50):
+            task = tasks.get(task_id)
+            if task and task.status == "completed":
+                return task.result or ""
+            await asyncio.sleep(0.05)
+        return ""
+
+    result_json = asyncio.run(run())
+    result = json.loads(result_json)
+    assert result.get("vlm_skip_reason") == "VLM not configured"
+    assert "markdown" in result
+
+
+def test_fetch_patent_pdf_execute_with_docling_cached_md(
+    bundle: ServiceBundle,
+) -> None:
+    """_execute() reads markdown from cache when md_path already exists."""
+    epo = _make_epo_client()
+    epo.get_pdf = AsyncMock(return_value=b"%PDF-1.4 fresh")  # type: ignore[method-assign]
+    bundle.epo = epo
+    bundle.docling = _make_mock_docling()  # type: ignore[assignment]
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_patent_tools(app)
+
+    async def run() -> str:
+        import hashlib
+        import re
+
+        patent_number = "EP3491801B1"
+        from scholar_mcp._patent_numbers import normalize
+
+        doc = normalize(patent_number)
+        stem = re.sub(r"[^\w\-]", "_", f"{doc.country}{doc.number}{doc.kind or ''}")
+        url_hash = hashlib.sha256(patent_number.encode()).hexdigest()[:8]
+        stem = f"patent_{stem}_{url_hash}"
+
+        md_dir = bundle.config.cache_dir / "md"
+        md_dir.mkdir(parents=True, exist_ok=True)
+        (md_dir / f"{stem}.md").write_text("# Pre-cached MD", encoding="utf-8")
+
+        async with Client(app) as client:
+            result = await client.call_tool(
+                "fetch_patent_pdf", {"patent_number": patent_number}
+            )
+        queued_data = json.loads(result.content[0].text)
+        task_id = queued_data["task_id"]
+
+        tasks = bundle.tasks
+        for _ in range(50):
+            task = tasks.get(task_id)
+            if task and task.status == "completed":
+                return task.result or ""
+            await asyncio.sleep(0.05)
+        return ""
+
+    result_json = asyncio.run(run())
+    result = json.loads(result_json)
+    assert result.get("markdown") == "# Pre-cached MD"
+    # convert should not be called since md was already cached
+    bundle.docling.convert.assert_not_called()  # type: ignore[union-attr]
