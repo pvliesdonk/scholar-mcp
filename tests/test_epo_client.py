@@ -12,6 +12,7 @@ from requests.exceptions import HTTPError
 from scholar_mcp._epo_client import (
     EpoClient,
     EpoRateLimitedError,
+    _parse_pdf_link,
     _parse_throttle_header,
 )
 from scholar_mcp._patent_numbers import DocdbNumber
@@ -885,3 +886,198 @@ async def test_preflight_cache_expires_after_60s(
         await mock_epo_client.search("ti=test")
 
     mock_epo_client._client.published_data_search.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# _parse_pdf_link tests
+# ---------------------------------------------------------------------------
+
+_IMAGE_INQUIRY_XML = b"""<?xml version="1.0" encoding="UTF-8"?>
+<ops:world-patent-data xmlns:ops="http://ops.epo.org">
+  <ops:document-inquiry>
+    <ops:inquiry-result>
+      <ops:document-instance desc="FullDocument" link="published-data/images/EP/1234567/A1/fullimage" number-of-pages="5">
+        <ops:document-format desc="application/pdf"/>
+      </ops:document-instance>
+    </ops:inquiry-result>
+  </ops:document-inquiry>
+</ops:world-patent-data>"""
+
+_IMAGE_INQUIRY_NO_PDF_XML = b"""<?xml version="1.0" encoding="UTF-8"?>
+<ops:world-patent-data xmlns:ops="http://ops.epo.org">
+  <ops:document-inquiry>
+    <ops:inquiry-result>
+      <ops:document-instance desc="FullDocument" link="published-data/images/EP/1234567/A1/fullimage" number-of-pages="5">
+        <ops:document-format desc="image/tiff"/>
+      </ops:document-instance>
+    </ops:inquiry-result>
+  </ops:document-inquiry>
+</ops:world-patent-data>"""
+
+_IMAGE_INQUIRY_NO_FULL_DOC_XML = b"""<?xml version="1.0" encoding="UTF-8"?>
+<ops:world-patent-data xmlns:ops="http://ops.epo.org">
+  <ops:document-inquiry>
+    <ops:inquiry-result>
+      <ops:document-instance desc="Thumbnail" link="some/path" number-of-pages="1">
+        <ops:document-format desc="image/png"/>
+      </ops:document-instance>
+    </ops:inquiry-result>
+  </ops:document-inquiry>
+</ops:world-patent-data>"""
+
+
+def test_parse_pdf_link_returns_link_from_valid_xml() -> None:
+    """_parse_pdf_link extracts the link attribute from a FullDocument PDF instance."""
+    link = _parse_pdf_link(_IMAGE_INQUIRY_XML)
+    assert link == "published-data/images/EP/1234567/A1/fullimage"
+
+
+def test_parse_pdf_link_returns_none_when_no_pdf_format() -> None:
+    """_parse_pdf_link returns None when FullDocument has no PDF format child."""
+    link = _parse_pdf_link(_IMAGE_INQUIRY_NO_PDF_XML)
+    assert link is None
+
+
+def test_parse_pdf_link_returns_none_when_no_full_document() -> None:
+    """_parse_pdf_link returns None when there is no FullDocument instance."""
+    link = _parse_pdf_link(_IMAGE_INQUIRY_NO_FULL_DOC_XML)
+    assert link is None
+
+
+def test_parse_pdf_link_returns_none_on_parse_error() -> None:
+    """_parse_pdf_link returns None (and logs) on malformed XML."""
+    link = _parse_pdf_link(b"not xml at all <<<!>>")
+    assert link is None
+
+
+def test_parse_pdf_link_reraises_rate_limit_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """_parse_pdf_link re-raises RateLimitedError / EpoRateLimitedError without swallowing."""
+    import scholar_mcp._epo_client as _mod
+
+    monkeypatch.setattr(
+        _mod._lxml_etree,
+        "fromstring",
+        lambda _data: (_ for _ in ()).throw(EpoRateLimitedError("yellow")),
+    )
+    with pytest.raises(EpoRateLimitedError):
+        _parse_pdf_link(b"<xml/>")
+
+
+# ---------------------------------------------------------------------------
+# get_pdf() tests
+# ---------------------------------------------------------------------------
+
+
+async def test_get_pdf_returns_pdf_bytes(
+    epo_client: EpoClient,
+    mock_ops_client: MagicMock,
+) -> None:
+    """get_pdf() returns raw PDF bytes on success."""
+    inquiry_resp = _mock_response(_IMAGE_INQUIRY_XML)
+    pdf_resp = _mock_response(b"%PDF-1.4 fake")
+    mock_ops_client.published_data.return_value = inquiry_resp
+    mock_ops_client.image.return_value = pdf_resp
+
+    doc = DocdbNumber(country="EP", number="1234567", kind="A1")
+    result = await epo_client.get_pdf(doc)
+
+    assert result == b"%PDF-1.4 fake"
+    mock_ops_client.published_data.assert_called_once()
+    mock_ops_client.image.assert_called_once()
+
+
+async def test_get_pdf_raises_value_error_when_no_pdf_available(
+    epo_client: EpoClient,
+    mock_ops_client: MagicMock,
+) -> None:
+    """get_pdf() raises ValueError when the inquiry returns no PDF link."""
+    mock_ops_client.published_data.return_value = _mock_response(
+        _IMAGE_INQUIRY_NO_PDF_XML
+    )
+
+    doc = DocdbNumber(country="EP", number="1234567", kind="A1")
+    with pytest.raises(ValueError, match="No PDF available"):
+        await epo_client.get_pdf(doc)
+
+
+async def test_get_pdf_preflight_blocks_when_throttled(
+    mock_epo_client: EpoClient,
+) -> None:
+    """get_pdf() pre-flight raises EpoRateLimitedError when retrieval is throttled."""
+    mock_epo_client._throttle_cache = {"retrieval": "yellow", "_overall": "green"}
+    mock_epo_client._throttle_cache_ts = time.monotonic()
+
+    doc = DocdbNumber(country="EP", number="1234567", kind="A1")
+    with pytest.raises(EpoRateLimitedError, match="retrieval"):
+        await mock_epo_client.get_pdf(doc)
+
+    mock_epo_client._client.published_data.assert_not_called()
+
+
+async def test_get_pdf_preflight_black_raises_runtime_error(
+    mock_epo_client: EpoClient,
+) -> None:
+    """get_pdf() pre-flight raises RuntimeError when quota is exhausted (black)."""
+    mock_epo_client._throttle_cache = {"retrieval": "black", "_overall": "green"}
+    mock_epo_client._throttle_cache_ts = time.monotonic()
+
+    doc = DocdbNumber(country="EP", number="1234567", kind="A1")
+    with pytest.raises(RuntimeError, match="daily quota"):
+        await mock_epo_client.get_pdf(doc)
+
+
+async def test_get_pdf_second_throttle_check_raises(
+    epo_client: EpoClient,
+    mock_ops_client: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """get_pdf() raises after step-1 when retrieval becomes throttled before step-2."""
+    # Step 1 returns green so _check_throttle passes; step-2 pre-flight returns True.
+    mock_ops_client.published_data.return_value = _mock_response(_IMAGE_INQUIRY_XML)
+
+    call_count = 0
+
+    def throttled_on_second_call(service: str) -> bool:
+        nonlocal call_count
+        call_count += 1
+        if call_count > 1:
+            epo_client._throttle_cache = {"retrieval": "yellow", "_overall": "green"}
+            epo_client._throttle_cache_ts = time.monotonic()
+            return True
+        return False
+
+    monkeypatch.setattr(epo_client, "_is_service_throttled", throttled_on_second_call)
+
+    doc = DocdbNumber(country="EP", number="1234567", kind="A1")
+    with pytest.raises(EpoRateLimitedError, match="retrieval"):
+        await epo_client.get_pdf(doc)
+
+    mock_ops_client.image.assert_not_called()
+
+
+async def test_get_pdf_second_throttle_check_black_raises_runtime_error(
+    epo_client: EpoClient,
+    mock_ops_client: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """get_pdf() raises RuntimeError if retrieval goes black between step-1 and step-2."""
+    mock_ops_client.published_data.return_value = _mock_response(_IMAGE_INQUIRY_XML)
+
+    call_count = 0
+
+    def black_on_second_call(service: str) -> bool:
+        nonlocal call_count
+        call_count += 1
+        if call_count > 1:
+            epo_client._throttle_cache = {"retrieval": "black", "_overall": "green"}
+            epo_client._throttle_cache_ts = time.monotonic()
+            return True
+        return False
+
+    monkeypatch.setattr(epo_client, "_is_service_throttled", black_on_second_call)
+
+    doc = DocdbNumber(country="EP", number="1234567", kind="A1")
+    with pytest.raises(RuntimeError, match="daily quota"):
+        await epo_client.get_pdf(doc)

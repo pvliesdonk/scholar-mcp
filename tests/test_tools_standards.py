@@ -63,8 +63,20 @@ async def test_resolve_unambiguous(respx_mock: respx.MockRouter, mcp: FastMCP) -
     )
 
 
+@respx.mock(assert_all_called=False)
 async def test_resolve_unknown_returns_null(mcp: FastMCP) -> None:
     """resolve_standard_identifier returns nulls for unknown input."""
+    # Mock all external endpoints so the test is hermetic
+    respx.get(url__regex=r"datatracker\.ietf\.org").mock(
+        return_value=httpx.Response(
+            200, json={"objects": [], "meta": {"total_count": 0}}
+        )
+    )
+    respx.get(url__regex=r"api\.github\.com").mock(return_value=httpx.Response(503))
+    respx.get(url__regex=r"api\.w3\.org").mock(return_value=httpx.Response(404))
+    respx.get(url__regex=r"www\.etsi\.org").mock(
+        return_value=httpx.Response(200, json=[])
+    )
     async with Client(mcp) as client:
         result = await client.call_tool(
             "resolve_standard_identifier", {"raw": "totally unknown xyz"}

@@ -402,6 +402,145 @@ def register_patent_tools(mcp: FastMCP) -> None:
                 {"queued": True, "task_id": task_id, "tool": "get_citing_patents"}
             )
 
+    @mcp.tool(
+        annotations={
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "openWorldHint": True,
+        },
+        tags={"write"},
+    )
+    async def fetch_patent_pdf(
+        patent_number: str,
+        use_vlm: bool = False,
+        bundle: ServiceBundle = Depends(get_bundle),
+    ) -> str:
+        """Download a patent PDF via authenticated EPO OPS and convert to Markdown.
+
+        Downloads the full-document PDF for a patent using the authenticated
+        EPO Open Patent Services session, saves it locally, and if docling is
+        configured converts it to Markdown.
+
+        Not all patents have full text available via OPS — WO and older EP
+        patents sometimes lack PDFs. Returns an error in that case.
+
+        Args:
+            patent_number: Patent number in any format (EP, WO, US, etc.),
+                e.g. "EP3491801B1", "EP 3491801 B1", "US10123456B2".
+            use_vlm: Use VLM enrichment for formulas and figures (requires
+                VLM to be configured).
+
+        Returns:
+            JSON with ``pdf_path`` and optionally ``markdown`` / ``md_path``,
+            or ``{"queued": true, "task_id": "...", "tool": "fetch_patent_pdf"}``
+            while the download is in progress.
+        """
+        import hashlib
+        import re
+
+        if bundle.epo is None:
+            return json.dumps(
+                {
+                    "error": "epo_not_configured",
+                    "detail": (
+                        "EPO OPS credentials are not set. "
+                        "Configure SCHOLAR_MCP_EPO_CONSUMER_KEY and "
+                        "SCHOLAR_MCP_EPO_CONSUMER_SECRET."
+                    ),
+                }
+            )
+
+        try:
+            doc = normalize(patent_number)
+        except ValueError:
+            return json.dumps(
+                {
+                    "error": "invalid_patent_number",
+                    "detail": f"Could not parse patent number: {patent_number!r}",
+                }
+            )
+
+        stem = re.sub(r"[^\w\-]", "_", f"{doc.country}{doc.number}{doc.kind or ''}")
+        url_hash = hashlib.sha256(patent_number.encode()).hexdigest()[:8]
+        stem = f"patent_{stem}_{url_hash}"
+
+        pdf_dir = bundle.config.cache_dir / "pdfs"
+        pdf_dir.mkdir(parents=True, exist_ok=True)
+        pdf_path = pdf_dir / f"{stem}.pdf"
+
+        # Cache hit: return synchronously without queuing (per CLAUDE.md pattern)
+        if pdf_path.exists():
+            cached_result: dict[str, object] = {"pdf_path": str(pdf_path)}
+            if bundle.docling is not None:
+                vlm_suffix = "_vlm" if use_vlm and bundle.docling.vlm_available else ""
+                md_path_cached = (
+                    bundle.config.cache_dir / "md" / f"{stem}{vlm_suffix}.md"
+                )
+                if md_path_cached.exists():
+                    markdown_cached = await _asyncio.to_thread(
+                        md_path_cached.read_text, encoding="utf-8"
+                    )
+                    cached_result["markdown"] = markdown_cached
+                    cached_result["md_path"] = str(md_path_cached)
+                    cached_result["vlm_used"] = use_vlm and bundle.docling.vlm_available
+                    skip_reason = bundle.docling.vlm_skip_reason(use_vlm)
+                    if skip_reason:
+                        cached_result["vlm_skip_reason"] = skip_reason
+                    return json.dumps(cached_result)
+            else:
+                return json.dumps(cached_result)
+
+        async def _execute() -> str:
+            if not pdf_path.exists():
+                try:
+                    pdf_bytes = await bundle.epo.get_pdf(doc)  # type: ignore[union-attr]
+                except ValueError as exc:
+                    return json.dumps(
+                        {"error": "pdf_not_available", "detail": str(exc)}
+                    )
+                await _asyncio.to_thread(pdf_path.write_bytes, pdf_bytes)
+                logger.info(
+                    "patent_pdf_downloaded path=%s bytes=%d",
+                    pdf_path,
+                    len(pdf_bytes),
+                )
+
+            result: dict[str, object] = {"pdf_path": str(pdf_path)}
+
+            if bundle.docling is None:
+                return json.dumps(result)
+
+            vlm_suffix = "_vlm" if use_vlm and bundle.docling.vlm_available else ""
+            md_dir = bundle.config.cache_dir / "md"
+            md_dir.mkdir(parents=True, exist_ok=True)
+            md_path = md_dir / f"{stem}{vlm_suffix}.md"
+
+            if md_path.exists():
+                markdown = await _asyncio.to_thread(md_path.read_text, encoding="utf-8")
+            else:
+                try:
+                    pdf_bytes_for_conv = await _asyncio.to_thread(pdf_path.read_bytes)
+                    markdown = await bundle.docling.convert(
+                        pdf_bytes_for_conv, pdf_path.name, use_vlm=use_vlm
+                    )
+                except Exception:
+                    logger.exception("docling_convert_failed path=%s", pdf_path)
+                    return json.dumps(result)
+                await _asyncio.to_thread(md_path.write_text, markdown, encoding="utf-8")
+
+            result["markdown"] = markdown
+            result["md_path"] = str(md_path)
+            result["vlm_used"] = use_vlm and bundle.docling.vlm_available
+            skip_reason = bundle.docling.vlm_skip_reason(use_vlm)
+            if skip_reason:
+                result["vlm_skip_reason"] = skip_reason
+            return json.dumps(result)
+
+        task_id = bundle.tasks.submit(_execute(), ttl=3600.0, tool="fetch_patent_pdf")
+        return json.dumps(
+            {"queued": True, "task_id": task_id, "tool": "fetch_patent_pdf"}
+        )
+
 
 # All available patent sections.
 _AVAILABLE_SECTIONS = {
