@@ -49,7 +49,9 @@ _W3C_WEBAUTHN_RE = re.compile(r"(?i)\bwebauthn\s+level\s+(\d+)\b")
 
 # ETSI: "ETSI EN 303 645", "etsi en 303645", "ETSI TS 102 165"
 # Require explicit "etsi" prefix to avoid false positives with other European bodies (CEN, CENELEC)
-_ETSI_RE = re.compile(r"(?i)\betsi\s+(EN|TS|TR|ES|EG)\s*(\d{3})\s*[\s-]?\s*(\d{3})\b")
+_ETSI_RE = re.compile(
+    r"(?i)\betsi\s+(EN|TS|TR|ES|EG)\s*(\d{3})\s*[\s-]?\s*(\d{3}(?:-\d+)?)\b"
+)
 
 
 def resolve_identifier_local(raw: str) -> tuple[str, str] | None:
@@ -872,7 +874,7 @@ class _ETSIFetcher:
             return []
         try:
             items: list[dict] = resp.json()  # type: ignore[type-arg]
-        except Exception as exc:
+        except json.JSONDecodeError as exc:
             logger.warning(
                 "etsi_api_json_decode_error url=%s err=%s", str(resp.url), exc
             )

@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 import epo_ops
 import epo_ops.models
+from lxml import etree as _lxml_etree
 from requests.exceptions import HTTPError
 
 from scholar_mcp._epo_xml import (
@@ -62,9 +63,7 @@ def _parse_pdf_link(inquiry_xml: bytes) -> str | None:
         ``None`` if no PDF is available.
     """
     try:
-        from lxml import etree
-
-        root = etree.fromstring(inquiry_xml)
+        root = _lxml_etree.fromstring(inquiry_xml)
         ns = {"ops": "http://ops.epo.org"}
         for el in root.xpath(
             "//ops:document-instance[@desc='FullDocument']", namespaces=ns
@@ -76,7 +75,7 @@ def _parse_pdf_link(inquiry_xml: bytes) -> str | None:
         return None
     except (RateLimitedError, EpoRateLimitedError):
         raise
-    except Exception as exc:
+    except _lxml_etree.LxmlError as exc:
         logger.warning("epo_pdf_link_parse_failed err=%s", exc)
         return None
 

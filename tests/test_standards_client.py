@@ -140,6 +140,11 @@ def test_resolve_etsi_en_no_spaces() -> None:
     assert result == ("ETSI EN 303 645", "ETSI")
 
 
+def test_resolve_etsi_ts_with_part_number() -> None:
+    result = resolve_identifier_local("ETSI TS 102 690-1")
+    assert result == ("ETSI TS 102 690-1", "ETSI")
+
+
 # --- Resolver: unrecognised ---
 
 

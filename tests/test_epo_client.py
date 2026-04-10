@@ -954,10 +954,10 @@ def test_parse_pdf_link_reraises_rate_limit_errors(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """_parse_pdf_link re-raises RateLimitedError / EpoRateLimitedError without swallowing."""
-    from lxml import etree
+    import scholar_mcp._epo_client as _mod
 
     monkeypatch.setattr(
-        etree,
+        _mod._lxml_etree,
         "fromstring",
         lambda _data: (_ for _ in ()).throw(EpoRateLimitedError("yellow")),
     )

@@ -464,7 +464,10 @@ def register_pdf_tools(mcp: FastMCP) -> None:
             JSON with ``pdf_path`` and optionally ``markdown`` / ``md_path``.
         """
         # Intercept authenticated service URLs that need special handling
-        if "ops.epo.org" in url:
+        from urllib.parse import urlparse as _urlparse
+
+        _parsed = _urlparse(url)
+        if _parsed.netloc == "ops.epo.org" or _parsed.netloc.endswith(".ops.epo.org"):
             return json.dumps(
                 {
                     "error": "use_fetch_patent_pdf",
