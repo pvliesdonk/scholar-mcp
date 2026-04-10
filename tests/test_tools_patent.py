@@ -1009,3 +1009,92 @@ async def test_get_citing_patents_rate_limited_queues(
     data = json.loads(result.content[0].text)
     assert data["queued"] is True
     assert data["tool"] == "get_citing_patents"
+
+
+# ---------------------------------------------------------------------------
+# fetch_patent_pdf tests
+# ---------------------------------------------------------------------------
+
+
+def _make_image_inquiry_xml(link: str, pages: int = 5) -> bytes:
+    """Build a minimal EPO image inquiry XML response."""
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<ops:world-patent-data xmlns:ops="http://ops.epo.org" xmlns:exch="http://www.epo.org/exchange">
+  <ops:document-inquiry>
+    <ops:inquiry-result>
+      <ops:document-instance desc="FullDocument" link="{link}" number-of-pages="{pages}">
+        <ops:document-format desc="application/pdf"/>
+      </ops:document-instance>
+    </ops:inquiry-result>
+  </ops:document-inquiry>
+</ops:world-patent-data>
+""".encode()
+
+
+def test_fetch_patent_pdf_no_epo_client(bundle: ServiceBundle) -> None:
+    """Returns error when EPO is not configured."""
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_patent_tools(app)
+
+    async def run() -> dict:
+        async with Client(app) as client:
+            result = await client.call_tool(
+                "fetch_patent_pdf", {"patent_number": "EP3491801B1"}
+            )
+        return json.loads(result.content[0].text)
+
+    data = asyncio.run(run())
+    assert "error" in data
+    assert "epo" in data["error"].lower() or "configured" in data["error"].lower()
+
+
+def test_fetch_patent_pdf_invalid_number(bundle: ServiceBundle) -> None:
+    """Returns error for unparseable patent number."""
+    bundle.epo = _make_epo_client()
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_patent_tools(app)
+
+    async def run() -> dict:
+        async with Client(app) as client:
+            result = await client.call_tool(
+                "fetch_patent_pdf", {"patent_number": "NOTAPATENT"}
+            )
+        return json.loads(result.content[0].text)
+
+    data = asyncio.run(run())
+    assert "error" in data
+
+
+def test_fetch_patent_pdf_queued(bundle: ServiceBundle) -> None:
+    """fetch_patent_pdf queues task and returns queued response."""
+    epo = _make_epo_client()
+    epo.get_pdf = AsyncMock(return_value=b"%PDF-1.4 fake pdf content")
+    bundle.epo = epo
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_patent_tools(app)
+
+    async def run() -> dict:
+        async with Client(app) as client:
+            result = await client.call_tool(
+                "fetch_patent_pdf", {"patent_number": "EP3491801B1"}
+            )
+        return json.loads(result.content[0].text)
+
+    data = asyncio.run(run())
+    assert data.get("queued") is True
+    assert data.get("tool") == "fetch_patent_pdf"

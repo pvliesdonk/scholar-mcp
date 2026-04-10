@@ -463,6 +463,19 @@ def register_pdf_tools(mcp: FastMCP) -> None:
         Returns:
             JSON with ``pdf_path`` and optionally ``markdown`` / ``md_path``.
         """
+        # Intercept authenticated service URLs that need special handling
+        if "ops.epo.org" in url:
+            return json.dumps(
+                {
+                    "error": "use_fetch_patent_pdf",
+                    "detail": (
+                        "EPO OPS URLs require authenticated access. "
+                        "Use the fetch_patent_pdf tool instead, passing the patent number "
+                        "(e.g. fetch_patent_pdf('EP3491801B1'))."
+                    ),
+                }
+            )
+
         import hashlib
         import re
         from urllib.parse import urlparse

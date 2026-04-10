@@ -51,6 +51,34 @@ def _parse_throttle_header(header: str) -> dict[str, str]:
     return result
 
 
+def _parse_pdf_link(inquiry_xml: bytes) -> str | None:
+    """Extract the FullDocument PDF link path from an EPO image inquiry response.
+
+    Args:
+        inquiry_xml: Raw XML bytes from ``published_data(..., endpoint='images')``.
+
+    Returns:
+        The ``link`` attribute value for the FullDocument PDF instance, or
+        ``None`` if no PDF is available.
+    """
+    try:
+        from lxml import etree
+
+        root = etree.fromstring(inquiry_xml)
+        ns = {"ops": "http://ops.epo.org"}
+        for el in root.xpath(
+            "//ops:document-instance[@desc='FullDocument']", namespaces=ns
+        ):
+            for fmt in el:
+                if fmt.get("desc") == "application/pdf":
+                    link = el.get("link")
+                    return str(link) if link is not None else None
+        return None
+    except Exception as exc:
+        logger.warning("epo_pdf_link_parse_failed err=%s", exc)
+        return None
+
+
 class EpoRateLimitedError(RateLimitedError):
     """Raised when the EPO OPS API throttles a request."""
 
@@ -389,6 +417,65 @@ class EpoClient:
             )
         self._check_throttle(response, service="retrieval")
         return parse_citations_from_biblio(response.content)
+
+    async def get_pdf(self, doc: DocdbNumber) -> bytes:
+        """Download full-document PDF for a patent via EPO OPS image service.
+
+        Two-step process: first fetches the image inquiry to get the PDF link
+        path, then downloads the PDF using that path.
+
+        Args:
+            doc: Patent number in DOCDB format.
+
+        Returns:
+            Raw PDF bytes.
+
+        Raises:
+            EpoRateLimitedError: When the EPO traffic light is not green.
+            ValueError: If no PDF is available for this patent.
+        """
+        if self._is_service_throttled("retrieval"):
+            cached = self._throttle_cache
+            color = cached.get("retrieval", cached.get("_overall", "red"))
+            if color == "black":
+                raise RuntimeError(
+                    "EPO daily quota exhausted. Please try again tomorrow."
+                )
+            raise EpoRateLimitedError(color, service="retrieval")
+
+        inp = self._to_docdb_input(doc)
+
+        # Step 1: image inquiry to get the PDF link path
+        async with self._lock:
+            inquiry_resp = await asyncio.to_thread(
+                self._client.published_data,
+                "publication",
+                inp,
+                endpoint="images",
+            )
+        self._check_throttle(inquiry_resp, service="retrieval")
+
+        pdf_link = _parse_pdf_link(inquiry_resp.content)
+        if pdf_link is None:
+            raise ValueError(
+                f"No PDF available for patent {doc.country}{doc.number}{doc.kind or ''}"
+            )
+
+        # Step 2: download the PDF
+        if self._is_service_throttled("retrieval"):
+            cached = self._throttle_cache
+            color = cached.get("retrieval", cached.get("_overall", "red"))
+            raise EpoRateLimitedError(color, service="retrieval")
+
+        async with self._lock:
+            pdf_resp = await asyncio.to_thread(
+                self._client.image,
+                pdf_link,
+                range=1,
+                document_format="application/pdf",
+            )
+        self._check_throttle(pdf_resp, service="retrieval")
+        return bytes(pdf_resp.content)
 
     async def aclose(self) -> None:
         """No-op cleanup.

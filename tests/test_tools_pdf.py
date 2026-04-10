@@ -703,3 +703,21 @@ async def test_fetch_pdf_by_url_cached(
     data = json.loads(result.content[0].text)
     assert "queued" not in data
     assert data["pdf_path"] == str(cached)
+
+
+def test_fetch_pdf_by_url_intercepts_epo_url(mcp_no_docling: FastMCP) -> None:
+    """fetch_pdf_by_url returns helpful error for EPO OPS URLs."""
+
+    async def run() -> dict:
+        async with Client(mcp_no_docling) as client:
+            result = await client.call_tool(
+                "fetch_pdf_by_url",
+                {
+                    "url": "https://ops.epo.org/rest-services/published-data/publication/epodoc/EP3491801B1/fulltext/pdf"
+                },
+            )
+        return json.loads(result.content[0].text)
+
+    data = asyncio.run(run())
+    assert "error" in data
+    assert "fetch_patent_pdf" in str(data).lower() or "epo" in str(data).lower()
