@@ -421,7 +421,8 @@ async def test_nist_search_sp(respx_mock: respx.MockRouter, tmp_path) -> None:
     assert results[0]["body"] == "NIST"
     assert results[0]["number"] == "800-53"
     assert results[0]["revision"] == "Rev. 5"
-    assert results[0]["full_text_available"] is True
+    assert results[0]["full_text_available"] is False
+    assert results[0]["url"]  # catalogue/DOI URL is still set
 
 
 @pytest.mark.respx(base_url=GITHUB_RELEASES_URL)

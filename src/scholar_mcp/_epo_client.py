@@ -74,6 +74,8 @@ def _parse_pdf_link(inquiry_xml: bytes) -> str | None:
                     link = el.get("link")
                     return str(link) if link is not None else None
         return None
+    except (RateLimitedError, EpoRateLimitedError):
+        raise
     except Exception as exc:
         logger.warning("epo_pdf_link_parse_failed err=%s", exc)
         return None
@@ -465,6 +467,10 @@ class EpoClient:
         if self._is_service_throttled("retrieval"):
             cached = self._throttle_cache
             color = cached.get("retrieval", cached.get("_overall", "red"))
+            if color == "black":
+                raise RuntimeError(
+                    "EPO daily quota exhausted. Please try again tomorrow."
+                )
             raise EpoRateLimitedError(color, service="retrieval")
 
         async with self._lock:

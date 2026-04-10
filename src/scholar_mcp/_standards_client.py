@@ -601,8 +601,8 @@ def _normalize_nist_mods(mods: ET.Element, ns: str) -> StandardRecord | None:
         scope=scope,
         committee=None,
         url=url,
-        full_text_url=url or None,
-        full_text_available=bool(url),
+        full_text_url=None,  # MODS URL is a catalogue/DOI page, not a direct PDF link
+        full_text_available=False,
         price=None,
         related=[],
     )
@@ -872,8 +872,10 @@ class _ETSIFetcher:
             return []
         try:
             items: list[dict] = resp.json()  # type: ignore[type-arg]
-        except Exception:
-            logger.warning("etsi_api_json_decode_error url=%s", str(resp.url))
+        except Exception as exc:
+            logger.warning(
+                "etsi_api_json_decode_error url=%s err=%s", str(resp.url), exc
+            )
             return []
         if not isinstance(items, list):
             logger.warning("etsi_api_unexpected_response type=%s", type(items).__name__)
@@ -909,9 +911,10 @@ def _normalize_etsi(item: dict) -> StandardRecord:  # type: ignore[type-arg]
     scope = item.get("Scope") or None
     tb = item.get("TB") or None
 
-    # Canonical identifier: "ETSI EN 303 645" from "ETSI EN 303 645 V3.1.3 (2024-09)"
-    m = re.match(r"(ETSI\s+\w+\s+\d+\s+\d+)", deliverable)
-    canonical = m.group(1) if m else deliverable.split(" V")[0].strip()
+    # Canonical identifier: strip trailing version string, e.g.
+    # "ETSI EN 303 645 V3.1.3 (2024-09)" → "ETSI EN 303 645"
+    # "ETSI TS 102 690-1 V2.0.16 (2013-09)" → "ETSI TS 102 690-1"
+    canonical = deliverable.split(" V")[0].strip()
 
     # Version from deliverable string
     vm = re.search(r"V([\d.]+)\s+\((\d{4}-\d{2})\)", deliverable)

@@ -1098,3 +1098,117 @@ def test_fetch_patent_pdf_queued(bundle: ServiceBundle) -> None:
     data = asyncio.run(run())
     assert data.get("queued") is True
     assert data.get("tool") == "fetch_patent_pdf"
+
+
+def test_fetch_patent_pdf_cache_hit_returns_pdf_path(bundle: ServiceBundle) -> None:
+    """fetch_patent_pdf returns cached PDF path immediately when file already exists."""
+    epo = _make_epo_client()
+    bundle.epo = epo
+
+    # Pre-create the cached PDF file so the cache-hit branch fires
+    pdf_dir = bundle.config.cache_dir / "pdfs"
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_patent_tools(app)
+
+    async def run() -> dict:
+        # Compute the stem the same way the tool does
+        import hashlib
+        import re
+
+        patent_number = "EP3491801B1"
+        from scholar_mcp._patent_numbers import normalize
+
+        doc = normalize(patent_number)
+        stem = re.sub(r"[^\w\-]", "_", f"{doc.country}{doc.number}{doc.kind or ''}")
+        url_hash = hashlib.sha256(patent_number.encode()).hexdigest()[:8]
+        stem = f"patent_{stem}_{url_hash}"
+        (pdf_dir / f"{stem}.pdf").write_bytes(b"%PDF-1.4 cached")
+
+        async with Client(app) as client:
+            result = await client.call_tool(
+                "fetch_patent_pdf", {"patent_number": patent_number}
+            )
+        return json.loads(result.content[0].text)
+
+    data = asyncio.run(run())
+    assert "pdf_path" in data
+    assert data.get("queued") is not True
+    # EPO get_pdf was never called because of the cache hit
+    epo.get_pdf = AsyncMock()  # type: ignore[method-assign]
+
+
+def test_fetch_patent_pdf_execute_downloads_pdf(bundle: ServiceBundle) -> None:
+    """_execute() downloads PDF from EPO and stores it when cache is empty."""
+    epo = _make_epo_client()
+    epo.get_pdf = AsyncMock(return_value=b"%PDF-1.4 fresh")  # type: ignore[method-assign]
+    bundle.epo = epo
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_patent_tools(app)
+
+    async def run() -> str:
+        async with Client(app) as client:
+            result = await client.call_tool(
+                "fetch_patent_pdf", {"patent_number": "EP3491801B1"}
+            )
+        queued_data = json.loads(result.content[0].text)
+        assert queued_data.get("queued") is True
+        task_id = queued_data["task_id"]
+
+        # Wait for the background task to complete
+        tasks = bundle.tasks
+        for _ in range(50):
+            task = tasks.get(task_id)
+            if task and task.status == "completed":
+                return task.result or ""
+            await asyncio.sleep(0.05)
+        return ""
+
+    result_json = asyncio.run(run())
+    result = json.loads(result_json)
+    assert "pdf_path" in result
+    epo.get_pdf.assert_called_once()  # type: ignore[attr-defined]
+
+
+def test_fetch_patent_pdf_execute_pdf_not_available(bundle: ServiceBundle) -> None:
+    """_execute() returns pdf_not_available error when EPO raises ValueError."""
+    epo = _make_epo_client()
+    epo.get_pdf = AsyncMock(side_effect=ValueError("No PDF available for EP3491801B1"))  # type: ignore[method-assign]
+    bundle.epo = epo
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_patent_tools(app)
+
+    async def run() -> str:
+        async with Client(app) as client:
+            result = await client.call_tool(
+                "fetch_patent_pdf", {"patent_number": "EP3491801B1"}
+            )
+        queued_data = json.loads(result.content[0].text)
+        task_id = queued_data["task_id"]
+
+        tasks = bundle.tasks
+        for _ in range(50):
+            task = tasks.get(task_id)
+            if task and task.status == "completed":
+                return task.result or ""
+            await asyncio.sleep(0.05)
+        return ""
+
+    result_json = asyncio.run(run())
+    result = json.loads(result_json)
+    assert result.get("error") == "pdf_not_available"

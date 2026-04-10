@@ -468,6 +468,28 @@ def register_patent_tools(mcp: FastMCP) -> None:
         pdf_dir.mkdir(parents=True, exist_ok=True)
         pdf_path = pdf_dir / f"{stem}.pdf"
 
+        # Cache hit: return synchronously without queuing (per CLAUDE.md pattern)
+        if pdf_path.exists():
+            cached_result: dict[str, object] = {"pdf_path": str(pdf_path)}
+            if bundle.docling is not None:
+                vlm_suffix = "_vlm" if use_vlm and bundle.docling.vlm_available else ""
+                md_path_cached = (
+                    bundle.config.cache_dir / "md" / f"{stem}{vlm_suffix}.md"
+                )
+                if md_path_cached.exists():
+                    markdown_cached = await _asyncio.to_thread(
+                        md_path_cached.read_text, encoding="utf-8"
+                    )
+                    cached_result["markdown"] = markdown_cached
+                    cached_result["md_path"] = str(md_path_cached)
+                    cached_result["vlm_used"] = use_vlm and bundle.docling.vlm_available
+                    skip_reason = bundle.docling.vlm_skip_reason(use_vlm)
+                    if skip_reason:
+                        cached_result["vlm_skip_reason"] = skip_reason
+                    return json.dumps(cached_result)
+            else:
+                return json.dumps(cached_result)
+
         async def _execute() -> str:
             if not pdf_path.exists():
                 try:
