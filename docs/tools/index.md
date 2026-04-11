@@ -1,6 +1,9 @@
 # Tools
 
-Scholar MCP provides 25 tools across ten categories. All tools return JSON.
+Scholar MCP provides 27 tools organised by scholarly source type: **Papers**, **Patents**, **Books**, and **Standards** are peer source domains; the remaining sections (Utility, PDF Conversion, Task Polling) are cross-cutting. All tools return JSON.
+
+!!! info "Coverage by domain"
+    Per-domain depth is uneven — papers currently have the richest tool surface (citation graph, recommendations, cross-referencing to all three other domains); standards are the leanest. That reflects public data availability, not a value hierarchy. Parity work is tracked in [GitHub issues](https://github.com/pvliesdonk/scholar-mcp/issues) and [milestones](https://github.com/pvliesdonk/scholar-mcp/milestones).
 
 All tools include [MCP tool annotations](https://spec.modelcontextprotocol.io/specification/2025-03-26/server/tools/#annotations):
 
@@ -23,7 +26,7 @@ When a tool queues an operation, it returns:
 
 Poll with `get_task_result` to check status and retrieve the result. Task results expire after 10 minutes (S2 tools) or 1 hour (PDF tools).
 
-## Search & Retrieval
+## Papers — Search & Retrieval
 
 ### `search_papers`
 
@@ -83,7 +86,7 @@ Fetch an author profile or search by name.
 
 ---
 
-## Citation Graph
+## Papers — Citation Graph
 
 ### `get_citations`
 
@@ -184,7 +187,7 @@ Or `{"found": false}` if no path exists within `max_depth`.
 
 ---
 
-## Recommendations
+## Papers — Recommendations
 
 ### `recommend_papers`
 
@@ -204,7 +207,7 @@ Paper recommendations based on positive (and optional negative) examples.
 
 ---
 
-## Book Search
+## Books
 
 Book tools use [Open Library](https://openlibrary.org/) as their data source. No API key is required. Rate limits are handled automatically; if the Open Library API is temporarily unavailable, calls queue and return a task ID (see [Async Task Queue](#async-task-queue)).
 
@@ -354,7 +357,7 @@ Results are cached for 30 days.
 
 ---
 
-## Citation Generation
+## Papers — Citation Generation
 
 ### `generate_citations`
 
@@ -379,7 +382,7 @@ Papers that fail to resolve are reported inline (BibTeX/RIS: as comments, CSL-JS
 
 ---
 
-## Patent Search
+## Patents
 
 !!! note "Credentials required"
     Patent tools require EPO OPS credentials. When `SCHOLAR_MCP_EPO_CONSUMER_KEY` and `SCHOLAR_MCP_EPO_CONSUMER_SECRET` are not set, these tools are automatically hidden. See [EPO OPS configuration](../configuration.md#epo-open-patent-services) for setup instructions.
@@ -497,6 +500,46 @@ Find patents that cite a given academic paper. Coverage is incomplete -- relies 
 
 !!! warning "Incomplete coverage"
     Not all patent-to-paper citations are captured by EPO OPS. Use this tool for discovery, not exhaustive analysis.
+
+---
+
+## Standards
+
+Scholar MCP supports Tier 1 standards bodies (NIST, IETF, W3C, ETSI) with full metadata and
+optional full-text conversion. Tier 2 paywalled bodies (ISO, IEC, IEEE) are tracked in
+[GitHub issues](https://github.com/pvliesdonk/scholar-mcp/issues).
+
+### `resolve_standard_identifier`
+
+Normalise a messy citation string to its canonical form and body.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `raw` | string | — | Messy citation string (e.g. `"rfc9000"`, `"nist 800-53"`) |
+
+---
+
+### `search_standards`
+
+Search standards by identifier, title, or free text.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `query` | string | — | Identifier, title, or free text |
+| `body` | string | null | Filter to one body: `NIST`, `IETF`, `W3C`, `ETSI` |
+| `limit` | integer | 10 | Max results (max 50) |
+
+---
+
+### `get_standard`
+
+Retrieve a standard by identifier (canonical or fuzzy). Optionally fetches and converts
+full text via docling.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `identifier` | string | — | Canonical or fuzzy identifier |
+| `fetch_full_text` | boolean | false | Fetch and convert full text via docling |
 
 ---
 
@@ -639,38 +682,3 @@ The `hint` field gives expected duration — keep polling until the task complet
 List all active (non-expired) background tasks.
 
 **Returns:** JSON list of `{"task_id": "...", "status": "..."}` dicts.
-
----
-
-## Standards
-
-Scholar MCP supports Tier 1 standards bodies (NIST, IETF, W3C, ETSI) with full metadata and
-optional full-text conversion. Tier 2 paywalled bodies (ISO, IEC, IEEE) are planned for v0.9.0.
-
-### `search_standards`
-
-Search standards by identifier, title, or free text.
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `query` | string | — | Identifier, title, or free text |
-| `body` | string | null | Filter to one body: `NIST`, `IETF`, `W3C`, `ETSI` |
-| `limit` | integer | 10 | Max results (max 50) |
-
-### `get_standard`
-
-Retrieve a standard by identifier (canonical or fuzzy). Optionally fetches and converts
-full text via docling.
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `identifier` | string | — | Canonical or fuzzy identifier |
-| `fetch_full_text` | boolean | false | Fetch and convert full text via docling |
-
-### `resolve_standard_identifier`
-
-Normalise a messy citation string to its canonical form and body.
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `raw` | string | — | Messy citation string (e.g. `"rfc9000"`, `"nist 800-53"`) |
