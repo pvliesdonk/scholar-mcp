@@ -339,6 +339,9 @@ def normalize_book(
             "subjects": data.get("subject") or [],
             "page_count": data.get("number_of_pages_median"),
             "description": None,
+            "worldcat_url": (
+                f"https://www.worldcat.org/isbn/{isbn_13}" if isbn_13 else None
+            ),
         }
 
     # source == "edition"
@@ -372,4 +375,7 @@ def normalize_book(
         "subjects": data.get("subjects") or [],
         "page_count": data.get("number_of_pages"),
         "description": None,
+        "worldcat_url": (
+            f"https://www.worldcat.org/isbn/{isbn_13}" if isbn_13 else None
+        ),
     }

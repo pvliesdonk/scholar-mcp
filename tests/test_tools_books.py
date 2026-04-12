@@ -570,3 +570,199 @@ async def test_get_book_queued_on_rate_limit(
     data = json.loads(result.content[0].text)
     assert data["queued"] is True
     assert data["tool"] == "get_book"
+
+
+COVERS_BASE = "https://covers.openlibrary.org"
+
+
+@pytest.mark.respx(base_url=OL_BASE)
+async def test_get_book_download_cover_saves_file(
+    respx_mock: respx.MockRouter,
+    mcp: FastMCP,
+    bundle: ServiceBundle,
+) -> None:
+    """download_cover=True downloads the cover image and returns cover_path."""
+    from unittest.mock import AsyncMock, patch
+
+    bundle.config.read_only = False
+    respx_mock.get("/isbn/9780201633610.json").mock(
+        return_value=httpx.Response(200, json=SAMPLE_EDITION_RESPONSE)
+    )
+    respx_mock.get("/works/OL1168083W.json").mock(
+        return_value=httpx.Response(200, json=SAMPLE_WORK_RESPONSE)
+    )
+    respx_mock.get("/authors/OL239963A.json").mock(
+        return_value=httpx.Response(200, json=SAMPLE_AUTHOR_GAMMA)
+    )
+    respx_mock.get("/authors/OL239964A.json").mock(
+        return_value=httpx.Response(200, json=SAMPLE_AUTHOR_HELM)
+    )
+    mock_resp = AsyncMock()
+    mock_resp.content = b"FAKE_JPEG_DATA"
+    mock_resp.raise_for_status = lambda: None
+
+    mock_client = AsyncMock()
+    mock_client.get.return_value = mock_resp
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("scholar_mcp._tools_books.httpx.AsyncClient", return_value=mock_client):
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "get_book",
+                {"identifier": "9780201633610", "download_cover": True},
+            )
+    data = json.loads(result.content[0].text)
+    assert "cover_path" in data
+    mock_client.get.assert_called_once_with(
+        "https://covers.openlibrary.org/b/isbn/9780201633610-M.jpg"
+    )
+    from pathlib import Path
+
+    saved = Path(data["cover_path"])
+    assert saved.exists()
+    assert saved.read_bytes() == b"FAKE_JPEG_DATA"
+
+
+@pytest.mark.respx(base_url=OL_BASE)
+async def test_get_book_download_cover_uses_cache(
+    respx_mock: respx.MockRouter,
+    mcp: FastMCP,
+    bundle: ServiceBundle,
+) -> None:
+    """When cover file already exists on disk, no HTTP download is made."""
+    bundle.config.read_only = False
+    respx_mock.get("/isbn/9780201633610.json").mock(
+        return_value=httpx.Response(200, json=SAMPLE_EDITION_RESPONSE)
+    )
+    respx_mock.get("/works/OL1168083W.json").mock(
+        return_value=httpx.Response(200, json=SAMPLE_WORK_RESPONSE)
+    )
+    respx_mock.get("/authors/OL239963A.json").mock(
+        return_value=httpx.Response(200, json=SAMPLE_AUTHOR_GAMMA)
+    )
+    respx_mock.get("/authors/OL239964A.json").mock(
+        return_value=httpx.Response(200, json=SAMPLE_AUTHOR_HELM)
+    )
+    # Pre-create the cover file
+    covers_dir = bundle.config.cache_dir / "covers"
+    covers_dir.mkdir(parents=True, exist_ok=True)
+    cover_file = covers_dir / "9780201633610_M.jpg"
+    cover_file.write_bytes(b"CACHED_IMAGE")
+
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_book",
+            {"identifier": "9780201633610", "download_cover": True},
+        )
+    data = json.loads(result.content[0].text)
+    assert data["cover_path"] == str(cover_file)
+    # File content should be unchanged (no download happened)
+    assert cover_file.read_bytes() == b"CACHED_IMAGE"
+
+
+@pytest.mark.respx(base_url=OL_BASE)
+async def test_get_book_download_cover_read_only(
+    respx_mock: respx.MockRouter,
+    mcp: FastMCP,
+    bundle: ServiceBundle,
+) -> None:
+    """In read-only mode, download_cover returns cover_error instead."""
+    bundle.config.read_only = True
+    respx_mock.get("/isbn/9780201633610.json").mock(
+        return_value=httpx.Response(200, json=SAMPLE_EDITION_RESPONSE)
+    )
+    respx_mock.get("/works/OL1168083W.json").mock(
+        return_value=httpx.Response(200, json=SAMPLE_WORK_RESPONSE)
+    )
+    respx_mock.get("/authors/OL239963A.json").mock(
+        return_value=httpx.Response(200, json=SAMPLE_AUTHOR_GAMMA)
+    )
+    respx_mock.get("/authors/OL239964A.json").mock(
+        return_value=httpx.Response(200, json=SAMPLE_AUTHOR_HELM)
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_book",
+            {"identifier": "9780201633610", "download_cover": True},
+        )
+    data = json.loads(result.content[0].text)
+    assert data["cover_error"] == "read_only_mode"
+    assert "cover_path" not in data
+
+
+@pytest.mark.respx(base_url=OL_BASE)
+async def test_get_book_download_cover_false_by_default(
+    respx_mock: respx.MockRouter,
+    mcp: FastMCP,
+) -> None:
+    """Normal get_book call without download_cover has no cover_path."""
+    respx_mock.get("/isbn/9780201633610.json").mock(
+        return_value=httpx.Response(200, json=SAMPLE_EDITION_RESPONSE)
+    )
+    respx_mock.get("/works/OL1168083W.json").mock(
+        return_value=httpx.Response(200, json=SAMPLE_WORK_RESPONSE)
+    )
+    respx_mock.get("/authors/OL239963A.json").mock(
+        return_value=httpx.Response(200, json=SAMPLE_AUTHOR_GAMMA)
+    )
+    respx_mock.get("/authors/OL239964A.json").mock(
+        return_value=httpx.Response(200, json=SAMPLE_AUTHOR_HELM)
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool("get_book", {"identifier": "9780201633610"})
+    data = json.loads(result.content[0].text)
+    assert "cover_path" not in data or data.get("cover_path") is None
+    assert "cover_error" not in data
+
+
+GB_BASE = "https://www.googleapis.com/books/v1"
+
+SAMPLE_GB_VOLUME = {
+    "volumeInfo": {
+        "title": "Design Patterns",
+        "description": "A classic software engineering book.",
+        "previewLink": "https://books.google.com/books?id=abc123",
+    },
+    "accessInfo": {
+        "viewability": "PARTIAL",
+    },
+    "searchInfo": {
+        "textSnippet": "Gang of Four patterns explained.",
+    },
+}
+
+
+@pytest.mark.respx(base_url=GB_BASE)
+async def test_get_book_excerpt_returns_data(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """get_book_excerpt returns excerpt, description, and preview info."""
+    respx_mock.get("/volumes").mock(
+        return_value=httpx.Response(
+            200, json={"totalItems": 1, "items": [SAMPLE_GB_VOLUME]}
+        )
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool("get_book_excerpt", {"isbn": "9780201633610"})
+    data = json.loads(result.content[0].text)
+    assert data["source"] == "google_books"
+    assert data["excerpt"] == "Gang of Four patterns explained."
+    assert data["description"] == "A classic software engineering book."
+    assert data["preview_available"] is True
+    assert data["preview_link"] == "https://books.google.com/books?id=abc123"
+
+
+@pytest.mark.respx(base_url=GB_BASE)
+async def test_get_book_excerpt_not_found(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """get_book_excerpt returns error when ISBN not found."""
+    respx_mock.get("/volumes").mock(
+        return_value=httpx.Response(200, json={"totalItems": 0, "items": []})
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool("get_book_excerpt", {"isbn": "0000000000000"})
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "not_found"
+    assert data["isbn"] == "0000000000000"

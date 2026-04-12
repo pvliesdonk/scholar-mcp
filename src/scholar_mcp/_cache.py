@@ -76,6 +76,9 @@ _BOOK_WORK_TTL = 30 * 86400  # 30 days
 _BOOK_SEARCH_TTL = 7 * 86400  # 7 days
 _BOOK_SUBJECT_TTL = 7 * 86400  # 7 days
 
+_CROSSREF_TTL = 30 * 86400  # 30 days
+_GOOGLE_BOOKS_TTL = 30 * 86400  # 30 days
+
 _STANDARD_TTL = 90 * 86400  # 90 days — standards rarely change
 _STANDARD_ALIAS_TTL = 90 * 86400  # 90 days
 _STANDARD_SEARCH_TTL = 7 * 86400  # 7 days
@@ -202,6 +205,20 @@ CREATE TABLE IF NOT EXISTS books_subject (
 );
 CREATE INDEX IF NOT EXISTS idx_books_subject_cached ON books_subject(cached_at);
 
+CREATE TABLE IF NOT EXISTS crossref (
+    doi       TEXT PRIMARY KEY,
+    data      TEXT NOT NULL,
+    cached_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_crossref_cached ON crossref(cached_at);
+
+CREATE TABLE IF NOT EXISTS google_books (
+    isbn      TEXT PRIMARY KEY,
+    data      TEXT NOT NULL,
+    cached_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_google_books_cached ON google_books(cached_at);
+
 CREATE TABLE IF NOT EXISTS standards (
     identifier TEXT PRIMARY KEY,
     data       TEXT NOT NULL,
@@ -248,6 +265,8 @@ _TTL_TABLES = (
     "books_openlibrary",
     "books_search",
     "books_subject",
+    "crossref",
+    "google_books",
     "standards",
     "standards_aliases",
     "standards_search",
@@ -914,6 +933,78 @@ class ScholarCache:
         await db.execute(
             "INSERT OR REPLACE INTO books_subject (query_hash, data, cached_at) VALUES (?, ?, ?)",
             (query_hash, json.dumps(data), time.time()),
+        )
+        await db.commit()
+
+    # ------------------------------------------------------------------
+    # CrossRef
+    # ------------------------------------------------------------------
+
+    async def get_crossref(self, doi: str) -> dict[str, Any] | None:
+        """Return cached CrossRef data for a DOI or None if missing/stale.
+
+        Args:
+            doi: DOI string.
+
+        Returns:
+            CrossRef message dict or None.
+        """
+        db = _require_open(self._db)
+        async with db.execute(
+            "SELECT data, cached_at FROM crossref WHERE doi = ?", (doi,)
+        ) as cur:
+            row = await cur.fetchone()
+        if row is None or time.time() - row[1] > _CROSSREF_TTL:
+            return None
+        return json.loads(row[0])  # type: ignore[no-any-return]
+
+    async def set_crossref(self, doi: str, data: dict[str, Any]) -> None:
+        """Cache CrossRef data for a DOI.
+
+        Args:
+            doi: DOI string.
+            data: CrossRef message dict.
+        """
+        db = _require_open(self._db)
+        await db.execute(
+            "INSERT OR REPLACE INTO crossref (doi, data, cached_at) VALUES (?, ?, ?)",
+            (doi, json.dumps(data), time.time()),
+        )
+        await db.commit()
+
+    # ------------------------------------------------------------------
+    # Google Books
+    # ------------------------------------------------------------------
+
+    async def get_google_books(self, isbn: str) -> dict[str, Any] | None:
+        """Return cached Google Books data for an ISBN or None if missing/stale.
+
+        Args:
+            isbn: ISBN string.
+
+        Returns:
+            Google Books volume dict or None.
+        """
+        db = _require_open(self._db)
+        async with db.execute(
+            "SELECT data, cached_at FROM google_books WHERE isbn = ?", (isbn,)
+        ) as cur:
+            row = await cur.fetchone()
+        if row is None or time.time() - row[1] > _GOOGLE_BOOKS_TTL:
+            return None
+        return json.loads(row[0])  # type: ignore[no-any-return]
+
+    async def set_google_books(self, isbn: str, data: dict[str, Any]) -> None:
+        """Cache Google Books data for an ISBN.
+
+        Args:
+            isbn: ISBN string.
+            data: Google Books volume dict.
+        """
+        db = _require_open(self._db)
+        await db.execute(
+            "INSERT OR REPLACE INTO google_books (isbn, data, cached_at) VALUES (?, ?, ?)",
+            (isbn, json.dumps(data), time.time()),
         )
         await db.commit()
 

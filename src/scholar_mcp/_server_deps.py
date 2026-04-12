@@ -14,10 +14,13 @@ from fastmcp.dependencies import CurrentContext
 from fastmcp.server.context import Context
 
 from ._cache import ScholarCache
+from ._crossref_client import CrossRefClient
 from ._docling_client import DoclingClient
+from ._enricher_crossref import CrossRefEnricher
 from ._enricher_openalex import OpenAlexEnricher
 from ._enrichment import EnrichmentPipeline
 from ._epo_client import EpoClient
+from ._google_books_client import GoogleBooksClient
 from ._openalex_client import OpenAlexClient
 from ._openlibrary_client import OpenLibraryClient
 from ._rate_limiter import RateLimiter
@@ -31,6 +34,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_CROSSREF_BASE = "https://api.crossref.org"
+_GOOGLE_BOOKS_BASE = "https://www.googleapis.com/books/v1"
 _OPENALEX_BASE = "https://api.openalex.org"
 _OPENLIBRARY_BASE = "https://openlibrary.org"
 _OPENLIBRARY_DELAY = 0.6  # ~100 req/min politeness
@@ -43,6 +48,8 @@ class ServiceBundle:
     Attributes:
         s2: Semantic Scholar API client.
         openalex: OpenAlex API client (httpx.AsyncClient pointed at OpenAlex).
+        crossref: CrossRef API client for DOI metadata enrichment.
+        google_books: Google Books API client for book excerpts and previews.
         docling: docling-serve httpx client, or None if not configured.
         epo: EPO OPS API client, or None if not configured.
         openlibrary: Open Library API client (keyless, always available).
@@ -52,6 +59,8 @@ class ServiceBundle:
 
     s2: S2Client
     openalex: OpenAlexClient
+    crossref: CrossRefClient
+    google_books: GoogleBooksClient
     docling: DoclingClient | None
     epo: EpoClient | None
     openlibrary: OpenLibraryClient
@@ -76,6 +85,7 @@ def _build_enrichment_pipeline() -> EnrichmentPipeline:
     return EnrichmentPipeline(
         [
             OpenAlexEnricher(),
+            CrossRefEnricher(),
             OpenLibraryEnricher(),
         ]
     )
@@ -106,6 +116,20 @@ async def make_service_lifespan(
         timeout=30.0,
     )
     openalex = OpenAlexClient(openalex_http)
+    crossref_http = httpx.AsyncClient(
+        base_url=_CROSSREF_BASE,
+        headers={"User-Agent": ua},
+        timeout=30.0,
+    )
+    crossref = CrossRefClient(crossref_http)
+    google_books_http = httpx.AsyncClient(
+        base_url=_GOOGLE_BOOKS_BASE,
+        headers={"User-Agent": ua},
+        timeout=30.0,
+    )
+    google_books = GoogleBooksClient(
+        google_books_http, api_key=config.google_books_api_key
+    )
     openlibrary_http = httpx.AsyncClient(
         base_url=_OPENLIBRARY_BASE,
         headers={"User-Agent": ua},
@@ -157,6 +181,8 @@ async def make_service_lifespan(
     bundle = ServiceBundle(
         s2=s2,
         openalex=openalex,
+        crossref=crossref,
+        google_books=google_books,
         docling=docling,
         epo=epo,
         openlibrary=openlibrary,
@@ -171,6 +197,8 @@ async def make_service_lifespan(
     finally:
         await s2.aclose()
         await openalex_http.aclose()
+        await crossref_http.aclose()
+        await google_books_http.aclose()
         await openlibrary.aclose()
         if docling_http:
             await docling_http.aclose()

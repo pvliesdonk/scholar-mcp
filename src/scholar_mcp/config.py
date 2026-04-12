@@ -26,6 +26,8 @@ class ServerConfig:
             for the polite pool. Set ``SCHOLAR_MCP_CONTACT_EMAIL`` to opt in.
         epo_consumer_key: EPO OPS API consumer key.
         epo_consumer_secret: EPO OPS API consumer secret.
+        google_books_api_key: Optional Google Books API key for higher rate
+            limits.
     """
 
     read_only: bool = True
@@ -38,6 +40,7 @@ class ServerConfig:
     contact_email: str | None = None
     epo_consumer_key: str | None = None
     epo_consumer_secret: str | None = None
+    google_books_api_key: str | None = None
 
     @property
     def epo_configured(self) -> bool:
@@ -75,4 +78,5 @@ def load_config() -> ServerConfig:
         contact_email=_str("CONTACT_EMAIL"),
         epo_consumer_key=_str("EPO_CONSUMER_KEY"),
         epo_consumer_secret=_str("EPO_CONSUMER_SECRET"),
+        google_books_api_key=_str("GOOGLE_BOOKS_API_KEY"),
     )
