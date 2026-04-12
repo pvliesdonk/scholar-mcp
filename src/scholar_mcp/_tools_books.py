@@ -7,6 +7,7 @@ import json
 import logging
 import re
 
+import httpx
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
 
@@ -153,6 +154,8 @@ def register_book_tools(mcp: FastMCP) -> None:
     async def get_book(
         identifier: str,
         include_editions: bool = False,
+        download_cover: bool = False,
+        cover_size: str = "M",
         bundle: ServiceBundle = Depends(get_bundle),
     ) -> str:
         """Fetch book metadata by ISBN or Open Library ID.
@@ -161,6 +164,11 @@ def register_book_tools(mcp: FastMCP) -> None:
             identifier: ISBN-10, ISBN-13, Open Library work ID (e.g.
                 OL1168083W), or edition ID (e.g. OL1429049M).
             include_editions: If true, fetch the work and list editions.
+            download_cover: If True, download and cache the cover image
+                locally. Returns ``cover_path`` in the response. In
+                read-only mode, returns ``cover_error`` instead.
+            cover_size: Cover size variant: ``"S"`` (small), ``"M"``
+                (medium), ``"L"`` (large). Defaults to ``"M"``.
 
         Returns:
             JSON book record, or ``{"error": "not_found"}`` if not found.
@@ -178,11 +186,93 @@ def register_book_tools(mcp: FastMCP) -> None:
             return await _resolve_isbn(isbn, bundle)
 
         try:
-            return await _execute(retry=False)
+            raw = await _execute(retry=False)
         except RateLimitedError:
             logger.debug("rate_limited_queued tool=%s", "get_book")
             task_id = bundle.tasks.submit(_execute(retry=True), tool="get_book")
             return json.dumps({"queued": True, "task_id": task_id, "tool": "get_book"})
+
+        result = json.loads(raw)
+
+        if download_cover and result.get("cover_url") and result.get("isbn_13"):
+            if bundle.config.read_only:
+                result["cover_error"] = "read_only_mode"
+            else:
+                isbn = result["isbn_13"]
+                size = (
+                    cover_size.upper() if cover_size.upper() in ("S", "M", "L") else "M"
+                )
+                covers_dir = bundle.config.cache_dir / "covers"
+                covers_dir.mkdir(parents=True, exist_ok=True)
+                local_path = covers_dir / f"{isbn}_{size}.jpg"
+                if local_path.exists():
+                    result["cover_path"] = str(local_path)
+                else:
+                    url = f"https://covers.openlibrary.org/b/isbn/{isbn}-{size}.jpg"
+                    try:
+                        async with httpx.AsyncClient(timeout=30.0) as http:
+                            resp = await http.get(url)
+                            resp.raise_for_status()
+                            local_path.write_bytes(resp.content)
+                            result["cover_path"] = str(local_path)
+                    except Exception:
+                        logger.debug(
+                            "cover_download_failed isbn=%s",
+                            isbn,
+                            exc_info=True,
+                        )
+
+        return json.dumps(result)
+
+    @mcp.tool(
+        tags={"write"},
+        annotations={
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "openWorldHint": True,
+        },
+    )
+    async def get_book_excerpt(
+        isbn: str,
+        bundle: ServiceBundle = Depends(get_bundle),
+    ) -> str:
+        """Get a book excerpt and preview info from Google Books.
+
+        Returns the publisher description, text snippet, and a link to
+        the Google Books preview page. Google Books does not expose full
+        chapter text via API -- the excerpt is a publisher-provided summary
+        and/or search snippet.
+
+        Args:
+            isbn: ISBN-10 or ISBN-13.
+
+        Returns:
+            JSON with excerpt, description, preview availability, and link.
+
+        Example return::
+
+            {"excerpt": "...", "description": "...", "source": "google_books",
+             "preview_available": true, "preview_link": "https://..."}
+        """
+        volume = await bundle.google_books.search_by_isbn(isbn)
+        if volume is None:
+            return json.dumps({"error": "not_found", "isbn": isbn})
+
+        vol_info = volume.get("volumeInfo") or {}
+        access_info = volume.get("accessInfo") or {}
+        search_info = volume.get("searchInfo") or {}
+        viewability = access_info.get("viewability", "NO_PAGES")
+        preview_available = viewability in ("PARTIAL", "ALL_PAGES")
+
+        return json.dumps(
+            {
+                "excerpt": search_info.get("textSnippet"),
+                "description": vol_info.get("description"),
+                "source": "google_books",
+                "preview_available": preview_available,
+                "preview_link": vol_info.get("previewLink"),
+            }
+        )
 
     @mcp.tool(
         annotations={
