@@ -64,11 +64,11 @@ class GoogleBooksClient:
             if not items:
                 return None
             return items[0]  # type: ignore[no-any-return]
-        except httpx.HTTPStatusError:
+        except (httpx.HTTPStatusError, httpx.RequestError):
             logger.warning(
-                "google_books_search_error isbn=%s status=%s",
+                "google_books_search_error isbn=%s",
                 isbn,
-                r.status_code,
+                exc_info=True,
             )
             return None
 
@@ -90,10 +90,10 @@ class GoogleBooksClient:
                 return None
             r.raise_for_status()
             return r.json()  # type: ignore[no-any-return]
-        except httpx.HTTPStatusError:
+        except (httpx.HTTPStatusError, httpx.RequestError):
             logger.warning(
-                "google_books_volume_error volume_id=%s status=%s",
+                "google_books_volume_error volume_id=%s",
                 volume_id,
-                r.status_code,
+                exc_info=True,
             )
             return None

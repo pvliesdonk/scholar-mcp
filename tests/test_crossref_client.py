@@ -56,35 +56,3 @@ async def test_get_by_doi_returns_none_on_error(
     respx_mock.get("/works/10.0/fail").mock(return_value=httpx.Response(500))
     result = await client.get_by_doi("10.0/fail")
     assert result is None
-
-
-@pytest.mark.respx(base_url=CR_BASE)
-async def test_search_chapters_returns_items(
-    respx_mock: respx.MockRouter, client: CrossRefClient
-) -> None:
-    respx_mock.get("/works").mock(
-        return_value=httpx.Response(
-            200,
-            json={
-                "status": "ok",
-                "message": {
-                    "items": [
-                        {"DOI": "10.1234/ch1", "type": "book-chapter"},
-                        {"DOI": "10.1234/ch2", "type": "book-chapter"},
-                    ]
-                },
-            },
-        )
-    )
-    result = await client.search_chapters("some title")
-    assert len(result) == 2
-    assert result[0]["DOI"] == "10.1234/ch1"
-
-
-@pytest.mark.respx(base_url=CR_BASE)
-async def test_search_chapters_returns_empty_on_error(
-    respx_mock: respx.MockRouter, client: CrossRefClient
-) -> None:
-    respx_mock.get("/works").mock(return_value=httpx.Response(500))
-    result = await client.search_chapters("bad query")
-    assert result == []

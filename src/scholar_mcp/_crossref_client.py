@@ -37,31 +37,6 @@ class CrossRefClient:
             r.raise_for_status()
             data = r.json()
             return data["message"]  # type: ignore[no-any-return]
-        except httpx.HTTPStatusError:
-            logger.warning("crossref_error doi=%s status=%s", doi, r.status_code)
+        except (httpx.HTTPStatusError, httpx.RequestError, KeyError):
+            logger.warning("crossref_error doi=%s", doi, exc_info=True)
             return None
-
-    async def search_chapters(self, title: str) -> list[dict[str, Any]]:
-        """Search CrossRef for book chapters matching a title.
-
-        Args:
-            title: Bibliographic title to search for.
-
-        Returns:
-            List of CrossRef work items (up to 5), or empty list on error.
-        """
-        try:
-            r = await self._client.get(
-                "/works",
-                params={
-                    "query.bibliographic": title,
-                    "filter": "type:book-chapter",
-                    "rows": "5",
-                },
-            )
-            r.raise_for_status()
-            data = r.json()
-            return data["message"]["items"]  # type: ignore[no-any-return]
-        except (httpx.HTTPStatusError, KeyError):
-            logger.warning("crossref_chapter_search_error title=%s", title)
-            return []

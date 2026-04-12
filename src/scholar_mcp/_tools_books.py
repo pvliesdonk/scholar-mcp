@@ -225,9 +225,8 @@ def register_book_tools(mcp: FastMCP) -> None:
         return json.dumps(result)
 
     @mcp.tool(
-        tags={"write"},
         annotations={
-            "readOnlyHint": False,
+            "readOnlyHint": True,
             "destructiveHint": False,
             "openWorldHint": True,
         },
@@ -254,9 +253,12 @@ def register_book_tools(mcp: FastMCP) -> None:
             {"excerpt": "...", "description": "...", "source": "google_books",
              "preview_available": true, "preview_link": "https://..."}
         """
-        volume = await bundle.google_books.search_by_isbn(isbn)
+        volume = await bundle.cache.get_google_books(isbn)
         if volume is None:
-            return json.dumps({"error": "not_found", "isbn": isbn})
+            volume = await bundle.google_books.search_by_isbn(isbn)
+            if volume is None:
+                return json.dumps({"error": "not_found", "isbn": isbn})
+            await bundle.cache.set_google_books(isbn, volume)
 
         vol_info = volume.get("volumeInfo") or {}
         access_info = volume.get("accessInfo") or {}
