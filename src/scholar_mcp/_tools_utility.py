@@ -12,6 +12,7 @@ from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
 
 from ._cache import normalize_isbn
+from ._chapter_parser import hint_to_dict, parse_chapter_hint
 from ._epo_client import EpoRateLimitedError
 from ._openlibrary_client import normalize_book
 from ._patent_numbers import is_patent_number, normalize
@@ -20,6 +21,23 @@ from ._s2_client import FIELD_SETS
 from ._server_deps import ServiceBundle, get_bundle
 
 logger = logging.getLogger(__name__)
+
+
+def _attach_chapter_info(result: dict[str, Any], raw: str) -> None:
+    """Attach chapter_info to *result* when parsed hints exist.
+
+    The enrichment pipeline resolves the parent book separately; this
+    function only records heuristic hints extracted from the raw
+    identifier string (chapter number, page range, parent title, ISBN).
+
+    Args:
+        result: Mutable paper result dict to enrich in-place.
+        raw: Raw identifier string potentially containing chapter hints.
+    """
+    hint = parse_chapter_hint(raw)
+    if not hint.has_chapter_info:
+        return
+    result["chapter_info"] = hint_to_dict(hint)
 
 
 def register_utility_tools(mcp: FastMCP) -> None:
@@ -102,15 +120,22 @@ def register_utility_tools(mcp: FastMCP) -> None:
                 idx: int, raw: str, s2_data: dict[str, Any] | None
             ) -> tuple[int, dict[str, Any]]:
                 if s2_data is not None:
-                    return idx, {"identifier": raw, "paper": s2_data}
+                    paper_result: dict[str, Any] = {
+                        "identifier": raw,
+                        "paper": s2_data,
+                    }
+                    _attach_chapter_info(paper_result, raw)
+                    return idx, paper_result
                 if idx in doi_map:
                     oa = await bundle.openalex.get_by_doi(doi_map[idx])
                     if oa:
-                        return idx, {
+                        paper_result = {
                             "identifier": raw,
                             "paper": oa,
                             "source": "openalex",
                         }
+                        _attach_chapter_info(paper_result, raw)
+                        return idx, paper_result
                 return idx, {"identifier": raw, "error": "not_found"}
 
             async def _resolve_patent(idx: int, raw: str) -> tuple[int, dict[str, Any]]:

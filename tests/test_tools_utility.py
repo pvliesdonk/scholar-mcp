@@ -649,3 +649,83 @@ async def test_batch_resolve_mixed_papers_and_isbn(mcp: FastMCP) -> None:
     assert "paper" in data[0]
     assert data[1]["identifier"] == "ISBN:9780201633610"
     assert data[1]["source_type"] == "book"
+
+
+# ---------------------------------------------------------------------------
+# batch_resolve chapter integration tests
+# ---------------------------------------------------------------------------
+
+
+async def test_batch_resolve_chapter_hint_parsed(mcp: FastMCP) -> None:
+    """batch_resolve attaches parsed chapter_info when chapter hints exist."""
+    with respx.mock:
+        respx.post(f"{S2_BASE}/paper/batch").mock(
+            return_value=httpx.Response(
+                200,
+                json=[{"paperId": "p1", "title": "Deep Learning"}],
+            )
+        )
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "batch_resolve",
+                {"identifiers": ["DOI:10.1/ch3 Ch. 3, pp. 45-67"]},
+            )
+    data = json.loads(result.content[0].text)
+    assert len(data) == 1
+    assert "paper" in data[0]
+    assert "chapter_info" in data[0]
+    ci = data[0]["chapter_info"]
+    assert ci["citation_source"] == "parsed"
+    assert ci["chapter_number"] == 3
+    assert ci["page_start"] == 45
+    assert ci["page_end"] == 67
+
+
+async def test_batch_resolve_chapter_parent_title_and_isbn(mcp: FastMCP) -> None:
+    """parent_title and isbn from citation text flow into chapter_info."""
+    with respx.mock:
+        respx.post(f"{S2_BASE}/paper/batch").mock(
+            return_value=httpx.Response(
+                200,
+                json=[{"paperId": "p1", "title": "Chapter Title"}],
+            )
+        )
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "batch_resolve",
+                {
+                    "identifiers": [
+                        "DOI:10.1/ch5 Ch. 5, pp. 100-120, "
+                        "In: Deep Learning, ISBN: 978-0-262-03561-3"
+                    ]
+                },
+            )
+    data = json.loads(result.content[0].text)
+    assert len(data) == 1
+    ci = data[0]["chapter_info"]
+    assert ci["citation_source"] == "parsed"
+    assert ci["chapter_number"] == 5
+    assert ci["page_start"] == 100
+    assert ci["page_end"] == 120
+    assert ci["parent_title"] == "Deep Learning"
+    assert ci["isbn"] == "9780262035613"
+
+
+async def test_batch_resolve_no_chapter_info(mcp: FastMCP) -> None:
+    """batch_resolve does not attach chapter_info for plain identifiers."""
+    with respx.mock:
+        respx.post(f"{S2_BASE}/paper/batch").mock(
+            return_value=httpx.Response(
+                200,
+                json=[{"paperId": "p1", "title": "Regular Paper"}],
+            )
+        )
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "batch_resolve",
+                {"identifiers": ["p1"]},
+            )
+    data = json.loads(result.content[0].text)
+    assert len(data) == 1
+    assert "paper" in data[0]
+    assert "chapter_info" not in data[0]

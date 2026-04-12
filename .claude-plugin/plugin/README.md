@@ -40,6 +40,7 @@ Optional environment variables:
 | `SCHOLAR_MCP_VLM_MODEL` | `gpt-4o` | Model name for VLM-enriched conversion. |
 | `SCHOLAR_MCP_EPO_CONSUMER_KEY` | -- | EPO OPS key (enables patent tools). |
 | `SCHOLAR_MCP_EPO_CONSUMER_SECRET` | -- | EPO OPS secret. |
+| `SCHOLAR_MCP_GOOGLE_BOOKS_API_KEY` | -- | Google Books API key (higher rate limits). |
 | `FASTMCP_LOG_LEVEL` | `INFO` | `DEBUG` / `INFO` / `WARNING` / `ERROR`. |
 
 For the full list of env vars, see the
@@ -47,7 +48,7 @@ For the full list of env vars, see the
 
 ## What you get
 
-27 tools across four scholarly source domains:
+28 tools across four scholarly source domains:
 
 - **Papers** -- search, single-paper lookup, author search, forward/backward
   citations, BFS graph traversal, shortest-path bridge, recommendations,
@@ -55,7 +56,8 @@ For the full list of env vars, see the
 - **Patents** -- search 100+ offices via EPO OPS, full patent sections,
   family/legal/citations, NPL-to-paper resolution.
 - **Books** -- search, ISBN/OLID lookup, subject recommendations via
-  Open Library.
+  Open Library; Google Books excerpts and previews; WorldCat permalinks;
+  cover image caching.
 - **Standards** -- identifier resolution, search, and metadata for NIST,
   IETF, W3C, ETSI.
 - **PDF conversion** -- download and convert to Markdown via docling-serve,

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TypedDict
+from typing import Literal, TypedDict
 
 
 class BookRecord(TypedDict, total=False):
@@ -30,6 +30,24 @@ class BookRecord(TypedDict, total=False):
     worldcat_url: str | None
     snippet: str | None
     cover_path: str | None
+
+
+class BookChapterRecord(TypedDict, total=False):
+    """Chapter-level metadata within a book.
+
+    Used when citation strings reference specific chapters or page
+    ranges. ``citation_source`` indicates whether data came from
+    CrossRef (structured) or regex parsing (heuristic).
+    """
+
+    chapter_title: str
+    chapter_number: int
+    page_start: int
+    page_end: int
+    parent_title: str
+    parent_book: BookRecord
+    isbn: str
+    citation_source: Literal["crossref", "parsed"]
 
 
 class StandardRecord(TypedDict, total=False):

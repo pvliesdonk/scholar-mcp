@@ -74,6 +74,14 @@ Or in `claude_desktop_config.json`:
 }
 ```
 
+## Google Books
+
+Google Books integration is available without configuration (unauthenticated, 1000 requests/day). An API key unlocks higher rate limits.
+
+| Variable | Default | Description |
+|---|---|---|
+| `SCHOLAR_MCP_GOOGLE_BOOKS_API_KEY` | -- | [Google Books API key](https://developers.google.com/books/docs/v1/using#APIKey). Optional — the enricher and `get_book_excerpt` tool work without it at reduced rate limits. |
+
 ## Server
 
 | Variable | Default | Description |
@@ -130,6 +138,8 @@ Cache expiry is not configurable via environment variables. The built-in TTLs ar
 | `citations` | 7 days | Citation lists (paper IDs) |
 | `refs` | 7 days | Reference lists (paper IDs) |
 | `openalex` | 30 days | OpenAlex enrichment data |
+| `crossref` | 30 days | CrossRef metadata (publisher, page ranges, container titles) |
+| `google_books` | 30 days | Google Books volume data (preview links, descriptions) |
 | `id_aliases` | -- | Identifier-to-S2-ID mappings (never expires) |
 
 Use the CLI to manage the cache:
