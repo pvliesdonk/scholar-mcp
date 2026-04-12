@@ -56,7 +56,7 @@ class EnrichmentPipeline:
         bundle: ServiceBundle,
         *,
         tags: frozenset[str] | None = None,
-        concurrency: int = 5,
+        concurrency: int = 10,
     ) -> None:
         """Run matching enrichers on all records, phase by phase."""
 ```

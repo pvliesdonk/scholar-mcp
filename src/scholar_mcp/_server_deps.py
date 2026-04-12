@@ -62,6 +62,25 @@ class ServiceBundle:
     enrichment: EnrichmentPipeline
 
 
+def _build_enrichment_pipeline() -> EnrichmentPipeline:
+    """Build the enrichment pipeline with all registered enrichers.
+
+    OpenLibraryEnricher is imported here (not at module level) to avoid
+    a circular import: _enricher_openlibrary -> _book_enrichment -> _server_deps.
+
+    Returns:
+        Configured :class:`EnrichmentPipeline` instance.
+    """
+    from ._enricher_openlibrary import OpenLibraryEnricher
+
+    return EnrichmentPipeline(
+        [
+            OpenAlexEnricher(),
+            OpenLibraryEnricher(),
+        ]
+    )
+
+
 @asynccontextmanager
 async def make_service_lifespan(
     app: FastMCP,
@@ -133,16 +152,7 @@ async def make_service_lifespan(
     standards_http = httpx.AsyncClient(timeout=30.0)
     standards = StandardsClient(standards_http, cache_dir=config.cache_dir)
 
-    # OpenLibraryEnricher imported here to avoid circular import
-    # (_enricher_openlibrary -> _book_enrichment -> _server_deps)
-    from ._enricher_openlibrary import OpenLibraryEnricher
-
-    enrichment = EnrichmentPipeline(
-        [
-            OpenAlexEnricher(),
-            OpenLibraryEnricher(),
-        ]
-    )
+    enrichment = _build_enrichment_pipeline()
 
     bundle = ServiceBundle(
         s2=s2,
