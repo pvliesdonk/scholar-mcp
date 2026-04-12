@@ -1054,7 +1054,7 @@ async def test_npl_chapter_info_parsed(
     assert ci["chapter_number"] == 5
     assert ci["page_start"] == 100
     assert ci["page_end"] == 150
-    assert ci["chapter_title"] == "Advanced Methods"
+    assert ci["parent_title"] == "Advanced Methods"
 
 
 async def test_npl_no_chapter_info(

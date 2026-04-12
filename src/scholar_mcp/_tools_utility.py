@@ -23,45 +23,21 @@ from ._server_deps import ServiceBundle, get_bundle
 logger = logging.getLogger(__name__)
 
 
-def _attach_chapter_info(
-    result: dict[str, Any], raw: str, paper_data: dict[str, Any]
-) -> None:
-    """Attach chapter_info to *result* when hints exist.
+def _attach_chapter_info(result: dict[str, Any], raw: str) -> None:
+    """Attach chapter_info to *result* when parsed hints exist.
 
-    Uses CrossRef metadata when available (book-chapter type), otherwise
-    falls back to parsed hints from the raw identifier string.
+    The enrichment pipeline resolves the parent book separately; this
+    function only records heuristic hints extracted from the raw
+    identifier string (chapter number, page range, parent title, ISBN).
 
     Args:
         result: Mutable paper result dict to enrich in-place.
         raw: Raw identifier string potentially containing chapter hints.
-        paper_data: S2 or OpenAlex paper data dict.
     """
     hint = parse_chapter_hint(raw)
     if not hint.has_chapter_info:
         return
-    crossref_meta = paper_data.get("crossref_metadata", {})
-    if crossref_meta.get("type") == "book-chapter":
-        chapter_info: dict[str, Any] = {
-            "citation_source": "crossref",
-        }
-        if crossref_meta.get("page"):
-            parts = crossref_meta["page"].split("-")
-            try:
-                chapter_info["page_start"] = int(parts[0])
-                if len(parts) > 1:
-                    chapter_info["page_end"] = int(parts[1])
-            except ValueError:
-                pass
-        # CrossRef "title" is the chapter title;
-        # "container-title" is the parent book.
-        cr_title = crossref_meta.get("title")
-        if cr_title:
-            chapter_info["chapter_title"] = (
-                cr_title[0] if isinstance(cr_title, list) else cr_title
-            )
-        result["chapter_info"] = chapter_info
-    else:
-        result["chapter_info"] = hint_to_dict(hint)
+    result["chapter_info"] = hint_to_dict(hint)
 
 
 def register_utility_tools(mcp: FastMCP) -> None:
@@ -148,7 +124,7 @@ def register_utility_tools(mcp: FastMCP) -> None:
                         "identifier": raw,
                         "paper": s2_data,
                     }
-                    _attach_chapter_info(paper_result, raw, s2_data)
+                    _attach_chapter_info(paper_result, raw)
                     return idx, paper_result
                 if idx in doi_map:
                     oa = await bundle.openalex.get_by_doi(doi_map[idx])
@@ -158,7 +134,7 @@ def register_utility_tools(mcp: FastMCP) -> None:
                             "paper": oa,
                             "source": "openalex",
                         }
-                        _attach_chapter_info(paper_result, raw, oa)
+                        _attach_chapter_info(paper_result, raw)
                         return idx, paper_result
                 return idx, {"identifier": raw, "error": "not_found"}
 

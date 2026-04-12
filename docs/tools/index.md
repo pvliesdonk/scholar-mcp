@@ -508,7 +508,7 @@ Sections are fetched concurrently where possible (cache lookups run in parallel;
     ],
     "npl_refs": [
       {"raw": "Smith et al., \"Widget Processing\", 2018, doi:10.1234/test", "paper": {"paperId": "abc123", "title": "Widget Processing"}, "confidence": "high"},
-      {"raw": "Doe, \"Advanced Widgets\", Ch. 5, pp. 112-130, 2019", "confidence": null, "chapter_info": {"chapter": "5", "pages": "112-130"}}
+      {"raw": "Doe, \"Advanced Widgets\", Ch. 5, pp. 112-130, 2019", "confidence": null, "chapter_info": {"citation_source": "parsed", "chapter_number": 5, "page_start": 112, "page_end": 130}}
     ]
   }
 }

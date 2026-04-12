@@ -32,9 +32,9 @@ _RE_PAGES = re.compile(
     re.IGNORECASE,
 )
 
-# Parent book title: "In: {title}" up to comma+year or end of string
+# Parent book title: "In: {title}" up to comma+(year|ISBN) or end of string
 _RE_PARENT = re.compile(
-    r"\bIn:\s+(.+?)(?=,\s*\d{4}|$)",
+    r"\bIn:\s+(.+?)(?=,\s*(?:\d{4}|ISBN\b)|$)",
     re.IGNORECASE,
 )
 
@@ -176,5 +176,7 @@ def hint_to_dict(hint: ChapterHint) -> dict[str, Any]:
     if hint.page_end is not None:
         info["page_end"] = hint.page_end
     if hint.parent_title is not None:
-        info["chapter_title"] = hint.parent_title
+        info["parent_title"] = hint.parent_title
+    if hint.isbn is not None:
+        info["isbn"] = hint.isbn
     return info

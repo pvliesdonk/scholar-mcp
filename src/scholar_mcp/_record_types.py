@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TypedDict
+from typing import Literal, TypedDict
 
 
 class BookRecord(TypedDict, total=False):
@@ -44,8 +44,10 @@ class BookChapterRecord(TypedDict, total=False):
     chapter_number: int
     page_start: int
     page_end: int
+    parent_title: str
     parent_book: BookRecord
-    citation_source: str  # "crossref" | "parsed"
+    isbn: str
+    citation_source: Literal["crossref", "parsed"]
 
 
 class StandardRecord(TypedDict, total=False):

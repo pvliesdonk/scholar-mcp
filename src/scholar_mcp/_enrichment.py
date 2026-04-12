@@ -5,9 +5,20 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections import defaultdict
-from typing import Any, Protocol, runtime_checkable
+from collections.abc import Sequence  # noqa: TC003  # used in TypeAlias (runtime)
+from typing import Any, Protocol, TypeAlias, cast, runtime_checkable
+
+from ._record_types import BookChapterRecord, BookRecord, StandardRecord
 
 logger = logging.getLogger(__name__)
+
+#: Records the pipeline can enrich. Paper records flow through as
+#: generic ``dict[str, Any]`` (from S2/OpenAlex responses); domain
+#: objects use TypedDict-based records for field-level typing. All
+#: variants are dicts at runtime; enrichers mutate the underlying dict.
+EnrichableRecord: TypeAlias = (
+    dict[str, Any] | BookRecord | BookChapterRecord | StandardRecord
+)
 
 
 @runtime_checkable
@@ -67,7 +78,7 @@ class EnrichmentPipeline:
 
     async def enrich(
         self,
-        records: list[dict[str, Any]],
+        records: Sequence[EnrichableRecord],
         bundle: Any,
         *,
         tags: frozenset[str] | None = None,
@@ -75,8 +86,15 @@ class EnrichmentPipeline:
     ) -> None:
         """Run all registered enrichers over *records*.
 
+        Accepts a covariant :class:`Sequence` of records so callers can
+        pass a ``list[BookRecord]`` (or any other supported TypedDict
+        record) without casts or ``# type: ignore``.  At runtime every
+        supported record type is a plain ``dict``, so the ``cast`` to
+        ``dict[str, Any]`` below is safe and lets enrichers keep their
+        simpler parameter type.
+
         Args:
-            records: List of record dicts to enrich in place.
+            records: Sequence of record dicts to enrich in place.
             bundle: Service bundle for API clients, cache, etc.
             tags: If provided, only enrichers whose tags overlap run.
             concurrency: Maximum concurrent enrichment calls per phase.
@@ -89,10 +107,11 @@ class EnrichmentPipeline:
                 if tags is not None and not enricher.tags & tags:
                     continue
                 for record in records:
-                    if not enricher.can_enrich(record):
+                    record_dict = cast("dict[str, Any]", record)
+                    if not enricher.can_enrich(record_dict):
                         continue
                     task = asyncio.create_task(
-                        self._run_one(sem, enricher, record, bundle)
+                        self._run_one(sem, enricher, record_dict, bundle)
                     )
                     tasks.append(task)
             if tasks:

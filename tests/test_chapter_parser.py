@@ -98,7 +98,11 @@ class TestEmptyAndProperties:
 class TestHintToDict:
     def test_hint_to_dict(self) -> None:
         hint = ChapterHint(
-            chapter_number=3, page_start=45, page_end=67, parent_title="Deep Learning"
+            chapter_number=3,
+            page_start=45,
+            page_end=67,
+            parent_title="Deep Learning",
+            isbn="9780262035613",
         )
         info = hint_to_dict(hint)
         assert info == {
@@ -106,10 +110,16 @@ class TestHintToDict:
             "chapter_number": 3,
             "page_start": 45,
             "page_end": 67,
-            "chapter_title": "Deep Learning",
+            "parent_title": "Deep Learning",
+            "isbn": "9780262035613",
         }
 
     def test_hint_to_dict_partial(self) -> None:
         hint = ChapterHint(page_start=100)
         info = hint_to_dict(hint)
         assert info == {"citation_source": "parsed", "page_start": 100}
+
+    def test_hint_to_dict_includes_isbn_when_present(self) -> None:
+        hint = ChapterHint(page_start=100, isbn="9780262035613")
+        info = hint_to_dict(hint)
+        assert info["isbn"] == "9780262035613"
