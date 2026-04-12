@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from scholar_mcp._chapter_parser import parse_chapter_hint
+from scholar_mcp._chapter_parser import ChapterHint, hint_to_dict, parse_chapter_hint
 
 
 class TestChapterNumber:
@@ -93,3 +93,23 @@ class TestEmptyAndProperties:
     def test_has_chapter_info_with_isbn(self) -> None:
         hint = parse_chapter_hint("Some Book, ISBN 978-0-262-03561-3")
         assert hint.has_chapter_info is True
+
+
+class TestHintToDict:
+    def test_hint_to_dict(self) -> None:
+        hint = ChapterHint(
+            chapter_number=3, page_start=45, page_end=67, parent_title="Deep Learning"
+        )
+        info = hint_to_dict(hint)
+        assert info == {
+            "citation_source": "parsed",
+            "chapter_number": 3,
+            "page_start": 45,
+            "page_end": 67,
+            "chapter_title": "Deep Learning",
+        }
+
+    def test_hint_to_dict_partial(self) -> None:
+        hint = ChapterHint(page_start=100)
+        info = hint_to_dict(hint)
+        assert info == {"citation_source": "parsed", "page_start": 100}

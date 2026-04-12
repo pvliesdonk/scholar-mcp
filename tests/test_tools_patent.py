@@ -1013,6 +1013,163 @@ async def test_get_citing_patents_rate_limited_queues(
 
 
 # ---------------------------------------------------------------------------
+# NPL chapter info tests
+# ---------------------------------------------------------------------------
+
+
+async def test_npl_chapter_info_parsed(
+    bundle: ServiceBundle,
+) -> None:
+    """NPL ref with chapter pattern gets chapter_info attached."""
+    citations_data = {
+        "patent_refs": [],
+        "npl_refs": [
+            {
+                "raw": "Smith et al., Ch. 5, pp. 100-150, In: Advanced Methods, 2020",
+                "doi": None,
+            },
+        ],
+    }
+    epo = _make_epo_client(citations_result=citations_data)
+    bundle.epo = epo
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_patent_tools(app)
+
+    async with Client(app) as client:
+        result = await client.call_tool(
+            "get_patent",
+            {"patent_number": "EP1234567A1", "sections": ["citations"]},
+        )
+    data = json.loads(result.content[0].text)
+    npl = data["citations"]["npl_refs"]
+    assert len(npl) == 1
+    assert "chapter_info" in npl[0]
+    ci = npl[0]["chapter_info"]
+    assert ci["citation_source"] == "parsed"
+    assert ci["chapter_number"] == 5
+    assert ci["page_start"] == 100
+    assert ci["page_end"] == 150
+    assert ci["chapter_title"] == "Advanced Methods"
+
+
+async def test_npl_no_chapter_info(
+    bundle: ServiceBundle,
+) -> None:
+    """NPL ref without chapter patterns has no chapter_info key."""
+    citations_data = {
+        "patent_refs": [],
+        "npl_refs": [
+            {"raw": "Smith et al., Journal of Testing, 2020", "doi": None},
+        ],
+    }
+    epo = _make_epo_client(citations_result=citations_data)
+    bundle.epo = epo
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_patent_tools(app)
+
+    async with Client(app) as client:
+        result = await client.call_tool(
+            "get_patent",
+            {"patent_number": "EP1234567A1", "sections": ["citations"]},
+        )
+    data = json.loads(result.content[0].text)
+    npl = data["citations"]["npl_refs"]
+    assert len(npl) == 1
+    assert "chapter_info" not in npl[0]
+
+
+async def test_npl_chapter_info_with_s2_resolution(
+    bundle: ServiceBundle,
+) -> None:
+    """NPL chapter_info is attached even when S2 resolution succeeds."""
+    citations_data = {
+        "patent_refs": [],
+        "npl_refs": [
+            {
+                "raw": "Smith, Ch. 3, pp. 45-67, doi:10.1234/test",
+                "doi": "10.1234/test",
+            },
+        ],
+    }
+    epo = _make_epo_client(citations_result=citations_data)
+    bundle.epo = epo
+
+    # Mock S2 batch_resolve to return a paper for the DOI
+    bundle.s2.batch_resolve = AsyncMock(  # type: ignore[assignment]
+        return_value=[{"paperId": "abc123", "title": "Smith Paper"}]
+    )
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_patent_tools(app)
+
+    async with Client(app) as client:
+        result = await client.call_tool(
+            "get_patent",
+            {"patent_number": "EP1234567A1", "sections": ["citations"]},
+        )
+    data = json.loads(result.content[0].text)
+    npl = data["citations"]["npl_refs"]
+    assert npl[0]["confidence"] == "high"
+    assert npl[0]["paper"]["paperId"] == "abc123"
+    assert "chapter_info" in npl[0]
+    ci = npl[0]["chapter_info"]
+    assert ci["citation_source"] == "parsed"
+    assert ci["chapter_number"] == 3
+    assert ci["page_start"] == 45
+    assert ci["page_end"] == 67
+
+
+async def test_npl_chapter_info_no_s2_branch(
+    bundle: ServiceBundle,
+) -> None:
+    """NPL chapter_info is attached via the else branch when s2=None."""
+    from scholar_mcp._patent_numbers import DocdbNumber
+
+    citations_data = {
+        "patent_refs": [],
+        "npl_refs": [
+            {
+                "raw": "Deep Learning, Ch. 3, pp. 45-67",
+                "doi": None,
+            },
+        ],
+    }
+    epo = _make_epo_client(citations_result=citations_data)
+    doc = DocdbNumber("EP", "1234567", "A1")
+    result_json = await _fetch_patent_sections(
+        doc=doc,
+        sections=["citations"],
+        epo=epo,
+        cache=bundle.cache,
+        s2=None,
+    )
+    result = json.loads(result_json)
+    npl = result["citations"]["npl_refs"]
+    assert len(npl) == 1
+    assert npl[0]["confidence"] is None
+    assert "chapter_info" in npl[0]
+    ci = npl[0]["chapter_info"]
+    assert ci["citation_source"] == "parsed"
+    assert ci["chapter_number"] == 3
+    assert ci["page_start"] == 45
+    assert ci["page_end"] == 67
+
+
+# ---------------------------------------------------------------------------
 # fetch_patent_pdf tests
 # ---------------------------------------------------------------------------
 

@@ -80,6 +80,7 @@ def _build_enrichment_pipeline() -> EnrichmentPipeline:
     Returns:
         Configured :class:`EnrichmentPipeline` instance.
     """
+    from ._enricher_google_books import GoogleBooksEnricher
     from ._enricher_openlibrary import OpenLibraryEnricher
 
     return EnrichmentPipeline(
@@ -87,6 +88,7 @@ def _build_enrichment_pipeline() -> EnrichmentPipeline:
             OpenAlexEnricher(),
             CrossRefEnricher(),
             OpenLibraryEnricher(),
+            GoogleBooksEnricher(),
         ]
     )
 

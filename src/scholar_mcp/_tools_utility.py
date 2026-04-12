@@ -12,6 +12,7 @@ from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
 
 from ._cache import normalize_isbn
+from ._chapter_parser import hint_to_dict, parse_chapter_hint
 from ._epo_client import EpoRateLimitedError
 from ._openlibrary_client import normalize_book
 from ._patent_numbers import is_patent_number, normalize
@@ -20,6 +21,47 @@ from ._s2_client import FIELD_SETS
 from ._server_deps import ServiceBundle, get_bundle
 
 logger = logging.getLogger(__name__)
+
+
+def _attach_chapter_info(
+    result: dict[str, Any], raw: str, paper_data: dict[str, Any]
+) -> None:
+    """Attach chapter_info to *result* when hints exist.
+
+    Uses CrossRef metadata when available (book-chapter type), otherwise
+    falls back to parsed hints from the raw identifier string.
+
+    Args:
+        result: Mutable paper result dict to enrich in-place.
+        raw: Raw identifier string potentially containing chapter hints.
+        paper_data: S2 or OpenAlex paper data dict.
+    """
+    hint = parse_chapter_hint(raw)
+    if not hint.has_chapter_info:
+        return
+    crossref_meta = paper_data.get("crossref_metadata", {})
+    if crossref_meta.get("type") == "book-chapter":
+        chapter_info: dict[str, Any] = {
+            "citation_source": "crossref",
+        }
+        if crossref_meta.get("page"):
+            parts = crossref_meta["page"].split("-")
+            try:
+                chapter_info["page_start"] = int(parts[0])
+                if len(parts) > 1:
+                    chapter_info["page_end"] = int(parts[1])
+            except ValueError:
+                pass
+        # CrossRef "title" is the chapter title;
+        # "container-title" is the parent book.
+        cr_title = crossref_meta.get("title")
+        if cr_title:
+            chapter_info["chapter_title"] = (
+                cr_title[0] if isinstance(cr_title, list) else cr_title
+            )
+        result["chapter_info"] = chapter_info
+    else:
+        result["chapter_info"] = hint_to_dict(hint)
 
 
 def register_utility_tools(mcp: FastMCP) -> None:
@@ -102,15 +144,22 @@ def register_utility_tools(mcp: FastMCP) -> None:
                 idx: int, raw: str, s2_data: dict[str, Any] | None
             ) -> tuple[int, dict[str, Any]]:
                 if s2_data is not None:
-                    return idx, {"identifier": raw, "paper": s2_data}
+                    paper_result: dict[str, Any] = {
+                        "identifier": raw,
+                        "paper": s2_data,
+                    }
+                    _attach_chapter_info(paper_result, raw, s2_data)
+                    return idx, paper_result
                 if idx in doi_map:
                     oa = await bundle.openalex.get_by_doi(doi_map[idx])
                     if oa:
-                        return idx, {
+                        paper_result = {
                             "identifier": raw,
                             "paper": oa,
                             "source": "openalex",
                         }
+                        _attach_chapter_info(paper_result, raw, oa)
+                        return idx, paper_result
                 return idx, {"identifier": raw, "error": "not_found"}
 
             async def _resolve_patent(idx: int, raw: str) -> tuple[int, dict[str, Any]]:

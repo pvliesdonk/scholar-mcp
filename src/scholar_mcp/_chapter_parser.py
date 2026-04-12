@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -156,3 +157,24 @@ def parse_chapter_hint(citation: str) -> ChapterHint:
             logger.debug("parse_chapter_hint isbn=%s (isbn10)", hint.isbn)
 
     return hint
+
+
+def hint_to_dict(hint: ChapterHint) -> dict[str, Any]:
+    """Convert a ChapterHint to a chapter_info dict for JSON output.
+
+    Args:
+        hint: Parsed chapter hint.
+
+    Returns:
+        Dict with populated fields and ``citation_source`` set to ``"parsed"``.
+    """
+    info: dict[str, Any] = {"citation_source": "parsed"}
+    if hint.chapter_number is not None:
+        info["chapter_number"] = hint.chapter_number
+    if hint.page_start is not None:
+        info["page_start"] = hint.page_start
+    if hint.page_end is not None:
+        info["page_end"] = hint.page_end
+    if hint.parent_title is not None:
+        info["chapter_title"] = hint.parent_title
+    return info

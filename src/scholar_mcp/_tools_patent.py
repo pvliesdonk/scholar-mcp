@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
 
+from ._chapter_parser import hint_to_dict, parse_chapter_hint
 from ._epo_client import EpoClient, EpoRateLimitedError
 from ._patent_numbers import DocdbNumber, normalize
 from ._protocols import CacheProtocol
@@ -553,6 +554,23 @@ _AVAILABLE_SECTIONS = {
 }
 
 
+def _attach_npl_chapter_info(entry: dict[str, Any], raw: str) -> None:
+    """Attach ``chapter_info`` to an NPL *entry* when hints are found.
+
+    Parses the raw citation string for chapter-level hints and, if any
+    are present, adds a ``chapter_info`` dict with ``citation_source``
+    set to ``"parsed"``.
+
+    Args:
+        entry: Mutable NPL entry dict to enrich in-place.
+        raw: Raw citation string from the patent NPL reference.
+    """
+    hint = parse_chapter_hint(raw)
+    if not hint.has_chapter_info:
+        return
+    entry["chapter_info"] = hint_to_dict(hint)
+
+
 async def _fetch_patent_sections(
     *,
     doc: DocdbNumber,
@@ -685,9 +703,13 @@ async def _fetch_patent_sections(
                     entry["confidence"] = None
                 else:
                     entry["confidence"] = None
+                _attach_npl_chapter_info(entry, npl["raw"])
                 resolved_npl.append(entry)
         else:
-            resolved_npl = [{"raw": n["raw"], "confidence": None} for n in npl_refs]
+            for n in npl_refs:
+                entry = {"raw": n["raw"], "confidence": None}
+                _attach_npl_chapter_info(entry, n["raw"])
+                resolved_npl.append(entry)
 
         result["citations"] = {
             "patent_refs": patent_refs,

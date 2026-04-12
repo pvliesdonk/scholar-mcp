@@ -69,6 +69,7 @@ async def bundle(cache: ScholarCache, test_config: ServerConfig) -> ServiceBundl
     # Import enrichers here to avoid circular import
     # (_enricher_openlibrary -> _book_enrichment -> _server_deps)
     from scholar_mcp._enricher_crossref import CrossRefEnricher
+    from scholar_mcp._enricher_google_books import GoogleBooksEnricher
     from scholar_mcp._enricher_openalex import OpenAlexEnricher
     from scholar_mcp._enricher_openlibrary import OpenLibraryEnricher
 
@@ -77,6 +78,7 @@ async def bundle(cache: ScholarCache, test_config: ServerConfig) -> ServiceBundl
             OpenAlexEnricher(),
             CrossRefEnricher(),
             OpenLibraryEnricher(),
+            GoogleBooksEnricher(),
         ]
     )
     yield ServiceBundle(
