@@ -98,7 +98,7 @@ ignore = ["E501"]
 "src/scholar_mcp/_server_resources.py" = ["B008", "TCH001", "TCH002"]
 "src/scholar_mcp/_server_prompts.py" = ["B008", "TCH002"]
 # pytest fixtures need runtime imports; Path used in signatures needs to be importable at runtime.
-"tests/*.py" = ["ARG001", "TCH001", "TCH002", "TCH003"]
+"tests/*.py" = ["ARG001", "ARG002", "TCH001", "TCH002", "TCH003"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["scholar_mcp"]
