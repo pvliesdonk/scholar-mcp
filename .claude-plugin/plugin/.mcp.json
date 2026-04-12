@@ -1,0 +1,19 @@
+{
+  "scholar-mcp": {
+    "command": "uvx",
+    "args": [
+      "--from", "pvliesdonk-scholar-mcp[mcp]==1.6.0",
+      "scholar-mcp", "serve"
+    ],
+    "env": {
+      "SCHOLAR_MCP_S2_API_KEY": "${SCHOLAR_MCP_S2_API_KEY:-}",
+      "SCHOLAR_MCP_READ_ONLY": "${SCHOLAR_MCP_READ_ONLY:-true}",
+      "SCHOLAR_MCP_CONTACT_EMAIL": "${SCHOLAR_MCP_CONTACT_EMAIL:-}",
+      "SCHOLAR_MCP_CACHE_DIR": "${SCHOLAR_MCP_CACHE_DIR:-}",
+      "SCHOLAR_MCP_DOCLING_URL": "${SCHOLAR_MCP_DOCLING_URL:-}",
+      "SCHOLAR_MCP_EPO_CONSUMER_KEY": "${SCHOLAR_MCP_EPO_CONSUMER_KEY:-}",
+      "SCHOLAR_MCP_EPO_CONSUMER_SECRET": "${SCHOLAR_MCP_EPO_CONSUMER_SECRET:-}",
+      "FASTMCP_LOG_LEVEL": "${FASTMCP_LOG_LEVEL:-INFO}"
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "scholar-mcp",
+  "description": "Scholarly-sources MCP server for papers, patents, books, and standards.",
+  "version": "1.6.0",
+  "author": { "name": "Peter van Liesdonk" },
+  "homepage": "https://pvliesdonk.github.io/scholar-mcp/",
+  "repository": "https://github.com/pvliesdonk/scholar-mcp",
+  "license": "MIT",
+  "keywords": ["scholar", "papers", "patents", "books", "standards", "citations", "mcp"]
+}

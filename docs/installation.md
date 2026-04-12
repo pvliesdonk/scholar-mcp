@@ -1,5 +1,14 @@
 # Installation
 
+## As a Claude Code plugin
+
+```bash
+/plugin marketplace add pvliesdonk/claude-plugins
+/plugin install scholar-mcp@pvliesdonk
+```
+
+See [Claude Code Plugin guide](guides/claude-code-plugin.md) for configuration and details.
+
 ## With `uvx` (recommended)
 
 [`uvx`](https://docs.astral.sh/uv/) runs the server in an isolated environment without installing anything globally:

@@ -36,6 +36,17 @@ Per-domain depth is uneven. Papers currently have the richest tool surface (cita
 
 ## Installation
 
+### Claude Code plugin
+
+```bash
+/plugin marketplace add pvliesdonk/claude-plugins
+/plugin install scholar-mcp@pvliesdonk
+```
+
+### Claude Desktop (.mcpb bundle)
+
+Download `scholar-mcp-<VERSION>.mcpb` from the [latest release](https://github.com/pvliesdonk/scholar-mcp/releases/latest) and open it in Claude Desktop, or install via the Claude Desktop MCP gallery.
+
 ### With `uvx` (recommended)
 
 ```bash
