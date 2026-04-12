@@ -102,6 +102,7 @@ nav:
       - Overview: tools/index.md
   - Guides:
       - Overview: guides/index.md
+      - Claude Code Plugin: guides/claude-code-plugin.md
       - Claude Desktop: guides/claude-desktop.md
       - Authentication: guides/authentication.md
       - PDF Conversion: guides/pdf-conversion.md

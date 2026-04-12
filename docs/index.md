@@ -21,6 +21,13 @@ Results are cached in a local SQLite database with per-table TTLs to minimize AP
 
 ## Quick start
 
+=== "Claude Code plugin"
+
+    ```bash
+    /plugin marketplace add pvliesdonk/claude-plugins
+    /plugin install scholar-mcp@pvliesdonk
+    ```
+
 === "uvx (recommended)"
 
     ```bash
@@ -82,5 +89,6 @@ See [Installation](installation.md) for all methods including Linux packages.
 - [Installation](installation.md) -- all installation methods
 - [Configuration](configuration.md) -- environment variable reference
 - [Tools](tools/index.md) -- full tool reference with parameters
+- [Claude Code plugin](guides/claude-code-plugin.md) -- install as a Claude Code plugin
 - [Claude Desktop setup](guides/claude-desktop.md) -- get started with Claude Desktop
 - [Docker deployment](deployment/docker.md) -- production Docker Compose setup

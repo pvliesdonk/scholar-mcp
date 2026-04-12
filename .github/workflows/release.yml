@@ -52,11 +52,12 @@ jobs:
           git_committer_email: "actions@users.noreply.github.com"
           force: ${{ inputs.force }}
 
-      - name: Update server.json and uv.lock to released version
+      - name: Update versioned manifests to released version
         if: steps.release.outputs.released == 'true'
         env:
           VERSION: ${{ steps.release.outputs.version }}
         run: |
+          # server.json
           jq --arg v "$VERSION" '
             .version = $v |
             .packages |= map(
@@ -66,12 +67,42 @@ jobs:
             )
           ' server.json > server.json.tmp
           mv server.json.tmp server.json
+
+          # Claude Code plugin.json
+          jq --arg v "$VERSION" '.version = $v' \
+            .claude-plugin/plugin/.claude-plugin/plugin.json > plugin.json.tmp
+          mv plugin.json.tmp .claude-plugin/plugin/.claude-plugin/plugin.json
+
+          # Claude Code .mcp.json — keep --from spec in lockstep with plugin.json
+          jq --arg v "$VERSION" '
+            ."scholar-mcp".args = [
+              "--from", ("pvliesdonk-scholar-mcp[mcp]==" + $v),
+              "scholar-mcp", "serve"
+            ]
+          ' .claude-plugin/plugin/.mcp.json > mcp.json.tmp
+          mv mcp.json.tmp .claude-plugin/plugin/.mcp.json
+
           uv lock
           git config user.name "github-actions"
           git config user.email "actions@users.noreply.github.com"
-          git add server.json uv.lock
-          git diff --cached --quiet || git commit -m "chore: update server.json and uv.lock to v${VERSION} [skip ci]"
+          git add server.json uv.lock \
+                  .claude-plugin/plugin/.claude-plugin/plugin.json \
+                  .claude-plugin/plugin/.mcp.json
+          git diff --cached --quiet || git commit -m "chore: update manifests to v${VERSION} [skip ci]"
           git push
+
+          # Re-point the release tag to the manifest-bump commit so that
+          # marketplace installs (which checkout .claude-plugin/plugin at
+          # ref: vVERSION) get the updated plugin.json and .mcp.json.
+          #
+          # Trade-off: downstream jobs (publish-docker) sign images at the
+          # original tag SHA; after this force-push the tag SHA and the
+          # attestation SHA diverge. Acceptable because the only delta is
+          # version strings in JSON manifests, not executable code. A
+          # pre-release hook would avoid this but python-semantic-release
+          # doesn't support pre-tag hooks that modify the working tree.
+          git tag -f "v${VERSION}"
+          git push --force origin "refs/tags/v${VERSION}"
 
       - name: Build package
         if: steps.release.outputs.released == 'true'
@@ -289,6 +320,109 @@ jobs:
         run: gh release upload ${{ needs.release.outputs.tag }} dist/*.deb dist/*.rpm --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-mcpb:
+    needs: release
+    if: needs.release.outputs.released == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release.outputs.tag }}
+      - name: Install mcpb CLI
+        run: npm install -g @anthropic-ai/mcpb@2.1.2
+      - name: Render templates
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          mkdir -p build/mcpb/src
+          # Restrict substitution to ${VERSION} only — other ${...} tokens
+          # (e.g. ${DOCUMENTS}, ${user_config.*}) are runtime placeholders
+          # for the mcpb host and must survive intact.
+          envsubst '${VERSION}' < packaging/mcpb/manifest.json.in  > build/mcpb/manifest.json
+          envsubst '${VERSION}' < packaging/mcpb/pyproject.toml.in > build/mcpb/pyproject.toml
+          cp packaging/mcpb/src/server.py build/mcpb/src/server.py
+      - name: Validate and pack
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          mcpb validate build/mcpb/manifest.json
+          mkdir -p dist
+          mcpb pack build/mcpb "dist/scholar-mcp-${VERSION}.mcpb"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mcpb-bundle
+          path: dist/scholar-mcp-*.mcpb
+          if-no-files-found: error
+
+  publish-mcpb:
+    needs: [release, build-mcpb]
+    if: needs.release.outputs.released == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: mcpb-bundle
+          path: dist/
+      - name: Upload to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload \
+            "${{ needs.release.outputs.tag }}" \
+            dist/scholar-mcp-*.mcpb \
+            --clobber \
+            --repo "${{ github.repository }}"
+
+  publish-claude-plugin-pr:
+    needs: release
+    if: needs.release.outputs.released == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout catalog repo
+        uses: actions/checkout@v4
+        with:
+          repository: pvliesdonk/claude-plugins
+          token: ${{ secrets.CLAUDE_PLUGINS_PAT }}
+          path: catalog
+      - name: Bump marketplace.json entry
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          cd catalog
+          jq --arg v "$VERSION" --arg ref "v$VERSION" '
+            .plugins |= map(
+              if .name == "scholar-mcp"
+              then .version = $v | .source.ref = $ref
+              else . end
+            )
+          ' .claude-plugin/marketplace.json > marketplace.json.tmp
+          mv marketplace.json.tmp .claude-plugin/marketplace.json
+      - name: Validate marketplace entry was updated
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          cd catalog
+          jq -e --arg v "$VERSION" \
+            '.plugins[] | select(.name == "scholar-mcp") | .version == $v' \
+            .claude-plugin/marketplace.json > /dev/null || {
+            echo "::error::scholar-mcp entry not found or not updated in marketplace.json"
+            exit 1
+          }
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          path: catalog
+          token: ${{ secrets.CLAUDE_PLUGINS_PAT }}
+          branch: bump/scholar-mcp-${{ needs.release.outputs.version }}
+          title: "chore: bump scholar-mcp to v${{ needs.release.outputs.version }}"
+          body: |
+            Auto-generated bump from [scholar-mcp ${{ needs.release.outputs.tag }}](https://github.com/pvliesdonk/scholar-mcp/releases/tag/${{ needs.release.outputs.tag }}).
+          commit-message: "chore: bump scholar-mcp to v${{ needs.release.outputs.version }}"
+          committer: "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+          author: "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
 
   publish-registry:
     needs: [release, publish-pypi, publish-docker]

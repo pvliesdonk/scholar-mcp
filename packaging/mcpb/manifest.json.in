@@ -1,0 +1,124 @@
+{
+  "manifest_version": "0.4",
+  "name": "scholar-mcp",
+  "display_name": "Scholar",
+  "version": "${VERSION}",
+  "description": "Scholarly-sources MCP server for papers, patents, books, and standards.",
+  "long_description": "Unified search, cross-reference, and retrieval across papers (Semantic Scholar + OpenAlex), patents (EPO OPS), books (Open Library), and standards (NIST, IETF, W3C, ETSI). Includes citation graph traversal, BibTeX/CSL-JSON/RIS generation, and optional docling-serve PDF-to-Markdown conversion.",
+  "author": {
+    "name": "Peter van Liesdonk",
+    "url": "https://github.com/pvliesdonk"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pvliesdonk/scholar-mcp.git"
+  },
+  "homepage": "https://pvliesdonk.github.io/scholar-mcp/",
+  "documentation": "https://pvliesdonk.github.io/scholar-mcp/",
+  "support": "https://github.com/pvliesdonk/scholar-mcp/issues",
+  "license": "MIT",
+  "keywords": ["scholar", "semantic-scholar", "openalex", "epo", "patents", "open-library", "standards", "citations", "bibtex"],
+  "server": {
+    "type": "uv",
+    "entry_point": "src/server.py",
+    "mcp_config": {
+      "command": "uvx",
+      "args": ["--from", "pvliesdonk-scholar-mcp[mcp]==${VERSION}", "scholar-mcp", "serve"],
+      "env": {
+        "SCHOLAR_MCP_S2_API_KEY":         "${user_config.s2_api_key}",
+        "SCHOLAR_MCP_READ_ONLY":          "${user_config.read_only}",
+        "SCHOLAR_MCP_CACHE_DIR":          "${user_config.cache_dir}",
+        "SCHOLAR_MCP_CONTACT_EMAIL":      "${user_config.contact_email}",
+        "SCHOLAR_MCP_DOCLING_URL":        "${user_config.docling_url}",
+        "SCHOLAR_MCP_VLM_API_URL":        "${user_config.vlm_api_url}",
+        "SCHOLAR_MCP_VLM_API_KEY":        "${user_config.vlm_api_key}",
+        "SCHOLAR_MCP_VLM_MODEL":          "${user_config.vlm_model}",
+        "SCHOLAR_MCP_EPO_CONSUMER_KEY":   "${user_config.epo_consumer_key}",
+        "SCHOLAR_MCP_EPO_CONSUMER_SECRET":"${user_config.epo_consumer_secret}",
+        "FASTMCP_LOG_LEVEL":              "${user_config.log_level}"
+      }
+    }
+  },
+  "user_config": {
+    "s2_api_key": {
+      "type": "string",
+      "title": "Semantic Scholar API key",
+      "description": "Optional but strongly recommended. Unauthenticated requests are limited to ~1 req/s; a free key bumps that to ~10 req/s. Request one at https://www.semanticscholar.org/product/api#api-key-form.",
+      "required": false,
+      "sensitive": true
+    },
+    "read_only": {
+      "type": "boolean",
+      "title": "Read-only mode",
+      "description": "When true, write-tagged tools (PDF download and conversion) are hidden.",
+      "required": false,
+      "default": true
+    },
+    "cache_dir": {
+      "type": "directory",
+      "title": "Cache directory",
+      "description": "Directory for the SQLite cache database and downloaded PDFs.",
+      "required": false,
+      "default": "${DOCUMENTS}/scholar-mcp"
+    },
+    "contact_email": {
+      "type": "string",
+      "title": "Contact email",
+      "description": "Used in the OpenAlex User-Agent for polite-pool access and to enable Unpaywall PDF lookups.",
+      "required": false
+    },
+    "docling_url": {
+      "type": "string",
+      "title": "docling-serve URL",
+      "description": "Base URL of a running docling-serve instance (e.g. http://localhost:5001). Required for PDF-to-Markdown conversion.",
+      "required": false
+    },
+    "vlm_api_url": {
+      "type": "string",
+      "title": "VLM API URL",
+      "description": "OpenAI-compatible VLM endpoint for formula/figure-enriched PDF conversion.",
+      "required": false
+    },
+    "vlm_api_key": {
+      "type": "string",
+      "title": "VLM API key",
+      "description": "API key for the VLM endpoint. Stored in the OS keychain.",
+      "required": false,
+      "sensitive": true
+    },
+    "vlm_model": {
+      "type": "string",
+      "title": "VLM model",
+      "description": "Model name for VLM-enriched conversion.",
+      "required": false,
+      "default": "gpt-4o"
+    },
+    "epo_consumer_key": {
+      "type": "string",
+      "title": "EPO OPS consumer key",
+      "description": "EPO Open Patent Services consumer key. Both key and secret must be set for patent tools to appear. Register at https://developers.epo.org/user/register.",
+      "required": false
+    },
+    "epo_consumer_secret": {
+      "type": "string",
+      "title": "EPO OPS consumer secret",
+      "description": "EPO Open Patent Services consumer secret. Stored in the OS keychain.",
+      "required": false,
+      "sensitive": true
+    },
+    "log_level": {
+      "type": "string",
+      "title": "Log level",
+      "description": "One of: DEBUG, INFO, WARNING, ERROR.",
+      "required": false,
+      "default": "INFO"
+    }
+  },
+  "compatibility": {
+    "claude_desktop": ">=0.10.0",
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": {
+      "python": ">=3.11,<4.0"
+    }
+  }
+}
