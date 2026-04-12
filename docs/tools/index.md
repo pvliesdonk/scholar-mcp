@@ -1,6 +1,9 @@
 # Tools
 
-Scholar MCP provides 25 tools across ten categories. All tools return JSON.
+Scholar MCP provides 27 tools organised by scholarly source type: **Papers**, **Patents**, **Books**, and **Standards** are peer source domains; the remaining sections (Cross-source Utility, PDF Conversion, Task Polling) are cross-cutting. All tools return JSON.
+
+!!! info "Coverage by domain"
+    Per-domain depth is uneven — papers currently have the richest tool surface (citation graph, recommendations, cross-referencing to all three other domains); standards are the leanest. That reflects public data availability, not a value hierarchy. Parity work is tracked in [GitHub issues](https://github.com/pvliesdonk/scholar-mcp/issues) and [milestones](https://github.com/pvliesdonk/scholar-mcp/milestones).
 
 All tools include [MCP tool annotations](https://spec.modelcontextprotocol.io/specification/2025-03-26/server/tools/#annotations):
 
@@ -23,7 +26,7 @@ When a tool queues an operation, it returns:
 
 Poll with `get_task_result` to check status and retrieve the result. Task results expire after 10 minutes (S2 tools) or 1 hour (PDF tools).
 
-## Search & Retrieval
+## Papers — Search & Retrieval
 
 ### `search_papers`
 
@@ -83,7 +86,7 @@ Fetch an author profile or search by name.
 
 ---
 
-## Citation Graph
+## Papers — Citation Graph
 
 ### `get_citations`
 
@@ -184,7 +187,7 @@ Or `{"found": false}` if no path exists within `max_depth`.
 
 ---
 
-## Recommendations
+## Papers — Recommendations
 
 ### `recommend_papers`
 
@@ -204,7 +207,56 @@ Paper recommendations based on positive (and optional negative) examples.
 
 ---
 
-## Book Search
+## Papers — Enrichment
+
+### `enrich_paper`
+
+Augment Semantic Scholar metadata with OpenAlex data.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `identifier` | string | *(required)* | S2 paper ID or `DOI:xxx` |
+| `fields` | list[string] | *(required)* | Fields to retrieve: `affiliations`, `funders`, `oa_status`, `concepts` |
+
+**Available fields:**
+
+| Field | Description |
+|---|---|
+| `affiliations` | Institution display names from author affiliations |
+| `funders` | Funding organization names |
+| `oa_status` | Open access status string (e.g. `gold`, `green`, `hybrid`); also includes `is_oa` boolean |
+| `concepts` | List of `{"name": "...", "score": 0.95}` topic concepts |
+
+Results are cached for 30 days.
+
+---
+
+## Papers — Citation Generation
+
+### `generate_citations`
+
+Generate formatted citations for one or more papers. Resolves papers via Semantic Scholar, optionally enriches with OpenAlex metadata, and formats as BibTeX, CSL-JSON, or RIS.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `paper_ids` | list[string] | *(required)* | Paper identifiers (S2 IDs, DOIs, arXiv IDs, etc.). Max 100. |
+| `citation_format` | string | `"bibtex"` | Output format: `bibtex`, `csl-json`, or `ris` |
+| `enrich` | boolean | `true` | Attempt OpenAlex enrichment for missing venue data |
+
+**BibTeX output** includes entry type inference (`@article`, `@inproceedings`, `@misc`, `@book`), proper author formatting (`{Last}, First`), title casing preservation, DOI, arXiv eprint fields, and special character escaping. Papers with `book_metadata` (ISBN or publisher) are emitted as `@book` entries with `publisher`, `edition`, and `isbn` fields.
+
+**CSL-JSON output** returns `{"citations": [...], "errors": [...]}` -- the citations array contains standard CSL-JSON objects compatible with Zotero, Mendeley, Pandoc, and other CSL processors. Book entries use `type: "book"` with `publisher` and `ISBN` fields.
+
+**RIS output** uses standard RIS tags (`TY`, `AU`, `TI`, `PY`, `JO`/`BT`, `DO`, `UR`, `AB`, `ER`). Book entries use `TY - BOOK` with `PB` (publisher) and `SN` (ISBN) tags.
+
+Papers that fail to resolve are reported inline (BibTeX/RIS: as comments, CSL-JSON: in the errors array) rather than failing the entire request. When all papers fail, a structured error is returned: `{"error": "no_papers_resolved", "failed": [...]}`.
+
+!!! tip "Enrichment"
+    When `enrich` is enabled and a paper has no venue but has a DOI, the tool queries OpenAlex to fill in the venue name. This improves citation quality for papers where Semantic Scholar has incomplete metadata.
+
+---
+
+## Books
 
 Book tools use [Open Library](https://openlibrary.org/) as their data source. No API key is required. Rate limits are handled automatically; if the Open Library API is temporarily unavailable, calls queue and return a task ID (see [Async Task Queue](#async-task-queue)).
 
@@ -312,7 +364,7 @@ Enrichment failures are silently skipped — if Open Library is unreachable or t
 
 ---
 
-## Utility
+## Cross-source Utility
 
 ### `batch_resolve`
 
@@ -332,54 +384,7 @@ Resolve up to 100 paper, patent, or book identifiers to full metadata in a singl
 
 ---
 
-### `enrich_paper`
-
-Augment Semantic Scholar metadata with OpenAlex data.
-
-| Parameter | Type | Default | Description |
-|---|---|---|---|
-| `identifier` | string | *(required)* | S2 paper ID or `DOI:xxx` |
-| `fields` | list[string] | *(required)* | Fields to retrieve: `affiliations`, `funders`, `oa_status`, `concepts` |
-
-**Available fields:**
-
-| Field | Description |
-|---|---|
-| `affiliations` | Institution display names from author affiliations |
-| `funders` | Funding organization names |
-| `oa_status` | Open access status string (e.g. `gold`, `green`, `hybrid`); also includes `is_oa` boolean |
-| `concepts` | List of `{"name": "...", "score": 0.95}` topic concepts |
-
-Results are cached for 30 days.
-
----
-
-## Citation Generation
-
-### `generate_citations`
-
-Generate formatted citations for one or more papers. Resolves papers via Semantic Scholar, optionally enriches with OpenAlex metadata, and formats as BibTeX, CSL-JSON, or RIS.
-
-| Parameter | Type | Default | Description |
-|---|---|---|---|
-| `paper_ids` | list[string] | *(required)* | Paper identifiers (S2 IDs, DOIs, arXiv IDs, etc.). Max 100. |
-| `citation_format` | string | `"bibtex"` | Output format: `bibtex`, `csl-json`, or `ris` |
-| `enrich` | boolean | `true` | Attempt OpenAlex enrichment for missing venue data |
-
-**BibTeX output** includes entry type inference (`@article`, `@inproceedings`, `@misc`, `@book`), proper author formatting (`{Last}, First`), title casing preservation, DOI, arXiv eprint fields, and special character escaping. Papers with `book_metadata` (ISBN or publisher) are emitted as `@book` entries with `publisher`, `edition`, and `isbn` fields.
-
-**CSL-JSON output** returns `{"citations": [...], "errors": [...]}` -- the citations array contains standard CSL-JSON objects compatible with Zotero, Mendeley, Pandoc, and other CSL processors. Book entries use `type: "book"` with `publisher` and `ISBN` fields.
-
-**RIS output** uses standard RIS tags (`TY`, `AU`, `TI`, `PY`, `JO`/`BT`, `DO`, `UR`, `AB`, `ER`). Book entries use `TY - BOOK` with `PB` (publisher) and `SN` (ISBN) tags.
-
-Papers that fail to resolve are reported inline (BibTeX/RIS: as comments, CSL-JSON: in the errors array) rather than failing the entire request. When all papers fail, a structured error is returned: `{"error": "no_papers_resolved", "failed": [...]}`.
-
-!!! tip "Enrichment"
-    When `enrich` is enabled and a paper has no venue but has a DOI, the tool queries OpenAlex to fill in the venue name. This improves citation quality for papers where Semantic Scholar has incomplete metadata.
-
----
-
-## Patent Search
+## Patents
 
 !!! note "Credentials required"
     Patent tools require EPO OPS credentials. When `SCHOLAR_MCP_EPO_CONSUMER_KEY` and `SCHOLAR_MCP_EPO_CONSUMER_SECRET` are not set, these tools are automatically hidden. See [EPO OPS configuration](../configuration.md#epo-open-patent-services) for setup instructions.
@@ -497,6 +502,64 @@ Find patents that cite a given academic paper. Coverage is incomplete -- relies 
 
 !!! warning "Incomplete coverage"
     Not all patent-to-paper citations are captured by EPO OPS. Use this tool for discovery, not exhaustive analysis.
+
+---
+
+### `fetch_patent_pdf`
+
+Download a patent PDF via authenticated EPO OPS and optionally convert to Markdown.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `patent_number` | string | *(required)* | Patent number in any format (e.g. `EP3491801B1`, `US10123456B2`, `WO2024/123456`) |
+| `use_vlm` | bool | `false` | Enable VLM enrichment for formulas and figures |
+
+**Returns:** `{"pdf_path": "/data/scholar-mcp/pdfs/<stem>.pdf", "markdown": "...", "md_path": "/data/scholar-mcp/md/<stem>.md"}` when docling is configured, or just `{"pdf_path": "..."}` without it.
+
+Not all patents have full text available via OPS — WO and older EP patents sometimes lack PDFs. Returns `{"error": "pdf_not_available"}` in that case.
+
+!!! note "Write-tagged"
+    This tool is write-tagged and hidden when `SCHOLAR_MCP_READ_ONLY=true`. It also requires EPO OPS credentials.
+
+---
+
+## Standards
+
+Scholar MCP supports Tier 1 standards bodies (NIST, IETF, W3C, ETSI) with full metadata and
+optional full-text conversion. Tier 2 paywalled bodies (ISO, IEC, IEEE) are tracked in
+[GitHub issues](https://github.com/pvliesdonk/scholar-mcp/issues).
+
+### `resolve_standard_identifier`
+
+Normalise a messy citation string to its canonical form and body.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `raw` | string | — | Messy citation string (e.g. `"rfc9000"`, `"nist 800-53"`) |
+
+---
+
+### `search_standards`
+
+Search standards by identifier, title, or free text.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `query` | string | — | Identifier, title, or free text |
+| `body` | string | null | Filter to one body: `NIST`, `IETF`, `W3C`, `ETSI` |
+| `limit` | integer | 10 | Max results (max 50) |
+
+---
+
+### `get_standard`
+
+Retrieve a standard by identifier (canonical or fuzzy). Optionally fetches and converts
+full text via docling.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `identifier` | string | — | Canonical or fuzzy identifier |
+| `fetch_full_text` | boolean | false | Fetch and convert full text via docling |
 
 ---
 
@@ -639,38 +702,3 @@ The `hint` field gives expected duration — keep polling until the task complet
 List all active (non-expired) background tasks.
 
 **Returns:** JSON list of `{"task_id": "...", "status": "..."}` dicts.
-
----
-
-## Standards
-
-Scholar MCP supports Tier 1 standards bodies (NIST, IETF, W3C, ETSI) with full metadata and
-optional full-text conversion. Tier 2 paywalled bodies (ISO, IEC, IEEE) are planned for v0.9.0.
-
-### `search_standards`
-
-Search standards by identifier, title, or free text.
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `query` | string | — | Identifier, title, or free text |
-| `body` | string | null | Filter to one body: `NIST`, `IETF`, `W3C`, `ETSI` |
-| `limit` | integer | 10 | Max results (max 50) |
-
-### `get_standard`
-
-Retrieve a standard by identifier (canonical or fuzzy). Optionally fetches and converts
-full text via docling.
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `identifier` | string | — | Canonical or fuzzy identifier |
-| `fetch_full_text` | boolean | false | Fetch and convert full text via docling |
-
-### `resolve_standard_identifier`
-
-Normalise a messy citation string to its canonical form and body.
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `raw` | string | — | Messy citation string (e.g. `"rfc9000"`, `"nist 800-53"`) |

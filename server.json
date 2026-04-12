@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.pvliesdonk/scholar-mcp",
   "title": "Scholar MCP Server",
-  "description": "Academic literature search, citation graphs, and PDF conversion via Semantic Scholar.",
+  "description": "Scholarly-sources MCP server for papers, patents, books, and standards — search, cross-reference, and retrieve prior art across Semantic Scholar, EPO OPS, Open Library, and standards bodies.",
   "version": "1.6.0",
   "repository": {
     "url": "https://github.com/pvliesdonk/scholar-mcp",

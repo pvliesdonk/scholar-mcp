@@ -10,22 +10,29 @@
 [![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://pvliesdonk.github.io/scholar-mcp/)
 [![llms.txt](https://img.shields.io/badge/llms.txt-available-green)](https://pvliesdonk.github.io/scholar-mcp/llms.txt)
 
-A [FastMCP](https://github.com/jlowin/fastmcp) server providing structured academic literature access via [Semantic Scholar](https://www.semanticscholar.org/), with [OpenAlex](https://openalex.org/) enrichment and optional [docling-serve](https://github.com/DS4SD/docling-serve) PDF conversion.
+A [FastMCP](https://github.com/jlowin/fastmcp) server for the scholarly citation landscape -- **papers**, **patents**, **books**, and **standards** -- giving LLMs a unified way to search, cross-reference, and retrieve prior art across all four source types via [Semantic Scholar](https://www.semanticscholar.org/), [EPO Open Patent Services](https://www.epo.org/en/searching-for-patents/data/web-services/ops), [Open Library](https://openlibrary.org/), and standards bodies (NIST, IETF, W3C, ETSI), with [OpenAlex](https://openalex.org/) enrichment and optional [docling-serve](https://github.com/DS4SD/docling-serve) PDF/full-text conversion.
 
 ## Features
 
-- **Search & retrieval** -- full-text paper search with year, venue, field-of-study, and citation-count filters; single-paper lookup by DOI, S2 ID, arXiv ID, and more; author profile and name search
-- **Citation graph** -- forward citations, backward references, BFS graph traversal up to configurable depth, and shortest-path bridge paper discovery
-- **Recommendations** -- paper recommendations from positive (and optional negative) examples via the S2 recommendation API
-- **Citation generation** -- format paper metadata as BibTeX, CSL-JSON, or RIS citations with automatic entry type inference, author name parsing, and OpenAlex venue enrichment
-- **Book search** -- search and fetch book metadata via [Open Library](https://openlibrary.org/) (no API key required); papers with an ISBN are automatically enriched with publisher, edition, cover URL, and subject data
-- **OpenAlex enrichment** -- augment paper metadata with open-access URLs, affiliations, funders, concepts, and OA status
-- **Patent search & cross-referencing** -- search and retrieve patents via [EPO Open Patent Services](https://www.epo.org/en/searching-for-patents/data/web-services/ops) covering 100+ patent offices, with cited reference extraction, NPL-to-paper resolution via Semantic Scholar, and paper-to-patent citation discovery; EPO credentials are optional -- paper search works without them
-- **PDF conversion** -- download open-access PDFs and convert to Markdown via [docling-serve](https://github.com/DS4SD/docling-serve), with optional VLM enrichment for formulas and figures; automatic fallback to ArXiv, PubMed Central, and Unpaywall when Semantic Scholar has no OA link; direct URL download for PDFs found elsewhere
-- **Intelligent caching** -- SQLite-backed cache with per-table TTLs (30 days for papers/authors, 7 days for citations/references) and identifier aliasing
-- **Authentication** -- bearer token, OIDC (OAuth 2.1), or both simultaneously (multi-auth)
-- **Multi-transport** -- stdio (Claude Desktop), HTTP (streamable-http), and SSE transports
-- **Linux packages** -- `.deb` and `.rpm` packages with systemd service and security hardening
+### Source domains
+
+- **Papers** -- full-text search with year/venue/field/citation filters; single-paper lookup by DOI, S2 ID, arXiv ID, ACM ID, or PubMed ID; author profile and name search; forward citations, backward references, BFS graph traversal, shortest-path bridge discovery; recommendations from positive/negative examples; BibTeX/CSL-JSON/RIS citation generation with OpenAlex venue enrichment.
+- **Patents** -- search across 100+ patent offices via EPO OPS with CPC/applicant/inventor/jurisdiction filters; bibliographic, claims, description, family, legal, and citations sections; NPL-to-paper resolution via Semantic Scholar and paper-to-patent citation discovery. EPO credentials are optional -- other domains work without them.
+- **Books** -- search by title/author/keywords via Open Library (no API key required); lookup by ISBN-10/13, Open Library work ID, or edition ID; subject-based recommendations sorted by popularity. Papers with an ISBN in `externalIds` are automatically enriched with publisher, edition, cover URL, and subject data.
+- **Standards** -- identifier resolution, search, and metadata retrieval for NIST, IETF, W3C, and ETSI standards, with optional full-text fetch and Markdown conversion via docling. Tier-2 paywalled bodies (ISO, IEC, IEEE) are tracked in [GitHub issues](https://github.com/pvliesdonk/scholar-mcp/issues).
+
+### Cross-cutting
+
+- **OpenAlex enrichment** -- augment paper metadata with open-access URLs, affiliations, funders, concepts, and OA status.
+- **PDF conversion** -- download open-access PDFs and convert to Markdown via [docling-serve](https://github.com/DS4SD/docling-serve), with optional VLM enrichment for formulas and figures; automatic fallback to ArXiv, PubMed Central, and Unpaywall when Semantic Scholar has no OA link; direct URL download for PDFs found elsewhere.
+- **Intelligent caching** -- SQLite-backed cache with per-table TTLs (30 days for papers/authors, 7 days for citations/references) and identifier aliasing.
+- **Authentication** -- bearer token, OIDC (OAuth 2.1), or both simultaneously (multi-auth).
+- **Multi-transport** -- stdio (Claude Desktop), HTTP (streamable-http), and SSE transports.
+- **Linux packages** -- `.deb` and `.rpm` packages with systemd service and security hardening.
+
+### Coverage by domain
+
+Per-domain depth is uneven. Papers currently have the richest tool surface (citation graph, recommendations, cross-referencing to all three other domains); standards are the leanest. That reflects public data availability, not a value hierarchy — writing a paper typically needs all four source types for citations and prior art. Parity work is tracked in [GitHub issues](https://github.com/pvliesdonk/scholar-mcp/issues) and [milestones](https://github.com/pvliesdonk/scholar-mcp/milestones); the roadmap shows intent, not a completeness commitment.
 
 ## Installation
 
@@ -139,7 +146,11 @@ All settings are controlled via environment variables with the `SCHOLAR_MCP_` pr
 
 ## MCP Tools
 
-### Search & Retrieval
+27 tools, organised by scholarly source type.
+
+### Papers
+
+#### Search & retrieval
 
 | Tool | Description |
 |---|---|
@@ -147,7 +158,7 @@ All settings are controlled via environment variables with the `SCHOLAR_MCP_` pr
 | `get_paper` | Fetch full metadata for a single paper by DOI, S2 ID, arXiv ID, ACM ID, or PubMed ID. |
 | `get_author` | Fetch author profile with publications, or search by name. |
 
-### Citation Graph
+#### Citation graph
 
 | Tool | Description |
 |---|---|
@@ -156,13 +167,26 @@ All settings are controlled via environment variables with the `SCHOLAR_MCP_` pr
 | `get_citation_graph` | BFS traversal from seed papers, returning nodes + edges up to configurable depth. |
 | `find_bridge_papers` | Shortest citation path between two papers. |
 
-### Recommendations
+#### Recommendations & citation generation
 
 | Tool | Description |
 |---|---|
 | `recommend_papers` | Paper recommendations from 1--5 positive examples and optional negative examples. |
+| `generate_citations` | Generate BibTeX, CSL-JSON, or RIS citations for up to 100 papers, with automatic entry type inference and optional OpenAlex venue enrichment. |
+| `enrich_paper` | Augment Semantic Scholar metadata with OpenAlex fields (affiliations, funders, OA status, concepts). |
 
-### Book Search
+### Patents
+
+| Tool | Description |
+|---|---|
+| `search_patents` | Search patents across 100+ patent offices via EPO OPS with CPC / applicant / inventor / jurisdiction / date filters. |
+| `get_patent` | Fetch bibliographic / claims / description / family / legal / citations sections for a single patent by publication number. Citations include NPL-to-paper resolution via Semantic Scholar. |
+| `get_citing_patents` | Find patents that cite a given academic paper (best-effort; EPO OPS citation search coverage is incomplete). |
+| `fetch_patent_pdf` | Download a patent PDF via authenticated EPO OPS and optionally convert to Markdown. |
+
+> Patent tools are hidden when `SCHOLAR_MCP_EPO_CONSUMER_KEY` and `SCHOLAR_MCP_EPO_CONSUMER_SECRET` are not set. `fetch_patent_pdf` is also write-tagged and hidden when `SCHOLAR_MCP_READ_ONLY=true`.
+
+### Books
 
 | Tool | Description |
 |---|---|
@@ -172,28 +196,21 @@ All settings are controlled via environment variables with the `SCHOLAR_MCP_` pr
 
 > Papers with an ISBN in their `externalIds` are automatically enriched with `book_metadata` (publisher, edition, cover URL, subjects, and more) from Open Library when fetched via `get_paper`, `get_citations`, `get_references`, or `get_citation_graph`.
 
-### Utility
+### Standards
 
 | Tool | Description |
 |---|---|
-| `batch_resolve` | Resolve up to 100 identifiers to full metadata in one call, with OpenAlex fallback. |
-| `enrich_paper` | Augment S2 metadata with OpenAlex fields (affiliations, funders, OA status, concepts). |
+| `resolve_standard_identifier` | Normalise a messy citation string (e.g. `"rfc9000"`, `"nist 800-53"`) to canonical form and body. |
+| `search_standards` | Search standards by identifier, title, or free text, optionally filtered to one body (`NIST`, `IETF`, `W3C`, `ETSI`). |
+| `get_standard` | Retrieve a standard by canonical or fuzzy identifier, optionally fetching and converting the full text via docling. |
 
-### Citation Generation
+> Tier-1 bodies (NIST, IETF, W3C, ETSI) are supported with full metadata and optional full-text conversion. Tier-2 paywalled bodies (ISO, IEC, IEEE) are tracked in [GitHub issues](https://github.com/pvliesdonk/scholar-mcp/issues).
 
-| Tool | Description |
-|---|---|
-| `generate_citations` | Generate BibTeX, CSL-JSON, or RIS citations for up to 100 papers, with automatic entry type inference and optional OpenAlex venue enrichment. |
-
-### Patent Search (requires EPO OPS credentials)
+### Cross-source Utility
 
 | Tool | Description |
 |---|---|
-| `search_patents` | Search patents across 100+ patent offices via EPO OPS. |
-| `get_patent` | Fetch bibliographic metadata for a single patent by publication number. |
-| `fetch_patent_pdf` | Download a patent PDF via authenticated EPO OPS and optionally convert to Markdown. |
-
-> Patent tools are hidden when `SCHOLAR_MCP_EPO_CONSUMER_KEY` and `SCHOLAR_MCP_EPO_CONSUMER_SECRET` are not set. `fetch_patent_pdf` is also write-tagged and hidden when `SCHOLAR_MCP_READ_ONLY=true`.
+| `batch_resolve` | Resolve up to 100 mixed identifiers (paper DOIs, patent numbers, ISBNs) to full metadata in one call, routing each to the right backend with OpenAlex fallback. |
 
 ### PDF Conversion (requires docling-serve)
 
@@ -204,7 +221,7 @@ All settings are controlled via environment variables with the `SCHOLAR_MCP_` pr
 | `fetch_and_convert` | Full pipeline: fetch PDF (with fallback), convert to Markdown, return both. |
 | `fetch_pdf_by_url` | Download a PDF from any URL and optionally convert to Markdown. |
 
-> PDF tools are write-tagged and hidden when `SCHOLAR_MCP_READ_ONLY=true` (the default).
+> PDF tools are write-tagged and hidden when `SCHOLAR_MCP_READ_ONLY=true` (the default). `fetch_patent_pdf` (above) and the `get_standard` full-text mode cover the patent and standards equivalents.
 
 ### Task Polling
 
@@ -213,7 +230,7 @@ All settings are controlled via environment variables with the `SCHOLAR_MCP_` pr
 | `get_task_result` | Poll for the result of a background task by ID. |
 | `list_tasks` | List all active background tasks. |
 
-> Long-running operations (PDF download/conversion) and rate-limited S2 requests return `{"queued": true, "task_id": "..."}` immediately. Use `get_task_result` to poll for the result.
+> Long-running operations (PDF download/conversion) and rate-limited backend requests return `{"queued": true, "task_id": "..."}` immediately. Use `get_task_result` to poll for the result.
 
 ## Docker Compose
 
