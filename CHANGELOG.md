@@ -2,6 +2,265 @@
 
 <!-- version list -->
 
+## v1.7.0-rc.1 (2026-04-12)
+
+### Bug Fixes
+
+- Add missing tools and correct VLM scope in SKILL.md
+  ([`97b0748`](https://github.com/pvliesdonk/scholar-mcp/commit/97b074879e3b9a731ea92f7ebbbc9ecf1421ac58))
+
+- Add VLM vars to plugin README, test assertions, tighter validation
+  ([`3dce50c`](https://github.com/pvliesdonk/scholar-mcp/commit/3dce50c0235de6619ff50b83d96605dd8ea5b723))
+
+- Address all PR #97 review issues
+  ([`8097296`](https://github.com/pvliesdonk/scholar-mcp/commit/8097296ebba82464bc31b9647eb95a5034d73782))
+
+- Address PR #95 review — typing, regex, and test coverage
+  ([`0402770`](https://github.com/pvliesdonk/scholar-mcp/commit/0402770b29af2e73dd80723f62669bed009ed9fe))
+
+- Address PR #96 review — bugs, performance, race conditions
+  ([`5aaad33`](https://github.com/pvliesdonk/scholar-mcp/commit/5aaad33488ad091a528359185ce5f64971802f1f))
+
+- Address PR review — always() on save/upload, graceful artifact download
+  ([`0bfa2bf`](https://github.com/pvliesdonk/scholar-mcp/commit/0bfa2bfd68dcb1edcb65e17aabf466a1ae2e7845))
+
+- Address PR review — consolidate Papers sections, add fetch_patent_pdf
+  ([`88f5944`](https://github.com/pvliesdonk/scholar-mcp/commit/88f5944309c0d8fe012e60cd4146627d4de91615))
+
+- Address PR review — env expansion, test logic, docs, workflow
+  ([`13b6ecd`](https://github.com/pvliesdonk/scholar-mcp/commit/13b6ecd988fba32997dda290a6ce8da6b11d4485))
+
+- Address PR review — improve prerelease docs and configurable token
+  ([`188b3b2`](https://github.com/pvliesdonk/scholar-mcp/commit/188b3b2cc326398a56d7e0c8c64d992b00722ed8))
+
+- Address PR review — propagate guard, traceback conditional, test fixes
+  ([`583f2ef`](https://github.com/pvliesdonk/scholar-mcp/commit/583f2efa7ae98d7d9844dd303ce227523e7fb0d2))
+
+- Address PR review — throttle cache fallback, black pre-flight, lint, type check
+  ([`ce7a21e`](https://github.com/pvliesdonk/scholar-mcp/commit/ce7a21e08fad24ec0f1a7b96ccacf0b39882655e))
+
+- Address remaining nits — capitalisation and Patents bullet
+  ([`579dfe9`](https://github.com/pvliesdonk/scholar-mcp/commit/579dfe9171ee7cf8becbb8510a8d8b179eea295a))
+
+- Address round-2 review comments
+  ([`2582edf`](https://github.com/pvliesdonk/scholar-mcp/commit/2582edf2f786b52bd82d4ca7dfadf41611d03c0d))
+
+- BCP/STD/FYI canonical identifier format, NIST double-checked locking
+  ([`ea26432`](https://github.com/pvliesdonk/scholar-mcp/commit/ea26432e5f0767198c2fc2b07bca6451a2f18252))
+
+- Complete queued operations list and note cache-hit fast path
+  ([`3a93cde`](https://github.com/pvliesdonk/scholar-mcp/commit/3a93cde2d6a6859e80608e2a9948a525a352fac5))
+
+- Correct get_standard queueing behaviour in SKILL.md
+  ([`9d01d0b`](https://github.com/pvliesdonk/scholar-mcp/commit/9d01d0b8574ac7c4d4fac0282d2ebe72a13b572c))
+
+- Correct queued response shape and duration estimates in SKILL.md
+  ([`e640083`](https://github.com/pvliesdonk/scholar-mcp/commit/e64008371052e3dbad4749ef415e0c00269f489f))
+
+- EPO search bugs — 404 no-results, idle throttle, within date syntax, optional query, inventor-only
+  search
+  ([`f0d6a26`](https://github.com/pvliesdonk/scholar-mcp/commit/f0d6a260fc34823d73213e2cb3cca0eeb0001d58))
+
+- Guard NIST catalogue against empty parse result and add in-memory cache test
+  ([`0857b4c`](https://github.com/pvliesdonk/scholar-mcp/commit/0857b4c704170edbfdc15f87cfd6b9c4707f733f))
+
+- Remove duplicate BCP/STD resolver tests
+  ([`9fa0f57`](https://github.com/pvliesdonk/scholar-mcp/commit/9fa0f5773b3ea9cd9960555697c93d5bc882776d))
+
+- Remove stale type: ignore comments after StandardRecord typing upgrade
+  ([`783fd37`](https://github.com/pvliesdonk/scholar-mcp/commit/783fd37095afb388f02755a4aaed811734657383))
+
+- Replace dead NIST JSON endpoint with MODS XML from GitHub releases (#100)
+  ([#100](https://github.com/pvliesdonk/scholar-mcp/pull/100),
+  [`8f54959`](https://github.com/pvliesdonk/scholar-mcp/commit/8f54959bb6d942a809386a3cd91d627a811638d9))
+
+- Replace ETSI HTML scraper with Joomla JSON API endpoint (#102)
+  ([#102](https://github.com/pvliesdonk/scholar-mcp/pull/102),
+  [`5193cf1`](https://github.com/pvliesdonk/scholar-mcp/commit/5193cf1d78f96c10d8a0820722552ab867be8626))
+
+- Replace substring URL checks in tests with startswith (CodeQL)
+  ([`5487ce9`](https://github.com/pvliesdonk/scholar-mcp/commit/5487ce97f4eaea99423a4bd6fab77ccff9edb273))
+
+- Rewrite W3C fetcher to use _links.specifications and client-side search (#101)
+  ([#101](https://github.com/pvliesdonk/scholar-mcp/pull/101),
+  [`cb5b2bd`](https://github.com/pvliesdonk/scholar-mcp/commit/cb5b2bd98f117b63a7c74cdada8664528bdfe9a0))
+
+- Sync SCHOLAR_MCP_LOG_LEVEL to FASTMCP_LOG_LEVEL
+  ([`3a48480`](https://github.com/pvliesdonk/scholar-mcp/commit/3a48480677f4f5e2449839feffcc694eb30baaba))
+
+- Use steps.download.outcome instead of success() for artifact guard
+  ([`937defe`](https://github.com/pvliesdonk/scholar-mcp/commit/937defe364f270c032fd853e6c702a6bb297ed51))
+
+- W3C empty-results falsy bug, dead committee branch, and coverage
+  ([`4b85f34`](https://github.com/pvliesdonk/scholar-mcp/commit/4b85f341c41bf650ab403af79a04cc36f79aaa13))
+
+### Chores
+
+- Clarify ruff lint order in CLAUDE.md gates
+  ([`80b09cb`](https://github.com/pvliesdonk/scholar-mcp/commit/80b09cb218d65c363c8f39708ceaa89f87e88200))
+
+- Fix ruff format on _protocols.py and _standards_client.py
+  ([`733cbc5`](https://github.com/pvliesdonk/scholar-mcp/commit/733cbc5c59a9f9846b1a461e7018b8cb92846708))
+
+- Fix ruff format on _standards_client.py
+  ([`a75376a`](https://github.com/pvliesdonk/scholar-mcp/commit/a75376ab3505abb1c2eaa8319a2d2bbe20360aab))
+
+- Fix ruff format on test_tools_standards.py
+  ([`75ba486`](https://github.com/pvliesdonk/scholar-mcp/commit/75ba4869762426683124f9365a0fae1cb58a4d51))
+
+- Fix ruff format on tools branch
+  ([`790db54`](https://github.com/pvliesdonk/scholar-mcp/commit/790db5484040827639b5576f8f24fc173c2a4c20))
+
+- Trigger CI
+  ([`c378a27`](https://github.com/pvliesdonk/scholar-mcp/commit/c378a27ac87285702f7593c1603e68547112113c))
+
+- Update server.json and uv.lock to v1.6.0 [skip ci]
+  ([`cb16e35`](https://github.com/pvliesdonk/scholar-mcp/commit/cb16e351ed2b5afcca8d2d250cdba00f51d84ccc))
+
+- **deps**: Bump cryptography from 46.0.6 to 46.0.7
+  ([`9ba4bfe`](https://github.com/pvliesdonk/scholar-mcp/commit/9ba4bfef43049b7b186cb5cbc4de5a9ef61c2010))
+
+### Continuous Integration
+
+- Post codecov/patch status for fork PRs via workflow_run
+  ([`591c160`](https://github.com/pvliesdonk/scholar-mcp/commit/591c160863304f7b0fcab4fa065650d748b90ac4))
+
+### Documentation
+
+- Add fetch_patent_pdf to README tool table and READ_ONLY note
+  ([`bc22262`](https://github.com/pvliesdonk/scholar-mcp/commit/bc22262f0fe84200f7a53a56cf1fa3d3cbae2873))
+
+- Add logging standard to CLAUDE.md
+  ([`4b50302`](https://github.com/pvliesdonk/scholar-mcp/commit/4b5030206e8c55b1a21544b070617083ce7142ca))
+
+- Add standards support design spec (v0.8.0)
+  ([`8951391`](https://github.com/pvliesdonk/scholar-mcp/commit/89513913e90270b0ee09f58b710299ec7aaedd3b))
+
+- Add standards support implementation plan (v0.8.0)
+  ([`a222653`](https://github.com/pvliesdonk/scholar-mcp/commit/a222653bb7137f811b9e8b557ac25e64df3c80cc))
+
+- Add transparent rate-limiting note to patent tool descriptions
+  ([`c377544`](https://github.com/pvliesdonk/scholar-mcp/commit/c3775449093db261e8a28188bfd35fc25c1bc69a))
+
+- Document SCHOLAR_MCP_LOG_FORMAT env var
+  ([`86a6239`](https://github.com/pvliesdonk/scholar-mcp/commit/86a6239d95b43046efa41ede473c48a96c097649))
+
+- Document standards tools (search_standards, get_standard, resolve_standard_identifier)
+  ([`75f4fc7`](https://github.com/pvliesdonk/scholar-mcp/commit/75f4fc744da418cea993959e4402b8ebad49b89f))
+
+- Implementation plan for EPO per-service throttle and LLM retry guidance
+  ([`54b19f1`](https://github.com/pvliesdonk/scholar-mcp/commit/54b19f1d0008bf309ef5ee8fcb19ff18b97270fd))
+
+- Reposition scholar-mcp as a scholarly-sources MCP server
+  ([`8dbf918`](https://github.com/pvliesdonk/scholar-mcp/commit/8dbf918d78a1d3f29166fcc5b64b3f4918e3267a))
+
+- Spec for EPO per-service throttle and LLM retry guidance
+  ([`59a5ef9`](https://github.com/pvliesdonk/scholar-mcp/commit/59a5ef9ceaeea5590533531c18a80a69f5487b43))
+
+- Update EPO throttle spec with concrete retry times and consistent messaging
+  ([`729b58b`](https://github.com/pvliesdonk/scholar-mcp/commit/729b58bb98aaa24c40c19d543dfc0a20c56c62bb))
+
+### Features
+
+- Add _parse_throttle_header for per-service throttle parsing
+  ([`dca5fa2`](https://github.com/pvliesdonk/scholar-mcp/commit/dca5fa278ca3563e23bffd445b6e3a562dbec339))
+
+- Add Claude Code plugin and mcpb bundle distribution
+  ([`a1c55ee`](https://github.com/pvliesdonk/scholar-mcp/commit/a1c55ee8818e60fd7f178ddcc2ae49954d0bec83))
+
+- Add debug logging to rate-limit queueing in all tools
+  ([`68b5150`](https://github.com/pvliesdonk/scholar-mcp/commit/68b51504b2cd24d05314c33ee4256e1c19b596bb))
+
+- Add EpoRateLimitedError.service, throttle cache, and pre-flight check on search()
+  ([`e88f56e`](https://github.com/pvliesdonk/scholar-mcp/commit/e88f56e36d9733974bc5d95edb27643cec6c5db4))
+
+- Add ETSI source fetcher with in-memory catalogue index
+  ([`7d28aa9`](https://github.com/pvliesdonk/scholar-mcp/commit/7d28aa9eea4be9be68e3affbd0d27521caa3efb0))
+
+- Add fetch_patent_pdf tool with authenticated EPO download + URL interception (#103)
+  ([#103](https://github.com/pvliesdonk/scholar-mcp/pull/103),
+  [`c3fd2fe`](https://github.com/pvliesdonk/scholar-mcp/commit/c3fd2feac6f17a44284cfb405593284950152043))
+
+- Add IETF RFC source fetcher
+  ([`cb8944c`](https://github.com/pvliesdonk/scholar-mcp/commit/cb8944c8221bb4422d28d3b0cb821a588bfb4f3d))
+
+- Add NIST CSRC source fetcher
+  ([`ee18b8e`](https://github.com/pvliesdonk/scholar-mcp/commit/ee18b8e1d21b254da0a63eda74f48d6e4f873f8a))
+
+- Add per-service color check to _check_throttle
+  ([`77bd254`](https://github.com/pvliesdonk/scholar-mcp/commit/77bd2541b1ce13acef521d95d20b92871866bbb6))
+
+- Add pre-flight throttle check and per-service _check_throttle to all EpoClient methods
+  ([`3a52c11`](https://github.com/pvliesdonk/scholar-mcp/commit/3a52c1129288121d4360104dd98298d297548604))
+
+- Add resolve_standard_identifier tool
+  ([`d135c5c`](https://github.com/pvliesdonk/scholar-mcp/commit/d135c5c742cf7d2ce652c995a5a2295165d2b785))
+
+- Add scholar-workflow SKILL.md with tool guidance
+  ([`d52c313`](https://github.com/pvliesdonk/scholar-mcp/commit/d52c313d996dae6ec2ba6ade0bdaeef9b4ed5455))
+
+- Add SCHOLAR_MCP_LOG_FORMAT config field
+  ([`f97ce30`](https://github.com/pvliesdonk/scholar-mcp/commit/f97ce30e25351e37803b90ac6c78caa7bb34d78b))
+
+- Add StandardRecord TypedDict and standards cache tables
+  ([`8307d73`](https://github.com/pvliesdonk/scholar-mcp/commit/8307d73b06965a92f57e5b912a4c42439673df75))
+
+- Add standards identifier resolver with Tier 1 regex patterns
+  ([`6137180`](https://github.com/pvliesdonk/scholar-mcp/commit/6137180081a860e956302cce7bfeb6ee668c12ee))
+
+- Add StandardsClient and wire into ServiceBundle
+  ([`bd2621a`](https://github.com/pvliesdonk/scholar-mcp/commit/bd2621a58f8a01c09e7a352ff1ba58a5d914eb06))
+
+- Add W3C specification source fetcher
+  ([`c41d465`](https://github.com/pvliesdonk/scholar-mcp/commit/c41d46507c0c0c8821e989a77973fe54b6ff7172))
+
+- Implement full-text docling conversion in get_standard
+  ([`18ce246`](https://github.com/pvliesdonk/scholar-mcp/commit/18ce2468a485dbb626d6c0d52d47ccb94b15fbcc))
+
+- Sanitise rate-limit errors in get_task_result and add patent duration hints
+  ([`642ef1d`](https://github.com/pvliesdonk/scholar-mcp/commit/642ef1dcf463f3c427a429932c8b6705198e0fbf))
+
+- Wire FastMCP logging, timing, and error middleware
+  ([`1207640`](https://github.com/pvliesdonk/scholar-mcp/commit/12076400a8c7e67d6dda9ce4f518b466d51e9989))
+
+- **ci**: Add prerelease mode to release workflow
+  ([`6d66a3e`](https://github.com/pvliesdonk/scholar-mcp/commit/6d66a3ecac7609b084ebbfc8ab9a7d9665b96b83))
+
+### Refactoring
+
+- Replace SCHOLAR_MCP_LOG_LEVEL/LOG_FORMAT with FastMCP vars
+  ([`d45c850`](https://github.com/pvliesdonk/scholar-mcp/commit/d45c85035f0df6c61d58f2f2212dd038cae1563a))
+
+- Use FastMCP configure_logging for uniform log output
+  ([`2165955`](https://github.com/pvliesdonk/scholar-mcp/commit/2165955140f0d98f77135b22da76ded6f2b84b7a))
+
+### Testing
+
+- Add BCP and STD resolver coverage for IETF patterns
+  ([`8abe778`](https://github.com/pvliesdonk/scholar-mcp/commit/8abe778ddc6207d23d7315f46790524ec3524af0))
+
+- Add search_standards and get_standard tool tests
+  ([`acf110d`](https://github.com/pvliesdonk/scholar-mcp/commit/acf110d91f8e7eb68c6cd0b84bf5a6fa3fef11f8))
+
+- Cover all _tools_standards branches; add PR gates to CLAUDE.md
+  ([`3952989`](https://github.com/pvliesdonk/scholar-mcp/commit/3952989d8f0370b1197879a4785d110972079f19))
+
+- Cover BCP, STD, NIST bare number, and WebAuthn resolver branches
+  ([`afff8f5`](https://github.com/pvliesdonk/scholar-mcp/commit/afff8f559c91d2512f2c571bc95d1eadb4a94ccb))
+
+- Cover black pre-flight, _overall fallback, and ValueError in search_patents
+  ([`bc0b228`](https://github.com/pvliesdonk/scholar-mcp/commit/bc0b228d7aea787fb796c67fd4216accc7bdbf11))
+
+- Cover docling and NIST branches to reach 80% patch coverage
+  ([`b6eb5ca`](https://github.com/pvliesdonk/scholar-mcp/commit/b6eb5ca7ef3a7602e6e71c355ac9bb12d2a7f33b))
+
+- Cover remaining pre-flight branches for all retrieval and inpadoc methods
+  ([`e8d2ef7`](https://github.com/pvliesdonk/scholar-mcp/commit/e8d2ef7522260dc62db601b2404e2a70dd5c9c35))
+
+- Raise patch coverage above 80% for PR review fixes
+  ([`347d8c2`](https://github.com/pvliesdonk/scholar-mcp/commit/347d8c22764b641560c782aa4692f660f503bcf8))
+
+
 ## v1.6.0 (2026-04-07)
 
 ### Bug Fixes
