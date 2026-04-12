@@ -18,12 +18,12 @@ A [FastMCP](https://github.com/jlowin/fastmcp) server for the scholarly citation
 
 - **Papers** -- full-text search with year/venue/field/citation filters; single-paper lookup by DOI, S2 ID, arXiv ID, ACM ID, or PubMed ID; author profile and name search; forward citations, backward references, BFS graph traversal, shortest-path bridge discovery; recommendations from positive/negative examples; BibTeX/CSL-JSON/RIS citation generation with OpenAlex venue enrichment.
 - **Patents** -- search across 100+ patent offices via EPO OPS with CPC/applicant/inventor/jurisdiction filters; bibliographic, claims, description, family, legal, and citations sections; NPL-to-paper resolution via Semantic Scholar and paper-to-patent citation discovery. EPO credentials are optional -- other domains work without them.
-- **Books** -- search by title/author/keywords via Open Library (no API key required); lookup by ISBN-10/13, Open Library work ID, or edition ID; subject-based recommendations sorted by popularity. Papers with an ISBN in `externalIds` are automatically enriched with publisher, edition, cover URL, and subject data.
+- **Books** -- search by title/author/keywords via Open Library (no API key required); lookup by ISBN-10/13, Open Library work ID, or edition ID; subject-based recommendations sorted by popularity; Google Books excerpts and preview links; WorldCat permalinks for library discovery; cover image caching. Papers with an ISBN in `externalIds` are automatically enriched with publisher, edition, cover URL, and subject data from Open Library.
 - **Standards** -- identifier resolution, search, and metadata retrieval for NIST, IETF, W3C, and ETSI standards, with optional full-text fetch and Markdown conversion via docling. Tier-2 paywalled bodies (ISO, IEC, IEEE) are tracked in [GitHub issues](https://github.com/pvliesdonk/scholar-mcp/issues).
 
 ### Cross-cutting
 
-- **OpenAlex enrichment** -- augment paper metadata with open-access URLs, affiliations, funders, concepts, and OA status.
+- **Enrichment pipeline** -- phased enrichment from multiple sources: OpenAlex (OA status, affiliations, funders, concepts), CrossRef (publisher, page ranges, container titles), Google Books (preview links, excerpts), and Open Library (book metadata). Runs automatically on paper and book results.
 - **PDF conversion** -- download open-access PDFs and convert to Markdown via [docling-serve](https://github.com/DS4SD/docling-serve), with optional VLM enrichment for formulas and figures; automatic fallback to ArXiv, PubMed Central, and Unpaywall when Semantic Scholar has no OA link; direct URL download for PDFs found elsewhere.
 - **Intelligent caching** -- SQLite-backed cache with per-table TTLs (30 days for papers/authors, 7 days for citations/references) and identifier aliasing.
 - **Authentication** -- bearer token, OIDC (OAuth 2.1), or both simultaneously (multi-auth).
@@ -144,6 +144,12 @@ All settings are controlled via environment variables with the `SCHOLAR_MCP_` pr
 | `SCHOLAR_MCP_EPO_CONSUMER_KEY` | -- | EPO OPS consumer key ([register at developers.epo.org](https://developers.epo.org/user/register)); both key and secret must be set for patent tools to appear |
 | `SCHOLAR_MCP_EPO_CONSUMER_SECRET` | -- | EPO OPS consumer secret |
 
+### Google Books (optional)
+
+| Variable | Default | Description |
+|---|---|---|
+| `SCHOLAR_MCP_GOOGLE_BOOKS_API_KEY` | -- | Google Books API key for higher rate limits (1000 req/day without key) |
+
 ### Authentication (optional)
 
 | Variable | Default | Description |
@@ -157,7 +163,7 @@ All settings are controlled via environment variables with the `SCHOLAR_MCP_` pr
 
 ## MCP Tools
 
-27 tools, organised by scholarly source type.
+28 tools, organised by scholarly source type.
 
 ### Papers
 
@@ -202,10 +208,11 @@ All settings are controlled via environment variables with the `SCHOLAR_MCP_` pr
 | Tool | Description |
 |---|---|
 | `search_books` | Search for books by title, author, ISBN, or keywords via Open Library. Returns up to 50 results. |
-| `get_book` | Fetch book metadata by ISBN-10, ISBN-13, Open Library work ID (`OL...W`), or edition ID (`OL...M`). |
+| `get_book` | Fetch book metadata by ISBN-10, ISBN-13, Open Library work ID, or edition ID. Optionally download and cache the cover image locally. |
+| `get_book_excerpt` | Fetch a book excerpt and description from Google Books by ISBN. Shows preview availability and link. |
 | `recommend_books` | Recommend books for a subject via Open Library, sorted by popularity. |
 
-> Papers with an ISBN in their `externalIds` are automatically enriched with `book_metadata` (publisher, edition, cover URL, subjects, and more) from Open Library when fetched via `get_paper`, `get_citations`, `get_references`, or `get_citation_graph`.
+> Papers with an ISBN in their `externalIds` are automatically enriched with `book_metadata` (publisher, edition, cover URL, subjects, and more) from Open Library when fetched via `get_paper`, `get_citations`, `get_references`, or `get_citation_graph`. Book records also include `worldcat_url` (when ISBN-13 is present), `google_books_url`, and `snippet` from Google Books enrichment. Cover images can be downloaded and cached locally via `get_book`.
 
 ### Standards
 

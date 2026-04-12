@@ -1,6 +1,6 @@
 # Tools
 
-Scholar MCP provides 27 tools organised by scholarly source type: **Papers**, **Patents**, **Books**, and **Standards** are peer source domains; the remaining sections (Cross-source Utility, PDF Conversion, Task Polling) are cross-cutting. All tools return JSON.
+Scholar MCP provides 28 tools organised by scholarly source type: **Papers**, **Patents**, **Books**, and **Standards** are peer source domains; the remaining sections (Cross-source Utility, PDF Conversion, Task Polling) are cross-cutting. All tools return JSON.
 
 !!! info "Coverage by domain"
     Per-domain depth is uneven — papers currently have the richest tool surface (citation graph, recommendations, cross-referencing to all three other domains); standards are the leanest. That reflects public data availability, not a value hierarchy. Parity work is tracked in [GitHub issues](https://github.com/pvliesdonk/scholar-mcp/issues) and [milestones](https://github.com/pvliesdonk/scholar-mcp/milestones).
@@ -258,7 +258,7 @@ Papers that fail to resolve are reported inline (BibTeX/RIS: as comments, CSL-JS
 
 ## Books
 
-Book tools use [Open Library](https://openlibrary.org/) as their data source. No API key is required. Rate limits are handled automatically; if the Open Library API is temporarily unavailable, calls queue and return a task ID (see [Async Task Queue](#async-task-queue)).
+Book tools use [Open Library](https://openlibrary.org/) and [Google Books](https://developers.google.com/books) as data sources. No API key is required (a Google Books API key is optional for higher rate limits). Rate limits are handled automatically; if an API is temporarily unavailable, calls queue and return a task ID (see [Async Task Queue](#async-task-queue)).
 
 ### `search_books`
 
@@ -290,7 +290,10 @@ When only `query` is given, it is first tried as a title search (better relevanc
     "openlibrary_work_id": "OL17953442W",
     "openlibrary_edition_id": "OL26423929M",
     "cover_url": "https://covers.openlibrary.org/b/isbn/9780262035613-M.jpg",
-    "google_books_url": null,
+    "google_books_url": "https://books.google.com/books?id=Np9SDQAAQBAJ",
+    "worldcat_url": "https://search.worldcat.org/isbn/9780262035613",
+    "snippet": "An introduction to a broad range of topics in deep learning...",
+    "cover_path": null,
     "subjects": ["Machine learning", "Artificial intelligence"],
     "page_count": 800,
     "description": null
@@ -302,12 +305,14 @@ When only `query` is given, it is first tried as a title search (better relevanc
 
 ### `get_book`
 
-Fetch full metadata for a single book by ISBN or Open Library identifier.
+Fetch full metadata for a single book by ISBN or Open Library identifier. Optionally download and cache the cover image locally.
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `identifier` | string | *(required)* | ISBN-10, ISBN-13, Open Library work ID, or edition ID |
 | `include_editions` | bool | `false` | If true, fetch work and list editions |
+| `download_cover` | bool | `false` | If true, download and cache the cover image locally; adds `cover_path` to result |
+| `cover_size` | string | `"M"` | Cover image size: `S` (small), `M` (medium), or `L` (large) |
 
 **Identifier formats:**
 
@@ -321,7 +326,35 @@ Fetch full metadata for a single book by ISBN or Open Library identifier.
 
 **Returns:** A single book record (same shape as items returned by `search_books`), or `{"error": "not_found", "identifier": "..."}` if not found.
 
-Results are cached. Work and edition lookups are cached by their respective Open Library IDs; ISBN lookups are also stored under the resolved ISBN-13.
+Results are cached. Work and edition lookups are cached by their respective Open Library IDs; ISBN lookups are also stored under the resolved ISBN-13. When `download_cover=true`, the cover image is saved to `<cache_dir>/covers/<isbn>_<size>.jpg` and the path is returned as `cover_path`.
+
+---
+
+### `get_book_excerpt`
+
+Fetch a book excerpt and description from Google Books by ISBN. Shows preview availability and a link to the Google Books preview page.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `isbn` | string | *(required)* | ISBN-10 or ISBN-13 |
+
+**Returns:**
+
+```json
+{
+  "title": "Deep Learning",
+  "authors": ["Ian Goodfellow", "Yoshua Bengio", "Aaron Courville"],
+  "description": "An introduction to a broad range of topics in deep learning...",
+  "snippet": "Deep learning is a form of machine learning that enables...",
+  "preview_link": "https://books.google.com/books?id=Np9SDQAAQBAJ&printsec=frontcover",
+  "preview_available": true
+}
+```
+
+Or `{"error": "not_found", "isbn": "..."}` if Google Books has no matching volume.
+
+!!! note "Write-tagged"
+    This tool is write-tagged and hidden when `SCHOLAR_MCP_READ_ONLY=true`.
 
 ---
 
@@ -342,6 +375,11 @@ Results are cached for 7 days, keyed by the normalized subject slug. Up to 50 re
 
 ## Auto-Enrichment
 
+Scholar MCP uses a phased enrichment pipeline that automatically augments paper and book results with metadata from multiple sources. Enrichment runs in two phases:
+
+- **Phase 0** (primary): OpenAlex (OA status, affiliations, funders, concepts) and CrossRef (publisher, page ranges, container titles)
+- **Phase 1** (secondary): Open Library (book metadata for papers with ISBNs) and Google Books (preview links, excerpts, snippets)
+
 When `get_paper`, `get_citations`, `get_references`, or `get_citation_graph` retrieves a paper that has an ISBN in its `externalIds` field, Open Library metadata is automatically fetched and attached as a `book_metadata` key on the paper record.
 
 **Trigger condition:** `externalIds.ISBN` is present and non-empty.
@@ -360,7 +398,9 @@ When `get_paper`, `get_citations`, `get_references`, or `get_citation_graph` ret
 | `page_count` | Page count, if known |
 | `authors` | List of author name strings (resolved from Open Library work metadata) |
 
-Enrichment failures are silently skipped — if Open Library is unreachable or the ISBN is not found, the paper record is returned without `book_metadata`. Up to 5 concurrent Open Library requests are made per batch.
+CrossRef enrichment adds publisher metadata, page ranges, and container titles to paper results when a DOI is available. Google Books enrichment adds `google_books_url` and `snippet` to book records when an ISBN is present.
+
+Enrichment failures are silently skipped — if a source is unreachable or returns no data, the record is returned without that enrichment layer. Up to 5 concurrent requests are made per batch.
 
 ---
 
@@ -377,7 +417,7 @@ Resolve up to 100 paper, patent, or book identifiers to full metadata in a singl
 
 **Returns:** JSON list of resolved items:
 
-- **Paper results** have a `"paper"` key. Papers not found in Semantic Scholar are automatically tried via OpenAlex (by DOI); results from OpenAlex include `"source": "openalex"`.
+- **Paper results** have a `"paper"` key. Papers not found in Semantic Scholar are automatically tried via OpenAlex (by DOI); results from OpenAlex include `"source": "openalex"`. When the citation string contains chapter patterns (e.g. "Chapter 3", "pp. 45-67"), a `chapter_info` dict is attached with parsed chapter/page information. CrossRef metadata takes precedence over parsed hints.
 - **Patent results** have a `"patent"` key and `"source_type": "patent"`. Patent numbers are auto-detected by their two-letter country prefix (e.g. `EP`, `US`, `WO`) and routed to the EPO OPS API.
 - **Book results** have a `"book"` key and `"source_type": "book"`. ISBNs (prefixed with `ISBN:`) are routed to Open Library.
 - **Unresolved items** have an `"error"` key.
@@ -468,13 +508,13 @@ Sections are fetched concurrently where possible (cache lookups run in parallel;
     ],
     "npl_refs": [
       {"raw": "Smith et al., \"Widget Processing\", 2018, doi:10.1234/test", "paper": {"paperId": "abc123", "title": "Widget Processing"}, "confidence": "high"},
-      {"raw": "Doe, \"Advanced Widgets\", 2019", "confidence": null}
+      {"raw": "Doe, \"Advanced Widgets\", Ch. 5, pp. 112-130, 2019", "confidence": null, "chapter_info": {"chapter": "5", "pages": "112-130"}}
     ]
   }
 }
 ```
 
-When `citations` is requested, non-patent literature (NPL) references are resolved against Semantic Scholar on a best-effort basis. References with a DOI are resolved with `"confidence": "high"`. References without a DOI or that fail to resolve have `"confidence": null`.
+When `citations` is requested, non-patent literature (NPL) references are resolved against Semantic Scholar on a best-effort basis. References with a DOI are resolved with `"confidence": "high"`. References without a DOI or that fail to resolve have `"confidence": null`. When citation strings contain chapter patterns (e.g. "Ch. 5", "pp. 112-130"), a `chapter_info` dict is included with parsed chapter and page information.
 
 ---
 
