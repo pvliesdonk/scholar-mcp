@@ -76,8 +76,9 @@ class EnrichmentPipeline:
 ### File location
 
 New file: `src/scholar_mcp/_enrichment.py` — contains `Enricher` protocol and
-`EnrichmentPipeline` class. Each enricher is a small class in its respective
-client/enrichment module (not a separate file per enricher).
+`EnrichmentPipeline` class. Each enricher lives in a dedicated file
+(`_enricher_openalex.py`, `_enricher_openlibrary.py`, etc.) for clear
+single-responsibility boundaries.
 
 `EnrichmentPipeline` instance is created in lifespan and stored on
 `ServiceBundle.enrichment`.

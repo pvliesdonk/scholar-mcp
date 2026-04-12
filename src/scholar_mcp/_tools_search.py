@@ -137,7 +137,7 @@ def register_search_tools(mcp: FastMCP) -> None:
         data = await bundle.cache.get_paper(cached_id)
         if data:
             logger.debug("cache_hit identifier=%s", identifier)
-            await bundle.enrichment.enrich([data], bundle, tags={"papers"})
+            await bundle.enrichment.enrich([data], bundle, tags=frozenset({"papers"}))
             return json.dumps(data)
 
         async def _execute(*, retry: bool = True) -> str:
@@ -160,7 +160,9 @@ def register_search_tools(mcp: FastMCP) -> None:
                 if identifier != paper_id:
                     await bundle.cache.set_alias(identifier, paper_id)
 
-            await bundle.enrichment.enrich([fetched], bundle, tags={"papers"})
+            await bundle.enrichment.enrich(
+                [fetched], bundle, tags=frozenset({"papers"})
+            )
             return json.dumps(fetched)
 
         try:

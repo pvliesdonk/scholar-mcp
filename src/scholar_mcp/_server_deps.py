@@ -15,6 +15,7 @@ from fastmcp.server.context import Context
 
 from ._cache import ScholarCache
 from ._docling_client import DoclingClient
+from ._enricher_openalex import OpenAlexEnricher
 from ._enrichment import EnrichmentPipeline
 from ._epo_client import EpoClient
 from ._openalex_client import OpenAlexClient
@@ -132,9 +133,8 @@ async def make_service_lifespan(
     standards_http = httpx.AsyncClient(timeout=30.0)
     standards = StandardsClient(standards_http, cache_dir=config.cache_dir)
 
-    # Import enrichers here to avoid circular import
+    # OpenLibraryEnricher imported here to avoid circular import
     # (_enricher_openlibrary -> _book_enrichment -> _server_deps)
-    from ._enricher_openalex import OpenAlexEnricher
     from ._enricher_openlibrary import OpenLibraryEnricher
 
     enrichment = EnrichmentPipeline(

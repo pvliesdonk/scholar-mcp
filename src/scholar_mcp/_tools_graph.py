@@ -157,7 +157,9 @@ def register_graph_tools(mcp: FastMCP) -> None:
                     for item in filtered[offset : offset + limit]
                     if item.get("citingPaper")
                 ]
-                await bundle.enrichment.enrich(papers, bundle, tags={"papers"})
+                await bundle.enrichment.enrich(
+                    papers, bundle, tags=frozenset({"papers"})
+                )
                 return json.dumps(result)
 
             try:
@@ -185,7 +187,9 @@ def register_graph_tools(mcp: FastMCP) -> None:
                 for item in data_list
                 if item.get("citingPaper")
             ]
-            await bundle.enrichment.enrich(citing_papers, bundle, tags={"papers"})
+            await bundle.enrichment.enrich(
+                citing_papers, bundle, tags=frozenset({"papers"})
+            )
             return json.dumps(result)
 
         try:
@@ -243,7 +247,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
                 for item in result.get("data") or []
                 if item.get("citedPaper")
             ]
-            await bundle.enrichment.enrich(papers, bundle, tags={"papers"})
+            await bundle.enrichment.enrich(papers, bundle, tags=frozenset({"papers"}))
             return json.dumps(result)
 
         try:
@@ -486,7 +490,9 @@ def register_graph_tools(mcp: FastMCP) -> None:
                 e for e in edges if e["source"] in node_ids and e["target"] in node_ids
             ]
 
-            await bundle.enrichment.enrich(node_list, bundle, tags={"papers"})
+            await bundle.enrichment.enrich(
+                node_list, bundle, tags=frozenset({"papers"})
+            )
             return json.dumps(
                 {
                     "nodes": node_list,

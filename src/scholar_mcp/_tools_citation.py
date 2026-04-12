@@ -94,7 +94,9 @@ def register_citation_tools(mcp: FastMCP) -> None:
                     errors.append({"identifier": raw_id, "reason": "not found"})
 
             if enrich:
-                await bundle.enrichment.enrich(papers, bundle, tags={"papers"})
+                await bundle.enrichment.enrich(
+                    papers, bundle, tags=frozenset({"papers"})
+                )
 
             if not papers:
                 return json.dumps(

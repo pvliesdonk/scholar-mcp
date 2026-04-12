@@ -70,8 +70,8 @@ class EnrichmentPipeline:
         records: list[dict[str, Any]],
         bundle: Any,
         *,
-        tags: set[str] | None = None,
-        concurrency: int = 5,
+        tags: frozenset[str] | None = None,
+        concurrency: int = 10,
     ) -> None:
         """Run all registered enrichers over *records*.
 
