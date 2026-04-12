@@ -213,7 +213,9 @@ def register_book_tools(mcp: FastMCP) -> None:
                         async with httpx.AsyncClient(timeout=30.0) as http:
                             resp = await http.get(url)
                             resp.raise_for_status()
-                            local_path.write_bytes(resp.content)
+                            await asyncio.to_thread(
+                                local_path.write_bytes, resp.content
+                            )
                             result["cover_path"] = str(local_path)
                     except Exception:
                         logger.debug(
