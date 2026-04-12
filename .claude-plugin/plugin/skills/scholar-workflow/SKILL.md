@@ -157,14 +157,14 @@ PDF downloads, patent PDF fetches, full-text standard retrieval, and any
 tool that hits a rate limit return a task ID:
 
 ```json
-{"queued": true, "task_id": "abc123", "hint": "..."}
+{"queued": true, "task_id": "abc123", "tool": "..."}
 ```
 
 Poll with `get_task_result(task_id="abc123")`. The response includes
 `status`, `elapsed_seconds`, and a `hint` while running.
 
 `list_tasks` shows all active tasks. Don't poll in a tight loop — tasks
-typically complete in 5–30 seconds (PDF download) or 30–120 seconds (PDF
+typically complete in 10–30 seconds (PDF download) or 1–5 minutes (PDF
 conversion with VLM).
 
 ## Do not
