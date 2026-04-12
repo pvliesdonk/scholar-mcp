@@ -291,7 +291,7 @@ When only `query` is given, it is first tried as a title search (better relevanc
     "openlibrary_edition_id": "OL26423929M",
     "cover_url": "https://covers.openlibrary.org/b/isbn/9780262035613-M.jpg",
     "google_books_url": "https://books.google.com/books?id=Np9SDQAAQBAJ",
-    "worldcat_url": "https://search.worldcat.org/isbn/9780262035613",
+    "worldcat_url": "https://www.worldcat.org/isbn/9780262035613",
     "snippet": "An introduction to a broad range of topics in deep learning...",
     "cover_path": null,
     "subjects": ["Machine learning", "Artificial intelligence"],

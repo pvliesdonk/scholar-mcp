@@ -344,6 +344,7 @@ async def _resolve_isbn(isbn: str, bundle: ServiceBundle) -> str:
 
     book: BookRecord = normalize_book(edition, source="edition")
     await enrich_authors_from_work(book, bundle)
+    await bundle.enrichment.enrich([book], bundle, tags={"books"})  # type: ignore[list-item]
     await bundle.cache.set_book_by_isbn(isbn, book)
     work_id = book.get("openlibrary_work_id")
     if work_id:
@@ -422,10 +423,14 @@ async def _resolve_work(work_id: str, bundle: ServiceBundle) -> str:
         "openlibrary_edition_id": edition.get("openlibrary_edition_id"),
         "cover_url": cover_url,
         "google_books_url": None,
+        "worldcat_url": (
+            f"https://www.worldcat.org/isbn/{isbn_13}" if isbn_13 else None
+        ),
         "subjects": work.get("subjects") or [],
         "page_count": edition.get("page_count"),
         "description": description if isinstance(description, str) else None,
     }
+    await bundle.enrichment.enrich([book], bundle, tags={"books"})  # type: ignore[list-item]
     await bundle.cache.set_book_by_work(work_id, book)
     if isbn_13:
         await bundle.cache.set_book_by_isbn(isbn_13, book)
@@ -448,6 +453,7 @@ async def _resolve_edition(edition_id: str, bundle: ServiceBundle) -> str:
 
     book: BookRecord = normalize_book(edition, source="edition")
     await enrich_authors_from_work(book, bundle)
+    await bundle.enrichment.enrich([book], bundle, tags={"books"})  # type: ignore[list-item]
     isbn_13 = book.get("isbn_13")
     if isbn_13:
         await bundle.cache.set_book_by_isbn(isbn_13, book)
