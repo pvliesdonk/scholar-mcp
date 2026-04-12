@@ -94,6 +94,13 @@ jobs:
           # Re-point the release tag to the manifest-bump commit so that
           # marketplace installs (which checkout .claude-plugin/plugin at
           # ref: vVERSION) get the updated plugin.json and .mcp.json.
+          #
+          # Trade-off: downstream jobs (publish-docker) sign images at the
+          # original tag SHA; after this force-push the tag SHA and the
+          # attestation SHA diverge. Acceptable because the only delta is
+          # version strings in JSON manifests, not executable code. A
+          # pre-release hook would avoid this but python-semantic-release
+          # doesn't support pre-tag hooks that modify the working tree.
           git tag -f "v${VERSION}"
           git push --force origin "refs/tags/v${VERSION}"
 
@@ -393,6 +400,15 @@ jobs:
             )
           ' .claude-plugin/marketplace.json > marketplace.json.tmp
           mv marketplace.json.tmp .claude-plugin/marketplace.json
+      - name: Validate marketplace entry was updated
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          cd catalog
+          grep -q "\"version\": \"${VERSION}\"" .claude-plugin/marketplace.json || {
+            echo "::error::scholar-mcp entry not found or not updated in marketplace.json"
+            exit 1
+          }
       - name: Create pull request
         uses: peter-evans/create-pull-request@v7
         with:

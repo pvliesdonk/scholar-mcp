@@ -33,7 +33,7 @@ Optional environment variables:
 | `SCHOLAR_MCP_S2_API_KEY` | -- | [Free API key](https://www.semanticscholar.org/product/api#api-key-form) for ~10 req/s (vs ~1 without). |
 | `SCHOLAR_MCP_READ_ONLY` | `true` | Hide write tools (PDF download/conversion). |
 | `SCHOLAR_MCP_CONTACT_EMAIL` | -- | OpenAlex polite pool + Unpaywall access. |
-| `SCHOLAR_MCP_CACHE_DIR` | `/data/scholar-mcp` | SQLite cache and PDF storage. |
+| `SCHOLAR_MCP_CACHE_DIR` | `/data/scholar-mcp` | SQLite cache and PDF storage. Set a writable local path (e.g. `~/Documents/scholar-mcp`) — the default is for Docker. |
 | `SCHOLAR_MCP_DOCLING_URL` | -- | docling-serve URL for PDF-to-Markdown. |
 | `SCHOLAR_MCP_EPO_CONSUMER_KEY` | -- | EPO OPS key (enables patent tools). |
 | `SCHOLAR_MCP_EPO_CONSUMER_SECRET` | -- | EPO OPS secret. |
@@ -55,7 +55,8 @@ For the full list of env vars, see the
   Open Library.
 - **Standards** -- identifier resolution, search, and metadata for NIST,
   IETF, W3C, ETSI.
-- **PDF conversion** -- download and convert to Markdown via docling-serve.
+- **PDF conversion** -- download and convert to Markdown via docling-serve,
+  with optional VLM enrichment for formulas and figures.
 
 ## Updating
 

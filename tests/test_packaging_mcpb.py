@@ -71,8 +71,9 @@ def test_mcpb_manifest_template_valid_and_complete() -> None:
     # mcp_config must NOT use --from . (local source dir) — that would fail
     # at runtime in an installed bundle.
     mcp_config = server["mcp_config"]
-    if "args" in mcp_config:
-        assert "--from" not in mcp_config["args"] or "." not in mcp_config["args"], (
+    if "args" in mcp_config and "--from" in mcp_config["args"]:
+        from_idx = mcp_config["args"].index("--from")
+        assert mcp_config["args"][from_idx + 1] != ".", (
             "mcp_config.args must not use '--from .' (local source); "
             "use '--from pvliesdonk-scholar-mcp[mcp]==${VERSION}' instead"
         )
