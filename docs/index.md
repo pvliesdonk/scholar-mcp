@@ -7,10 +7,10 @@ A [FastMCP](https://github.com/jlowin/fastmcp) server for the scholarly citation
 Scholar MCP exposes 27 tools that let LLM-powered applications search, cross-reference, and retrieve scholarly sources across four peer domains:
 
 - **Papers** -- full-text search (year, venue, field, citation filters); single-paper lookup by DOI / S2 ID / arXiv / ACM / PubMed; author profile and name search; forward citations, backward references, BFS citation graph, shortest-path bridge discovery; recommendations from positive/negative examples; BibTeX/CSL-JSON/RIS citation generation; OpenAlex enrichment (affiliations, funders, OA status, and concepts).
-- **Patents** -- search across 100+ patent offices via EPO OPS with CPC / applicant / inventor / jurisdiction filters; biblio, claims, description, family, legal and citations sections; NPL-to-paper resolution via Semantic Scholar and paper-to-patent citation discovery.
+- **Patents** -- search across 100+ patent offices via EPO OPS with CPC / applicant / inventor / jurisdiction filters; biblio, claims, description, family, legal and citations sections; NPL-to-paper resolution via Semantic Scholar and paper-to-patent citation discovery; patent PDF download via EPO OPS.
 - **Books** -- search by title/author/keywords via Open Library; lookup by ISBN or Open Library ID; subject recommendations. Papers with an ISBN are automatically enriched with publisher/edition/cover/subject metadata.
 - **Standards** -- identifier resolution, search, and metadata retrieval for NIST, IETF, W3C, and ETSI, with optional full-text fetch and Markdown conversion via docling.
-- **Cross-source utility** -- resolve up to 100 mixed identifiers (paper DOIs, patent numbers, ISBNs) to full metadata in one call.
+- **Cross-source Utility** -- resolve up to 100 mixed identifiers (paper DOIs, patent numbers, ISBNs) to full metadata in one call.
 - **PDF conversion** -- download PDFs and convert to Markdown via [docling-serve](https://github.com/DS4SD/docling-serve), with optional VLM enrichment for formulas and figures; automatic fallback to ArXiv, PubMed Central, and Unpaywall; direct URL download for alternative versions.
 - **Async task queue** -- long-running operations return immediately with a task ID; poll for results with `get_task_result`.
 
