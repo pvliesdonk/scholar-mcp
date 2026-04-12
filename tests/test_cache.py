@@ -163,3 +163,27 @@ class TestPatentCache:
         await cache.set_patent("EP.1234567.A1", {"title": "Test"})
         stats = await cache.stats()
         assert stats["patents"] >= 1
+
+
+class TestCrossRefCache:
+    async def test_crossref_roundtrip(self, cache) -> None:
+        data = {"DOI": "10.1234/test", "title": ["Test Paper"]}
+        await cache.set_crossref("10.1234/test", data)
+        result = await cache.get_crossref("10.1234/test")
+        assert result == data
+
+    async def test_crossref_not_found(self, cache) -> None:
+        assert await cache.get_crossref("10.0/missing") is None
+
+    async def test_crossref_ttl_expired(self, cache) -> None:
+        import aiosqlite
+
+        data = {"DOI": "10.1234/old", "title": ["Old"]}
+        await cache.set_crossref("10.1234/old", data)
+        async with aiosqlite.connect(cache._db_path) as db:
+            await db.execute(
+                "UPDATE crossref SET cached_at = ? WHERE doi = ?",
+                (time.time() - 31 * 86400, "10.1234/old"),
+            )
+            await db.commit()
+        assert await cache.get_crossref("10.1234/old") is None
