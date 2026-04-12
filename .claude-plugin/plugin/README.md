@@ -35,6 +35,9 @@ Optional environment variables:
 | `SCHOLAR_MCP_CONTACT_EMAIL` | -- | OpenAlex polite pool + Unpaywall access. |
 | `SCHOLAR_MCP_CACHE_DIR` | `/data/scholar-mcp` | SQLite cache and PDF storage. Set a writable local path (e.g. `~/Documents/scholar-mcp`) — the default is for Docker. |
 | `SCHOLAR_MCP_DOCLING_URL` | -- | docling-serve URL for PDF-to-Markdown. |
+| `SCHOLAR_MCP_VLM_API_URL` | -- | OpenAI-compatible VLM endpoint for formula/figure enrichment. |
+| `SCHOLAR_MCP_VLM_API_KEY` | -- | API key for the VLM endpoint. |
+| `SCHOLAR_MCP_VLM_MODEL` | `gpt-4o` | Model name for VLM-enriched conversion. |
 | `SCHOLAR_MCP_EPO_CONSUMER_KEY` | -- | EPO OPS key (enables patent tools). |
 | `SCHOLAR_MCP_EPO_CONSUMER_SECRET` | -- | EPO OPS secret. |
 | `FASTMCP_LOG_LEVEL` | `INFO` | `DEBUG` / `INFO` / `WARNING` / `ERROR`. |

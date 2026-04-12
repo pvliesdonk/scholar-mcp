@@ -148,3 +148,6 @@ def test_plugin_mcp_json_pinned_and_matches_plugin_version() -> None:
     env = entry["env"]
     assert "SCHOLAR_MCP_S2_API_KEY" in env
     assert "SCHOLAR_MCP_READ_ONLY" in env
+    assert "SCHOLAR_MCP_VLM_API_URL" in env
+    assert "SCHOLAR_MCP_VLM_API_KEY" in env
+    assert "SCHOLAR_MCP_VLM_MODEL" in env

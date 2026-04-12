@@ -405,7 +405,9 @@ jobs:
           VERSION: ${{ needs.release.outputs.version }}
         run: |
           cd catalog
-          grep -q "\"version\": \"${VERSION}\"" .claude-plugin/marketplace.json || {
+          jq -e --arg v "$VERSION" \
+            '.plugins[] | select(.name == "scholar-mcp") | .version == $v' \
+            .claude-plugin/marketplace.json > /dev/null || {
             echo "::error::scholar-mcp entry not found or not updated in marketplace.json"
             exit 1
           }
