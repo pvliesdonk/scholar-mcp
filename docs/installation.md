@@ -39,6 +39,13 @@ docker run -v scholar-mcp-data:/data/scholar-mcp \
 
 The image is available for `linux/amd64` and `linux/arm64`. See [Docker deployment](deployment/docker.md) for Docker Compose with docling-serve.
 
+For early adopters who want to try the latest release candidate, an `:unstable` tag is published by the release workflow's pre-release mode. It tracks the latest `rc` build and may include in-progress features. Pre-releases are Docker-only — they are not published to PyPI or as Linux packages. The floating `:latest`, `:vN`, and `:vN.M` tags only move on stable releases.
+
+```bash
+docker run -v scholar-mcp-data:/data/scholar-mcp \
+           ghcr.io/pvliesdonk/scholar-mcp:unstable
+```
+
 ## Linux packages
 
 Download `.deb` or `.rpm` from the [latest release](https://github.com/pvliesdonk/scholar-mcp/releases/latest):

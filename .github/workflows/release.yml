@@ -12,6 +12,14 @@ on:
           - patch
           - minor
           - major
+      prerelease:
+        description: 'Create a pre-release (skips PyPI, catalog, registry, linux packages). Uncheck to cut a real release.'
+        type: boolean
+        default: true
+      prerelease_token:
+        description: 'Pre-release channel token (default: rc)'
+        type: string
+        default: rc
 
 permissions:
   contents: read
@@ -51,9 +59,11 @@ jobs:
           git_committer_name: "github-actions"
           git_committer_email: "actions@users.noreply.github.com"
           force: ${{ inputs.force }}
+          prerelease: ${{ inputs.prerelease }}
+          prerelease_token: ${{ inputs.prerelease_token || 'rc' }}
 
       - name: Update versioned manifests to released version
-        if: steps.release.outputs.released == 'true'
+        if: steps.release.outputs.released == 'true' && !inputs.prerelease
         env:
           VERSION: ${{ steps.release.outputs.version }}
         run: |
@@ -145,7 +155,7 @@ jobs:
 
   publish-pypi:
     needs: release
-    if: needs.release.outputs.released == 'true'
+    if: needs.release.outputs.released == 'true' && !inputs.prerelease
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -218,10 +228,11 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=latest
             type=raw,value=v${{ steps.version.outputs.version }}
-            type=raw,value=v${{ steps.version.outputs.minor }}
-            type=raw,value=v${{ steps.version.outputs.major }}
+            type=raw,value=latest,enable=${{ !inputs.prerelease }}
+            type=raw,value=v${{ steps.version.outputs.minor }},enable=${{ !inputs.prerelease }}
+            type=raw,value=v${{ steps.version.outputs.major }},enable=${{ !inputs.prerelease }}
+            type=raw,value=unstable,enable=${{ inputs.prerelease }}
           labels: |
             org.opencontainers.image.title=scholar-mcp
             org.opencontainers.image.description=FastMCP server for Semantic Scholar with OpenAlex enrichment and docling PDF conversion
@@ -266,7 +277,7 @@ jobs:
 
   publish-linux-packages:
     needs: release
-    if: needs.release.outputs.released == 'true'
+    if: needs.release.outputs.released == 'true' && !inputs.prerelease
     runs-on: ubuntu-latest
 
     permissions:
@@ -378,7 +389,7 @@ jobs:
 
   publish-claude-plugin-pr:
     needs: release
-    if: needs.release.outputs.released == 'true'
+    if: needs.release.outputs.released == 'true' && !inputs.prerelease
     runs-on: ubuntu-latest
     steps:
       - name: Checkout catalog repo
@@ -426,7 +437,7 @@ jobs:
 
   publish-registry:
     needs: [release, publish-pypi, publish-docker]
-    if: needs.release.outputs.released == 'true'
+    if: needs.release.outputs.released == 'true' && !inputs.prerelease
     runs-on: ubuntu-latest
 
     permissions:
