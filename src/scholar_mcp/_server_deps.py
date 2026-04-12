@@ -15,6 +15,7 @@ from fastmcp.server.context import Context
 
 from ._cache import ScholarCache
 from ._docling_client import DoclingClient
+from ._enrichment import EnrichmentPipeline
 from ._epo_client import EpoClient
 from ._openalex_client import OpenAlexClient
 from ._openlibrary_client import OpenLibraryClient
@@ -57,6 +58,7 @@ class ServiceBundle:
     config: ServerConfig
     tasks: TaskQueue
     standards: StandardsClient
+    enrichment: EnrichmentPipeline
 
 
 @asynccontextmanager
@@ -130,6 +132,18 @@ async def make_service_lifespan(
     standards_http = httpx.AsyncClient(timeout=30.0)
     standards = StandardsClient(standards_http, cache_dir=config.cache_dir)
 
+    # Import enrichers here to avoid circular import
+    # (_enricher_openlibrary -> _book_enrichment -> _server_deps)
+    from ._enricher_openalex import OpenAlexEnricher
+    from ._enricher_openlibrary import OpenLibraryEnricher
+
+    enrichment = EnrichmentPipeline(
+        [
+            OpenAlexEnricher(),
+            OpenLibraryEnricher(),
+        ]
+    )
+
     bundle = ServiceBundle(
         s2=s2,
         openalex=openalex,
@@ -140,6 +154,7 @@ async def make_service_lifespan(
         config=config,
         tasks=tasks,
         standards=standards,
+        enrichment=enrichment,
     )
     try:
         yield {"bundle": bundle}

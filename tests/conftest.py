@@ -9,6 +9,7 @@ import httpx
 import pytest
 
 from scholar_mcp._cache import ScholarCache
+from scholar_mcp._enrichment import EnrichmentPipeline
 from scholar_mcp._openalex_client import OpenAlexClient
 from scholar_mcp._openlibrary_client import OpenLibraryClient
 from scholar_mcp._rate_limiter import RateLimiter
@@ -57,6 +58,17 @@ async def bundle(cache: ScholarCache, test_config: ServerConfig) -> ServiceBundl
     openlibrary = OpenLibraryClient(openlibrary_http, RateLimiter(delay=0.0))
     standards_http = httpx.AsyncClient(timeout=10.0)
     standards = StandardsClient(standards_http)
+    # Import enrichers here to avoid circular import
+    # (_enricher_openlibrary -> _book_enrichment -> _server_deps)
+    from scholar_mcp._enricher_openalex import OpenAlexEnricher
+    from scholar_mcp._enricher_openlibrary import OpenLibraryEnricher
+
+    enrichment = EnrichmentPipeline(
+        [
+            OpenAlexEnricher(),
+            OpenLibraryEnricher(),
+        ]
+    )
     yield ServiceBundle(
         s2=s2,
         openalex=openalex,
@@ -67,6 +79,7 @@ async def bundle(cache: ScholarCache, test_config: ServerConfig) -> ServiceBundl
         config=test_config,
         tasks=TaskQueue(),
         standards=standards,
+        enrichment=enrichment,
     )
     await openlibrary_http.aclose()
     await openalex_http.aclose()

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 from typing import Any, Literal
@@ -23,36 +22,6 @@ _FORMATTERS = {
     "csl-json": format_csl_json,
     "ris": format_ris,
 }
-
-
-async def _enrich_paper(paper: dict[str, Any], bundle: ServiceBundle) -> None:
-    """Enrich paper in-place with OpenAlex venue data if missing.
-
-    Args:
-        paper: Paper metadata dict (mutated in-place).
-        bundle: Service bundle for API access.
-    """
-    if paper.get("venue"):
-        return
-    doi = (paper.get("externalIds") or {}).get("DOI")
-    if not doi:
-        return
-    try:
-        cached = await bundle.cache.get_openalex(doi)
-        oa_data = (
-            cached if cached is not None else await bundle.openalex.get_by_doi(doi)
-        )
-        if oa_data is None:
-            return
-        if cached is None:
-            await bundle.cache.set_openalex(doi, oa_data)
-        loc = oa_data.get("primary_location") or {}
-        source = loc.get("source") or {}
-        venue = source.get("display_name")
-        if venue:
-            paper["venue"] = venue
-    except Exception:
-        logger.debug("openalex_enrich_failed doi=%s", doi, exc_info=True)
 
 
 def register_citation_tools(mcp: FastMCP) -> None:
@@ -125,13 +94,7 @@ def register_citation_tools(mcp: FastMCP) -> None:
                     errors.append({"identifier": raw_id, "reason": "not found"})
 
             if enrich:
-                sem = asyncio.Semaphore(10)
-
-                async def _bounded_enrich(p: dict[str, Any]) -> None:
-                    async with sem:
-                        await _enrich_paper(p, bundle)
-
-                await asyncio.gather(*(_bounded_enrich(p) for p in papers))
+                await bundle.enrichment.enrich(papers, bundle, tags={"papers"})
 
             if not papers:
                 return json.dumps(
