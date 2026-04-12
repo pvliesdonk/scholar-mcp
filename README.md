@@ -206,7 +206,7 @@ All settings are controlled via environment variables with the `SCHOLAR_MCP_` pr
 
 > Tier-1 bodies (NIST, IETF, W3C, ETSI) are supported with full metadata and optional full-text conversion. Tier-2 paywalled bodies (ISO, IEC, IEEE) are tracked in [GitHub issues](https://github.com/pvliesdonk/scholar-mcp/issues).
 
-### Cross-source utility
+### Cross-source Utility
 
 | Tool | Description |
 |---|---|
