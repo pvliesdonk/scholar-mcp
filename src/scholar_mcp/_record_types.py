@@ -27,6 +27,9 @@ class BookRecord(TypedDict, total=False):
     subjects: list[str]
     page_count: int | None
     description: str | None
+    worldcat_url: str | None
+    snippet: str | None
+    cover_path: str | None
 
 
 class StandardRecord(TypedDict, total=False):

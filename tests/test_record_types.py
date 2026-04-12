@@ -21,6 +21,9 @@ def test_book_record_accepts_valid_data() -> None:
         "subjects": ["Software patterns"],
         "page_count": 395,
         "description": None,
+        "worldcat_url": "https://www.worldcat.org/isbn/9780201633610",
+        "snippet": None,
+        "cover_path": None,
     }
     assert book["title"] == "Design Patterns"
     assert book["authors"] == ["Erich Gamma"]

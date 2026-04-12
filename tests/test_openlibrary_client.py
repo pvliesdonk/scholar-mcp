@@ -177,6 +177,7 @@ def test_normalize_book_from_search_doc() -> None:
     assert book["subjects"] == ["Software patterns"]
     assert book["page_count"] == 395
     assert book["google_books_url"] is None
+    assert book["worldcat_url"] == "https://www.worldcat.org/isbn/9780201633610"
 
 
 def test_normalize_book_from_edition() -> None:
@@ -188,6 +189,28 @@ def test_normalize_book_from_edition() -> None:
     assert book["openlibrary_edition_id"] == "OL1429049M"
     assert book["openlibrary_work_id"] == "OL1168083W"
     assert book["page_count"] == 395
+    assert book["worldcat_url"] == "https://www.worldcat.org/isbn/9780201633610"
+
+
+def test_normalize_book_worldcat_url_none_without_isbn13() -> None:
+    """worldcat_url is None when no ISBN-13 is available."""
+    doc_no_isbn = {
+        "title": "No ISBN Book",
+        "author_name": ["Some Author"],
+        "key": "/works/OL9999999W",
+    }
+    book = normalize_book(doc_no_isbn, source="search")
+    assert book["worldcat_url"] is None
+
+    edition_no_isbn = {
+        "title": "No ISBN Edition",
+        "publishers": ["Some Publisher"],
+        "publish_date": "2000",
+        "works": [{"key": "/works/OL9999999W"}],
+        "key": "/books/OL9999999M",
+    }
+    book_edition = normalize_book(edition_no_isbn, source="edition")
+    assert book_edition["worldcat_url"] is None
 
 
 @pytest.mark.respx(base_url=OL_BASE)
