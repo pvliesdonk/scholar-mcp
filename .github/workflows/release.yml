@@ -13,9 +13,13 @@ on:
           - minor
           - major
       prerelease:
-        description: 'Create a pre-release (rc channel — skips PyPI, catalog, registry, linux packages). Uncheck to cut a real release.'
+        description: 'Create a pre-release (skips PyPI, catalog, registry, linux packages). Uncheck to cut a real release.'
         type: boolean
         default: true
+      prerelease_token:
+        description: 'Pre-release channel token (default: rc)'
+        type: string
+        default: rc
 
 permissions:
   contents: read
@@ -56,7 +60,7 @@ jobs:
           git_committer_email: "actions@users.noreply.github.com"
           force: ${{ inputs.force }}
           prerelease: ${{ inputs.prerelease }}
-          prerelease_token: rc
+          prerelease_token: ${{ inputs.prerelease_token || 'rc' }}
 
       - name: Update versioned manifests to released version
         if: steps.release.outputs.released == 'true' && !inputs.prerelease
