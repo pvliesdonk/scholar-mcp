@@ -103,6 +103,9 @@ The positive examples define the topic; negatives steer away from unwanted
 areas. For best results, pick positive examples that span the desired topic
 rather than clustering around one sub-area.
 
+`recommend_books` takes a subject string (e.g. "machine learning", "algorithms")
+and returns popular books from Open Library sorted by edition count.
+
 ## Citation generation
 
 `generate_citations` produces BibTeX, CSL-JSON, or RIS for up to 100 papers.
@@ -134,6 +137,9 @@ instance (`SCHOLAR_MCP_DOCLING_URL`) for Markdown conversion.
 - `fetch_and_convert` does fetch + convert in one call — usually what users
   want.
 - `fetch_pdf_by_url` handles arbitrary PDF URLs (e.g. an author's website).
+- `convert_pdf_to_markdown` converts a local PDF file to Markdown — use this
+  when you already have the PDF on disk (e.g. a paywalled paper obtained
+  manually). Accepts an absolute `file_path`.
 
 ### Patents
 
@@ -146,8 +152,10 @@ instance (`SCHOLAR_MCP_DOCLING_URL`) for Markdown conversion.
 
 ### VLM enrichment
 
-Pass `use_vlm=true` to any conversion tool for better formula and figure
-extraction. Requires `SCHOLAR_MCP_VLM_API_URL` and `SCHOLAR_MCP_VLM_API_KEY`.
+Pass `use_vlm=true` to `fetch_and_convert`, `fetch_pdf_by_url`,
+`fetch_patent_pdf`, or `convert_pdf_to_markdown` for better formula and figure
+extraction. (`get_standard` uses docling internally but does not expose the VLM
+flag.) Requires `SCHOLAR_MCP_VLM_API_URL` and `SCHOLAR_MCP_VLM_API_KEY`.
 VLM and standard conversions are cached separately — switching modes never
 overwrites previous results.
 
