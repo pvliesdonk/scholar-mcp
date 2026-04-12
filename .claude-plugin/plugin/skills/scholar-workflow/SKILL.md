@@ -162,8 +162,10 @@ overwrites previous results.
 ## Handling queued operations
 
 PDF downloads (`fetch_paper_pdf`), patent PDF fetches (`fetch_patent_pdf`),
-full pipeline runs (`fetch_and_convert`), and any tool that hits a rate limit
-return a task ID:
+full pipeline runs (`fetch_and_convert`), URL-based fetches (`fetch_pdf_by_url`),
+local file conversions (`convert_pdf_to_markdown`), and any tool that hits a
+rate limit return a task ID when work is submitted to the background queue.
+Cache hits return immediately without queuing. Example queued response:
 
 ```json
 {"queued": true, "task_id": "abc123", "tool": "..."}
