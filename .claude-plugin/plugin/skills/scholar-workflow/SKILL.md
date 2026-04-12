@@ -66,8 +66,8 @@ papers).
   "NIST SP 800-53 rev5") and normalises to canonical form. Use it first when
   the user gives an informal name.
 - `get_standard` with `fetch_full_text=true` downloads and converts the
-  standard via docling (requires `SCHOLAR_MCP_DOCLING_URL`). This is
-  long-running — it returns a task ID.
+  standard via docling (requires `SCHOLAR_MCP_DOCLING_URL`). This may block
+  until conversion completes; it only returns a task ID if rate-limited.
 
 ## Citation graph traversal
 
@@ -161,8 +161,9 @@ overwrites previous results.
 
 ## Handling queued operations
 
-PDF downloads, patent PDF fetches, full-text standard retrieval, and any
-tool that hits a rate limit return a task ID:
+PDF downloads (`fetch_paper_pdf`), patent PDF fetches (`fetch_patent_pdf`),
+full pipeline runs (`fetch_and_convert`), and any tool that hits a rate limit
+return a task ID:
 
 ```json
 {"queued": true, "task_id": "abc123", "tool": "..."}
