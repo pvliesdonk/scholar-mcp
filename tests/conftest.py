@@ -9,6 +9,7 @@ import httpx
 import pytest
 
 from scholar_mcp._cache import ScholarCache
+from scholar_mcp._crossref_client import CrossRefClient
 from scholar_mcp._enrichment import EnrichmentPipeline
 from scholar_mcp._openalex_client import OpenAlexClient
 from scholar_mcp._openlibrary_client import OpenLibraryClient
@@ -52,6 +53,8 @@ async def bundle(cache: ScholarCache, test_config: ServerConfig) -> ServiceBundl
     s2 = S2Client(api_key=None, delay=0.0)
     openalex_http = httpx.AsyncClient(base_url="https://api.openalex.org")
     openalex = OpenAlexClient(openalex_http)
+    crossref_http = httpx.AsyncClient(base_url="https://api.crossref.org", timeout=10.0)
+    crossref = CrossRefClient(crossref_http)
     openlibrary_http = httpx.AsyncClient(
         base_url="https://openlibrary.org", timeout=10.0, follow_redirects=True
     )
@@ -60,18 +63,21 @@ async def bundle(cache: ScholarCache, test_config: ServerConfig) -> ServiceBundl
     standards = StandardsClient(standards_http)
     # Import enrichers here to avoid circular import
     # (_enricher_openlibrary -> _book_enrichment -> _server_deps)
+    from scholar_mcp._enricher_crossref import CrossRefEnricher
     from scholar_mcp._enricher_openalex import OpenAlexEnricher
     from scholar_mcp._enricher_openlibrary import OpenLibraryEnricher
 
     enrichment = EnrichmentPipeline(
         [
             OpenAlexEnricher(),
+            CrossRefEnricher(),
             OpenLibraryEnricher(),
         ]
     )
     yield ServiceBundle(
         s2=s2,
         openalex=openalex,
+        crossref=crossref,
         docling=None,
         epo=None,
         openlibrary=openlibrary,
@@ -81,6 +87,7 @@ async def bundle(cache: ScholarCache, test_config: ServerConfig) -> ServiceBundl
         standards=standards,
         enrichment=enrichment,
     )
+    await crossref_http.aclose()
     await openlibrary_http.aclose()
     await openalex_http.aclose()
     await s2.aclose()
