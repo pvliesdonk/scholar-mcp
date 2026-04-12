@@ -133,7 +133,7 @@ jobs:
           fi
 
       - name: Save patch coverage result
-        if: matrix.python-version == '3.13' && github.event_name == 'pull_request'
+        if: matrix.python-version == '3.13' && github.event_name == 'pull_request' && always()
         env:
           PATCH_STATE: ${{ steps.diffcover.outputs.state || 'error' }}
           PATCH_DESC: ${{ steps.diffcover.outputs.description || 'diff-cover step did not run' }}
@@ -142,7 +142,7 @@ jobs:
             '{"state":$state,"description":$description}' > patch-coverage.json
 
       - name: Upload patch coverage artifact
-        if: matrix.python-version == '3.13' && github.event_name == 'pull_request'
+        if: matrix.python-version == '3.13' && github.event_name == 'pull_request' && always()
         uses: actions/upload-artifact@v4
         with:
           name: patch-coverage
