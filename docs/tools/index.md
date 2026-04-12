@@ -417,7 +417,7 @@ Resolve up to 100 paper, patent, or book identifiers to full metadata in a singl
 
 **Returns:** JSON list of resolved items:
 
-- **Paper results** have a `"paper"` key. Papers not found in Semantic Scholar are automatically tried via OpenAlex (by DOI); results from OpenAlex include `"source": "openalex"`. When the citation string contains chapter patterns (e.g. "Chapter 3", "pp. 45-67"), a `chapter_info` dict is attached with parsed chapter/page information. CrossRef metadata takes precedence over parsed hints.
+- **Paper results** have a `"paper"` key. Papers not found in Semantic Scholar are automatically tried via OpenAlex (by DOI); results from OpenAlex include `"source": "openalex"`. When the citation string contains chapter patterns (e.g. "Chapter 3", "pp. 45-67"), a `chapter_info` dict is attached with parsed chapter/page information.
 - **Patent results** have a `"patent"` key and `"source_type": "patent"`. Patent numbers are auto-detected by their two-letter country prefix (e.g. `EP`, `US`, `WO`) and routed to the EPO OPS API.
 - **Book results** have a `"book"` key and `"source_type": "book"`. ISBNs (prefixed with `ISBN:`) are routed to Open Library.
 - **Unresolved items** have an `"error"` key.
