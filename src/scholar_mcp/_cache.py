@@ -86,7 +86,7 @@ _STANDARD_INDEX_TTL = 30 * 86400  # 30 days — re-scrape monthly
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY);
-INSERT OR IGNORE INTO schema_version VALUES (1);
+INSERT OR IGNORE INTO schema_version VALUES (2);
 
 CREATE TABLE IF NOT EXISTS papers (
     paper_id  TEXT PRIMARY KEY,
@@ -222,9 +222,12 @@ CREATE INDEX IF NOT EXISTS idx_google_books_cached ON google_books(cached_at);
 CREATE TABLE IF NOT EXISTS standards (
     identifier TEXT PRIMARY KEY,
     data       TEXT NOT NULL,
-    cached_at  REAL NOT NULL
+    cached_at  REAL NOT NULL,
+    source     TEXT,
+    synced_at  REAL
 );
 CREATE INDEX IF NOT EXISTS idx_standards_cached ON standards(cached_at);
+CREATE INDEX IF NOT EXISTS idx_standards_source ON standards(source);
 
 CREATE TABLE IF NOT EXISTS standards_aliases (
     raw_id     TEXT PRIMARY KEY,
@@ -247,6 +250,31 @@ CREATE TABLE IF NOT EXISTS standards_index (
 );
 CREATE INDEX IF NOT EXISTS idx_standards_index_cached ON standards_index(cached_at);
 """
+
+# Idempotent migrations for existing cache DBs. Each MUST tolerate
+# re-execution — use CREATE IF NOT EXISTS and check PRAGMA before ALTER.
+_MIGRATIONS = """
+-- v2: add source and synced_at to standards for sync/live distinction
+"""
+
+
+async def _apply_migrations(db: aiosqlite.Connection) -> None:
+    """Apply column migrations not covered by CREATE TABLE IF NOT EXISTS.
+
+    Idempotent — safe to run on fresh or already-migrated DBs.
+    """
+    async with db.execute("PRAGMA table_info(standards)") as cur:
+        cols = {row[1] for row in await cur.fetchall()}
+    if "source" not in cols:
+        await db.execute("ALTER TABLE standards ADD COLUMN source TEXT")
+    if "synced_at" not in cols:
+        await db.execute("ALTER TABLE standards ADD COLUMN synced_at REAL")
+    await db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_standards_source ON standards(source)"
+    )
+    await db.execute("INSERT OR IGNORE INTO schema_version VALUES (2)")
+    await db.commit()
+
 
 _TTL_TABLES = (
     "papers",
@@ -307,6 +335,7 @@ class ScholarCache:
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         self._db = await aiosqlite.connect(self._db_path)
         await self._db.executescript(_SCHEMA)
+        await _apply_migrations(self._db)
         await self._db.commit()
         logger.info("cache_opened path=%s", self._db_path)
 

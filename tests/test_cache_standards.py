@@ -6,6 +6,9 @@ import time
 from typing import Any
 from unittest.mock import patch
 
+import aiosqlite
+
+from scholar_mcp import _cache as _cache_mod
 from scholar_mcp._cache import ScholarCache
 
 SAMPLE_STANDARD: dict[str, Any] = {
@@ -83,12 +86,29 @@ async def test_get_standard_expired(cache: ScholarCache) -> None:
     assert result is None
 
 
-from scholar_mcp import _cache as _cache_mod
-
-
 def test_standard_search_ttl_is_30_days() -> None:
     assert _cache_mod._STANDARD_SEARCH_TTL == 30 * 86400
 
 
 def test_standard_index_ttl_is_30_days() -> None:
     assert _cache_mod._STANDARD_INDEX_TTL == 30 * 86400
+
+
+async def test_standards_table_has_source_column(cache: ScholarCache) -> None:
+    async with (
+        aiosqlite.connect(cache._db_path) as db,  # type: ignore[attr-defined]
+        db.execute("PRAGMA table_info(standards)") as cur,
+    ):
+        cols = {row[1] for row in await cur.fetchall()}
+    assert "source" in cols
+    assert "synced_at" in cols
+
+
+async def test_schema_version_is_2(cache: ScholarCache) -> None:
+    async with (
+        aiosqlite.connect(cache._db_path) as db,  # type: ignore[attr-defined]
+        db.execute("SELECT MAX(version) FROM schema_version") as cur,
+    ):
+        row = await cur.fetchone()
+    assert row is not None
+    assert row[0] == 2
