@@ -10,10 +10,14 @@ import asyncio
 import logging
 import os
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import click
 
 from scholar_mcp.config import _ENV_PREFIX
+
+if TYPE_CHECKING:
+    from scholar_mcp._standards_sync import Loader
 
 logger = logging.getLogger(__name__)
 
@@ -207,6 +211,82 @@ def cache_clear(older_than: int | None, cache_dir: Path | None) -> None:
             click.echo("Cache cleared.")
 
     asyncio.run(_run())
+
+
+_SYNC_BODIES = ("ISO", "IEC", "IEEE", "CEN", "CC", "all")
+
+
+@cli.command("sync-standards")
+@click.option(
+    "--body",
+    type=click.Choice(_SYNC_BODIES, case_sensitive=False),
+    default="all",
+    show_default=True,
+    help="Body to sync. 'all' runs every registered loader.",
+)
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Bypass upstream-freshness checks and re-sync unconditionally.",
+)
+@click.option(
+    "--cache-dir",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Override cache directory.",
+)
+def sync_standards(body: str, force: bool, cache_dir: Path | None) -> None:
+    """Sync Tier 2 standards catalogue data into the local cache.
+
+    Safe to schedule under cron / launchd / systemd timers.
+
+    Exit codes:
+        0 — no changes OR synced with updates
+        1 — hard failure (no body synced)
+        3 — partial failure (some bodies succeeded, some did not)
+    """
+    from scholar_mcp._cache import ScholarCache
+    from scholar_mcp._standards_sync import format_reports, run_sync
+    from scholar_mcp.config import load_config
+
+    async def _run() -> int:
+        config = load_config()
+        db_path = (cache_dir or config.cache_dir) / "cache.db"
+        c = ScholarCache(db_path)
+        await c.open()
+        try:
+            loaders = _select_loaders(body)
+            reports = await run_sync(loaders, c, force=force)
+        finally:
+            await c.close()
+
+        click.echo(format_reports(reports))
+
+        if not loaders:
+            return 0
+        failures = [r for r in reports if r.errors]
+        successes = [r for r in reports if not r.errors]
+        if failures and not successes:
+            return 1
+        if failures and successes:
+            return 3
+        return 0
+
+    exit_code = asyncio.run(_run())
+    raise SystemExit(exit_code)
+
+
+def _select_loaders(body: str) -> list[Loader]:
+    """Return loaders matching *body* ('all' returns every registered).
+
+    Zero loaders are registered in PR 1 — this is a placeholder that
+    later PRs (ISO/IEC in PR 2, IEEE in PR 3, CEN+CC in PR 4) replace
+    with real registration.
+    """
+    registered: list[Loader] = []
+    if body.upper() == "ALL":
+        return registered
+    return [loader for loader in registered if loader.body == body.upper()]
 
 
 def main() -> None:
