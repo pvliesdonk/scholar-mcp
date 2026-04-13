@@ -81,3 +81,14 @@ async def test_get_standard_expired(cache: ScholarCache) -> None:
         mock_time.time.return_value = future
         result = await cache.get_standard("RFC 9000")
     assert result is None
+
+
+from scholar_mcp import _cache as _cache_mod
+
+
+def test_standard_search_ttl_is_30_days() -> None:
+    assert _cache_mod._STANDARD_SEARCH_TTL == 30 * 86400
+
+
+def test_standard_index_ttl_is_30_days() -> None:
+    assert _cache_mod._STANDARD_INDEX_TTL == 30 * 86400

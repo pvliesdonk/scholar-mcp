@@ -81,8 +81,8 @@ _GOOGLE_BOOKS_TTL = 30 * 86400  # 30 days
 
 _STANDARD_TTL = 90 * 86400  # 90 days — standards rarely change
 _STANDARD_ALIAS_TTL = 90 * 86400  # 90 days
-_STANDARD_SEARCH_TTL = 7 * 86400  # 7 days
-_STANDARD_INDEX_TTL = 7 * 86400  # 7 days — re-scrape weekly
+_STANDARD_SEARCH_TTL = 30 * 86400  # 30 days — standards are effectively append-only
+_STANDARD_INDEX_TTL = 30 * 86400  # 30 days — re-scrape monthly
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY);
