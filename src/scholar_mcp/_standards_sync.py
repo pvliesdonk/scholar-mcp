@@ -165,7 +165,7 @@ def format_reports(reports: list[SyncReport]) -> str:
     if not reports:
         return "no loaders registered"
     lines = []
-    total_added = total_updated = total_withdrawn = total_errors = 0
+    total_added = total_updated = total_unchanged = total_withdrawn = total_errors = 0
     for r in reports:
         lines.append(
             f"{r.body} added={r.added} updated={r.updated} "
@@ -174,10 +174,12 @@ def format_reports(reports: list[SyncReport]) -> str:
         )
         total_added += r.added
         total_updated += r.updated
+        total_unchanged += r.unchanged
         total_withdrawn += r.withdrawn
         total_errors += len(r.errors)
     lines.append(
         f"total added={total_added} updated={total_updated} "
-        f"withdrawn={total_withdrawn} errors={total_errors}"
+        f"unchanged={total_unchanged} withdrawn={total_withdrawn} "
+        f"errors={total_errors}"
     )
     return "\n".join(lines)
