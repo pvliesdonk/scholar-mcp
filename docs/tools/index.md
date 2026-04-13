@@ -603,6 +603,16 @@ full text via docling.
 
 ---
 
+### `get_sync_status`
+
+Reports the last run of each Tier 2 standards sync. Returns one record per
+body — see `scholar-mcp sync-standards` in the CLI docs.
+
+**Returns:** `{"runs": [{"body", "upstream_ref", "added", "updated", "unchanged", "withdrawn", "errors", "started_at", "finished_at"}]}`.
+An empty `runs` list means no sync has been run yet.
+
+---
+
 ## PDF Conversion
 
 !!! warning "Write-tagged tools"

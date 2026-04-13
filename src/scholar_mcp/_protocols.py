@@ -79,7 +79,14 @@ class CacheProtocol(Protocol):
 
     # Standards methods
     async def get_standard(self, identifier: str) -> StandardRecord | None: ...
-    async def set_standard(self, identifier: str, data: StandardRecord) -> None: ...
+    async def set_standard(
+        self,
+        identifier: str,
+        data: StandardRecord,
+        *,
+        source: str | None = None,
+        synced: bool = False,
+    ) -> None: ...
     async def get_standard_alias(self, raw: str) -> str | None: ...
     async def set_standard_alias(self, raw: str, canonical: str) -> None: ...
     async def get_standards_search(self, query: str) -> list[StandardRecord] | None: ...
@@ -90,3 +97,20 @@ class CacheProtocol(Protocol):
     async def set_standards_index(
         self, body: str, data: list[dict[str, Any]]
     ) -> None: ...
+
+    # Standards sync-run methods
+    async def set_sync_run(
+        self,
+        *,
+        body: str,
+        upstream_ref: str | None,
+        added: int,
+        updated: int,
+        unchanged: int,
+        withdrawn: int,
+        errors: list[str],
+        started_at: float,
+        finished_at: float,
+    ) -> None: ...
+    async def get_sync_run(self, body: str) -> dict[str, Any] | None: ...
+    async def list_sync_runs(self) -> list[dict[str, Any]]: ...

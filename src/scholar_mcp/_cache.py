@@ -81,12 +81,12 @@ _GOOGLE_BOOKS_TTL = 30 * 86400  # 30 days
 
 _STANDARD_TTL = 90 * 86400  # 90 days — standards rarely change
 _STANDARD_ALIAS_TTL = 90 * 86400  # 90 days
-_STANDARD_SEARCH_TTL = 7 * 86400  # 7 days
-_STANDARD_INDEX_TTL = 7 * 86400  # 7 days — re-scrape weekly
+_STANDARD_SEARCH_TTL = 30 * 86400  # 30 days — standards are effectively append-only
+_STANDARD_INDEX_TTL = 30 * 86400  # 30 days — re-scrape monthly
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY);
-INSERT OR IGNORE INTO schema_version VALUES (1);
+INSERT OR IGNORE INTO schema_version VALUES (2);
 
 CREATE TABLE IF NOT EXISTS papers (
     paper_id  TEXT PRIMARY KEY,
@@ -222,9 +222,13 @@ CREATE INDEX IF NOT EXISTS idx_google_books_cached ON google_books(cached_at);
 CREATE TABLE IF NOT EXISTS standards (
     identifier TEXT PRIMARY KEY,
     data       TEXT NOT NULL,
-    cached_at  REAL NOT NULL
+    cached_at  REAL NOT NULL,
+    source     TEXT,
+    synced_at  REAL
 );
 CREATE INDEX IF NOT EXISTS idx_standards_cached ON standards(cached_at);
+-- idx_standards_source is created by _apply_migrations so v1 DBs (which
+-- lack the source column until ALTER TABLE runs) don't break on open.
 
 CREATE TABLE IF NOT EXISTS standards_aliases (
     raw_id     TEXT PRIMARY KEY,
@@ -246,7 +250,38 @@ CREATE TABLE IF NOT EXISTS standards_index (
     cached_at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_standards_index_cached ON standards_index(cached_at);
+
+CREATE TABLE IF NOT EXISTS standards_sync_runs (
+    body          TEXT PRIMARY KEY,
+    upstream_ref  TEXT,
+    added         INTEGER NOT NULL,
+    updated       INTEGER NOT NULL,
+    unchanged     INTEGER NOT NULL,
+    withdrawn     INTEGER NOT NULL,
+    errors        TEXT NOT NULL,
+    started_at    REAL NOT NULL,
+    finished_at   REAL NOT NULL
+);
 """
+
+
+async def _apply_migrations(db: aiosqlite.Connection) -> None:
+    """Apply column migrations not covered by CREATE TABLE IF NOT EXISTS.
+
+    Idempotent — safe to run on fresh or already-migrated DBs.
+    """
+    async with db.execute("PRAGMA table_info(standards)") as cur:
+        cols = {row[1] for row in await cur.fetchall()}
+    if "source" not in cols:
+        await db.execute("ALTER TABLE standards ADD COLUMN source TEXT")
+    if "synced_at" not in cols:
+        await db.execute("ALTER TABLE standards ADD COLUMN synced_at REAL")
+    await db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_standards_source ON standards(source)"
+    )
+    await db.execute("INSERT OR IGNORE INTO schema_version VALUES (2)")
+    await db.commit()
+
 
 _TTL_TABLES = (
     "papers",
@@ -307,6 +342,7 @@ class ScholarCache:
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         self._db = await aiosqlite.connect(self._db_path)
         await self._db.executescript(_SCHEMA)
+        await _apply_migrations(self._db)
         await self._db.commit()
         logger.info("cache_opened path=%s", self._db_path)
 
@@ -1013,7 +1049,11 @@ class ScholarCache:
     # ------------------------------------------------------------------
 
     async def get_standard(self, identifier: str) -> StandardRecord | None:
-        """Return cached standard record or None if missing/stale.
+        """Return cached standard record or None if missing.
+
+        Synced records (``synced_at IS NOT NULL``) bypass TTL — they're
+        refreshed only by a subsequent sync. Live-fetched records expire
+        after ``_STANDARD_TTL`` seconds.
 
         Args:
             identifier: Canonical standard identifier.
@@ -1023,24 +1063,44 @@ class ScholarCache:
         """
         db = _require_open(self._db)
         async with db.execute(
-            "SELECT data, cached_at FROM standards WHERE identifier = ?", (identifier,)
+            "SELECT data, cached_at, synced_at FROM standards WHERE identifier = ?",
+            (identifier,),
         ) as cur:
             row = await cur.fetchone()
-        if row is None or time.time() - row[1] > _STANDARD_TTL:
+        if row is None:
+            return None
+        synced_at = row[2]
+        if synced_at is None and time.time() - row[1] > _STANDARD_TTL:
             return None
         return json.loads(row[0])  # type: ignore[no-any-return]
 
-    async def set_standard(self, identifier: str, data: StandardRecord) -> None:
+    async def set_standard(
+        self,
+        identifier: str,
+        data: StandardRecord,
+        *,
+        source: str | None = None,
+        synced: bool = False,
+    ) -> None:
         """Cache a standard record.
 
         Args:
             identifier: Canonical standard identifier.
             data: StandardRecord dict.
+            source: Populating body — one of "IETF", "NIST", "W3C", "ETSI",
+                "ISO", "IEC", "IEEE", "CEN", "CENELEC", "CC". ``None`` for
+                legacy call sites that have not been updated yet.
+            synced: When True, marks ``synced_at=now``. Synced records never
+                TTL-expire. Live-fetched callers must leave this False.
         """
         db = _require_open(self._db)
+        now = time.time()
+        synced_at = now if synced else None
         await db.execute(
-            "INSERT OR REPLACE INTO standards (identifier, data, cached_at) VALUES (?, ?, ?)",
-            (identifier, json.dumps(data), time.time()),
+            "INSERT OR REPLACE INTO standards "
+            "(identifier, data, cached_at, source, synced_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (identifier, json.dumps(data), now, source, synced_at),
         )
         await db.commit()
 
@@ -1145,6 +1205,118 @@ class ScholarCache:
             (body, json.dumps(data), time.time()),
         )
         await db.commit()
+
+    # ------------------------------------------------------------------
+    # Standards sync runs
+    # ------------------------------------------------------------------
+
+    async def set_sync_run(
+        self,
+        *,
+        body: str,
+        upstream_ref: str | None,
+        added: int,
+        updated: int,
+        unchanged: int,
+        withdrawn: int,
+        errors: list[str],
+        started_at: float,
+        finished_at: float,
+    ) -> None:
+        """Record (or replace) the latest sync run for *body*.
+
+        Args:
+            body: Standards body key (e.g. ``"ISO"``).
+            upstream_ref: Commit SHA, ``Last-Modified``, or similar marker
+                indicating what upstream version was synced.
+            added: Number of new records.
+            updated: Number of records that changed.
+            unchanged: Number of records unchanged since last sync.
+            withdrawn: Number of records marked withdrawn.
+            errors: Non-fatal error strings encountered this run.
+            started_at: Unix timestamp (seconds) when the run started.
+            finished_at: Unix timestamp (seconds) when the run finished.
+        """
+        db = _require_open(self._db)
+        await db.execute(
+            "INSERT OR REPLACE INTO standards_sync_runs ("
+            "body, upstream_ref, added, updated, unchanged, "
+            "withdrawn, errors, started_at, finished_at"
+            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                body,
+                upstream_ref,
+                added,
+                updated,
+                unchanged,
+                withdrawn,
+                json.dumps(errors),
+                started_at,
+                finished_at,
+            ),
+        )
+        await db.commit()
+
+    async def get_sync_run(self, body: str) -> dict[str, Any] | None:
+        """Return the last sync run record for *body*, or None.
+
+        Args:
+            body: Standards body key.
+
+        Returns:
+            Dict with keys ``body``, ``upstream_ref``, ``added``,
+            ``updated``, ``unchanged``, ``withdrawn``, ``errors``,
+            ``started_at``, ``finished_at``.
+        """
+        db = _require_open(self._db)
+        async with db.execute(
+            "SELECT body, upstream_ref, added, updated, unchanged, "
+            "withdrawn, errors, started_at, finished_at "
+            "FROM standards_sync_runs WHERE body = ?",
+            (body,),
+        ) as cur:
+            row = await cur.fetchone()
+        if row is None:
+            return None
+        return {
+            "body": row[0],
+            "upstream_ref": row[1],
+            "added": row[2],
+            "updated": row[3],
+            "unchanged": row[4],
+            "withdrawn": row[5],
+            "errors": json.loads(row[6]),
+            "started_at": row[7],
+            "finished_at": row[8],
+        }
+
+    async def list_sync_runs(self) -> list[dict[str, Any]]:
+        """Return every recorded sync run, one per body.
+
+        Returns:
+            List of dicts with the same shape as :meth:`get_sync_run`.
+        """
+        db = _require_open(self._db)
+        async with db.execute(
+            "SELECT body, upstream_ref, added, updated, unchanged, "
+            "withdrawn, errors, started_at, finished_at "
+            "FROM standards_sync_runs ORDER BY body"
+        ) as cur:
+            rows = await cur.fetchall()
+        return [
+            {
+                "body": r[0],
+                "upstream_ref": r[1],
+                "added": r[2],
+                "updated": r[3],
+                "unchanged": r[4],
+                "withdrawn": r[5],
+                "errors": json.loads(r[6]),
+                "started_at": r[7],
+                "finished_at": r[8],
+            }
+            for r in rows
+        ]
 
     # ------------------------------------------------------------------
     # Maintenance

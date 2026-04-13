@@ -531,3 +531,53 @@ async def test_handle_full_text_rate_limited_queues_task(
     data = json.loads(result.content[0].text)
     assert data.get("queued") is True
     assert "task_id" in data
+
+
+# ---------------------------------------------------------------------------
+# get_sync_status tests
+# ---------------------------------------------------------------------------
+
+
+async def test_get_sync_status_empty(mcp: FastMCP) -> None:
+    """get_sync_status returns empty runs list when no sync has been run."""
+    async with Client(mcp) as client:
+        result = await client.call_tool("get_sync_status", {})
+    payload = json.loads(result.content[0].text)
+    assert payload == {"runs": []}
+
+
+async def test_get_sync_status_reports_runs(
+    mcp: FastMCP, bundle: ServiceBundle
+) -> None:
+    """get_sync_status returns one row per sync run."""
+    import time as _time
+
+    started = _time.time() - 5
+    finished = _time.time()
+    await bundle.cache.set_sync_run(
+        body="ISO",
+        upstream_ref="abc123",
+        added=10,
+        updated=0,
+        unchanged=50_000,
+        withdrawn=0,
+        errors=[],
+        started_at=started,
+        finished_at=finished,
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool("get_sync_status", {})
+    payload = json.loads(result.content[0].text)
+    assert len(payload["runs"]) == 1
+    row = payload["runs"][0]
+    # Assert all 9 fields
+    assert row["body"] == "ISO"
+    assert row["upstream_ref"] == "abc123"
+    assert row["added"] == 10
+    assert row["updated"] == 0
+    assert row["unchanged"] == 50_000
+    assert row["withdrawn"] == 0
+    assert row["errors"] == []
+    assert isinstance(row["started_at"], float)
+    assert isinstance(row["finished_at"], float)
+    assert row["started_at"] < row["finished_at"]
