@@ -108,15 +108,20 @@ SHA / `Last-Modified`.
 | Column | Type |
 |---|---|
 | `body` | `TEXT PRIMARY KEY` (one row per body; updated per run) |
-| `started_at` | `TEXT` |
-| `finished_at` | `TEXT` |
+| `started_at` | `REAL` — Unix epoch seconds, consistent with `cached_at` elsewhere |
+| `finished_at` | `REAL` — Unix epoch seconds |
 | `upstream_ref` | `TEXT` — commit SHA, `Last-Modified`, or similar |
 | `added` | `INTEGER` |
 | `updated` | `INTEGER` |
 | `unchanged` | `INTEGER` |
 | `withdrawn` | `INTEGER` |
-| `errors` | `INTEGER` |
-| `error_detail` | `TEXT NULL` (JSON array of error strings, null on success) |
+| `errors` | `TEXT NOT NULL` (JSON array of error strings; `"[]"` on success) |
+
+`started_at` / `finished_at` are floats (Unix epoch), matching
+`SyncReport.started_at: float` and `cached_at REAL` on the sibling
+`standards` / `books` / `papers` tables. MCP tools and JSON serialisation
+render them as numeric timestamps — agents can format them locally as
+needed.
 
 Backs a new `get_sync_status` MCP tool/resource that surfaces per-body freshness.
 
