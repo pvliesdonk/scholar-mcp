@@ -122,7 +122,7 @@ async def run_sync(
                 exc,
                 exc_info=True,
             )
-            return SyncReport(
+            report = SyncReport(
                 body=loader.body,
                 added=0,
                 updated=0,
@@ -133,7 +133,9 @@ async def run_sync(
                 started_at=started,
                 finished_at=time.time(),
             )
-        # Persist a row per body for get_sync_status.
+        # Persist a row per body for get_sync_status — on both the
+        # success and crash paths, so operators see the failure via
+        # get_sync_status instead of "last successful run" or silence.
         await cache.set_sync_run(
             body=report.body,
             upstream_ref=report.upstream_ref,

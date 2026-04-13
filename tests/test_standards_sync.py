@@ -123,6 +123,27 @@ async def test_run_sync_isolates_loader_failure(cache: ScholarCache) -> None:
     assert good_report.errors == []
 
 
+async def test_run_sync_persists_row_for_crashed_loader(cache: ScholarCache) -> None:
+    """A loader crash must still write a standards_sync_runs row.
+
+    Otherwise get_sync_status shows nothing (first run) or the previous
+    successful run (repeat run) — hiding the failure from operators.
+    """
+    bad = _FakeLoader("IEC", raises=RuntimeError("upstream is down"))
+    await run_sync([bad], cache)
+    row = await cache.get_sync_run("IEC")
+    assert row is not None
+    assert row["body"] == "IEC"
+    assert row["upstream_ref"] is None
+    assert row["added"] == 0
+    assert row["updated"] == 0
+    assert row["unchanged"] == 0
+    assert row["withdrawn"] == 0
+    assert len(row["errors"]) == 1
+    assert "RuntimeError" in row["errors"][0]
+    assert "upstream is down" in row["errors"][0]
+
+
 async def test_run_sync_force_propagates(cache: ScholarCache) -> None:
     class _ForceSensitive:
         body = "FS"
