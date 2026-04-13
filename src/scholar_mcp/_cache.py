@@ -249,6 +249,18 @@ CREATE TABLE IF NOT EXISTS standards_index (
     cached_at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_standards_index_cached ON standards_index(cached_at);
+
+CREATE TABLE IF NOT EXISTS standards_sync_runs (
+    body          TEXT PRIMARY KEY,
+    upstream_ref  TEXT,
+    added         INTEGER NOT NULL,
+    updated       INTEGER NOT NULL,
+    unchanged     INTEGER NOT NULL,
+    withdrawn     INTEGER NOT NULL,
+    errors        TEXT NOT NULL,
+    started_at    REAL NOT NULL,
+    finished_at   REAL NOT NULL
+);
 """
 
 # Idempotent migrations for existing cache DBs. Each MUST tolerate
@@ -1198,6 +1210,118 @@ class ScholarCache:
             (body, json.dumps(data), time.time()),
         )
         await db.commit()
+
+    # ------------------------------------------------------------------
+    # Standards sync runs
+    # ------------------------------------------------------------------
+
+    async def set_sync_run(
+        self,
+        *,
+        body: str,
+        upstream_ref: str | None,
+        added: int,
+        updated: int,
+        unchanged: int,
+        withdrawn: int,
+        errors: list[str],
+        started_at: float,
+        finished_at: float,
+    ) -> None:
+        """Record (or replace) the latest sync run for *body*.
+
+        Args:
+            body: Standards body key (e.g. ``"ISO"``).
+            upstream_ref: Commit SHA, ``Last-Modified``, or similar marker
+                indicating what upstream version was synced.
+            added: Number of new records.
+            updated: Number of records that changed.
+            unchanged: Number of records unchanged since last sync.
+            withdrawn: Number of records marked withdrawn.
+            errors: Non-fatal error strings encountered this run.
+            started_at: Unix timestamp (seconds) when the run started.
+            finished_at: Unix timestamp (seconds) when the run finished.
+        """
+        db = _require_open(self._db)
+        await db.execute(
+            "INSERT OR REPLACE INTO standards_sync_runs ("
+            "body, upstream_ref, added, updated, unchanged, "
+            "withdrawn, errors, started_at, finished_at"
+            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                body,
+                upstream_ref,
+                added,
+                updated,
+                unchanged,
+                withdrawn,
+                json.dumps(errors),
+                started_at,
+                finished_at,
+            ),
+        )
+        await db.commit()
+
+    async def get_sync_run(self, body: str) -> dict[str, Any] | None:
+        """Return the last sync run record for *body*, or None.
+
+        Args:
+            body: Standards body key.
+
+        Returns:
+            Dict with keys ``body``, ``upstream_ref``, ``added``,
+            ``updated``, ``unchanged``, ``withdrawn``, ``errors``,
+            ``started_at``, ``finished_at``.
+        """
+        db = _require_open(self._db)
+        async with db.execute(
+            "SELECT body, upstream_ref, added, updated, unchanged, "
+            "withdrawn, errors, started_at, finished_at "
+            "FROM standards_sync_runs WHERE body = ?",
+            (body,),
+        ) as cur:
+            row = await cur.fetchone()
+        if row is None:
+            return None
+        return {
+            "body": row[0],
+            "upstream_ref": row[1],
+            "added": row[2],
+            "updated": row[3],
+            "unchanged": row[4],
+            "withdrawn": row[5],
+            "errors": json.loads(row[6]),
+            "started_at": row[7],
+            "finished_at": row[8],
+        }
+
+    async def list_sync_runs(self) -> list[dict[str, Any]]:
+        """Return every recorded sync run, one per body.
+
+        Returns:
+            List of dicts with the same shape as :meth:`get_sync_run`.
+        """
+        db = _require_open(self._db)
+        async with db.execute(
+            "SELECT body, upstream_ref, added, updated, unchanged, "
+            "withdrawn, errors, started_at, finished_at "
+            "FROM standards_sync_runs ORDER BY body"
+        ) as cur:
+            rows = await cur.fetchall()
+        return [
+            {
+                "body": r[0],
+                "upstream_ref": r[1],
+                "added": r[2],
+                "updated": r[3],
+                "unchanged": r[4],
+                "withdrawn": r[5],
+                "errors": json.loads(r[6]),
+                "started_at": r[7],
+                "finished_at": r[8],
+            }
+            for r in rows
+        ]
 
     # ------------------------------------------------------------------
     # Maintenance

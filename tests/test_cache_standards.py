@@ -181,3 +181,90 @@ async def test_get_standard_live_respects_ttl(cache: ScholarCache) -> None:
         await db.commit()
     result = await cache.get_standard("RFC 1234")
     assert result is None
+
+
+async def test_sync_run_roundtrip(cache: ScholarCache) -> None:
+    await cache.set_sync_run(
+        body="ISO",
+        upstream_ref="abc123",
+        added=42,
+        updated=3,
+        unchanged=100,
+        withdrawn=1,
+        errors=[],
+        started_at=1_000_000.0,
+        finished_at=1_000_060.0,
+    )
+    row = await cache.get_sync_run("ISO")
+    assert row is not None
+    assert row["body"] == "ISO"
+    assert row["upstream_ref"] == "abc123"
+    assert row["added"] == 42
+    assert row["updated"] == 3
+    assert row["unchanged"] == 100
+    assert row["withdrawn"] == 1
+    assert row["errors"] == []
+    assert row["started_at"] == 1_000_000.0
+    assert row["finished_at"] == 1_000_060.0
+
+
+async def test_sync_run_replaces_on_second_write(cache: ScholarCache) -> None:
+    await cache.set_sync_run(
+        body="IEC",
+        upstream_ref="v1",
+        added=1,
+        updated=0,
+        unchanged=0,
+        withdrawn=0,
+        errors=[],
+        started_at=1.0,
+        finished_at=2.0,
+    )
+    await cache.set_sync_run(
+        body="IEC",
+        upstream_ref="v2",
+        added=5,
+        updated=2,
+        unchanged=10,
+        withdrawn=0,
+        errors=["one failure"],
+        started_at=3.0,
+        finished_at=4.0,
+    )
+    row = await cache.get_sync_run("IEC")
+    assert row is not None
+    assert row["upstream_ref"] == "v2"
+    assert row["added"] == 5
+    assert row["errors"] == ["one failure"]
+
+
+async def test_sync_run_missing_returns_none(cache: ScholarCache) -> None:
+    assert await cache.get_sync_run("IEEE") is None
+
+
+async def test_list_sync_runs(cache: ScholarCache) -> None:
+    await cache.set_sync_run(
+        body="ISO",
+        upstream_ref="a",
+        added=0,
+        updated=0,
+        unchanged=0,
+        withdrawn=0,
+        errors=[],
+        started_at=1.0,
+        finished_at=2.0,
+    )
+    await cache.set_sync_run(
+        body="IEC",
+        upstream_ref="b",
+        added=0,
+        updated=0,
+        unchanged=0,
+        withdrawn=0,
+        errors=[],
+        started_at=3.0,
+        finished_at=4.0,
+    )
+    rows = await cache.list_sync_runs()
+    bodies = {r["body"] for r in rows}
+    assert bodies == {"ISO", "IEC"}

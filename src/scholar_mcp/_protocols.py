@@ -90,3 +90,20 @@ class CacheProtocol(Protocol):
     async def set_standards_index(
         self, body: str, data: list[dict[str, Any]]
     ) -> None: ...
+
+    # Standards sync-run methods
+    async def set_sync_run(
+        self,
+        *,
+        body: str,
+        upstream_ref: str | None,
+        added: int,
+        updated: int,
+        unchanged: int,
+        withdrawn: int,
+        errors: list[str],
+        started_at: float,
+        finished_at: float,
+    ) -> None: ...
+    async def get_sync_run(self, body: str) -> dict[str, Any] | None: ...
+    async def list_sync_runs(self) -> list[dict[str, Any]]: ...
