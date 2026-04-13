@@ -264,13 +264,6 @@ CREATE TABLE IF NOT EXISTS standards_sync_runs (
 );
 """
 
-# Idempotent migrations for existing cache DBs. Each MUST tolerate
-# re-execution — use CREATE IF NOT EXISTS and check PRAGMA before ALTER.
-_MIGRATIONS = """
--- v2: add source and synced_at to standards for sync/live distinction
-"""
-
-
 async def _apply_migrations(db: aiosqlite.Connection) -> None:
     """Apply column migrations not covered by CREATE TABLE IF NOT EXISTS.
 
