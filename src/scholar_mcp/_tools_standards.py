@@ -204,6 +204,30 @@ def register_standards_tools(mcp: FastMCP) -> None:
             return await _handle_full_text(record, bundle)
         return json.dumps(record)
 
+    @mcp.tool(
+        annotations={
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "openWorldHint": False,
+        },
+    )
+    async def get_sync_status(
+        bundle: ServiceBundle = Depends(get_bundle),
+    ) -> str:
+        """Report the last sync run for each standards body.
+
+        One row per body. ``started_at`` / ``finished_at`` are Unix
+        timestamps (seconds). ``errors`` is a list of non-fatal error
+        strings from the most recent run (empty on success).
+
+        Returns:
+            JSON ``{"runs": [{body, upstream_ref, added, updated,
+            unchanged, withdrawn, errors, started_at, finished_at}, ...]}``.
+            Empty ``runs`` list when no sync has been run yet.
+        """
+        runs = await bundle.cache.list_sync_runs()
+        return json.dumps({"runs": runs})
+
 
 async def _handle_full_text(
     record: StandardRecord,
