@@ -264,6 +264,7 @@ CREATE TABLE IF NOT EXISTS standards_sync_runs (
 );
 """
 
+
 async def _apply_migrations(db: aiosqlite.Connection) -> None:
     """Apply column migrations not covered by CREATE TABLE IF NOT EXISTS.
 
