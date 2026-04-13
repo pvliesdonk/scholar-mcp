@@ -227,7 +227,8 @@ CREATE TABLE IF NOT EXISTS standards (
     synced_at  REAL
 );
 CREATE INDEX IF NOT EXISTS idx_standards_cached ON standards(cached_at);
-CREATE INDEX IF NOT EXISTS idx_standards_source ON standards(source);
+-- idx_standards_source is created by _apply_migrations so v1 DBs (which
+-- lack the source column until ALTER TABLE runs) don't break on open.
 
 CREATE TABLE IF NOT EXISTS standards_aliases (
     raw_id     TEXT PRIMARY KEY,

@@ -114,6 +114,39 @@ async def test_schema_version_is_2(cache: ScholarCache) -> None:
     assert row[0] == 2
 
 
+async def test_migration_adds_source_and_synced_at_to_v1_db(tmp_path: Any) -> None:
+    """Opening a v1 cache (no source/synced_at columns) triggers ALTER TABLE."""
+    db_path = tmp_path / "v1.db"
+    # Hand-roll a v1 standards table without source/synced_at.
+    async with aiosqlite.connect(db_path) as db:
+        await db.executescript(
+            """
+            CREATE TABLE schema_version (version INTEGER PRIMARY KEY);
+            INSERT INTO schema_version VALUES (1);
+            CREATE TABLE standards (
+                identifier TEXT PRIMARY KEY,
+                data       TEXT NOT NULL,
+                cached_at  REAL NOT NULL
+            );
+            """
+        )
+        await db.commit()
+
+    # Now open via ScholarCache — should run _apply_migrations.
+    c = ScholarCache(db_path)
+    await c.open()
+    try:
+        async with (
+            aiosqlite.connect(c._db_path) as db,  # type: ignore[attr-defined]
+            db.execute("PRAGMA table_info(standards)") as cur,
+        ):
+            cols = {row[1] for row in await cur.fetchall()}
+        assert "source" in cols
+        assert "synced_at" in cols
+    finally:
+        await c.close()
+
+
 async def test_set_standard_with_source_stores_both_columns(
     cache: ScholarCache,
 ) -> None:
