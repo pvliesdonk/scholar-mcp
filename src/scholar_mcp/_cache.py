@@ -1042,7 +1042,11 @@ class ScholarCache:
     # ------------------------------------------------------------------
 
     async def get_standard(self, identifier: str) -> StandardRecord | None:
-        """Return cached standard record or None if missing/stale.
+        """Return cached standard record or None if missing.
+
+        Synced records (``synced_at IS NOT NULL``) bypass TTL — they're
+        refreshed only by a subsequent sync. Live-fetched records expire
+        after ``_STANDARD_TTL`` seconds.
 
         Args:
             identifier: Canonical standard identifier.
@@ -1052,24 +1056,44 @@ class ScholarCache:
         """
         db = _require_open(self._db)
         async with db.execute(
-            "SELECT data, cached_at FROM standards WHERE identifier = ?", (identifier,)
+            "SELECT data, cached_at, synced_at FROM standards WHERE identifier = ?",
+            (identifier,),
         ) as cur:
             row = await cur.fetchone()
-        if row is None or time.time() - row[1] > _STANDARD_TTL:
+        if row is None:
+            return None
+        synced_at = row[2]
+        if synced_at is None and time.time() - row[1] > _STANDARD_TTL:
             return None
         return json.loads(row[0])  # type: ignore[no-any-return]
 
-    async def set_standard(self, identifier: str, data: StandardRecord) -> None:
+    async def set_standard(
+        self,
+        identifier: str,
+        data: StandardRecord,
+        *,
+        source: str | None = None,
+        synced: bool = False,
+    ) -> None:
         """Cache a standard record.
 
         Args:
             identifier: Canonical standard identifier.
             data: StandardRecord dict.
+            source: Populating body — one of "IETF", "NIST", "W3C", "ETSI",
+                "ISO", "IEC", "IEEE", "CEN", "CENELEC", "CC". ``None`` for
+                legacy call sites that have not been updated yet.
+            synced: When True, marks ``synced_at=now``. Synced records never
+                TTL-expire. Live-fetched callers must leave this False.
         """
         db = _require_open(self._db)
+        now = time.time()
+        synced_at = now if synced else None
         await db.execute(
-            "INSERT OR REPLACE INTO standards (identifier, data, cached_at) VALUES (?, ?, ?)",
-            (identifier, json.dumps(data), time.time()),
+            "INSERT OR REPLACE INTO standards "
+            "(identifier, data, cached_at, source, synced_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (identifier, json.dumps(data), now, source, synced_at),
         )
         await db.commit()
 

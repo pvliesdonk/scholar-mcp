@@ -112,3 +112,72 @@ async def test_schema_version_is_2(cache: ScholarCache) -> None:
         row = await cur.fetchone()
     assert row is not None
     assert row[0] == 2
+
+
+async def test_set_standard_with_source_stores_both_columns(
+    cache: ScholarCache,
+) -> None:
+    await cache.set_standard("RFC 9000", SAMPLE_STANDARD, source="IETF")
+    async with (
+        aiosqlite.connect(cache._db_path) as db,  # type: ignore[attr-defined]
+        db.execute(
+            "SELECT source, synced_at FROM standards WHERE identifier = ?",
+            ("RFC 9000",),
+        ) as cur,
+    ):
+        row = await cur.fetchone()
+    assert row is not None
+    assert row[0] == "IETF"
+    assert row[1] is None  # live-fetched, no synced_at
+
+
+async def test_set_standard_synced_marks_synced_at(cache: ScholarCache) -> None:
+    before = time.time()
+    await cache.set_standard(
+        "ISO 9001:2015", SAMPLE_STANDARD, source="ISO", synced=True
+    )
+    async with (
+        aiosqlite.connect(cache._db_path) as db,  # type: ignore[attr-defined]
+        db.execute(
+            "SELECT synced_at FROM standards WHERE identifier = ?",
+            ("ISO 9001:2015",),
+        ) as cur,
+    ):
+        row = await cur.fetchone()
+    assert row is not None
+    assert row[0] is not None
+    assert row[0] >= before
+
+
+async def test_get_standard_synced_ignores_ttl(cache: ScholarCache) -> None:
+    """Synced records must never TTL-expire."""
+    await cache.set_standard(
+        "ISO 27001:2022", SAMPLE_STANDARD, source="ISO", synced=True
+    )
+    # Backdate cached_at beyond the 90-day TTL
+    async with (
+        aiosqlite.connect(cache._db_path) as db,  # type: ignore[attr-defined]
+        db.execute(
+            "UPDATE standards SET cached_at = ? WHERE identifier = ?",
+            (time.time() - (180 * 86400), "ISO 27001:2022"),
+        ) as _,
+    ):
+        await db.commit()
+    result = await cache.get_standard("ISO 27001:2022")
+    assert result is not None
+    assert result["identifier"] == "RFC 9000"  # fixture body — we only care it returned
+
+
+async def test_get_standard_live_respects_ttl(cache: ScholarCache) -> None:
+    """Live-fetched records (no synced_at) still TTL-expire."""
+    await cache.set_standard("RFC 1234", SAMPLE_STANDARD, source="IETF")
+    async with (
+        aiosqlite.connect(cache._db_path) as db,  # type: ignore[attr-defined]
+        db.execute(
+            "UPDATE standards SET cached_at = ? WHERE identifier = ?",
+            (time.time() - (180 * 86400), "RFC 1234"),
+        ) as _,
+    ):
+        await db.commit()
+    result = await cache.get_standard("RFC 1234")
+    assert result is None
