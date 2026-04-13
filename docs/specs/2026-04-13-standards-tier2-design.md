@@ -96,7 +96,7 @@ Designed for unattended operation under cron / CI / launchd.
 | Column | Type | Semantics |
 |---|---|---|
 | `source` | `TEXT` | `"IETF"|"NIST"|"W3C"|"ETSI"|"ISO"|"IEC"|"IEEE"|"CEN"|"CENELEC"|"CC"` |
-| `synced_at` | `TEXT NULL` | ISO timestamp when set by sync; `NULL` for live-fetched |
+| `synced_at` | `REAL NULL` | Unix epoch float when set by sync; `NULL` for live-fetched |
 
 Live-fetched records keep the 90-day TTL via the existing `cached_at` column (the
 project-wide cache convention). Synced records (`synced_at NOT NULL`) are **never
@@ -155,9 +155,9 @@ class SyncReport:
     unchanged: int
     withdrawn: int
     errors: list[str]
-    upstream_ref: str
-    started_at: datetime
-    finished_at: datetime
+    upstream_ref: str | None
+    started_at: float
+    finished_at: float
 ```
 
 The dispatcher in `_standards_sync.py` runs all selected loaders concurrently (one
