@@ -113,6 +113,22 @@ Claude Desktop configuration (`claude_desktop_config.json`):
 uvx --from pvliesdonk-scholar-mcp scholar-mcp serve --transport http --port 8000
 ```
 
+### Syncing Tier 2 standards catalogues
+
+Tier 2 bodies (ISO, IEC, IEEE, CEN/CENELEC, Common Criteria) are populated
+from community-curated bulk dumps rather than live-scraped at MCP-server
+runtime. Run the sync on first install and periodically thereafter:
+
+```bash
+scholar-mcp sync-standards            # all bodies
+scholar-mcp sync-standards --body ISO # single body
+scholar-mcp sync-standards --force    # bypass incremental checks
+```
+
+Schedule via cron / launchd / systemd timer — weekly is sufficient;
+standards change slowly. First sync can take several minutes; subsequent
+runs that find no upstream changes exit within seconds.
+
 ## Configuration
 
 All settings are controlled via environment variables with the `SCHOLAR_MCP_` prefix.
