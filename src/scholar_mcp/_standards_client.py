@@ -8,7 +8,7 @@ import logging
 import re
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from xml.etree import ElementTree as ET
 
 import httpx
@@ -52,6 +52,17 @@ _W3C_WEBAUTHN_RE = re.compile(r"(?i)\bwebauthn\s+level\s+(\d+)\b")
 _ETSI_RE = re.compile(
     r"(?i)\betsi\s+(EN|TS|TR|ES|EG)\s*(\d{3})\s*[\s-]?\s*(\d{3}(?:-\d+)?)\b"
 )
+
+# ISO joint with IEC (must precede plain ISO/IEC so the joint form wins):
+#   "ISO/IEC 27001:2022", "ISO IEC 27001:2022", "IEC/ISO 27001:2022"
+_ISO_IEC_JOINT_RE = re.compile(
+    r"(?i)\b(?:iso[/\s]*iec|iec[/\s]*iso)\s*"
+    r"(\d{1,5}(?:-\d+)*)\s*[:\s-]\s*(\d{4})\b"
+)
+# ISO alone: "ISO 9001:2015", "ISO9001:2015", "iso 15189-2:2022"
+_ISO_RE = re.compile(r"(?i)\biso\s*(\d{1,5}(?:-\d+)*)\s*[:\s-]\s*(\d{4})\b")
+# IEC alone: "IEC 62443-3-3:2020"
+_IEC_RE = re.compile(r"(?i)\biec\s*(\d{1,5}(?:-\d+)*)\s*[:\s-]\s*(\d{4})\b")
 
 
 def resolve_identifier_local(raw: str) -> tuple[str, str] | None:
@@ -126,6 +137,21 @@ def resolve_identifier_local(raw: str) -> tuple[str, str] | None:
     m = _ETSI_RE.search(s)
     if m:
         return f"ETSI {m.group(1).upper()} {m.group(2)} {m.group(3)}", "ETSI"
+
+    # ISO/IEC joint (check before plain ISO and plain IEC)
+    m = _ISO_IEC_JOINT_RE.search(s)
+    if m:
+        return f"ISO/IEC {m.group(1)}:{m.group(2)}", "ISO/IEC"
+
+    # ISO
+    m = _ISO_RE.search(s)
+    if m:
+        return f"ISO {m.group(1)}:{m.group(2)}", "ISO"
+
+    # IEC
+    m = _IEC_RE.search(s)
+    if m:
+        return f"IEC {m.group(1)}:{m.group(2)}", "IEC"
 
     return None
 
@@ -973,14 +999,18 @@ class StandardsClient:
     def __init__(
         self, http: httpx.AsyncClient, *, cache_dir: Path | None = None
     ) -> None:
+        from ._relaton_live import RelatonLiveFetcher
+
         self._http = http
-        self._fetchers: dict[
-            str, _IETFFetcher | _NISTFetcher | _W3CFetcher | _ETSIFetcher
-        ] = {
+        relaton_live = RelatonLiveFetcher(http=http)
+        self._fetchers: dict[str, Any] = {
             "IETF": _IETFFetcher(http, RateLimiter(delay=0.5)),
             "NIST": _NISTFetcher(http, RateLimiter(delay=1.0), cache_dir=cache_dir),
             "W3C": _W3CFetcher(http, RateLimiter(delay=0.5)),
             "ETSI": _ETSIFetcher(http, RateLimiter(delay=1.0)),
+            "ISO": relaton_live,
+            "IEC": relaton_live,
+            "ISO/IEC": relaton_live,
         }
 
     async def search(
@@ -995,6 +1025,9 @@ class StandardsClient:
         Args:
             query: Identifier, title, or free text.
             body: Optional body filter: "NIST", "IETF", "W3C", or "ETSI".
+                "ISO", "IEC", and "ISO/IEC" are accepted but return empty
+                results until RelatonLiveFetcher implements search
+                (tracked in #123).
             limit: Maximum results.
 
         Returns:
@@ -1002,13 +1035,19 @@ class StandardsClient:
         """
         if body is not None:
             fetcher = self._fetchers.get(body.upper())
-            if fetcher is None:
+            if fetcher is None or not hasattr(fetcher, "search"):
                 return []
-            return await fetcher.search(query, limit=limit)
+            return cast(
+                "list[StandardRecord]", await fetcher.search(query, limit=limit)
+            )
 
         # Search all sources concurrently and merge
         results_per_body = await asyncio.gather(
-            *(f.search(query, limit=limit) for f in self._fetchers.values()),
+            *(
+                f.search(query, limit=limit)
+                for f in self._fetchers.values()
+                if hasattr(f, "search")
+            ),
             return_exceptions=True,
         )
         merged: list[StandardRecord] = []
@@ -1033,12 +1072,19 @@ class StandardsClient:
         if resolved is not None:
             canonical, body = resolved
             fetcher = self._fetchers.get(body)
-            if fetcher:
-                return await fetcher.get(canonical)
+            if fetcher is not None:
+                if hasattr(fetcher, "fetch"):
+                    return cast("StandardRecord | None", await fetcher.fetch(canonical))
+                return cast("StandardRecord | None", await fetcher.get(canonical))
 
-        # No local resolution — try each fetcher
-        for fetcher in self._fetchers.values():
-            result = await fetcher.get(identifier)
+        # No local resolution — try each fetcher (deduped: same RelatonLiveFetcher
+        # instance is registered under ISO, IEC, and ISO/IEC).
+        seen: list[Any] = list(dict.fromkeys(self._fetchers.values()))
+        for fetcher in seen:
+            if hasattr(fetcher, "fetch"):
+                result = cast("StandardRecord | None", await fetcher.fetch(identifier))
+            else:
+                result = cast("StandardRecord | None", await fetcher.get(identifier))
             if result is not None:
                 return result
         return None
@@ -1062,7 +1108,12 @@ class StandardsClient:
             canonical, body = resolved
             fetcher = self._fetchers.get(body)
             if fetcher:
-                record = await fetcher.get(canonical)
+                if hasattr(fetcher, "fetch"):
+                    record = cast(
+                        "StandardRecord | None", await fetcher.fetch(canonical)
+                    )
+                else:
+                    record = cast("StandardRecord | None", await fetcher.get(canonical))
                 if record is not None:
                     return [record]
             # Identifier resolved locally but source fetch failed — return minimal stub

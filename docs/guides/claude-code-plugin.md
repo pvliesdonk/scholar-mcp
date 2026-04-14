@@ -58,7 +58,7 @@ For the full list, see [Configuration](../configuration.md).
 - **Papers** -- search, lookup, author search, citations, references, BFS graph traversal, bridge papers, recommendations, BibTeX/CSL-JSON/RIS generation, OpenAlex enrichment.
 - **Patents** -- search 100+ offices via EPO OPS, full patent sections, family/legal/citations, NPL-to-paper resolution.
 - **Books** -- search, ISBN/OLID lookup, subject recommendations via Open Library.
-- **Standards** -- identifier resolution, search, and metadata for NIST, IETF, W3C, ETSI.
+- **Standards** -- identifier resolution, search, and metadata for NIST, IETF, W3C, ETSI, plus Tier 2 ISO and IEC via local Relaton sync (`sync-standards`).
 - **PDF conversion** -- download and convert to Markdown via docling-serve, with optional VLM enrichment for formulas and figures.
 
 ## Update

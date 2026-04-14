@@ -80,3 +80,17 @@ def test_epo_configured_partial(monkeypatch) -> None:
             monkeypatch.delenv(key, raising=False)
     config = load_config()
     assert config.epo_configured is False
+
+
+def test_github_token_read_from_env(monkeypatch):
+    """github_token is populated from SCHOLAR_GITHUB_TOKEN."""
+    monkeypatch.setenv("SCHOLAR_GITHUB_TOKEN", "ghp_abc123")
+    config = load_config()
+    assert config.github_token == "ghp_abc123"
+
+
+def test_github_token_defaults_to_none(monkeypatch):
+    """github_token is None when env var unset."""
+    monkeypatch.delenv("SCHOLAR_GITHUB_TOKEN", raising=False)
+    config = load_config()
+    assert config.github_token is None

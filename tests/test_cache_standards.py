@@ -275,6 +275,44 @@ async def test_sync_run_missing_returns_none(cache: ScholarCache) -> None:
     assert await cache.get_sync_run("IEEE") is None
 
 
+async def test_list_synced_standard_ids_filters_by_source(tmp_path: Any) -> None:
+    """list_synced_standard_ids returns only rows matching source filter."""
+    from scholar_mcp._record_types import StandardRecord
+
+    cache = ScholarCache(tmp_path / "cache.db")
+    await cache.open()
+    try:
+        iso_a: StandardRecord = {"identifier": "ISO 9001:2015", "title": "A"}
+        iso_b: StandardRecord = {"identifier": "ISO 14001:2015", "title": "B"}
+        iec_a: StandardRecord = {"identifier": "IEC 60601-1:2020", "title": "C"}
+        unsynced: StandardRecord = {"identifier": "ISO 27001:2022", "title": "D"}
+
+        await cache.set_standard("ISO 9001:2015", iso_a, source="ISO", synced=True)
+        await cache.set_standard("ISO 14001:2015", iso_b, source="ISO", synced=True)
+        await cache.set_standard("IEC 60601-1:2020", iec_a, source="IEC", synced=True)
+        await cache.set_standard("ISO 27001:2022", unsynced, source="ISO", synced=False)
+
+        iso_ids = await cache.list_synced_standard_ids(source="ISO")
+        iec_ids = await cache.list_synced_standard_ids(source="IEC")
+    finally:
+        await cache.close()
+
+    assert iso_ids == {"ISO 9001:2015", "ISO 14001:2015"}
+    assert iec_ids == {"IEC 60601-1:2020"}
+
+
+async def test_list_synced_standard_ids_empty_source(tmp_path: Any) -> None:
+    """Unknown source returns an empty set."""
+    cache = ScholarCache(tmp_path / "cache.db")
+    await cache.open()
+    try:
+        result = await cache.list_synced_standard_ids(source="IEEE")
+    finally:
+        await cache.close()
+
+    assert result == set()
+
+
 async def test_list_sync_runs(cache: ScholarCache) -> None:
     await cache.set_sync_run(
         body="ISO",

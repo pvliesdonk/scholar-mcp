@@ -19,7 +19,7 @@ A [FastMCP](https://github.com/jlowin/fastmcp) server for the scholarly citation
 - **Papers** -- full-text search with year/venue/field/citation filters; single-paper lookup by DOI, S2 ID, arXiv ID, ACM ID, or PubMed ID; author profile and name search; forward citations, backward references, BFS graph traversal, shortest-path bridge discovery; recommendations from positive/negative examples; BibTeX/CSL-JSON/RIS citation generation with OpenAlex venue enrichment.
 - **Patents** -- search across 100+ patent offices via EPO OPS with CPC/applicant/inventor/jurisdiction filters; bibliographic, claims, description, family, legal, and citations sections; NPL-to-paper resolution via Semantic Scholar and paper-to-patent citation discovery. EPO credentials are optional -- other domains work without them.
 - **Books** -- search by title/author/keywords via Open Library (no API key required); lookup by ISBN-10/13, Open Library work ID, or edition ID; subject-based recommendations sorted by popularity; Google Books excerpts and preview links; WorldCat permalinks for library discovery; cover image caching. Papers with an ISBN in `externalIds` are automatically enriched with publisher, edition, cover URL, and subject data from Open Library.
-- **Standards** -- identifier resolution, search, and metadata retrieval for NIST, IETF, W3C, and ETSI standards, with optional full-text fetch and Markdown conversion via docling. Tier-2 paywalled bodies (ISO, IEC, IEEE) are tracked in [GitHub issues](https://github.com/pvliesdonk/scholar-mcp/issues).
+- **Standards** -- identifier resolution, search, and metadata retrieval for NIST, IETF, W3C, and ETSI standards, with optional full-text fetch and Markdown conversion via docling. Tier 2 ISO and IEC metadata is now synced locally from Relaton YAML dumps via `sync-standards`, with a live-fetch fallback for unsynced identifiers (see [docs/guides/standards.md](docs/guides/standards.md)). IEEE remains tracked in [GitHub issues](https://github.com/pvliesdonk/scholar-mcp/issues).
 
 ### Cross-cutting
 
@@ -165,6 +165,12 @@ All settings are controlled via environment variables with the `SCHOLAR_MCP_` pr
 | Variable | Default | Description |
 |---|---|---|
 | `SCHOLAR_MCP_GOOGLE_BOOKS_API_KEY` | -- | Google Books API key for higher rate limits (1000 req/day without key) |
+
+### Tier 2 standards sync (optional)
+
+| Variable | Default | Description |
+|---|---|---|
+| `SCHOLAR_GITHUB_TOKEN` | -- | GitHub personal access token for Relaton sync; lifts unauthenticated GitHub rate limit from 60/hr to 5,000/hr (no scopes required for public-repo reads). Useful for repeated `--force` testing; daily cron is fine unauthenticated. |
 
 ### Authentication (optional)
 

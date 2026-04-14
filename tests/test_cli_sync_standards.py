@@ -62,11 +62,14 @@ def test_sync_standards_help() -> None:
     assert "--force" in result.output
 
 
-def test_sync_standards_no_loaders_registered(tmp_path: Path) -> None:
+def test_sync_standards_no_loaders_registered(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Zero loaders registered → exits 0 with a clear message."""
     db_path = tmp_path / "cache.db"
     asyncio.run(_init_db(db_path))
 
+    monkeypatch.setattr(cli_mod, "_select_loaders", lambda _body, **_kw: [])
     runner = CliRunner()
     result = runner.invoke(cli, ["sync-standards", "--cache-dir", str(tmp_path)])
     assert result.exit_code == 0
@@ -90,7 +93,9 @@ def test_sync_standards_hard_failure(
     db_path = tmp_path / "cache.db"
     asyncio.run(_init_db(db_path))
 
-    monkeypatch.setattr(cli_mod, "_select_loaders", lambda _body: [_BadLoader("ISO")])
+    monkeypatch.setattr(
+        cli_mod, "_select_loaders", lambda _body, **_kw: [_BadLoader("ISO")]
+    )
     runner = CliRunner()
     result = runner.invoke(cli, ["sync-standards", "--cache-dir", str(tmp_path)])
     assert result.exit_code == 1
@@ -107,7 +112,7 @@ def test_sync_standards_partial_failure(
     monkeypatch.setattr(
         cli_mod,
         "_select_loaders",
-        lambda _body: [_GoodLoader("ISO"), _BadLoader("IEC")],
+        lambda _body, **_kw: [_GoodLoader("ISO"), _BadLoader("IEC")],
     )
     runner = CliRunner()
     result = runner.invoke(cli, ["sync-standards", "--cache-dir", str(tmp_path)])
@@ -126,7 +131,7 @@ def test_sync_standards_all_success(
     monkeypatch.setattr(
         cli_mod,
         "_select_loaders",
-        lambda _body: [_GoodLoader("ISO"), _GoodLoader("IEC")],
+        lambda _body, **_kw: [_GoodLoader("ISO"), _GoodLoader("IEC")],
     )
     runner = CliRunner()
     result = runner.invoke(cli, ["sync-standards", "--cache-dir", str(tmp_path)])
@@ -136,9 +141,68 @@ def test_sync_standards_all_success(
 def test_select_loaders_single_body_filters() -> None:
     """Non-'all' body exercises the filter branch in _select_loaders.
 
-    The registered list is empty in PR 1, so both branches return [],
-    but this call exercises the list-comprehension line so it's not an
-    uncovered branch in the Codecov patch report.
+    With ISO/IEC loaders registered, "ISO" returns exactly one loader
+    and "all" returns two (ISO + IEC). "XYZ" returns empty.
     """
-    assert cli_mod._select_loaders("ISO") == []
-    assert cli_mod._select_loaders("all") == []
+    import httpx
+
+    from scholar_mcp._sync_relaton import RelatonLoader
+
+    http = httpx.AsyncClient()
+    try:
+        iso_loaders = cli_mod._select_loaders("ISO", http=http, token=None)
+        assert len(iso_loaders) == 1
+        assert isinstance(iso_loaders[0], RelatonLoader)
+        assert iso_loaders[0].body == "ISO"
+
+        all_loaders = cli_mod._select_loaders("all", http=http, token=None)
+        assert len(all_loaders) == 2
+        bodies = {loader.body for loader in all_loaders}
+        assert bodies == {"ISO", "IEC"}
+
+        xyz_loaders = cli_mod._select_loaders("XYZ", http=http, token=None)
+        assert xyz_loaders == []
+    finally:
+        asyncio.run(http.aclose())
+
+
+def test_sync_standards_iso_real_loader(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """`sync-standards --body ISO` runs the real RelatonLoader end-to-end."""
+    import gzip
+    import io
+    import tarfile
+
+    import httpx
+    import respx
+
+    fixtures = Path(__file__).parent / "fixtures" / "standards" / "relaton_iso_sample"
+
+    buf = io.BytesIO()
+    with (
+        gzip.GzipFile(fileobj=buf, mode="wb") as gz,
+        tarfile.open(fileobj=gz, mode="w") as tar,
+    ):
+        for yaml_path in sorted(fixtures.glob("*.yaml")):
+            data = yaml_path.read_bytes()
+            info = tarfile.TarInfo(name=f"relaton-data-iso-main/data/{yaml_path.name}")
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
+    tarball = buf.getvalue()
+
+    monkeypatch.setenv("SCHOLAR_MCP_CACHE_DIR", str(tmp_path))
+
+    runner = CliRunner()
+    with respx.mock(assert_all_called=False) as router:
+        router.get(
+            "https://api.github.com/repos/relaton/relaton-data-iso/commits/main"
+        ).mock(return_value=httpx.Response(200, json={"sha": "cli-sha"}))
+        router.get(
+            "https://api.github.com/repos/relaton/relaton-data-iso/tarball/cli-sha"
+        ).mock(return_value=httpx.Response(200, content=tarball))
+
+        result = runner.invoke(cli, ["sync-standards", "--body", "ISO"])
+
+    assert result.exit_code == 0, result.output
+    assert "ISO added=5" in result.output

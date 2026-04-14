@@ -1,0 +1,18 @@
+docidentifier:
+  - id: "ISO 14001:2015"
+    type: "ISO"
+    primary: true
+title:
+  - content: "Environmental management systems — Requirements with guidance for use"
+    language: "en"
+    script: "Latn"
+    format: "text/plain"
+    type: "main"
+date:
+  - type: "published"
+    value: "2015-09-15"
+docstatus:
+  stage: "60.60"
+link:
+  - type: "src"
+    content: "https://www.iso.org/standard/60857.html"

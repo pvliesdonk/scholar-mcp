@@ -1104,6 +1104,28 @@ class ScholarCache:
         )
         await db.commit()
 
+    async def list_synced_standard_ids(self, source: str) -> set[str]:
+        """Return identifiers of all synced standards for a given source.
+
+        Only rows with ``synced_at IS NOT NULL`` are returned — live-fetched
+        entries are excluded. Used by the sync driver to detect records that
+        disappeared from the upstream dump (withdrawal detection).
+
+        Args:
+            source: Standards body key (``"ISO"``, ``"IEC"``, ``"IEEE"``, …).
+
+        Returns:
+            Set of canonical identifiers. Empty set when nothing matches.
+        """
+        db = _require_open(self._db)
+        async with db.execute(
+            "SELECT identifier FROM standards "
+            "WHERE source = ? AND synced_at IS NOT NULL",
+            (source,),
+        ) as cur:
+            rows = await cur.fetchall()
+        return {row[0] for row in rows}
+
     async def get_standard_alias(self, raw: str) -> str | None:
         """Return canonical identifier for a raw alias string, or None.
 

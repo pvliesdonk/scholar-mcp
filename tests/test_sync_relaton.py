@@ -1,0 +1,891 @@
+"""Tests for _sync_relaton: YAML mapper, joint detection, record-changed."""
+
+from __future__ import annotations
+
+import gzip
+import io
+import tarfile
+from pathlib import Path
+
+import httpx
+import pytest
+import respx
+import yaml
+
+FIXTURES = Path(__file__).parent / "fixtures" / "standards"
+
+
+def _load_fixture(relative: str) -> dict:
+    with (FIXTURES / relative).open() as f:
+        return yaml.safe_load(f)
+
+
+def test_yaml_to_record_plain_iso() -> None:
+    """Plain ISO entry maps to body='ISO', identifier='ISO 9001:2015'."""
+    from scholar_mcp._sync_relaton import _yaml_to_record
+
+    doc = _load_fixture("relaton_iso_sample/iso-9001-2015.yaml")
+    record, aliases = _yaml_to_record(doc)
+
+    assert record is not None
+    assert record["identifier"] == "ISO 9001:2015"
+    assert record["body"] == "ISO"
+    assert "Quality management" in record["title"]
+    assert record["status"] == "published"
+    assert record["published_date"] == "2015-09-15"
+    assert record["url"] == "https://www.iso.org/standard/62085.html"
+    assert record["full_text_available"] is False
+    # URN form is an alias
+    assert any("urn" in a.lower() or "iso:std" in a for a in aliases)
+
+
+def test_yaml_to_record_joint_iso_iec() -> None:
+    """Joint entry → body='ISO/IEC', identifier preserves slash form."""
+    from scholar_mcp._sync_relaton import _yaml_to_record
+
+    doc = _load_fixture("relaton_iso_sample/iso-iec-27001-2022.yaml")
+    record, _ = _yaml_to_record(doc)
+
+    assert record is not None
+    assert record["body"] == "ISO/IEC"
+    assert record["identifier"] == "ISO/IEC 27001:2022"
+
+
+def test_yaml_to_record_iec_only() -> None:
+    """IEC-only entry → body='IEC'."""
+    from scholar_mcp._sync_relaton import _yaml_to_record
+
+    doc = _load_fixture("relaton_iec_sample/iec-62443-3-3-2020.yaml")
+    record, _ = _yaml_to_record(doc)
+
+    assert record is not None
+    assert record["body"] == "IEC"
+    assert record["identifier"] == "IEC 62443-3-3:2020"
+
+
+def test_yaml_to_record_withdrawn_status() -> None:
+    """docstatus.stage='95.99' maps to status='withdrawn'."""
+    from scholar_mcp._sync_relaton import _yaml_to_record
+
+    doc = _load_fixture("relaton_iso_sample/iso-9001-2008.yaml")
+    record, _ = _yaml_to_record(doc)
+
+    assert record is not None
+    assert record["status"] == "withdrawn"
+    assert record["superseded_by"] == "ISO 9001:2015"
+
+
+def test_yaml_to_record_missing_identifier_returns_none() -> None:
+    """Document without any docidentifier returns (None, [])."""
+    from scholar_mcp._sync_relaton import _yaml_to_record
+
+    record, aliases = _yaml_to_record({"title": [{"content": "orphan"}]})
+
+    assert record is None
+    assert aliases == []
+
+
+def test_yaml_to_record_missing_title_returns_none() -> None:
+    """Document with no title is unusable — returns (None, [])."""
+    from scholar_mcp._sync_relaton import _yaml_to_record
+
+    doc = {"docidentifier": [{"id": "ISO 123:2020", "type": "ISO", "primary": True}]}
+    record, aliases = _yaml_to_record(doc)
+
+    assert record is None
+    assert aliases == []
+
+
+def test_record_changed_detects_title_edit() -> None:
+    from scholar_mcp._sync_relaton import _record_changed
+
+    old = {"identifier": "ISO 9001:2015", "title": "A", "status": "published"}
+    new = {"identifier": "ISO 9001:2015", "title": "B", "status": "published"}
+    assert _record_changed(old, new) is True
+
+
+def test_record_changed_ignores_extra_keys() -> None:
+    """cached_at is not in _RECORD_IDENTITY_FIELDS — must be ignored."""
+    from scholar_mcp._sync_relaton import _record_changed
+
+    old = {"title": "A", "status": "published", "body": "ISO"}
+    new = {
+        "title": "A",
+        "status": "published",
+        "body": "ISO",
+        "cached_at": "2026-04-14T00:00:00Z",  # extra key absent in old
+    }
+    assert _record_changed(old, new) is False
+
+
+def test_record_changed_detects_status_edit() -> None:
+    """A change in an identity field (status) must be detected."""
+    from scholar_mcp._sync_relaton import _record_changed
+
+    old = {"title": "A", "status": "published", "body": "ISO"}
+    new = {"title": "A", "status": "withdrawn", "body": "ISO"}
+    assert _record_changed(old, new) is True
+
+
+# ---------------------------------------------------------------------------
+# _canonical_identifier_and_body branch coverage
+# ---------------------------------------------------------------------------
+
+
+def test_canonical_joint_rewrites_iso_text() -> None:
+    """Both ISO and IEC entries present but neither id contains 'ISO/IEC'.
+
+    The branch ``if not ident.startswith("ISO/IEC")`` must rewrite
+    ``"ISO 27001:2022"`` → ``"ISO/IEC 27001:2022"``.
+    """
+    from scholar_mcp._sync_relaton import _canonical_identifier_and_body
+
+    docidentifiers = [
+        {"type": "ISO", "id": "ISO 27001:2022", "primary": True},
+        {"type": "IEC", "id": "IEC 27001:2022"},
+    ]
+    result = _canonical_identifier_and_body(docidentifiers)
+    assert result == ("ISO/IEC 27001:2022", "ISO/IEC")
+
+
+def test_canonical_joint_rewrites_iec_text() -> None:
+    """Both ISO and IEC entries present, IEC entry is selected as joint.
+
+    The branch ``elif ident.startswith("IEC ")`` must rewrite
+    ``"IEC 27001:2022"`` → ``"ISO/IEC 27001:2022"``.
+    """
+    from scholar_mcp._sync_relaton import _canonical_identifier_and_body
+
+    docidentifiers = [
+        {"type": "IEC", "id": "IEC 27001:2022", "primary": True},
+        {"type": "ISO", "id": "ISO 27001:2022"},
+    ]
+    result = _canonical_identifier_and_body(docidentifiers)
+    assert result == ("ISO/IEC 27001:2022", "ISO/IEC")
+
+
+def test_canonical_primary_entry_fallback() -> None:
+    """When neither ISO nor IEC entries exist, primary=True entry is used."""
+    from scholar_mcp._sync_relaton import _canonical_identifier_and_body
+
+    docidentifiers = [
+        {"type": "URN", "id": "urn:iso:std:iso:9999:ed-1", "primary": True},
+    ]
+    result = _canonical_identifier_and_body(docidentifiers)
+    assert result == ("urn:iso:std:iso:9999:ed-1", "URN")
+
+
+def test_canonical_no_matching_entry_returns_none() -> None:
+    """No ISO/IEC entry and no primary entry → None."""
+    from scholar_mcp._sync_relaton import _canonical_identifier_and_body
+
+    result = _canonical_identifier_and_body([{"type": "OTHER", "id": "X 1"}])
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# _first_link_of_type coverage
+# ---------------------------------------------------------------------------
+
+
+def test_first_link_of_type_not_found_returns_none() -> None:
+    """Empty links list returns None."""
+    from scholar_mcp._sync_relaton import _first_link_of_type
+
+    assert _first_link_of_type([], "src") is None
+
+
+def test_first_link_of_type_finds_later_entry() -> None:
+    """When the first entry doesn't match, a later one is returned."""
+    from scholar_mcp._sync_relaton import _first_link_of_type
+
+    links = [
+        {"type": "obp", "content": "https://obp.example.com"},
+        {"type": "src", "content": "https://src.example.com"},
+    ]
+    assert _first_link_of_type(links, "src") == "https://src.example.com"
+
+
+# ---------------------------------------------------------------------------
+# _first_title coverage
+# ---------------------------------------------------------------------------
+
+
+def test_first_title_plain_string() -> None:
+    """When titles[0] is a plain string, it is returned as-is."""
+    from scholar_mcp._sync_relaton import _first_title
+
+    assert _first_title(["Some Title"]) == "Some Title"
+
+
+def test_first_title_empty_list() -> None:
+    from scholar_mcp._sync_relaton import _first_title
+
+    assert _first_title([]) == ""
+
+
+# ---------------------------------------------------------------------------
+# _published_date coverage
+# ---------------------------------------------------------------------------
+
+
+def test_published_date_no_published_type_returns_none() -> None:
+    """Date entries with no 'published' type → None."""
+    from scholar_mcp._sync_relaton import _published_date
+
+    dates = [{"type": "updated", "value": "2023-01-01"}]
+    assert _published_date(dates) is None
+
+
+def test_published_date_no_date_key_returns_none() -> None:
+    """Published entry without a 'value' key → None (falls through)."""
+    from scholar_mcp._sync_relaton import _published_date
+
+    dates = [{"type": "published"}]  # missing 'value'
+    assert _published_date(dates) is None
+
+
+# ---------------------------------------------------------------------------
+# _superseded_by coverage
+# ---------------------------------------------------------------------------
+
+
+def test_superseded_by_relation_absent() -> None:
+    from scholar_mcp._sync_relaton import _superseded_by
+
+    assert _superseded_by(None) is None
+
+
+def test_superseded_by_non_obsoleted_relation_returns_none() -> None:
+    """A 'replaces' relation should NOT match."""
+    from scholar_mcp._sync_relaton import _superseded_by
+
+    relations = [
+        {
+            "type": "replaces",
+            "bibitem": {"docidentifier": [{"id": "ISO 9001:2008"}]},
+        }
+    ]
+    assert _superseded_by(relations) is None
+
+
+def test_superseded_by_happy_path() -> None:
+    """obsoleted-by relation returns the successor identifier."""
+    from scholar_mcp._sync_relaton import _superseded_by
+
+    doc = _load_fixture("relaton_iso_sample/iso-9001-2008.yaml")
+    assert _superseded_by(doc.get("relation")) == "ISO 9001:2015"
+
+
+# ---------------------------------------------------------------------------
+# _supersedes coverage
+# ---------------------------------------------------------------------------
+
+
+def test_supersedes_obsoletes_relation() -> None:
+    """'obsoletes' relation populates the supersedes list."""
+    from scholar_mcp._sync_relaton import _supersedes
+
+    relations = [
+        {
+            "type": "obsoletes",
+            "bibitem": {"docidentifier": [{"id": "ISO 9001:2008"}]},
+        }
+    ]
+    assert _supersedes(relations) == ["ISO 9001:2008"]
+
+
+def test_supersedes_empty_when_no_relations() -> None:
+    from scholar_mcp._sync_relaton import _supersedes
+
+    assert _supersedes(None) == []
+
+
+# ---------------------------------------------------------------------------
+# _committee coverage
+# ---------------------------------------------------------------------------
+
+
+def test_committee_none_editorialgroup() -> None:
+    from scholar_mcp._sync_relaton import _committee
+
+    assert _committee(None) is None
+
+
+def test_committee_dash_variant() -> None:
+    """editorialgroup uses 'technical-committee' (dash) key."""
+    from scholar_mcp._sync_relaton import _committee
+
+    eg = {"technical-committee": [{"name": "TC 176"}]}
+    assert _committee(eg) == "TC 176"
+
+
+# ---------------------------------------------------------------------------
+# _yaml_to_record miscellaneous branches
+# ---------------------------------------------------------------------------
+
+
+def test_yaml_to_record_alias_non_string_skipped() -> None:
+    """A docidentifier entry whose id is not a string must be skipped."""
+    from scholar_mcp._sync_relaton import _yaml_to_record
+
+    doc = {
+        "docidentifier": [
+            {"id": "ISO 9001:2015", "type": "ISO", "primary": True},
+            {"id": 12345, "type": "NUMERIC"},  # non-string id
+        ],
+        "title": [{"content": "Quality management"}],
+    }
+    record, aliases = _yaml_to_record(doc)
+
+    assert record is not None
+    assert 12345 not in aliases
+    assert all(isinstance(a, str) for a in aliases)
+
+
+def test_yaml_to_record_abstract_plain_string() -> None:
+    """When abstract[0] is a plain string, scope remains None."""
+    from scholar_mcp._sync_relaton import _yaml_to_record
+
+    doc = {
+        "docidentifier": [{"id": "ISO 9001:2015", "type": "ISO", "primary": True}],
+        "title": [{"content": "Quality management"}],
+        "abstract": ["Plain text scope — not a dict"],
+    }
+    record, _ = _yaml_to_record(doc)
+
+    assert record is not None
+    assert record["scope"] is None
+
+
+def test_yaml_to_record_unknown_stage_defaults_to_published() -> None:
+    """An unrecognised stage code defaults to 'published' and logs a debug message."""
+    from scholar_mcp._sync_relaton import _yaml_to_record
+
+    doc = {
+        "docidentifier": [{"id": "ISO 9001:2015", "type": "ISO", "primary": True}],
+        "title": [{"content": "Quality management"}],
+        "docstatus": {"stage": "99.99"},  # not in _STAGE_TO_STATUS
+    }
+    record, _ = _yaml_to_record(doc)
+
+    assert record is not None
+    assert record["status"] == "published"
+
+
+# ---------------------------------------------------------------------------
+# RelatonLoader tests (Task 6)
+# ---------------------------------------------------------------------------
+
+
+def _build_tarball(fixture_dir: Path, prefix: str = "relaton-data-iso-main") -> bytes:
+    """Build an in-memory .tar.gz matching GitHub's tarball layout.
+
+    GitHub tarballs prefix every entry with '<repo>-<sha7>/', and YAML
+    files live under '<prefix>/data/'.
+    """
+    buf = io.BytesIO()
+    with (
+        gzip.GzipFile(fileobj=buf, mode="wb") as gz,
+        tarfile.open(fileobj=gz, mode="w") as tar,
+    ):
+        for yaml_path in sorted(fixture_dir.glob("*.yaml")):
+            data = yaml_path.read_bytes()
+            info = tarfile.TarInfo(name=f"{prefix}/data/{yaml_path.name}")
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
+    return buf.getvalue()
+
+
+@pytest.fixture
+def iso_tarball() -> bytes:
+    return _build_tarball(FIXTURES / "relaton_iso_sample")
+
+
+@pytest.fixture
+def iec_tarball() -> bytes:
+    return _build_tarball(
+        FIXTURES / "relaton_iec_sample", prefix="relaton-data-iec-main"
+    )
+
+
+@pytest.mark.asyncio
+async def test_loader_cold_sync_inserts_records(tmp_path, iso_tarball) -> None:
+    """Cold sync (empty cache) inserts every fixture row with added=N."""
+    from scholar_mcp._cache import ScholarCache
+    from scholar_mcp._sync_relaton import RelatonLoader
+
+    cache = ScholarCache(tmp_path / "cache.db")
+    await cache.open()
+    try:
+        with respx.mock(assert_all_called=False) as router:
+            router.get(
+                "https://api.github.com/repos/relaton/relaton-data-iso/commits/main"
+            ).mock(return_value=httpx.Response(200, json={"sha": "deadbeef"}))
+            router.get(
+                "https://api.github.com/repos/relaton/relaton-data-iso/tarball/deadbeef"
+            ).mock(return_value=httpx.Response(200, content=iso_tarball))
+
+            async with httpx.AsyncClient() as http:
+                loader = RelatonLoader(body="ISO", http=http)
+                report = await loader.sync(cache)
+
+        assert report.body == "ISO"
+        assert report.added > 0
+        assert report.updated == 0
+        assert report.unchanged == 0
+        assert report.upstream_ref == "deadbeef"
+
+        # Rows must be findable via their canonical identifiers
+        iso_9001 = await cache.get_standard("ISO 9001:2015")
+        assert iso_9001 is not None
+        assert iso_9001["title"].startswith("Quality management")
+
+        # Joint record carries body='ISO/IEC'
+        joint = await cache.get_standard("ISO/IEC 27001:2022")
+        assert joint is not None
+        assert joint["body"] == "ISO/IEC"
+    finally:
+        await cache.close()
+
+
+@pytest.mark.asyncio
+async def test_loader_resync_same_sha_returns_unchanged(tmp_path, iso_tarball) -> None:
+    """Second call with the same SHA skips tarball fetch, reports unchanged."""
+    from scholar_mcp._cache import ScholarCache
+    from scholar_mcp._sync_relaton import RelatonLoader
+
+    cache = ScholarCache(tmp_path / "cache.db")
+    await cache.open()
+    try:
+        async with httpx.AsyncClient() as http:
+            with respx.mock(assert_all_called=False) as router:
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iso/commits/main"
+                ).mock(return_value=httpx.Response(200, json={"sha": "same-sha"}))
+                tarball_route = router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iso/tarball/same-sha"
+                ).mock(return_value=httpx.Response(200, content=iso_tarball))
+
+                loader = RelatonLoader(body="ISO", http=http)
+                first = await loader.sync(cache)
+                # Persist the upstream_ref the way run_sync would
+                await cache.set_sync_run(
+                    body=first.body,
+                    upstream_ref=first.upstream_ref,
+                    added=first.added,
+                    updated=first.updated,
+                    unchanged=first.unchanged,
+                    withdrawn=first.withdrawn,
+                    errors=first.errors,
+                    started_at=first.started_at or 0.0,
+                    finished_at=first.finished_at or 0.0,
+                )
+
+                # Second run — tarball should NOT be fetched
+                tarball_route.reset()
+                second = await loader.sync(cache)
+
+        assert second.added == 0
+        assert second.updated == 0
+        assert second.unchanged > 0
+        assert not tarball_route.called
+    finally:
+        await cache.close()
+
+
+@pytest.mark.asyncio
+async def test_loader_force_bypasses_sha_check(tmp_path, iso_tarball) -> None:
+    """force=True triggers a tarball fetch even when SHA is unchanged."""
+    from scholar_mcp._cache import ScholarCache
+    from scholar_mcp._sync_relaton import RelatonLoader
+
+    cache = ScholarCache(tmp_path / "cache.db")
+    await cache.open()
+    try:
+        async with httpx.AsyncClient() as http:
+            with respx.mock(assert_all_called=False) as router:
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iso/commits/main"
+                ).mock(return_value=httpx.Response(200, json={"sha": "same-sha"}))
+                tarball_route = router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iso/tarball/same-sha"
+                ).mock(return_value=httpx.Response(200, content=iso_tarball))
+
+                loader = RelatonLoader(body="ISO", http=http)
+                await loader.sync(cache)
+                await cache.set_sync_run(
+                    body="ISO",
+                    upstream_ref="same-sha",
+                    added=0,
+                    updated=0,
+                    unchanged=0,
+                    withdrawn=0,
+                    errors=[],
+                    started_at=0.0,
+                    finished_at=0.0,
+                )
+                tarball_route.reset()
+
+                forced = await loader.sync(cache, force=True)
+
+        assert tarball_route.called
+        assert forced.upstream_ref == "same-sha"
+    finally:
+        await cache.close()
+
+
+@pytest.mark.asyncio
+async def test_loader_modified_record_increments_updated(tmp_path, iso_tarball) -> None:
+    """A fixture record whose title changed upstream → updated == 1."""
+    import copy
+
+    from scholar_mcp._cache import ScholarCache
+    from scholar_mcp._sync_relaton import RelatonLoader
+
+    cache = ScholarCache(tmp_path / "cache.db")
+    await cache.open()
+    try:
+        async with httpx.AsyncClient() as http:
+            with respx.mock(assert_all_called=False) as router:
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iso/commits/main"
+                ).mock(return_value=httpx.Response(200, json={"sha": "v1"}))
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iso/tarball/v1"
+                ).mock(return_value=httpx.Response(200, content=iso_tarball))
+
+                loader = RelatonLoader(body="ISO", http=http)
+                first = await loader.sync(cache)
+                await cache.set_sync_run(
+                    body="ISO",
+                    upstream_ref="v1",
+                    added=first.added,
+                    updated=0,
+                    unchanged=0,
+                    withdrawn=0,
+                    errors=[],
+                    started_at=0.0,
+                    finished_at=0.0,
+                )
+
+            # Mutate ISO 9001:2015's cached row (simulate prior-sync drift)
+            existing = await cache.get_standard("ISO 9001:2015")
+            assert existing is not None
+            mutated = copy.deepcopy(existing)
+            mutated["title"] = "STALE TITLE"
+            await cache.set_standard(
+                "ISO 9001:2015", mutated, source="ISO", synced=True
+            )
+
+            with respx.mock(assert_all_called=False) as router:
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iso/commits/main"
+                ).mock(return_value=httpx.Response(200, json={"sha": "v2"}))
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iso/tarball/v2"
+                ).mock(return_value=httpx.Response(200, content=iso_tarball))
+
+                second = await loader.sync(cache)
+
+        assert second.updated == 1
+        refreshed = await cache.get_standard("ISO 9001:2015")
+        assert refreshed is not None
+        assert refreshed["title"].startswith("Quality management")
+    finally:
+        await cache.close()
+
+
+@pytest.mark.asyncio
+async def test_loader_sends_github_token_header(tmp_path, iso_tarball) -> None:
+    """When token is set, Authorization header is attached to GitHub calls."""
+    from scholar_mcp._cache import ScholarCache
+    from scholar_mcp._sync_relaton import RelatonLoader
+
+    cache = ScholarCache(tmp_path / "cache.db")
+    await cache.open()
+    try:
+        seen_auth: list[str | None] = []
+
+        def _capture(request: httpx.Request) -> httpx.Response:
+            seen_auth.append(request.headers.get("Authorization"))
+            if request.url.path.endswith("/commits/main"):
+                return httpx.Response(200, json={"sha": "abc"})
+            return httpx.Response(200, content=iso_tarball)
+
+        with respx.mock(assert_all_called=False) as router:
+            router.route(host="api.github.com").mock(side_effect=_capture)
+
+            async with httpx.AsyncClient() as http:
+                loader = RelatonLoader(body="ISO", http=http, token="ghp_xyz")
+                await loader.sync(cache)
+
+        assert seen_auth  # at least one request captured
+        assert all(a == "token ghp_xyz" for a in seen_auth)
+    finally:
+        await cache.close()
+
+
+# ---------------------------------------------------------------------------
+# Task 7: Withdrawal detection + >50% mass-disappearance guard
+# ---------------------------------------------------------------------------
+
+
+def _tarball_without(fixture_dir: Path, skip_names: set[str], prefix: str) -> bytes:
+    """Tarball that OMITS specific filenames — used to simulate withdrawals."""
+    buf = io.BytesIO()
+    with (
+        gzip.GzipFile(fileobj=buf, mode="wb") as gz,
+        tarfile.open(fileobj=gz, mode="w") as tar,
+    ):
+        for yaml_path in sorted(fixture_dir.glob("*.yaml")):
+            if yaml_path.name in skip_names:
+                continue
+            data = yaml_path.read_bytes()
+            info = tarfile.TarInfo(name=f"{prefix}/data/{yaml_path.name}")
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
+    return buf.getvalue()
+
+
+@pytest.mark.asyncio
+async def test_loader_marks_missing_records_withdrawn(tmp_path, iso_tarball) -> None:
+    """A record present on first sync, absent on second → status='withdrawn'."""
+    from scholar_mcp._cache import ScholarCache
+    from scholar_mcp._sync_relaton import RelatonLoader
+
+    cache = ScholarCache(tmp_path / "cache.db")
+    await cache.open()
+    try:
+        async with httpx.AsyncClient() as http:
+            with respx.mock(assert_all_called=False) as router:
+                # First sync — full fixture set
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iso/commits/main"
+                ).mock(return_value=httpx.Response(200, json={"sha": "v1"}))
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iso/tarball/v1"
+                ).mock(return_value=httpx.Response(200, content=iso_tarball))
+
+                loader = RelatonLoader(body="ISO", http=http)
+                first = await loader.sync(cache)
+                await cache.set_sync_run(
+                    body="ISO",
+                    upstream_ref="v1",
+                    added=first.added,
+                    updated=0,
+                    unchanged=0,
+                    withdrawn=0,
+                    errors=[],
+                    started_at=0.0,
+                    finished_at=0.0,
+                )
+
+            # Second sync — tarball omits one file
+            shrunk = _tarball_without(
+                FIXTURES / "relaton_iso_sample",
+                skip_names={"iso-14001-2015.yaml"},
+                prefix="relaton-data-iso-main",
+            )
+            with respx.mock(assert_all_called=False) as router:
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iso/commits/main"
+                ).mock(return_value=httpx.Response(200, json={"sha": "v2"}))
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iso/tarball/v2"
+                ).mock(return_value=httpx.Response(200, content=shrunk))
+
+                second = await loader.sync(cache)
+
+        assert second.withdrawn == 1
+
+        withdrawn_record = await cache.get_standard("ISO 14001:2015")
+        assert withdrawn_record is not None
+        assert withdrawn_record["status"] == "withdrawn"
+    finally:
+        await cache.close()
+
+
+@pytest.mark.asyncio
+async def test_loader_aborts_withdrawal_on_mass_disappearance(
+    tmp_path, iso_tarball
+) -> None:
+    """Tarball missing >50% of prior ids → withdrawal pass skipped, error logged."""
+    from scholar_mcp._cache import ScholarCache
+    from scholar_mcp._sync_relaton import RelatonLoader
+
+    cache = ScholarCache(tmp_path / "cache.db")
+    await cache.open()
+    try:
+        async with httpx.AsyncClient() as http:
+            with respx.mock(assert_all_called=False) as router:
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iso/commits/main"
+                ).mock(return_value=httpx.Response(200, json={"sha": "v1"}))
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iso/tarball/v1"
+                ).mock(return_value=httpx.Response(200, content=iso_tarball))
+
+                loader = RelatonLoader(body="ISO", http=http)
+                first = await loader.sync(cache)
+                await cache.set_sync_run(
+                    body="ISO",
+                    upstream_ref="v1",
+                    added=first.added,
+                    updated=0,
+                    unchanged=0,
+                    withdrawn=0,
+                    errors=[],
+                    started_at=0.0,
+                    finished_at=0.0,
+                )
+                prior_ids = await cache.list_synced_standard_ids(source="ISO")
+                # Capture statuses before second sync for change-detection
+                prior_statuses = {
+                    ident: (await cache.get_standard(ident) or {}).get("status")
+                    for ident in prior_ids
+                }
+
+            # Build a "disaster" tarball with only the first fixture file,
+            # guaranteeing >50% of prior ids are missing.
+            all_files = sorted(
+                p.name for p in (FIXTURES / "relaton_iso_sample").glob("*.yaml")
+            )
+            keep_one = set(all_files) - {all_files[0]}
+            disaster = _tarball_without(
+                FIXTURES / "relaton_iso_sample",
+                skip_names=keep_one,
+                prefix="relaton-data-iso-main",
+            )
+            with respx.mock(assert_all_called=False) as router:
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iso/commits/main"
+                ).mock(return_value=httpx.Response(200, json={"sha": "v2"}))
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iso/tarball/v2"
+                ).mock(return_value=httpx.Response(200, content=disaster))
+
+                second = await loader.sync(cache)
+
+        assert second.withdrawn == 0
+        assert any("withdrawal pass aborted" in e for e in second.errors)
+        # Prior rows must remain untouched — none flipped to 'withdrawn' by the pass
+        for ident in prior_ids:
+            record = await cache.get_standard(ident)
+            before = prior_statuses.get(ident)
+            after = record.get("status") if record else None
+            # A record that was NOT already withdrawn before must not be withdrawn now
+            if before != "withdrawn":
+                assert after != "withdrawn", (
+                    f"{ident!r} was flipped to 'withdrawn' despite mass-disappearance guard"
+                )
+    finally:
+        await cache.close()
+
+
+# ---------------------------------------------------------------------------
+# Task 7: Joint-dedup tests (both body orderings)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_loader_joint_dedup_iso_then_iec(
+    tmp_path, iso_tarball, iec_tarball
+) -> None:
+    """Syncing ISO then IEC leaves joint records as one row per identifier."""
+    from scholar_mcp._cache import ScholarCache
+    from scholar_mcp._sync_relaton import RelatonLoader
+
+    cache = ScholarCache(tmp_path / "cache.db")
+    await cache.open()
+    try:
+        async with httpx.AsyncClient() as http:
+            with respx.mock(assert_all_called=False) as router:
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iso/commits/main"
+                ).mock(return_value=httpx.Response(200, json={"sha": "iso-sha"}))
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iso/tarball/iso-sha"
+                ).mock(return_value=httpx.Response(200, content=iso_tarball))
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iec/commits/main"
+                ).mock(return_value=httpx.Response(200, json={"sha": "iec-sha"}))
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iec/tarball/iec-sha"
+                ).mock(return_value=httpx.Response(200, content=iec_tarball))
+
+                iso_loader = RelatonLoader(body="ISO", http=http)
+                iec_loader = RelatonLoader(body="IEC", http=http)
+                await iso_loader.sync(cache)
+                await cache.set_sync_run(
+                    body="ISO",
+                    upstream_ref="iso-sha",
+                    added=0,
+                    updated=0,
+                    unchanged=0,
+                    withdrawn=0,
+                    errors=[],
+                    started_at=0.0,
+                    finished_at=0.0,
+                )
+                await iec_loader.sync(cache)
+
+        joint = await cache.get_standard("ISO/IEC 27001:2022")
+        assert joint is not None
+        assert joint["body"] == "ISO/IEC"
+        assert joint["status"] == "published"
+    finally:
+        await cache.close()
+
+
+@pytest.mark.asyncio
+async def test_loader_joint_dedup_iec_then_iso(
+    tmp_path, iso_tarball, iec_tarball
+) -> None:
+    """Reverse order leaves the same final joint row — one per identifier."""
+    from scholar_mcp._cache import ScholarCache
+    from scholar_mcp._sync_relaton import RelatonLoader
+
+    cache = ScholarCache(tmp_path / "cache.db")
+    await cache.open()
+    try:
+        async with httpx.AsyncClient() as http:
+            with respx.mock(assert_all_called=False) as router:
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iec/commits/main"
+                ).mock(return_value=httpx.Response(200, json={"sha": "iec-sha"}))
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iec/tarball/iec-sha"
+                ).mock(return_value=httpx.Response(200, content=iec_tarball))
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iso/commits/main"
+                ).mock(return_value=httpx.Response(200, json={"sha": "iso-sha"}))
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iso/tarball/iso-sha"
+                ).mock(return_value=httpx.Response(200, content=iso_tarball))
+
+                iec_loader = RelatonLoader(body="IEC", http=http)
+                iso_loader = RelatonLoader(body="ISO", http=http)
+                await iec_loader.sync(cache)
+                await cache.set_sync_run(
+                    body="IEC",
+                    upstream_ref="iec-sha",
+                    added=0,
+                    updated=0,
+                    unchanged=0,
+                    withdrawn=0,
+                    errors=[],
+                    started_at=0.0,
+                    finished_at=0.0,
+                )
+                await iso_loader.sync(cache)
+
+        joint = await cache.get_standard("ISO/IEC 27001:2022")
+        assert joint is not None
+        assert joint["body"] == "ISO/IEC"
+        assert joint["status"] == "published"
+        # And no duplicate row accidentally written under an ISO-only identifier
+        iso_only = await cache.get_standard("ISO 27001:2022")
+        assert iso_only is None
+    finally:
+        await cache.close()

@@ -1,0 +1,33 @@
+docidentifier:
+  - id: "ISO 9001:2015"
+    type: "ISO"
+    primary: true
+  - id: "iso:std:iso:9001:stage-90.93:ed-5:en"
+    type: "URN"
+title:
+  - content: "Quality management systems — Requirements"
+    language: "en"
+    script: "Latn"
+    format: "text/plain"
+    type: "main"
+date:
+  - type: "published"
+    value: "2015-09-15"
+docstatus:
+  stage: "60.60"
+link:
+  - type: "src"
+    content: "https://www.iso.org/standard/62085.html"
+  - type: "obp"
+    content: "https://www.iso.org/obp/ui/#!iso:std:62085:en"
+edition: "5"
+language:
+  - en
+abstract:
+  - content: "ISO 9001:2015 specifies requirements for a quality management system."
+    language: "en"
+    format: "text/plain"
+editorialgroup:
+  technical_committee:
+    - name: "TC 176/SC 2"
+      number: 2

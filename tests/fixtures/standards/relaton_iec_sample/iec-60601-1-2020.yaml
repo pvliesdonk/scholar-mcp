@@ -1,0 +1,18 @@
+docidentifier:
+  - id: "IEC 60601-1:2020"
+    type: "IEC"
+    primary: true
+title:
+  - content: "Medical electrical equipment — Part 1: General requirements for basic safety and essential performance"
+    language: "en"
+    script: "Latn"
+    format: "text/plain"
+    type: "main"
+date:
+  - type: "published"
+    value: "2020-04-01"
+docstatus:
+  stage: "60.60"
+link:
+  - type: "src"
+    content: "https://webstore.iec.ch/publication/60601-1"

@@ -28,6 +28,10 @@ class ServerConfig:
         epo_consumer_secret: EPO OPS API consumer secret.
         google_books_api_key: Optional Google Books API key for higher rate
             limits.
+        github_token: Optional GitHub token for authenticated Relaton sync
+            requests. Lifts the unauthenticated rate limit from 60 to 5,000
+            req/hr. Useful for repeated --force testing; cron syncs are fine
+            unauthenticated.
     """
 
     read_only: bool = True
@@ -41,6 +45,7 @@ class ServerConfig:
     epo_consumer_key: str | None = None
     epo_consumer_secret: str | None = None
     google_books_api_key: str | None = None
+    github_token: str | None = None
 
     @property
     def epo_configured(self) -> bool:
@@ -79,4 +84,7 @@ def load_config() -> ServerConfig:
         epo_consumer_key=_str("EPO_CONSUMER_KEY"),
         epo_consumer_secret=_str("EPO_CONSUMER_SECRET"),
         google_books_api_key=_str("GOOGLE_BOOKS_API_KEY"),
+        # SCHOLAR_GITHUB_TOKEN (not SCHOLAR_MCP_GITHUB_TOKEN) — matches the
+        # conventional GitHub-tooling env name users expect.
+        github_token=os.environ.get("SCHOLAR_GITHUB_TOKEN") or None,
     )
