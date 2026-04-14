@@ -148,6 +148,22 @@ def test_canonical_joint_rewrites_iso_text() -> None:
     assert result == ("ISO/IEC 27001:2022", "ISO/IEC")
 
 
+def test_canonical_joint_rewrites_iec_text() -> None:
+    """Both ISO and IEC entries present, IEC entry is selected as joint.
+
+    The branch ``elif ident.startswith("IEC ")`` must rewrite
+    ``"IEC 27001:2022"`` → ``"ISO/IEC 27001:2022"``.
+    """
+    from scholar_mcp._sync_relaton import _canonical_identifier_and_body
+
+    docidentifiers = [
+        {"type": "IEC", "id": "IEC 27001:2022", "primary": True},
+        {"type": "ISO", "id": "ISO 27001:2022"},
+    ]
+    result = _canonical_identifier_and_body(docidentifiers)
+    assert result == ("ISO/IEC 27001:2022", "ISO/IEC")
+
+
 def test_canonical_primary_entry_fallback() -> None:
     """When neither ISO nor IEC entries exist, primary=True entry is used."""
     from scholar_mcp._sync_relaton import _canonical_identifier_and_body

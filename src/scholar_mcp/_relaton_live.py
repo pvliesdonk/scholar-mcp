@@ -134,6 +134,7 @@ class RelatonLiveFetcher:
             "identifier": identifier,
             "title": "",
             "body": body,
+            "status": "unknown",
             "full_text_available": False,
         }
         return stub

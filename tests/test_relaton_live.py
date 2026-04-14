@@ -191,6 +191,7 @@ async def test_live_fetch_returns_stub_when_both_404() -> None:
     assert record["identifier"] == "ISO 99999:2099"
     assert record["full_text_available"] is False
     assert record["title"] == ""
+    assert record["status"] == "unknown"
 
 
 @pytest.mark.asyncio
@@ -227,6 +228,7 @@ async def test_live_fetch_returns_stub_on_server_error() -> None:
     assert result["title"] == ""
     assert result["full_text_available"] is False
     assert result["identifier"] == "ISO 9001:2015"
+    assert result["status"] == "unknown"
 
 
 @pytest.mark.asyncio
@@ -255,3 +257,4 @@ async def test_live_fetch_returns_stub_on_yaml_parse_error() -> None:
     assert result["title"] == ""
     assert result["full_text_available"] is False
     assert result["identifier"] == "ISO 9001:2015"
+    assert result["status"] == "unknown"

@@ -1025,6 +1025,9 @@ class StandardsClient:
         Args:
             query: Identifier, title, or free text.
             body: Optional body filter: "NIST", "IETF", "W3C", or "ETSI".
+                "ISO", "IEC", and "ISO/IEC" are accepted but return empty
+                results until RelatonLiveFetcher implements search
+                (tracked in #123).
             limit: Maximum results.
 
         Returns:

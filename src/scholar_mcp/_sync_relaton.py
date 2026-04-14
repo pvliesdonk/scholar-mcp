@@ -8,9 +8,9 @@ Design reference: ``docs/specs/2026-04-13-pr2-iso-iec-relaton-design.md``.
 
 from __future__ import annotations
 
-import io
 import logging
 import tarfile
+import tempfile
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -88,10 +88,12 @@ def _canonical_identifier_and_body(
         # Normalise reversed joint form
         ident = ident.replace("IEC/ISO", "ISO/IEC")
         if not ident.startswith("ISO/IEC"):
-            # docidentifier had plain ISO text in the ISO entry for a joint doc
-            ident = (
-                "ISO/IEC " + ident[len("ISO ") :] if ident.startswith("ISO ") else ident
-            )
+            # docidentifier had plain ISO or IEC text in the entry for a joint doc
+            if ident.startswith("ISO "):
+                ident = "ISO/IEC " + ident[len("ISO ") :]
+            elif ident.startswith("IEC "):
+                ident = "ISO/IEC " + ident[len("IEC ") :]
+            # else: leave as-is (unusual upstream shape)
         return ident, "ISO/IEC"
 
     if iso_entries:
@@ -372,57 +374,61 @@ class RelatonLoader:
         added = updated = unchanged = 0
         current_ids: set[str] = set()
 
+        # Snapshot prev_ids BEFORE the tarball loop so the withdrawal guard
+        # denominator reflects the prior state, not the post-insertion state.
+        prev_ids = await cache.list_synced_standard_ids(source=self.body)
+
         tar_url = f"{_GITHUB_API}/repos/{self._config.repo}/tarball/{sha}"
-        response = await self._http.get(
-            tar_url, headers=self._headers(), follow_redirects=True
-        )
-        response.raise_for_status()
+        with tempfile.TemporaryFile(suffix=".tar.gz") as tmp:
+            async with self._http.stream(
+                "GET", tar_url, headers=self._headers(), follow_redirects=True
+            ) as response:
+                response.raise_for_status()
+                async for chunk in response.aiter_bytes(chunk_size=1 << 20):
+                    tmp.write(chunk)
+            tmp.seek(0)
+            with tarfile.open(fileobj=tmp, mode="r:gz") as tar:
+                for member in tar:
+                    if not member.isfile():
+                        continue
+                    if not member.name.endswith(".yaml"):
+                        continue
+                    if "/data/" not in member.name:
+                        continue
 
-        # Load into a BytesIO — we already have the whole payload in memory,
-        # but tarfile's sequential reader keeps only one YAML file resident
-        # at a time during extraction.
-        with tarfile.open(fileobj=io.BytesIO(response.content), mode="r:gz") as tar:
-            for member in tar:
-                if not member.isfile():
-                    continue
-                if not member.name.endswith(".yaml"):
-                    continue
-                if "/data/" not in member.name:
-                    continue
+                    handle = tar.extractfile(member)
+                    if handle is None:
+                        continue
+                    try:
+                        doc = yaml.safe_load(handle.read())
+                    except yaml.YAMLError as exc:
+                        errors.append(f"unparseable: {member.name}: {exc}")
+                        continue
+                    if not isinstance(doc, dict):
+                        errors.append(f"unparseable: {member.name}: not a mapping")
+                        continue
 
-                handle = tar.extractfile(member)
-                if handle is None:
-                    continue
-                try:
-                    doc = yaml.safe_load(handle.read())
-                except yaml.YAMLError as exc:
-                    errors.append(f"unparseable: {member.name}: {exc}")
-                    continue
-                if not isinstance(doc, dict):
-                    errors.append(f"unparseable: {member.name}: not a mapping")
-                    continue
+                    record, aliases = _yaml_to_record(doc)
+                    if record is None:
+                        errors.append(f"unparseable: {member.name}")
+                        continue
 
-                record, aliases = _yaml_to_record(doc)
-                if record is None:
-                    errors.append(f"unparseable: {member.name}")
-                    continue
+                    identifier = record["identifier"]
+                    current_ids.add(identifier)
 
-                identifier = record["identifier"]
-                current_ids.add(identifier)
+                    existing = await cache.get_standard(identifier)
+                    if existing is None:
+                        added += 1
+                    elif _record_changed(existing, record):
+                        updated += 1
+                    else:
+                        unchanged += 1
 
-                existing = await cache.get_standard(identifier)
-                if existing is None:
-                    added += 1
-                elif _record_changed(existing, record):
-                    updated += 1
-                else:
-                    unchanged += 1
-
-                await cache.set_standard(
-                    identifier, record, source=self.body, synced=True
-                )
-                for alias in aliases:
-                    await cache.set_standard_alias(alias, identifier)
+                    await cache.set_standard(
+                        identifier, record, source=self.body, synced=True
+                    )
+                    for alias in aliases:
+                        await cache.set_standard_alias(alias, identifier)
 
         logger.info(
             "sync_relaton_done body=%s sha=%s added=%s updated=%s unchanged=%s errors=%s",
@@ -434,9 +440,10 @@ class RelatonLoader:
             len(errors),
         )
 
-        # Withdrawal detection — guarded against partial-tarball disasters
+        # Withdrawal detection — guarded against partial-tarball disasters.
+        # prev_ids was snapshotted BEFORE the extraction loop so the denominator
+        # reflects the prior state (not the post-insertion state).
         withdrawn = 0
-        prev_ids = await cache.list_synced_standard_ids(source=self.body)
         missing = prev_ids - current_ids
         if prev_ids and len(missing) > 0.5 * len(prev_ids):
             errors.append(
