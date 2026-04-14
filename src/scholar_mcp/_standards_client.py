@@ -53,6 +53,17 @@ _ETSI_RE = re.compile(
     r"(?i)\betsi\s+(EN|TS|TR|ES|EG)\s*(\d{3})\s*[\s-]?\s*(\d{3}(?:-\d+)?)\b"
 )
 
+# ISO joint with IEC (must precede plain ISO/IEC so the joint form wins):
+#   "ISO/IEC 27001:2022", "ISO IEC 27001:2022", "IEC/ISO 27001:2022"
+_ISO_IEC_JOINT_RE = re.compile(
+    r"(?i)\b(?:iso[/\s]*iec|iec[/\s]*iso)\s*"
+    r"(\d{1,5}(?:-\d+)*)\s*[:\s-]\s*(\d{4})\b"
+)
+# ISO alone: "ISO 9001:2015", "ISO9001:2015", "iso 15189-2:2022"
+_ISO_RE = re.compile(r"(?i)\biso\s*(\d{1,5}(?:-\d+)*)\s*[:\s-]\s*(\d{4})\b")
+# IEC alone: "IEC 62443-3-3:2020"
+_IEC_RE = re.compile(r"(?i)\biec\s*(\d{1,5}(?:-\d+)*)\s*[:\s-]\s*(\d{4})\b")
+
 
 def resolve_identifier_local(raw: str) -> tuple[str, str] | None:
     """Attempt to resolve *raw* to (canonical_identifier, body) using only regex.
@@ -126,6 +137,21 @@ def resolve_identifier_local(raw: str) -> tuple[str, str] | None:
     m = _ETSI_RE.search(s)
     if m:
         return f"ETSI {m.group(1).upper()} {m.group(2)} {m.group(3)}", "ETSI"
+
+    # ISO/IEC joint (check before plain ISO and plain IEC)
+    m = _ISO_IEC_JOINT_RE.search(s)
+    if m:
+        return f"ISO/IEC {m.group(1)}:{m.group(2)}", "ISO/IEC"
+
+    # ISO
+    m = _ISO_RE.search(s)
+    if m:
+        return f"ISO {m.group(1)}:{m.group(2)}", "ISO"
+
+    # IEC
+    m = _IEC_RE.search(s)
+    if m:
+        return f"IEC {m.group(1)}:{m.group(2)}", "IEC"
 
     return None
 

@@ -169,6 +169,64 @@ def test_resolve_iec_series_returns_none() -> None:
     assert result is None
 
 
+# --- Resolver: ISO / IEC ---
+
+
+def test_resolve_identifier_iso_plain():
+    from scholar_mcp._standards_client import resolve_identifier_local
+
+    assert resolve_identifier_local("ISO 9001:2015") == ("ISO 9001:2015", "ISO")
+
+
+def test_resolve_identifier_iso_no_space():
+    from scholar_mcp._standards_client import resolve_identifier_local
+
+    assert resolve_identifier_local("ISO9001:2015") == ("ISO 9001:2015", "ISO")
+
+
+def test_resolve_identifier_iso_iec_joint():
+    from scholar_mcp._standards_client import resolve_identifier_local
+
+    assert resolve_identifier_local("ISO/IEC 27001:2022") == (
+        "ISO/IEC 27001:2022",
+        "ISO/IEC",
+    )
+
+
+def test_resolve_identifier_iso_iec_joint_reversed():
+    from scholar_mcp._standards_client import resolve_identifier_local
+
+    assert resolve_identifier_local("IEC/ISO 27001:2022") == (
+        "ISO/IEC 27001:2022",
+        "ISO/IEC",
+    )
+
+
+def test_resolve_identifier_iec_only():
+    from scholar_mcp._standards_client import resolve_identifier_local
+
+    assert resolve_identifier_local("IEC 62443-3-3:2020") == (
+        "IEC 62443-3-3:2020",
+        "IEC",
+    )
+
+
+def test_resolve_identifier_iso_multipart_number():
+    from scholar_mcp._standards_client import resolve_identifier_local
+
+    assert resolve_identifier_local("ISO 15189-2:2022") == (
+        "ISO 15189-2:2022",
+        "ISO",
+    )
+
+
+def test_resolve_identifier_bare_number_not_matched():
+    """Bare '27001:2022' (no body prefix) is ambiguous — return None."""
+    from scholar_mcp._standards_client import resolve_identifier_local
+
+    assert resolve_identifier_local("27001:2022") is None
+
+
 # ---------------------------------------------------------------------------
 # IETF fetcher tests
 # ---------------------------------------------------------------------------
