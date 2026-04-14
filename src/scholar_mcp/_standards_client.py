@@ -1074,8 +1074,10 @@ class StandardsClient:
                     return cast("StandardRecord | None", await fetcher.fetch(canonical))
                 return cast("StandardRecord | None", await fetcher.get(canonical))
 
-        # No local resolution — try each fetcher
-        for fetcher in self._fetchers.values():
+        # No local resolution — try each fetcher (deduped: same RelatonLiveFetcher
+        # instance is registered under ISO, IEC, and ISO/IEC).
+        seen: list[Any] = list(dict.fromkeys(self._fetchers.values()))
+        for fetcher in seen:
             if hasattr(fetcher, "fetch"):
                 result = cast("StandardRecord | None", await fetcher.fetch(identifier))
             else:

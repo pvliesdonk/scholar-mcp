@@ -69,7 +69,7 @@ def test_sync_standards_no_loaders_registered(
     db_path = tmp_path / "cache.db"
     asyncio.run(_init_db(db_path))
 
-    monkeypatch.setattr(cli_mod, "_select_loaders", lambda _body: [])
+    monkeypatch.setattr(cli_mod, "_select_loaders", lambda _body, **_kw: [])
     runner = CliRunner()
     result = runner.invoke(cli, ["sync-standards", "--cache-dir", str(tmp_path)])
     assert result.exit_code == 0
@@ -93,7 +93,9 @@ def test_sync_standards_hard_failure(
     db_path = tmp_path / "cache.db"
     asyncio.run(_init_db(db_path))
 
-    monkeypatch.setattr(cli_mod, "_select_loaders", lambda _body: [_BadLoader("ISO")])
+    monkeypatch.setattr(
+        cli_mod, "_select_loaders", lambda _body, **_kw: [_BadLoader("ISO")]
+    )
     runner = CliRunner()
     result = runner.invoke(cli, ["sync-standards", "--cache-dir", str(tmp_path)])
     assert result.exit_code == 1
@@ -110,7 +112,7 @@ def test_sync_standards_partial_failure(
     monkeypatch.setattr(
         cli_mod,
         "_select_loaders",
-        lambda _body: [_GoodLoader("ISO"), _BadLoader("IEC")],
+        lambda _body, **_kw: [_GoodLoader("ISO"), _BadLoader("IEC")],
     )
     runner = CliRunner()
     result = runner.invoke(cli, ["sync-standards", "--cache-dir", str(tmp_path)])
@@ -129,7 +131,7 @@ def test_sync_standards_all_success(
     monkeypatch.setattr(
         cli_mod,
         "_select_loaders",
-        lambda _body: [_GoodLoader("ISO"), _GoodLoader("IEC")],
+        lambda _body, **_kw: [_GoodLoader("ISO"), _GoodLoader("IEC")],
     )
     runner = CliRunner()
     result = runner.invoke(cli, ["sync-standards", "--cache-dir", str(tmp_path)])
@@ -142,20 +144,26 @@ def test_select_loaders_single_body_filters() -> None:
     With ISO/IEC loaders registered, "ISO" returns exactly one loader
     and "all" returns two (ISO + IEC). "XYZ" returns empty.
     """
+    import httpx
+
     from scholar_mcp._sync_relaton import RelatonLoader
 
-    iso_loaders = cli_mod._select_loaders("ISO")
-    assert len(iso_loaders) == 1
-    assert isinstance(iso_loaders[0], RelatonLoader)
-    assert iso_loaders[0].body == "ISO"
+    http = httpx.AsyncClient()
+    try:
+        iso_loaders = cli_mod._select_loaders("ISO", http=http, token=None)
+        assert len(iso_loaders) == 1
+        assert isinstance(iso_loaders[0], RelatonLoader)
+        assert iso_loaders[0].body == "ISO"
 
-    all_loaders = cli_mod._select_loaders("all")
-    assert len(all_loaders) == 2
-    bodies = {loader.body for loader in all_loaders}
-    assert bodies == {"ISO", "IEC"}
+        all_loaders = cli_mod._select_loaders("all", http=http, token=None)
+        assert len(all_loaders) == 2
+        bodies = {loader.body for loader in all_loaders}
+        assert bodies == {"ISO", "IEC"}
 
-    xyz_loaders = cli_mod._select_loaders("XYZ")
-    assert xyz_loaders == []
+        xyz_loaders = cli_mod._select_loaders("XYZ", http=http, token=None)
+        assert xyz_loaders == []
+    finally:
+        asyncio.run(http.aclose())
 
 
 def test_sync_standards_iso_real_loader(
@@ -197,4 +205,4 @@ def test_sync_standards_iso_real_loader(
         result = runner.invoke(cli, ["sync-standards", "--body", "ISO"])
 
     assert result.exit_code == 0, result.output
-    assert "ISO added=" in result.output
+    assert "ISO added=5" in result.output

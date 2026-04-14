@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 import click
+import httpx
 
 from scholar_mcp.config import _ENV_PREFIX
 
@@ -256,16 +257,14 @@ def sync_standards(body: str, force: bool, cache_dir: Path | None) -> None:
         db_path = (cache_dir or config.cache_dir) / "cache.db"
         c = ScholarCache(db_path)
         await c.open()
+        http = httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0))
         loaders: list[Loader] = []
         reports: list[SyncReport] = []
         try:
-            loaders = _select_loaders(body)
+            loaders = _select_loaders(body, http=http, token=config.github_token)
             reports = await run_sync(loaders, c, force=force)
         finally:
-            for loader in loaders:
-                http = getattr(loader, "_http", None)
-                if http is not None:
-                    await http.aclose()
+            await http.aclose()
             await c.close()
 
         click.echo(format_reports(reports))
@@ -284,26 +283,29 @@ def sync_standards(body: str, force: bool, cache_dir: Path | None) -> None:
     raise SystemExit(exit_code)
 
 
-def _select_loaders(body: str) -> list[Loader]:
+def _select_loaders(
+    body: str, *, http: httpx.AsyncClient, token: str | None
+) -> list[Loader]:
     """Return loaders matching *body* ('all' returns every registered).
 
-    The loaders each own a short-lived ``httpx.AsyncClient`` created for
-    the duration of ``sync_standards``. The token is read from
-    ``SCHOLAR_GITHUB_TOKEN`` via :func:`load_config`.
+    All loaders share the passed-in ``httpx.AsyncClient``; the caller is
+    responsible for closing it.
+
+    Args:
+        body: Standards body name or 'all' to return every registered loader.
+        http: Shared async HTTP client owned by the caller.
+        token: Optional GitHub personal access token for authenticated requests.
+
+    Returns:
+        List of Loader instances matching *body*.
     """
-    import httpx
-
     from scholar_mcp._sync_relaton import RelatonLoader
-    from scholar_mcp.config import load_config
-
-    config = load_config()
-    http = httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0))
 
     registered: list[Loader] = cast(
         "list[Loader]",
         [
-            RelatonLoader("ISO", http=http, token=config.github_token),
-            RelatonLoader("IEC", http=http, token=config.github_token),
+            RelatonLoader("ISO", http=http, token=token),
+            RelatonLoader("IEC", http=http, token=token),
         ],
     )
     if body.upper() == "ALL":
