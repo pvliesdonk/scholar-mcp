@@ -25,7 +25,7 @@ _RAW_BASE = "https://raw.githubusercontent.com/relaton"
 
 
 def _identifier_to_relaton_slug(identifier: str) -> str | None:
-    """Convert a canonical ISO/IEC/ISO/IEC identifier to its Relaton filename slug.
+    """Convert an ISO, IEC, or ISO/IEC identifier to a Relaton filename slug.
 
     Examples:
         >>> _identifier_to_relaton_slug("ISO 9001:2015")
@@ -45,8 +45,8 @@ def _identifier_to_relaton_slug(identifier: str) -> str | None:
         upper.startswith("ISO/IEC")
         or upper.startswith("ISO ")
         or upper.startswith("IEC ")
-        or (upper.startswith("ISO") and upper[3:4].isdigit())
-        or (upper.startswith("IEC") and upper[3:4].isdigit())
+        or (upper.startswith("ISO") and upper[3:4] in {" ", "-"})
+        or (upper.startswith("IEC") and upper[3:4] in {" ", "-"})
     ):
         return None
 
@@ -64,9 +64,7 @@ def _identifier_to_relaton_slug(identifier: str) -> str | None:
 def _identifier_prefers_iec(identifier: str) -> bool:
     """Plain 'IEC xxx' identifiers prefer the IEC repo first."""
     upper = identifier.strip().upper()
-    return upper.startswith("IEC ") or (
-        upper.startswith("IEC") and upper[3:4].isdigit()
-    )
+    return upper.startswith("IEC ")
 
 
 class RelatonLiveFetcher:
@@ -126,7 +124,7 @@ class RelatonLiveFetcher:
         # 404 in both repos — return a stub so callers can surface
         # "resolved but catalogue entry unavailable" rather than a bare None.
         upper = identifier.strip().upper()
-        if upper.startswith("ISO/IEC") or "IEC/ISO" in upper:
+        if upper.startswith("ISO/IEC"):
             body = "ISO/IEC"
         elif upper.startswith("IEC"):
             body = "IEC"
