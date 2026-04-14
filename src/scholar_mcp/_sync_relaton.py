@@ -191,16 +191,25 @@ def _yaml_to_record(
     docidentifiers = doc.get("docidentifier") or []
     canonical = _canonical_identifier_and_body(docidentifiers)
     if canonical is None:
+        logger.debug("relaton_yaml_skip reason=%s identifier=%s", "no_canonical", "")
         return None, []
     identifier, body = canonical
     if not identifier:
+        logger.debug(
+            "relaton_yaml_skip reason=%s identifier=%s", "empty_identifier", ""
+        )
         return None, []
 
     title = _first_title(doc.get("title"))
     if not title:
+        logger.debug(
+            "relaton_yaml_skip reason=%s identifier=%s", "no_title", identifier
+        )
         return None, []
 
     stage = str((doc.get("docstatus") or {}).get("stage", "")).strip()
+    if stage and stage not in _STAGE_TO_STATUS:
+        logger.debug("relaton_unknown_stage stage=%s identifier=%s", stage, identifier)
     status = _STAGE_TO_STATUS.get(stage, "published")
 
     url = _first_link_of_type(doc.get("link"), "src") or ""
