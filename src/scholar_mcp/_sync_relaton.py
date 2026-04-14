@@ -454,7 +454,9 @@ class RelatonLoader:
                 existing = await cache.get_standard(ident)
                 if existing is None:
                     continue
-                updated_record = cast("StandardRecord", {**existing, "status": "withdrawn"})
+                updated_record = cast(
+                    "StandardRecord", {**existing, "status": "withdrawn"}
+                )
                 await cache.set_standard(
                     ident, updated_record, source=self.body, synced=True
                 )

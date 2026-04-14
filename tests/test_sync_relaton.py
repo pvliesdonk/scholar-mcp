@@ -817,6 +817,7 @@ async def test_loader_joint_dedup_iso_then_iec(
         joint = await cache.get_standard("ISO/IEC 27001:2022")
         assert joint is not None
         assert joint["body"] == "ISO/IEC"
+        assert joint["status"] == "published"
     finally:
         await cache.close()
 
@@ -866,6 +867,7 @@ async def test_loader_joint_dedup_iec_then_iso(
         joint = await cache.get_standard("ISO/IEC 27001:2022")
         assert joint is not None
         assert joint["body"] == "ISO/IEC"
+        assert joint["status"] == "published"
         # And no duplicate row accidentally written under an ISO-only identifier
         iso_only = await cache.get_standard("ISO 27001:2022")
         assert iso_only is None
