@@ -172,19 +172,19 @@ def test_resolve_iec_series_returns_none() -> None:
 # --- Resolver: ISO / IEC ---
 
 
-def test_resolve_identifier_iso_plain():
+def test_resolve_identifier_iso_plain() -> None:
     from scholar_mcp._standards_client import resolve_identifier_local
 
     assert resolve_identifier_local("ISO 9001:2015") == ("ISO 9001:2015", "ISO")
 
 
-def test_resolve_identifier_iso_no_space():
+def test_resolve_identifier_iso_no_space() -> None:
     from scholar_mcp._standards_client import resolve_identifier_local
 
     assert resolve_identifier_local("ISO9001:2015") == ("ISO 9001:2015", "ISO")
 
 
-def test_resolve_identifier_iso_iec_joint():
+def test_resolve_identifier_iso_iec_joint() -> None:
     from scholar_mcp._standards_client import resolve_identifier_local
 
     assert resolve_identifier_local("ISO/IEC 27001:2022") == (
@@ -193,7 +193,7 @@ def test_resolve_identifier_iso_iec_joint():
     )
 
 
-def test_resolve_identifier_iso_iec_joint_reversed():
+def test_resolve_identifier_iso_iec_joint_reversed() -> None:
     from scholar_mcp._standards_client import resolve_identifier_local
 
     assert resolve_identifier_local("IEC/ISO 27001:2022") == (
@@ -202,7 +202,7 @@ def test_resolve_identifier_iso_iec_joint_reversed():
     )
 
 
-def test_resolve_identifier_iec_only():
+def test_resolve_identifier_iec_only() -> None:
     from scholar_mcp._standards_client import resolve_identifier_local
 
     assert resolve_identifier_local("IEC 62443-3-3:2020") == (
@@ -211,7 +211,7 @@ def test_resolve_identifier_iec_only():
     )
 
 
-def test_resolve_identifier_iso_multipart_number():
+def test_resolve_identifier_iso_multipart_number() -> None:
     from scholar_mcp._standards_client import resolve_identifier_local
 
     assert resolve_identifier_local("ISO 15189-2:2022") == (
@@ -220,7 +220,7 @@ def test_resolve_identifier_iso_multipart_number():
     )
 
 
-def test_resolve_identifier_bare_number_not_matched():
+def test_resolve_identifier_bare_number_not_matched() -> None:
     """Bare '27001:2022' (no body prefix) is ambiguous — return None."""
     from scholar_mcp._standards_client import resolve_identifier_local
 
