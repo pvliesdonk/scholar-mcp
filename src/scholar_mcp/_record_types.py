@@ -60,7 +60,7 @@ class StandardRecord(TypedDict, total=False):
     identifier: str  # canonical: "NIST SP 800-53 Rev. 5", "RFC 9000"
     aliases: list[str]  # alt forms seen in citations
     title: str
-    body: str  # "NIST" | "IETF" | "W3C" | "ETSI"
+    body: str  # "NIST" | "IETF" | "W3C" | "ETSI" | "ISO" | "IEC" | "ISO/IEC"
     number: str  # "800-53", "9000", "2.1"
     revision: str | None  # "Rev. 5", "2022", "3rd edition"
     status: str  # "published" | "withdrawn" | "superseded" | "draft"
