@@ -96,6 +96,7 @@ ignore = ["E501"]
 "src/scholar_mcp/_openlibrary_client.py" = ["TCH001"]
 "src/scholar_mcp/_standards_client.py" = ["TCH001", "TCH002", "TCH003"]
 "src/scholar_mcp/_sync_relaton.py" = ["TCH001", "TCH002", "TCH003"]
+"src/scholar_mcp/_relaton_live.py" = ["TCH001", "TCH002", "TCH003"]
 "src/scholar_mcp/_server_resources.py" = ["B008", "TCH001", "TCH002"]
 "src/scholar_mcp/_server_prompts.py" = ["B008", "TCH002"]
 # pytest fixtures need runtime imports; Path used in signatures needs to be importable at runtime.
