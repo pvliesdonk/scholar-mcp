@@ -604,6 +604,7 @@ async def test_loader_sends_github_token_header(tmp_path, iso_tarball) -> None:
                 loader = RelatonLoader(body="ISO", http=http, token="ghp_xyz")
                 await loader.sync(cache)
 
-        assert any(a == "token ghp_xyz" for a in seen_auth if a is not None)
+        assert seen_auth  # at least one request captured
+        assert all(a == "token ghp_xyz" for a in seen_auth)
     finally:
         await cache.close()
