@@ -608,3 +608,266 @@ async def test_loader_sends_github_token_header(tmp_path, iso_tarball) -> None:
         assert all(a == "token ghp_xyz" for a in seen_auth)
     finally:
         await cache.close()
+
+
+# ---------------------------------------------------------------------------
+# Task 7: Withdrawal detection + >50% mass-disappearance guard
+# ---------------------------------------------------------------------------
+
+
+def _tarball_without(fixture_dir: Path, skip_names: set[str], prefix: str) -> bytes:
+    """Tarball that OMITS specific filenames — used to simulate withdrawals."""
+    buf = io.BytesIO()
+    with (
+        gzip.GzipFile(fileobj=buf, mode="wb") as gz,
+        tarfile.open(fileobj=gz, mode="w") as tar,
+    ):
+        for yaml_path in sorted(fixture_dir.glob("*.yaml")):
+            if yaml_path.name in skip_names:
+                continue
+            data = yaml_path.read_bytes()
+            info = tarfile.TarInfo(name=f"{prefix}/data/{yaml_path.name}")
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
+    return buf.getvalue()
+
+
+@pytest.mark.asyncio
+async def test_loader_marks_missing_records_withdrawn(tmp_path, iso_tarball) -> None:
+    """A record present on first sync, absent on second → status='withdrawn'."""
+    from scholar_mcp._cache import ScholarCache
+    from scholar_mcp._sync_relaton import RelatonLoader
+
+    cache = ScholarCache(tmp_path / "cache.db")
+    await cache.open()
+    try:
+        async with httpx.AsyncClient() as http:
+            with respx.mock(assert_all_called=False) as router:
+                # First sync — full fixture set
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iso/commits/main"
+                ).mock(return_value=httpx.Response(200, json={"sha": "v1"}))
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iso/tarball/v1"
+                ).mock(return_value=httpx.Response(200, content=iso_tarball))
+
+                loader = RelatonLoader(body="ISO", http=http)
+                first = await loader.sync(cache)
+                await cache.set_sync_run(
+                    body="ISO",
+                    upstream_ref="v1",
+                    added=first.added,
+                    updated=0,
+                    unchanged=0,
+                    withdrawn=0,
+                    errors=[],
+                    started_at=0.0,
+                    finished_at=0.0,
+                )
+
+            # Second sync — tarball omits one file
+            shrunk = _tarball_without(
+                FIXTURES / "relaton_iso_sample",
+                skip_names={"iso-14001-2015.yaml"},
+                prefix="relaton-data-iso-main",
+            )
+            with respx.mock(assert_all_called=False) as router:
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iso/commits/main"
+                ).mock(return_value=httpx.Response(200, json={"sha": "v2"}))
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iso/tarball/v2"
+                ).mock(return_value=httpx.Response(200, content=shrunk))
+
+                second = await loader.sync(cache)
+
+        assert second.withdrawn == 1
+
+        withdrawn_record = await cache.get_standard("ISO 14001:2015")
+        assert withdrawn_record is not None
+        assert withdrawn_record["status"] == "withdrawn"
+    finally:
+        await cache.close()
+
+
+@pytest.mark.asyncio
+async def test_loader_aborts_withdrawal_on_mass_disappearance(
+    tmp_path, iso_tarball
+) -> None:
+    """Tarball missing >50% of prior ids → withdrawal pass skipped, error logged."""
+    from scholar_mcp._cache import ScholarCache
+    from scholar_mcp._sync_relaton import RelatonLoader
+
+    cache = ScholarCache(tmp_path / "cache.db")
+    await cache.open()
+    try:
+        async with httpx.AsyncClient() as http:
+            with respx.mock(assert_all_called=False) as router:
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iso/commits/main"
+                ).mock(return_value=httpx.Response(200, json={"sha": "v1"}))
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iso/tarball/v1"
+                ).mock(return_value=httpx.Response(200, content=iso_tarball))
+
+                loader = RelatonLoader(body="ISO", http=http)
+                first = await loader.sync(cache)
+                await cache.set_sync_run(
+                    body="ISO",
+                    upstream_ref="v1",
+                    added=first.added,
+                    updated=0,
+                    unchanged=0,
+                    withdrawn=0,
+                    errors=[],
+                    started_at=0.0,
+                    finished_at=0.0,
+                )
+                prior_ids = await cache.list_synced_standard_ids(source="ISO")
+                # Capture statuses before second sync for change-detection
+                prior_statuses = {
+                    ident: (await cache.get_standard(ident) or {}).get("status")
+                    for ident in prior_ids
+                }
+
+            # Build a "disaster" tarball with only the first fixture file,
+            # guaranteeing >50% of prior ids are missing.
+            all_files = sorted(
+                p.name for p in (FIXTURES / "relaton_iso_sample").glob("*.yaml")
+            )
+            keep_one = set(all_files) - {all_files[0]}
+            disaster = _tarball_without(
+                FIXTURES / "relaton_iso_sample",
+                skip_names=keep_one,
+                prefix="relaton-data-iso-main",
+            )
+            with respx.mock(assert_all_called=False) as router:
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iso/commits/main"
+                ).mock(return_value=httpx.Response(200, json={"sha": "v2"}))
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iso/tarball/v2"
+                ).mock(return_value=httpx.Response(200, content=disaster))
+
+                second = await loader.sync(cache)
+
+        assert second.withdrawn == 0
+        assert any("withdrawal pass aborted" in e for e in second.errors)
+        # Prior rows must remain untouched — none flipped to 'withdrawn' by the pass
+        for ident in prior_ids:
+            record = await cache.get_standard(ident)
+            before = prior_statuses.get(ident)
+            after = record.get("status") if record else None
+            # A record that was NOT already withdrawn before must not be withdrawn now
+            if before != "withdrawn":
+                assert after != "withdrawn", (
+                    f"{ident!r} was flipped to 'withdrawn' despite mass-disappearance guard"
+                )
+    finally:
+        await cache.close()
+
+
+# ---------------------------------------------------------------------------
+# Task 7: Joint-dedup tests (both body orderings)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_loader_joint_dedup_iso_then_iec(
+    tmp_path, iso_tarball, iec_tarball
+) -> None:
+    """Syncing ISO then IEC leaves joint records as one row per identifier."""
+    from scholar_mcp._cache import ScholarCache
+    from scholar_mcp._sync_relaton import RelatonLoader
+
+    cache = ScholarCache(tmp_path / "cache.db")
+    await cache.open()
+    try:
+        async with httpx.AsyncClient() as http:
+            with respx.mock(assert_all_called=False) as router:
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iso/commits/main"
+                ).mock(return_value=httpx.Response(200, json={"sha": "iso-sha"}))
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iso/tarball/iso-sha"
+                ).mock(return_value=httpx.Response(200, content=iso_tarball))
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iec/commits/main"
+                ).mock(return_value=httpx.Response(200, json={"sha": "iec-sha"}))
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iec/tarball/iec-sha"
+                ).mock(return_value=httpx.Response(200, content=iec_tarball))
+
+                iso_loader = RelatonLoader(body="ISO", http=http)
+                iec_loader = RelatonLoader(body="IEC", http=http)
+                await iso_loader.sync(cache)
+                await cache.set_sync_run(
+                    body="ISO",
+                    upstream_ref="iso-sha",
+                    added=0,
+                    updated=0,
+                    unchanged=0,
+                    withdrawn=0,
+                    errors=[],
+                    started_at=0.0,
+                    finished_at=0.0,
+                )
+                await iec_loader.sync(cache)
+
+        joint = await cache.get_standard("ISO/IEC 27001:2022")
+        assert joint is not None
+        assert joint["body"] == "ISO/IEC"
+    finally:
+        await cache.close()
+
+
+@pytest.mark.asyncio
+async def test_loader_joint_dedup_iec_then_iso(
+    tmp_path, iso_tarball, iec_tarball
+) -> None:
+    """Reverse order leaves the same final joint row — one per identifier."""
+    from scholar_mcp._cache import ScholarCache
+    from scholar_mcp._sync_relaton import RelatonLoader
+
+    cache = ScholarCache(tmp_path / "cache.db")
+    await cache.open()
+    try:
+        async with httpx.AsyncClient() as http:
+            with respx.mock(assert_all_called=False) as router:
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iec/commits/main"
+                ).mock(return_value=httpx.Response(200, json={"sha": "iec-sha"}))
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iec/tarball/iec-sha"
+                ).mock(return_value=httpx.Response(200, content=iec_tarball))
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iso/commits/main"
+                ).mock(return_value=httpx.Response(200, json={"sha": "iso-sha"}))
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iso/tarball/iso-sha"
+                ).mock(return_value=httpx.Response(200, content=iso_tarball))
+
+                iec_loader = RelatonLoader(body="IEC", http=http)
+                iso_loader = RelatonLoader(body="ISO", http=http)
+                await iec_loader.sync(cache)
+                await cache.set_sync_run(
+                    body="IEC",
+                    upstream_ref="iec-sha",
+                    added=0,
+                    updated=0,
+                    unchanged=0,
+                    withdrawn=0,
+                    errors=[],
+                    started_at=0.0,
+                    finished_at=0.0,
+                )
+                await iso_loader.sync(cache)
+
+        joint = await cache.get_standard("ISO/IEC 27001:2022")
+        assert joint is not None
+        assert joint["body"] == "ISO/IEC"
+        # And no duplicate row accidentally written under an ISO-only identifier
+        iso_only = await cache.get_standard("ISO 27001:2022")
+        assert iso_only is None
+    finally:
+        await cache.close()

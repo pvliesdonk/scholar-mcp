@@ -12,8 +12,9 @@ import io
 import logging
 import tarfile
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Mapping
+from typing import TYPE_CHECKING, Any, cast
 
 import httpx
 import yaml
@@ -433,12 +434,44 @@ class RelatonLoader:
             len(errors),
         )
 
+        # Withdrawal detection — guarded against partial-tarball disasters
+        withdrawn = 0
+        prev_ids = await cache.list_synced_standard_ids(source=self.body)
+        missing = prev_ids - current_ids
+        if prev_ids and len(missing) > 0.5 * len(prev_ids):
+            errors.append(
+                f"withdrawal pass aborted: {len(missing)}/{len(prev_ids)} ids "
+                "missing (>50% — likely partial sync)"
+            )
+            logger.warning(
+                "sync_relaton_withdrawal_aborted body=%s missing=%s prev=%s",
+                self.body,
+                len(missing),
+                len(prev_ids),
+            )
+        else:
+            for ident in missing:
+                existing = await cache.get_standard(ident)
+                if existing is None:
+                    continue
+                updated_record = cast("StandardRecord", {**existing, "status": "withdrawn"})
+                await cache.set_standard(
+                    ident, updated_record, source=self.body, synced=True
+                )
+                withdrawn += 1
+            if withdrawn:
+                logger.info(
+                    "sync_relaton_withdrawn body=%s count=%s",
+                    self.body,
+                    withdrawn,
+                )
+
         return SyncReport(
             body=self.body,
             added=added,
             updated=updated,
             unchanged=unchanged,
-            withdrawn=0,
+            withdrawn=withdrawn,
             errors=errors,
             upstream_ref=sha,
             started_at=started_at,
