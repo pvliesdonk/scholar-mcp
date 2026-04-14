@@ -8,9 +8,18 @@ Design reference: ``docs/specs/2026-04-13-pr2-iso-iec-relaton-design.md``.
 
 from __future__ import annotations
 
+import io
 import logging
+import tarfile
+import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Mapping
+
+import httpx
+import yaml
+
+from ._protocols import CacheProtocol
+from ._standards_sync import SyncReport
 
 if TYPE_CHECKING:
     from ._record_types import StandardRecord
@@ -273,9 +282,165 @@ _RECORD_IDENTITY_FIELDS = (
 )
 
 
-def _record_changed(old: dict[str, Any], new: dict[str, Any]) -> bool:
+def _record_changed(old: Mapping[str, Any], new: Mapping[str, Any]) -> bool:
     """True when any identity field differs between ``old`` and ``new``."""
     for field_name in _RECORD_IDENTITY_FIELDS:
         if old.get(field_name) != new.get(field_name):
             return True
     return False
+
+
+_GITHUB_API = "https://api.github.com"
+
+
+class RelatonLoader:
+    """One instance per body (ISO or IEC). Conforms to the Loader protocol.
+
+    The full sync algorithm is documented in
+    ``docs/specs/2026-04-13-pr2-iso-iec-relaton-design.md``.
+    """
+
+    def __init__(
+        self,
+        body: str,
+        *,
+        http: httpx.AsyncClient,
+        token: str | None = None,
+    ) -> None:
+        config = _RELATON_BODIES.get(body.upper())
+        if config is None:
+            raise ValueError(f"unsupported Relaton body: {body!r}")
+        self._config = config
+        self._http = http
+        self._token = token
+
+    @property
+    def body(self) -> str:
+        return self._config.body
+
+    def _headers(self) -> dict[str, str]:
+        headers = {"Accept": "application/vnd.github+json"}
+        if self._token:
+            headers["Authorization"] = f"token {self._token}"
+        return headers
+
+    async def _head_sha(self) -> str:
+        url = f"{_GITHUB_API}/repos/{self._config.repo}/commits/{self._config.branch}"
+        response = await self._http.get(url, headers=self._headers())
+        response.raise_for_status()
+        sha = response.json().get("sha")
+        if not isinstance(sha, str) or not sha:
+            raise RuntimeError(f"missing sha in response from {url}")
+        return sha
+
+    async def sync(self, cache: CacheProtocol, *, force: bool = False) -> SyncReport:
+        """Pull upstream YAML into *cache*, returning a SyncReport.
+
+        Args:
+            cache: Open cache.
+            force: If True, bypass the SHA freshness check and re-sync.
+        """
+        started_at = time.time()
+        errors: list[str] = []
+
+        sha = await self._head_sha()
+
+        previous = await cache.get_sync_run(self.body)
+        previous_sha = previous.get("upstream_ref") if previous else None
+
+        if not force and previous_sha == sha:
+            existing_count = len(await cache.list_synced_standard_ids(source=self.body))
+            logger.info(
+                "sync_relaton_unchanged body=%s sha=%s count=%s",
+                self.body,
+                sha,
+                existing_count,
+            )
+            return SyncReport(
+                body=self.body,
+                added=0,
+                updated=0,
+                unchanged=existing_count,
+                withdrawn=0,
+                errors=errors,
+                upstream_ref=sha,
+                started_at=started_at,
+                finished_at=time.time(),
+            )
+
+        added = updated = unchanged = 0
+        current_ids: set[str] = set()
+
+        tar_url = f"{_GITHUB_API}/repos/{self._config.repo}/tarball/{sha}"
+        response = await self._http.get(
+            tar_url, headers=self._headers(), follow_redirects=True
+        )
+        response.raise_for_status()
+
+        # Load into a BytesIO — we already have the whole payload in memory,
+        # but tarfile's sequential reader keeps only one YAML file resident
+        # at a time during extraction.
+        with tarfile.open(fileobj=io.BytesIO(response.content), mode="r:gz") as tar:
+            for member in tar:
+                if not member.isfile():
+                    continue
+                if not member.name.endswith(".yaml"):
+                    continue
+                if "/data/" not in member.name:
+                    continue
+
+                handle = tar.extractfile(member)
+                if handle is None:
+                    continue
+                try:
+                    doc = yaml.safe_load(handle.read())
+                except yaml.YAMLError as exc:
+                    errors.append(f"unparseable: {member.name}: {exc}")
+                    continue
+                if not isinstance(doc, dict):
+                    errors.append(f"unparseable: {member.name}: not a mapping")
+                    continue
+
+                record, aliases = _yaml_to_record(doc)
+                if record is None:
+                    errors.append(f"unparseable: {member.name}")
+                    continue
+
+                identifier = record["identifier"]
+                current_ids.add(identifier)
+
+                existing = await cache.get_standard(identifier)
+                if existing is None:
+                    added += 1
+                elif _record_changed(existing, record):
+                    updated += 1
+                else:
+                    unchanged += 1
+
+                await cache.set_standard(
+                    identifier, record, source=self.body, synced=True
+                )
+                for alias in aliases:
+                    await cache.set_standard_alias(alias, identifier)
+
+        logger.info(
+            "sync_relaton_done body=%s sha=%s added=%s updated=%s unchanged=%s errors=%s",
+            self.body,
+            sha,
+            added,
+            updated,
+            unchanged,
+            len(errors),
+        )
+
+        return SyncReport(
+            body=self.body,
+            added=added,
+            updated=updated,
+            unchanged=unchanged,
+            withdrawn=0,
+            errors=errors,
+            upstream_ref=sha,
+            started_at=started_at,
+            finished_at=time.time(),
+        )

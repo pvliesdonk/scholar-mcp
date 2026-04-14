@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
+import gzip
+import io
+import tarfile
 from pathlib import Path
 
+import httpx
+import pytest
+import respx
 import yaml
 
 FIXTURES = Path(__file__).parent / "fixtures" / "standards"
@@ -349,3 +355,255 @@ def test_yaml_to_record_unknown_stage_defaults_to_published() -> None:
 
     assert record is not None
     assert record["status"] == "published"
+
+
+# ---------------------------------------------------------------------------
+# RelatonLoader tests (Task 6)
+# ---------------------------------------------------------------------------
+
+
+def _build_tarball(fixture_dir: Path, prefix: str = "relaton-data-iso-main") -> bytes:
+    """Build an in-memory .tar.gz matching GitHub's tarball layout.
+
+    GitHub tarballs prefix every entry with '<repo>-<sha7>/', and YAML
+    files live under '<prefix>/data/'.
+    """
+    buf = io.BytesIO()
+    with (
+        gzip.GzipFile(fileobj=buf, mode="wb") as gz,
+        tarfile.open(fileobj=gz, mode="w") as tar,
+    ):
+        for yaml_path in sorted(fixture_dir.glob("*.yaml")):
+            data = yaml_path.read_bytes()
+            info = tarfile.TarInfo(name=f"{prefix}/data/{yaml_path.name}")
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
+    return buf.getvalue()
+
+
+@pytest.fixture
+def iso_tarball() -> bytes:
+    return _build_tarball(FIXTURES / "relaton_iso_sample")
+
+
+@pytest.fixture
+def iec_tarball() -> bytes:
+    return _build_tarball(
+        FIXTURES / "relaton_iec_sample", prefix="relaton-data-iec-main"
+    )
+
+
+@pytest.mark.asyncio
+async def test_loader_cold_sync_inserts_records(tmp_path, iso_tarball) -> None:
+    """Cold sync (empty cache) inserts every fixture row with added=N."""
+    from scholar_mcp._cache import ScholarCache
+    from scholar_mcp._sync_relaton import RelatonLoader
+
+    cache = ScholarCache(tmp_path / "cache.db")
+    await cache.open()
+    try:
+        with respx.mock(assert_all_called=False) as router:
+            router.get(
+                "https://api.github.com/repos/relaton/relaton-data-iso/commits/main"
+            ).mock(return_value=httpx.Response(200, json={"sha": "deadbeef"}))
+            router.get(
+                "https://api.github.com/repos/relaton/relaton-data-iso/tarball/deadbeef"
+            ).mock(return_value=httpx.Response(200, content=iso_tarball))
+
+            async with httpx.AsyncClient() as http:
+                loader = RelatonLoader(body="ISO", http=http)
+                report = await loader.sync(cache)
+
+        assert report.body == "ISO"
+        assert report.added > 0
+        assert report.updated == 0
+        assert report.unchanged == 0
+        assert report.upstream_ref == "deadbeef"
+
+        # Rows must be findable via their canonical identifiers
+        iso_9001 = await cache.get_standard("ISO 9001:2015")
+        assert iso_9001 is not None
+        assert iso_9001["title"].startswith("Quality management")
+
+        # Joint record carries body='ISO/IEC'
+        joint = await cache.get_standard("ISO/IEC 27001:2022")
+        assert joint is not None
+        assert joint["body"] == "ISO/IEC"
+    finally:
+        await cache.close()
+
+
+@pytest.mark.asyncio
+async def test_loader_resync_same_sha_returns_unchanged(tmp_path, iso_tarball) -> None:
+    """Second call with the same SHA skips tarball fetch, reports unchanged."""
+    from scholar_mcp._cache import ScholarCache
+    from scholar_mcp._sync_relaton import RelatonLoader
+
+    cache = ScholarCache(tmp_path / "cache.db")
+    await cache.open()
+    try:
+        async with httpx.AsyncClient() as http:
+            with respx.mock(assert_all_called=False) as router:
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iso/commits/main"
+                ).mock(return_value=httpx.Response(200, json={"sha": "same-sha"}))
+                tarball_route = router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iso/tarball/same-sha"
+                ).mock(return_value=httpx.Response(200, content=iso_tarball))
+
+                loader = RelatonLoader(body="ISO", http=http)
+                first = await loader.sync(cache)
+                # Persist the upstream_ref the way run_sync would
+                await cache.set_sync_run(
+                    body=first.body,
+                    upstream_ref=first.upstream_ref,
+                    added=first.added,
+                    updated=first.updated,
+                    unchanged=first.unchanged,
+                    withdrawn=first.withdrawn,
+                    errors=first.errors,
+                    started_at=first.started_at or 0.0,
+                    finished_at=first.finished_at or 0.0,
+                )
+
+                # Second run — tarball should NOT be fetched
+                tarball_route.reset()
+                second = await loader.sync(cache)
+
+        assert second.added == 0
+        assert second.updated == 0
+        assert second.unchanged > 0
+        assert not tarball_route.called
+    finally:
+        await cache.close()
+
+
+@pytest.mark.asyncio
+async def test_loader_force_bypasses_sha_check(tmp_path, iso_tarball) -> None:
+    """force=True triggers a tarball fetch even when SHA is unchanged."""
+    from scholar_mcp._cache import ScholarCache
+    from scholar_mcp._sync_relaton import RelatonLoader
+
+    cache = ScholarCache(tmp_path / "cache.db")
+    await cache.open()
+    try:
+        async with httpx.AsyncClient() as http:
+            with respx.mock(assert_all_called=False) as router:
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iso/commits/main"
+                ).mock(return_value=httpx.Response(200, json={"sha": "same-sha"}))
+                tarball_route = router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iso/tarball/same-sha"
+                ).mock(return_value=httpx.Response(200, content=iso_tarball))
+
+                loader = RelatonLoader(body="ISO", http=http)
+                await loader.sync(cache)
+                await cache.set_sync_run(
+                    body="ISO",
+                    upstream_ref="same-sha",
+                    added=0,
+                    updated=0,
+                    unchanged=0,
+                    withdrawn=0,
+                    errors=[],
+                    started_at=0.0,
+                    finished_at=0.0,
+                )
+                tarball_route.reset()
+
+                forced = await loader.sync(cache, force=True)
+
+        assert tarball_route.called
+        assert forced.upstream_ref == "same-sha"
+    finally:
+        await cache.close()
+
+
+@pytest.mark.asyncio
+async def test_loader_modified_record_increments_updated(tmp_path, iso_tarball) -> None:
+    """A fixture record whose title changed upstream → updated == 1."""
+    import copy
+
+    from scholar_mcp._cache import ScholarCache
+    from scholar_mcp._sync_relaton import RelatonLoader
+
+    cache = ScholarCache(tmp_path / "cache.db")
+    await cache.open()
+    try:
+        async with httpx.AsyncClient() as http:
+            with respx.mock(assert_all_called=False) as router:
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iso/commits/main"
+                ).mock(return_value=httpx.Response(200, json={"sha": "v1"}))
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iso/tarball/v1"
+                ).mock(return_value=httpx.Response(200, content=iso_tarball))
+
+                loader = RelatonLoader(body="ISO", http=http)
+                first = await loader.sync(cache)
+                await cache.set_sync_run(
+                    body="ISO",
+                    upstream_ref="v1",
+                    added=first.added,
+                    updated=0,
+                    unchanged=0,
+                    withdrawn=0,
+                    errors=[],
+                    started_at=0.0,
+                    finished_at=0.0,
+                )
+
+            # Mutate ISO 9001:2015's cached row (simulate prior-sync drift)
+            existing = await cache.get_standard("ISO 9001:2015")
+            assert existing is not None
+            mutated = copy.deepcopy(existing)
+            mutated["title"] = "STALE TITLE"
+            await cache.set_standard(
+                "ISO 9001:2015", mutated, source="ISO", synced=True
+            )
+
+            with respx.mock(assert_all_called=False) as router:
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iso/commits/main"
+                ).mock(return_value=httpx.Response(200, json={"sha": "v2"}))
+                router.get(
+                    "https://api.github.com/repos/relaton/relaton-data-iso/tarball/v2"
+                ).mock(return_value=httpx.Response(200, content=iso_tarball))
+
+                second = await loader.sync(cache)
+
+        assert second.updated == 1
+        refreshed = await cache.get_standard("ISO 9001:2015")
+        assert refreshed is not None
+        assert refreshed["title"].startswith("Quality management")
+    finally:
+        await cache.close()
+
+
+@pytest.mark.asyncio
+async def test_loader_sends_github_token_header(tmp_path, iso_tarball) -> None:
+    """When token is set, Authorization header is attached to GitHub calls."""
+    from scholar_mcp._cache import ScholarCache
+    from scholar_mcp._sync_relaton import RelatonLoader
+
+    cache = ScholarCache(tmp_path / "cache.db")
+    await cache.open()
+    try:
+        seen_auth: list[str | None] = []
+
+        def _capture(request: httpx.Request) -> httpx.Response:
+            seen_auth.append(request.headers.get("Authorization"))
+            if request.url.path.endswith("/commits/main"):
+                return httpx.Response(200, json={"sha": "abc"})
+            return httpx.Response(200, content=iso_tarball)
+
+        with respx.mock(assert_all_called=False) as router:
+            router.route(host="api.github.com").mock(side_effect=_capture)
+
+            async with httpx.AsyncClient() as http:
+                loader = RelatonLoader(body="ISO", http=http, token="ghp_xyz")
+                await loader.sync(cache)
+
+        assert any(a == "token ghp_xyz" for a in seen_auth if a is not None)
+    finally:
+        await cache.close()
