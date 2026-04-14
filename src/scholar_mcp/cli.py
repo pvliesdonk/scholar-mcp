@@ -10,7 +10,7 @@ import asyncio
 import logging
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import click
 
@@ -250,14 +250,22 @@ def sync_standards(body: str, force: bool, cache_dir: Path | None) -> None:
     from scholar_mcp.config import load_config
 
     async def _run() -> int:
+        from scholar_mcp._standards_sync import SyncReport
+
         config = load_config()
         db_path = (cache_dir or config.cache_dir) / "cache.db"
         c = ScholarCache(db_path)
         await c.open()
+        loaders: list[Loader] = []
+        reports: list[SyncReport] = []
         try:
             loaders = _select_loaders(body)
             reports = await run_sync(loaders, c, force=force)
         finally:
+            for loader in loaders:
+                http = getattr(loader, "_http", None)
+                if http is not None:
+                    await http.aclose()
             await c.close()
 
         click.echo(format_reports(reports))
@@ -279,11 +287,25 @@ def sync_standards(body: str, force: bool, cache_dir: Path | None) -> None:
 def _select_loaders(body: str) -> list[Loader]:
     """Return loaders matching *body* ('all' returns every registered).
 
-    Zero loaders are registered in PR 1 — this is a placeholder that
-    later PRs (ISO/IEC in PR 2, IEEE in PR 3, CEN+CC in PR 4) replace
-    with real registration.
+    The loaders each own a short-lived ``httpx.AsyncClient`` created for
+    the duration of ``sync_standards``. The token is read from
+    ``SCHOLAR_GITHUB_TOKEN`` via :func:`load_config`.
     """
-    registered: list[Loader] = []
+    import httpx
+
+    from scholar_mcp._sync_relaton import RelatonLoader
+    from scholar_mcp.config import load_config
+
+    config = load_config()
+    http = httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0))
+
+    registered: list[Loader] = cast(
+        "list[Loader]",
+        [
+            RelatonLoader("ISO", http=http, token=config.github_token),
+            RelatonLoader("IEC", http=http, token=config.github_token),
+        ],
+    )
     if body.upper() == "ALL":
         return registered
     return [loader for loader in registered if loader.body == body.upper()]
