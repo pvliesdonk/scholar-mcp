@@ -1,0 +1,33 @@
+docidentifier:
+  - id: "ISO/IEC 27001:2022"
+    type: "ISO"
+    primary: true
+  - id: "ISO/IEC 27001:2022"
+    type: "IEC"
+  - id: "iso-iec:std:iso-iec:27001:stage-60.60:ed-3:en"
+    type: "URN"
+title:
+  - content: "Information security, cybersecurity and privacy protection — Information security management systems — Requirements"
+    language: "en"
+    script: "Latn"
+    format: "text/plain"
+    type: "main"
+date:
+  - type: "published"
+    value: "2022-10-25"
+docstatus:
+  stage: "60.60"
+link:
+  - type: "src"
+    content: "https://www.iso.org/standard/82875.html"
+edition: "3"
+language:
+  - en
+abstract:
+  - content: "This document specifies requirements for an information security management system."
+    language: "en"
+    format: "text/plain"
+editorialgroup:
+  technical_committee:
+    - name: "JTC 1/SC 27"
+      number: 27

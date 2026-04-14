@@ -1,0 +1,18 @@
+docidentifier:
+  - id: "IEC 62443-3-3:2020"
+    type: "IEC"
+    primary: true
+title:
+  - content: "Industrial communication networks — Network and system security — Part 3-3"
+    language: "en"
+    script: "Latn"
+    format: "text/plain"
+    type: "main"
+date:
+  - type: "published"
+    value: "2020-06-01"
+docstatus:
+  stage: "60.60"
+link:
+  - type: "src"
+    content: "https://webstore.iec.ch/publication/62443-3-3"

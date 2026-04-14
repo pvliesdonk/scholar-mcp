@@ -1,0 +1,20 @@
+docidentifier:
+  - id: "ISO/IEC 15408-1:2022"
+    type: "ISO"
+    primary: true
+  - id: "ISO/IEC 15408-1:2022"
+    type: "IEC"
+title:
+  - content: "Information security, cybersecurity and privacy protection — Evaluation criteria for IT security — Part 1"
+    language: "en"
+    script: "Latn"
+    format: "text/plain"
+    type: "main"
+date:
+  - type: "published"
+    value: "2022-08-01"
+docstatus:
+  stage: "60.60"
+link:
+  - type: "src"
+    content: "https://www.iso.org/standard/72891.html"
