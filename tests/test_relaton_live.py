@@ -318,3 +318,25 @@ async def test_live_fetcher_search_returns_empty_without_cache() -> None:
         results = await fetcher.search("9001")
 
     assert results == []
+
+
+@pytest.mark.live
+@pytest.mark.asyncio
+async def test_live_fetch_iso_9001_2015_real() -> None:
+    """Smoke test: hit the real ISO Relaton repo to catch schema drift.
+
+    Regression guard for the docid/docidentifier schema-key bug that
+    caused live-fetching real ISO standards to silently return stubs.
+    Not run by default; enable with `pytest -m live`.
+    """
+    from scholar_mcp._relaton_live import RelatonLiveFetcher
+
+    async with httpx.AsyncClient(timeout=30.0) as http:
+        fetcher = RelatonLiveFetcher(http=http)
+        record = await fetcher.get("ISO 9001:2015")
+
+    assert record is not None
+    assert record["identifier"] == "ISO 9001:2015"
+    assert record["body"] == "ISO"
+    assert record["title"]
+    assert "Quality management" in record["title"]

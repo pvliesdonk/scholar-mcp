@@ -889,3 +889,32 @@ async def test_loader_joint_dedup_iec_then_iso(
         assert iso_only is None
     finally:
         await cache.close()
+
+
+def test_yaml_to_record_reads_docid_key() -> None:
+    """Real relaton repos use top-level 'docid:', not 'docidentifier:'.
+
+    Regression guard — the parser must accept both shapes so live-fetched
+    records from raw.githubusercontent.com parse into full records (not
+    fallback stubs).
+    """
+    from scholar_mcp._sync_relaton import _yaml_to_record
+
+    doc = _load_fixture("relaton_test_cases/iso-9001-2015-docid-shape.yaml")
+    record, _ = _yaml_to_record(doc)
+
+    assert record is not None
+    assert record["identifier"] == "ISO 9001:2015"
+    assert record["body"] == "ISO"
+    assert "Quality management" in record["title"]
+
+
+def test_yaml_to_record_falls_back_to_docidentifier_key() -> None:
+    """Old-shape fixtures with 'docidentifier:' still work."""
+    from scholar_mcp._sync_relaton import _yaml_to_record
+
+    doc = _load_fixture("relaton_iso_sample/iso-9001-2015.yaml")
+    record, _ = _yaml_to_record(doc)
+
+    assert record is not None
+    assert record["identifier"] == "ISO 9001:2015"

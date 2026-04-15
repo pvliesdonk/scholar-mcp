@@ -150,7 +150,8 @@ def _superseded_by(relations: list[dict[str, Any]] | None) -> str | None:
         if str(rel.get("type", "")).lower() != "obsoleted-by":
             continue
         bibitem = rel.get("bibitem") or {}
-        for ident in bibitem.get("docidentifier", []) or []:
+        idents = bibitem.get("docid") or bibitem.get("docidentifier") or []
+        for ident in idents:
             if ident.get("id"):
                 return str(ident["id"])
     return None
@@ -164,7 +165,8 @@ def _supersedes(relations: list[dict[str, Any]] | None) -> list[str]:
         if str(rel.get("type", "")).lower() != "obsoletes":
             continue
         bibitem = rel.get("bibitem") or {}
-        for ident in bibitem.get("docidentifier", []) or []:
+        idents = bibitem.get("docid") or bibitem.get("docidentifier") or []
+        for ident in idents:
             if ident.get("id"):
                 out.append(str(ident["id"]))
     return out
@@ -200,7 +202,7 @@ def _yaml_to_record(
     Returns:
         Tuple of ``(StandardRecord | None, alias_identifiers)``.
     """
-    docidentifiers = doc.get("docidentifier") or []
+    docidentifiers = doc.get("docid") or doc.get("docidentifier") or []
     canonical = _canonical_identifier_and_body(docidentifiers)
     if canonical is None:
         logger.debug("relaton_yaml_skip reason=%s identifier=%s", "no_canonical", "")
