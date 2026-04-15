@@ -258,3 +258,42 @@ async def test_live_fetch_returns_stub_on_yaml_parse_error() -> None:
     assert result["full_text_available"] is False
     assert result["identifier"] == "ISO 9001:2015"
     assert result["status"] == "unknown"
+
+
+@pytest.mark.asyncio
+async def test_live_fetcher_search_returns_cache_results() -> None:
+    """search() delegates to cache.search_synced_standards."""
+    from unittest.mock import AsyncMock
+
+    from scholar_mcp._record_types import StandardRecord
+    from scholar_mcp._relaton_live import RelatonLiveFetcher
+
+    record: StandardRecord = {
+        "identifier": "ISO 9001:2015",
+        "title": "Quality management systems",
+        "body": "ISO",
+        "status": "published",
+        "full_text_available": False,
+    }
+    mock_cache = AsyncMock()
+    mock_cache.search_synced_standards = AsyncMock(return_value=[record])
+
+    async with httpx.AsyncClient() as http:
+        fetcher = RelatonLiveFetcher(http=http, cache=mock_cache)
+        results = await fetcher.search("9001", limit=5)
+
+    mock_cache.search_synced_standards.assert_awaited_once_with("9001", limit=5)
+    assert len(results) == 1
+    assert results[0]["identifier"] == "ISO 9001:2015"
+
+
+@pytest.mark.asyncio
+async def test_live_fetcher_search_returns_empty_without_cache() -> None:
+    """search() returns [] when no cache is provided."""
+    from scholar_mcp._relaton_live import RelatonLiveFetcher
+
+    async with httpx.AsyncClient() as http:
+        fetcher = RelatonLiveFetcher(http=http)
+        results = await fetcher.search("9001")
+
+    assert results == []

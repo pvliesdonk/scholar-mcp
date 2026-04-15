@@ -13,6 +13,7 @@ from xml.etree import ElementTree as ET
 
 import httpx
 
+from ._protocols import CacheProtocol
 from ._rate_limiter import RateLimiter
 from ._record_types import StandardRecord
 
@@ -997,12 +998,16 @@ class StandardsClient:
     """
 
     def __init__(
-        self, http: httpx.AsyncClient, *, cache_dir: Path | None = None
+        self,
+        http: httpx.AsyncClient,
+        *,
+        cache_dir: Path | None = None,
+        cache: CacheProtocol | None = None,
     ) -> None:
         from ._relaton_live import RelatonLiveFetcher
 
         self._http = http
-        relaton_live = RelatonLiveFetcher(http=http)
+        relaton_live = RelatonLiveFetcher(http=http, cache=cache)
         self._fetchers: dict[str, Any] = {
             "IETF": _IETFFetcher(http, RateLimiter(delay=0.5)),
             "NIST": _NISTFetcher(http, RateLimiter(delay=1.0), cache_dir=cache_dir),
@@ -1024,10 +1029,10 @@ class StandardsClient:
 
         Args:
             query: Identifier, title, or free text.
-            body: Optional body filter: "NIST", "IETF", "W3C", or "ETSI".
-                "ISO", "IEC", and "ISO/IEC" are accepted but return empty
-                results until RelatonLiveFetcher implements search
-                (tracked in #123).
+            body: Optional body filter: "IETF", "NIST", "W3C", "ETSI",
+                "ISO", "IEC", or "ISO/IEC". ISO / IEC / ISO/IEC results
+                come from the locally synced cache; run ``sync-standards``
+                first for non-empty results.
             limit: Maximum results.
 
         Returns:

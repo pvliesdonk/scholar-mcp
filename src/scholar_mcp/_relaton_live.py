@@ -12,12 +12,16 @@ from __future__ import annotations
 
 import logging
 import re
+from typing import TYPE_CHECKING
 
 import httpx
 import yaml
 
 from ._record_types import StandardRecord
 from ._sync_relaton import _yaml_to_record
+
+if TYPE_CHECKING:
+    from ._protocols import CacheProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -74,8 +78,11 @@ class RelatonLiveFetcher:
     and ``ISO/IEC``. Returns ``None`` for identifiers outside that set.
     """
 
-    def __init__(self, *, http: httpx.AsyncClient) -> None:
+    def __init__(
+        self, *, http: httpx.AsyncClient, cache: CacheProtocol | None = None
+    ) -> None:
         self._http = http
+        self._cache = cache
 
     async def _try_repo(self, repo: str, slug: str) -> dict[str, object] | None:
         url = f"{_RAW_BASE}/{repo}/main/data/{slug}.yaml"
@@ -101,6 +108,25 @@ class RelatonLiveFetcher:
         if not isinstance(doc, dict):
             return None
         return doc
+
+    async def search(self, query: str, *, limit: int = 10) -> list[StandardRecord]:
+        """Search synced ISO / IEC / ISO/IEC standards by keyword.
+
+        Delegates to the cache's ``search_synced_standards`` method. Returns
+        an empty list if no cache was provided at construction time (i.e.,
+        ``sync-standards`` has not been run or the fetcher is in a test
+        context without a cache).
+
+        Args:
+            query: Substring to match against identifier and title.
+            limit: Maximum number of results.
+
+        Returns:
+            List of matching ``StandardRecord`` dicts.
+        """
+        if self._cache is None:
+            return []
+        return await self._cache.search_synced_standards(query, limit=limit)
 
     async def get(self, identifier: str) -> StandardRecord | None:
         """Return a parsed record for *identifier*, or a stub, or ``None``."""

@@ -1206,3 +1206,29 @@ async def test_standards_client_get_fallback_to_fetchers() -> None:
         result = await client.get("some-unknown-standard-xyz")
         await http.aclose()
     assert result is None
+
+
+@pytest.mark.asyncio
+async def test_standards_client_search_iso_delegates_to_relaton() -> None:
+    """search(body='ISO') routes to RelatonLiveFetcher.search()."""
+    from unittest.mock import AsyncMock
+
+    from scholar_mcp._record_types import StandardRecord
+    from scholar_mcp._standards_client import StandardsClient
+
+    record: StandardRecord = {
+        "identifier": "ISO 9001:2015",
+        "title": "Quality management systems",
+        "body": "ISO",
+        "status": "published",
+        "full_text_available": False,
+    }
+    mock_cache = AsyncMock()
+    mock_cache.search_synced_standards = AsyncMock(return_value=[record])
+
+    async with httpx.AsyncClient() as http:
+        client = StandardsClient(http, cache=mock_cache)
+        results = await client.search("9001", body="ISO")
+
+    assert len(results) == 1
+    assert results[0]["identifier"] == "ISO 9001:2015"

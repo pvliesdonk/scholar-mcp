@@ -176,7 +176,7 @@ async def make_service_lifespan(
     tasks = TaskQueue()
 
     standards_http = httpx.AsyncClient(timeout=30.0)
-    standards = StandardsClient(standards_http, cache_dir=config.cache_dir)
+    standards = StandardsClient(standards_http, cache_dir=config.cache_dir, cache=cache)
 
     enrichment = _build_enrichment_pipeline()
 
