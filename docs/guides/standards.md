@@ -1,15 +1,17 @@
-# Tier 2 standards sync -- ISO & IEC
+# Tier 2 standards sync -- ISO, IEC & IEEE
 
-Scholar MCP caches ISO and IEC standards metadata locally. The source of truth is the
-community-maintained Relaton YAML dumps at
-[`relaton/relaton-data-iso`](https://github.com/relaton/relaton-data-iso)
-and [`relaton/relaton-data-iec`](https://github.com/relaton/relaton-data-iec).
+Scholar MCP caches ISO, IEC, and IEEE standards metadata locally. The source of truth
+is the community-maintained Relaton YAML dumps at
+[`relaton/relaton-data-iso`](https://github.com/relaton/relaton-data-iso),
+[`relaton/relaton-data-iec`](https://github.com/relaton/relaton-data-iec), and
+[`relaton/relaton-data-ieee`](https://github.com/relaton/relaton-data-ieee).
 
 ## Running a sync
 
 ```
 scholar-mcp sync-standards            # all registered bodies
 scholar-mcp sync-standards --body ISO # only ISO
+scholar-mcp sync-standards --body IEEE # only IEEE
 scholar-mcp sync-standards --force    # re-sync even if upstream SHA is unchanged
 ```
 
@@ -103,3 +105,24 @@ FROM standards
 WHERE source IS NOT NULL
 GROUP BY source;
 ```
+
+## IEEE
+
+IEEE metadata comes from the [`relaton/relaton-data-ieee`](https://github.com/relaton/relaton-data-ieee) repository.
+
+### Supported identifier forms
+
+- `IEEE 1003.1-2024`, `IEEE 802.11-2020` — plain IEEE standards
+- `IEEE Std 1588-2019` — the `Std` token is accepted (upstream convention)
+- `IEC/IEEE 61588-2021` — joint standards hosted in the IEEE repo
+- `ISO/IEC/IEEE 42010-2011` — triple-joint standards (ISO + IEC + IEEE committees)
+
+For joint standards the stored `body` field reflects the true joint nature (e.g. `"ISO/IEC/IEEE"`), while dispatch still routes through the `"IEEE"` fetcher key. Per-body filename conventions differ between repositories: ISO/IEC use lowercase-hyphen (`iso-9001-2015.yaml`), IEEE uses uppercase-underscore (`IEEE_1003.1-2024.yaml`, `ISO_IEC_IEEE_42010-2011.yaml`).
+
+### Not yet supported (filed follow-ups)
+
+- `ANSI/IEEE Std 754-1985` and other historical ANSI-co-branded identifiers — see [#127](https://github.com/pvliesdonk/scholar-mcp/issues/127)
+- `AIEE 11-1937` and other pre-IEEE AIEE identifiers — see [#127](https://github.com/pvliesdonk/scholar-mcp/issues/127)
+- `IEEE P802.11-REVme` unpublished drafts — see [#128](https://github.com/pvliesdonk/scholar-mcp/issues/128)
+- Explicit `body="IEC/IEEE"` / `body="ISO/IEC/IEEE"` search dispatch — see [#129](https://github.com/pvliesdonk/scholar-mcp/issues/129). Today, use identifier lookup or `body="IEEE"` which returns joints too.
+- IEEE Xplore authenticated full-text — see [#92](https://github.com/pvliesdonk/scholar-mcp/issues/92)
