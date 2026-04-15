@@ -83,6 +83,33 @@ _IEEE_RE = re.compile(
     r"(\d{1,5}(?:-\d+)*(?:\.\d+)*)\s*[-\s]\s*(\d{4})\b"
 )
 
+# CC version: "CC:2022", "CC 2022", "Common Criteria 2022"
+_CC_VERSION_RE = re.compile(
+    r"(?i)\b(?:cc|common\s+criteria)[:\s]\s*(\d{4})\b(?!\s+part)"
+)
+# CC with part: "CC:2022 Part 1", "Common Criteria 2022 Part 1"
+_CC_PART_RE = re.compile(
+    r"(?i)\b(?:cc|common\s+criteria)[:\s]\s*(\d{4})\s+part\s+(\d)\b"
+)
+# CC 3.1 Revision: "CC 3.1 R5", "CC 3.1 Revision 5", "Common Criteria 3.1 R5"
+_CC_REV_RE = re.compile(
+    r"(?i)\b(?:cc|common\s+criteria)\s+3\.1\s+r(?:ev(?:ision)?\.?)?\s*(\d)\b"
+)
+# CEM: "CEM:2022", "Common Evaluation Methodology 2022"
+_CEM_RE = re.compile(
+    r"(?i)\b(?:cem|common\s+evaluation\s+methodology)[:\s]\s*(\d{4})\b"
+)
+# CC Protection Profile schemes (BSI, KECS, ANSSI, NIAP, CCN)
+_CC_PP_RE = re.compile(
+    r"\b("
+    r"BSI-CC-PP-\d+(?:-V\d+)?-\d{4}"
+    r"|KECS-PP-\d+-\d{4}"
+    r"|ANSSI-CC-PP-\d{4}/\d+"
+    r"|CCN-PP-\d+-\d{4}"
+    r"|NIAP-PP-[A-Za-z0-9_-]+"
+    r")\b"
+)
+
 
 def resolve_identifier_local(raw: str) -> tuple[str, str] | None:
     """Attempt to resolve *raw* to (canonical_identifier, body) using only regex.
@@ -96,6 +123,31 @@ def resolve_identifier_local(raw: str) -> tuple[str, str] | None:
         Tuple of (canonical_identifier, body) or None.
     """
     s = raw.strip()
+
+    # CC Protection Profile (very specific scheme prefix — check first)
+    m = _CC_PP_RE.search(s)
+    if m:
+        return m.group(1), "CC"
+
+    # CC with part: "CC:2022 Part 1" / "Common Criteria 2022 Part 1"
+    m = _CC_PART_RE.search(s)
+    if m:
+        return f"CC:{m.group(1)} Part {m.group(2)}", "CC"
+
+    # CC 3.1 Revision: "CC 3.1 R5" / "CC 3.1 Revision 5"
+    m = _CC_REV_RE.search(s)
+    if m:
+        return f"CC:2017 (3.1 R{m.group(1)})", "CC"
+
+    # CEM: "CEM:2022" / "Common Evaluation Methodology 2022"
+    m = _CEM_RE.search(s)
+    if m:
+        return f"CEM:{m.group(1)}", "CC"
+
+    # CC version only: "CC:2022" / "Common Criteria 2022"
+    m = _CC_VERSION_RE.search(s)
+    if m:
+        return f"CC:{m.group(1)}", "CC"
 
     # IEEE patterns (check before IETF STD to prevent "IEEE Std X" from matching _IETF_STD_RE)
     # ISO/IEC/IEEE triple-joint (must precede other IEEE joints and plain IEEE)
@@ -1032,6 +1084,52 @@ def _normalize_etsi(item: dict) -> StandardRecord:  # type: ignore[type-arg]
     )
 
 
+class _CCFetcher:
+    """Cache-only fetcher for Common Criteria standards.
+
+    CC has no live API — all records are populated by ``CCLoader`` via
+    ``sync-standards --body CC``. This fetcher delegates ``get`` and
+    ``search`` to the cache and emits a WARNING on cache miss with the
+    sync-command hint so operators see the gap.
+
+    Conforms to the ``_StandardsFetcher`` Protocol.
+    """
+
+    def __init__(self, *, cache: CacheProtocol | None = None) -> None:
+        """Initialise the fetcher.
+
+        Args:
+            cache: Optional cache. When ``None``, ``get`` always returns
+                ``None`` and ``search`` returns ``[]``.
+        """
+        self._cache = cache
+
+    async def get(self, identifier: str) -> StandardRecord | None:
+        """Return cached CC record, or ``None`` (with WARNING log)."""
+        if self._cache is None:
+            logger.warning(
+                "cc_cache_miss identifier=%s reason=no_cache_configured",
+                identifier,
+            )
+            return None
+        record = await self._cache.get_standard(identifier)
+        if record is None:
+            logger.warning(
+                "cc_cache_miss identifier=%s hint=%s",
+                identifier,
+                "run sync-standards --body CC",
+            )
+        return record
+
+    async def search(self, query: str, *, limit: int = 10) -> list[StandardRecord]:
+        """Search synced CC records via the cache."""
+        if self._cache is None:
+            return []
+        return await self._cache.search_synced_standards(
+            query, source="CC", limit=limit
+        )
+
+
 # ---------------------------------------------------------------------------
 # StandardsClient — public orchestrator
 # ---------------------------------------------------------------------------
@@ -1074,6 +1172,7 @@ class StandardsClient:
             "IEC": RelatonLiveFetcher(http=http, cache=cache, source="IEC"),
             "IEEE": RelatonLiveFetcher(http=http, cache=cache, source="IEEE"),
             "ISO/IEC": RelatonLiveFetcher(http=http, cache=cache, source=None),
+            "CC": _CCFetcher(cache=cache),
         }
 
     async def search(
@@ -1088,8 +1187,8 @@ class StandardsClient:
         Args:
             query: Identifier, title, or free text.
             body: Optional body filter: "IETF", "NIST", "W3C", "ETSI",
-                "ISO", "IEC", "ISO/IEC", or "IEEE". ISO / IEC / ISO/IEC /
-                IEEE results come from the locally synced cache; run
+                "ISO", "IEC", "ISO/IEC", "IEEE", or "CC". ISO / IEC / ISO/IEC /
+                IEEE / CC results come from the locally synced cache; run
                 ``sync-standards`` first for non-empty results.
             limit: Maximum results.
 
