@@ -1008,12 +1008,15 @@ def test_yaml_to_record_ieee_skips_trademark_scope() -> None:
 async def test_loader_cold_sync_inserts_ieee_records(
     tmp_path: Path, ieee_tarball: bytes
 ) -> None:
-    """Cold sync of IEEE fixtures inserts all four records with correct body.
+    """Cold sync of IEEE fixtures exercises the full RelatonLoader path.
 
-    Exercises the full RelatonLoader path for IEEE, mirroring the ISO
-    cold-sync test. Guards against wiring regressions between RelatonLoader,
-    _yaml_to_record, and _canonical_identifier_and_body for IEEE inputs
-    including the IEC/IEEE and ISO/IEC/IEEE joint detection.
+    The four fixture YAML files map to three unique canonical identifiers
+    (the trademark fixture and the plain fixture both resolve to
+    ``IEEE 1003.1-2024``; alphabetical iteration means the trademark
+    version inserts first and the plain version updates it). Guards
+    against wiring regressions between RelatonLoader, _yaml_to_record,
+    and _canonical_identifier_and_body for IEEE inputs including the
+    IEC/IEEE and ISO/IEC/IEEE joint detection.
     """
     from scholar_mcp._cache import ScholarCache
     from scholar_mcp._sync_relaton import RelatonLoader
