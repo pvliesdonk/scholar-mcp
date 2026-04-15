@@ -58,7 +58,7 @@ def _identifier_to_relaton_slug(identifier: str) -> str | None:
     ):
         return _ieee_slug(stripped)
 
-    # ISO/IEC/IEC/ISO slugging (lowercase-hyphen) — PR 2 behavior.
+    # ISO / IEC / ISO/IEC slugging (lowercase-hyphen) — PR 2 behavior.
     if not (
         upper.startswith("ISO/IEC")
         or upper.startswith("ISO ")
@@ -77,7 +77,11 @@ def _identifier_to_relaton_slug(identifier: str) -> str | None:
 
 
 def _ieee_slug(identifier: str) -> str | None:
-    """IEEE filename slug: uppercase, underscores between tokens, dots kept.
+    """IEEE filename slug: underscores between tokens, dots and hyphens kept.
+
+    Input is assumed to be a canonical IEEE identifier with uppercase
+    body prefixes; callers routing from ``resolve_identifier_local`` already
+    satisfy this contract. The function does not recase the input.
 
     Examples:
         IEEE 1003.1-2024        → IEEE_1003.1-2024
@@ -93,8 +97,11 @@ def _ieee_slug(identifier: str) -> str | None:
 def _repo_order_for(identifier: str) -> list[str]:
     """Return the ordered list of relaton-data-* repos to probe.
 
-    The first repo that returns a parseable YAML wins. All 404s → stub
-    record.
+    The first repo whose YAML parses cleanly wins. All other outcomes
+    (404, non-404 error, unparseable YAML) are treated the same by
+    :meth:`RelatonLiveFetcher.get` — it moves on to the next repo. When
+    all repos exhaust without a parseable result, the caller returns a
+    stub record.
     """
     upper = identifier.strip().upper()
     if (
@@ -203,8 +210,9 @@ class RelatonLiveFetcher:
             if record is not None:
                 return record
 
-        # All repos 404 — return a stub so callers can surface
-        # "resolved but catalogue entry unavailable" rather than None.
+        # All repos exhausted without a parseable result — return a stub so
+        # callers can surface "resolved but catalogue entry unavailable"
+        # rather than None.
         upper = identifier.strip().upper()
         if upper.startswith("ISO/IEC/IEEE"):
             body = "ISO/IEC/IEEE"

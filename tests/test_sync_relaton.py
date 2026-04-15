@@ -301,6 +301,32 @@ def test_supersedes_empty_when_no_relations() -> None:
     assert _supersedes(None) == []
 
 
+def test_superseded_by_reads_docid_key_in_relation() -> None:
+    """bibitem.docid is accepted (mirrors the top-level docid fix)."""
+    from scholar_mcp._sync_relaton import _superseded_by
+
+    relations = [
+        {
+            "type": "obsoleted-by",
+            "bibitem": {"docid": [{"id": "ISO 9001:2015"}]},
+        }
+    ]
+    assert _superseded_by(relations) == "ISO 9001:2015"
+
+
+def test_supersedes_reads_docid_key_in_relation() -> None:
+    """bibitem.docid is accepted for obsoletes relations too."""
+    from scholar_mcp._sync_relaton import _supersedes
+
+    relations = [
+        {
+            "type": "obsoletes",
+            "bibitem": {"docid": [{"id": "ISO 9001:2008"}]},
+        }
+    ]
+    assert _supersedes(relations) == ["ISO 9001:2008"]
+
+
 # ---------------------------------------------------------------------------
 # _committee coverage
 # ---------------------------------------------------------------------------
@@ -406,6 +432,13 @@ def iso_tarball() -> bytes:
 def iec_tarball() -> bytes:
     return _build_tarball(
         FIXTURES / "relaton_iec_sample", prefix="relaton-data-iec-main"
+    )
+
+
+@pytest.fixture
+def ieee_tarball() -> bytes:
+    return _build_tarball(
+        FIXTURES / "relaton_ieee_sample", prefix="relaton-data-ieee-main"
     )
 
 
@@ -969,3 +1002,61 @@ def test_yaml_to_record_ieee_skips_trademark_scope() -> None:
     assert record is not None
     assert record["identifier"] == "IEEE 1003.1-2024"
     assert "™" not in record["identifier"]
+
+
+@pytest.mark.asyncio
+async def test_loader_cold_sync_inserts_ieee_records(
+    tmp_path: Path, ieee_tarball: bytes
+) -> None:
+    """Cold sync of IEEE fixtures inserts all four records with correct body.
+
+    Exercises the full RelatonLoader path for IEEE, mirroring the ISO
+    cold-sync test. Guards against wiring regressions between RelatonLoader,
+    _yaml_to_record, and _canonical_identifier_and_body for IEEE inputs
+    including the IEC/IEEE and ISO/IEC/IEEE joint detection.
+    """
+    from scholar_mcp._cache import ScholarCache
+    from scholar_mcp._sync_relaton import RelatonLoader
+
+    cache = ScholarCache(tmp_path / "cache.db")
+    await cache.open()
+    try:
+        sha = "deadbeef" * 5
+        with respx.mock(assert_all_called=False) as router:
+            router.get(
+                "https://api.github.com/repos/relaton/relaton-data-ieee/commits/main"
+            ).mock(return_value=httpx.Response(200, json={"sha": sha}))
+            router.get(
+                f"https://api.github.com/repos/relaton/relaton-data-ieee/tarball/{sha}"
+            ).mock(
+                return_value=httpx.Response(
+                    200,
+                    content=ieee_tarball,
+                    headers={"Content-Type": "application/x-gzip"},
+                )
+            )
+
+            async with httpx.AsyncClient() as http:
+                loader = RelatonLoader("IEEE", http=http)
+                report = await loader.sync(cache)
+
+        assert report.added == 3
+        assert report.updated == 1
+        assert report.body == "IEEE"
+        assert report.upstream_ref == sha
+
+        plain = await cache.get_standard("IEEE 1003.1-2024")
+        assert plain is not None
+        assert plain["body"] == "IEEE"
+        assert "POSIX" in plain["title"]
+
+        iec_ieee = await cache.get_standard("IEC/IEEE 61588-2021")
+        assert iec_ieee is not None
+        assert iec_ieee["body"] == "IEC/IEEE"
+
+        iso_iec_ieee = await cache.get_standard("ISO/IEC/IEEE 42010-2011")
+        assert iso_iec_ieee is not None
+        assert iso_iec_ieee["body"] == "ISO/IEC/IEEE"
+        assert "™" not in iso_iec_ieee["identifier"]
+    finally:
+        await cache.close()
