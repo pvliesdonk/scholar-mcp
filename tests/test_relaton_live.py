@@ -93,7 +93,7 @@ async def test_live_fetch_iso_hit() -> None:
 
         async with httpx.AsyncClient() as http:
             fetcher = RelatonLiveFetcher(http=http)
-            record = await fetcher.fetch("ISO 9001:2015")
+            record = await fetcher.get("ISO 9001:2015")
 
     assert record is not None
     assert record["identifier"] == "ISO 9001:2015"
@@ -127,7 +127,7 @@ async def test_live_fetch_falls_back_to_iec_when_iso_404() -> None:
 
         async with httpx.AsyncClient() as http:
             fetcher = RelatonLiveFetcher(http=http)
-            record = await fetcher.fetch("ISO 9001:2015")
+            record = await fetcher.get("ISO 9001:2015")
 
     assert record is not None
     assert record["identifier"] == "ISO 9001:2015"
@@ -162,7 +162,7 @@ async def test_live_fetch_falls_back_to_iso_when_iec_404() -> None:
 
         async with httpx.AsyncClient() as http:
             fetcher = RelatonLiveFetcher(http=http)
-            record = await fetcher.fetch("IEC 62443-3-3:2020")
+            record = await fetcher.get("IEC 62443-3-3:2020")
 
     assert record is not None
     assert record["body"] == "IEC"
@@ -185,7 +185,7 @@ async def test_live_fetch_returns_stub_when_both_404() -> None:
 
         async with httpx.AsyncClient() as http:
             fetcher = RelatonLiveFetcher(http=http)
-            record = await fetcher.fetch("ISO 99999:2099")
+            record = await fetcher.get("ISO 99999:2099")
 
     assert record is not None
     assert record["identifier"] == "ISO 99999:2099"
@@ -201,7 +201,7 @@ async def test_live_fetch_returns_none_for_non_slugifiable_id() -> None:
 
     async with httpx.AsyncClient() as http:
         fetcher = RelatonLiveFetcher(http=http)
-        result = await fetcher.fetch("RFC 9000")
+        result = await fetcher.get("RFC 9000")
 
     assert result is None
 
@@ -221,7 +221,7 @@ async def test_live_fetch_returns_stub_on_server_error() -> None:
 
         async with httpx.AsyncClient() as http:
             fetcher = RelatonLiveFetcher(http=http)
-            result = await fetcher.fetch("ISO 9001:2015")
+            result = await fetcher.get("ISO 9001:2015")
 
     # Both repos returned 5xx → fall through to stub
     assert result is not None
@@ -250,7 +250,7 @@ async def test_live_fetch_returns_stub_on_yaml_parse_error() -> None:
 
         async with httpx.AsyncClient() as http:
             fetcher = RelatonLiveFetcher(http=http)
-            result = await fetcher.fetch("ISO 9001:2015")
+            result = await fetcher.get("ISO 9001:2015")
 
     # YAMLError caught in ISO repo + 404 from IEC → stub
     assert result is not None
@@ -258,3 +258,63 @@ async def test_live_fetch_returns_stub_on_yaml_parse_error() -> None:
     assert result["full_text_available"] is False
     assert result["identifier"] == "ISO 9001:2015"
     assert result["status"] == "unknown"
+
+
+@pytest.mark.asyncio
+async def test_live_fetcher_search_returns_cache_results() -> None:
+    """search() delegates to cache.search_synced_standards with source=None."""
+    from unittest.mock import AsyncMock
+
+    from scholar_mcp._record_types import StandardRecord
+    from scholar_mcp._relaton_live import RelatonLiveFetcher
+
+    record: StandardRecord = {
+        "identifier": "ISO 9001:2015",
+        "title": "Quality management systems",
+        "body": "ISO",
+        "status": "published",
+        "full_text_available": False,
+    }
+    mock_cache = AsyncMock()
+    mock_cache.search_synced_standards = AsyncMock(return_value=[record])
+
+    async with httpx.AsyncClient() as http:
+        fetcher = RelatonLiveFetcher(http=http, cache=mock_cache)
+        results = await fetcher.search("9001", limit=5)
+
+    mock_cache.search_synced_standards.assert_awaited_once_with(
+        "9001", source=None, limit=5
+    )
+    assert len(results) == 1
+    assert results[0]["identifier"] == "ISO 9001:2015"
+
+
+@pytest.mark.asyncio
+async def test_live_fetcher_search_forwards_source_filter() -> None:
+    """search() forwards the source= __init__ kwarg to the cache."""
+    from unittest.mock import AsyncMock
+
+    from scholar_mcp._relaton_live import RelatonLiveFetcher
+
+    mock_cache = AsyncMock()
+    mock_cache.search_synced_standards = AsyncMock(return_value=[])
+
+    async with httpx.AsyncClient() as http:
+        fetcher = RelatonLiveFetcher(http=http, cache=mock_cache, source="IEC")
+        await fetcher.search("62443", limit=3)
+
+    mock_cache.search_synced_standards.assert_awaited_once_with(
+        "62443", source="IEC", limit=3
+    )
+
+
+@pytest.mark.asyncio
+async def test_live_fetcher_search_returns_empty_without_cache() -> None:
+    """search() returns [] when no cache is provided."""
+    from scholar_mcp._relaton_live import RelatonLiveFetcher
+
+    async with httpx.AsyncClient() as http:
+        fetcher = RelatonLiveFetcher(http=http)
+        results = await fetcher.search("9001")
+
+    assert results == []

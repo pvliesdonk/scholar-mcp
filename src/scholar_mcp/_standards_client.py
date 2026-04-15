@@ -8,11 +8,12 @@ import logging
 import re
 import time
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Protocol, runtime_checkable
 from xml.etree import ElementTree as ET
 
 import httpx
 
+from ._protocols import CacheProtocol
 from ._rate_limiter import RateLimiter
 from ._record_types import StandardRecord
 
@@ -154,6 +155,25 @@ def resolve_identifier_local(raw: str) -> tuple[str, str] | None:
         return f"IEC {m.group(1)}:{m.group(2)}", "IEC"
 
     return None
+
+
+# ---------------------------------------------------------------------------
+# Structural protocol shared by all registered fetchers
+# ---------------------------------------------------------------------------
+
+
+@runtime_checkable
+class _StandardsFetcher(Protocol):
+    """Structural type shared by all body fetchers in StandardsClient.
+
+    Every fetcher registered in ``_fetchers`` must expose both ``.get()``
+    and ``.search()``. The Protocol is ``runtime_checkable`` so tests can
+    use ``isinstance`` to verify conformance.
+    """
+
+    async def get(self, identifier: str) -> StandardRecord | None: ...
+
+    async def search(self, query: str, *, limit: int = 10) -> list[StandardRecord]: ...
 
 
 # ---------------------------------------------------------------------------
@@ -997,20 +1017,27 @@ class StandardsClient:
     """
 
     def __init__(
-        self, http: httpx.AsyncClient, *, cache_dir: Path | None = None
+        self,
+        http: httpx.AsyncClient,
+        *,
+        cache_dir: Path | None = None,
+        cache: CacheProtocol | None = None,
     ) -> None:
         from ._relaton_live import RelatonLiveFetcher
 
         self._http = http
-        relaton_live = RelatonLiveFetcher(http=http)
-        self._fetchers: dict[str, Any] = {
+        # Three RelatonLiveFetcher instances so each body key can carry its
+        # own source filter when search() delegates to the cache.
+        # The ISO/IEC variant uses source=None to cover joint-committee
+        # records that may live under either "ISO" or "IEC" in the cache.
+        self._fetchers: dict[str, _StandardsFetcher] = {
             "IETF": _IETFFetcher(http, RateLimiter(delay=0.5)),
             "NIST": _NISTFetcher(http, RateLimiter(delay=1.0), cache_dir=cache_dir),
             "W3C": _W3CFetcher(http, RateLimiter(delay=0.5)),
             "ETSI": _ETSIFetcher(http, RateLimiter(delay=1.0)),
-            "ISO": relaton_live,
-            "IEC": relaton_live,
-            "ISO/IEC": relaton_live,
+            "ISO": RelatonLiveFetcher(http=http, cache=cache, source="ISO"),
+            "IEC": RelatonLiveFetcher(http=http, cache=cache, source="IEC"),
+            "ISO/IEC": RelatonLiveFetcher(http=http, cache=cache, source=None),
         }
 
     async def search(
@@ -1024,10 +1051,10 @@ class StandardsClient:
 
         Args:
             query: Identifier, title, or free text.
-            body: Optional body filter: "NIST", "IETF", "W3C", or "ETSI".
-                "ISO", "IEC", and "ISO/IEC" are accepted but return empty
-                results until RelatonLiveFetcher implements search
-                (tracked in #123).
+            body: Optional body filter: "IETF", "NIST", "W3C", "ETSI",
+                "ISO", "IEC", or "ISO/IEC". ISO / IEC / ISO/IEC results
+                come from the locally synced cache; run ``sync-standards``
+                first for non-empty results.
             limit: Maximum results.
 
         Returns:
@@ -1035,19 +1062,20 @@ class StandardsClient:
         """
         if body is not None:
             fetcher = self._fetchers.get(body.upper())
-            if fetcher is None or not hasattr(fetcher, "search"):
+            if fetcher is None:
                 return []
-            return cast(
-                "list[StandardRecord]", await fetcher.search(query, limit=limit)
-            )
+            return await fetcher.search(query, limit=limit)
 
-        # Search all sources concurrently and merge
+        # Search all sources concurrently, one call per fetcher type. For
+        # RelatonLiveFetcher specifically, the ISO/IEC variant (source=None)
+        # returns unfiltered Relaton records and subsumes the ISO/IEC-scoped
+        # instances — last-wins overwrite keeps it (dict insertion order:
+        # ISO → IEC → ISO/IEC). This is a deliberate, type-based dedup; if
+        # a second instance of any non-Relaton type is ever registered, the
+        # earlier one will be silently skipped.
+        one_per_type = self._one_fetcher_per_type()
         results_per_body = await asyncio.gather(
-            *(
-                f.search(query, limit=limit)
-                for f in self._fetchers.values()
-                if hasattr(f, "search")
-            ),
+            *(f.search(query, limit=limit) for f in one_per_type),
             return_exceptions=True,
         )
         merged: list[StandardRecord] = []
@@ -1073,21 +1101,36 @@ class StandardsClient:
             canonical, body = resolved
             fetcher = self._fetchers.get(body)
             if fetcher is not None:
-                if hasattr(fetcher, "fetch"):
-                    return cast("StandardRecord | None", await fetcher.fetch(canonical))
-                return cast("StandardRecord | None", await fetcher.get(canonical))
+                return await fetcher.get(canonical)
 
-        # No local resolution — try each fetcher (deduped: same RelatonLiveFetcher
-        # instance is registered under ISO, IEC, and ISO/IEC).
-        seen: list[Any] = list(dict.fromkeys(self._fetchers.values()))
-        for fetcher in seen:
-            if hasattr(fetcher, "fetch"):
-                result = cast("StandardRecord | None", await fetcher.fetch(identifier))
-            else:
-                result = cast("StandardRecord | None", await fetcher.get(identifier))
+        # No local resolution — try one fetcher per type. See
+        # :meth:`_one_fetcher_per_type` for the dedup contract.
+        for fetcher in self._one_fetcher_per_type():
+            result = await fetcher.get(identifier)
             if result is not None:
                 return result
         return None
+
+    def _one_fetcher_per_type(self) -> list[_StandardsFetcher]:
+        """Return one fetcher per concrete fetcher class.
+
+        Used by the all-bodies paths of :meth:`search` and :meth:`get` so that
+        fetchers registered under multiple body keys are only invoked once.
+
+        For :class:`RelatonLiveFetcher` (registered under ``ISO``, ``IEC``,
+        ``ISO/IEC``), the last-wins overwrite keeps the ``ISO/IEC`` variant
+        whose ``source=None`` returns all synced Relaton records — the ISO-
+        and IEC-scoped instances would be subsumed by it. Insertion order of
+        ``self._fetchers`` (``ISO`` → ``IEC`` → ``ISO/IEC``) is load-bearing.
+
+        Non-Relaton fetchers appear exactly once today; if a second instance
+        of any of those types is ever added, it will replace the earlier one
+        — register distinct wrapper types if that matters.
+        """
+        by_type: dict[type[object], _StandardsFetcher] = {}
+        for f in self._fetchers.values():
+            by_type[type(f)] = f
+        return list(by_type.values())
 
     async def resolve(self, raw: str) -> list[StandardRecord]:
         """Resolve a raw citation string to one or more StandardRecords.
@@ -1108,12 +1151,7 @@ class StandardsClient:
             canonical, body = resolved
             fetcher = self._fetchers.get(body)
             if fetcher:
-                if hasattr(fetcher, "fetch"):
-                    record = cast(
-                        "StandardRecord | None", await fetcher.fetch(canonical)
-                    )
-                else:
-                    record = cast("StandardRecord | None", await fetcher.get(canonical))
+                record = await fetcher.get(canonical)
                 if record is not None:
                     return [record]
             # Identifier resolved locally but source fetch failed — return minimal stub
