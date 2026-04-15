@@ -8,7 +8,7 @@ import logging
 import re
 import time
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Protocol, runtime_checkable
 from xml.etree import ElementTree as ET
 
 import httpx
@@ -155,6 +155,25 @@ def resolve_identifier_local(raw: str) -> tuple[str, str] | None:
         return f"IEC {m.group(1)}:{m.group(2)}", "IEC"
 
     return None
+
+
+# ---------------------------------------------------------------------------
+# Structural protocol shared by all registered fetchers
+# ---------------------------------------------------------------------------
+
+
+@runtime_checkable
+class _StandardsFetcher(Protocol):
+    """Structural type shared by all body fetchers in StandardsClient.
+
+    Every fetcher registered in ``_fetchers`` must expose both ``.get()``
+    and ``.search()``. The Protocol is ``runtime_checkable`` so tests can
+    use ``isinstance`` to verify conformance.
+    """
+
+    async def get(self, identifier: str) -> StandardRecord | None: ...
+
+    async def search(self, query: str, *, limit: int = 10) -> list[StandardRecord]: ...
 
 
 # ---------------------------------------------------------------------------
@@ -1008,7 +1027,7 @@ class StandardsClient:
 
         self._http = http
         relaton_live = RelatonLiveFetcher(http=http, cache=cache)
-        self._fetchers: dict[str, Any] = {
+        self._fetchers: dict[str, _StandardsFetcher] = {
             "IETF": _IETFFetcher(http, RateLimiter(delay=0.5)),
             "NIST": _NISTFetcher(http, RateLimiter(delay=1.0), cache_dir=cache_dir),
             "W3C": _W3CFetcher(http, RateLimiter(delay=0.5)),
@@ -1040,18 +1059,16 @@ class StandardsClient:
         """
         if body is not None:
             fetcher = self._fetchers.get(body.upper())
-            if fetcher is None or not hasattr(fetcher, "search"):
+            if fetcher is None:
                 return []
-            return cast(
-                "list[StandardRecord]", await fetcher.search(query, limit=limit)
-            )
+            return await fetcher.search(query, limit=limit)
 
-        # Search all sources concurrently and merge
+        # Search all sources concurrently (dedup: same RelatonLiveFetcher instance
+        # covers ISO, IEC, and ISO/IEC — only call it once).
         results_per_body = await asyncio.gather(
             *(
                 f.search(query, limit=limit)
-                for f in self._fetchers.values()
-                if hasattr(f, "search")
+                for f in dict.fromkeys(self._fetchers.values())
             ),
             return_exceptions=True,
         )
@@ -1078,13 +1095,13 @@ class StandardsClient:
             canonical, body = resolved
             fetcher = self._fetchers.get(body)
             if fetcher is not None:
-                return cast("StandardRecord | None", await fetcher.get(canonical))
+                return await fetcher.get(canonical)
 
         # No local resolution — try each fetcher (deduped: same RelatonLiveFetcher
         # instance is registered under ISO, IEC, and ISO/IEC).
-        seen: list[Any] = list(dict.fromkeys(self._fetchers.values()))
+        seen = list(dict.fromkeys(self._fetchers.values()))
         for fetcher in seen:
-            result = cast("StandardRecord | None", await fetcher.get(identifier))
+            result = await fetcher.get(identifier)
             if result is not None:
                 return result
         return None
@@ -1108,7 +1125,7 @@ class StandardsClient:
             canonical, body = resolved
             fetcher = self._fetchers.get(body)
             if fetcher:
-                record = cast("StandardRecord | None", await fetcher.get(canonical))
+                record = await fetcher.get(canonical)
                 if record is not None:
                     return [record]
             # Identifier resolved locally but source fetch failed — return minimal stub
