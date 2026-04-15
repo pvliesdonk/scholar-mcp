@@ -43,6 +43,26 @@ _RELATON_BODIES: dict[str, RelatonConfig] = {
     "IEEE": RelatonConfig(body="IEEE", repo="relaton/relaton-data-ieee"),
 }
 
+# Per-body denylist of upstream slugs that another loader owns. The CC
+# loader (see _sync_cc.py) writes ISO/IEC 15408 and ISO/IEC 18045 records
+# directly so it can attach the freely-downloadable CC PDF as full_text_url
+# (the relaton-data-iso versions describe the same content but inherit
+# ISO's paywall). The slug here is the lowercase-hyphen form derived from
+# the YAML filename inside the tarball.
+_RELATON_SKIP_SLUGS: dict[str, frozenset[str]] = {
+    "ISO": frozenset(
+        {
+            "iso-iec-15408-1-2022",
+            "iso-iec-15408-2-2022",
+            "iso-iec-15408-3-2022",
+            "iso-iec-15408-1-2009",
+            "iso-iec-15408-2-2008",
+            "iso-iec-15408-3-2008",
+            "iso-iec-18045-2022",
+            "iso-iec-18045-2008",
+        }
+    ),
+}
 
 # Map Relaton docstatus.stage codes → StandardRecord.status
 _STAGE_TO_STATUS = {
@@ -434,6 +454,16 @@ class RelatonLoader:
                     if not member.name.endswith(".yaml"):
                         continue
                     if "/data/" not in member.name:
+                        continue
+
+                    # Per-body denylist (e.g. CC owns ISO/IEC 15408 family)
+                    slug = member.name.rsplit("/", 1)[-1].removesuffix(".yaml")
+                    if slug in _RELATON_SKIP_SLUGS.get(self.body, frozenset()):
+                        logger.debug(
+                            "sync_relaton_skip_owned_by_other body=%s slug=%s",
+                            self.body,
+                            slug,
+                        )
                         continue
 
                     handle = tar.extractfile(member)
