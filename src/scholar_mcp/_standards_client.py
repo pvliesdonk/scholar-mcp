@@ -1066,19 +1066,23 @@ class StandardsClient:
                 return []
             return await fetcher.search(query, limit=limit)
 
-        # Search all sources concurrently. The three RelatonLiveFetcher
-        # instances may return overlapping records (the ISO/IEC variant with
-        # source=None is unfiltered), so dedup merged results by identifier.
+        # Search all sources concurrently, one call per fetcher type. For
+        # RelatonLiveFetcher specifically, the ISO/IEC variant (source=None)
+        # returns unfiltered Relaton records and subsumes the ISO/IEC-scoped
+        # instances — last-wins overwrite keeps it (dict insertion order:
+        # ISO → IEC → ISO/IEC). This is a deliberate, type-based dedup; if
+        # a second instance of any non-Relaton type is ever registered, the
+        # earlier one will be silently skipped.
+        one_per_type = self._one_fetcher_per_type()
         results_per_body = await asyncio.gather(
-            *(f.search(query, limit=limit) for f in self._fetchers.values()),
+            *(f.search(query, limit=limit) for f in one_per_type),
             return_exceptions=True,
         )
-        by_identifier: dict[str, StandardRecord] = {}
+        merged: list[StandardRecord] = []
         for r in results_per_body:
             if isinstance(r, list):
-                for rec in r:
-                    by_identifier.setdefault(rec["identifier"], rec)
-        return list(by_identifier.values())[:limit]
+                merged.extend(r)
+        return merged[:limit]
 
     async def get(self, identifier: str) -> StandardRecord | None:
         """Resolve and fetch a single standard by identifier.
@@ -1099,17 +1103,34 @@ class StandardsClient:
             if fetcher is not None:
                 return await fetcher.get(canonical)
 
-        # No local resolution — try each fetcher (deduped by type: the three
-        # RelatonLiveFetcher instances do identical slug-based lookup for
-        # get(), so call only one of them).
-        seen_types: dict[type[object], _StandardsFetcher] = {}
-        for f in self._fetchers.values():
-            seen_types.setdefault(type(f), f)
-        for fetcher in seen_types.values():
+        # No local resolution — try one fetcher per type. See
+        # :meth:`_one_fetcher_per_type` for the dedup contract.
+        for fetcher in self._one_fetcher_per_type():
             result = await fetcher.get(identifier)
             if result is not None:
                 return result
         return None
+
+    def _one_fetcher_per_type(self) -> list[_StandardsFetcher]:
+        """Return one fetcher per concrete fetcher class.
+
+        Used by the all-bodies paths of :meth:`search` and :meth:`get` so that
+        fetchers registered under multiple body keys are only invoked once.
+
+        For :class:`RelatonLiveFetcher` (registered under ``ISO``, ``IEC``,
+        ``ISO/IEC``), the last-wins overwrite keeps the ``ISO/IEC`` variant
+        whose ``source=None`` returns all synced Relaton records — the ISO-
+        and IEC-scoped instances would be subsumed by it. Insertion order of
+        ``self._fetchers`` (``ISO`` → ``IEC`` → ``ISO/IEC``) is load-bearing.
+
+        Non-Relaton fetchers appear exactly once today; if a second instance
+        of any of those types is ever added, it will replace the earlier one
+        — register distinct wrapper types if that matters.
+        """
+        by_type: dict[type[object], _StandardsFetcher] = {}
+        for f in self._fetchers.values():
+            by_type[type(f)] = f
+        return list(by_type.values())
 
     async def resolve(self, raw: str) -> list[StandardRecord]:
         """Resolve a raw citation string to one or more StandardRecords.
