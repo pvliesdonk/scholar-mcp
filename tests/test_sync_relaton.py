@@ -301,6 +301,32 @@ def test_supersedes_empty_when_no_relations() -> None:
     assert _supersedes(None) == []
 
 
+def test_superseded_by_reads_docid_key_in_relation() -> None:
+    """bibitem.docid is accepted (mirrors the top-level docid fix)."""
+    from scholar_mcp._sync_relaton import _superseded_by
+
+    relations = [
+        {
+            "type": "obsoleted-by",
+            "bibitem": {"docid": [{"id": "ISO 9001:2015"}]},
+        }
+    ]
+    assert _superseded_by(relations) == "ISO 9001:2015"
+
+
+def test_supersedes_reads_docid_key_in_relation() -> None:
+    """bibitem.docid is accepted for obsoletes relations too."""
+    from scholar_mcp._sync_relaton import _supersedes
+
+    relations = [
+        {
+            "type": "obsoletes",
+            "bibitem": {"docid": [{"id": "ISO 9001:2008"}]},
+        }
+    ]
+    assert _supersedes(relations) == ["ISO 9001:2008"]
+
+
 # ---------------------------------------------------------------------------
 # _committee coverage
 # ---------------------------------------------------------------------------
@@ -406,6 +432,13 @@ def iso_tarball() -> bytes:
 def iec_tarball() -> bytes:
     return _build_tarball(
         FIXTURES / "relaton_iec_sample", prefix="relaton-data-iec-main"
+    )
+
+
+@pytest.fixture
+def ieee_tarball() -> bytes:
+    return _build_tarball(
+        FIXTURES / "relaton_ieee_sample", prefix="relaton-data-ieee-main"
     )
 
 
@@ -887,5 +920,146 @@ async def test_loader_joint_dedup_iec_then_iso(
         # And no duplicate row accidentally written under an ISO-only identifier
         iso_only = await cache.get_standard("ISO 27001:2022")
         assert iso_only is None
+    finally:
+        await cache.close()
+
+
+def test_yaml_to_record_reads_docid_key() -> None:
+    """Real relaton repos use top-level 'docid:', not 'docidentifier:'.
+
+    Regression guard — the parser must accept both shapes so live-fetched
+    records from raw.githubusercontent.com parse into full records (not
+    fallback stubs).
+    """
+    from scholar_mcp._sync_relaton import _yaml_to_record
+
+    doc = _load_fixture("relaton_test_cases/iso-9001-2015-docid-shape.yaml")
+    record, _ = _yaml_to_record(doc)
+
+    assert record is not None
+    assert record["identifier"] == "ISO 9001:2015"
+    assert record["body"] == "ISO"
+    assert "Quality management" in record["title"]
+
+
+def test_yaml_to_record_falls_back_to_docidentifier_key() -> None:
+    """Old-shape fixtures with 'docidentifier:' still work."""
+    from scholar_mcp._sync_relaton import _yaml_to_record
+
+    doc = _load_fixture("relaton_iso_sample/iso-9001-2015.yaml")
+    record, _ = _yaml_to_record(doc)
+
+    assert record is not None
+    assert record["identifier"] == "ISO 9001:2015"
+
+
+def test_yaml_to_record_plain_ieee() -> None:
+    """Pure IEEE entry → body='IEEE', identifier preserved verbatim."""
+    from scholar_mcp._sync_relaton import _yaml_to_record
+
+    doc = _load_fixture("relaton_ieee_sample/ieee-1003-1-2024.yaml")
+    record, _ = _yaml_to_record(doc)
+
+    assert record is not None
+    assert record["identifier"] == "IEEE 1003.1-2024"
+    assert record["body"] == "IEEE"
+    assert "POSIX" in record["title"]
+
+
+def test_yaml_to_record_iec_ieee_joint() -> None:
+    """docid list with IEC + IEEE entries → body='IEC/IEEE'."""
+    from scholar_mcp._sync_relaton import _yaml_to_record
+
+    doc = _load_fixture("relaton_ieee_sample/iec-ieee-61588-2021.yaml")
+    record, _ = _yaml_to_record(doc)
+
+    assert record is not None
+    assert record["identifier"] == "IEC/IEEE 61588-2021"
+    assert record["body"] == "IEC/IEEE"
+
+
+def test_yaml_to_record_iso_iec_ieee_joint() -> None:
+    """docid list with ISO + IEC + IEEE entries → body='ISO/IEC/IEEE'."""
+    from scholar_mcp._sync_relaton import _yaml_to_record
+
+    doc = _load_fixture("relaton_ieee_sample/iso-iec-ieee-42010-2011.yaml")
+    record, _ = _yaml_to_record(doc)
+
+    assert record is not None
+    assert record["body"] == "ISO/IEC/IEEE"
+    assert "ISO/IEC/IEEE 42010" in record["identifier"]
+    # trademark variant (with ™) is filtered — canonical must NOT include the ™ suffix
+    assert "™" not in record["identifier"]
+
+
+def test_yaml_to_record_ieee_skips_trademark_scope() -> None:
+    """scope: trademark entries are filtered out when picking canonical."""
+    from scholar_mcp._sync_relaton import _yaml_to_record
+
+    doc = _load_fixture("relaton_ieee_sample/ieee-1003-1-2024-with-trademark.yaml")
+    record, _ = _yaml_to_record(doc)
+
+    assert record is not None
+    assert record["identifier"] == "IEEE 1003.1-2024"
+    assert "™" not in record["identifier"]
+
+
+@pytest.mark.asyncio
+async def test_loader_cold_sync_inserts_ieee_records(
+    tmp_path: Path, ieee_tarball: bytes
+) -> None:
+    """Cold sync of IEEE fixtures exercises the full RelatonLoader path.
+
+    The four fixture YAML files map to three unique canonical identifiers
+    (the trademark fixture and the plain fixture both resolve to
+    ``IEEE 1003.1-2024``; alphabetical iteration means the trademark
+    version inserts first and the plain version updates it). Guards
+    against wiring regressions between RelatonLoader, _yaml_to_record,
+    and _canonical_identifier_and_body for IEEE inputs including the
+    IEC/IEEE and ISO/IEC/IEEE joint detection.
+    """
+    from scholar_mcp._cache import ScholarCache
+    from scholar_mcp._sync_relaton import RelatonLoader
+
+    cache = ScholarCache(tmp_path / "cache.db")
+    await cache.open()
+    try:
+        sha = "deadbeef" * 5
+        with respx.mock(assert_all_called=False) as router:
+            router.get(
+                "https://api.github.com/repos/relaton/relaton-data-ieee/commits/main"
+            ).mock(return_value=httpx.Response(200, json={"sha": sha}))
+            router.get(
+                f"https://api.github.com/repos/relaton/relaton-data-ieee/tarball/{sha}"
+            ).mock(
+                return_value=httpx.Response(
+                    200,
+                    content=ieee_tarball,
+                    headers={"Content-Type": "application/x-gzip"},
+                )
+            )
+
+            async with httpx.AsyncClient() as http:
+                loader = RelatonLoader("IEEE", http=http)
+                report = await loader.sync(cache)
+
+        assert report.added == 3
+        assert report.updated == 1
+        assert report.body == "IEEE"
+        assert report.upstream_ref == sha
+
+        plain = await cache.get_standard("IEEE 1003.1-2024")
+        assert plain is not None
+        assert plain["body"] == "IEEE"
+        assert "POSIX" in plain["title"]
+
+        iec_ieee = await cache.get_standard("IEC/IEEE 61588-2021")
+        assert iec_ieee is not None
+        assert iec_ieee["body"] == "IEC/IEEE"
+
+        iso_iec_ieee = await cache.get_standard("ISO/IEC/IEEE 42010-2011")
+        assert iso_iec_ieee is not None
+        assert iso_iec_ieee["body"] == "ISO/IEC/IEEE"
+        assert "™" not in iso_iec_ieee["identifier"]
     finally:
         await cache.close()

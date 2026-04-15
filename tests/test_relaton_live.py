@@ -318,3 +318,272 @@ async def test_live_fetcher_search_returns_empty_without_cache() -> None:
         results = await fetcher.search("9001")
 
     assert results == []
+
+
+def test_identifier_to_slug_ieee_plain() -> None:
+    """IEEE identifiers use uppercase-underscore form, preserving dots."""
+    from scholar_mcp._relaton_live import _identifier_to_relaton_slug
+
+    assert _identifier_to_relaton_slug("IEEE 1003.1-2024") == "IEEE_1003.1-2024"
+
+
+def test_identifier_to_slug_ieee_std_variant() -> None:
+    """`IEEE Std 1588-2019` keeps the 'Std' token, underscore-joined."""
+    from scholar_mcp._relaton_live import _identifier_to_relaton_slug
+
+    assert _identifier_to_relaton_slug("IEEE Std 1588-2019") == "IEEE_Std_1588-2019"
+
+
+def test_identifier_to_slug_iec_ieee_joint() -> None:
+    """IEC/IEEE joint → IEC_IEEE_NUMBER-YEAR uppercase."""
+    from scholar_mcp._relaton_live import _identifier_to_relaton_slug
+
+    assert _identifier_to_relaton_slug("IEC/IEEE 61588-2021") == "IEC_IEEE_61588-2021"
+
+
+def test_identifier_to_slug_iso_iec_ieee_joint() -> None:
+    """ISO/IEC/IEEE triple-joint → ISO_IEC_IEEE_NUMBER-YEAR uppercase."""
+    from scholar_mcp._relaton_live import _identifier_to_relaton_slug
+
+    assert (
+        _identifier_to_relaton_slug("ISO/IEC/IEEE 42010-2011")
+        == "ISO_IEC_IEEE_42010-2011"
+    )
+
+
+def test_identifier_to_slug_preserves_iso_lowercase_hyphen() -> None:
+    """Pre-PR-3 ISO/IEC slug form (lowercase-hyphen) must not regress."""
+    from scholar_mcp._relaton_live import _identifier_to_relaton_slug
+
+    assert _identifier_to_relaton_slug("ISO 9001:2015") == "iso-9001-2015"
+    assert _identifier_to_relaton_slug("IEC 62443-3-3:2020") == "iec-62443-3-3-2020"
+    assert _identifier_to_relaton_slug("ISO/IEC 27001:2022") == "iso-iec-27001-2022"
+
+
+@pytest.mark.asyncio
+async def test_live_fetch_ieee_hit() -> None:
+    """Mocked 200 → parses to full IEEE record."""
+    from scholar_mcp._relaton_live import RelatonLiveFetcher
+
+    ieee_yaml = """
+docid:
+  - id: "IEEE 1003.1-2024"
+    type: "IEEE"
+    primary: true
+title:
+  - content: "POSIX Base Specifications"
+    format: "text/plain"
+    type: "main"
+docstatus:
+  stage: "60.60"
+link:
+  - type: "src"
+    content: "https://ieeexplore.ieee.org/document/10555529"
+"""
+
+    with respx.mock(assert_all_called=True) as router:
+        router.get(
+            "https://raw.githubusercontent.com/relaton/relaton-data-ieee/main/data/IEEE_1003.1-2024.yaml"
+        ).mock(return_value=httpx.Response(200, text=ieee_yaml))
+
+        async with httpx.AsyncClient() as http:
+            fetcher = RelatonLiveFetcher(http=http, source="IEEE")
+            record = await fetcher.get("IEEE 1003.1-2024")
+
+    assert record is not None
+    assert record["identifier"] == "IEEE 1003.1-2024"
+    assert record["body"] == "IEEE"
+    assert "POSIX" in record["title"]
+
+
+@pytest.mark.asyncio
+async def test_live_fetch_ieee_joint_falls_back_to_iso() -> None:
+    """ISO/IEC/IEEE joint: IEEE 404 → ISO repo 200 wins."""
+    from scholar_mcp._relaton_live import RelatonLiveFetcher
+
+    joint_yaml = """
+docid:
+  - id: "ISO/IEC/IEEE 42010-2011"
+    type: "IEEE"
+    primary: true
+  - id: "ISO/IEC/IEEE 42010:2011"
+    type: "ISO"
+    primary: true
+  - id: "ISO/IEC/IEEE 42010:2011"
+    type: "IEC"
+    primary: true
+title:
+  - content: "Architecture description"
+    format: "text/plain"
+    type: "main"
+docstatus:
+  stage: "60.60"
+"""
+
+    with respx.mock(assert_all_called=True) as router:
+        router.get(
+            "https://raw.githubusercontent.com/relaton/relaton-data-ieee/main/data/ISO_IEC_IEEE_42010-2011.yaml"
+        ).mock(return_value=httpx.Response(404))
+        router.get(
+            "https://raw.githubusercontent.com/relaton/relaton-data-iso/main/data/ISO_IEC_IEEE_42010-2011.yaml"
+        ).mock(return_value=httpx.Response(200, text=joint_yaml))
+
+        async with httpx.AsyncClient() as http:
+            fetcher = RelatonLiveFetcher(http=http)
+            record = await fetcher.get("ISO/IEC/IEEE 42010-2011")
+
+    assert record is not None
+    assert record["body"] == "ISO/IEC/IEEE"
+
+
+@pytest.mark.live
+@pytest.mark.asyncio
+async def test_live_fetch_ieee_1003_1_2024_real() -> None:
+    """Smoke test: fetch a known IEEE standard from the real repo."""
+    from scholar_mcp._relaton_live import RelatonLiveFetcher
+
+    async with httpx.AsyncClient(timeout=30.0) as http:
+        fetcher = RelatonLiveFetcher(http=http)
+        record = await fetcher.get("IEEE 1003.1-2024")
+
+    assert record is not None
+    assert record["identifier"] == "IEEE 1003.1-2024"
+    assert record["body"] == "IEEE"
+    assert record["title"]
+
+
+@pytest.mark.live
+@pytest.mark.asyncio
+async def test_live_fetch_iso_9001_2015_real() -> None:
+    """Smoke test: hit the real ISO Relaton repo to catch schema drift.
+
+    Regression guard for the docid/docidentifier schema-key bug that
+    caused live-fetching real ISO standards to silently return stubs.
+    Not run by default; enable with `pytest -m live`.
+    """
+    from scholar_mcp._relaton_live import RelatonLiveFetcher
+
+    async with httpx.AsyncClient(timeout=30.0) as http:
+        fetcher = RelatonLiveFetcher(http=http)
+        record = await fetcher.get("ISO 9001:2015")
+
+    assert record is not None
+    assert record["identifier"] == "ISO 9001:2015"
+    assert record["body"] == "ISO"
+    assert record["title"]
+    assert "Quality management" in record["title"]
+
+
+@pytest.mark.asyncio
+async def test_live_fetch_ieee_all_repos_fail_returns_stub() -> None:
+    """IEEE identifier, IEEE repo 404 → stub with body='IEEE'."""
+    from scholar_mcp._relaton_live import RelatonLiveFetcher
+
+    with respx.mock(assert_all_called=True) as router:
+        router.get(
+            "https://raw.githubusercontent.com/relaton/relaton-data-ieee/main/data/IEEE_1003.1-2024.yaml"
+        ).mock(return_value=httpx.Response(404))
+
+        async with httpx.AsyncClient() as http:
+            fetcher = RelatonLiveFetcher(http=http)
+            record = await fetcher.get("IEEE 1003.1-2024")
+
+    assert record is not None
+    assert record["identifier"] == "IEEE 1003.1-2024"
+    assert record["body"] == "IEEE"
+    assert record["title"] == ""
+    assert record["full_text_available"] is False
+    assert record["status"] == "unknown"
+
+
+@pytest.mark.asyncio
+async def test_live_fetch_iec_ieee_all_repos_fail_returns_stub() -> None:
+    """IEC/IEEE identifier, all repos 404 → stub with body='IEC/IEEE'.
+
+    Also exercises the IEC/IEEE branch of _repo_order_for (IEEE repo
+    tried first, then IEC).
+    """
+    from scholar_mcp._relaton_live import RelatonLiveFetcher
+
+    with respx.mock(assert_all_called=True) as router:
+        router.get(
+            "https://raw.githubusercontent.com/relaton/relaton-data-ieee/main/data/IEC_IEEE_61588-2021.yaml"
+        ).mock(return_value=httpx.Response(404))
+        router.get(
+            "https://raw.githubusercontent.com/relaton/relaton-data-iec/main/data/IEC_IEEE_61588-2021.yaml"
+        ).mock(return_value=httpx.Response(404))
+
+        async with httpx.AsyncClient() as http:
+            fetcher = RelatonLiveFetcher(http=http)
+            record = await fetcher.get("IEC/IEEE 61588-2021")
+
+    assert record is not None
+    assert record["identifier"] == "IEC/IEEE 61588-2021"
+    assert record["body"] == "IEC/IEEE"
+    assert record["title"] == ""
+
+
+@pytest.mark.asyncio
+async def test_live_fetch_iso_iec_ieee_all_repos_fail_returns_stub() -> None:
+    """ISO/IEC/IEEE triple-joint, all three repos 404 → stub with body='ISO/IEC/IEEE'."""
+    from scholar_mcp._relaton_live import RelatonLiveFetcher
+
+    with respx.mock(assert_all_called=True) as router:
+        router.get(
+            "https://raw.githubusercontent.com/relaton/relaton-data-ieee/main/data/ISO_IEC_IEEE_42010-2011.yaml"
+        ).mock(return_value=httpx.Response(404))
+        router.get(
+            "https://raw.githubusercontent.com/relaton/relaton-data-iso/main/data/ISO_IEC_IEEE_42010-2011.yaml"
+        ).mock(return_value=httpx.Response(404))
+        router.get(
+            "https://raw.githubusercontent.com/relaton/relaton-data-iec/main/data/ISO_IEC_IEEE_42010-2011.yaml"
+        ).mock(return_value=httpx.Response(404))
+
+        async with httpx.AsyncClient() as http:
+            fetcher = RelatonLiveFetcher(http=http)
+            record = await fetcher.get("ISO/IEC/IEEE 42010-2011")
+
+    assert record is not None
+    assert record["identifier"] == "ISO/IEC/IEEE 42010-2011"
+    assert record["body"] == "ISO/IEC/IEEE"
+
+
+@pytest.mark.asyncio
+async def test_live_fetch_iec_ieee_iec_repo_wins() -> None:
+    """IEC/IEEE identifier: IEEE repo 404 → IEC repo 200 (fallback path).
+
+    Exercises the second element of the IEC/IEEE repo-order list.
+    """
+    from scholar_mcp._relaton_live import RelatonLiveFetcher
+
+    iec_ieee_yaml = """
+docid:
+  - id: "IEC/IEEE 61588-2021"
+    type: "IEEE"
+    primary: true
+  - id: "IEC/IEEE 61588-2021"
+    type: "IEC"
+    primary: true
+title:
+  - content: "Precision clock synchronization"
+    format: "text/plain"
+    type: "main"
+docstatus:
+  stage: "60.60"
+"""
+
+    with respx.mock(assert_all_called=True) as router:
+        router.get(
+            "https://raw.githubusercontent.com/relaton/relaton-data-ieee/main/data/IEC_IEEE_61588-2021.yaml"
+        ).mock(return_value=httpx.Response(404))
+        router.get(
+            "https://raw.githubusercontent.com/relaton/relaton-data-iec/main/data/IEC_IEEE_61588-2021.yaml"
+        ).mock(return_value=httpx.Response(200, text=iec_ieee_yaml))
+
+        async with httpx.AsyncClient() as http:
+            fetcher = RelatonLiveFetcher(http=http)
+            record = await fetcher.get("IEC/IEEE 61588-2021")
+
+    assert record is not None
+    assert record["body"] == "IEC/IEEE"
+    assert "Precision clock" in record["title"]

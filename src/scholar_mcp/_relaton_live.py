@@ -1,8 +1,12 @@
-"""Single-file live-fetch fallback for ISO / IEC / ISO/IEC identifiers.
+"""Single-file live-fetch fallback for ISO / IEC / IEEE Relaton standards.
 
 Used by :class:`StandardsClient` when ``get_standard(identifier)`` misses
 the cache AND no sync has been run. Avoids the "false negative until sync
 runs" trap by doing one cheap ``raw.githubusercontent.com`` GET per call.
+
+Covers pure ISO, IEC, IEEE plus their joint forms: ISO/IEC, IEC/IEEE,
+ISO/IEC/IEEE. Per-body filename conventions (ISO lowercase-hyphen vs.
+IEEE uppercase-underscore) are handled by :func:`_identifier_to_relaton_slug`.
 
 Lives alongside ``_sync_relaton.py``; the two modules share the same YAML
 mapper so synced and live-fetched records have identical shape.
@@ -29,22 +33,32 @@ _RAW_BASE = "https://raw.githubusercontent.com/relaton"
 
 
 def _identifier_to_relaton_slug(identifier: str) -> str | None:
-    """Convert an ISO, IEC, or ISO/IEC identifier to a Relaton filename slug.
+    """Convert an identifier to its Relaton filename slug.
 
-    Examples:
-        >>> _identifier_to_relaton_slug("ISO 9001:2015")
-        'iso-9001-2015'
-        >>> _identifier_to_relaton_slug("ISO/IEC 27001:2022")
-        'iso-iec-27001-2022'
-        >>> _identifier_to_relaton_slug("IEC 62443-3-3:2020")
-        'iec-62443-3-3-2020'
-        >>> _identifier_to_relaton_slug("ISO 9001:2015/Amd 1:2020")
-        'iso-9001-2015-amd-1-2020'
+    Dispatch on body prefix:
 
-    Returns ``None`` when the prefix is not one of ISO, IEC, or ISO/IEC.
+    - IEEE / IEC/IEEE / ISO/IEC/IEEE → uppercase-underscore form preserving
+      internal dots and intra-token hyphens
+      (``IEEE 1003.1-2024`` → ``IEEE_1003.1-2024``;
+       ``ISO/IEC/IEEE 42010-2011`` → ``ISO_IEC_IEEE_42010-2011``).
+    - ISO / IEC / ISO/IEC → lowercase-hyphen form (unchanged from PR 2).
+
+    Returns ``None`` when the prefix isn't recognized.
     """
     stripped = identifier.strip()
     upper = stripped.upper()
+
+    # IEEE slugging (uppercase-underscore) — check before ISO/IEC since
+    # ISO/IEC/IEEE and IEC/IEEE are IEEE-repo joints.
+    if (
+        upper.startswith("IEEE ")
+        or (upper.startswith("IEEE") and upper[4:5] in {" ", "_"})
+        or upper.startswith("IEC/IEEE")
+        or upper.startswith("ISO/IEC/IEEE")
+    ):
+        return _ieee_slug(stripped)
+
+    # ISO / IEC / ISO/IEC slugging (lowercase-hyphen) — PR 2 behavior.
     if not (
         upper.startswith("ISO/IEC")
         or upper.startswith("ISO ")
@@ -55,27 +69,63 @@ def _identifier_to_relaton_slug(identifier: str) -> str | None:
         return None
 
     slug = stripped.lower()
-    # Normalise "iso/iec" and the rarer reversed form before general substitution
     slug = slug.replace("iec/iso", "iso-iec")
     slug = slug.replace("iso/iec", "iso-iec")
-    # Any whitespace, colon, slash, or ampersand becomes a hyphen
     slug = re.sub(r"[\s:/&]+", "-", slug)
-    # Collapse repeated hyphens and strip leading/trailing
     slug = re.sub(r"-+", "-", slug).strip("-")
     return slug or None
 
 
-def _identifier_prefers_iec(identifier: str) -> bool:
-    """Plain 'IEC xxx' identifiers prefer the IEC repo first."""
+def _ieee_slug(identifier: str) -> str | None:
+    """IEEE filename slug: underscores between tokens, dots and hyphens kept.
+
+    Input is assumed to be a canonical IEEE identifier with uppercase
+    body prefixes; callers routing from ``resolve_identifier_local`` already
+    satisfy this contract. The function does not recase the input.
+
+    Examples:
+        IEEE 1003.1-2024        → IEEE_1003.1-2024
+        IEEE Std 1588-2019      → IEEE_Std_1588-2019
+        IEC/IEEE 61588-2021     → IEC_IEEE_61588-2021
+        ISO/IEC/IEEE 42010-2011 → ISO_IEC_IEEE_42010-2011
+    """
+    slug = re.sub(r"[/\s]+", "_", identifier.strip())
+    slug = re.sub(r"_+", "_", slug).strip("_")
+    return slug or None
+
+
+def _repo_order_for(identifier: str) -> list[str]:
+    """Return the ordered list of relaton-data-* repos to probe.
+
+    The first repo whose YAML parses cleanly wins. All other outcomes
+    (404, non-404 error, unparseable YAML) are treated the same by
+    :meth:`RelatonLiveFetcher.get` — it moves on to the next repo. When
+    all repos exhaust without a parseable result, the caller returns a
+    stub record.
+    """
     upper = identifier.strip().upper()
-    return upper.startswith("IEC ")
+    if (
+        upper.startswith("IEEE ")
+        or (upper.startswith("IEEE") and upper[4:5] in {" ", "_"})
+        or upper.startswith("IEC/IEEE")
+        or upper.startswith("ISO/IEC/IEEE")
+    ):
+        if upper.startswith("ISO/IEC/IEEE"):
+            return ["relaton-data-ieee", "relaton-data-iso", "relaton-data-iec"]
+        if upper.startswith("IEC/IEEE"):
+            return ["relaton-data-ieee", "relaton-data-iec"]
+        return ["relaton-data-ieee"]
+    if upper.startswith("IEC "):
+        return ["relaton-data-iec", "relaton-data-iso"]
+    return ["relaton-data-iso", "relaton-data-iec"]
 
 
 class RelatonLiveFetcher:
     """Fetches a single Relaton YAML file on demand over HTTPS.
 
     Registered into ``StandardsClient._fetchers`` for keys ``ISO``, ``IEC``,
-    and ``ISO/IEC``. Returns ``None`` for identifiers outside that set.
+    ``ISO/IEC``, and ``IEEE``. Returns ``None`` for identifiers the slug
+    helper can't convert (e.g. ``RFC 9000``).
     """
 
     def __init__(
@@ -152,12 +202,7 @@ class RelatonLiveFetcher:
         if slug is None:
             return None
 
-        repos = (
-            ["relaton-data-iec", "relaton-data-iso"]
-            if _identifier_prefers_iec(identifier)
-            else ["relaton-data-iso", "relaton-data-iec"]
-        )
-        for repo in repos:
+        for repo in _repo_order_for(identifier):
             doc = await self._try_repo(repo, slug)
             if doc is None:
                 continue
@@ -165,10 +210,17 @@ class RelatonLiveFetcher:
             if record is not None:
                 return record
 
-        # 404 in both repos — return a stub so callers can surface
-        # "resolved but catalogue entry unavailable" rather than a bare None.
+        # All repos exhausted without a parseable result — return a stub so
+        # callers can surface "resolved but catalogue entry unavailable"
+        # rather than None.
         upper = identifier.strip().upper()
-        if upper.startswith("ISO/IEC"):
+        if upper.startswith("ISO/IEC/IEEE"):
+            body = "ISO/IEC/IEEE"
+        elif upper.startswith("IEC/IEEE"):
+            body = "IEC/IEEE"
+        elif upper.startswith("IEEE"):
+            body = "IEEE"
+        elif upper.startswith("ISO/IEC"):
             body = "ISO/IEC"
         elif upper.startswith("IEC"):
             body = "IEC"

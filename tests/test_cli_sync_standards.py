@@ -141,8 +141,9 @@ def test_sync_standards_all_success(
 def test_select_loaders_single_body_filters() -> None:
     """Non-'all' body exercises the filter branch in _select_loaders.
 
-    With ISO/IEC loaders registered, "ISO" returns exactly one loader
-    and "all" returns two (ISO + IEC). "XYZ" returns empty.
+    With ISO/IEC/IEEE loaders registered, "ISO" returns exactly one loader,
+    "IEEE" returns exactly one loader, and "all" returns three
+    (ISO + IEC + IEEE). "XYZ" returns empty.
     """
     import httpx
 
@@ -156,9 +157,14 @@ def test_select_loaders_single_body_filters() -> None:
         assert iso_loaders[0].body == "ISO"
 
         all_loaders = cli_mod._select_loaders("all", http=http, token=None)
-        assert len(all_loaders) == 2
+        assert len(all_loaders) == 3
         bodies = {loader.body for loader in all_loaders}
-        assert bodies == {"ISO", "IEC"}
+        assert bodies == {"ISO", "IEC", "IEEE"}
+
+        ieee_loaders = cli_mod._select_loaders("IEEE", http=http, token=None)
+        assert len(ieee_loaders) == 1
+        assert isinstance(ieee_loaders[0], RelatonLoader)
+        assert ieee_loaders[0].body == "IEEE"
 
         xyz_loaders = cli_mod._select_loaders("XYZ", http=http, token=None)
         assert xyz_loaders == []

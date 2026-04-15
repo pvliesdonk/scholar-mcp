@@ -111,8 +111,11 @@ indent-style = "space"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = ["--strict-markers", "-ra"]
+addopts = ["--strict-markers", "-ra", "-m", "not live"]
 asyncio_mode = "auto"
+markers = [
+    "live: tests that hit real network services; opt-in via `pytest -m live`",
+]
 
 [tool.coverage.run]
 source = ["src/scholar_mcp"]
