@@ -15,13 +15,22 @@ commits in this PR.
 
 from __future__ import annotations
 
+import csv
+import hashlib
+import io
 import logging
 import re
+import time
 from dataclasses import dataclass
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
+
+import httpx
+
+from ._standards_sync import SyncReport
 
 if TYPE_CHECKING:
+    from ._protocols import CacheProtocol
     from ._record_types import StandardRecord
 else:
     StandardRecord = dict
@@ -297,7 +306,7 @@ def _normalise_date(raw: str) -> str | None:
         return None
 
 
-def _pp_row_to_record(row: dict[str, str]) -> StandardRecord | None:
+def _pp_row_to_record(row: dict[str, str | Any]) -> StandardRecord | None:
     """Map a pps.csv row to a StandardRecord, or None if unusable.
 
     Required fields: ``Protection Profile`` (URL), ``Name``, ``Scheme``.
@@ -334,3 +343,210 @@ def _pp_row_to_record(row: dict[str, str]) -> StandardRecord | None:
     if archived:
         record["withdrawn_date"] = _normalise_date(archived)
     return record
+
+
+# Fields that distinguish a "real" content change from a no-op rewrite
+# (everything else — rebuilt from constants — is irrelevant for the
+# update / unchanged counter).
+_CC_RECORD_IDENTITY_FIELDS = (
+    "title",
+    "status",
+    "published_date",
+    "withdrawn_date",
+    "url",
+    "full_text_url",
+    "full_text_available",
+    "body",
+    "related",
+)
+
+
+def _cc_record_changed(
+    old: dict[str, object] | StandardRecord, new: StandardRecord
+) -> bool:
+    """True when any identity field differs between *old* and *new*.
+
+    Mirrors :func:`_record_changed` in ``_sync_relaton`` for behavioural
+    parity — counts on re-sync should reflect actual content changes,
+    not the fact that we rewrote the row.
+    """
+    for field_name in _CC_RECORD_IDENTITY_FIELDS:
+        if old.get(field_name) != new.get(field_name):
+            return True
+    return False
+
+
+_PP_CSV_URL = "https://www.commoncriteriaportal.org/pps/pps.csv"
+
+
+class CCLoader:
+    """Common Criteria sync loader. Conforms to the Loader Protocol.
+
+    Three phases per :meth:`sync`:
+
+    1. Framework documents — iterate :data:`_FRAMEWORK_DOCS`, write 1 or
+       2 records per entry depending on whether the doc is dual-published
+       as an ISO/IEC standard. No HTTP.
+    2. Protection Profiles — fetch ``pps.csv`` from
+       commoncriteriaportal.org. Content-hash gated: if the SHA256 of the
+       CSV bytes matches the previous sync's ``upstream_ref``, short-
+       circuit with ``unchanged`` populated.
+    3. Withdrawal detection — same >50%-missing guard as
+       :class:`RelatonLoader`. IDs that disappeared from upstream get
+       ``status="withdrawn"`` (unless the >50% guard fires).
+    """
+
+    body = "CC"
+
+    def __init__(self, *, http: httpx.AsyncClient) -> None:
+        """Initialise the loader.
+
+        Args:
+            http: Shared async HTTP client owned by the caller.
+        """
+        self._http = http
+
+    async def sync(self, cache: CacheProtocol, *, force: bool = False) -> SyncReport:
+        """Pull CC framework + PPs into *cache*; return a SyncReport.
+
+        Args:
+            cache: Open cache.
+            force: If True, bypass the content-hash freshness check and
+                re-process the CSV unconditionally.
+        """
+        started_at = time.time()
+        errors: list[str] = []
+        added = updated = unchanged = withdrawn = 0
+        current_ids: set[str] = set()
+
+        prev_ids = await cache.list_synced_standard_ids(source=self.body)
+
+        # Phase 1 — framework documents (no network)
+        for entry in _FRAMEWORK_DOCS:
+            for record in _framework_to_records(entry):
+                ident = record["identifier"]
+                current_ids.add(ident)
+                existing = await cache.get_standard(ident)
+                if existing is None:
+                    added += 1
+                elif _cc_record_changed(existing, record):
+                    updated += 1
+                else:
+                    unchanged += 1
+                await cache.set_standard(ident, record, source=self.body, synced=True)
+            for alias in _framework_aliases(entry):
+                await cache.set_standard_alias(alias, entry.cc_identifier)
+
+        # Phase 2 — Protection Profiles, content-hash gated
+        try:
+            response = await self._http.get(_PP_CSV_URL, follow_redirects=True)
+            response.raise_for_status()
+            csv_bytes = response.content
+        except httpx.HTTPError as exc:
+            logger.error("cc_pp_fetch_failed err=%s", exc, exc_info=True)
+            errors.append(f"pps.csv fetch failed: {exc}")
+            return SyncReport(
+                body=self.body,
+                added=added,
+                updated=updated,
+                unchanged=unchanged,
+                withdrawn=0,
+                errors=errors,
+                upstream_ref=None,
+                started_at=started_at,
+                finished_at=time.time(),
+            )
+
+        csv_hash = hashlib.sha256(csv_bytes).hexdigest()
+        previous = await cache.get_sync_run(self.body)
+        previous_hash = previous.get("upstream_ref") if previous else None
+        if not force and previous_hash == csv_hash:
+            existing_pp_count = len(prev_ids) - sum(
+                2 if e.iso_identifier else 1 for e in _FRAMEWORK_DOCS
+            )
+            unchanged += max(existing_pp_count, 0)
+            logger.info(
+                "sync_cc_unchanged hash=%s pp_count=%s", csv_hash, existing_pp_count
+            )
+            return SyncReport(
+                body=self.body,
+                added=added,
+                updated=updated,
+                unchanged=unchanged,
+                withdrawn=0,
+                errors=errors,
+                upstream_ref=csv_hash,
+                started_at=started_at,
+                finished_at=time.time(),
+            )
+
+        for row in csv.DictReader(io.StringIO(csv_bytes.decode("utf-8"))):
+            pp_record: StandardRecord | None = _pp_row_to_record(row)
+            if pp_record is None:
+                errors.append(f"unparseable PP row: {row.get('Name', '?')}")
+                continue
+            ident = pp_record["identifier"]
+            current_ids.add(ident)
+            existing = await cache.get_standard(ident)
+            if existing is None:
+                added += 1
+            elif _cc_record_changed(existing, pp_record):
+                updated += 1
+            else:
+                unchanged += 1
+            await cache.set_standard(ident, pp_record, source=self.body, synced=True)
+
+        # Phase 3 — withdrawal detection (same >50% guard as RelatonLoader)
+        # Guard checks only PP records (framework docs are constant),
+        # so we compare against prev_ids minus framework identifiers.
+        framework_ids = set()
+        for entry in _FRAMEWORK_DOCS:
+            for record in _framework_to_records(entry):
+                framework_ids.add(record["identifier"])
+        prev_pp_ids = prev_ids - framework_ids
+        missing = prev_ids - current_ids
+        if prev_pp_ids and len(missing) > 0.5 * len(prev_pp_ids):
+            errors.append(
+                f"withdrawal pass aborted: {len(missing)}/{len(prev_pp_ids)} "
+                "PP ids missing (>50% — likely partial sync)"
+            )
+            logger.warning(
+                "cc_withdrawal_aborted missing=%s prev_pp=%s",
+                len(missing),
+                len(prev_pp_ids),
+            )
+        else:
+            for ident in missing:
+                existing = await cache.get_standard(ident)
+                if existing is None:
+                    continue
+                updated_record: StandardRecord = {
+                    **existing,
+                    "status": "withdrawn",
+                }
+                await cache.set_standard(
+                    ident, updated_record, source=self.body, synced=True
+                )
+                withdrawn += 1
+
+        logger.info(
+            "sync_cc_done hash=%s added=%s updated=%s unchanged=%s withdrawn=%s errors=%s",
+            csv_hash,
+            added,
+            updated,
+            unchanged,
+            withdrawn,
+            len(errors),
+        )
+
+        return SyncReport(
+            body=self.body,
+            added=added,
+            updated=updated,
+            unchanged=unchanged,
+            withdrawn=withdrawn,
+            errors=errors,
+            upstream_ref=csv_hash,
+            started_at=started_at,
+            finished_at=time.time(),
+        )

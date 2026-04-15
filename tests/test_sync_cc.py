@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import httpx
 import pytest
+import respx
 
 
 def test_framework_to_records_dual_publication_yields_two_records() -> None:
@@ -250,3 +252,248 @@ def test_pp_row_to_record_published_date_iso_format(pp_csv_path: Path) -> None:
     record = _pp_row_to_record(rows[0])
     assert record is not None
     assert record["published_date"] == "2017-08-18"
+
+
+@pytest.fixture
+def pps_csv_bytes(pp_csv_path: Path) -> bytes:
+    return pp_csv_path.read_bytes()
+
+
+def _mock_pps(router: respx.Router, body: bytes, status: int = 200) -> None:
+    router.get("https://www.commoncriteriaportal.org/pps/pps.csv").mock(
+        return_value=httpx.Response(
+            status,
+            content=body,
+            headers={"Content-Type": "text/csv"},
+        )
+    )
+
+
+@pytest.mark.asyncio
+async def test_cc_loader_cold_sync_writes_framework_and_pps(
+    tmp_path: Path, pps_csv_bytes: bytes
+) -> None:
+    """Cold sync writes all framework records + every PP row from the CSV."""
+    from scholar_mcp._cache import ScholarCache
+    from scholar_mcp._sync_cc import _FRAMEWORK_DOCS, CCLoader
+
+    cache = ScholarCache(tmp_path / "cache.db")
+    await cache.open()
+    try:
+        with respx.mock(assert_all_called=False) as router:
+            _mock_pps(router, pps_csv_bytes)
+
+            async with httpx.AsyncClient() as http:
+                report = await CCLoader(http=http).sync(cache)
+
+        framework_records = sum(2 if e.iso_identifier else 1 for e in _FRAMEWORK_DOCS)
+        assert report.added == framework_records + 6
+        assert report.body == "CC"
+        cc_p1 = await cache.get_standard("CC:2022 Part 1")
+        iso_p1 = await cache.get_standard("ISO/IEC 15408-1:2022")
+        assert cc_p1 is not None and cc_p1["body"] == "CC"
+        assert iso_p1 is not None and iso_p1["body"] == "ISO/IEC"
+        assert iso_p1["full_text_url"] == cc_p1["full_text_url"]
+        bsi = await cache.get_standard("BSI-CC-PP-0099-V2-2017")
+        assert bsi is not None
+        assert bsi["status"] == "archived"
+    finally:
+        await cache.close()
+
+
+@pytest.mark.asyncio
+async def test_cc_loader_resync_unchanged_csv_short_circuits(
+    tmp_path: Path, pps_csv_bytes: bytes
+) -> None:
+    """Re-sync with same CSV content hash returns unchanged report."""
+    from scholar_mcp._cache import ScholarCache
+    from scholar_mcp._sync_cc import CCLoader
+
+    cache = ScholarCache(tmp_path / "cache.db")
+    await cache.open()
+    try:
+        with respx.mock(assert_all_called=False) as router:
+            _mock_pps(router, pps_csv_bytes)
+
+            async with httpx.AsyncClient() as http:
+                first = await CCLoader(http=http).sync(cache)
+                second = await CCLoader(http=http).sync(cache)
+
+        assert first.added > 0
+        assert second.added == 0
+        assert second.unchanged > 0
+        assert second.upstream_ref == first.upstream_ref
+    finally:
+        await cache.close()
+
+
+@pytest.mark.asyncio
+async def test_cc_loader_resync_changed_csv_detects_updates(
+    tmp_path: Path, pps_csv_bytes: bytes
+) -> None:
+    """Modified CSV → updated counter increments for the changed row."""
+    from scholar_mcp._cache import ScholarCache
+    from scholar_mcp._sync_cc import CCLoader
+
+    modified = pps_csv_bytes.replace(
+        b"Korean National Protection Profile for Single Sign On V1.0",
+        b"Korean National Protection Profile for Single Sign On V1.0 (REVISED)",
+    )
+
+    cache = ScholarCache(tmp_path / "cache.db")
+    await cache.open()
+    try:
+        with respx.mock(assert_all_called=False) as router:
+            _mock_pps(router, pps_csv_bytes)
+
+            async with httpx.AsyncClient() as http:
+                first = await CCLoader(http=http).sync(cache)
+
+        with respx.mock(assert_all_called=False) as router:
+            _mock_pps(router, modified)
+
+            async with httpx.AsyncClient() as http:
+                second = await CCLoader(http=http).sync(cache)
+
+        assert first.added > 0
+        assert second.updated >= 1
+        assert second.upstream_ref != first.upstream_ref
+    finally:
+        await cache.close()
+
+
+@pytest.mark.asyncio
+async def test_cc_loader_withdrawal_detection(
+    tmp_path: Path, pps_csv_bytes: bytes
+) -> None:
+    """A PP that disappears in second sync gets status='withdrawn'."""
+    from scholar_mcp._cache import ScholarCache
+    from scholar_mcp._sync_cc import CCLoader
+
+    lines = pps_csv_bytes.splitlines(keepends=True)
+    reduced = b"".join(lines[:2] + lines[3:])  # header + KECS + ANSSI + ...
+
+    cache = ScholarCache(tmp_path / "cache.db")
+    await cache.open()
+    try:
+        with respx.mock(assert_all_called=False) as router:
+            _mock_pps(router, pps_csv_bytes)
+            async with httpx.AsyncClient() as http:
+                await CCLoader(http=http).sync(cache)
+
+        with respx.mock(assert_all_called=False) as router:
+            _mock_pps(router, reduced)
+            async with httpx.AsyncClient() as http:
+                second = await CCLoader(http=http).sync(cache)
+
+        assert second.withdrawn == 1
+        bsi = await cache.get_standard("BSI-CC-PP-0099-V2-2017")
+        assert bsi is not None
+        assert bsi["status"] == "withdrawn"
+    finally:
+        await cache.close()
+
+
+@pytest.mark.asyncio
+async def test_cc_loader_withdrawal_aborts_on_majority_missing(
+    tmp_path: Path, pps_csv_bytes: bytes
+) -> None:
+    """If >50% of synced PPs disappear, withdrawal pass aborts."""
+    from scholar_mcp._cache import ScholarCache
+    from scholar_mcp._sync_cc import CCLoader
+
+    lines = pps_csv_bytes.splitlines(keepends=True)
+    reduced = b"".join(lines[:2])  # header + KECS row
+
+    cache = ScholarCache(tmp_path / "cache.db")
+    await cache.open()
+    try:
+        with respx.mock(assert_all_called=False) as router:
+            _mock_pps(router, pps_csv_bytes)
+            async with httpx.AsyncClient() as http:
+                await CCLoader(http=http).sync(cache)
+
+        with respx.mock(assert_all_called=False) as router:
+            _mock_pps(router, reduced)
+            async with httpx.AsyncClient() as http:
+                second = await CCLoader(http=http).sync(cache)
+
+        assert second.withdrawn == 0
+        assert any("withdrawal" in e.lower() for e in second.errors)
+        bsi = await cache.get_standard("BSI-CC-PP-0099-V2-2017")
+        assert bsi is not None
+        assert bsi["status"] == "archived"
+    finally:
+        await cache.close()
+
+
+@pytest.mark.asyncio
+async def test_cc_loader_csv_fetch_404_returns_degraded_report(
+    tmp_path: Path,
+) -> None:
+    """HTTP 404 on pps.csv → framework records still loaded, error logged."""
+    from scholar_mcp._cache import ScholarCache
+    from scholar_mcp._sync_cc import _FRAMEWORK_DOCS, CCLoader
+
+    cache = ScholarCache(tmp_path / "cache.db")
+    await cache.open()
+    try:
+        with respx.mock(assert_all_called=False) as router:
+            _mock_pps(router, b"", status=404)
+
+            async with httpx.AsyncClient() as http:
+                report = await CCLoader(http=http).sync(cache)
+
+        framework_records = sum(2 if e.iso_identifier else 1 for e in _FRAMEWORK_DOCS)
+        assert report.added == framework_records
+        assert any("pp" in e.lower() or "csv" in e.lower() for e in report.errors)
+        cc_p1 = await cache.get_standard("CC:2022 Part 1")
+        assert cc_p1 is not None
+    finally:
+        await cache.close()
+
+
+@pytest.mark.asyncio
+async def test_cc_loader_owns_iso_15408_records(
+    tmp_path: Path, pps_csv_bytes: bytes
+) -> None:
+    """The CC dual record overrides any prior ISO loader entry for 15408.
+
+    With Task 1's denylist in place the ISO loader never writes
+    iso-iec-15408-* slugs at all, so this test simulates the
+    cross-loader scenario by writing a placeholder record manually,
+    then asserting CCLoader replaces it with the CC-sourced version
+    (free PDF, related cross-link, source='CC').
+    """
+    from scholar_mcp._cache import ScholarCache
+    from scholar_mcp._record_types import StandardRecord
+    from scholar_mcp._sync_cc import CCLoader
+
+    placeholder: StandardRecord = {
+        "identifier": "ISO/IEC 15408-1:2022",
+        "title": "Placeholder from a hypothetical ISO loader run",
+        "body": "ISO/IEC",
+        "status": "published",
+        "full_text_url": None,
+        "full_text_available": False,
+    }
+    cache = ScholarCache(tmp_path / "cache.db")
+    await cache.open()
+    try:
+        await cache.set_standard(
+            "ISO/IEC 15408-1:2022", placeholder, source="ISO", synced=True
+        )
+
+        with respx.mock(assert_all_called=False) as router:
+            _mock_pps(router, pps_csv_bytes)
+            async with httpx.AsyncClient() as http:
+                await CCLoader(http=http).sync(cache)
+
+        rec = await cache.get_standard("ISO/IEC 15408-1:2022")
+        assert rec is not None
+        assert rec["full_text_available"] is True
+        assert rec["full_text_url"] is not None
+        assert rec["full_text_url"].startswith("https://www.commoncriteriaportal.org/")
+        assert rec.get("related") == ["CC:2022 Part 1"]
+    finally:
+        await cache.close()
