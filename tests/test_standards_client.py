@@ -1234,21 +1234,15 @@ async def test_standards_client_search_iso_delegates_to_relaton() -> None:
     assert results[0]["identifier"] == "ISO 9001:2015"
 
 
-def test_standards_client_fetchers_all_implement_protocol() -> None:
+@pytest.mark.asyncio
+async def test_standards_client_fetchers_all_implement_protocol() -> None:
     """Every fetcher in _fetchers satisfies _StandardsFetcher at runtime."""
-    import asyncio
-
     from scholar_mcp._standards_client import StandardsClient, _StandardsFetcher
 
-    async def build() -> StandardsClient:
-        return StandardsClient(httpx.AsyncClient())
-
-    client = asyncio.run(build())
-    seen = set()
-    for fetcher in client._fetchers.values():
-        if id(fetcher) in seen:
-            continue
-        seen.add(id(fetcher))
-        assert isinstance(fetcher, _StandardsFetcher), (
-            f"{type(fetcher).__name__} does not satisfy _StandardsFetcher"
-        )
+    async with httpx.AsyncClient() as http:
+        client = StandardsClient(http)
+        for name, fetcher in client._fetchers.items():
+            assert isinstance(fetcher, _StandardsFetcher), (
+                f"Fetcher for '{name}' ({type(fetcher).__name__}) "
+                f"does not implement _StandardsFetcher Protocol"
+            )

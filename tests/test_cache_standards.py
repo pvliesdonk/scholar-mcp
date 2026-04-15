@@ -445,3 +445,31 @@ async def test_search_synced_standards_limit(tmp_path: Path) -> None:
     results = await cache.search_synced_standards("ISO", limit=3)
     await cache.close()
     assert len(results) == 3
+
+
+@pytest.mark.asyncio
+async def test_search_synced_standards_escapes_wildcards(tmp_path: Path) -> None:
+    """Query containing LIKE wildcard chars is treated as literals."""
+    cache = ScholarCache(tmp_path / "c.db")
+    await cache.open()
+    exact: StandardRecord = {
+        "identifier": "ISO_001:2020",
+        "title": "ISO 001 2020",
+        "body": "ISO",
+        "status": "published",
+        "full_text_available": False,
+    }
+    near: StandardRecord = {
+        "identifier": "ISO X001:2020",
+        "title": "ISO X001 2020",
+        "body": "ISO",
+        "status": "published",
+        "full_text_available": False,
+    }
+    await cache.set_standard("ISO_001:2020", exact, source="ISO", synced=True)
+    await cache.set_standard("ISO X001:2020", near, source="ISO", synced=True)
+    results = await cache.search_synced_standards("ISO_001")
+    await cache.close()
+    identifiers = [r["identifier"] for r in results]
+    assert "ISO_001:2020" in identifiers
+    assert "ISO X001:2020" not in identifiers

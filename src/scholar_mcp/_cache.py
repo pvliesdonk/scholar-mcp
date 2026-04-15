@@ -1140,7 +1140,9 @@ class ScholarCache:
         LIKE is case-insensitive for ASCII by default.
 
         Args:
-            query: Substring to match against identifier and title.
+            query: Substring to match against the identifier column and the
+                title field (via json_extract). ``%`` and ``_`` in the query
+                are treated as literals, not LIKE wildcards.
             source: Optional body filter (``"ISO"``, ``"IEC"``, …). Pass
                 ``None`` to search all synced bodies.
             limit: Maximum number of results.
@@ -1149,13 +1151,15 @@ class ScholarCache:
             List of matching ``StandardRecord`` dicts.
         """
         db = _require_open(self._db)
-        pattern = f"%{query}%"
+        escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        pattern = f"%{escaped}%"
         if source is not None:
             async with db.execute(
                 "SELECT data FROM standards "
                 "WHERE synced_at IS NOT NULL "
                 "AND source = ? "
-                "AND (identifier LIKE ? OR json_extract(data, '$.title') LIKE ?) "
+                "AND (identifier LIKE ? ESCAPE '\\' "
+                "OR json_extract(data, '$.title') LIKE ? ESCAPE '\\') "
                 "LIMIT ?",
                 (source, pattern, pattern, limit),
             ) as cur:
@@ -1164,7 +1168,8 @@ class ScholarCache:
             async with db.execute(
                 "SELECT data FROM standards "
                 "WHERE synced_at IS NOT NULL "
-                "AND (identifier LIKE ? OR json_extract(data, '$.title') LIKE ?) "
+                "AND (identifier LIKE ? ESCAPE '\\' "
+                "OR json_extract(data, '$.title') LIKE ? ESCAPE '\\') "
                 "LIMIT ?",
                 (pattern, pattern, limit),
             ) as cur:
