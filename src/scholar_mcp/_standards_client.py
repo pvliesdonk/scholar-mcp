@@ -1026,15 +1026,18 @@ class StandardsClient:
         from ._relaton_live import RelatonLiveFetcher
 
         self._http = http
-        relaton_live = RelatonLiveFetcher(http=http, cache=cache)
+        # Three RelatonLiveFetcher instances so each body key can carry its
+        # own source filter when search() delegates to the cache.
+        # The ISO/IEC variant uses source=None to cover joint-committee
+        # records that may live under either "ISO" or "IEC" in the cache.
         self._fetchers: dict[str, _StandardsFetcher] = {
             "IETF": _IETFFetcher(http, RateLimiter(delay=0.5)),
             "NIST": _NISTFetcher(http, RateLimiter(delay=1.0), cache_dir=cache_dir),
             "W3C": _W3CFetcher(http, RateLimiter(delay=0.5)),
             "ETSI": _ETSIFetcher(http, RateLimiter(delay=1.0)),
-            "ISO": relaton_live,
-            "IEC": relaton_live,
-            "ISO/IEC": relaton_live,
+            "ISO": RelatonLiveFetcher(http=http, cache=cache, source="ISO"),
+            "IEC": RelatonLiveFetcher(http=http, cache=cache, source="IEC"),
+            "ISO/IEC": RelatonLiveFetcher(http=http, cache=cache, source=None),
         }
 
     async def search(
@@ -1063,20 +1066,19 @@ class StandardsClient:
                 return []
             return await fetcher.search(query, limit=limit)
 
-        # Search all sources concurrently (dedup: same RelatonLiveFetcher instance
-        # covers ISO, IEC, and ISO/IEC — only call it once).
+        # Search all sources concurrently. The three RelatonLiveFetcher
+        # instances may return overlapping records (the ISO/IEC variant with
+        # source=None is unfiltered), so dedup merged results by identifier.
         results_per_body = await asyncio.gather(
-            *(
-                f.search(query, limit=limit)
-                for f in dict.fromkeys(self._fetchers.values())
-            ),
+            *(f.search(query, limit=limit) for f in self._fetchers.values()),
             return_exceptions=True,
         )
-        merged: list[StandardRecord] = []
+        by_identifier: dict[str, StandardRecord] = {}
         for r in results_per_body:
             if isinstance(r, list):
-                merged.extend(r)
-        return merged[:limit]
+                for rec in r:
+                    by_identifier.setdefault(rec["identifier"], rec)
+        return list(by_identifier.values())[:limit]
 
     async def get(self, identifier: str) -> StandardRecord | None:
         """Resolve and fetch a single standard by identifier.
@@ -1097,10 +1099,13 @@ class StandardsClient:
             if fetcher is not None:
                 return await fetcher.get(canonical)
 
-        # No local resolution — try each fetcher (deduped: same RelatonLiveFetcher
-        # instance is registered under ISO, IEC, and ISO/IEC).
-        seen = list(dict.fromkeys(self._fetchers.values()))
-        for fetcher in seen:
+        # No local resolution — try each fetcher (deduped by type: the three
+        # RelatonLiveFetcher instances do identical slug-based lookup for
+        # get(), so call only one of them).
+        seen_types: dict[type[object], _StandardsFetcher] = {}
+        for f in self._fetchers.values():
+            seen_types.setdefault(type(f), f)
+        for fetcher in seen_types.values():
             result = await fetcher.get(identifier)
             if result is not None:
                 return result

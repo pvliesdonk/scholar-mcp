@@ -262,7 +262,7 @@ async def test_live_fetch_returns_stub_on_yaml_parse_error() -> None:
 
 @pytest.mark.asyncio
 async def test_live_fetcher_search_returns_cache_results() -> None:
-    """search() delegates to cache.search_synced_standards."""
+    """search() delegates to cache.search_synced_standards with source=None."""
     from unittest.mock import AsyncMock
 
     from scholar_mcp._record_types import StandardRecord
@@ -282,9 +282,30 @@ async def test_live_fetcher_search_returns_cache_results() -> None:
         fetcher = RelatonLiveFetcher(http=http, cache=mock_cache)
         results = await fetcher.search("9001", limit=5)
 
-    mock_cache.search_synced_standards.assert_awaited_once_with("9001", limit=5)
+    mock_cache.search_synced_standards.assert_awaited_once_with(
+        "9001", source=None, limit=5
+    )
     assert len(results) == 1
     assert results[0]["identifier"] == "ISO 9001:2015"
+
+
+@pytest.mark.asyncio
+async def test_live_fetcher_search_forwards_source_filter() -> None:
+    """search() forwards the source= __init__ kwarg to the cache."""
+    from unittest.mock import AsyncMock
+
+    from scholar_mcp._relaton_live import RelatonLiveFetcher
+
+    mock_cache = AsyncMock()
+    mock_cache.search_synced_standards = AsyncMock(return_value=[])
+
+    async with httpx.AsyncClient() as http:
+        fetcher = RelatonLiveFetcher(http=http, cache=mock_cache, source="IEC")
+        await fetcher.search("62443", limit=3)
+
+    mock_cache.search_synced_standards.assert_awaited_once_with(
+        "62443", source="IEC", limit=3
+    )
 
 
 @pytest.mark.asyncio

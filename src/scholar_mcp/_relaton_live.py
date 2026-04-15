@@ -79,10 +79,25 @@ class RelatonLiveFetcher:
     """
 
     def __init__(
-        self, *, http: httpx.AsyncClient, cache: CacheProtocol | None = None
+        self,
+        *,
+        http: httpx.AsyncClient,
+        cache: CacheProtocol | None = None,
+        source: str | None = None,
     ) -> None:
+        """Initialise the fetcher.
+
+        Args:
+            http: Shared ``httpx.AsyncClient``.
+            cache: Optional cache for :meth:`search`. When ``None``,
+                :meth:`search` returns an empty list.
+            source: Optional ``source`` filter forwarded to the cache on
+                :meth:`search`. Used by :class:`StandardsClient` to keep
+                ``body="ISO"`` and ``body="IEC"`` searches scoped.
+        """
         self._http = http
         self._cache = cache
+        self._source = source
 
     async def _try_repo(self, repo: str, slug: str) -> dict[str, object] | None:
         url = f"{_RAW_BASE}/{repo}/main/data/{slug}.yaml"
@@ -125,8 +140,11 @@ class RelatonLiveFetcher:
             List of matching ``StandardRecord`` dicts.
         """
         if self._cache is None:
+            logger.debug("relaton_live_search_no_cache query=%s", query)
             return []
-        return await self._cache.search_synced_standards(query, limit=limit)
+        return await self._cache.search_synced_standards(
+            query, source=self._source, limit=limit
+        )
 
     async def get(self, identifier: str) -> StandardRecord | None:
         """Return a parsed record for *identifier*, or a stub, or ``None``."""

@@ -1210,7 +1210,7 @@ async def test_standards_client_get_fallback_to_fetchers() -> None:
 
 @pytest.mark.asyncio
 async def test_standards_client_search_iso_delegates_to_relaton() -> None:
-    """search(body='ISO') routes to RelatonLiveFetcher.search()."""
+    """search(body='ISO') routes to RelatonLiveFetcher.search() with source='ISO'."""
     from unittest.mock import AsyncMock
 
     from scholar_mcp._record_types import StandardRecord
@@ -1230,8 +1230,59 @@ async def test_standards_client_search_iso_delegates_to_relaton() -> None:
         client = StandardsClient(http, cache=mock_cache)
         results = await client.search("9001", body="ISO")
 
+    mock_cache.search_synced_standards.assert_awaited_once_with(
+        "9001", source="ISO", limit=10
+    )
     assert len(results) == 1
     assert results[0]["identifier"] == "ISO 9001:2015"
+
+
+@pytest.mark.asyncio
+async def test_standards_client_search_iec_delegates_to_relaton() -> None:
+    """search(body='IEC') routes to RelatonLiveFetcher.search() with source='IEC'."""
+    from unittest.mock import AsyncMock
+
+    from scholar_mcp._record_types import StandardRecord
+    from scholar_mcp._standards_client import StandardsClient
+
+    record: StandardRecord = {
+        "identifier": "IEC 62443-3-3:2020",
+        "title": "Industrial communication networks — IT security",
+        "body": "IEC",
+        "status": "published",
+        "full_text_available": False,
+    }
+    mock_cache = AsyncMock()
+    mock_cache.search_synced_standards = AsyncMock(return_value=[record])
+
+    async with httpx.AsyncClient() as http:
+        client = StandardsClient(http, cache=mock_cache)
+        results = await client.search("62443", body="IEC")
+
+    mock_cache.search_synced_standards.assert_awaited_once_with(
+        "62443", source="IEC", limit=10
+    )
+    assert len(results) == 1
+    assert results[0]["identifier"] == "IEC 62443-3-3:2020"
+
+
+@pytest.mark.asyncio
+async def test_standards_client_search_iso_iec_uses_no_source_filter() -> None:
+    """search(body='ISO/IEC') routes to unfiltered RelatonLiveFetcher variant."""
+    from unittest.mock import AsyncMock
+
+    from scholar_mcp._standards_client import StandardsClient
+
+    mock_cache = AsyncMock()
+    mock_cache.search_synced_standards = AsyncMock(return_value=[])
+
+    async with httpx.AsyncClient() as http:
+        client = StandardsClient(http, cache=mock_cache)
+        await client.search("27001", body="ISO/IEC")
+
+    mock_cache.search_synced_standards.assert_awaited_once_with(
+        "27001", source=None, limit=10
+    )
 
 
 @pytest.mark.asyncio

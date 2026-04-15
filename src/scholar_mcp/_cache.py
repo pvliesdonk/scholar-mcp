@@ -1153,27 +1153,19 @@ class ScholarCache:
         db = _require_open(self._db)
         escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         pattern = f"%{escaped}%"
+        where = ["synced_at IS NOT NULL"]
+        params: list[object] = []
         if source is not None:
-            async with db.execute(
-                "SELECT data FROM standards "
-                "WHERE synced_at IS NOT NULL "
-                "AND source = ? "
-                "AND (identifier LIKE ? ESCAPE '\\' "
-                "OR json_extract(data, '$.title') LIKE ? ESCAPE '\\') "
-                "LIMIT ?",
-                (source, pattern, pattern, limit),
-            ) as cur:
-                rows = await cur.fetchall()
-        else:
-            async with db.execute(
-                "SELECT data FROM standards "
-                "WHERE synced_at IS NOT NULL "
-                "AND (identifier LIKE ? ESCAPE '\\' "
-                "OR json_extract(data, '$.title') LIKE ? ESCAPE '\\') "
-                "LIMIT ?",
-                (pattern, pattern, limit),
-            ) as cur:
-                rows = await cur.fetchall()
+            where.append("source = ?")
+            params.append(source)
+        where.append(
+            "(identifier LIKE ? ESCAPE '\\' "
+            "OR json_extract(data, '$.title') LIKE ? ESCAPE '\\')"
+        )
+        params.extend([pattern, pattern, limit])
+        sql = "SELECT data FROM standards WHERE " + " AND ".join(where) + " LIMIT ?"
+        async with db.execute(sql, params) as cur:
+            rows = await cur.fetchall()
         return [json.loads(row[0]) for row in rows]
 
     async def get_standard_alias(self, raw: str) -> str | None:
