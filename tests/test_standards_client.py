@@ -227,6 +227,98 @@ def test_resolve_identifier_bare_number_not_matched() -> None:
     assert resolve_identifier_local("27001:2022") is None
 
 
+# --- Resolver: IEEE ---
+
+
+def test_resolve_ieee_plain() -> None:
+    """Plain IEEE identifier resolves to (canonical, 'IEEE')."""
+    from scholar_mcp._standards_client import resolve_identifier_local
+
+    assert resolve_identifier_local("IEEE 802.11-2020") == ("IEEE 802.11-2020", "IEEE")
+    assert resolve_identifier_local("IEEE 1003.1-2024") == ("IEEE 1003.1-2024", "IEEE")
+
+
+def test_resolve_ieee_std_variant() -> None:
+    """`IEEE Std X-YYYY` form is accepted."""
+    from scholar_mcp._standards_client import resolve_identifier_local
+
+    result = resolve_identifier_local("IEEE Std 1588-2019")
+    assert result is not None
+    identifier, body = result
+    assert body == "IEEE"
+    assert "1588" in identifier
+    assert "2019" in identifier
+
+
+def test_resolve_iec_ieee_joint_dispatches_to_ieee() -> None:
+    """IEC/IEEE joint → canonical form kept, dispatch body is 'IEEE'.
+
+    The dispatch body ('IEEE') must match a StandardsClient._fetchers key.
+    The record's body field (set by _yaml_to_record) will be 'IEC/IEEE'.
+    """
+    from scholar_mcp._standards_client import resolve_identifier_local
+
+    result = resolve_identifier_local("IEC/IEEE 61588-2021")
+    assert result is not None
+    identifier, body = result
+    assert identifier == "IEC/IEEE 61588-2021"
+    assert body == "IEEE"  # dispatch body, not record body
+
+
+def test_resolve_iso_iec_ieee_joint_dispatches_to_ieee() -> None:
+    """ISO/IEC/IEEE triple-joint → dispatch body 'IEEE'."""
+    from scholar_mcp._standards_client import resolve_identifier_local
+
+    result = resolve_identifier_local("ISO/IEC/IEEE 42010-2011")
+    assert result is not None
+    identifier, body = result
+    assert identifier == "ISO/IEC/IEEE 42010-2011"
+    assert body == "IEEE"
+
+
+@pytest.mark.asyncio
+async def test_standards_client_search_ieee_delegates_to_relaton() -> None:
+    """search(body='IEEE') → RelatonLiveFetcher.search() with source='IEEE'."""
+    from unittest.mock import AsyncMock
+
+    from scholar_mcp._record_types import StandardRecord
+    from scholar_mcp._standards_client import StandardsClient
+
+    record: StandardRecord = {
+        "identifier": "IEEE 1003.1-2024",
+        "title": "POSIX Base Specifications",
+        "body": "IEEE",
+        "status": "published",
+        "full_text_available": False,
+    }
+    mock_cache = AsyncMock()
+    mock_cache.search_synced_standards = AsyncMock(return_value=[record])
+
+    async with httpx.AsyncClient() as http:
+        client = StandardsClient(http, cache=mock_cache)
+        results = await client.search("1003", body="IEEE")
+
+    mock_cache.search_synced_standards.assert_awaited_once_with(
+        "1003", source="IEEE", limit=10
+    )
+    assert len(results) == 1
+    assert results[0]["identifier"] == "IEEE 1003.1-2024"
+
+
+@pytest.mark.asyncio
+async def test_standards_client_fetchers_ieee_instance_registered() -> None:
+    """_fetchers['IEEE'] is a RelatonLiveFetcher with source='IEEE'."""
+    from scholar_mcp._relaton_live import RelatonLiveFetcher
+    from scholar_mcp._standards_client import StandardsClient
+
+    async with httpx.AsyncClient() as http:
+        client = StandardsClient(http)
+        fetcher = client._fetchers["IEEE"]
+
+    assert isinstance(fetcher, RelatonLiveFetcher)
+    assert fetcher._source == "IEEE"
+
+
 # ---------------------------------------------------------------------------
 # IETF fetcher tests
 # ---------------------------------------------------------------------------

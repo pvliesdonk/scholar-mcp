@@ -54,7 +54,19 @@ _ETSI_RE = re.compile(
     r"(?i)\betsi\s+(EN|TS|TR|ES|EG)\s*(\d{3})\s*[\s-]?\s*(\d{3}(?:-\d+)?)\b"
 )
 
-# ISO joint with IEC (must precede plain ISO/IEC so the joint form wins):
+# IEEE triple-joint with ISO and IEC (must precede other IEEE and joint patterns):
+#   "ISO/IEC/IEEE 42010-2011", "ISO/IEC/IEEE 42010:2011"
+_ISO_IEC_IEEE_JOINT_RE = re.compile(
+    r"(?i)\biso[/\s]*iec[/\s]*ieee\s*"
+    r"(\d{1,5}(?:-\d+)*(?:\.\d+)*)\s*[:\s-]\s*(\d{4})\b"
+)
+# IEEE joint with IEC (must precede plain IEEE and the ISO/IEC joint):
+#   "IEC/IEEE 61588-2021", "IEEE/IEC 61588-2021"
+_IEC_IEEE_JOINT_RE = re.compile(
+    r"(?i)\b(?:iec[/\s]*ieee|ieee[/\s]*iec)\s*"
+    r"(\d{1,5}(?:-\d+)*(?:\.\d+)*)\s*[:\s-]\s*(\d{4})\b"
+)
+# ISO joint with IEC (must precede plain ISO and plain IEC):
 #   "ISO/IEC 27001:2022", "ISO IEC 27001:2022", "IEC/ISO 27001:2022"
 _ISO_IEC_JOINT_RE = re.compile(
     r"(?i)\b(?:iso[/\s]*iec|iec[/\s]*iso)\s*"
@@ -64,6 +76,12 @@ _ISO_IEC_JOINT_RE = re.compile(
 _ISO_RE = re.compile(r"(?i)\biso\s*(\d{1,5}(?:-\d+)*)\s*[:\s-]\s*(\d{4})\b")
 # IEC alone: "IEC 62443-3-3:2020"
 _IEC_RE = re.compile(r"(?i)\biec\s*(\d{1,5}(?:-\d+)*)\s*[:\s-]\s*(\d{4})\b")
+# IEEE alone (with optional 'Std' token):
+#   "IEEE 802.11-2020", "IEEE Std 1588-2019", "IEEE 1003.1-2024"
+_IEEE_RE = re.compile(
+    r"(?i)\bieee(?:\s+std)?\s+"
+    r"(\d{1,5}(?:-\d+)*(?:\.\d+)*)\s*[-\s]\s*(\d{4})\b"
+)
 
 
 def resolve_identifier_local(raw: str) -> tuple[str, str] | None:
@@ -78,6 +96,22 @@ def resolve_identifier_local(raw: str) -> tuple[str, str] | None:
         Tuple of (canonical_identifier, body) or None.
     """
     s = raw.strip()
+
+    # IEEE patterns (check before IETF STD to prevent "IEEE Std X" from matching _IETF_STD_RE)
+    # ISO/IEC/IEEE triple-joint (must precede other IEEE joints and plain IEEE)
+    m = _ISO_IEC_IEEE_JOINT_RE.search(s)
+    if m:
+        return f"ISO/IEC/IEEE {m.group(1)}-{m.group(2)}", "IEEE"
+
+    # IEC/IEEE joint (precedes plain IEEE and the plain ISO/IEC joint)
+    m = _IEC_IEEE_JOINT_RE.search(s)
+    if m:
+        return f"IEC/IEEE {m.group(1)}-{m.group(2)}", "IEEE"
+
+    # IEEE alone (must come before IETF STD check to prevent "IEEE Std X" from matching STD)
+    m = _IEEE_RE.search(s)
+    if m:
+        return f"IEEE {m.group(1)}-{m.group(2)}", "IEEE"
 
     # IETF RFC (check before NIST to avoid "RFC" matching NIST patterns)
     m = _IETF_RFC_RE.search(s)
@@ -1026,10 +1060,11 @@ class StandardsClient:
         from ._relaton_live import RelatonLiveFetcher
 
         self._http = http
-        # Three RelatonLiveFetcher instances so each body key can carry its
-        # own source filter when search() delegates to the cache.
-        # The ISO/IEC variant uses source=None to cover joint-committee
-        # records that may live under either "ISO" or "IEC" in the cache.
+        # Four RelatonLiveFetcher instances (ISO, IEC, IEEE, ISO/IEC) so each
+        # body key can carry its own source filter when search() delegates to
+        # the cache. The ISO/IEC variant uses source=None to cover
+        # joint-committee records and must be listed last so it wins the type
+        # dedup in _one_fetcher_per_type() for all-bodies searches.
         self._fetchers: dict[str, _StandardsFetcher] = {
             "IETF": _IETFFetcher(http, RateLimiter(delay=0.5)),
             "NIST": _NISTFetcher(http, RateLimiter(delay=1.0), cache_dir=cache_dir),
@@ -1037,6 +1072,7 @@ class StandardsClient:
             "ETSI": _ETSIFetcher(http, RateLimiter(delay=1.0)),
             "ISO": RelatonLiveFetcher(http=http, cache=cache, source="ISO"),
             "IEC": RelatonLiveFetcher(http=http, cache=cache, source="IEC"),
+            "IEEE": RelatonLiveFetcher(http=http, cache=cache, source="IEEE"),
             "ISO/IEC": RelatonLiveFetcher(http=http, cache=cache, source=None),
         }
 
@@ -1052,9 +1088,9 @@ class StandardsClient:
         Args:
             query: Identifier, title, or free text.
             body: Optional body filter: "IETF", "NIST", "W3C", "ETSI",
-                "ISO", "IEC", or "ISO/IEC". ISO / IEC / ISO/IEC results
-                come from the locally synced cache; run ``sync-standards``
-                first for non-empty results.
+                "ISO", "IEC", "ISO/IEC", or "IEEE". ISO / IEC / ISO/IEC /
+                IEEE results come from the locally synced cache; run
+                ``sync-standards`` first for non-empty results.
             limit: Maximum results.
 
         Returns:
@@ -1118,10 +1154,11 @@ class StandardsClient:
         fetchers registered under multiple body keys are only invoked once.
 
         For :class:`RelatonLiveFetcher` (registered under ``ISO``, ``IEC``,
-        ``ISO/IEC``), the last-wins overwrite keeps the ``ISO/IEC`` variant
-        whose ``source=None`` returns all synced Relaton records — the ISO-
-        and IEC-scoped instances would be subsumed by it. Insertion order of
-        ``self._fetchers`` (``ISO`` → ``IEC`` → ``ISO/IEC``) is load-bearing.
+        ``IEEE``, ``ISO/IEC``), the last-wins overwrite keeps the ``ISO/IEC``
+        variant whose ``source=None`` returns all synced Relaton records — the
+        ISO-, IEC-, and IEEE-scoped instances would be subsumed by it.
+        Insertion order of ``self._fetchers`` (``ISO`` → ``IEC`` → ``IEEE`` →
+        ``ISO/IEC``) is load-bearing.
 
         Non-Relaton fetchers appear exactly once today; if a second instance
         of any of those types is ever added, it will replace the earlier one

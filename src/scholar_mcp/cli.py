@@ -306,6 +306,7 @@ def _select_loaders(
         [
             RelatonLoader("ISO", http=http, token=token),
             RelatonLoader("IEC", http=http, token=token),
+            RelatonLoader("IEEE", http=http, token=token),
         ],
     )
     if body.upper() == "ALL":
