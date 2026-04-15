@@ -1,0 +1,19 @@
+docid:
+  - id: "IEEE 1003.1-2024"
+    type: "IEEE"
+    primary: true
+  - id: "IEEE 1003.1-2024™"
+    type: "IEEE"
+    scope: "trademark"
+    primary: true
+  - id: "979-8-8557-0793-9"
+    type: "ISBN"
+title:
+  - content: "POSIX Base Specifications"
+    format: "text/plain"
+    type: "main"
+link:
+  - content: "https://ieeexplore.ieee.org/document/10555529"
+    type: "src"
+docstatus:
+  stage: "60.60"

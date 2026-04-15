@@ -1,0 +1,18 @@
+docid:
+  - id: "IEEE 1003.1-2024"
+    type: "IEEE"
+    primary: true
+  - id: "10.1109/IEEESTD.2024.10555529"
+    type: "DOI"
+title:
+  - content: "IEEE/Open Group Standard for Information Technology - Portable Operating System Interface (POSIX) Base Specifications, Issue 8"
+    format: "text/plain"
+    type: "main"
+link:
+  - content: "https://ieeexplore.ieee.org/document/10555529"
+    type: "src"
+docstatus:
+  stage: "60.60"
+date:
+  - type: "published"
+    value: "2024-06-14"

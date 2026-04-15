@@ -918,3 +918,54 @@ def test_yaml_to_record_falls_back_to_docidentifier_key() -> None:
 
     assert record is not None
     assert record["identifier"] == "ISO 9001:2015"
+
+
+def test_yaml_to_record_plain_ieee() -> None:
+    """Pure IEEE entry → body='IEEE', identifier preserved verbatim."""
+    from scholar_mcp._sync_relaton import _yaml_to_record
+
+    doc = _load_fixture("relaton_ieee_sample/ieee-1003-1-2024.yaml")
+    record, _ = _yaml_to_record(doc)
+
+    assert record is not None
+    assert record["identifier"] == "IEEE 1003.1-2024"
+    assert record["body"] == "IEEE"
+    assert "POSIX" in record["title"]
+
+
+def test_yaml_to_record_iec_ieee_joint() -> None:
+    """docid list with IEC + IEEE entries → body='IEC/IEEE'."""
+    from scholar_mcp._sync_relaton import _yaml_to_record
+
+    doc = _load_fixture("relaton_ieee_sample/iec-ieee-61588-2021.yaml")
+    record, _ = _yaml_to_record(doc)
+
+    assert record is not None
+    assert record["identifier"] == "IEC/IEEE 61588-2021"
+    assert record["body"] == "IEC/IEEE"
+
+
+def test_yaml_to_record_iso_iec_ieee_joint() -> None:
+    """docid list with ISO + IEC + IEEE entries → body='ISO/IEC/IEEE'."""
+    from scholar_mcp._sync_relaton import _yaml_to_record
+
+    doc = _load_fixture("relaton_ieee_sample/iso-iec-ieee-42010-2011.yaml")
+    record, _ = _yaml_to_record(doc)
+
+    assert record is not None
+    assert record["body"] == "ISO/IEC/IEEE"
+    assert "ISO/IEC/IEEE 42010" in record["identifier"]
+    # trademark variant (with ™) is filtered — canonical must NOT include the ™ suffix
+    assert "™" not in record["identifier"]
+
+
+def test_yaml_to_record_ieee_skips_trademark_scope() -> None:
+    """scope: trademark entries are filtered out when picking canonical."""
+    from scholar_mcp._sync_relaton import _yaml_to_record
+
+    doc = _load_fixture("relaton_ieee_sample/ieee-1003-1-2024-with-trademark.yaml")
+    record, _ = _yaml_to_record(doc)
+
+    assert record is not None
+    assert record["identifier"] == "IEEE 1003.1-2024"
+    assert "™" not in record["identifier"]

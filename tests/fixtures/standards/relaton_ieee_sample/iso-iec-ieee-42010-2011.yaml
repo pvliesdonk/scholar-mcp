@@ -1,0 +1,23 @@
+docid:
+  - id: "ISO/IEC/IEEE 42010-2011"
+    type: "IEEE"
+    primary: true
+  - id: "ISO/IEC/IEEE 42010:2011"
+    type: "ISO"
+    primary: true
+  - id: "ISO/IEC/IEEE 42010:2011"
+    type: "IEC"
+    primary: true
+  - id: "ISO/IEC/IEEE 42010™-2011"
+    type: "IEEE"
+    scope: "trademark"
+    primary: true
+title:
+  - content: "Systems and software engineering - Architecture description"
+    format: "text/plain"
+    type: "main"
+link:
+  - content: "https://ieeexplore.ieee.org/document/6129467"
+    type: "src"
+docstatus:
+  stage: "60.60"

@@ -1,0 +1,16 @@
+docid:
+  - id: "IEC/IEEE 61588-2021"
+    type: "IEEE"
+    primary: true
+  - id: "IEC/IEEE 61588-2021"
+    type: "IEC"
+    primary: true
+title:
+  - content: "Precision clock synchronization protocol for networked measurement and control systems"
+    format: "text/plain"
+    type: "main"
+link:
+  - content: "https://ieeexplore.ieee.org/document/9543623"
+    type: "src"
+docstatus:
+  stage: "60.60"

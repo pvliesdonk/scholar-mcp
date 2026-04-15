@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 class RelatonConfig:
     """Per-body Relaton sync configuration."""
 
-    body: str  # "ISO" or "IEC"
+    body: str  # "ISO", "IEC", or "IEEE"
     repo: str  # "relaton/relaton-data-iso"
     branch: str = "main"
 
@@ -40,6 +40,7 @@ class RelatonConfig:
 _RELATON_BODIES: dict[str, RelatonConfig] = {
     "ISO": RelatonConfig(body="ISO", repo="relaton/relaton-data-iso"),
     "IEC": RelatonConfig(body="IEC", repo="relaton/relaton-data-iec"),
+    "IEEE": RelatonConfig(body="IEEE", repo="relaton/relaton-data-ieee"),
 }
 
 
@@ -60,21 +61,43 @@ def _canonical_identifier_and_body(
 ) -> tuple[str, str] | None:
     """Return ``(identifier, body)`` for a Relaton doc, or ``None`` if unknown.
 
-    Joint detection rules:
-    - If the docidentifier list contains BOTH a ``type=ISO`` entry and a
-      ``type=IEC`` entry, the standard is joint → ``body="ISO/IEC"``.
-    - If only one of ``{ISO, IEC}`` types is present → ``body=that type``.
-    - Otherwise the primary entry's ``type`` determines both.
+    Joint detection rules (checked in order of specificity):
+
+    - ISO + IEC + IEEE types present → ``body="ISO/IEC/IEEE"``
+    - IEC + IEEE types present (no ISO) → ``body="IEC/IEEE"``
+    - ISO + IEC types present (no IEEE) → ``body="ISO/IEC"``
+    - IEEE-only → ``body="IEEE"``
+    - ISO-only / IEC-only → respective body
+    - Otherwise fall back to the primary entry's ``type``.
+
+    Entries with ``scope: trademark`` are filtered out before picking the
+    canonical identifier (they hold a ™ variant of the same id).
     """
     if not docidentifiers:
         return None
 
-    iso_entries = [d for d in docidentifiers if str(d.get("type", "")).upper() == "ISO"]
-    iec_entries = [d for d in docidentifiers if str(d.get("type", "")).upper() == "IEC"]
-    primary_entries = [d for d in docidentifiers if d.get("primary")]
+    def _is_trademark(entry: dict[str, Any]) -> bool:
+        return str(entry.get("scope", "")).lower() == "trademark"
+
+    non_tm = [d for d in docidentifiers if not _is_trademark(d)]
+    if not non_tm:
+        return None
+
+    iso_entries = [d for d in non_tm if str(d.get("type", "")).upper() == "ISO"]
+    iec_entries = [d for d in non_tm if str(d.get("type", "")).upper() == "IEC"]
+    ieee_entries = [d for d in non_tm if str(d.get("type", "")).upper() == "IEEE"]
+
+    if iso_entries and iec_entries and ieee_entries:
+        ident = str(ieee_entries[0].get("id", "")).strip()
+        ident = _normalise_joint(ident, "ISO/IEC/IEEE")
+        return ident, "ISO/IEC/IEEE"
+
+    if iec_entries and ieee_entries:
+        ident = str(ieee_entries[0].get("id", "")).strip()
+        ident = _normalise_joint(ident, "IEC/IEEE")
+        return ident, "IEC/IEEE"
 
     if iso_entries and iec_entries:
-        # Joint — prefer an entry whose id already contains the slash form
         joint = next(
             (
                 d
@@ -85,27 +108,42 @@ def _canonical_identifier_and_body(
             iso_entries[0],
         )
         ident = str(joint.get("id", "")).strip()
-        # Normalise reversed joint form
-        ident = ident.replace("IEC/ISO", "ISO/IEC")
-        if not ident.startswith("ISO/IEC"):
-            # docidentifier had plain ISO or IEC text in the entry for a joint doc
-            if ident.startswith("ISO "):
-                ident = "ISO/IEC " + ident[len("ISO ") :]
-            elif ident.startswith("IEC "):
-                ident = "ISO/IEC " + ident[len("IEC ") :]
-            # else: leave as-is (unusual upstream shape)
+        ident = _normalise_joint(ident, "ISO/IEC")
         return ident, "ISO/IEC"
 
+    if ieee_entries:
+        return str(ieee_entries[0].get("id", "")).strip(), "IEEE"
     if iso_entries:
         return str(iso_entries[0].get("id", "")).strip(), "ISO"
     if iec_entries:
         return str(iec_entries[0].get("id", "")).strip(), "IEC"
+
+    primary_entries = [d for d in non_tm if d.get("primary")]
     if primary_entries:
         ident = str(primary_entries[0].get("id", "")).strip()
         body = str(primary_entries[0].get("type", "")).upper()
         if ident and body:
             return ident, body
     return None
+
+
+def _normalise_joint(ident: str, joint_prefix: str) -> str:
+    """Rewrite *ident* so it starts with *joint_prefix*.
+
+    Handles upstream shapes like ``ISO 42010:2011`` (IEEE entry uses ISO
+    prefix) or ``IEC/ISO 27001:2022`` (reversed slash order).
+    """
+    if ident.startswith(joint_prefix):
+        return ident
+    ident = ident.replace("IEC/ISO", "ISO/IEC")
+    ident = ident.replace("IEEE/IEC", "IEC/IEEE")
+    ident = ident.replace("IEEE/ISO/IEC", "ISO/IEC/IEEE")
+    if ident.startswith(joint_prefix):
+        return ident
+    for prefix in ("ISO/IEC/IEEE ", "IEC/IEEE ", "ISO/IEC ", "IEEE ", "IEC ", "ISO "):
+        if ident.startswith(prefix):
+            return f"{joint_prefix} {ident[len(prefix) :]}"
+    return f"{joint_prefix} {ident}"
 
 
 def _first_link_of_type(links: list[dict[str, Any]] | None, wanted: str) -> str | None:
@@ -299,7 +337,7 @@ _GITHUB_API = "https://api.github.com"
 
 
 class RelatonLoader:
-    """One instance per body (ISO or IEC). Conforms to the Loader protocol.
+    """One instance per body (ISO, IEC, or IEEE). Conforms to the Loader protocol.
 
     The full sync algorithm is documented in
     ``docs/specs/2026-04-13-pr2-iso-iec-relaton-design.md``.
