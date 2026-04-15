@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import time
+from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
 import aiosqlite
+import pytest
 
 from scholar_mcp import _cache as _cache_mod
 from scholar_mcp._cache import ScholarCache
+from scholar_mcp._record_types import StandardRecord
 
 SAMPLE_STANDARD: dict[str, Any] = {
     "identifier": "RFC 9000",
@@ -277,7 +280,6 @@ async def test_sync_run_missing_returns_none(cache: ScholarCache) -> None:
 
 async def test_list_synced_standard_ids_filters_by_source(tmp_path: Any) -> None:
     """list_synced_standard_ids returns only rows matching source filter."""
-    from scholar_mcp._record_types import StandardRecord
 
     cache = ScholarCache(tmp_path / "cache.db")
     await cache.open()
@@ -339,3 +341,107 @@ async def test_list_sync_runs(cache: ScholarCache) -> None:
     rows = await cache.list_sync_runs()
     bodies = {r["body"] for r in rows}
     assert bodies == {"ISO", "IEC"}
+
+
+@pytest.mark.asyncio
+async def test_search_synced_standards_by_identifier(tmp_path: Path) -> None:
+    """Substring match on identifier returns synced records."""
+    cache = ScholarCache(tmp_path / "c.db")
+    await cache.open()
+    record: StandardRecord = {
+        "identifier": "ISO 9001:2015",
+        "title": "Quality management systems",
+        "body": "ISO",
+        "status": "published",
+        "full_text_available": False,
+    }
+    await cache.set_standard("ISO 9001:2015", record, source="ISO", synced=True)
+    results = await cache.search_synced_standards("9001")
+    await cache.close()
+    assert len(results) == 1
+    assert results[0]["identifier"] == "ISO 9001:2015"
+
+
+@pytest.mark.asyncio
+async def test_search_synced_standards_by_title(tmp_path: Path) -> None:
+    """Substring match on title returns synced records."""
+    cache = ScholarCache(tmp_path / "c.db")
+    await cache.open()
+    record: StandardRecord = {
+        "identifier": "ISO 9001:2015",
+        "title": "Quality management systems",
+        "body": "ISO",
+        "status": "published",
+        "full_text_available": False,
+    }
+    await cache.set_standard("ISO 9001:2015", record, source="ISO", synced=True)
+    results = await cache.search_synced_standards("Quality management")
+    await cache.close()
+    assert len(results) == 1
+    assert results[0]["title"] == "Quality management systems"
+
+
+@pytest.mark.asyncio
+async def test_search_synced_standards_excludes_live_fetched(tmp_path: Path) -> None:
+    """Records with synced=False (live-fetched) are excluded."""
+    cache = ScholarCache(tmp_path / "c.db")
+    await cache.open()
+    record: StandardRecord = {
+        "identifier": "ISO 9001:2015",
+        "title": "Quality management systems",
+        "body": "ISO",
+        "status": "published",
+        "full_text_available": False,
+    }
+    await cache.set_standard("ISO 9001:2015", record, source="ISO", synced=False)
+    results = await cache.search_synced_standards("9001")
+    await cache.close()
+    assert results == []
+
+
+@pytest.mark.asyncio
+async def test_search_synced_standards_source_filter(tmp_path: Path) -> None:
+    """source= kwarg restricts results to that body."""
+    cache = ScholarCache(tmp_path / "c.db")
+    await cache.open()
+    iso_record: StandardRecord = {
+        "identifier": "ISO 9001:2015",
+        "title": "Quality management systems",
+        "body": "ISO",
+        "status": "published",
+        "full_text_available": False,
+    }
+    iec_record: StandardRecord = {
+        "identifier": "IEC 62443-3-3:2020",
+        "title": "IT security for industrial systems",
+        "body": "IEC",
+        "status": "published",
+        "full_text_available": False,
+    }
+    await cache.set_standard("ISO 9001:2015", iso_record, source="ISO", synced=True)
+    await cache.set_standard(
+        "IEC 62443-3-3:2020", iec_record, source="IEC", synced=True
+    )
+    iso_only = await cache.search_synced_standards("", source="ISO")
+    await cache.close()
+    assert all(r["body"] == "ISO" for r in iso_only)
+    assert len(iso_only) == 1
+
+
+@pytest.mark.asyncio
+async def test_search_synced_standards_limit(tmp_path: Path) -> None:
+    """limit= kwarg caps the result count."""
+    cache = ScholarCache(tmp_path / "c.db")
+    await cache.open()
+    for i in range(5):
+        record: StandardRecord = {
+            "identifier": f"ISO 900{i}:2015",
+            "title": f"Standard {i}",
+            "body": "ISO",
+            "status": "published",
+            "full_text_available": False,
+        }
+        await cache.set_standard(f"ISO 900{i}:2015", record, source="ISO", synced=True)
+    results = await cache.search_synced_standards("ISO", limit=3)
+    await cache.close()
+    assert len(results) == 3

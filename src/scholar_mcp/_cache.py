@@ -1126,6 +1126,51 @@ class ScholarCache:
             rows = await cur.fetchall()
         return {row[0] for row in rows}
 
+    async def search_synced_standards(
+        self,
+        query: str,
+        *,
+        source: str | None = None,
+        limit: int = 10,
+    ) -> list[StandardRecord]:
+        """Full-text search over synced standards using SQL LIKE.
+
+        Searches the ``identifier`` and ``title`` fields of all synced rows
+        (``synced_at IS NOT NULL``). Case-insensitive on ASCII because SQLite
+        LIKE is case-insensitive for ASCII by default.
+
+        Args:
+            query: Substring to match against identifier and title.
+            source: Optional body filter (``"ISO"``, ``"IEC"``, …). Pass
+                ``None`` to search all synced bodies.
+            limit: Maximum number of results.
+
+        Returns:
+            List of matching ``StandardRecord`` dicts.
+        """
+        db = _require_open(self._db)
+        pattern = f"%{query}%"
+        if source is not None:
+            async with db.execute(
+                "SELECT data FROM standards "
+                "WHERE synced_at IS NOT NULL "
+                "AND source = ? "
+                "AND (identifier LIKE ? OR json_extract(data, '$.title') LIKE ?) "
+                "LIMIT ?",
+                (source, pattern, pattern, limit),
+            ) as cur:
+                rows = await cur.fetchall()
+        else:
+            async with db.execute(
+                "SELECT data FROM standards "
+                "WHERE synced_at IS NOT NULL "
+                "AND (identifier LIKE ? OR json_extract(data, '$.title') LIKE ?) "
+                "LIMIT ?",
+                (pattern, pattern, limit),
+            ) as cur:
+                rows = await cur.fetchall()
+        return [json.loads(row[0]) for row in rows]
+
     async def get_standard_alias(self, raw: str) -> str | None:
         """Return canonical identifier for a raw alias string, or None.
 
