@@ -16,11 +16,15 @@ commits in this PR.
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ._record_types import StandardRecord
+else:
+    StandardRecord = dict
 
 logger = logging.getLogger(__name__)
 
@@ -236,3 +240,97 @@ _FRAMEWORK_DOCS: list[CCFrameworkEntry] = [
         cc_version="3.1 R5",
     ),
 ]
+
+
+# Per-scheme regex extracting a stable PP identifier from the Protection
+# Profile URL filename. Each pattern is keyed by the scheme code
+# (column "Scheme" in pps.csv: KR, DE, FR, US, ES, …).
+_PP_SCHEME_PATTERNS: dict[str, re.Pattern[str]] = {
+    "KR": re.compile(r"(KECS-PP-\d+-\d{4})"),
+    "DE": re.compile(r"(BSI-CC-PP-\d+(?:-V\d+)?-\d{4})"),
+    # ANSSI uses an underscore between year and number on disk; we
+    # canonicalise to slash form via _extract_pp_id.
+    "FR": re.compile(r"(ANSSI-CC-PP-\d{4}[_/]\d+)"),
+    "US": re.compile(r"(NIAP-PP-[A-Za-z0-9_-]+|PP_[A-Za-z0-9_]+_v\d+(?:\.\d+)*)"),
+    "ES": re.compile(r"(CCN-PP-\d+-\d{4})"),
+}
+
+
+def _extract_pp_id(scheme: str, pp_url: str, fallback_name: str) -> str:
+    """Extract a stable PP identifier from the Protection Profile URL.
+
+    Args:
+        scheme: 2-letter scheme code from the CSV ``Scheme`` column.
+        pp_url: Full URL to the PP PDF (may be empty).
+        fallback_name: PP product name to use when no per-scheme regex
+            matches; produces a composite ``CC PP {scheme}-{name}`` form.
+
+    Returns:
+        The extracted scheme-prefixed ID (e.g. ``"BSI-CC-PP-0099-V2-2017"``)
+        or, on no match, the composite fallback. Never returns an empty
+        string — callers can assume a usable identifier.
+    """
+    pattern = _PP_SCHEME_PATTERNS.get(scheme.upper())
+    if pattern is not None:
+        match = pattern.search(pp_url)
+        if match:
+            ident = match.group(1)
+            # ANSSI canonicalisation: 2014_01 → 2014/01
+            if scheme.upper() == "FR":
+                m = re.match(r"(ANSSI-CC-PP-)(\d{4})[_/](\d+)$", ident)
+                if m:
+                    ident = f"{m.group(1)}{m.group(2)}/{m.group(3)}"
+            return ident
+    logger.debug("cc_pp_id_fallback scheme=%s name=%s", scheme, fallback_name)
+    return f"CC PP {scheme}-{fallback_name}"
+
+
+def _normalise_date(raw: str) -> str | None:
+    """Convert ``MM/DD/YYYY`` → ``YYYY-MM-DD``; return None on parse failure."""
+    raw = raw.strip()
+    if not raw:
+        return None
+    try:
+        return datetime.strptime(raw, "%m/%d/%Y").strftime("%Y-%m-%d")
+    except ValueError:
+        logger.debug("cc_pp_date_parse_failed raw=%s", raw)
+        return None
+
+
+def _pp_row_to_record(row: dict[str, str]) -> StandardRecord | None:
+    """Map a pps.csv row to a StandardRecord, or None if unusable.
+
+    Required fields: ``Protection Profile`` (URL), ``Name``, ``Scheme``.
+    Missing or empty fields → None and a DEBUG log.
+    """
+    pp_url = (row.get("Protection Profile") or "").strip()
+    name = (row.get("Name") or "").strip()
+    scheme = (row.get("Scheme") or "").strip()
+    if not pp_url or not name or not scheme:
+        logger.debug(
+            "cc_pp_row_skip reason=missing_required name=%s scheme=%s pp_url=%s",
+            name,
+            scheme,
+            bool(pp_url),
+        )
+        return None
+
+    identifier = _extract_pp_id(scheme, pp_url, name)
+    archived = (row.get("Archived Date") or "").strip()
+    status = "archived" if archived else "published"
+    cert_url = (row.get("Certification Report URL") or "").strip()
+
+    record: StandardRecord = {
+        "identifier": identifier,
+        "title": name,
+        "body": "CC",
+        "status": status,
+        "published_date": _normalise_date(row.get("Certification Date") or ""),
+        "url": cert_url or pp_url,
+        "full_text_url": pp_url,
+        "full_text_available": True,
+        "price": None,
+    }
+    if archived:
+        record["withdrawn_date"] = _normalise_date(archived)
+    return record

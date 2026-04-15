@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
+
 
 def test_framework_to_records_dual_publication_yields_two_records() -> None:
     """A CC framework entry with iso_identifier yields CC + ISO records."""
@@ -123,3 +127,126 @@ def test_framework_docs_includes_cc_2017_three_parts() -> None:
     assert by_cc["CC:2017 Part 1"].iso_identifier == "ISO/IEC 15408-1:2009"
     assert by_cc["CC:2017 Part 2"].iso_identifier == "ISO/IEC 15408-2:2008"
     assert by_cc["CC:2017 Part 3"].iso_identifier == "ISO/IEC 15408-3:2008"
+
+
+@pytest.fixture
+def pp_csv_path() -> Path:
+    return Path(__file__).parent / "fixtures" / "standards" / "cc_sample" / "pps.csv"
+
+
+def test_extract_pp_id_kecs() -> None:
+    """KECS scheme: KECS-PP-NNNN-YYYY extracted from URL filename."""
+    from scholar_mcp._sync_cc import _extract_pp_id
+
+    url = (
+        "http://www.commoncriteriaportal.org:443/files/epfiles/"
+        "KECS-PP-0822-2017 Korean National PP for Single Sign On V1.0(eng).pdf"
+    )
+    assert _extract_pp_id("KR", url, "Korean National PP …") == "KECS-PP-0822-2017"
+
+
+def test_extract_pp_id_bsi() -> None:
+    """BSI: BSI-CC-PP-NNNN[-VN]-YYYY extracted."""
+    from scholar_mcp._sync_cc import _extract_pp_id
+
+    url = (
+        "http://www.commoncriteriaportal.org:443/files/epfiles/"
+        "BSI-CC-PP-0099-V2-2017.pdf"
+    )
+    assert (
+        _extract_pp_id("DE", url, "PP for Hardcopy Devices") == "BSI-CC-PP-0099-V2-2017"
+    )
+
+
+def test_extract_pp_id_anssi() -> None:
+    """ANSSI: ANSSI-CC-PP-YYYY_NN canonicalises underscore to slash."""
+    from scholar_mcp._sync_cc import _extract_pp_id
+
+    url = (
+        "http://www.commoncriteriaportal.org:443/files/epfiles/ANSSI-CC-PP-2014_01.pdf"
+    )
+    assert _extract_pp_id("FR", url, "French PP for OS") == "ANSSI-CC-PP-2014/01"
+
+
+def test_extract_pp_id_ccn() -> None:
+    """CCN (Spanish): CCN-PP-NNNN-YYYY extracted."""
+    from scholar_mcp._sync_cc import _extract_pp_id
+
+    url = "http://www.commoncriteriaportal.org:443/files/epfiles/CCN-PP-0058-2021.pdf"
+    assert _extract_pp_id("ES", url, "Spanish PP for SE") == "CCN-PP-0058-2021"
+
+
+def test_extract_pp_id_unknown_scheme_falls_back_to_composite() -> None:
+    """Unknown scheme → composite form 'CC PP {scheme}-{name}'."""
+    from scholar_mcp._sync_cc import _extract_pp_id
+
+    url = "http://example.com/random-pp.pdf"
+    result = _extract_pp_id("XX", url, "Strange Unknown Scheme PP")
+    assert result == "CC PP XX-Strange Unknown Scheme PP"
+
+
+def test_pp_row_to_record_happy_path(pp_csv_path: Path) -> None:
+    """A complete CSV row maps to a populated StandardRecord."""
+    import csv
+
+    from scholar_mcp._sync_cc import _pp_row_to_record
+
+    with pp_csv_path.open(encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    record = _pp_row_to_record(rows[0])
+
+    assert record is not None
+    assert record["identifier"] == "KECS-PP-0822-2017"
+    assert record["body"] == "CC"
+    assert record["status"] == "published"
+    assert record["title"].startswith("Korean National Protection Profile")
+    assert record["full_text_url"] is not None
+    assert record["full_text_available"] is True
+    assert record["published_date"] == "2017-08-18"
+
+
+def test_pp_row_to_record_archived_status(pp_csv_path: Path) -> None:
+    """A row with a non-empty Archived Date → status='archived'."""
+    import csv
+
+    from scholar_mcp._sync_cc import _pp_row_to_record
+
+    with pp_csv_path.open(encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    record = _pp_row_to_record(rows[1])
+    assert record is not None
+    assert record["status"] == "archived"
+
+
+def test_pp_row_to_record_returns_none_on_missing_pp_url() -> None:
+    """A row with no Protection Profile URL is unusable → None."""
+    from scholar_mcp._sync_cc import _pp_row_to_record
+
+    bad_row = {
+        "Category": "Anything",
+        "Name": "Some PP",
+        "Version": "V1.0",
+        "Assurance Level": "EAL1",
+        "Certification Date": "01/01/2024",
+        "Archived Date": "",
+        "Certification Report URL": "",
+        "Protection Profile": "",
+        "Maintenance Date": "",
+        "Maintenance Title": "",
+        "Maintenance Report": "",
+        "Scheme": "DE",
+    }
+    assert _pp_row_to_record(bad_row) is None
+
+
+def test_pp_row_to_record_published_date_iso_format(pp_csv_path: Path) -> None:
+    """MM/DD/YYYY upstream date is normalised to YYYY-MM-DD."""
+    import csv
+
+    from scholar_mcp._sync_cc import _pp_row_to_record
+
+    with pp_csv_path.open(encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    record = _pp_row_to_record(rows[0])
+    assert record is not None
+    assert record["published_date"] == "2017-08-18"
