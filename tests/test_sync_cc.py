@@ -497,3 +497,45 @@ async def test_cc_loader_owns_iso_15408_records(
         assert rec.get("related") == ["CC:2022 Part 1"]
     finally:
         await cache.close()
+
+
+@pytest.mark.live
+@pytest.mark.asyncio
+async def test_live_fetch_cc_pps_csv_real() -> None:
+    """Smoke: real pps.csv parses into >=100 records with >=5 distinct schemes.
+
+    Catches schema drift / portal layout changes early. Opt-in via
+    ``pytest -m live``; not run in CI by default.
+    """
+    import csv as _csv
+    import io as _io
+
+    async with httpx.AsyncClient(timeout=30.0) as http:
+        response = await http.get(
+            "https://www.commoncriteriaportal.org/pps/pps.csv",
+            follow_redirects=True,
+        )
+        response.raise_for_status()
+
+    rows = list(_csv.DictReader(_io.StringIO(response.text)))
+    assert len(rows) >= 100, f"only {len(rows)} rows in pps.csv"
+    schemes = {r.get("Scheme", "").strip() for r in rows if r.get("Scheme")}
+    assert len(schemes) >= 5, f"only {len(schemes)} distinct schemes: {schemes}"
+
+
+@pytest.mark.live
+@pytest.mark.asyncio
+async def test_live_framework_pdf_urls_resolve_real() -> None:
+    """Smoke: every _FRAMEWORK_DOCS PDF URL responds 200 to HEAD.
+
+    Catches PDF URL rot — CCRA occasionally moves PDFs after a release.
+    """
+    from scholar_mcp._sync_cc import _FRAMEWORK_DOCS
+
+    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as http:
+        for entry in _FRAMEWORK_DOCS:
+            response = await http.head(entry.cc_pdf_url)
+            assert response.status_code == 200, (
+                f"{entry.cc_identifier} → {entry.cc_pdf_url} returned "
+                f"{response.status_code}"
+            )
