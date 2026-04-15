@@ -19,7 +19,7 @@ A [FastMCP](https://github.com/jlowin/fastmcp) server for the scholarly citation
 - **Papers** -- full-text search with year/venue/field/citation filters; single-paper lookup by DOI, S2 ID, arXiv ID, ACM ID, or PubMed ID; author profile and name search; forward citations, backward references, BFS graph traversal, shortest-path bridge discovery; recommendations from positive/negative examples; BibTeX/CSL-JSON/RIS citation generation with OpenAlex venue enrichment.
 - **Patents** -- search across 100+ patent offices via EPO OPS with CPC/applicant/inventor/jurisdiction filters; bibliographic, claims, description, family, legal, and citations sections; NPL-to-paper resolution via Semantic Scholar and paper-to-patent citation discovery. EPO credentials are optional -- other domains work without them.
 - **Books** -- search by title/author/keywords via Open Library (no API key required); lookup by ISBN-10/13, Open Library work ID, or edition ID; subject-based recommendations sorted by popularity; Google Books excerpts and preview links; WorldCat permalinks for library discovery; cover image caching. Papers with an ISBN in `externalIds` are automatically enriched with publisher, edition, cover URL, and subject data from Open Library.
-- **Standards** -- identifier resolution, search, and metadata retrieval for NIST, IETF, W3C, and ETSI standards, with optional full-text fetch and Markdown conversion via docling. Tier 2 ISO, IEC, and IEEE metadata (including joint standards such as ISO/IEC/IEEE) is synced locally from Relaton YAML dumps via `sync-standards`, with a live-fetch fallback for unsynced identifiers (see [docs/guides/standards.md](docs/guides/standards.md)).
+- **Standards** -- identifier resolution, search, and metadata retrieval for NIST, IETF, W3C, and ETSI standards, with optional full-text fetch and Markdown conversion via docling. Tier 2 ISO, IEC, IEEE, and Common Criteria (CC) metadata (including ISO/IEC/IEEE joint standards and the CC ↔ ISO/IEC 15408 cross-link) is synced locally via `sync-standards`. ISO, IEC, IEEE have a live-fetch fallback for unsynced identifiers; CC has no live API and requires a sync first (see [docs/guides/standards.md](docs/guides/standards.md)).
 
 ### Cross-cutting
 
@@ -115,7 +115,7 @@ uvx --from pvliesdonk-scholar-mcp scholar-mcp serve --transport http --port 8000
 
 ### Syncing Tier 2 standards catalogues
 
-Tier 2 bodies (ISO, IEC, IEEE, CEN/CENELEC, Common Criteria) are populated
+Tier 2 bodies (ISO, IEC, IEEE, CC) are populated
 from community-curated bulk dumps rather than live-scraped at MCP-server
 runtime. Run the sync on first install and periodically thereafter:
 
@@ -123,6 +123,7 @@ runtime. Run the sync on first install and periodically thereafter:
 scholar-mcp sync-standards            # all registered bodies
 scholar-mcp sync-standards --body ISO # only ISO
 scholar-mcp sync-standards --body IEEE # only IEEE
+scholar-mcp sync-standards --body CC   # only Common Criteria
 scholar-mcp sync-standards --force    # re-sync even if upstream SHA is unchanged
 ```
 
@@ -245,7 +246,7 @@ All settings are controlled via environment variables with the `SCHOLAR_MCP_` pr
 | `search_standards` | Search standards by identifier, title, or free text, optionally filtered to one body (`NIST`, `IETF`, `W3C`, `ETSI`). |
 | `get_standard` | Retrieve a standard by canonical or fuzzy identifier, optionally fetching and converting the full text via docling. |
 
-> Tier-1 bodies (NIST, IETF, W3C, ETSI) are supported with full metadata and optional full-text conversion. Tier-2 bodies (ISO, IEC, IEEE) are populated locally via `scholar-mcp sync-standards`; CEN/CENELEC and Common Criteria remain tracked in [GitHub issues](https://github.com/pvliesdonk/scholar-mcp/issues).
+> Tier-1 bodies (NIST, IETF, W3C, ETSI) are supported with full metadata and optional full-text conversion. Tier-2 bodies (ISO, IEC, IEEE, CC) are populated locally via `scholar-mcp sync-standards`; CEN/CENELEC remains tracked in [GitHub issues](https://github.com/pvliesdonk/scholar-mcp/issues).
 
 ### Cross-source Utility
 
