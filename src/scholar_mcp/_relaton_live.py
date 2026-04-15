@@ -102,7 +102,7 @@ class RelatonLiveFetcher:
             return None
         return doc
 
-    async def fetch(self, identifier: str) -> StandardRecord | None:
+    async def get(self, identifier: str) -> StandardRecord | None:
         """Return a parsed record for *identifier*, or a stub, or ``None``."""
         slug = _identifier_to_relaton_slug(identifier)
         if slug is None:

@@ -1073,18 +1073,13 @@ class StandardsClient:
             canonical, body = resolved
             fetcher = self._fetchers.get(body)
             if fetcher is not None:
-                if hasattr(fetcher, "fetch"):
-                    return cast("StandardRecord | None", await fetcher.fetch(canonical))
                 return cast("StandardRecord | None", await fetcher.get(canonical))
 
         # No local resolution — try each fetcher (deduped: same RelatonLiveFetcher
         # instance is registered under ISO, IEC, and ISO/IEC).
         seen: list[Any] = list(dict.fromkeys(self._fetchers.values()))
         for fetcher in seen:
-            if hasattr(fetcher, "fetch"):
-                result = cast("StandardRecord | None", await fetcher.fetch(identifier))
-            else:
-                result = cast("StandardRecord | None", await fetcher.get(identifier))
+            result = cast("StandardRecord | None", await fetcher.get(identifier))
             if result is not None:
                 return result
         return None
@@ -1108,12 +1103,7 @@ class StandardsClient:
             canonical, body = resolved
             fetcher = self._fetchers.get(body)
             if fetcher:
-                if hasattr(fetcher, "fetch"):
-                    record = cast(
-                        "StandardRecord | None", await fetcher.fetch(canonical)
-                    )
-                else:
-                    record = cast("StandardRecord | None", await fetcher.get(canonical))
+                record = cast("StandardRecord | None", await fetcher.get(canonical))
                 if record is not None:
                     return [record]
             # Identifier resolved locally but source fetch failed — return minimal stub
