@@ -1379,11 +1379,12 @@ async def test_standards_client_search_iso_iec_uses_no_source_filter() -> None:
 
 @pytest.mark.asyncio
 async def test_standards_client_search_no_body_hits_relaton_cache_once() -> None:
-    """All-bodies search invokes the Relaton cache a single time.
+    """All-bodies search invokes the Relaton cache once, CC cache once.
 
     Regression guard: the three RelatonLiveFetcher instances (ISO, IEC,
     ISO/IEC) should be deduped to the source=None variant in the no-body
     path so the cache isn't queried three times for overlapping results.
+    The CC fetcher also queries the cache separately.
     """
     from unittest.mock import AsyncMock
 
@@ -1401,10 +1402,14 @@ async def test_standards_client_search_no_body_hits_relaton_cache_once() -> None
             client = StandardsClient(http, cache=mock_cache)
             await client.search("test-query")
 
-    assert mock_cache.search_synced_standards.await_count == 1
-    mock_cache.search_synced_standards.assert_awaited_once_with(
-        "test-query", source=None, limit=10
+    assert mock_cache.search_synced_standards.await_count == 2
+    calls = mock_cache.search_synced_standards.call_args_list
+    # First call is ISO/IEC Relaton with source=None
+    # Second call is CC with source="CC"
+    assert any(call[1].get("source") is None for call in calls), (
+        "ISO/IEC Relaton fetch missing"
     )
+    assert any(call[1].get("source") == "CC" for call in calls), "CC fetch missing"
 
 
 @pytest.mark.asyncio
@@ -1419,3 +1424,154 @@ async def test_standards_client_fetchers_all_implement_protocol() -> None:
                 f"Fetcher for '{name}' ({type(fetcher).__name__}) "
                 f"does not implement _StandardsFetcher Protocol"
             )
+
+
+# --- Resolver: CC (Common Criteria) ---
+
+
+def test_resolve_cc_version_only() -> None:
+    """`CC:2022` resolves to body 'CC'."""
+    from scholar_mcp._standards_client import resolve_identifier_local
+
+    result = resolve_identifier_local("CC:2022")
+    assert result is not None
+    identifier, body = result
+    assert body == "CC"
+    assert "2022" in identifier
+
+
+def test_resolve_cc_part() -> None:
+    """`CC:2022 Part 1` and `Common Criteria 2022 Part 1` resolve to CC."""
+    from scholar_mcp._standards_client import resolve_identifier_local
+
+    assert resolve_identifier_local("CC:2022 Part 1") == ("CC:2022 Part 1", "CC")
+    result = resolve_identifier_local("Common Criteria 2022 Part 1")
+    assert result is not None
+    assert result[1] == "CC"
+    assert "2022 Part 1" in result[0]
+
+
+def test_resolve_cc_3_1_revision() -> None:
+    """`CC 3.1 R5` resolves to CC:2017 Part 1 (default part for unqualified version)."""
+    from scholar_mcp._standards_client import resolve_identifier_local
+
+    for raw in ("CC 3.1 R5", "CC 3.1 Revision 5", "Common Criteria 3.1 R5"):
+        result = resolve_identifier_local(raw)
+        assert result is not None, raw
+        assert result == ("CC:2017 Part 1", "CC"), f"{raw} → {result}"
+
+
+def test_resolve_cem_form() -> None:
+    """`CEM:2022` and `Common Evaluation Methodology 2022` resolve to CC."""
+    from scholar_mcp._standards_client import resolve_identifier_local
+
+    assert resolve_identifier_local("CEM:2022") == ("CEM:2022", "CC")
+    result = resolve_identifier_local("Common Evaluation Methodology 2022")
+    assert result is not None
+    assert result[1] == "CC"
+
+
+def test_resolve_cc_pp_bsi() -> None:
+    """`BSI-CC-PP-0099-V2-2017` resolves to body 'CC'."""
+    from scholar_mcp._standards_client import resolve_identifier_local
+
+    assert resolve_identifier_local("BSI-CC-PP-0099-V2-2017") == (
+        "BSI-CC-PP-0099-V2-2017",
+        "CC",
+    )
+
+
+def test_resolve_cc_pp_kecs() -> None:
+    """`KECS-PP-0822-2017` resolves to body 'CC'."""
+    from scholar_mcp._standards_client import resolve_identifier_local
+
+    assert resolve_identifier_local("KECS-PP-0822-2017") == (
+        "KECS-PP-0822-2017",
+        "CC",
+    )
+
+
+def test_resolve_cc_pp_niap_pp_form() -> None:
+    """`PP_MD_v3.1` (NIAP alternate form) resolves to body 'CC'."""
+    from scholar_mcp._standards_client import resolve_identifier_local
+
+    assert resolve_identifier_local("PP_MD_v3.1") == ("PP_MD_v3.1", "CC")
+
+
+def test_resolve_iso_15408_still_dispatches_to_iso_iec() -> None:
+    """`ISO/IEC 15408-1:2022` keeps dispatching to ISO/IEC.
+
+    The record itself is owned by CC sync but the dispatch body matches
+    the _fetchers key — `_fetchers["ISO/IEC"]` is what reads the cache
+    where CC wrote the dual record.
+    """
+    from scholar_mcp._standards_client import resolve_identifier_local
+
+    assert resolve_identifier_local("ISO/IEC 15408-1:2022") == (
+        "ISO/IEC 15408-1:2022",
+        "ISO/IEC",
+    )
+
+
+@pytest.mark.asyncio
+async def test_standards_client_fetchers_cc_instance_registered() -> None:
+    """`_fetchers['CC']` is a `_CCFetcher`."""
+    from scholar_mcp._standards_client import StandardsClient, _CCFetcher
+
+    async with httpx.AsyncClient() as http:
+        client = StandardsClient(http)
+        fetcher = client._fetchers["CC"]
+    assert isinstance(fetcher, _CCFetcher)
+
+
+@pytest.mark.asyncio
+async def test_standards_client_search_cc_delegates_to_cache() -> None:
+    """`search(query, body='CC')` forwards `source='CC'` to the cache."""
+    from unittest.mock import AsyncMock
+
+    from scholar_mcp._record_types import StandardRecord
+    from scholar_mcp._standards_client import StandardsClient
+
+    record: StandardRecord = {
+        "identifier": "CC:2022 Part 1",
+        "title": "CC Part 1",
+        "body": "CC",
+        "status": "published",
+        "full_text_available": True,
+    }
+    mock_cache = AsyncMock()
+    mock_cache.search_synced_standards = AsyncMock(return_value=[record])
+    mock_cache.get_standard = AsyncMock(return_value=None)
+
+    async with httpx.AsyncClient() as http:
+        client = StandardsClient(http, cache=mock_cache)
+        results = await client.search("Part 1", body="CC")
+
+    mock_cache.search_synced_standards.assert_awaited_once_with(
+        "Part 1", source="CC", limit=10
+    )
+    assert results == [record]
+
+
+@pytest.mark.asyncio
+async def test_cc_fetcher_cache_miss_logs_warning_and_returns_none(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """`_CCFetcher.get` on a cache miss logs WARNING and returns None."""
+    import logging
+    from unittest.mock import AsyncMock
+
+    from scholar_mcp._standards_client import _CCFetcher
+
+    mock_cache = AsyncMock()
+    mock_cache.get_standard = AsyncMock(return_value=None)
+
+    fetcher = _CCFetcher(cache=mock_cache)
+    with caplog.at_level(logging.WARNING, logger="scholar_mcp._standards_client"):
+        result = await fetcher.get("Some-Unknown-PP-0001-2024")
+
+    assert result is None
+    assert any(
+        "cc_cache_miss" in rec.message and "sync-standards" in rec.message
+        for rec in caplog.records
+    )

@@ -1063,3 +1063,139 @@ async def test_loader_cold_sync_inserts_ieee_records(
         assert "™" not in iso_iec_ieee["identifier"]
     finally:
         await cache.close()
+
+
+# ---------------------------------------------------------------------------
+# Task 1: ISO loader denylist for shared-ownership slugs
+# ---------------------------------------------------------------------------
+
+
+def _make_tarball(*, prefix: str, files: dict[str, bytes]) -> bytes:
+    """Build an in-memory .tar.gz from file contents."""
+    buf = io.BytesIO()
+    with (
+        gzip.GzipFile(fileobj=buf, mode="wb") as gz,
+        tarfile.open(fileobj=gz, mode="w") as tar,
+    ):
+        for name, data in files.items():
+            info = tarfile.TarInfo(name=f"{prefix}/{name}")
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
+    return buf.getvalue()
+
+
+@pytest.mark.asyncio
+async def test_iso_loader_skips_15408_slugs(tmp_path: Path) -> None:
+    """ISO loader filters out ISO/IEC 15408 family — owned by CC loader."""
+    from scholar_mcp._cache import ScholarCache
+    from scholar_mcp._sync_relaton import RelatonLoader
+
+    skipped_yaml = b"""
+docid:
+  - id: "ISO/IEC 15408-1:2022"
+    type: "ISO"
+    primary: true
+title:
+  - content: "Information technology - Security techniques - Evaluation criteria"
+    format: "text/plain"
+    type: "main"
+docstatus:
+  stage: "60.60"
+"""
+    loaded_yaml = b"""
+docid:
+  - id: "ISO 9999:2022"
+    type: "ISO"
+    primary: true
+title:
+  - content: "Some other ISO standard"
+    format: "text/plain"
+    type: "main"
+docstatus:
+  stage: "60.60"
+"""
+
+    tarball = _make_tarball(
+        prefix="relaton-data-iso-main",
+        files={
+            "data/iso-iec-15408-1-2022.yaml": skipped_yaml,
+            "data/iso-9999-2022.yaml": loaded_yaml,
+        },
+    )
+
+    sha = "deadbeef" * 5
+    cache = ScholarCache(tmp_path / "cache.db")
+    await cache.open()
+    try:
+        with respx.mock(assert_all_called=False) as router:
+            router.get(
+                "https://api.github.com/repos/relaton/relaton-data-iso/commits/main"
+            ).mock(return_value=httpx.Response(200, json={"sha": sha}))
+            router.get(
+                f"https://api.github.com/repos/relaton/relaton-data-iso/tarball/{sha}"
+            ).mock(
+                return_value=httpx.Response(
+                    200, content=tarball, headers={"Content-Type": "application/x-gzip"}
+                )
+            )
+
+            async with httpx.AsyncClient() as http:
+                loader = RelatonLoader("ISO", http=http)
+                report = await loader.sync(cache)
+
+        assert report.added == 1
+        assert await cache.get_standard("ISO 9999:2022") is not None
+        assert await cache.get_standard("ISO/IEC 15408-1:2022") is None
+    finally:
+        await cache.close()
+
+
+@pytest.mark.asyncio
+async def test_iso_loader_skip_slugs_only_apply_to_their_body(
+    tmp_path: Path,
+) -> None:
+    """Skip-list is per-body; an IEC sync sees the slug only if listed under IEC."""
+    from scholar_mcp._cache import ScholarCache
+    from scholar_mcp._sync_relaton import RelatonLoader
+
+    yaml_bytes = b"""
+docid:
+  - id: "IEC 99999:2022"
+    type: "IEC"
+    primary: true
+title:
+  - content: "Defensive test for per-body skip-list"
+    format: "text/plain"
+    type: "main"
+docstatus:
+  stage: "60.60"
+"""
+    tarball = _make_tarball(
+        prefix="relaton-data-iec-main",
+        files={"data/iso-iec-15408-1-2022.yaml": yaml_bytes},
+    )
+
+    sha = "cafef00d" * 5
+    cache = ScholarCache(tmp_path / "cache.db")
+    await cache.open()
+    try:
+        with respx.mock(assert_all_called=False) as router:
+            router.get(
+                "https://api.github.com/repos/relaton/relaton-data-iec/commits/main"
+            ).mock(return_value=httpx.Response(200, json={"sha": sha}))
+            router.get(
+                f"https://api.github.com/repos/relaton/relaton-data-iec/tarball/{sha}"
+            ).mock(
+                return_value=httpx.Response(
+                    200, content=tarball, headers={"Content-Type": "application/x-gzip"}
+                )
+            )
+
+            async with httpx.AsyncClient() as http:
+                loader = RelatonLoader("IEC", http=http)
+                report = await loader.sync(cache)
+
+        assert report.added == 1
+        assert await cache.get_standard("IEC 99999:2022") is not None
+    finally:
+        await cache.close()

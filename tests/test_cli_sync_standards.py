@@ -6,6 +6,7 @@ import asyncio
 from pathlib import Path
 from typing import Any
 
+import httpx
 import pytest
 from click.testing import CliRunner
 
@@ -141,9 +142,9 @@ def test_sync_standards_all_success(
 def test_select_loaders_single_body_filters() -> None:
     """Non-'all' body exercises the filter branch in _select_loaders.
 
-    With ISO/IEC/IEEE loaders registered, "ISO" returns exactly one loader,
-    "IEEE" returns exactly one loader, and "all" returns three
-    (ISO + IEC + IEEE). "XYZ" returns empty.
+    With ISO/IEC/IEEE/CC loaders registered, "ISO" returns exactly one loader,
+    "IEEE" returns exactly one loader, and "all" returns four
+    (ISO + IEC + IEEE + CC). "XYZ" returns empty.
     """
     import httpx
 
@@ -157,9 +158,9 @@ def test_select_loaders_single_body_filters() -> None:
         assert iso_loaders[0].body == "ISO"
 
         all_loaders = cli_mod._select_loaders("all", http=http, token=None)
-        assert len(all_loaders) == 3
+        assert len(all_loaders) == 4
         bodies = {loader.body for loader in all_loaders}
-        assert bodies == {"ISO", "IEC", "IEEE"}
+        assert bodies == {"ISO", "IEC", "IEEE", "CC"}
 
         ieee_loaders = cli_mod._select_loaders("IEEE", http=http, token=None)
         assert len(ieee_loaders) == 1
@@ -212,3 +213,23 @@ def test_sync_standards_iso_real_loader(
 
     assert result.exit_code == 0, result.output
     assert "ISO added=5" in result.output
+
+
+def test_select_loaders_accepts_cc() -> None:
+    """`--body CC` returns only the CC loader."""
+    from scholar_mcp.cli import _select_loaders
+
+    http = httpx.AsyncClient()
+    loaders = _select_loaders("CC", http=http, token=None)
+    assert len(loaders) == 1
+    assert loaders[0].body == "CC"
+
+
+def test_select_loaders_all_includes_cc() -> None:
+    """`--body all` includes ISO + IEC + IEEE + CC."""
+    from scholar_mcp.cli import _select_loaders
+
+    http = httpx.AsyncClient()
+    loaders = _select_loaders("all", http=http, token=None)
+    bodies = {loader.body for loader in loaders}
+    assert {"ISO", "IEC", "IEEE", "CC"} <= bodies

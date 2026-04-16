@@ -126,3 +126,51 @@ For joint standards the stored `body` field reflects the true joint nature (e.g.
 - `IEEE P802.11-REVme` unpublished drafts — see [#128](https://github.com/pvliesdonk/scholar-mcp/issues/128)
 - Explicit `body="IEC/IEEE"` / `body="ISO/IEC/IEEE"` search dispatch — see [#129](https://github.com/pvliesdonk/scholar-mcp/issues/129). Today, use identifier lookup or `body="IEEE"` which returns joints too.
 - IEEE Xplore authenticated full-text — see [#92](https://github.com/pvliesdonk/scholar-mcp/issues/92)
+
+## Common Criteria
+
+Common Criteria metadata is sync-only — there's no live API for the CC portal. Run:
+
+```bash
+scholar-mcp sync-standards --body CC
+```
+
+to populate the local cache. Two record categories load:
+
+### Framework documents (~15 records)
+
+The CC framework — `CC:2022`, `CC:2017` (CC 3.1 Revision 5), and the Common Evaluation Methodology (CEM) — ships as a hard-coded table in `_sync_cc.py`. Updates land manually when CCRA publishes a new release (every ~5 years).
+
+CC framework documents that are also published as ISO/IEC 15408 / 18045 (parts 1-3) write **two records** under one `source="CC"` sync — one with `body="CC"` (`CC:2022 Part 1`), one with `body="ISO/IEC"` (`ISO/IEC 15408-1:2022`). Both records share the same free CC PDF as `full_text_url`. The `related` field on each cross-links to the other.
+
+Why two records? CC and ISO/IEC 15408 are **parallel publications**, not a joint committee output. Real-world citations use either form (`CC:2022` or `ISO/IEC 15408`) but never a joined form. To keep returned metadata matching what the LLM looked up, we store one record per publishing body.
+
+To prevent collision with the existing ISO loader, the ISO loader has a small denylist (`_RELATON_SKIP_SLUGS`) covering the 15408 / 18045 family — those records are owned exclusively by the CC loader, which has the freely-downloadable PDFs (vs. ISO's paywalled metadata).
+
+### Protection Profiles (~500 records)
+
+Loaded from `https://www.commoncriteriaportal.org/pps/pps.csv`. Identifier extraction uses per-scheme regex with a composite fallback:
+
+| Scheme | Code | Identifier example |
+|---|---|---|
+| German BSI | DE | `BSI-CC-PP-0099-V2-2017` |
+| Korean KECS | KR | `KECS-PP-0822-2017` |
+| French ANSSI | FR | `ANSSI-CC-PP-2014/01` |
+| US NIAP | US | `NIAP-PP-...` / `PP_..._v3.1` |
+| Spanish CCN | ES | `CCN-PP-0058-2021` |
+| Other | * | `CC PP {scheme}-{name}` (composite fallback) |
+
+### Supported identifier forms
+
+- `CC:2022`, `CC:2017`, `CC 3.1 R5`, `CC 3.1 Revision 5`
+- `CC:2022 Part 1`, `Common Criteria 2022 Part 1`
+- `CEM:2022`, `Common Evaluation Methodology 2022`
+- `ISO/IEC 15408-1:2022` (resolves to the CC-owned dual record with free PDF)
+- `BSI-CC-PP-0099-V2-2017`, `KECS-PP-0822-2017`, etc.
+
+### Not yet supported (filed follow-ups)
+
+- ~6700 certified product certifications from sec-certs JSON — see [#131](https://github.com/pvliesdonk/scholar-mcp/issues/131)
+- CC Supporting Documents and Guidance Documents — see [#132](https://github.com/pvliesdonk/scholar-mcp/issues/132)
+- CEM Supplements and Application Notes — see [#133](https://github.com/pvliesdonk/scholar-mcp/issues/133)
+- Auto-discovery of new framework documents from the portal HTML — see [#134](https://github.com/pvliesdonk/scholar-mcp/issues/134)
