@@ -18,9 +18,10 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import re
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from ._standards_sync import SyncReport
 
@@ -31,6 +32,27 @@ else:
     StandardRecord = dict
 
 logger = logging.getLogger(__name__)
+
+_AMENDMENT_SUFFIX_RE = re.compile(r"\+A\d+:\d{4}$")
+
+
+def _normalise_en_identifier(identifier: str) -> str:
+    """Strip amendment suffix and version notation for cache-key normalisation.
+
+    ``EN 349:1993+A1:2008`` → ``EN 349:1993``
+    ``EN 300 328 V2.2.2:2019`` → ``EN 300 328:2019``
+
+    Args:
+        identifier: Raw identifier string from the harmonised-standards table.
+
+    Returns:
+        Normalised identifier suitable for use as a cache key.
+    """
+    # Strip amendment suffix: +A1:2008, +A2:2019, +A11:2020
+    ident = _AMENDMENT_SUFFIX_RE.sub("", identifier)
+    # Strip ETSI-style version notation: V2.2.2, V1.1.1 etc.
+    ident = re.sub(r"\s+V[\d.]+(?=\s*[:\s-]\s*\d{4})", "", ident)
+    return ident.strip()
 
 
 @dataclass(frozen=True)
@@ -60,9 +82,15 @@ def _hs_to_record(entry: HarmonisedStandard) -> StandardRecord:
 
     All CEN records are paywalled (``full_text_available=False``) and
     carry no catalogue URL (the CEN portal is unreliable).
+
+    The cache key (``identifier``) is normalised: amendment suffixes such as
+    ``+A1:2008`` and ETSI-style version tokens such as ``V2.2.2`` are stripped
+    so that ``resolve_identifier_local`` and the cache lookup agree on the same
+    key form.
     """
+    normalised_id = _normalise_en_identifier(entry.identifier)
     record: StandardRecord = {
-        "identifier": entry.identifier,
+        "identifier": normalised_id,
         "title": entry.title,
         "body": "CEN",
         "status": entry.status,
@@ -424,9 +452,13 @@ _HARMONISED_STANDARDS: list[HarmonisedStandard] = [
 
 
 def _compute_table_hash() -> str:
-    """SHA256 of the table's identifiers + statuses, for change detection."""
+    """SHA256 of the table's identity fields for change detection.
+
+    Includes normalised identifier, title, status, and published_date so that
+    any content change (not just identifier or status) triggers a re-sync.
+    """
     content = "|".join(
-        f"{e.identifier}:{e.status}"
+        f"{_normalise_en_identifier(e.identifier)}:{e.title}:{e.status}:{e.published_date}"
         for e in sorted(_HARMONISED_STANDARDS, key=lambda e: e.identifier)
     )
     return hashlib.sha256(content.encode()).hexdigest()
@@ -511,8 +543,6 @@ class CENLoader:
                 existing = await cache.get_standard(ident)
                 if existing is None:
                     continue
-                from typing import cast
-
                 withdrawn_record = cast(
                     "StandardRecord", {**existing, "status": "withdrawn"}
                 )

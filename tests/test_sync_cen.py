@@ -156,3 +156,64 @@ async def test_cen_loader_force_rewrites(tmp_path: Path) -> None:
         assert forced.added == 0
     finally:
         await cache.close()
+
+
+def test_hs_to_record_strips_amendment_suffix() -> None:
+    """Amendment suffix +A1:2008 stripped from cache key."""
+    from scholar_mcp._sync_cen import HarmonisedStandard, _hs_to_record
+
+    entry = HarmonisedStandard(
+        identifier="EN 349:1993+A1:2008",
+        title="Safety of machinery — Minimum gaps",
+        directive="Machinery",
+    )
+    record = _hs_to_record(entry)
+    assert record["identifier"] == "EN 349:1993"
+
+
+def test_hs_to_record_strips_version_suffix() -> None:
+    """Version V2.2.2 stripped from cache key for RED entries."""
+    from scholar_mcp._sync_cen import HarmonisedStandard, _hs_to_record
+
+    entry = HarmonisedStandard(
+        identifier="EN 300 328 V2.2.2:2019",
+        title="Wideband data transmission — 2.4 GHz",
+        directive="RED",
+    )
+    record = _hs_to_record(entry)
+    assert record["identifier"] == "EN 300 328:2019"
+
+
+@pytest.mark.asyncio
+async def test_cen_loader_amendment_identifier_findable(tmp_path: Path) -> None:
+    """Records with +A1:yyyy suffix are retrievable after sync."""
+    from scholar_mcp._cache import ScholarCache
+    from scholar_mcp._sync_cen import CENLoader
+
+    cache = ScholarCache(tmp_path / "cache.db")
+    await cache.open()
+    try:
+        await CENLoader().sync(cache)
+        # EN 349:1993+A1:2008 in table → stored as EN 349:1993
+        rec = await cache.get_standard("EN 349:1993")
+        assert rec is not None, "amendment-suffix identifier not findable"
+        assert rec["body"] == "CEN"
+    finally:
+        await cache.close()
+
+
+@pytest.mark.asyncio
+async def test_cen_loader_etsi_3part_identifier_findable(tmp_path: Path) -> None:
+    """Records with ETSI 3-part numbers are retrievable after sync."""
+    from scholar_mcp._cache import ScholarCache
+    from scholar_mcp._sync_cen import CENLoader
+
+    cache = ScholarCache(tmp_path / "cache.db")
+    await cache.open()
+    try:
+        await CENLoader().sync(cache)
+        # EN 300 328 V2.2.2:2019 in table → stored as EN 300 328:2019
+        rec = await cache.get_standard("EN 300 328:2019")
+        assert rec is not None, "3-part EN number not findable"
+    finally:
+        await cache.close()

@@ -1680,3 +1680,24 @@ async def test_standards_client_search_cen_delegates_to_cache() -> None:
         "55032", source="CEN", limit=10
     )
     assert results == [record]
+
+
+def test_resolve_en_etsi_3part_number() -> None:
+    """EN 300 328 V2.2.2:2019 resolves to CEN with normalised identifier."""
+    from scholar_mcp._standards_client import resolve_identifier_local
+
+    result = resolve_identifier_local("EN 300 328 V2.2.2:2019")
+    assert result is not None
+    identifier, body = result
+    assert body == "CEN"
+    assert identifier == "EN 300 328:2019"
+
+
+def test_resolve_en_etsi_3part_without_version() -> None:
+    """EN 301 489-1:2019 (no version suffix) also resolves."""
+    from scholar_mcp._standards_client import resolve_identifier_local
+
+    result = resolve_identifier_local("EN 301 489-1:2019")
+    assert result is not None
+    assert result[1] == "CEN"
+    assert "301 489-1" in result[0]

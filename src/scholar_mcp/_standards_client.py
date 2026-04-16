@@ -63,7 +63,15 @@ _EN_ISO_IEC_RE = re.compile(
 )
 _EN_ISO_RE = re.compile(r"(?i)\bEN\s+ISO\s+(\d{1,5}(?:-\d+)*)\s*[:\s-]\s*(\d{4})\b")
 _EN_IEC_RE = re.compile(r"(?i)\bEN\s+IEC\s+(\d{1,5}(?:-\d+)*)\s*[:\s-]\s*(\d{4})\b")
-_EN_RE = re.compile(r"(?i)\bEN\s+(\d{1,5}(?:-\d+)*(?:\.\d+)*)\s*[:\s-]\s*(\d{4})\b")
+_EN_RE = re.compile(
+    r"(?i)\bEN\s+"
+    r"("
+    r"\d{3}\s+\d{3}(?:-\d+)?"  # ETSI 3-part: 300 328, 301 489-17
+    r"|\d{1,5}(?:-\d+)*(?:\.\d+)*"  # plain: 55032, 61000-3-2
+    r")"
+    r"(?:\s+V[\d.]+)?"  # optional version: V2.2.2
+    r"\s*[:\s-]\s*(\d{4})\b"
+)
 
 # IEEE triple-joint with ISO and IEC (must precede other IEEE and joint patterns):
 #   "ISO/IEC/IEEE 42010-2011", "ISO/IEC/IEEE 42010:2011"
