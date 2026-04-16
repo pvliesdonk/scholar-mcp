@@ -1452,13 +1452,13 @@ def test_resolve_cc_part() -> None:
 
 
 def test_resolve_cc_3_1_revision() -> None:
-    """`CC 3.1 R5` and `CC 3.1 Revision 5` resolve to CC."""
+    """`CC 3.1 R5` resolves to CC:2017 Part 1 (default part for unqualified version)."""
     from scholar_mcp._standards_client import resolve_identifier_local
 
     for raw in ("CC 3.1 R5", "CC 3.1 Revision 5", "Common Criteria 3.1 R5"):
         result = resolve_identifier_local(raw)
         assert result is not None, raw
-        assert result[1] == "CC", raw
+        assert result == ("CC:2017 Part 1", "CC"), f"{raw} → {result}"
 
 
 def test_resolve_cem_form() -> None:
@@ -1489,6 +1489,13 @@ def test_resolve_cc_pp_kecs() -> None:
         "KECS-PP-0822-2017",
         "CC",
     )
+
+
+def test_resolve_cc_pp_niap_pp_form() -> None:
+    """`PP_MD_v3.1` (NIAP alternate form) resolves to body 'CC'."""
+    from scholar_mcp._standards_client import resolve_identifier_local
+
+    assert resolve_identifier_local("PP_MD_v3.1") == ("PP_MD_v3.1", "CC")
 
 
 def test_resolve_iso_15408_still_dispatches_to_iso_iec() -> None:

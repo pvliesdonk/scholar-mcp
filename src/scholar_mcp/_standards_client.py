@@ -107,6 +107,7 @@ _CC_PP_RE = re.compile(
     r"|ANSSI-CC-PP-\d{4}/\d+"
     r"|CCN-PP-\d+-\d{4}"
     r"|NIAP-PP-[A-Za-z0-9_-]+"
+    r"|PP_[A-Za-z0-9_]+_v\d+(?:\.\d+)*"
     r")\b"
 )
 
@@ -137,7 +138,7 @@ def resolve_identifier_local(raw: str) -> tuple[str, str] | None:
     # CC 3.1 Revision: "CC 3.1 R5" / "CC 3.1 Revision 5"
     m = _CC_REV_RE.search(s)
     if m:
-        return f"CC:2017 (3.1 R{m.group(1)})", "CC"
+        return "CC:2017 Part 1", "CC"
 
     # CEM: "CEM:2022" / "Common Evaluation Methodology 2022"
     m = _CEM_RE.search(s)

@@ -126,6 +126,19 @@ def _framework_aliases(entry: CCFrameworkEntry) -> list[str]:
             aliases.append(f"Common Evaluation Methodology {rest}")
             aliases.append(f"Common Evaluation Methodology:{rest}")
 
+    # For CC:2017 (CC 3.1 R5), add version-only citation forms
+    # These resolve to the first Part (Part 1) by convention when no
+    # explicit part is specified.
+    if entry.cc_version == "3.1 R5" and "Part 1" in cc_id:
+        aliases.extend(
+            [
+                "CC 3.1 R5",
+                "CC 3.1 Revision 5",
+                "Common Criteria 3.1 R5",
+                "Common Criteria 3.1 Revision 5",
+            ]
+        )
+
     return aliases
 
 
@@ -306,7 +319,7 @@ def _normalise_date(raw: str) -> str | None:
         return None
 
 
-def _pp_row_to_record(row: dict[str, str | Any]) -> StandardRecord | None:
+def _pp_row_to_record(row: dict[str, Any]) -> StandardRecord | None:
     """Map a pps.csv row to a StandardRecord, or None if unusable.
 
     Required fields: ``Protection Profile`` (URL), ``Name``, ``Scheme``.
@@ -483,7 +496,9 @@ class CCLoader:
         for row in csv.DictReader(io.StringIO(csv_bytes.decode("utf-8"))):
             pp_record: StandardRecord | None = _pp_row_to_record(row)
             if pp_record is None:
-                errors.append(f"unparseable PP row: {row.get('Name', '?')}")
+                name = row.get("Name", "?")
+                logger.warning("cc_pp_row_parse_error name=%s", name)
+                errors.append(f"unparseable PP row: {name}")
                 continue
             ident = pp_record["identifier"]
             current_ids.add(ident)
@@ -504,7 +519,8 @@ class CCLoader:
             for record in _framework_to_records(entry):
                 framework_ids.add(record["identifier"])
         prev_pp_ids = prev_ids - framework_ids
-        missing = prev_ids - current_ids
+        current_pp_ids = current_ids - framework_ids
+        missing = prev_pp_ids - current_pp_ids
         if prev_pp_ids and len(missing) > 0.5 * len(prev_pp_ids):
             errors.append(
                 f"withdrawal pass aborted: {len(missing)}/{len(prev_pp_ids)} "
