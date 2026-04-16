@@ -1379,12 +1379,12 @@ async def test_standards_client_search_iso_iec_uses_no_source_filter() -> None:
 
 @pytest.mark.asyncio
 async def test_standards_client_search_no_body_hits_relaton_cache_once() -> None:
-    """All-bodies search invokes the Relaton cache once, CC cache once.
+    """All-bodies search invokes the Relaton cache once, CC cache once, CEN cache once.
 
     Regression guard: the three RelatonLiveFetcher instances (ISO, IEC,
     ISO/IEC) should be deduped to the source=None variant in the no-body
     path so the cache isn't queried three times for overlapping results.
-    The CC fetcher also queries the cache separately.
+    The CC and CEN fetchers also query the cache separately.
     """
     from unittest.mock import AsyncMock
 
@@ -1402,14 +1402,16 @@ async def test_standards_client_search_no_body_hits_relaton_cache_once() -> None
             client = StandardsClient(http, cache=mock_cache)
             await client.search("test-query")
 
-    assert mock_cache.search_synced_standards.await_count == 2
+    assert mock_cache.search_synced_standards.await_count == 3
     calls = mock_cache.search_synced_standards.call_args_list
     # First call is ISO/IEC Relaton with source=None
     # Second call is CC with source="CC"
+    # Third call is CEN with source="CEN"
     assert any(call[1].get("source") is None for call in calls), (
         "ISO/IEC Relaton fetch missing"
     )
     assert any(call[1].get("source") == "CC" for call in calls), "CC fetch missing"
+    assert any(call[1].get("source") == "CEN" for call in calls), "CEN fetch missing"
 
 
 @pytest.mark.asyncio
@@ -1575,3 +1577,145 @@ async def test_cc_fetcher_cache_miss_logs_warning_and_returns_none(
         "cc_cache_miss" in rec.message and "sync-standards" in rec.message
         for rec in caplog.records
     )
+
+
+def test_resolve_en_plain() -> None:
+    """Plain EN identifier resolves to body 'CEN'."""
+    assert resolve_identifier_local("EN 55032:2015") == ("EN 55032:2015", "CEN")
+
+
+def test_resolve_en_iso() -> None:
+    """EN ISO identifier resolves to body 'CEN'."""
+    assert resolve_identifier_local("EN ISO 13849-1:2023") == (
+        "EN ISO 13849-1:2023",
+        "CEN",
+    )
+
+
+def test_resolve_en_iec() -> None:
+    """EN IEC identifier resolves to body 'CEN'."""
+    assert resolve_identifier_local("EN IEC 62443-3-3:2020") == (
+        "EN IEC 62443-3-3:2020",
+        "CEN",
+    )
+
+
+def test_resolve_en_iso_iec() -> None:
+    """EN ISO/IEC identifier resolves to body 'CEN'."""
+    assert resolve_identifier_local("EN ISO/IEC 27001:2022") == (
+        "EN ISO/IEC 27001:2022",
+        "CEN",
+    )
+
+
+def test_resolve_etsi_en_still_dispatches_to_etsi() -> None:
+    """ETSI EN 303 645 must still dispatch to 'ETSI', not 'CEN'.
+
+    Regression guard: the ETSI regex requires explicit 'ETSI' prefix,
+    so it wins by position over the generic EN regex.
+    """
+    result = resolve_identifier_local("ETSI EN 303 645")
+    assert result is not None
+    assert result[1] == "ETSI"
+
+
+@pytest.mark.asyncio
+async def test_cen_fetcher_registered() -> None:
+    """_fetchers['CEN'] is a _CENFetcher."""
+    from scholar_mcp._standards_client import _CENFetcher
+
+    async with httpx.AsyncClient() as http:
+        client = StandardsClient(http)
+        fetcher = client._fetchers["CEN"]
+    assert isinstance(fetcher, _CENFetcher)
+
+
+@pytest.mark.asyncio
+async def test_cen_fetcher_cache_miss_logs_warning(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """_CENFetcher.get on cache miss logs WARNING with sync hint."""
+    import logging
+    from unittest.mock import AsyncMock
+
+    from scholar_mcp._standards_client import _CENFetcher
+
+    mock_cache = AsyncMock()
+    mock_cache.get_standard = AsyncMock(return_value=None)
+
+    fetcher = _CENFetcher(cache=mock_cache)
+    with caplog.at_level(logging.WARNING, logger="scholar_mcp._standards_client"):
+        result = await fetcher.get("EN 99999:2099")
+
+    assert result is None
+    assert any(
+        "cen_cache_miss" in rec.message and "sync-standards" in rec.message
+        for rec in caplog.records
+    )
+
+
+@pytest.mark.asyncio
+async def test_standards_client_search_cen_delegates_to_cache() -> None:
+    """search(body='CEN') forwards source='CEN' to the cache."""
+    from unittest.mock import AsyncMock
+
+    from scholar_mcp._record_types import StandardRecord
+
+    record: StandardRecord = {
+        "identifier": "EN 55032:2015",
+        "title": "EMC of multimedia equipment",
+        "body": "CEN",
+        "status": "harmonised",
+        "full_text_available": False,
+    }
+    mock_cache = AsyncMock()
+    mock_cache.search_synced_standards = AsyncMock(return_value=[record])
+    mock_cache.get_standard = AsyncMock(return_value=None)
+
+    async with httpx.AsyncClient() as http:
+        client = StandardsClient(http, cache=mock_cache)
+        results = await client.search("55032", body="CEN")
+
+    mock_cache.search_synced_standards.assert_awaited_once_with(
+        "55032", source="CEN", limit=10
+    )
+    assert results == [record]
+
+
+def test_resolve_en_etsi_3part_number() -> None:
+    """EN 300 328 V2.2.2:2019 resolves to CEN with normalised identifier."""
+    from scholar_mcp._standards_client import resolve_identifier_local
+
+    result = resolve_identifier_local("EN 300 328 V2.2.2:2019")
+    assert result is not None
+    identifier, body = result
+    assert body == "CEN"
+    assert identifier == "EN 300 328:2019"
+
+
+def test_resolve_en_etsi_3part_without_version() -> None:
+    """EN 301 489-1:2019 (no version suffix) also resolves."""
+    from scholar_mcp._standards_client import resolve_identifier_local
+
+    result = resolve_identifier_local("EN 301 489-1:2019")
+    assert result is not None
+    assert result[1] == "CEN"
+    assert "301 489-1" in result[0]
+
+
+def test_resolve_en_etsi_3part_with_subpart() -> None:
+    """EN 3-part with subpart (EN 301 489-17 V3.2.4:2020) resolves to CEN."""
+    from scholar_mcp._standards_client import resolve_identifier_local
+
+    result = resolve_identifier_local("EN 301 489-17 V3.2.4:2020")
+    assert result is not None
+    assert result == ("EN 301 489-17:2020", "CEN")
+
+
+def test_resolve_en_etsi_3part_large_version() -> None:
+    """EN 3-part with large version number (V12.5.1) resolves to CEN."""
+    from scholar_mcp._standards_client import resolve_identifier_local
+
+    result = resolve_identifier_local("EN 301 511 V12.5.1:2017")
+    assert result is not None
+    assert result == ("EN 301 511:2017", "CEN")

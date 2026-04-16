@@ -174,3 +174,44 @@ Loaded from `https://www.commoncriteriaportal.org/pps/pps.csv`. Identifier extra
 - CC Supporting Documents and Guidance Documents — see [#132](https://github.com/pvliesdonk/scholar-mcp/issues/132)
 - CEM Supplements and Application Notes — see [#133](https://github.com/pvliesdonk/scholar-mcp/issues/133)
 - Auto-discovery of new framework documents from the portal HTML — see [#134](https://github.com/pvliesdonk/scholar-mcp/issues/134)
+
+## CEN/CENELEC (European Norms)
+
+CEN/CENELEC harmonised standards metadata is sync-only. Run:
+
+```bash
+scholar-mcp sync-standards --body CEN
+```
+
+to populate the local cache. Unlike ISO/IEC/IEEE (which sync from upstream Relaton repositories), CEN standards load from a curated hard-coded table covering the most-cited harmonised standards from the major EU directives.
+
+### Covered directives
+
+| Directive | Shorthand | Example standards |
+|---|---|---|
+| Electromagnetic Compatibility 2014/30/EU | EMC | EN 55032, EN 61000-series |
+| Radio Equipment 2014/53/EU | RED | EN 300 328, EN 301 489-series |
+| Machinery 2006/42/EC | Machinery | EN ISO 12100, EN ISO 13849-1 |
+| Medical Devices 2017/745 | MDR | EN ISO 13485, EN 62304 |
+| Cyber Resilience Act | CRA | EN IEC 62443-series |
+| General Product Safety | GPSR | EN 71-series (toys) |
+| Low Voltage 2014/35/EU | LVD | EN 62368-1, EN 60335-1 |
+
+### Supported identifier forms
+
+- `EN 55032:2015` — plain European Norm
+- `EN ISO 13849-1:2023` — ISO standard adopted as EN
+- `EN IEC 62443-3-3:2020` — IEC standard adopted as EN
+- `EN ISO/IEC 27001:2022` — ISO/IEC joint adopted as EN
+
+All dispatch to `body="CEN"`. No cross-linking to the ISO/IEC records — the `EN ISO` / `EN IEC` prefix is self-documenting.
+
+### Table maintenance
+
+The `_HARMONISED_STANDARDS` table in `_sync_cen.py` needs periodic review when the EU Commission publishes new implementing decisions. See [#139](https://github.com/pvliesdonk/scholar-mcp/issues/139) for the quarterly cadence. If EUR-Lex infrastructure stabilises, [#137](https://github.com/pvliesdonk/scholar-mcp/issues/137) would automate this via Formex XML parsing.
+
+### Not yet supported
+
+- Full CEN/CENELEC catalogue beyond harmonised standards
+- Live scrape fallback from `standards.cencenelec.eu` — see [#138](https://github.com/pvliesdonk/scholar-mcp/issues/138)
+- EUR-Lex Formex XML automated sync — see [#137](https://github.com/pvliesdonk/scholar-mcp/issues/137)
