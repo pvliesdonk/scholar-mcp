@@ -174,3 +174,35 @@ def test_enricher_registered_in_pipeline() -> None:
     pipeline = _build_enrichment_pipeline()
     phase_0_names = [e.name for e in pipeline._phases.get(0, [])]
     assert "standards" in phase_0_names
+
+
+@pytest.mark.asyncio
+async def test_enrich_exception_is_caught() -> None:
+    """Exception from bundle.standards.get() is caught; no propagation."""
+    from scholar_mcp._enricher_standards import StandardsEnricher
+
+    bundle = MagicMock()
+    bundle.standards = AsyncMock()
+    bundle.standards.get = AsyncMock(side_effect=Exception("simulated timeout"))
+
+    enricher = StandardsEnricher()
+    record = _make_record("RFC 9000")
+    await enricher.enrich(record, bundle)  # must not raise
+
+    assert "standard_metadata" not in record
+
+
+@pytest.mark.asyncio
+async def test_enrich_coverage_guard_skips_partial_match() -> None:
+    """enrich() skips titles where identifier coverage is <=50%."""
+    from scholar_mcp._enricher_standards import StandardsEnricher
+
+    bundle = MagicMock()
+    bundle.standards = AsyncMock()
+
+    enricher = StandardsEnricher()
+    record = _make_record("Implementing ISO 27001 in healthcare: a systematic review")
+    await enricher.enrich(record, bundle)
+
+    assert "standard_metadata" not in record
+    bundle.standards.get.assert_not_awaited()
