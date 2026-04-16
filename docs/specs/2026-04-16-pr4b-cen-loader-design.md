@@ -208,6 +208,7 @@ The `_HARMONISED_STANDARDS` constant covers standards from these EU directives:
 | Cyber Resilience Act | CRA | EN IEC 62443-series (expected) |
 | Medical Devices Regulation | MDR | EN ISO 13485, EN 62304 |
 | General Product Safety | GPSR | EN 71-series (toys), EN 14988 (highchairs) |
+| Low Voltage | LVD | EN 62368-1, EN 60335-1, EN 61010-1 |
 
 The implementer should populate `_HARMONISED_STANDARDS` with the most-cited standards from each directive. A reasonable starting set: ~20-30 per directive for EMC/RED/Machinery (the most mature), ~10 each for CRA/MDR/GPSR. Total ~100-150 entries. Each entry needs: identifier, title, directive shorthand, status ("harmonised" or "withdrawn"), and optional published_date.
 
