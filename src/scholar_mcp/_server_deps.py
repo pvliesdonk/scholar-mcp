@@ -82,11 +82,13 @@ def _build_enrichment_pipeline() -> EnrichmentPipeline:
     """
     from ._enricher_google_books import GoogleBooksEnricher
     from ._enricher_openlibrary import OpenLibraryEnricher
+    from ._enricher_standards import StandardsEnricher
 
     return EnrichmentPipeline(
         [
             OpenAlexEnricher(),
             CrossRefEnricher(),
+            StandardsEnricher(),
             OpenLibraryEnricher(),
             GoogleBooksEnricher(),
         ]
