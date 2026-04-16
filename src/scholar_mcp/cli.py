@@ -300,6 +300,7 @@ def _select_loaders(
         List of Loader instances matching *body*.
     """
     from scholar_mcp._sync_cc import CCLoader
+    from scholar_mcp._sync_cen import CENLoader
     from scholar_mcp._sync_relaton import RelatonLoader
 
     registered: list[Loader] = cast(
@@ -309,6 +310,7 @@ def _select_loaders(
             RelatonLoader("IEC", http=http, token=token),
             RelatonLoader("IEEE", http=http, token=token),
             CCLoader(http=http),
+            CENLoader(),
         ],
     )
     if body.upper() == "ALL":

@@ -142,9 +142,9 @@ def test_sync_standards_all_success(
 def test_select_loaders_single_body_filters() -> None:
     """Non-'all' body exercises the filter branch in _select_loaders.
 
-    With ISO/IEC/IEEE/CC loaders registered, "ISO" returns exactly one loader,
-    "IEEE" returns exactly one loader, and "all" returns four
-    (ISO + IEC + IEEE + CC). "XYZ" returns empty.
+    With ISO/IEC/IEEE/CC/CEN loaders registered, "ISO" returns exactly one loader,
+    "IEEE" returns exactly one loader, and "all" returns five
+    (ISO + IEC + IEEE + CC + CEN). "XYZ" returns empty.
     """
     import httpx
 
@@ -158,9 +158,9 @@ def test_select_loaders_single_body_filters() -> None:
         assert iso_loaders[0].body == "ISO"
 
         all_loaders = cli_mod._select_loaders("all", http=http, token=None)
-        assert len(all_loaders) == 4
+        assert len(all_loaders) == 5
         bodies = {loader.body for loader in all_loaders}
-        assert bodies == {"ISO", "IEC", "IEEE", "CC"}
+        assert bodies == {"ISO", "IEC", "IEEE", "CC", "CEN"}
 
         ieee_loaders = cli_mod._select_loaders("IEEE", http=http, token=None)
         assert len(ieee_loaders) == 1
@@ -233,3 +233,23 @@ def test_select_loaders_all_includes_cc() -> None:
     loaders = _select_loaders("all", http=http, token=None)
     bodies = {loader.body for loader in loaders}
     assert {"ISO", "IEC", "IEEE", "CC"} <= bodies
+
+
+def test_select_loaders_accepts_cen() -> None:
+    """`--body CEN` returns only the CEN loader."""
+    from scholar_mcp.cli import _select_loaders
+
+    http = httpx.AsyncClient()
+    loaders = _select_loaders("CEN", http=http, token=None)
+    assert len(loaders) == 1
+    assert loaders[0].body == "CEN"
+
+
+def test_select_loaders_all_includes_cen() -> None:
+    """`--body all` includes CEN."""
+    from scholar_mcp.cli import _select_loaders
+
+    http = httpx.AsyncClient()
+    loaders = _select_loaders("all", http=http, token=None)
+    bodies = {loader.body for loader in loaders}
+    assert "CEN" in bodies

@@ -54,6 +54,17 @@ _ETSI_RE = re.compile(
     r"(?i)\betsi\s+(EN|TS|TR|ES|EG)\s*(\d{3})\s*[\s-]?\s*(\d{3}(?:-\d+)?)\b"
 )
 
+# CEN/CENELEC: European Norm identifiers.
+# Checked AFTER ETSI (which requires explicit "ETSI" prefix) to avoid
+# "ETSI EN 303 645" matching the generic EN pattern.
+# Order: EN ISO/IEC > EN ISO > EN IEC > plain EN (most-specific first).
+_EN_ISO_IEC_RE = re.compile(
+    r"(?i)\bEN\s+ISO/IEC\s+(\d{1,5}(?:-\d+)*)\s*[:\s-]\s*(\d{4})\b"
+)
+_EN_ISO_RE = re.compile(r"(?i)\bEN\s+ISO\s+(\d{1,5}(?:-\d+)*)\s*[:\s-]\s*(\d{4})\b")
+_EN_IEC_RE = re.compile(r"(?i)\bEN\s+IEC\s+(\d{1,5}(?:-\d+)*)\s*[:\s-]\s*(\d{4})\b")
+_EN_RE = re.compile(r"(?i)\bEN\s+(\d{1,5}(?:-\d+)*(?:\.\d+)*)\s*[:\s-]\s*(\d{4})\b")
+
 # IEEE triple-joint with ISO and IEC (must precede other IEEE and joint patterns):
 #   "ISO/IEC/IEEE 42010-2011", "ISO/IEC/IEEE 42010:2011"
 _ISO_IEC_IEEE_JOINT_RE = re.compile(
@@ -225,6 +236,23 @@ def resolve_identifier_local(raw: str) -> tuple[str, str] | None:
     m = _ETSI_RE.search(s)
     if m:
         return f"ETSI {m.group(1).upper()} {m.group(2)} {m.group(3)}", "ETSI"
+
+    # CEN/CENELEC EN (must come after ETSI to avoid "ETSI EN" collision)
+    m = _EN_ISO_IEC_RE.search(s)
+    if m:
+        return f"EN ISO/IEC {m.group(1)}:{m.group(2)}", "CEN"
+
+    m = _EN_ISO_RE.search(s)
+    if m:
+        return f"EN ISO {m.group(1)}:{m.group(2)}", "CEN"
+
+    m = _EN_IEC_RE.search(s)
+    if m:
+        return f"EN IEC {m.group(1)}:{m.group(2)}", "CEN"
+
+    m = _EN_RE.search(s)
+    if m:
+        return f"EN {m.group(1)}:{m.group(2)}", "CEN"
 
     # ISO/IEC joint (check before plain ISO and plain IEC)
     m = _ISO_IEC_JOINT_RE.search(s)
@@ -1131,6 +1159,51 @@ class _CCFetcher:
         )
 
 
+class _CENFetcher:
+    """Cache-only fetcher for CEN/CENELEC harmonised standards.
+
+    CEN has no live API — all records are populated by ``CENLoader`` via
+    ``sync-standards --body CEN``. This fetcher delegates ``get`` and
+    ``search`` to the cache and emits a WARNING on cache miss.
+
+    Conforms to the ``_StandardsFetcher`` Protocol.
+    """
+
+    def __init__(self, *, cache: CacheProtocol | None = None) -> None:
+        """Initialise the fetcher.
+
+        Args:
+            cache: Optional cache. When ``None``, ``get`` always returns
+                ``None`` and ``search`` returns ``[]``.
+        """
+        self._cache = cache
+
+    async def get(self, identifier: str) -> StandardRecord | None:
+        """Return cached CEN record, or ``None`` (with WARNING log)."""
+        if self._cache is None:
+            logger.warning(
+                "cen_cache_miss identifier=%s reason=no_cache_configured",
+                identifier,
+            )
+            return None
+        record = await self._cache.get_standard(identifier)
+        if record is None:
+            logger.warning(
+                "cen_cache_miss identifier=%s hint=%s",
+                identifier,
+                "run sync-standards --body CEN",
+            )
+        return record
+
+    async def search(self, query: str, *, limit: int = 10) -> list[StandardRecord]:
+        """Search synced CEN records via the cache."""
+        if self._cache is None:
+            return []
+        return await self._cache.search_synced_standards(
+            query, source="CEN", limit=limit
+        )
+
+
 # ---------------------------------------------------------------------------
 # StandardsClient — public orchestrator
 # ---------------------------------------------------------------------------
@@ -1174,6 +1247,7 @@ class StandardsClient:
             "IEEE": RelatonLiveFetcher(http=http, cache=cache, source="IEEE"),
             "ISO/IEC": RelatonLiveFetcher(http=http, cache=cache, source=None),
             "CC": _CCFetcher(cache=cache),
+            "CEN": _CENFetcher(cache=cache),
         }
 
     async def search(
@@ -1188,9 +1262,9 @@ class StandardsClient:
         Args:
             query: Identifier, title, or free text.
             body: Optional body filter: "IETF", "NIST", "W3C", "ETSI",
-                "ISO", "IEC", "ISO/IEC", "IEEE", or "CC". ISO / IEC / ISO/IEC /
-                IEEE / CC results come from the locally synced cache; run
-                ``sync-standards`` first for non-empty results.
+                "ISO", "IEC", "ISO/IEC", "IEEE", "CC", or "CEN". ISO / IEC /
+                ISO/IEC / IEEE / CC / CEN results come from the locally synced
+                cache; run ``sync-standards`` first for non-empty results.
             limit: Maximum results.
 
         Returns:
