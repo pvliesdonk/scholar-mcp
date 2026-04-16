@@ -85,16 +85,27 @@ class StandardsEnricher:
         if match is None:
             return
         canonical, _body = match
+        # Same >50% coverage guard as can_enrich() — makes enrich()
+        # safe to call directly without the pipeline's can_enrich gate.
+        if len(canonical) <= 0.5 * len(title.strip()):
+            return
         logger.debug(
             "standards_enrich_attempt identifier=%s title=%s",
             canonical,
             title[:60],
         )
-        standard = await bundle.standards.get(canonical)
-        if standard is not None:
-            record["standard_metadata"] = standard
+        try:
+            standard = await bundle.standards.get(canonical)
+            if standard is not None:
+                record["standard_metadata"] = standard
+                logger.debug(
+                    "standards_enrich_hit identifier=%s body=%s",
+                    canonical,
+                    standard.get("body", "?"),
+                )
+        except Exception:
             logger.debug(
-                "standards_enrich_hit identifier=%s body=%s",
+                "standards_enrich_failed identifier=%s",
                 canonical,
-                standard.get("body", "?"),
+                exc_info=True,
             )

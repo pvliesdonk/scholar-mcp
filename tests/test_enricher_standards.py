@@ -163,7 +163,12 @@ def test_enricher_conforms_to_protocol() -> None:
 
 
 def test_enricher_registered_in_pipeline() -> None:
-    """StandardsEnricher appears in the pipeline's phase-0 enrichers."""
+    """StandardsEnricher appears in the pipeline's phase-0 enrichers.
+
+    NOTE: accesses private ``_phases`` — fragile if EnrichmentPipeline
+    internals change. Acceptable for a registration smoke-test; a full
+    end-to-end test would require a mock ServiceBundle.
+    """
     from scholar_mcp._server_deps import _build_enrichment_pipeline
 
     pipeline = _build_enrichment_pipeline()
