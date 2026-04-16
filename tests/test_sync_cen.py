@@ -158,6 +158,48 @@ async def test_cen_loader_force_rewrites(tmp_path: Path) -> None:
         await cache.close()
 
 
+# ---------------------------------------------------------------------------
+# _normalise_en_identifier unit tests
+# ---------------------------------------------------------------------------
+
+
+def test_normalise_en_identifier_plain_unchanged() -> None:
+    """Plain identifiers with no amendment or version are returned unchanged."""
+    from scholar_mcp._sync_cen import _normalise_en_identifier
+
+    assert _normalise_en_identifier("EN 55032:2015") == "EN 55032:2015"
+    assert _normalise_en_identifier("EN ISO 13849-1:2023") == "EN ISO 13849-1:2023"
+    assert _normalise_en_identifier("EN 61000-3-2:2019") == "EN 61000-3-2:2019"
+
+
+def test_normalise_en_identifier_strips_amendment() -> None:
+    """Amendment suffix +Ax:yyyy is stripped for cache-key consistency."""
+    from scholar_mcp._sync_cen import _normalise_en_identifier
+
+    assert _normalise_en_identifier("EN 349:1993+A1:2008") == "EN 349:1993"
+    assert _normalise_en_identifier("EN 62368-1:2020+A11:2020") == "EN 62368-1:2020"
+    assert _normalise_en_identifier("EN 71-1:2014+A1:2018") == "EN 71-1:2014"
+    assert (
+        _normalise_en_identifier("EN IEC 60601-1:2006+A1:2013") == "EN IEC 60601-1:2006"
+    )
+    assert _normalise_en_identifier("EN ISO 11161:2007+A1:2010") == "EN ISO 11161:2007"
+
+
+def test_normalise_en_identifier_strips_version_token() -> None:
+    """ETSI version token Vx.y.z is stripped for cache-key consistency."""
+    from scholar_mcp._sync_cen import _normalise_en_identifier
+
+    assert _normalise_en_identifier("EN 300 328 V2.2.2:2019") == "EN 300 328:2019"
+    assert _normalise_en_identifier("EN 301 489-17 V3.2.4:2020") == "EN 301 489-17:2020"
+    assert _normalise_en_identifier("EN 301 511 V12.5.1:2017") == "EN 301 511:2017"
+    assert _normalise_en_identifier("EN 301 908-1 V13.1.1:2019") == "EN 301 908-1:2019"
+
+
+# ---------------------------------------------------------------------------
+# _hs_to_record normalisation tests
+# ---------------------------------------------------------------------------
+
+
 def test_hs_to_record_strips_amendment_suffix() -> None:
     """Amendment suffix +A1:2008 stripped from cache key."""
     from scholar_mcp._sync_cen import HarmonisedStandard, _hs_to_record

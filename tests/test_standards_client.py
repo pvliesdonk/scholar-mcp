@@ -1701,3 +1701,21 @@ def test_resolve_en_etsi_3part_without_version() -> None:
     assert result is not None
     assert result[1] == "CEN"
     assert "301 489-1" in result[0]
+
+
+def test_resolve_en_etsi_3part_with_subpart() -> None:
+    """EN 3-part with subpart (EN 301 489-17 V3.2.4:2020) resolves to CEN."""
+    from scholar_mcp._standards_client import resolve_identifier_local
+
+    result = resolve_identifier_local("EN 301 489-17 V3.2.4:2020")
+    assert result is not None
+    assert result == ("EN 301 489-17:2020", "CEN")
+
+
+def test_resolve_en_etsi_3part_large_version() -> None:
+    """EN 3-part with large version number (V12.5.1) resolves to CEN."""
+    from scholar_mcp._standards_client import resolve_identifier_local
+
+    result = resolve_identifier_local("EN 301 511 V12.5.1:2017")
+    assert result is not None
+    assert result == ("EN 301 511:2017", "CEN")
