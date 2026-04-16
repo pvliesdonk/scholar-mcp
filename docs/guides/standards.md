@@ -215,3 +215,42 @@ The `_HARMONISED_STANDARDS` table in `_sync_cen.py` needs periodic review when t
 - Full CEN/CENELEC catalogue beyond harmonised standards
 - Live scrape fallback from `standards.cencenelec.eu` — see [#138](https://github.com/pvliesdonk/scholar-mcp/issues/138)
 - EUR-Lex Formex XML automated sync — see [#137](https://github.com/pvliesdonk/scholar-mcp/issues/137)
+
+## Auto-enrichment
+
+When `get_citations`, `get_references`, or `get_citation_graph` return S2 citation records, the `StandardsEnricher` automatically checks each citation's title. If the title is predominantly a standards identifier (the resolved canonical form covers >50% of the title text), the enricher attaches a `standard_metadata` field containing the full `StandardRecord`.
+
+### Which citations trigger enrichment
+
+Citations whose title IS a standard — short, identifier-dominated titles:
+
+| Citation title | Coverage | Triggers? |
+|---|---|---|
+| `RFC 9000` | 100% | Yes |
+| `ISO 9001:2015` | 100% | Yes |
+| `NIST SP 800-53 Rev. 5` | 100% | Yes |
+| `IEEE 802.11-2020` | 100% | Yes |
+| `EN 55032:2015` | 100% | Yes |
+
+Citations that mention a standard but are papers ABOUT it:
+
+| Citation title | Coverage | Triggers? |
+|---|---|---|
+| `Implementing ISO 27001 in healthcare: a review` | ~20% | No |
+| `A survey of NIST post-quantum candidates` | ~15% | No |
+
+### What `standard_metadata` contains
+
+A `StandardRecord` dict — the same shape returned by `get_standard`:
+
+- `identifier` — canonical form (e.g., `"RFC 9000"`, `"ISO 9001:2015"`)
+- `title` — full standard title
+- `body` — standards body (`"IETF"`, `"ISO"`, `"IEEE"`, `"CC"`, `"CEN"`, etc.)
+- `status` — `"published"`, `"withdrawn"`, `"harmonised"`, etc.
+- `full_text_url` — direct link to the freely-downloadable document (when available)
+- `full_text_available` — `True` for Tier 1 sources (IETF, NIST, W3C, ETSI) and CC
+- `related` — cross-linked identifiers (e.g., CC ↔ ISO/IEC 15408)
+
+### Tier 2 bodies require sync
+
+ISO, IEC, IEEE, CC, and CEN metadata comes from the synced cache. If `sync-standards` hasn't been run, Tier 2 citations won't get enriched (Tier 1 citations — RFC, NIST SP, WCAG, ETSI — always work via live API lookup).
