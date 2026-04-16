@@ -113,6 +113,7 @@ indent-style = "space"
 testpaths = ["tests"]
 addopts = ["--strict-markers", "-ra", "-m", "not live"]
 asyncio_mode = "auto"
+log_level = "WARNING"
 markers = [
     "live: tests that hit real network services; opt-in via `pytest -m live`",
 ]
