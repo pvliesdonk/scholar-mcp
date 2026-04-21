@@ -27,7 +27,7 @@ from ._rate_limiter import RateLimiter
 from ._s2_client import S2Client
 from ._standards_client import StandardsClient
 from ._task_queue import TaskQueue
-from .config import ServerConfig, load_config
+from .config import ProjectConfig, load_config
 
 if TYPE_CHECKING:
     from ._protocols import CacheProtocol
@@ -65,7 +65,7 @@ class ServiceBundle:
     epo: EpoClient | None
     openlibrary: OpenLibraryClient
     cache: CacheProtocol
-    config: ServerConfig
+    config: ProjectConfig
     tasks: TaskQueue
     standards: StandardsClient
     enrichment: EnrichmentPipeline

@@ -1,12 +1,12 @@
 #!/bin/bash
 # Pre-remove script: stop and disable the service.
-# Skips stop/disable during upgrades — postinstall handles restart.
 set -eu
 
 SERVICE_NAME="scholar-mcp"
 
-# During an upgrade, skip stopping/disabling so postinstall can restart cleanly.
-# Debian: $1 = "upgrade"; RPM: $1 = "1" (packages remaining after operation).
+# On upgrade the package manager runs the old prerm before installing the new
+# version.  Skip stop/disable so the postinstall restart logic can handle it.
+# Debian passes "upgrade", RPM passes "1" (packages remaining after removal).
 case "${1:-}" in
     upgrade|1)
         exit 0

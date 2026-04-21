@@ -19,7 +19,7 @@ from scholar_mcp._s2_client import S2Client
 from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._standards_client import StandardsClient
 from scholar_mcp._task_queue import TaskQueue
-from scholar_mcp.config import ServerConfig
+from scholar_mcp.config import ProjectConfig
 
 
 @pytest.fixture(autouse=True)
@@ -43,13 +43,13 @@ async def cache(tmp_path: Path) -> ScholarCache:
 
 
 @pytest.fixture
-def test_config(tmp_path: Path) -> ServerConfig:
-    """Provide a ServerConfig pointing cache_dir at a temp directory."""
-    return ServerConfig(cache_dir=tmp_path, docling_url=None)
+def test_config(tmp_path: Path) -> ProjectConfig:
+    """Provide a ProjectConfig pointing cache_dir at a temp directory."""
+    return ProjectConfig(cache_dir=tmp_path, docling_url=None)
 
 
 @pytest.fixture
-async def bundle(cache: ScholarCache, test_config: ServerConfig) -> ServiceBundle:
+async def bundle(cache: ScholarCache, test_config: ProjectConfig) -> ServiceBundle:
     """Provide a ServiceBundle wired to in-memory/temp test services."""
     s2 = S2Client(api_key=None, delay=0.0)
     openalex_http = httpx.AsyncClient(base_url="https://api.openalex.org")
