@@ -133,6 +133,8 @@ async def run_sync(
                 started_at=started,
                 finished_at=time.time(),
             )
+        for err in report.errors:
+            logger.warning("sync_error body=%s msg=%s", report.body, err)
         # Persist a row per body for get_sync_status — on both the
         # success and crash paths, so operators see the failure via
         # get_sync_status instead of "last successful run" or silence.
