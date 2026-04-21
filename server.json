@@ -3,7 +3,7 @@
   "name": "io.github.pvliesdonk/scholar-mcp",
   "title": "Scholar MCP Server",
   "description": "Scholarly-sources MCP server for papers, patents, books, and standards — search, cross-reference, and retrieve prior art across Semantic Scholar, EPO OPS, Open Library, and standards bodies.",
-  "version": "1.8.0-rc.1",
+  "version": "1.7.0",
   "repository": {
     "url": "https://github.com/pvliesdonk/scholar-mcp",
     "source": "github"
@@ -12,7 +12,7 @@
     {
       "registryType": "pypi",
       "identifier": "pvliesdonk-scholar-mcp",
-      "version": "1.8.0-rc.1",
+      "version": "1.7.0",
       "transport": {
         "type": "stdio"
       },
@@ -32,7 +32,7 @@
     },
     {
       "registryType": "oci",
-      "identifier": "ghcr.io/pvliesdonk/scholar-mcp:v1.8.0-rc.1",
+      "identifier": "ghcr.io/pvliesdonk/scholar-mcp:v1.7.0",
       "transport": {
         "type": "streamable-http",
         "url": "http://localhost:{--port}/mcp"

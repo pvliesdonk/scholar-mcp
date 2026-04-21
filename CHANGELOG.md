@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.7.0 (2026-04-21)
+
+### Chores
+
+- **deps**: Drop pygments pin and refresh lockfile (#155)
+  ([#155](https://github.com/pvliesdonk/scholar-mcp/pull/155),
+  [`80d0274`](https://github.com/pvliesdonk/scholar-mcp/commit/80d0274aec296d0d54f5bbfa0a774d0062224e39))
+
+
 ## v1.8.0-rc.1 (2026-04-21)
 
 ### Chores
