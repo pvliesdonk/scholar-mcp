@@ -26,8 +26,13 @@ The `scholar-mcp` binary is on `PATH` inside the container, so no `bash -c` or
 **Exec into a running container** (uses the existing container's open DB and env):
 
 ```bash
-docker exec ai-scholar-mcp scholar-mcp sync-standards
+docker compose exec -u appuser scholar-mcp scholar-mcp sync-standards
 ```
+
+The `-u appuser` flag is required because the container's default user is `root`
+(the entrypoint uses `gosu` to drop privileges for the main process, but `exec`
+bypasses the entrypoint). Running without it would create root-owned files in the
+shared volume.
 
 **One-off via Docker Compose** (goes through the entrypoint → drops to `appuser`):
 
@@ -42,8 +47,8 @@ from the `environment:` / `env_file:` declarations in `compose.yml`.
 To sync only a specific body:
 
 ```bash
-docker exec ai-scholar-mcp scholar-mcp sync-standards --body ISO
-docker compose run --rm scholar-mcp scholar-mcp sync-standards --body IEC
+docker compose exec -u appuser scholar-mcp scholar-mcp sync-standards --body ISO
+docker compose run --rm scholar-mcp scholar-mcp sync-standards --body ISO
 ```
 
 ## Cron / systemd scheduling
