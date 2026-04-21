@@ -8,13 +8,14 @@ Design reference: ``docs/specs/2026-04-13-pr2-iso-iec-relaton-design.md``.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import tarfile
 import tempfile
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, BinaryIO, cast
 
 import httpx
 import yaml
@@ -356,6 +357,69 @@ def _record_changed(old: Mapping[str, Any], new: Mapping[str, Any]) -> bool:
 _GITHUB_API = "https://api.github.com"
 
 
+def _parse_tarball_sync(
+    fileobj: BinaryIO,
+    body: str,
+    skip_slugs: frozenset[str],
+) -> tuple[list[tuple[str, StandardRecord, list[str]]], list[str]]:
+    """Parse a Relaton .tar.gz and return (records, errors).
+
+    Runs synchronously so callers can hand it to ``asyncio.to_thread()``
+    to avoid blocking the event loop during CPU-bound tarfile + YAML work.
+
+    Args:
+        fileobj: Seeked-to-zero file object containing the .tar.gz bytes.
+        body: Standards body key, used only for debug logging.
+        skip_slugs: Slug denylist for this body (slugs owned by another loader).
+
+    Returns:
+        Tuple of ``(records, errors)`` where each record is
+        ``(identifier, StandardRecord, aliases)``.
+    """
+    records: list[tuple[str, StandardRecord, list[str]]] = []
+    errors: list[str] = []
+
+    with tarfile.open(fileobj=fileobj, mode="r:gz") as tar:
+        for member in tar:
+            if not member.isfile():
+                continue
+            if not member.name.endswith(".yaml"):
+                continue
+            if "/data/" not in member.name:
+                continue
+
+            slug = member.name.rsplit("/", 1)[-1].removesuffix(".yaml")
+            if slug in skip_slugs:
+                logger.debug(
+                    "sync_relaton_skip_owned_by_other body=%s slug=%s", body, slug
+                )
+                continue
+
+            handle = tar.extractfile(member)
+            if (
+                handle is None
+            ):  # pragma: no cover — only non-regular members, already filtered
+                continue
+            try:
+                doc = yaml.safe_load(handle.read())
+            except yaml.YAMLError as exc:
+                errors.append(f"unparseable: {member.name}: {exc}")
+                continue
+            if not isinstance(doc, dict):
+                errors.append(f"unparseable: {member.name}: not a mapping")
+                continue
+
+            record, aliases = _yaml_to_record(doc)
+            if record is None:
+                errors.append(f"unparseable: {member.name}")
+                continue
+
+            # _yaml_to_record guarantees identifier is set when it returns non-None
+            records.append((cast("str", record.get("identifier")), record, aliases))
+
+    return records, errors
+
+
 class RelatonLoader:
     """One instance per body (ISO, IEC, or IEEE). Conforms to the Loader protocol.
 
@@ -447,58 +511,54 @@ class RelatonLoader:
                 async for chunk in response.aiter_bytes(chunk_size=1 << 20):
                     tmp.write(chunk)
             tmp.seek(0)
-            with tarfile.open(fileobj=tmp, mode="r:gz") as tar:
-                for member in tar:
-                    if not member.isfile():
-                        continue
-                    if not member.name.endswith(".yaml"):
-                        continue
-                    if "/data/" not in member.name:
-                        continue
+            # CPU-bound tarfile + YAML parsing runs in a thread pool so the
+            # event loop stays responsive during the multi-second extraction.
+            parsed, parse_errors = await asyncio.to_thread(
+                _parse_tarball_sync,
+                tmp,
+                self.body,
+                _RELATON_SKIP_SLUGS.get(self.body, frozenset()),
+            )
+        errors.extend(
+            parse_errors
+        )  # parsed is a fully-materialised list; tmp is now closed
 
-                    # Per-body denylist (e.g. CC owns ISO/IEC 15408 family)
-                    slug = member.name.rsplit("/", 1)[-1].removesuffix(".yaml")
-                    if slug in _RELATON_SKIP_SLUGS.get(self.body, frozenset()):
-                        logger.debug(
-                            "sync_relaton_skip_owned_by_other body=%s slug=%s",
-                            self.body,
-                            slug,
-                        )
-                        continue
+        # Change detection: reads only (no writes yet).
+        # Track records seen within this tarball to handle within-batch
+        # duplicates (e.g. trademark vs plain variants mapping to the same id).
+        # Keyed dicts ensure only the final winning value per identifier/alias
+        # is sent to the batch write — no redundant INSERT OR REPLACE pairs.
+        in_current_batch: dict[str, StandardRecord] = {}
+        unique_aliases: dict[str, str] = {}
 
-                    handle = tar.extractfile(member)
-                    if handle is None:
-                        continue
-                    try:
-                        doc = yaml.safe_load(handle.read())
-                    except yaml.YAMLError as exc:
-                        errors.append(f"unparseable: {member.name}: {exc}")
-                        continue
-                    if not isinstance(doc, dict):
-                        errors.append(f"unparseable: {member.name}: not a mapping")
-                        continue
+        for identifier, record, aliases in parsed:
+            current_ids.add(identifier)
 
-                    record, aliases = _yaml_to_record(doc)
-                    if record is None:
-                        errors.append(f"unparseable: {member.name}")
-                        continue
+            if identifier in in_current_batch:
+                # Within-tarball duplicate (e.g. trademark variant followed by
+                # plain variant for the same canonical id).
+                if _record_changed(in_current_batch[identifier], record):
+                    updated += 1
+                else:
+                    unchanged += 1
+            else:
+                existing = await cache.get_standard(identifier)
+                if existing is None:
+                    added += 1
+                elif _record_changed(existing, record):
+                    updated += 1
+                else:
+                    unchanged += 1
 
-                    identifier = record["identifier"]
-                    current_ids.add(identifier)
+            in_current_batch[identifier] = record
+            for alias in aliases:
+                unique_aliases[alias] = identifier
 
-                    existing = await cache.get_standard(identifier)
-                    if existing is None:
-                        added += 1
-                    elif _record_changed(existing, record):
-                        updated += 1
-                    else:
-                        unchanged += 1
-
-                    await cache.set_standard(
-                        identifier, record, source=self.body, synced=True
-                    )
-                    for alias in aliases:
-                        await cache.set_standard_alias(alias, identifier)
+        # Batch-write all records and aliases in a single transaction each.
+        await cache.set_standards_batch(
+            list(in_current_batch.items()), source=self.body, synced=True
+        )
+        await cache.set_standard_aliases_batch(list(unique_aliases.items()))
 
         logger.info(
             "sync_relaton_done body=%s sha=%s added=%s updated=%s unchanged=%s errors=%s",
