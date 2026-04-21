@@ -196,9 +196,7 @@ jobs:
         run: uv export --all-extras --frozen --no-emit-project --no-hashes -o ${{ runner.temp }}/requirements.txt
 
       - name: Run pip-audit
-        # CVE-2026-4539 (pygments): fix version 2.20.0 crashes our docs build
-        # with AttributeError in HtmlFormatter; re-evaluate when 2.20.1 ships.
-        run: uvx pip-audit --strict --progress-spinner off --ignore-vuln CVE-2026-4539 -r ${{ runner.temp }}/requirements.txt
+        run: uvx pip-audit --strict --progress-spinner off -r ${{ runner.temp }}/requirements.txt
 
   secrets:
     name: Secret Detection
