@@ -378,6 +378,7 @@ def _parse_tarball_sync(
     """
     records: list[tuple[str, StandardRecord, list[str]]] = []
     errors: list[str] = []
+    _LOG_EVERY = 2000
 
     with tarfile.open(fileobj=fileobj, mode="r:gz") as tar:
         for member in tar:
@@ -416,6 +417,11 @@ def _parse_tarball_sync(
 
             # _yaml_to_record guarantees identifier is set when it returns non-None
             records.append((cast("str", record.get("identifier")), record, aliases))
+
+            if len(records) % _LOG_EVERY == 0:
+                logger.info(
+                    "sync_relaton_parsing body=%s parsed=%s", body, len(records)
+                )
 
     return records, errors
 
@@ -503,6 +509,7 @@ class RelatonLoader:
         prev_ids = await cache.list_synced_standard_ids(source=self.body)
 
         tar_url = f"{_GITHUB_API}/repos/{self._config.repo}/tarball/{sha}"
+        logger.info("sync_relaton_downloading body=%s sha=%s", self.body, sha)
         with tempfile.TemporaryFile(suffix=".tar.gz") as tmp:
             async with self._http.stream(
                 "GET", tar_url, headers=self._headers(), follow_redirects=True
@@ -513,6 +520,7 @@ class RelatonLoader:
             tmp.seek(0)
             # CPU-bound tarfile + YAML parsing runs in a thread pool so the
             # event loop stays responsive during the multi-second extraction.
+            logger.info("sync_relaton_parsing_start body=%s", self.body)
             parsed, parse_errors = await asyncio.to_thread(
                 _parse_tarball_sync,
                 tmp,
@@ -522,6 +530,12 @@ class RelatonLoader:
         errors.extend(
             parse_errors
         )  # parsed is a fully-materialised list; tmp is now closed
+        logger.info(
+            "sync_relaton_parsed body=%s records=%s errors=%s",
+            self.body,
+            len(parsed),
+            len(errors),
+        )
 
         # Change detection: reads only (no writes yet).
         # Track records seen within this tarball to handle within-batch
@@ -555,6 +569,12 @@ class RelatonLoader:
                 unique_aliases[alias] = identifier
 
         # Batch-write all records and aliases in a single transaction each.
+        logger.info(
+            "sync_relaton_writing body=%s records=%s aliases=%s",
+            self.body,
+            len(in_current_batch),
+            len(unique_aliases),
+        )
         await cache.set_standards_batch(
             list(in_current_batch.items()), source=self.body, synced=True
         )
