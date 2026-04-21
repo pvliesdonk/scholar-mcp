@@ -2,6 +2,108 @@
 
 <!-- version list -->
 
+## v1.7.0-rc.2 (2026-04-21)
+
+### Bug Fixes
+
+- Address PR review — use frozenset tags, fix imports, update spec
+  ([`67fd96c`](https://github.com/pvliesdonk/scholar-mcp/commit/67fd96c28f911ec0b9e4e5b393bed379491bf668))
+
+- Extract pipeline builder for testability, fix spec concurrency default
+  ([`e35a749`](https://github.com/pvliesdonk/scholar-mcp/commit/e35a7499adf5961f55543ea818dba1c1c9158036))
+
+- **sync**: Guard against plain strings in Relaton YAML list fields (#147)
+  ([#147](https://github.com/pvliesdonk/scholar-mcp/pull/147),
+  [`aeb21e9`](https://github.com/pvliesdonk/scholar-mcp/commit/aeb21e9735ede404f0f1a5466ffd6d68eee68e09))
+
+- **sync**: Log individual sync errors at WARNING level
+  ([`655c7cd`](https://github.com/pvliesdonk/scholar-mcp/commit/655c7cd6dd2a0e8db57ed4b66092a7e0dca34f44))
+
+### Chores
+
+- **deps**: Bump authlib from 1.6.9 to 1.6.11 (#144)
+  ([#144](https://github.com/pvliesdonk/scholar-mcp/pull/144),
+  [`306e0e3`](https://github.com/pvliesdonk/scholar-mcp/commit/306e0e33219904552e31381db9682598b70f82f0))
+
+- **deps**: Bump python-multipart from 0.0.22 to 0.0.26 (#135)
+  ([#135](https://github.com/pvliesdonk/scholar-mcp/pull/135),
+  [`b403257`](https://github.com/pvliesdonk/scholar-mcp/commit/b40325753811898ba118d0a497717e5d56b302b9))
+
+### Documentation
+
+- Add v0.6.0 enrichment pipeline design spec and implementation plan
+  ([`6bc0e90`](https://github.com/pvliesdonk/scholar-mcp/commit/6bc0e9067dbb99414938e1af3f624304d350e99c))
+
+- **standards**: Add Docker sync-standards commands (#146)
+  ([#146](https://github.com/pvliesdonk/scholar-mcp/pull/146),
+  [`4e13455`](https://github.com/pvliesdonk/scholar-mcp/commit/4e134554287868cca3da658bfc132a696f28b6e8))
+
+### Features
+
+- Add Enricher protocol and EnrichmentPipeline (#62)
+  ([#62](https://github.com/pvliesdonk/scholar-mcp/pull/62),
+  [`0233665`](https://github.com/pvliesdonk/scholar-mcp/commit/023366559b431b8aecf62a4f5a5894757f04384b))
+
+- Chapter-level resolution, docs, and final fixes (#64) (#119)
+  ([#119](https://github.com/pvliesdonk/scholar-mcp/pull/119),
+  [`aee4412`](https://github.com/pvliesdonk/scholar-mcp/commit/aee4412edb07d85a1e63e2c2440d01738d7e1dc7))
+
+- CrossRef, Google Books, WorldCat, and cover caching (#67, #61, #66, #68) (#118)
+  ([#118](https://github.com/pvliesdonk/scholar-mcp/pull/118),
+  [`c606844`](https://github.com/pvliesdonk/scholar-mcp/commit/c606844d13cdefa8f9deca3a22a2eb8d73a2f2fb))
+
+- Extract OpenAlexEnricher from inline citation logic (#62)
+  ([#62](https://github.com/pvliesdonk/scholar-mcp/pull/62),
+  [`e74ee25`](https://github.com/pvliesdonk/scholar-mcp/commit/e74ee25b296ea7c2fd6132b19473620f0b39d014))
+
+- Extract OpenLibraryEnricher from book_enrichment (#62)
+  ([#62](https://github.com/pvliesdonk/scholar-mcp/pull/62),
+  [`d399818`](https://github.com/pvliesdonk/scholar-mcp/commit/d3998185b205ea60faaa7e8ae469903da18fbd11))
+
+- **standards**: V0.9.0 PR 1/5 — sync infrastructure foundation (#121)
+  ([#121](https://github.com/pvliesdonk/scholar-mcp/pull/121),
+  [`2dcbc72`](https://github.com/pvliesdonk/scholar-mcp/commit/2dcbc728ba1704cb1bb6b0a33726c9dc46c8efff))
+
+- **standards**: V0.9.0 PR 2/5 — ISO + IEC Relaton loaders (#122)
+  ([#122](https://github.com/pvliesdonk/scholar-mcp/pull/122),
+  [`3d08973`](https://github.com/pvliesdonk/scholar-mcp/commit/3d08973b7d242df335ee83a74382b93a1b5687cc))
+
+- **standards**: V0.9.0 PR 3/5 — IEEE Relaton loader (#130)
+  ([#130](https://github.com/pvliesdonk/scholar-mcp/pull/130),
+  [`980cd81`](https://github.com/pvliesdonk/scholar-mcp/commit/980cd814f991de1f4e4d2bbee9cb7f6d5135759e))
+
+- **standards**: V0.9.0 PR 4a — Common Criteria loader (#136)
+  ([#136](https://github.com/pvliesdonk/scholar-mcp/pull/136),
+  [`3c6b6e6`](https://github.com/pvliesdonk/scholar-mcp/commit/3c6b6e6f5278fa939b8f3751b1355cefe99f16a1))
+
+- **standards**: V0.9.0 PR 4b — CEN/CENELEC harmonised-standards loader (#140)
+  ([#140](https://github.com/pvliesdonk/scholar-mcp/pull/140),
+  [`35f0bf5`](https://github.com/pvliesdonk/scholar-mcp/commit/35f0bf525d859555a63128060a09ea7374b15a3b))
+
+- **standards**: V0.9.0 PR 5/5 — standards auto-enrichment (#143)
+  ([#143](https://github.com/pvliesdonk/scholar-mcp/pull/143),
+  [`185064f`](https://github.com/pvliesdonk/scholar-mcp/commit/185064f02ccbf0e03c6fa0041a47d9007222635b))
+
+- **sync**: Add progress logging to RelatonLoader sync
+  ([`1e84b45`](https://github.com/pvliesdonk/scholar-mcp/commit/1e84b45165d904c1274f99ef502667381a90a9ac))
+
+### Performance Improvements
+
+- **sync**: Batch DB writes in RelatonLoader to fix sync hang (#145)
+  ([#145](https://github.com/pvliesdonk/scholar-mcp/pull/145),
+  [`1ac0b48`](https://github.com/pvliesdonk/scholar-mcp/commit/1ac0b4842ab06b3993fa02e472bbe5bd0ff74e71))
+
+### Refactoring
+
+- Wire EnrichmentPipeline into ServiceBundle, replace ad-hoc enrichment (#62)
+  ([#62](https://github.com/pvliesdonk/scholar-mcp/pull/62),
+  [`865a7fd`](https://github.com/pvliesdonk/scholar-mcp/commit/865a7fda2dc7f95609da3f1f154ece59dcf9c0b6))
+
+- **standards**: Relaton fetcher API cleanup (#123, #124, #125) (#126)
+  ([#126](https://github.com/pvliesdonk/scholar-mcp/pull/126),
+  [`d404bf7`](https://github.com/pvliesdonk/scholar-mcp/commit/d404bf751c88c54830ad88f374da67cd52433cb2))
+
+
 ## v1.7.0-rc.1 (2026-04-12)
 
 ### Bug Fixes
