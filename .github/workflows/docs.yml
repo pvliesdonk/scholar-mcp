@@ -3,10 +3,12 @@ name: Documentation
 on:
   push:
     branches: [main]
-    # Tag-push is a SMOKE TEST: it runs `build` only (confirms docs still
-    # compile against a release tag) — the `upload-artifact` and `deploy`
-    # steps below are gated on `github.event_name == 'release'`, so actual
-    # GitHub Pages deployment still only happens via the release event.
+    # Tag-push also deploys: whichever event fires first (tag-push or
+    # release:published) wins the concurrency group below and performs
+    # the full build+upload+deploy.  The release-event path can race
+    # against tag availability (see IG v1.8.0 / scholar v1.8.0-rc.1
+    # where release's deploy-pages step failed on timing); tag-push
+    # gives a deterministic second path.
     tags: ["v*"]
   pull_request:
     branches: [main]
@@ -54,13 +56,13 @@ jobs:
         run: uv run mkdocs build --strict
 
       - name: Upload artifact
-        if: github.event_name == 'release'
+        if: github.event_name == 'release' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
         uses: actions/upload-pages-artifact@v5
         with:
           path: site/
 
   deploy:
-    if: github.event_name == 'release'
+    if: github.event_name == 'release' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
     permissions:
       pages: write
       id-token: write
