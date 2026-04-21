@@ -97,10 +97,12 @@ def _canonical_identifier_and_body(
     if not docidentifiers:
         return None
 
-    def _is_trademark(entry: dict[str, Any]) -> bool:
+    def _is_trademark(entry: Any) -> bool:
+        if not isinstance(entry, dict):
+            return False
         return str(entry.get("scope", "")).lower() == "trademark"
 
-    non_tm = [d for d in docidentifiers if not _is_trademark(d)]
+    non_tm = [d for d in docidentifiers if isinstance(d, dict) and not _is_trademark(d)]
     if not non_tm:
         return None
 
@@ -171,6 +173,8 @@ def _first_link_of_type(links: list[dict[str, Any]] | None, wanted: str) -> str 
     if not links:
         return None
     for link in links:
+        if not isinstance(link, dict):
+            continue
         if str(link.get("type", "")).lower() == wanted:
             content = link.get("content")
             if isinstance(content, str) and content:
@@ -195,6 +199,8 @@ def _published_date(dates: list[dict[str, Any]] | None) -> str | None:
     if not dates:
         return None
     for entry in dates:
+        if not isinstance(entry, dict):
+            continue
         if str(entry.get("type", "")).lower() == "published":
             value = entry.get("value")
             if isinstance(value, str):
@@ -206,12 +212,16 @@ def _superseded_by(relations: list[dict[str, Any]] | None) -> str | None:
     if not relations:
         return None
     for rel in relations:
+        if not isinstance(rel, dict):
+            continue
         if str(rel.get("type", "")).lower() != "obsoleted-by":
             continue
         bibitem = rel.get("bibitem") or {}
+        if not isinstance(bibitem, dict):
+            continue
         idents = bibitem.get("docid") or bibitem.get("docidentifier") or []
         for ident in idents:
-            if ident.get("id"):
+            if isinstance(ident, dict) and ident.get("id"):
                 return str(ident["id"])
     return None
 
@@ -221,12 +231,16 @@ def _supersedes(relations: list[dict[str, Any]] | None) -> list[str]:
     if not relations:
         return out
     for rel in relations:
+        if not isinstance(rel, dict):
+            continue
         if str(rel.get("type", "")).lower() != "obsoletes":
             continue
         bibitem = rel.get("bibitem") or {}
+        if not isinstance(bibitem, dict):
+            continue
         idents = bibitem.get("docid") or bibitem.get("docidentifier") or []
         for ident in idents:
-            if ident.get("id"):
+            if isinstance(ident, dict) and ident.get("id"):
                 out.append(str(ident["id"]))
     return out
 
@@ -318,6 +332,8 @@ def _yaml_to_record(
 
     aliases: list[str] = []
     for entry in docidentifiers:
+        if not isinstance(entry, dict):
+            continue
         alias = entry.get("id")
         if not isinstance(alias, str):
             continue
