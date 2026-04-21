@@ -30,11 +30,13 @@ app = typer.Typer(
     help="Scholar MCP — academic literature server.",
     no_args_is_help=True,
     add_completion=False,
+    rich_markup_mode=None,
 )
 cache_app = typer.Typer(
     name="cache",
     help="Manage the Scholar MCP local cache.",
     no_args_is_help=True,
+    rich_markup_mode=None,
 )
 app.add_typer(cache_app, name="cache")
 

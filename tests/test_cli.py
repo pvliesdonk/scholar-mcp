@@ -22,7 +22,7 @@ async def _init_db(path: Path) -> None:
 
 def test_cache_help() -> None:
     runner = CliRunner()
-    result = runner.invoke(app, ["cache", "--help"], env={"COLUMNS": "200"})
+    result = runner.invoke(app, ["cache", "--help"])
     assert result.exit_code == 0
     assert "stats" in result.output
     assert "clear" in result.output
@@ -100,6 +100,6 @@ def test_verbose_overrides_fastmcp_log_level(monkeypatch: pytest.MonkeyPatch) ->
 def test_serve_help() -> None:
     """Existing serve command still works."""
     runner = CliRunner()
-    result = runner.invoke(app, ["serve", "--help"], env={"COLUMNS": "200"})
+    result = runner.invoke(app, ["serve", "--help"])
     assert result.exit_code == 0
     assert "--transport" in result.output
