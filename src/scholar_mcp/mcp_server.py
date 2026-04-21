@@ -74,10 +74,6 @@ def _build_oidc_auth() -> object | None:
     return build_oidc_proxy_auth(_load_server_config())
 
 
-# Module-level re-export for tests that patch resolve_auth_mode.
-resolve_auth_mode = _core_resolve_auth_mode
-
-
 def build_event_store(url: str | None = None) -> EventStore:
     """Build an ``EventStore`` — thin shim over core's helper.
 

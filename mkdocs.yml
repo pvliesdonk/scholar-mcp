@@ -93,6 +93,9 @@ markdown_extensions:
 
 exclude_docs: |
   superpowers/
+  plans/
+  specs/
+  design.md
 
 nav:
   - Home: index.md

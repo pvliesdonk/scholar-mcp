@@ -13,9 +13,9 @@ import os
 
 from fastmcp import FastMCP
 
-logger = logging.getLogger(__name__)
+from scholar_mcp.config import _ENV_PREFIX
 
-_ENV_PREFIX = "SCHOLAR_MCP"
+logger = logging.getLogger(__name__)
 
 
 def register_apps(_mcp: FastMCP) -> None:
