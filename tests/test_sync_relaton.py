@@ -1413,3 +1413,157 @@ docstatus:
         assert await cache.get_standard("ISO 9001:2015") is not None
     finally:
         await cache.close()
+
+
+# ---------------------------------------------------------------------------
+# isinstance guard tests — ISO edge cases with non-dict list entries
+# ---------------------------------------------------------------------------
+
+
+def test_yaml_to_record_string_docidentifier_entries_skipped() -> None:
+    """docidentifier list containing plain strings should not raise."""
+    from scholar_mcp._sync_relaton import _yaml_to_record
+
+    doc = {
+        "docid": [
+            "ISO 9001:2015",  # plain string — must be skipped, not crash
+            {"id": "ISO 9001:2015", "type": "ISO", "primary": True},
+        ],
+        "title": [{"content": "Quality management"}],
+    }
+    record, aliases = _yaml_to_record(doc)
+
+    assert record is not None
+    assert record["identifier"] == "ISO 9001:2015"
+    # The plain string entry should not appear in aliases
+    assert "ISO 9001:2015" not in aliases
+
+
+def test_yaml_to_record_string_relation_entries_skipped() -> None:
+    """relation list containing plain strings should not raise."""
+    from scholar_mcp._sync_relaton import _yaml_to_record
+
+    doc = {
+        "docid": [{"id": "ISO 9001:2008", "type": "ISO", "primary": True}],
+        "title": [{"content": "Quality management (old)"}],
+        "docstatus": {"stage": "95.99"},
+        "relation": [
+            "obsoleted-by ISO 9001:2015",  # plain string — must be skipped
+            {
+                "type": "obsoleted-by",
+                "bibitem": {
+                    "docid": [{"id": "ISO 9001:2015", "type": "ISO"}],
+                },
+            },
+        ],
+    }
+    record, _ = _yaml_to_record(doc)
+
+    assert record is not None
+    assert record["superseded_by"] == "ISO 9001:2015"
+
+
+def test_yaml_to_record_string_bibitem_skipped() -> None:
+    """relation entry with bibitem as a string should not raise."""
+    from scholar_mcp._sync_relaton import _yaml_to_record
+
+    doc = {
+        "docid": [{"id": "ISO 9001:2008", "type": "ISO", "primary": True}],
+        "title": [{"content": "Quality management (old)"}],
+        "relation": [
+            {
+                "type": "obsoleted-by",
+                "bibitem": "ISO 9001:2015",  # string instead of dict
+            },
+        ],
+    }
+    record, _ = _yaml_to_record(doc)
+
+    assert record is not None
+    assert record["superseded_by"] is None
+
+
+def test_yaml_to_record_string_ident_in_bibitem_skipped() -> None:
+    """docid list inside relation.bibitem containing plain strings should not raise."""
+    from scholar_mcp._sync_relaton import _yaml_to_record
+
+    doc = {
+        "docid": [{"id": "ISO 9001:2008", "type": "ISO", "primary": True}],
+        "title": [{"content": "Quality management (old)"}],
+        "relation": [
+            {
+                "type": "obsoleted-by",
+                "bibitem": {
+                    "docid": ["ISO 9001:2015"],  # plain string in list
+                },
+            },
+        ],
+    }
+    record, _ = _yaml_to_record(doc)
+
+    assert record is not None
+    assert record["superseded_by"] is None
+
+
+def test_yaml_to_record_string_link_entries_skipped() -> None:
+    """link list containing plain strings should not raise."""
+    from scholar_mcp._sync_relaton import _yaml_to_record
+
+    doc = {
+        "docid": [{"id": "ISO 9001:2015", "type": "ISO", "primary": True}],
+        "title": [{"content": "Quality management"}],
+        "link": [
+            "https://www.iso.org/standard/62085.html",  # plain string — must be skipped
+            {"type": "src", "content": "https://www.iso.org/standard/62085.html"},
+        ],
+    }
+    record, _ = _yaml_to_record(doc)
+
+    assert record is not None
+    assert record["url"] == "https://www.iso.org/standard/62085.html"
+
+
+def test_yaml_to_record_string_date_entries_skipped() -> None:
+    """date list containing plain strings should not raise."""
+    from scholar_mcp._sync_relaton import _yaml_to_record
+
+    doc = {
+        "docid": [{"id": "ISO 9001:2015", "type": "ISO", "primary": True}],
+        "title": [{"content": "Quality management"}],
+        "date": [
+            "2015-09-15",  # plain string — must be skipped
+            {"type": "published", "value": "2015-09-15"},
+        ],
+    }
+    record, _ = _yaml_to_record(doc)
+
+    assert record is not None
+    assert record["published_date"] == "2015-09-15"
+
+
+def test_yaml_to_record_supersedes_string_entries_skipped() -> None:
+    """relation 'obsoletes' entries containing string idents should not raise."""
+    from scholar_mcp._sync_relaton import _yaml_to_record
+
+    doc = {
+        "docid": [{"id": "ISO 9001:2015", "type": "ISO", "primary": True}],
+        "title": [{"content": "Quality management"}],
+        "relation": [
+            {
+                "type": "obsoletes",
+                "bibitem": {
+                    "docid": ["ISO 9001:2008"],  # plain string in list
+                },
+            },
+            {
+                "type": "obsoletes",
+                "bibitem": {
+                    "docid": [{"id": "ISO 9001:2008", "type": "ISO"}],
+                },
+            },
+        ],
+    }
+    record, _ = _yaml_to_record(doc)
+
+    assert record is not None
+    assert record["supersedes"] == ["ISO 9001:2008"]
