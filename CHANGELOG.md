@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.8.0-rc.1 (2026-04-21)
+
+### Chores
+
+- Adopt fastmcp-server-template v1.0.4 + fastmcp-pvl-core (#148)
+  ([#148](https://github.com/pvliesdonk/scholar-mcp/pull/148),
+  [`1a90fe1`](https://github.com/pvliesdonk/scholar-mcp/commit/1a90fe137295899780157273423d3f3f7501a703))
+
+
 ## v1.7.0-rc.2 (2026-04-21)
 
 ### Bug Fixes
