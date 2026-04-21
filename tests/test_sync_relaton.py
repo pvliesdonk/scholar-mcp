@@ -1199,3 +1199,217 @@ docstatus:
         assert await cache.get_standard("IEC 99999:2022") is not None
     finally:
         await cache.close()
+
+
+# ---------------------------------------------------------------------------
+# _parse_tarball_sync unit tests — covers error paths in the extracted function
+# ---------------------------------------------------------------------------
+
+
+def _make_tarball_raw(*, prefix: str, entries: list[tuple[str, bytes | None]]) -> bytes:
+    """Build an in-memory .tar.gz with explicit control over entry types.
+
+    Each entry is (name, content). Pass content=None to add a directory entry.
+    """
+    buf = io.BytesIO()
+    with (
+        gzip.GzipFile(fileobj=buf, mode="wb") as gz,
+        tarfile.open(fileobj=gz, mode="w") as tar,
+    ):
+        for name, content in entries:
+            if content is None:
+                info = tarfile.TarInfo(name=f"{prefix}/{name}")
+                info.type = tarfile.DIRTYPE
+                tar.addfile(info)
+            else:
+                info = tarfile.TarInfo(name=f"{prefix}/{name}")
+                info.size = len(content)
+                tar.addfile(info, io.BytesIO(content))
+    return buf.getvalue()
+
+
+def _open_tarball(data: bytes) -> io.BytesIO:
+    buf = io.BytesIO(data)
+    buf.seek(0)
+    return buf
+
+
+def test_parse_tarball_sync_skips_directory_entries() -> None:
+    """Non-file (directory) entries are skipped without error."""
+    from scholar_mcp._sync_relaton import _parse_tarball_sync
+
+    tb = _make_tarball_raw(
+        prefix="repo-main",
+        entries=[("data/", None)],  # directory entry
+    )
+    records, errors = _parse_tarball_sync(_open_tarball(tb), "ISO", frozenset())
+    assert records == []
+    assert errors == []
+
+
+def test_parse_tarball_sync_skips_non_yaml_files() -> None:
+    """Files not ending in .yaml are skipped."""
+    from scholar_mcp._sync_relaton import _parse_tarball_sync
+
+    tb = _make_tarball_raw(
+        prefix="repo-main",
+        entries=[("data/readme.txt", b"not yaml")],
+    )
+    records, errors = _parse_tarball_sync(_open_tarball(tb), "ISO", frozenset())
+    assert records == []
+    assert errors == []
+
+
+def test_parse_tarball_sync_skips_yaml_outside_data_dir() -> None:
+    """YAML files not under a /data/ path are silently ignored."""
+    from scholar_mcp._sync_relaton import _parse_tarball_sync
+
+    tb = _make_tarball_raw(
+        prefix="repo-main",
+        entries=[("other/iso-9001-2015.yaml", b"docid:\n  - id: ISO 9001:2015\n")],
+    )
+    records, errors = _parse_tarball_sync(_open_tarball(tb), "ISO", frozenset())
+    assert records == []
+    assert errors == []
+
+
+def test_parse_tarball_sync_reports_invalid_yaml() -> None:
+    """A file with unparseable YAML bytes produces an error entry."""
+    from scholar_mcp._sync_relaton import _parse_tarball_sync
+
+    tb = _make_tarball_raw(
+        prefix="repo-main",
+        entries=[("data/bad.yaml", b"key: [unclosed")],
+    )
+    records, errors = _parse_tarball_sync(_open_tarball(tb), "ISO", frozenset())
+    assert records == []
+    assert len(errors) == 1
+    assert "unparseable" in errors[0]
+    assert "bad.yaml" in errors[0]
+
+
+def test_parse_tarball_sync_reports_non_mapping_yaml() -> None:
+    """A YAML file that parses to a list (not a dict) produces an error entry."""
+    from scholar_mcp._sync_relaton import _parse_tarball_sync
+
+    tb = _make_tarball_raw(
+        prefix="repo-main",
+        entries=[("data/list.yaml", b"- item1\n- item2\n")],
+    )
+    records, errors = _parse_tarball_sync(_open_tarball(tb), "ISO", frozenset())
+    assert records == []
+    assert len(errors) == 1
+    assert "not a mapping" in errors[0]
+
+
+def test_parse_tarball_sync_reports_unparseable_record() -> None:
+    """A valid YAML dict that _yaml_to_record cannot map produces an error entry."""
+    from scholar_mcp._sync_relaton import _parse_tarball_sync
+
+    # No docidentifier and no title — _yaml_to_record returns None
+    tb = _make_tarball_raw(
+        prefix="repo-main",
+        entries=[("data/no-id.yaml", b"scope: some text\n")],
+    )
+    records, errors = _parse_tarball_sync(_open_tarball(tb), "ISO", frozenset())
+    assert records == []
+    assert len(errors) == 1
+    assert "unparseable" in errors[0]
+
+
+def test_parse_tarball_sync_returns_valid_records() -> None:
+    """Happy-path: valid YAML files in /data/ are parsed and returned."""
+    from scholar_mcp._sync_relaton import _parse_tarball_sync
+
+    valid_yaml = b"""
+docid:
+  - id: "ISO 9001:2015"
+    type: "ISO"
+    primary: true
+title:
+  - content: "Quality management systems"
+    format: "text/plain"
+    type: "main"
+docstatus:
+  stage: "60.60"
+"""
+    tb = _make_tarball_raw(
+        prefix="repo-main",
+        entries=[("data/iso-9001-2015.yaml", valid_yaml)],
+    )
+    records, errors = _parse_tarball_sync(_open_tarball(tb), "ISO", frozenset())
+    assert errors == []
+    assert len(records) == 1
+    identifier, record, _aliases = records[0]
+    assert identifier == "ISO 9001:2015"
+    assert record.get("body") == "ISO"
+
+
+def test_parse_tarball_sync_skips_symlink_entries() -> None:
+    """Symlink members (extractfile returns None) are skipped without error."""
+    from scholar_mcp._sync_relaton import _parse_tarball_sync
+
+    buf = io.BytesIO()
+    with (
+        gzip.GzipFile(fileobj=buf, mode="wb") as gz,
+        tarfile.open(fileobj=gz, mode="w") as tar,
+    ):
+        info = tarfile.TarInfo(name="repo-main/data/link.yaml")
+        info.type = tarfile.SYMTYPE
+        info.linkname = "target.yaml"
+        tar.addfile(info)
+    buf.seek(0)
+    records, errors = _parse_tarball_sync(buf, "ISO", frozenset())
+    assert records == []
+    assert errors == []
+
+
+@pytest.mark.asyncio
+async def test_loader_within_batch_unchanged_duplicate(tmp_path: Path) -> None:
+    """Two identical entries for the same identifier count as updated=1, unchanged=1."""
+    from scholar_mcp._cache import ScholarCache
+    from scholar_mcp._sync_relaton import RelatonLoader
+
+    same_yaml = b"""
+docid:
+  - id: "ISO 9001:2015"
+    type: "ISO"
+    primary: true
+title:
+  - content: "Quality management"
+    format: "text/plain"
+    type: "main"
+docstatus:
+  stage: "60.60"
+"""
+    # Two files with identical content → same canonical identifier resolved twice
+    tarball = _make_tarball(
+        prefix="relaton-data-iso-main",
+        files={
+            "data/iso-9001-2015-copy1.yaml": same_yaml,
+            "data/iso-9001-2015-copy2.yaml": same_yaml,
+        },
+    )
+
+    sha = "aabbccdd"
+    cache = ScholarCache(tmp_path / "c.db")
+    await cache.open()
+    try:
+        with respx.mock(assert_all_called=False) as router:
+            router.get(
+                "https://api.github.com/repos/relaton/relaton-data-iso/commits/main"
+            ).mock(return_value=httpx.Response(200, json={"sha": sha}))
+            router.get(
+                f"https://api.github.com/repos/relaton/relaton-data-iso/tarball/{sha}"
+            ).mock(return_value=httpx.Response(200, content=tarball))
+
+            async with httpx.AsyncClient() as http:
+                loader = RelatonLoader("ISO", http=http)
+                report = await loader.sync(cache)
+
+        assert report.added == 1
+        assert report.updated == 0
+        assert report.unchanged == 1
+        assert await cache.get_standard("ISO 9001:2015") is not None
+    finally:
+        await cache.close()

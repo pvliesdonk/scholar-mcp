@@ -1228,10 +1228,10 @@ class ScholarCache:
             "INSERT OR REPLACE INTO standards "
             "(identifier, data, cached_at, source, synced_at) "
             "VALUES (?, ?, ?, ?, ?)",
-            [
+            (
                 (ident, json.dumps(data), now, source, synced_at)
                 for ident, data in records
-            ],
+            ),
         )
         await db.commit()
 

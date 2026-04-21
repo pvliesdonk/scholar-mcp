@@ -453,8 +453,14 @@ async def test_set_standards_batch_inserts_all(tmp_path: Path) -> None:
     cache = ScholarCache(tmp_path / "c.db")
     await cache.open()
     records: list[tuple[str, StandardRecord]] = [
-        ("ISO 9001:2015", {"identifier": "ISO 9001:2015", "title": "QMS", "body": "ISO"}),
-        ("ISO 14001:2015", {"identifier": "ISO 14001:2015", "title": "EMS", "body": "ISO"}),
+        (
+            "ISO 9001:2015",
+            {"identifier": "ISO 9001:2015", "title": "QMS", "body": "ISO"},
+        ),
+        (
+            "ISO 14001:2015",
+            {"identifier": "ISO 14001:2015", "title": "EMS", "body": "ISO"},
+        ),
     ]
     await cache.set_standards_batch(records, source="ISO", synced=True)
     await cache.close()

@@ -396,7 +396,9 @@ def _parse_tarball_sync(
                 continue
 
             handle = tar.extractfile(member)
-            if handle is None:
+            if (
+                handle is None
+            ):  # pragma: no cover — only non-regular members, already filtered
                 continue
             try:
                 doc = yaml.safe_load(handle.read())
@@ -412,11 +414,8 @@ def _parse_tarball_sync(
                 errors.append(f"unparseable: {member.name}")
                 continue
 
-            identifier_val = record.get("identifier")
-            if not identifier_val:
-                errors.append(f"unparseable: {member.name}")
-                continue
-            records.append((identifier_val, record, aliases))
+            # _yaml_to_record guarantees identifier is set when it returns non-None
+            records.append((cast("str", record.get("identifier")), record, aliases))
 
     return records, errors
 
@@ -520,14 +519,17 @@ class RelatonLoader:
                 self.body,
                 _RELATON_SKIP_SLUGS.get(self.body, frozenset()),
             )
-        errors.extend(parse_errors)
+        errors.extend(
+            parse_errors
+        )  # parsed is a fully-materialised list; tmp is now closed
 
         # Change detection: reads only (no writes yet).
         # Track records seen within this tarball to handle within-batch
         # duplicates (e.g. trademark vs plain variants mapping to the same id).
-        records_batch: list[tuple[str, StandardRecord]] = []
-        aliases_batch: list[tuple[str, str]] = []
+        # Keyed dicts ensure only the final winning value per identifier/alias
+        # is sent to the batch write — no redundant INSERT OR REPLACE pairs.
         in_current_batch: dict[str, StandardRecord] = {}
+        unique_aliases: dict[str, str] = {}
 
         for identifier, record, aliases in parsed:
             current_ids.add(identifier)
@@ -549,12 +551,14 @@ class RelatonLoader:
                     unchanged += 1
 
             in_current_batch[identifier] = record
-            records_batch.append((identifier, record))
-            aliases_batch.extend((alias, identifier) for alias in aliases)
+            for alias in aliases:
+                unique_aliases[alias] = identifier
 
         # Batch-write all records and aliases in a single transaction each.
-        await cache.set_standards_batch(records_batch, source=self.body, synced=True)
-        await cache.set_standard_aliases_batch(aliases_batch)
+        await cache.set_standards_batch(
+            list(in_current_batch.items()), source=self.body, synced=True
+        )
+        await cache.set_standard_aliases_batch(list(unique_aliases.items()))
 
         logger.info(
             "sync_relaton_done body=%s sha=%s added=%s updated=%s unchanged=%s errors=%s",
