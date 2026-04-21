@@ -1366,7 +1366,7 @@ def test_parse_tarball_sync_skips_symlink_entries() -> None:
 
 @pytest.mark.asyncio
 async def test_loader_within_batch_unchanged_duplicate(tmp_path: Path) -> None:
-    """Two identical entries for the same identifier count as updated=1, unchanged=1."""
+    """Two identical entries for the same identifier count as added=1, unchanged=1."""
     from scholar_mcp._cache import ScholarCache
     from scholar_mcp._sync_relaton import RelatonLoader
 

@@ -1251,7 +1251,7 @@ class ScholarCache:
         await db.executemany(
             "INSERT OR REPLACE INTO standards_aliases "
             "(raw_id, canonical, cached_at) VALUES (?, ?, ?)",
-            [(raw, canonical, now) for raw, canonical in aliases],
+            ((raw, canonical, now) for raw, canonical in aliases),
         )
         await db.commit()
 
