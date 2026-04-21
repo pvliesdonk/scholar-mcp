@@ -1201,6 +1201,60 @@ class ScholarCache:
         )
         await db.commit()
 
+    async def set_standards_batch(
+        self,
+        records: list[tuple[str, StandardRecord]],
+        *,
+        source: str | None = None,
+        synced: bool = False,
+    ) -> None:
+        """Insert or replace a batch of standard records in a single transaction.
+
+        Dramatically faster than calling :meth:`set_standard` in a loop because
+        it performs a single ``db.commit()`` for the entire batch instead of one
+        commit per record.
+
+        Args:
+            records: List of ``(identifier, StandardRecord)`` pairs.
+            source: Standards body key (e.g. ``"ISO"``, ``"IEC"``).
+            synced: When True, marks ``synced_at=now`` on every row.
+        """
+        if not records:
+            return
+        db = _require_open(self._db)
+        now = time.time()
+        synced_at = now if synced else None
+        await db.executemany(
+            "INSERT OR REPLACE INTO standards "
+            "(identifier, data, cached_at, source, synced_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            [
+                (ident, json.dumps(data), now, source, synced_at)
+                for ident, data in records
+            ],
+        )
+        await db.commit()
+
+    async def set_standard_aliases_batch(
+        self,
+        aliases: list[tuple[str, str]],
+    ) -> None:
+        """Insert or replace a batch of alias mappings in a single transaction.
+
+        Args:
+            aliases: List of ``(raw_id, canonical)`` pairs.
+        """
+        if not aliases:
+            return
+        db = _require_open(self._db)
+        now = time.time()
+        await db.executemany(
+            "INSERT OR REPLACE INTO standards_aliases "
+            "(raw_id, canonical, cached_at) VALUES (?, ?, ?)",
+            [(raw, canonical, now) for raw, canonical in aliases],
+        )
+        await db.commit()
+
     async def get_standards_search(self, query: str) -> list[StandardRecord] | None:
         """Return cached standards search results or None if missing/stale.
 

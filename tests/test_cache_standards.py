@@ -448,6 +448,64 @@ async def test_search_synced_standards_limit(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_set_standards_batch_inserts_all(tmp_path: Path) -> None:
+    """set_standards_batch writes every record in a single transaction."""
+    cache = ScholarCache(tmp_path / "c.db")
+    await cache.open()
+    records: list[tuple[str, StandardRecord]] = [
+        ("ISO 9001:2015", {"identifier": "ISO 9001:2015", "title": "QMS", "body": "ISO"}),
+        ("ISO 14001:2015", {"identifier": "ISO 14001:2015", "title": "EMS", "body": "ISO"}),
+    ]
+    await cache.set_standards_batch(records, source="ISO", synced=True)
+    await cache.close()
+
+    cache2 = ScholarCache(tmp_path / "c.db")
+    await cache2.open()
+    r1 = await cache2.get_standard("ISO 9001:2015")
+    r2 = await cache2.get_standard("ISO 14001:2015")
+    await cache2.close()
+
+    assert r1 is not None and r1["title"] == "QMS"
+    assert r2 is not None and r2["title"] == "EMS"
+
+
+@pytest.mark.asyncio
+async def test_set_standards_batch_empty_is_noop(tmp_path: Path) -> None:
+    """Empty batch should not raise and should leave DB empty."""
+    cache = ScholarCache(tmp_path / "c.db")
+    await cache.open()
+    await cache.set_standards_batch([], source="ISO", synced=True)
+    result = await cache.list_synced_standard_ids(source="ISO")
+    await cache.close()
+    assert result == set()
+
+
+@pytest.mark.asyncio
+async def test_set_standard_aliases_batch_inserts_all(tmp_path: Path) -> None:
+    """set_standard_aliases_batch writes every alias mapping."""
+    cache = ScholarCache(tmp_path / "c.db")
+    await cache.open()
+    aliases = [("iso9001", "ISO 9001:2015"), ("iso14001", "ISO 14001:2015")]
+    await cache.set_standard_aliases_batch(aliases)
+    r1 = await cache.get_standard_alias("iso9001")
+    r2 = await cache.get_standard_alias("iso14001")
+    await cache.close()
+    assert r1 == "ISO 9001:2015"
+    assert r2 == "ISO 14001:2015"
+
+
+@pytest.mark.asyncio
+async def test_set_standard_aliases_batch_empty_is_noop(tmp_path: Path) -> None:
+    """Empty alias batch should not raise."""
+    cache = ScholarCache(tmp_path / "c.db")
+    await cache.open()
+    await cache.set_standard_aliases_batch([])
+    result = await cache.get_standard_alias("nonexistent")
+    await cache.close()
+    assert result is None
+
+
+@pytest.mark.asyncio
 async def test_search_synced_standards_escapes_wildcards(tmp_path: Path) -> None:
     """Query containing LIKE wildcard chars is treated as literals."""
     cache = ScholarCache(tmp_path / "c.db")
