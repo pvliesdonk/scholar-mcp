@@ -18,6 +18,34 @@ scholar-mcp sync-standards --force    # re-sync even if upstream SHA is unchange
 Exit codes: `0` on success (or no-op), `1` on hard failure, `3` on partial failure
 (some bodies succeeded, some did not).
 
+## Running a sync from Docker
+
+The `scholar-mcp` binary is on `PATH` inside the container, so no `bash -c` or
+`uv run` wrapper is needed.
+
+**Exec into a running container** (uses the existing container's open DB and env):
+
+```bash
+docker exec ai-scholar-mcp scholar-mcp sync-standards
+```
+
+**One-off via Docker Compose** (goes through the entrypoint → drops to `appuser`):
+
+```bash
+docker compose run --rm scholar-mcp scholar-mcp sync-standards
+```
+
+The `docker compose run` form is preferred when running outside of an already-running
+stack — it picks up the correct UID/GID from the entrypoint and inherits all env vars
+from the `environment:` / `env_file:` declarations in `compose.yml`.
+
+To sync only a specific body:
+
+```bash
+docker exec ai-scholar-mcp scholar-mcp sync-standards --body ISO
+docker compose run --rm scholar-mcp scholar-mcp sync-standards --body IEC
+```
+
 ## Cron / systemd scheduling
 
 Daily resync is plenty -- Relaton dumps move slowly and the SHA check skips the
