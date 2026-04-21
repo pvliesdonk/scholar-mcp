@@ -81,8 +81,12 @@ resolve_auth_mode = _core_resolve_auth_mode
 def build_event_store(url: str | None = None) -> EventStore:
     """Build an ``EventStore`` — thin shim over core's helper.
 
-    Preserves the legacy zero-arg call shape used by cli.py.
+    Preserves the legacy zero-arg call shape used by cli.py.  When ``url``
+    is ``None`` we load ``ServerConfig`` from env so ``SCHOLAR_MCP_EVENT_STORE_URL``
+    is honored; when ``url`` is provided explicitly it overrides the env.
     """
+    if url is None:
+        return _core_build_event_store(_ENV_PREFIX, _load_server_config())
     return _core_build_event_store(_ENV_PREFIX, ServerConfig(event_store_url=url))
 
 
@@ -160,6 +164,11 @@ def make_server(
 
     if config.read_only:
         mcp.disable(tags={"write"})
+    if not config.epo_configured:
+        # Hide patent-related tools when the EPO OPS credentials aren't set —
+        # otherwise the model sees ``search_patents``/etc. in its tool list and
+        # fails at call time with an auth error.
+        mcp.disable(tags={"patent"})
 
     return mcp
 

@@ -123,6 +123,36 @@ class TestReadOnlyMode:
         assert server is not None
 
 
+class TestPatentToolGating:
+    """Patent tools (tagged 'patent') are hidden unless EPO OPS is configured."""
+
+    async def test_patent_tools_hidden_without_epo(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """With no EPO env vars, patent-tagged tools must be disabled."""
+        monkeypatch.delenv("SCHOLAR_MCP_EPO_CONSUMER_KEY", raising=False)
+        monkeypatch.delenv("SCHOLAR_MCP_EPO_CONSUMER_SECRET", raising=False)
+        server = create_server()
+        patent_tools = [
+            t for t in await server.list_tools() if "patent" in (t.tags or set())
+        ]
+        assert patent_tools == []
+
+    async def test_patent_tools_visible_with_epo(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """With both EPO creds set, patent-tagged tools stay visible."""
+        monkeypatch.setenv("SCHOLAR_MCP_EPO_CONSUMER_KEY", "test-key")
+        monkeypatch.setenv("SCHOLAR_MCP_EPO_CONSUMER_SECRET", "test-secret")
+        monkeypatch.setenv("SCHOLAR_MCP_READ_ONLY", "false")
+        server = create_server()
+        # At least one patent-tagged tool should be visible when EPO is configured.
+        patent_tools = [
+            t for t in await server.list_tools() if "patent" in (t.tags or set())
+        ]
+        assert len(patent_tools) > 0
+
+
 class TestResolveAuthMode:
     """Tests for _resolve_auth_mode() auto-detection and explicit overrides."""
 
