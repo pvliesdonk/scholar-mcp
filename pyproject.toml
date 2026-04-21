@@ -5,7 +5,7 @@ description = "FastMCP server for Semantic Scholar with OpenAlex enrichment and 
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
-authors = [{ name = "Your Name" }]
+authors = [{ name = "Peter van Liesdonk" }]
 keywords = ["mcp", "pvliesdonk-scholar-mcp", "scholar-mcp", "model-context-protocol", "fastmcp"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -17,26 +17,29 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
 ]
 dependencies = [
+    # fastmcp + httpx + uvicorn come transitively via fastmcp-pvl-core;
+    # only list deps scholar uses DIRECTLY here.
+    "fastmcp-pvl-core>=1.0,<2",
+    "typer>=0.12",
     "httpx",
     "aiosqlite",
-    "click>=8.0",
     "python-epo-ops-client>=4.2",
     "lxml>=5.0",
     "beautifulsoup4>=4.14.3",
 ]
 
 [project.optional-dependencies]
-mcp = ["fastmcp>=3.2.0,<4", "uvicorn"]
-all = ["fastmcp>=3.2.0,<4", "uvicorn"]
+mcp = ["fastmcp[tasks]>=3.2.0,<4"]
+all = ["fastmcp[tasks]>=3.2.0,<4"]
 dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21",
     "pytest-cov>=4.0",
+    "diff-cover>=9.0",
     "ruff>=0.1",
     "mypy>=1.0",
     "pip-audit>=2.7",
     "respx>=0.20",
-    "diff-cover>=9.0",
 ]
 docs = [
     "mkdocs-material>=9.5",
@@ -75,7 +78,9 @@ ignore = ["E501"]
 # Depends() and CurrentContext() calls in argument defaults are the standard
 # FastMCP dependency injection pattern — B008 is a false positive here.
 # Context/FastMCP imports must stay runtime (not TYPE_CHECKING) for DI.
-"src/scholar_mcp/mcp_server.py" = ["B008", "TCH002"]
+"src/scholar_mcp/mcp_server.py" = ["ARG001", "B008", "TCH002"]
+"src/scholar_mcp/cli.py" = ["B008", "TCH002", "TCH003"]
+"src/scholar_mcp/_server_apps.py" = ["TCH002"]
 "src/scholar_mcp/_server_deps.py" = ["ARG001", "B008", "TCH002", "TCH003"]
 "src/scholar_mcp/_cache.py" = ["TCH003"]
 "src/scholar_mcp/_docling_client.py" = ["TCH002"]
@@ -168,6 +173,13 @@ ignore_missing_imports = true
 version_toml = ["pyproject.toml:project.version"]
 commit_parser = "angular"
 tag_format = "v{version}"
+# Bump versioned manifests (server.json) inside the release commit.
+build_command = "python scripts/bump_manifests.py"
+# PSR stages and commits files listed in `assets` alongside pyproject.toml
+# and CHANGELOG.md, landing a single commit per release tag.
+assets = [
+    "server.json",
+]
 
 [tool.semantic_release.changelog]
 changelog_file = "CHANGELOG.md"

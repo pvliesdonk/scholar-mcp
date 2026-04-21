@@ -8,11 +8,11 @@ from typing import Any
 
 import httpx
 import pytest
-from click.testing import CliRunner
+from typer.testing import CliRunner
 
 from scholar_mcp import cli as cli_mod
 from scholar_mcp._standards_sync import SyncReport
-from scholar_mcp.cli import cli
+from scholar_mcp.cli import app as cli
 
 
 class _GoodLoader:

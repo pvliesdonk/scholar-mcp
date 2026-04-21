@@ -19,6 +19,8 @@ htmlcov/
 *.npy
 *.npz
 site/
-.worktrees/
-docs/superpowers/
-.claude/worktrees/
+
+# Claude Code local settings
+.claude/
+coverage.json
+.playwright-mcp/

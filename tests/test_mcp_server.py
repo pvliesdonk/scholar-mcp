@@ -144,7 +144,7 @@ class TestResolveAuthMode:
         with caplog.at_level(logging.WARNING):
             result = _resolve_auth_mode()
         assert result is None
-        assert "Unknown AUTH_MODE" in caplog.text
+        assert "auth_mode_unknown" in caplog.text
 
     def test_auto_detects_oidc_proxy(self, monkeypatch: pytest.MonkeyPatch) -> None:
         for var, val in _OIDC_REQUIRED.items():
@@ -161,44 +161,60 @@ class TestResolveAuthMode:
 
 
 class TestBuildRemoteAuth:
-    """Tests for _build_remote_auth() — OIDC discovery and RemoteAuthProvider."""
+    """Tests for _build_remote_auth() — OIDC discovery and RemoteAuthProvider.
 
-    def test_raises_without_vars(self) -> None:
-        with pytest.raises(RuntimeError, match="requires BASE_URL"):
-            _build_remote_auth()
+    Semantics changed in the fastmcp-pvl-core retrofit: the helper now
+    returns ``None`` on misconfiguration / discovery failure and logs
+    rather than raising ``RuntimeError``.
+    """
 
-    def test_raises_on_discovery_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_returns_none_without_vars(self) -> None:
+        assert _build_remote_auth() is None
+
+    def test_returns_none_on_discovery_failure(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
         monkeypatch.setenv("SCHOLAR_MCP_BASE_URL", "https://mcp.example.com")
         monkeypatch.setenv("SCHOLAR_MCP_OIDC_CONFIG_URL", "https://bad.url/oidc")
         import httpx
 
         with (
             patch("httpx.get", side_effect=httpx.ConnectError("fail")),
-            pytest.raises(RuntimeError, match="failed to fetch"),
+            caplog.at_level(logging.ERROR),
         ):
-            _build_remote_auth()
+            result = _build_remote_auth()
+        assert result is None
+        assert "discovery_failed" in caplog.text
 
-    def test_raises_on_missing_jwks(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_returns_none_on_missing_jwks(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
         monkeypatch.setenv("SCHOLAR_MCP_BASE_URL", "https://mcp.example.com")
         monkeypatch.setenv("SCHOLAR_MCP_OIDC_CONFIG_URL", "https://auth.example.com/d")
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"issuer": "https://auth.example.com"}
+        mock_resp.raise_for_status = MagicMock()
         with (
             patch("httpx.get", return_value=mock_resp),
-            pytest.raises(RuntimeError, match="missing jwks_uri or issuer"),
+            caplog.at_level(logging.ERROR),
         ):
-            _build_remote_auth()
+            result = _build_remote_auth()
+        assert result is None
 
-    def test_raises_on_missing_issuer(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_returns_none_on_missing_issuer(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
         monkeypatch.setenv("SCHOLAR_MCP_BASE_URL", "https://mcp.example.com")
         monkeypatch.setenv("SCHOLAR_MCP_OIDC_CONFIG_URL", "https://auth.example.com/d")
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"jwks_uri": "https://auth.example.com/jwks.json"}
+        mock_resp.raise_for_status = MagicMock()
         with (
             patch("httpx.get", return_value=mock_resp),
-            pytest.raises(RuntimeError, match="missing jwks_uri or issuer"),
+            caplog.at_level(logging.ERROR),
         ):
-            _build_remote_auth()
+            result = _build_remote_auth()
+        assert result is None
 
     def test_success(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from fastmcp.server.auth import RemoteAuthProvider
@@ -210,6 +226,7 @@ class TestBuildRemoteAuth:
             "jwks_uri": "https://auth.example.com/jwks.json",
             "issuer": "https://auth.example.com",
         }
+        mock_resp.raise_for_status = MagicMock()
         with patch("httpx.get", return_value=mock_resp):
             result = _build_remote_auth()
         assert isinstance(result, RemoteAuthProvider)
@@ -245,10 +262,11 @@ class TestBuildRemoteAuth:
             "jwks_uri": "https://auth.example.com/jwks.json",
             "issuer": "https://auth.example.com",
         }
+        mock_resp.raise_for_status = MagicMock()
         with patch("httpx.get", return_value=mock_resp), caplog.at_level(logging.INFO):
             server = create_server(transport="http")
         assert isinstance(server.auth, MultiAuth)
-        assert "multi(remote+bearer)" in caplog.text
+        assert "Multi-auth enabled" in caplog.text
 
     def test_create_server_skips_oidc_for_stdio(
         self, monkeypatch: pytest.MonkeyPatch
@@ -260,19 +278,25 @@ class TestBuildRemoteAuth:
         server = create_server(transport="stdio")
         assert server.auth is None
 
-    def test_create_server_remote_discovery_failure_raises(
-        self, monkeypatch: pytest.MonkeyPatch
+    def test_create_server_remote_discovery_failure_returns_no_auth(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
     ) -> None:
-        """create_server() propagates RuntimeError when remote auth fails."""
+        """create_server() falls back to no-auth when remote discovery fails.
+
+        Semantics changed post-retrofit: core's build_remote_auth logs and
+        returns None on discovery failure instead of raising.
+        """
         import httpx
 
         monkeypatch.setenv("SCHOLAR_MCP_BASE_URL", "https://mcp.example.com")
         monkeypatch.setenv("SCHOLAR_MCP_OIDC_CONFIG_URL", "https://bad.url/oidc")
         with (
             patch("httpx.get", side_effect=httpx.ConnectError("fail")),
-            pytest.raises(RuntimeError, match="failed to fetch"),
+            caplog.at_level(logging.ERROR),
         ):
-            create_server(transport="http")
+            server = create_server(transport="http")
+        assert server.auth is None
+        assert "discovery_failed" in caplog.text
 
 
 class TestMiddlewareStack:

@@ -6,9 +6,10 @@ import asyncio
 import os
 from pathlib import Path
 
-from click.testing import CliRunner
+import pytest
+from typer.testing import CliRunner
 
-from scholar_mcp.cli import cli
+from scholar_mcp.cli import app
 
 
 async def _init_db(path: Path) -> None:
@@ -21,7 +22,7 @@ async def _init_db(path: Path) -> None:
 
 def test_cache_help() -> None:
     runner = CliRunner()
-    result = runner.invoke(cli, ["cache", "--help"])
+    result = runner.invoke(app, ["cache", "--help"])
     assert result.exit_code == 0
     assert "stats" in result.output
     assert "clear" in result.output
@@ -31,7 +32,7 @@ def test_cache_stats_no_db() -> None:
     """With no real DB, stats should exit gracefully with code 0."""
     runner = CliRunner()
     with runner.isolated_filesystem():
-        result = runner.invoke(cli, ["cache", "stats"])
+        result = runner.invoke(app, ["cache", "stats"])
     assert result.exit_code == 0
     assert "No cache database found" in result.output
 
@@ -42,7 +43,7 @@ def test_cache_stats_with_db(tmp_path: Path) -> None:
     asyncio.run(_init_db(db_path))
 
     runner = CliRunner()
-    result = runner.invoke(cli, ["cache", "stats", "--cache-dir", str(tmp_path)])
+    result = runner.invoke(app, ["cache", "stats", "--cache-dir", str(tmp_path)])
     assert result.exit_code == 0
     assert "papers:" in result.output
 
@@ -51,7 +52,7 @@ def test_cache_clear_no_db() -> None:
     """With no real DB, clear should exit gracefully with code 0."""
     runner = CliRunner()
     with runner.isolated_filesystem():
-        result = runner.invoke(cli, ["cache", "clear"])
+        result = runner.invoke(app, ["cache", "clear"])
     assert result.exit_code == 0
     assert "No cache database found" in result.output
 
@@ -62,7 +63,7 @@ def test_cache_clear_with_db(tmp_path: Path) -> None:
     asyncio.run(_init_db(db_path))
 
     runner = CliRunner()
-    result = runner.invoke(cli, ["cache", "clear", "--cache-dir", str(tmp_path)])
+    result = runner.invoke(app, ["cache", "clear", "--cache-dir", str(tmp_path)])
     assert result.exit_code == 0
     assert "cleared" in result.output.lower()
 
@@ -74,31 +75,31 @@ def test_cache_clear_older_than(tmp_path: Path) -> None:
 
     runner = CliRunner()
     result = runner.invoke(
-        cli, ["cache", "clear", "--older-than", "30", "--cache-dir", str(tmp_path)]
+        app, ["cache", "clear", "--older-than", "30", "--cache-dir", str(tmp_path)]
     )
     assert result.exit_code == 0
     assert "30" in result.output
 
 
-def test_verbose_sets_fastmcp_log_level(monkeypatch) -> None:
+def test_verbose_sets_fastmcp_log_level(monkeypatch: pytest.MonkeyPatch) -> None:
     """The -v flag sets FASTMCP_LOG_LEVEL to DEBUG."""
     monkeypatch.delenv("FASTMCP_LOG_LEVEL", raising=False)
     runner = CliRunner()
-    runner.invoke(cli, ["-v", "serve", "--help"])
+    runner.invoke(app, ["-v", "serve", "--help"])
     assert os.environ.get("FASTMCP_LOG_LEVEL") == "DEBUG"
 
 
-def test_verbose_overrides_fastmcp_log_level(monkeypatch) -> None:
+def test_verbose_overrides_fastmcp_log_level(monkeypatch: pytest.MonkeyPatch) -> None:
     """The -v flag overrides an explicit FASTMCP_LOG_LEVEL."""
     monkeypatch.setenv("FASTMCP_LOG_LEVEL", "WARNING")
     runner = CliRunner()
-    runner.invoke(cli, ["-v", "serve", "--help"])
+    runner.invoke(app, ["-v", "serve", "--help"])
     assert os.environ.get("FASTMCP_LOG_LEVEL") == "DEBUG"
 
 
 def test_serve_help() -> None:
     """Existing serve command still works."""
     runner = CliRunner()
-    result = runner.invoke(cli, ["serve", "--help"])
+    result = runner.invoke(app, ["serve", "--help"])
     assert result.exit_code == 0
     assert "--transport" in result.output

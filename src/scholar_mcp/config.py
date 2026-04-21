@@ -1,51 +1,48 @@
-"""Environment-based configuration for Scholar MCP Server."""
+"""Project configuration for scholar-mcp.
+
+Composes ``fastmcp_pvl_core.ServerConfig`` for transport/auth/event-store
+fields; adds Scholar domain fields below.
+"""
 
 from __future__ import annotations
 
+import logging
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+
+from fastmcp_pvl_core import ServerConfig, env, parse_bool
+
+logger = logging.getLogger(__name__)
 
 _ENV_PREFIX = "SCHOLAR_MCP"
 
 
 @dataclass
-class ServerConfig:
-    """All configuration loaded from environment variables.
+class ProjectConfig:
+    """Scholar-mcp configuration loaded from environment variables.
 
-    Attributes:
-        read_only: When True, write-tagged tools are hidden.
-        s2_api_key: Semantic Scholar API key (enables higher rate limits).
-        docling_url: Base URL of docling-serve instance. PDF tools return
-            ``docling_not_configured`` if unset.
-        vlm_api_url: OpenAI-compatible endpoint for VLM enrichment.
-        vlm_api_key: API key for the VLM endpoint.
-        vlm_model: Model name passed to the VLM endpoint.
-        cache_dir: Directory for SQLite DB and downloaded PDFs.
-        contact_email: Email address included in the OpenAlex User-Agent header
-            for the polite pool. Set ``SCHOLAR_MCP_CONTACT_EMAIL`` to opt in.
-        epo_consumer_key: EPO OPS API consumer key.
-        epo_consumer_secret: EPO OPS API consumer secret.
-        google_books_api_key: Optional Google Books API key for higher rate
-            limits.
-        github_token: Optional GitHub token for authenticated Relaton sync
-            requests. Lifts the unauthenticated rate limit from 60 to 5,000
-            req/hr. Useful for repeated --force testing; cron syncs are fine
-            unauthenticated.
+    The ``server`` field carries generic FastMCP server config (transport,
+    auth, event store).  Domain fields (API keys, cache dir, etc.) live
+    directly on this dataclass.
     """
 
+    # CONFIG-FIELDS-START — scholar domain fields; kept across copier update
+    server: ServerConfig = field(default_factory=ServerConfig)
+    server_name: str | None = None
     read_only: bool = True
     s2_api_key: str | None = None
     docling_url: str | None = None
     vlm_api_url: str | None = None
     vlm_api_key: str | None = None
     vlm_model: str = "gpt-4o"
-    cache_dir: Path = Path("/data/scholar-mcp")
+    cache_dir: Path = field(default_factory=lambda: Path("/data/scholar-mcp"))
     contact_email: str | None = None
     epo_consumer_key: str | None = None
     epo_consumer_secret: str | None = None
     google_books_api_key: str | None = None
     github_token: str | None = None
+    # CONFIG-FIELDS-END
 
     @property
     def epo_configured(self) -> bool:
@@ -55,36 +52,44 @@ class ServerConfig:
         )
 
 
-def load_config() -> ServerConfig:
-    """Load :class:`ServerConfig` from environment variables.
+def load_config() -> ProjectConfig:
+    """Load configuration from environment variables.
 
-    Returns:
-        Populated :class:`ServerConfig` instance.
+    Reads all generic ``ServerConfig`` env vars (BASE_URL, BEARER_TOKEN,
+    OIDC_*, EVENT_STORE_URL, etc.) plus scholar's domain fields — see
+    ``fastmcp_pvl_core.ServerConfig.from_env`` for the generic set.
     """
-    p = _ENV_PREFIX
+    server = ServerConfig.from_env(env_prefix=_ENV_PREFIX)
 
-    def _bool(key: str, default: bool) -> bool:
-        val = os.environ.get(f"{p}_{key}")
-        if val is None:
-            return default
-        return val.lower() not in ("0", "false", "no", "off", "n")
+    # CONFIG-FROM-ENV-START — scholar domain reads; kept across copier update
+    server_name = env(_ENV_PREFIX, "SERVER_NAME")
+    read_only = parse_bool(env(_ENV_PREFIX, "READ_ONLY", "true"))
 
-    def _str(key: str) -> str | None:
-        return os.environ.get(f"{p}_{key}") or None
+    cache_dir = Path(env(_ENV_PREFIX, "CACHE_DIR") or "/data/scholar-mcp")
 
-    return ServerConfig(
-        read_only=_bool("READ_ONLY", True),
-        s2_api_key=_str("S2_API_KEY"),
-        docling_url=_str("DOCLING_URL"),
-        vlm_api_url=_str("VLM_API_URL"),
-        vlm_api_key=_str("VLM_API_KEY"),
-        vlm_model=os.environ.get(f"{p}_VLM_MODEL", "gpt-4o"),
-        cache_dir=Path(os.environ.get(f"{p}_CACHE_DIR", "/data/scholar-mcp")),
-        contact_email=_str("CONTACT_EMAIL"),
-        epo_consumer_key=_str("EPO_CONSUMER_KEY"),
-        epo_consumer_secret=_str("EPO_CONSUMER_SECRET"),
-        google_books_api_key=_str("GOOGLE_BOOKS_API_KEY"),
-        # SCHOLAR_GITHUB_TOKEN (not SCHOLAR_MCP_GITHUB_TOKEN) — matches the
-        # conventional GitHub-tooling env name users expect.
-        github_token=os.environ.get("SCHOLAR_GITHUB_TOKEN") or None,
+    # SCHOLAR_GITHUB_TOKEN (not SCHOLAR_MCP_GITHUB_TOKEN) — conventional
+    # GitHub-tooling env name users expect.
+    github_token = os.environ.get("SCHOLAR_GITHUB_TOKEN") or None
+
+    config = ProjectConfig(
+        server=server,
+        server_name=server_name,
+        read_only=read_only,
+        s2_api_key=env(_ENV_PREFIX, "S2_API_KEY"),
+        docling_url=env(_ENV_PREFIX, "DOCLING_URL"),
+        vlm_api_url=env(_ENV_PREFIX, "VLM_API_URL"),
+        vlm_api_key=env(_ENV_PREFIX, "VLM_API_KEY"),
+        vlm_model=env(_ENV_PREFIX, "VLM_MODEL", "gpt-4o"),
+        cache_dir=cache_dir,
+        contact_email=env(_ENV_PREFIX, "CONTACT_EMAIL"),
+        epo_consumer_key=env(_ENV_PREFIX, "EPO_CONSUMER_KEY"),
+        epo_consumer_secret=env(_ENV_PREFIX, "EPO_CONSUMER_SECRET"),
+        google_books_api_key=env(_ENV_PREFIX, "GOOGLE_BOOKS_API_KEY"),
+        github_token=github_token,
     )
+    # CONFIG-FROM-ENV-END
+
+    logger.debug(
+        "load_config: read_only=%s cache_dir=%s", config.read_only, config.cache_dir
+    )
+    return config
