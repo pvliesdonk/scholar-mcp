@@ -20,9 +20,15 @@ htmlcov/
 *.npz
 site/
 
-# Claude Code local settings
-.claude/
+# Local artifacts (scholar-specific)
 coverage.json
 .playwright-mcp/
+
+# Shared dev-ecosystem ignores (align with template convention)
+.mcpregistry_*
 .worktrees/
+# Claude Code local overrides (scope narrowly so project-shared assets
+# under .claude/ — hooks, custom commands, agents — stay committable)
+.claude/worktrees/
+.claude/settings.local.json
 docs/superpowers/
