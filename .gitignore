@@ -24,4 +24,5 @@ site/
 .claude/
 coverage.json
 .playwright-mcp/
+.worktrees/
 docs/superpowers/
