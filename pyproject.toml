@@ -45,7 +45,7 @@ docs = [
     "mkdocs-material>=9.5",
     "mkdocstrings[python]>=0.24",
     "mkdocs-llmstxt>=0.2",
-    "pygments!=2.20.0",  # 2.20.0 crashes on empty filename in HtmlFormatter
+    "pygments>=2.20.0",  # CVE-2026-4539 fixed in 2.20.0
 ]
 
 [project.scripts]

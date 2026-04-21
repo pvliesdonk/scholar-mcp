@@ -57,7 +57,9 @@ async def _init_db(path: Path) -> None:
 
 def test_sync_standards_help() -> None:
     runner = CliRunner()
-    result = runner.invoke(cli, ["sync-standards", "--help"])
+    result = runner.invoke(
+        cli, ["sync-standards", "--help"], env={"COLUMNS": "200"}
+    )
     assert result.exit_code == 0
     assert "--body" in result.output
     assert "--force" in result.output
