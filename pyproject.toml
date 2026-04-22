@@ -21,16 +21,20 @@ dependencies = [
     # only list deps scholar uses DIRECTLY here.
     "fastmcp-pvl-core>=1.0,<2",
     "typer>=0.12",
+    # PROJECT-DEPS-START — domain dependencies; kept across copier update
     "httpx",
     "aiosqlite",
     "python-epo-ops-client>=4.2",
     "lxml>=5.0",
     "beautifulsoup4>=4.14.3",
+    # PROJECT-DEPS-END
 ]
 
 [project.optional-dependencies]
+# PROJECT-EXTRAS-START — domain optional-dependency groups; kept across copier update
 mcp = ["fastmcp[tasks]>=3.2.0,<4"]
 all = ["fastmcp[tasks]>=3.2.0,<4"]
+# PROJECT-EXTRAS-END
 dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21",
