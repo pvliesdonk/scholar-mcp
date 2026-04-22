@@ -50,7 +50,15 @@ jobs:
           VCS_REF: ${{ inputs.vcs_ref }}
         run: |
           set -euo pipefail
-          args=(update --trust --defaults --skip-answered --conflict=rej)
+          # `--conflict=inline` runs a real 3-way merge and writes standard
+          # `<<<<<<< before updating / ||||||| last update / ======= / >>>>>>> after updating`
+          # markers when local edits collide with template changes.  The
+          # alternative `--conflict=rej` is dangerously misleading: it
+          # blindly renders the new template content into the working file
+          # and only writes a `.rej` sidecar describing what was lost — so
+          # divergent local lines (license overrides, version bumps, etc.)
+          # silently disappear.
+          args=(update --trust --defaults --skip-answered --conflict=inline)
           if [ -n "${VCS_REF}" ]; then
             args+=(--vcs-ref "${VCS_REF}")
           fi
@@ -78,9 +86,14 @@ jobs:
             echo "::error::could not read _commit from .copier-answers.yml"
             exit 1
           fi
-          rej_count=$(find . -name '*.rej' -not -path './.git/*' | wc -l | tr -d ' ')
+          # `--conflict=inline` writes standard `<<<<<<< before updating`
+          # markers (not `.rej` sidecars).  Count files that contain at
+          # least one conflict marker; skip binary files with `git grep -I`.
+          # `|| true` swallows git grep's exit code 1 on no-match so the
+          # happy path (zero conflicts) doesn't trip `set -euo pipefail`.
+          conflict_count=$( { git grep -lI '^<<<<<<< before updating$' || true; } | wc -l | tr -d ' ')
           echo "ref=${ref}" >> "$GITHUB_OUTPUT"
-          echo "rej_count=${rej_count}" >> "$GITHUB_OUTPUT"
+          echo "conflict_count=${conflict_count}" >> "$GITHUB_OUTPUT"
 
       - name: Ensure `copier` label exists
         if: steps.changes.outputs.changed == 'true'
@@ -108,7 +121,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
           REF: ${{ steps.meta.outputs.ref }}
-          REJ_COUNT: ${{ steps.meta.outputs.rej_count }}
+          CONFLICT_COUNT: ${{ steps.meta.outputs.conflict_count }}
         run: |
           set -euo pipefail
           branch="copier/update"
@@ -118,10 +131,10 @@ jobs:
           # multi-line bash string would break the enclosing YAML block scalar
           # because the continuation lines would need to stay at column 11.
           body="Automated \`copier update\` run against template ref \`${REF}\`."
-          body+=$'\n\n'"Review the diff, fix any \`.rej\` conflict files, and merge if CI is green."
+          body+=$'\n\n'"Review the diff, resolve any \`<<<<<<< before updating\` conflict markers, and merge if CI is green."
           body+=$'\n\n'"> **Note:** \`--skip-answered\` was passed, so any **new** template variables introduced since the last update were silently filled with their copier defaults. Skim \`.copier-answers.yml\` for unexpected new keys."
-          if [ "${REJ_COUNT}" -gt 0 ]; then
-            body+=$'\n\n'"⚠️ **${REJ_COUNT} \`.rej\` conflict file(s) present — review and resolve manually before merging.**"
+          if [ "${CONFLICT_COUNT}" -gt 0 ]; then
+            body+=$'\n\n'"⚠️ **${CONFLICT_COUNT} file(s) contain unresolved \`<<<<<<< before updating\` conflict markers — review and resolve manually before merging.**"
           fi
 
           if gh pr view "${branch}" --json state --jq '.state' 2>/dev/null | grep -q OPEN; then
