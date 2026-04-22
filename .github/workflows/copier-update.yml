@@ -113,12 +113,14 @@ jobs:
 
       - name: Commit and push to copier/update branch
         if: steps.changes.outputs.changed == 'true'
+        env:
+          REF: ${{ steps.meta.outputs.ref }}
         run: |
           set -euo pipefail
           branch="copier/update"
           git checkout -B "${branch}"
           git add -A
-          git commit -m "chore(copier): update to ${{ steps.meta.outputs.ref }}" \
+          git commit -m "chore(copier): update to ${REF}" \
             -m "Automated \`copier update\` run — review the diff and merge if CI is green."
           git push --force-with-lease origin "${branch}"
 
