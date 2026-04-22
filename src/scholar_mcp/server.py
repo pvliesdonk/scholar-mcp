@@ -167,7 +167,3 @@ def make_server(
         mcp.disable(tags={"patent"})
 
     return mcp
-
-
-# Backward-compat alias: existing callers import `create_server`.
-create_server = make_server

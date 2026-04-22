@@ -80,7 +80,7 @@ def serve(
 ) -> None:
     """Run the MCP server."""
     try:
-        from scholar_mcp.mcp_server import build_event_store, create_server
+        from scholar_mcp.server import build_event_store, make_server
     except ImportError as exc:
         logger.error(
             "FastMCP is not installed. Install with: "
@@ -88,7 +88,7 @@ def serve(
         )
         raise typer.Exit(code=1) from exc
 
-    server = create_server(transport=transport)
+    server = make_server(transport=transport)
     env_http_path = os.environ.get(f"{_ENV_PREFIX}_HTTP_PATH")
     path = normalise_http_path(http_path or env_http_path)
 
