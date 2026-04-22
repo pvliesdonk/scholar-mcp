@@ -26,7 +26,7 @@ from scholar_mcp.config import ProjectConfig
 def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Remove all SCHOLAR_MCP_* env vars before each test.
 
-    Prevents env var leakage between tests that call :func:`create_server`.
+    Prevents env var leakage between tests that call :func:`make_server`.
     """
     for key in list(os.environ):
         if key.startswith("SCHOLAR_MCP_"):

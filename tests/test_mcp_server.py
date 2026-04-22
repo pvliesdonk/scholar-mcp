@@ -13,10 +13,10 @@ from fastmcp.server.middleware.logging import (
 )
 from fastmcp.server.middleware.timing import TimingMiddleware
 
-from scholar_mcp.mcp_server import (
+from scholar_mcp.server import (
     _build_remote_auth,
     _resolve_auth_mode,
-    create_server,
+    make_server,
 )
 
 # OIDC vars required by _build_oidc_auth()
@@ -29,7 +29,7 @@ _OIDC_REQUIRED = {
 
 
 class TestAuthModeSelection:
-    """Tests for create_server() auth mode selection.
+    """Tests for make_server() auth mode selection.
 
     Covers all four modes: multi (both configured), bearer-only,
     OIDC-only, and none.
@@ -37,7 +37,7 @@ class TestAuthModeSelection:
 
     def test_no_auth_when_nothing_configured(self) -> None:
         """Default: no auth when no auth env vars are set."""
-        server = create_server()
+        server = make_server()
         assert server.auth is None
 
     def test_bearer_only(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -45,7 +45,7 @@ class TestAuthModeSelection:
         from fastmcp.server.auth import StaticTokenVerifier
 
         monkeypatch.setenv("SCHOLAR_MCP_BEARER_TOKEN", "my-secret-token")
-        server = create_server()
+        server = make_server()
         assert isinstance(server.auth, StaticTokenVerifier)
 
     def test_oidc_only(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -56,7 +56,7 @@ class TestAuthModeSelection:
         mock_oidc = MagicMock()
         mock_cls = MagicMock(return_value=mock_oidc)
         with patch("fastmcp.server.auth.oidc_proxy.OIDCProxy", mock_cls):
-            server = create_server(transport="http")
+            server = make_server(transport="http")
 
         assert server.auth is mock_oidc
 
@@ -76,7 +76,7 @@ class TestAuthModeSelection:
             patch("fastmcp.server.auth.oidc_proxy.OIDCProxy", mock_cls),
             caplog.at_level(logging.INFO),
         ):
-            server = create_server(transport="http")
+            server = make_server(transport="http")
 
         assert isinstance(server.auth, MultiAuth)
         assert "Multi-auth enabled" in caplog.text
@@ -92,7 +92,7 @@ class TestAuthModeSelection:
         mock_oidc = MagicMock()
         mock_cls = MagicMock(return_value=mock_oidc)
         with patch("fastmcp.server.auth.oidc_proxy.OIDCProxy", mock_cls):
-            server = create_server(transport="http")
+            server = make_server(transport="http")
 
         assert isinstance(server.auth, MultiAuth)
         # OIDCProxy is an OAuthProvider — must be server=, not in verifiers=,
@@ -108,7 +108,7 @@ class TestReadOnlyMode:
 
     async def test_read_only_by_default(self) -> None:
         """Server is read-only by default — creates without error."""
-        server = create_server()
+        server = make_server()
         # No write-tagged tools should be present in read-only mode.
         write_tools = [
             t for t in await server.list_tools() if "write" in (t.tags or set())
@@ -118,7 +118,7 @@ class TestReadOnlyMode:
     async def test_read_write_mode(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Setting READ_ONLY=false creates server in read-write mode."""
         monkeypatch.setenv("SCHOLAR_MCP_READ_ONLY", "false")
-        server = create_server()
+        server = make_server()
         # Server should be created successfully in read-write mode.
         assert server is not None
 
@@ -132,7 +132,7 @@ class TestPatentToolGating:
         """With no EPO env vars, patent-tagged tools must be disabled."""
         monkeypatch.delenv("SCHOLAR_MCP_EPO_CONSUMER_KEY", raising=False)
         monkeypatch.delenv("SCHOLAR_MCP_EPO_CONSUMER_SECRET", raising=False)
-        server = create_server()
+        server = make_server()
         patent_tools = [
             t for t in await server.list_tools() if "patent" in (t.tags or set())
         ]
@@ -145,7 +145,7 @@ class TestPatentToolGating:
         monkeypatch.setenv("SCHOLAR_MCP_EPO_CONSUMER_KEY", "test-key")
         monkeypatch.setenv("SCHOLAR_MCP_EPO_CONSUMER_SECRET", "test-secret")
         monkeypatch.setenv("SCHOLAR_MCP_READ_ONLY", "false")
-        server = create_server()
+        server = make_server()
         # At least one patent-tagged tool should be visible when EPO is configured.
         patent_tools = [
             t for t in await server.list_tools() if "patent" in (t.tags or set())
@@ -261,10 +261,10 @@ class TestBuildRemoteAuth:
             result = _build_remote_auth()
         assert isinstance(result, RemoteAuthProvider)
 
-    def test_create_server_remote_mode(
+    def test_make_server_remote_mode(
         self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
     ) -> None:
-        """create_server(transport=http) uses remote auth when only BASE_URL + CONFIG_URL set."""
+        """make_server(transport=http) uses remote auth when only BASE_URL + CONFIG_URL set."""
         from fastmcp.server.auth import RemoteAuthProvider
 
         monkeypatch.setenv("SCHOLAR_MCP_BASE_URL", "https://mcp.example.com")
@@ -275,13 +275,13 @@ class TestBuildRemoteAuth:
             "issuer": "https://auth.example.com",
         }
         with patch("httpx.get", return_value=mock_resp), caplog.at_level(logging.INFO):
-            server = create_server(transport="http")
+            server = make_server(transport="http")
         assert isinstance(server.auth, RemoteAuthProvider)
 
-    def test_create_server_multi_remote_bearer(
+    def test_make_server_multi_remote_bearer(
         self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
     ) -> None:
-        """create_server(transport=http) uses MultiAuth(remote+bearer) when both configured."""
+        """make_server(transport=http) uses MultiAuth(remote+bearer) when both configured."""
         from fastmcp.server.auth import MultiAuth
 
         monkeypatch.setenv("SCHOLAR_MCP_BEARER_TOKEN", "my-token")
@@ -294,24 +294,24 @@ class TestBuildRemoteAuth:
         }
         mock_resp.raise_for_status = MagicMock()
         with patch("httpx.get", return_value=mock_resp), caplog.at_level(logging.INFO):
-            server = create_server(transport="http")
+            server = make_server(transport="http")
         assert isinstance(server.auth, MultiAuth)
         assert "Multi-auth enabled" in caplog.text
 
-    def test_create_server_skips_oidc_for_stdio(
+    def test_make_server_skips_oidc_for_stdio(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """create_server() skips OIDC setup for stdio transport."""
+        """make_server() skips OIDC setup for stdio transport."""
         monkeypatch.setenv("SCHOLAR_MCP_BASE_URL", "https://mcp.example.com")
         monkeypatch.setenv("SCHOLAR_MCP_OIDC_CONFIG_URL", "https://auth.example.com/d")
         # No httpx mock needed — _build_remote_auth should never be called
-        server = create_server(transport="stdio")
+        server = make_server(transport="stdio")
         assert server.auth is None
 
-    def test_create_server_remote_discovery_failure_returns_no_auth(
+    def test_make_server_remote_discovery_failure_returns_no_auth(
         self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
     ) -> None:
-        """create_server() falls back to no-auth when remote discovery fails.
+        """make_server() falls back to no-auth when remote discovery fails.
 
         Semantics changed post-retrofit: core's build_remote_auth logs and
         returns None on discovery failure instead of raising.
@@ -324,7 +324,7 @@ class TestBuildRemoteAuth:
             patch("httpx.get", side_effect=httpx.ConnectError("fail")),
             caplog.at_level(logging.ERROR),
         ):
-            server = create_server(transport="http")
+            server = make_server(transport="http")
         assert server.auth is None
         assert "discovery_failed" in caplog.text
 
@@ -334,7 +334,7 @@ class TestMiddlewareStack:
 
     def test_default_middleware_stack(self) -> None:
         """Default config wires ErrorHandling + Timing + LoggingMiddleware."""
-        server = create_server()
+        server = make_server()
         types = [type(m) for m in server.middleware]
         assert ErrorHandlingMiddleware in types
         assert TimingMiddleware in types
@@ -346,14 +346,14 @@ class TestMiddlewareStack:
     ) -> None:
         """FASTMCP_ENABLE_RICH_LOGGING=false wires StructuredLoggingMiddleware."""
         monkeypatch.setenv("FASTMCP_ENABLE_RICH_LOGGING", "false")
-        server = create_server()
+        server = make_server()
         types = [type(m) for m in server.middleware]
         assert StructuredLoggingMiddleware in types
         assert LoggingMiddleware not in types
 
     def test_middleware_order(self) -> None:
         """ErrorHandling is first, Timing second, Logging third."""
-        server = create_server()
+        server = make_server()
         types = [type(m) for m in server.middleware]
         err_idx = types.index(ErrorHandlingMiddleware)
         time_idx = types.index(TimingMiddleware)
