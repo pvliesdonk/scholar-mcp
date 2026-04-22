@@ -1,34 +1,46 @@
+# Python bytecode
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
+
+# Distribution / packaging
 *.egg-info/
+*.egg
 dist/
 build/
 .eggs/
-*.egg
+
+# Virtualenvs
 .venv/
 venv/
-.env
-*.so
+
+# Tooling caches
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
+
+# Test / coverage artifacts
 .coverage
 coverage.xml
+coverage.json
 htmlcov/
-*.npy
-*.npz
+
+# MkDocs build output
 site/
 
-# Local artifacts (scholar-specific)
-coverage.json
-.playwright-mcp/
+# Local environment
+.env
+.env.local
 
-# Shared dev-ecosystem ignores (align with template convention)
+# --- Development / ecosystem ignores (don't ship)
 .mcpregistry_*
 .worktrees/
-# Claude Code local overrides (scope narrowly so project-shared assets
-# under .claude/ — hooks, custom commands, agents — stay committable)
 .claude/worktrees/
 .claude/settings.local.json
 docs/superpowers/
+
+# --- Scholar-specific local artifacts
+*.npy
+*.npz
+.playwright-mcp/
