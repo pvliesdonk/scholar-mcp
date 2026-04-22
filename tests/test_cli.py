@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 from typer.testing import CliRunner
@@ -103,3 +104,25 @@ def test_serve_help() -> None:
     result = runner.invoke(app, ["serve", "--help"])
     assert result.exit_code == 0
     assert "--transport" in result.output
+
+
+def test_serve_stdio_invokes_make_server() -> None:
+    """`serve` (default stdio) wires make_server(transport='stdio') and runs it."""
+    mock_server = MagicMock()
+    with (
+        patch(
+            "scholar_mcp.server.make_server", return_value=mock_server
+        ) as mock_make_server,
+        patch("scholar_mcp.server.build_event_store"),
+    ):
+        result = CliRunner().invoke(app, ["serve"])
+    assert result.exit_code == 0
+    mock_make_server.assert_called_once_with(transport="stdio")
+    mock_server.run.assert_called_once_with(transport="stdio")
+
+
+def test_serve_import_error_exits_1() -> None:
+    """If fastmcp isn't installed (import fails), serve exits 1."""
+    with patch.dict("sys.modules", {"scholar_mcp.server": None}):
+        result = CliRunner().invoke(app, ["serve"])
+    assert result.exit_code == 1
