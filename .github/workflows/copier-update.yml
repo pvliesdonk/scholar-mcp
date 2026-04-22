@@ -118,8 +118,15 @@ jobs:
         run: |
           set -euo pipefail
           branch="copier/update"
-          git checkout -B "${branch}"
+          # `git add -A` runs BEFORE `git checkout -B` because copier's
+          # `--conflict=inline` mode leaves conflict-marker files in the
+          # index as `UU` (unmerged).  `git checkout -B` refuses to switch
+          # branches with unresolved merge entries; staging them first
+          # clears the unmerged state and lets the branch creation proceed.
+          # The conflict markers themselves land in the commit for human
+          # resolution in the PR.
           git add -A
+          git checkout -B "${branch}"
           git commit -m "chore(copier): update to ${REF}" \
             -m "Automated \`copier update\` run — review the diff and merge if CI is green."
           git push --force-with-lease origin "${branch}"
