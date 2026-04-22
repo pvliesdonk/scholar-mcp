@@ -1,0 +1,160 @@
+name: Copier Update
+
+# Weekly automated `copier update` against this project's template source.
+# If the template has moved since `.copier-answers.yml:_commit`, opens (or
+# refreshes) a PR on branch `copier/update` so CI can validate the diff and
+# an operator can review/merge.
+#
+# Uses the RELEASE_TOKEN PAT (not GITHUB_TOKEN) so the opened PR triggers
+# downstream workflows — GITHUB_TOKEN-authored PRs are muted by design.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"  # Monday 06:00 UTC
+  workflow_dispatch:
+    inputs:
+      vcs_ref:
+        description: "Template ref to update to (default: latest tag from .copier-answers.yml source)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          version: "latest"
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Run copier update
+        env:
+          VCS_REF: ${{ inputs.vcs_ref }}
+        run: |
+          set -euo pipefail
+          # `--conflict=inline` runs a real 3-way merge and writes standard
+          # `<<<<<<< before updating / ||||||| last update / ======= / >>>>>>> after updating`
+          # markers when local edits collide with template changes.  The
+          # alternative `--conflict=rej` is dangerously misleading: it
+          # blindly renders the new template content into the working file
+          # and only writes a `.rej` sidecar describing what was lost — so
+          # divergent local lines (license overrides, version bumps, etc.)
+          # silently disappear.
+          args=(update --trust --defaults --skip-answered --conflict=inline)
+          if [ -n "${VCS_REF}" ]; then
+            args+=(--vcs-ref "${VCS_REF}")
+          fi
+          uvx copier "${args[@]}"
+
+      - name: Detect changes
+        id: changes
+        run: |
+          if git diff --quiet && git diff --cached --quiet && [ -z "$(git ls-files --others --exclude-standard)" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Read template ref + count conflicts
+        if: steps.changes.outputs.changed == 'true'
+        id: meta
+        run: |
+          set -euo pipefail
+          # Parse `_commit:` from .copier-answers.yml without depending on
+          # PyYAML being present in the runner's system Python.  copier's
+          # to_nice_yaml output puts the key on its own line in canonical form.
+          ref=$(awk '/^_commit:[[:space:]]/ {print $2; exit}' .copier-answers.yml)
+          if [ -z "${ref}" ]; then
+            echo "::error::could not read _commit from .copier-answers.yml"
+            exit 1
+          fi
+          # `--conflict=inline` writes standard `<<<<<<< before updating`
+          # markers (not `.rej` sidecars).  Count files that contain at
+          # least one conflict marker; skip binary files with `git grep -I`.
+          # `|| true` swallows git grep's exit code 1 on no-match so the
+          # happy path (zero conflicts) doesn't trip `set -euo pipefail`.
+          conflict_count=$( { git grep -lI '^<<<<<<< before updating$' || true; } | wc -l | tr -d ' ')
+          echo "ref=${ref}" >> "$GITHUB_OUTPUT"
+          echo "conflict_count=${conflict_count}" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure PR labels exist
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          # `gh pr create --label foo` fails if the label doesn't exist,
+          # so ensure both labels are present first.  `|| true` keeps the
+          # step idempotent across repeat runs.
+          gh label create copier \
+            --color C5DEF5 \
+            --description "Automated copier template sync" \
+            2>/dev/null || true
+          gh label create dependencies \
+            --color 0075CA \
+            --description "Pull requests that update a dependency file" \
+            2>/dev/null || true
+
+      - name: Commit and push to copier/update branch
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          branch="copier/update"
+          git checkout -B "${branch}"
+          git add -A
+          git commit -m "chore(copier): update to ${{ steps.meta.outputs.ref }}" \
+            -m "Automated \`copier update\` run — review the diff and merge if CI is green."
+          git push --force-with-lease origin "${branch}"
+
+      - name: Open or update PR
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          REF: ${{ steps.meta.outputs.ref }}
+          CONFLICT_COUNT: ${{ steps.meta.outputs.conflict_count }}
+        run: |
+          set -euo pipefail
+          branch="copier/update"
+          title="chore(copier): update to ${REF}"
+
+          # Build the PR body piece-by-piece with $'\n' separators — a single
+          # multi-line bash string would break the enclosing YAML block scalar
+          # because the continuation lines would need to stay at column 11.
+          body="Automated \`copier update\` run against template ref \`${REF}\`."
+          body+=$'\n\n'"Review the diff, resolve any \`<<<<<<< before updating\` conflict markers, and merge if CI is green."
+          body+=$'\n\n'"> **Note:** \`--skip-answered\` was passed, so any **new** template variables introduced since the last update were silently filled with their copier defaults. Skim \`.copier-answers.yml\` for unexpected new keys."
+          if [ "${CONFLICT_COUNT}" -gt 0 ]; then
+            body+=$'\n\n'"⚠️ **${CONFLICT_COUNT} file(s) contain unresolved \`<<<<<<< before updating\` conflict markers — review and resolve manually before merging.**"
+          fi
+
+          if gh pr view "${branch}" --json state --jq '.state' 2>/dev/null | grep -q OPEN; then
+            gh pr edit "${branch}" \
+              --title "${title}" \
+              --body "${body}" \
+              --add-label copier \
+              --add-label dependencies
+          else
+            gh pr create \
+              --base main \
+              --head "${branch}" \
+              --title "${title}" \
+              --body "${body}" \
+              --label copier \
+              --label dependencies
+          fi
