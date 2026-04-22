@@ -1,8 +1,14 @@
 FROM python:3.12-slim
 
 # DOCKERFILE-APT-DEPS-START — add domain apt packages below; kept across copier update
+<<<<<<< before updating
 RUN apt-get update && apt-get install -y --no-install-recommends git gosu \
     && rm -rf /var/lib/apt/lists/*
+=======
+RUN apt-get update && apt-get install -y --no-install-recommends git git-lfs gosu \
+    && rm -rf /var/lib/apt/lists/* \
+    && git lfs install --system
+>>>>>>> after updating
 # DOCKERFILE-APT-DEPS-END
 
 COPY --from=ghcr.io/astral-sh/uv:0.6 /uv /uvx /bin/
@@ -23,7 +29,11 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 COPY pyproject.toml README.md /app/
 COPY src/ /app/src/
 RUN --mount=type=cache,target=/root/.cache/uv \
+<<<<<<< before updating
     uv sync --frozen --no-dev --extra all
+=======
+    uv sync --frozen --no-dev
+>>>>>>> after updating
 # DOCKERFILE-UV-EXTRAS-END
 
 # Create non-root user with configurable UID/GID for bind-mount compatibility.
