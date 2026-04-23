@@ -2,6 +2,48 @@
 
 <!-- version list -->
 
+## v1.7.1 (2026-04-23)
+
+### Bug Fixes
+
+- **ci**: Stage conflict markers before git checkout -B in copier-update
+  ([`14db115`](https://github.com/pvliesdonk/scholar-mcp/commit/14db11583b5c8aa317e40bc73deb94ced3f8c06b))
+
+### Chores
+
+- **copier**: Bootstrap copier-update workflow + align with template v1.1.3
+  ([`b65f79d`](https://github.com/pvliesdonk/scholar-mcp/commit/b65f79d36eccf3044d5130545dd5ecc97d6be7b3))
+
+- **copier**: Converge drifted template-owned files to v1.1.5 shape
+  ([`0588c4f`](https://github.com/pvliesdonk/scholar-mcp/commit/0588c4f8f471ba23c25f76096a22dede24a38f67))
+
+- **copier**: Update to v1.1.8
+  ([`404302d`](https://github.com/pvliesdonk/scholar-mcp/commit/404302df25242ddaea1552f520734579e25cc221))
+
+- **deps**: Bump actions/deploy-pages from 4 to 5
+  ([`a1949be`](https://github.com/pvliesdonk/scholar-mcp/commit/a1949be655810c8ef3dfdb475f943791de675389))
+
+- **deps**: Bump actions/github-script from 7 to 9
+  ([`a9c366b`](https://github.com/pvliesdonk/scholar-mcp/commit/a9c366b3ff1b1ae16e761ca36c5691e13d1d10fc))
+
+- **deps**: Bump astral-sh/setup-uv from 8.0.0 to 8.1.0
+  ([`a08a75b`](https://github.com/pvliesdonk/scholar-mcp/commit/a08a75bf80988f4755d4cbbdfd69028d2d33caf8))
+
+- **registry**: Shorten server.json description to <=100 chars
+  ([`f55e528`](https://github.com/pvliesdonk/scholar-mcp/commit/f55e528ef243e0b5be5c82e3f4d29ff647287ba6))
+
+### Refactoring
+
+- **claude-md**: Add DOMAIN + TEMPLATE-OWNED sentinel structure
+  ([`a27f52b`](https://github.com/pvliesdonk/scholar-mcp/commit/a27f52babaa9a837b7c70b2ef72069104298720f))
+
+- **pyproject**: Add PROJECT-DEPS + PROJECT-EXTRAS sentinel markers
+  ([`37a0a2d`](https://github.com/pvliesdonk/scholar-mcp/commit/37a0a2dc30bdcb4f45cac9a2971ae7b11ebfde59))
+
+- **server**: Align with template: mcp_server.py -> server.py, drop create_server alias
+  ([`0fb1ba6`](https://github.com/pvliesdonk/scholar-mcp/commit/0fb1ba6099fb09e72aedc50b23c8c7f0aa280dfc))
+
+
 ## v1.7.0 (2026-04-21)
 
 ### Chores
