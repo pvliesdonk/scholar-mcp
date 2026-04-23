@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.8.1 (2026-04-23)
+
+### Chores
+
+- **copier**: Update to v1.1.9
+  ([`8cf1fda`](https://github.com/pvliesdonk/scholar-mcp/commit/8cf1fdad49dc26940c5e5fa122d378c3d1658609))
+
+
 ## v1.7.1 (2026-04-23)
 
 ### Bug Fixes
