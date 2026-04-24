@@ -73,42 +73,43 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = [
-    "E", "W", "F", "I", "B", "C4", "UP", "ARG", "SIM", "TCH", "PTH", "RUF",
+    "E", "W", "F", "I", "B", "C4", "UP", "ARG", "SIM", "TC", "PTH", "RUF",
 ]
 ignore = ["E501"]
 
 [tool.ruff.lint.per-file-ignores]
 # Depends() and CurrentContext() calls in argument defaults are the standard
 # FastMCP dependency injection pattern — B008 is a false positive here.
-# Context/FastMCP imports must stay runtime (not TYPE_CHECKING) for DI.
-"src/scholar_mcp/server.py" = ["ARG001", "B008", "TCH002"]
-"src/scholar_mcp/cli.py" = ["B008", "TCH002", "TCH003"]
-"src/scholar_mcp/_server_apps.py" = ["TCH002"]
-"src/scholar_mcp/_server_deps.py" = ["ARG001", "B008", "TCH002", "TCH003"]
-"src/scholar_mcp/_cache.py" = ["TCH003"]
-"src/scholar_mcp/_docling_client.py" = ["TCH002"]
-"src/scholar_mcp/_rate_limiter.py" = ["TCH002", "TCH003"]
-"src/scholar_mcp/_server_tools.py" = ["ARG001", "B008", "TCH001", "TCH002"]
-"src/scholar_mcp/_tools_search.py" = ["ARG001", "B008", "TCH001", "TCH002"]
-"src/scholar_mcp/_tools_graph.py" = ["ARG001", "B008", "TCH001", "TCH002"]
-"src/scholar_mcp/_tools_recommendations.py" = ["ARG001", "B008", "TCH001", "TCH002"]
-"src/scholar_mcp/_tools_utility.py" = ["ARG001", "B008", "TCH001", "TCH002"]
-"src/scholar_mcp/_tools_pdf.py" = ["ARG001", "B008", "TCH001", "TCH002"]
-"src/scholar_mcp/_tools_tasks.py" = ["ARG001", "B008", "TCH001", "TCH002"]
-"src/scholar_mcp/_tools_citation.py" = ["ARG001", "B008", "TCH001", "TCH002"]
-"src/scholar_mcp/_tools_patent.py" = ["ARG001", "B008", "TCH001", "TCH002"]
-"src/scholar_mcp/_tools_books.py" = ["ARG001", "B008", "TCH001", "TCH002"]
-"src/scholar_mcp/_tools_standards.py" = ["ARG001", "B008", "TCH001", "TCH002"]
-"src/scholar_mcp/_book_enrichment.py" = ["TCH001"]
-"src/scholar_mcp/_task_queue.py" = ["TCH003"]
-"src/scholar_mcp/_openlibrary_client.py" = ["TCH001"]
-"src/scholar_mcp/_standards_client.py" = ["TCH001", "TCH002", "TCH003"]
-"src/scholar_mcp/_sync_relaton.py" = ["TCH001", "TCH002", "TCH003"]
-"src/scholar_mcp/_relaton_live.py" = ["TCH001", "TCH002", "TCH003"]
-"src/scholar_mcp/_server_resources.py" = ["B008", "TCH001", "TCH002"]
-"src/scholar_mcp/_server_prompts.py" = ["B008", "TCH002"]
+# Context/FastMCP/Service imports must stay runtime (not TYPE_CHECKING) for
+# DI resolution — TC001/TC002/TC003.
+"src/scholar_mcp/server.py" = ["ARG001", "B008", "TC002"]
+"src/scholar_mcp/cli.py" = ["B008", "TC002", "TC003"]
+"src/scholar_mcp/_server_apps.py" = ["TC002"]
+"src/scholar_mcp/_server_deps.py" = ["ARG001", "B008", "TC002", "TC003"]
+"src/scholar_mcp/_cache.py" = ["TC003"]
+"src/scholar_mcp/_docling_client.py" = ["TC002"]
+"src/scholar_mcp/_rate_limiter.py" = ["TC002", "TC003"]
+"src/scholar_mcp/_server_tools.py" = ["ARG001", "B008", "TC001", "TC002"]
+"src/scholar_mcp/_tools_search.py" = ["ARG001", "B008", "TC001", "TC002"]
+"src/scholar_mcp/_tools_graph.py" = ["ARG001", "B008", "TC001", "TC002"]
+"src/scholar_mcp/_tools_recommendations.py" = ["ARG001", "B008", "TC001", "TC002"]
+"src/scholar_mcp/_tools_utility.py" = ["ARG001", "B008", "TC001", "TC002"]
+"src/scholar_mcp/_tools_pdf.py" = ["ARG001", "B008", "TC001", "TC002"]
+"src/scholar_mcp/_tools_tasks.py" = ["ARG001", "B008", "TC001", "TC002"]
+"src/scholar_mcp/_tools_citation.py" = ["ARG001", "B008", "TC001", "TC002"]
+"src/scholar_mcp/_tools_patent.py" = ["ARG001", "B008", "TC001", "TC002"]
+"src/scholar_mcp/_tools_books.py" = ["ARG001", "B008", "TC001", "TC002"]
+"src/scholar_mcp/_tools_standards.py" = ["ARG001", "B008", "TC001", "TC002"]
+"src/scholar_mcp/_book_enrichment.py" = ["TC001"]
+"src/scholar_mcp/_task_queue.py" = ["TC003"]
+"src/scholar_mcp/_openlibrary_client.py" = ["TC001"]
+"src/scholar_mcp/_standards_client.py" = ["TC001", "TC002", "TC003"]
+"src/scholar_mcp/_sync_relaton.py" = ["TC001", "TC002", "TC003"]
+"src/scholar_mcp/_relaton_live.py" = ["TC001", "TC002", "TC003"]
+"src/scholar_mcp/_server_resources.py" = ["B008", "TC001", "TC002"]
+"src/scholar_mcp/_server_prompts.py" = ["B008", "TC002"]
 # pytest fixtures need runtime imports; Path used in signatures needs to be importable at runtime.
-"tests/*.py" = ["ARG001", "ARG002", "TCH001", "TCH002", "TCH003"]
+"tests/*.py" = ["ARG001", "ARG002", "TC001", "TC002", "TC003"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["scholar_mcp"]
@@ -172,12 +173,40 @@ ignore_missing_imports = true
 module = ["yaml"]
 ignore_missing_imports = true
 
+# Tests use pytest idioms (untyped fixtures, monkey-patching, ad-hoc stubs,
+# TypedDict literals passed as dicts) that don't pay back when forced into
+# strict annotation. Keep mypy running over tests/ so import-time failures
+# still surface, but relax the checks that produce no signal in test code.
+# Incremental re-tightening tracked in #167.
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+warn_unused_ignores = false
+disable_error_code = [
+    "arg-type",
+    "attr-defined",
+    "comparison-overlap",
+    "func-returns-value",
+    "index",
+    "list-item",
+    "method-assign",
+    "misc",
+    "no-any-return",
+    "type-arg",
+    "union-attr",
+    "var-annotated",
+]
+
 [tool.pyright]
 # Point Pyright at the uv-managed venv so editor diagnostics resolve
 # imports the same way as our CLI tools (mypy/ruff/pytest run via uv).
 venvPath = "."
 venv = ".venv"
 pythonVersion = "3.11"
+# src-layout editable installs use a .pth shim that Pyright does not execute;
+# point Pyright at src/ directly so IDE import resolution matches runtime.
+extraPaths = ["src"]
 
 [tool.semantic_release]
 version_toml = ["pyproject.toml:project.version"]

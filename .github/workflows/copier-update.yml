@@ -45,10 +45,19 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Run copier update
+        id: copier
         env:
           VCS_REF: ${{ inputs.vcs_ref }}
         run: |
           set -euo pipefail
+          # Capture the pre-update `_commit` BEFORE copier rewrites
+          # `.copier-answers.yml` with the new ref — the PR body uses it to
+          # render the prev_ref→ref delta and a compare link.  `|| true` so
+          # a missing/corrupt answers file doesn't abort before the update
+          # (the post-update meta step re-parses and hard-fails if needed).
+          prev_ref=$(awk '/^_commit:[[:space:]]/ {print $2; exit}' .copier-answers.yml || true)
+          echo "prev_ref=${prev_ref}" >> "$GITHUB_OUTPUT"
+
           # `--conflict=inline` runs a real 3-way merge and writes standard
           # `<<<<<<< before updating / ||||||| last update / ======= / >>>>>>> after updating`
           # markers when local edits collide with template changes.  The
@@ -72,7 +81,7 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Read template ref + count conflicts
+      - name: Read template ref + collect conflict files
         if: steps.changes.outputs.changed == 'true'
         id: meta
         run: |
@@ -86,13 +95,42 @@ jobs:
             exit 1
           fi
           # `--conflict=inline` writes standard `<<<<<<< before updating`
-          # markers (not `.rej` sidecars).  Count files that contain at
+          # markers (not `.rej` sidecars).  Collect files that contain at
           # least one conflict marker; skip binary files with `git grep -I`.
           # `|| true` swallows git grep's exit code 1 on no-match so the
           # happy path (zero conflicts) doesn't trip `set -euo pipefail`.
-          conflict_count=$( { git grep -lI '^<<<<<<< before updating$' || true; } | wc -l | tr -d ' ')
+          # We emit the file *list* (not just the count) so the PR body can
+          # tell the reviewer exactly which files need manual resolution.
+          conflict_files=$( { git grep -lI '^<<<<<<< before updating$' || true; } )
+          if [ -n "${conflict_files}" ]; then
+            conflict_count=$(printf '%s\n' "${conflict_files}" | wc -l | tr -d ' ')
+          else
+            conflict_count=0
+          fi
+          # Derive the template source repo from `_src_path` in .copier-answers.yml
+          # rather than synthesising from `{{ github_org }}` — `github_org` is the
+          # *consumer's* org (for Docker paths, etc.), not the template source's.
+          # Normalize the common forms copier may have stored ({gh:,https://github.com/,
+          # git@github.com:}org/repo[.git]) down to `org/repo`; local paths or anything
+          # else unrecognised becomes empty and the PR step skips the release-notes
+          # and compare-link sections gracefully.
+          src_path=$(awk '/^_src_path:[[:space:]]/ {print $2; exit}' .copier-answers.yml || true)
+          template_repo=$(printf '%s' "${src_path}" \
+            | sed -E 's|^gh:||; s|^https?://github\.com/||; s|^git@github\.com:||; s|\.git$||; s|/+$||')
+          if ! printf '%s' "${template_repo}" | grep -qE '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$'; then
+            template_repo=""
+          fi
           echo "ref=${ref}" >> "$GITHUB_OUTPUT"
           echo "conflict_count=${conflict_count}" >> "$GITHUB_OUTPUT"
+          echo "template_repo=${template_repo}" >> "$GITHUB_OUTPUT"
+          # Multiline `conflict_files` needs the heredoc form of $GITHUB_OUTPUT.
+          # The `CONFLICT_FILES_EOF` delimiter is safe because git-tracked file paths
+          # can't contain newlines, let alone a line that matches that literal string.
+          {
+            echo "conflict_files<<CONFLICT_FILES_EOF"
+            printf '%s\n' "${conflict_files}"
+            echo "CONFLICT_FILES_EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Ensure PR labels exist
         if: steps.changes.outputs.changed == 'true'
@@ -131,26 +169,93 @@ jobs:
             -m "Automated \`copier update\` run — review the diff and merge if CI is green."
           git push --force-with-lease origin "${branch}"
 
+      - name: Compute diff summary
+        if: steps.changes.outputs.changed == 'true'
+        id: diff
+        run: |
+          set -euo pipefail
+          # `copier/update` is always `main + 1 commit` because the previous
+          # step does `git checkout -B` off the checked-out default branch
+          # before making a single commit, so HEAD~1..HEAD captures exactly
+          # this update's delta — no merge-base math needed.
+          diff_count=$(git diff --name-only HEAD~1 HEAD | wc -l | tr -d ' ')
+          echo "diff_count=${diff_count}" >> "$GITHUB_OUTPUT"
+          {
+            echo "diff_stat<<DIFF_STAT_EOF"
+            git diff --stat HEAD~1 HEAD
+            echo "DIFF_STAT_EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Open or update PR
         if: steps.changes.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
           REF: ${{ steps.meta.outputs.ref }}
+          PREV_REF: ${{ steps.copier.outputs.prev_ref }}
+          TEMPLATE_REPO: ${{ steps.meta.outputs.template_repo }}
           CONFLICT_COUNT: ${{ steps.meta.outputs.conflict_count }}
+          CONFLICT_FILES: ${{ steps.meta.outputs.conflict_files }}
+          DIFF_COUNT: ${{ steps.diff.outputs.diff_count }}
+          DIFF_STAT: ${{ steps.diff.outputs.diff_stat }}
         run: |
           set -euo pipefail
           branch="copier/update"
           title="chore(copier): update to ${REF}"
 
+          # Fetch release notes for the target ref.  Empty when the release
+          # isn't cut yet (e.g. a manual `--vcs-ref` run targeting an unreleased
+          # sha) or when `_src_path` doesn't resolve to a GitHub repo (local
+          # template dev) — in which case the notes section is skipped.
+          release_notes=""
+          if [ -n "${TEMPLATE_REPO}" ]; then
+            release_notes=$(gh release view "${REF}" \
+              --repo "${TEMPLATE_REPO}" \
+              --json body --jq .body 2>/dev/null || true)
+          fi
+
           # Build the PR body piece-by-piece with $'\n' separators — a single
           # multi-line bash string would break the enclosing YAML block scalar
           # because the continuation lines would need to stay at column 11.
-          body="Automated \`copier update\` run against template ref \`${REF}\`."
-          body+=$'\n\n'"Review the diff, resolve any \`<<<<<<< before updating\` conflict markers, and merge if CI is green."
-          body+=$'\n\n'"> **Note:** \`--skip-answered\` was passed, so any **new** template variables introduced since the last update were silently filled with their copier defaults. Skim \`.copier-answers.yml\` for unexpected new keys."
-          if [ "${CONFLICT_COUNT}" -gt 0 ]; then
-            body+=$'\n\n'"⚠️ **${CONFLICT_COUNT} file(s) contain unresolved \`<<<<<<< before updating\` conflict markers — review and resolve manually before merging.**"
+
+          # Heading: render prev_ref→ref and a compare link when we have a
+          # previous ref that differs from the new one AND a resolvable
+          # template repo.  Otherwise fall back to a plain "update to REF".
+          if [ -n "${PREV_REF}" ] && [ "${PREV_REF}" != "${REF}" ]; then
+            body="## Template update: \`${PREV_REF}\` → \`${REF}\`"
+            if [ -n "${TEMPLATE_REPO}" ]; then
+              body+=$'\n\n'"[Compare on GitHub](https://github.com/${TEMPLATE_REPO}/compare/${PREV_REF}...${REF})"
+            fi
+          else
+            body="## Template update to \`${REF}\`"
           fi
+
+          # Release notes in a collapsed block so the PR body stays scannable.
+          if [ -n "${release_notes}" ]; then
+            body+=$'\n\n'"<details><summary>Release notes (${REF})</summary>"
+            body+=$'\n\n'"${release_notes}"
+            body+=$'\n\n'"</details>"
+          fi
+
+          # Diff stat — always collapsed; even a handful of files is noisy.
+          body+=$'\n\n'"<details><summary>Files changed (${DIFF_COUNT})</summary>"
+          body+=$'\n\n''```'
+          body+=$'\n'"${DIFF_STAT}"
+          body+=$'\n''```'
+          body+=$'\n\n'"</details>"
+
+          # Conflicts — list the files (not just a count), and call out that
+          # the markers are *committed to the branch*, not sidecar .rej files.
+          if [ "${CONFLICT_COUNT}" -gt 0 ]; then
+            body+=$'\n\n'"### ⚠️ ${CONFLICT_COUNT} file(s) with unresolved conflict markers"
+            body+=$'\n\n'"The \`<<<<<<< before updating\` markers **are committed to this branch** — resolve them before merging:"
+            body+=$'\n'
+            while IFS= read -r f; do
+              [ -n "${f}" ] && body+=$'\n'"- \`${f}\`"
+            done <<< "${CONFLICT_FILES}"
+          fi
+
+          body+=$'\n\n'"---"
+          body+=$'\n\n'"> **Note:** \`--skip-answered\` was passed, so any **new** template variables introduced since the last update were silently filled with their copier defaults. Skim \`.copier-answers.yml\` for unexpected new keys."
 
           if gh pr view "${branch}" --json state --jq '.state' 2>/dev/null | grep -q OPEN; then
             gh pr edit "${branch}" \
