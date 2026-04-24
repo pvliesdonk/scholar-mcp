@@ -113,7 +113,7 @@ scholar-mcp serve                                # stdio transport
 scholar-mcp serve --transport http --port 8000   # streamable HTTP
 ```
 
-For library usage (embedding the domain logic without the MCP transport), import from the `scholar_mcp` package directly — see `src/scholar_mcp/domain.py` for the entry point scaffold.
+For library usage (embedding the domain logic without the MCP transport), import from the `scholar_mcp` package directly — backend clients live under `src/scholar_mcp/_s2_client.py`, `_epo_client.py`, `_openlibrary_client.py`, and `_standards_client.py`.
 
 ## Configuration
 
