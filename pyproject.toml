@@ -35,6 +35,15 @@ dependencies = [
 mcp = ["fastmcp[tasks]>=3.2.0,<4"]
 all = ["fastmcp[tasks]>=3.2.0,<4"]
 # PROJECT-EXTRAS-END
+<<<<<<< before updating
+=======
+
+docs = [
+    "mkdocs-material>=9",
+    "mkdocstrings[python]>=0.28",
+]
+
+>>>>>>> after updating
 dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21",
@@ -80,6 +89,7 @@ ignore = ["E501"]
 [tool.ruff.lint.per-file-ignores]
 # Depends() and CurrentContext() calls in argument defaults are the standard
 # FastMCP dependency injection pattern — B008 is a false positive here.
+<<<<<<< before updating
 # Context/FastMCP imports must stay runtime (not TYPE_CHECKING) for DI.
 "src/scholar_mcp/server.py" = ["ARG001", "B008", "TCH002"]
 "src/scholar_mcp/cli.py" = ["B008", "TCH002", "TCH003"]
@@ -109,6 +119,20 @@ ignore = ["E501"]
 "src/scholar_mcp/_server_prompts.py" = ["B008", "TCH002"]
 # pytest fixtures need runtime imports; Path used in signatures needs to be importable at runtime.
 "tests/*.py" = ["ARG001", "ARG002", "TCH001", "TCH002", "TCH003"]
+=======
+# Context/FastMCP/Service imports must stay runtime (not TYPE_CHECKING) for
+# DI resolution — TC001/TC002/TC003.
+"src/scholar_mcp/cli.py" = ["B008"]
+"src/scholar_mcp/_server_deps.py" = ["B008", "TC002", "TC003"]
+"src/scholar_mcp/_server_apps.py" = ["B008", "TC001", "TC002"]
+"src/scholar_mcp/tools.py" = ["B008", "TC001", "TC002"]
+"src/scholar_mcp/resources.py" = ["B008", "TC001", "TC002"]
+"src/scholar_mcp/prompts.py" = ["B008", "TC002"]
+"tests/conftest.py" = ["TC002", "TC003"]
+"tests/test_smoke.py" = ["TC002"]
+"tests/test_tools.py" = ["TC002"]
+# Add project-specific overrides below as needed.
+>>>>>>> after updating
 
 [tool.ruff.lint.isort]
 known-first-party = ["scholar_mcp"]
@@ -178,6 +202,9 @@ ignore_missing_imports = true
 venvPath = "."
 venv = ".venv"
 pythonVersion = "3.11"
+# src-layout editable installs use a .pth shim that Pyright does not execute;
+# point Pyright at src/ directly so IDE import resolution matches runtime.
+extraPaths = ["src"]
 
 [tool.semantic_release]
 version_toml = ["pyproject.toml:project.version"]

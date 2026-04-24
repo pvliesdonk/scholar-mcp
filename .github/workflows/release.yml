@@ -347,11 +347,30 @@ jobs:
           VERSION: ${{ needs.release.outputs.version }}
         run: |
           cd catalog
-          jq --arg v "$VERSION" --arg ref "v$VERSION" '
-            .plugins |= map(
-              if .name == "scholar-mcp"
-              then .version = $v | .source.ref = $ref
-              else . end
+          NEW_ENTRY=$(jq -n \
+            --arg name    "scholar-mcp" \
+            --arg url     "https://github.com/pvliesdonk/scholar-mcp.git" \
+            --arg ref     "v$VERSION" \
+            --arg version "$VERSION" \
+            '{
+              name: $name,
+              source: {
+                source: "git-subdir",
+                url: $url,
+                path: ".claude-plugin/plugin",
+                ref: $ref
+              },
+              version: $version
+            }')
+          jq --arg name "scholar-mcp" \
+             --arg v    "$VERSION" \
+             --arg ref  "v$VERSION" \
+             --argjson new "$NEW_ENTRY" '
+            .plugins |= (
+              if any(.[]; .name == $name)
+              then map(if .name == $name then .version = $v | .source.ref = $ref else . end)
+              else . + [$new]
+              end
             )
           ' marketplace.json > marketplace.json.tmp
           mv marketplace.json.tmp marketplace.json

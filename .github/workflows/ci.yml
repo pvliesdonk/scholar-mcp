@@ -49,7 +49,7 @@ jobs:
         run: uv sync --all-extras
 
       - name: Run mypy
-        run: uv run mypy src/
+        run: uv run mypy src/ tests/
 
   test:
     name: Test (Python ${{ matrix.python-version }})
