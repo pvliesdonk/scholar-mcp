@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import httpx
 from fastmcp import FastMCP
@@ -14,6 +15,9 @@ from fastmcp.dependencies import Depends
 from ._pdf_url_resolver import ResolvedPdf, resolve_alternative_pdf
 from ._rate_limiter import RateLimitedError
 from ._server_deps import ServiceBundle, get_bundle
+
+if TYPE_CHECKING:
+    from ._record_types import PaperRecord
 
 _PDF_TASK_TTL = 3600.0  # 1 hour for PDF operations
 
@@ -58,7 +62,7 @@ def register_pdf_tools(mcp: FastMCP) -> None:
         """
 
         async def _download(
-            paper_data: dict,  # type: ignore[type-arg]
+            paper_data: PaperRecord,
             resolved: ResolvedPdf | None = None,
         ) -> str:
             dl_url: str | None

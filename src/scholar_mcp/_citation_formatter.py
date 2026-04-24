@@ -4,9 +4,14 @@ from __future__ import annotations
 
 import json
 import unicodedata
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ._citation_names import parse_author_name
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from ._record_types import PaperRecord
 
 # BibTeX special characters that must be escaped.
 _BIBTEX_ESCAPES: dict[str, str] = {
@@ -84,7 +89,7 @@ def _ascii_fold(text: str) -> str:
     return "".join(c for c in nfkd if unicodedata.category(c) != "Mn").lower()
 
 
-def generate_bibtex_key(paper: dict[str, Any], seen_keys: set[str]) -> str:
+def generate_bibtex_key(paper: PaperRecord, seen_keys: set[str]) -> str:
     """Generate a BibTeX citation key in authorYear style.
 
     Args:
@@ -124,7 +129,7 @@ def generate_bibtex_key(paper: dict[str, Any], seen_keys: set[str]) -> str:
         i += 1
 
 
-def infer_entry_type(paper: dict[str, Any]) -> str:
+def infer_entry_type(paper: PaperRecord) -> str:
     """Infer BibTeX entry type from paper metadata.
 
     Args:
@@ -145,7 +150,7 @@ def infer_entry_type(paper: dict[str, Any]) -> str:
     return "article"
 
 
-def _format_bibtex_author(paper: dict[str, Any]) -> str:
+def _format_bibtex_author(paper: PaperRecord) -> str:
     """Format author list for BibTeX using 'von Last, First' form.
 
     Names with a nobiliary particle use 'von Last, First'
@@ -173,7 +178,7 @@ def _format_bibtex_author(paper: dict[str, Any]) -> str:
     return " and ".join(parts)
 
 
-def _paper_url(paper: dict[str, Any]) -> str | None:
+def _paper_url(paper: PaperRecord) -> str | None:
     """Extract best URL from paper metadata.
 
     Args:
@@ -191,7 +196,7 @@ def _paper_url(paper: dict[str, Any]) -> str | None:
     return None
 
 
-def format_bibtex(papers: list[dict[str, Any]], errors: list[dict[str, Any]]) -> str:
+def format_bibtex(papers: Sequence[PaperRecord], errors: list[dict[str, Any]]) -> str:
     """Format papers as BibTeX entries.
 
     Args:
@@ -295,7 +300,7 @@ _CSL_TYPE_MAP: dict[str, str] = {
 }
 
 
-def _csl_author(paper: dict[str, Any]) -> list[dict[str, str]]:
+def _csl_author(paper: PaperRecord) -> list[dict[str, str]]:
     """Format authors for CSL-JSON.
 
     Args:
@@ -323,7 +328,7 @@ def _csl_author(paper: dict[str, Any]) -> list[dict[str, str]]:
     return result
 
 
-def format_csl_json(papers: list[dict[str, Any]], errors: list[dict[str, Any]]) -> str:
+def format_csl_json(papers: Sequence[PaperRecord], errors: list[dict[str, Any]]) -> str:
     """Format papers as CSL-JSON.
 
     Args:
@@ -417,7 +422,7 @@ _RIS_TYPE_MAP: dict[str, str] = {
 }
 
 
-def _ris_author_line(paper: dict[str, Any]) -> list[str]:
+def _ris_author_line(paper: PaperRecord) -> list[str]:
     """Format one AU tag per author for RIS.
 
     Args:
@@ -440,7 +445,7 @@ def _ris_author_line(paper: dict[str, Any]) -> list[str]:
     return lines
 
 
-def format_ris(papers: list[dict[str, Any]], errors: list[dict[str, Any]]) -> str:
+def format_ris(papers: Sequence[PaperRecord], errors: list[dict[str, Any]]) -> str:
     """Format papers as RIS records.
 
     Args:

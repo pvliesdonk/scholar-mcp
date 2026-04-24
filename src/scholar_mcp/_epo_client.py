@@ -26,6 +26,7 @@ from scholar_mcp._rate_limiter import RateLimitedError
 
 if TYPE_CHECKING:
     from scholar_mcp._patent_numbers import DocdbNumber
+    from scholar_mcp._record_types import PatentRecord
 
 logger = logging.getLogger(__name__)
 
@@ -234,14 +235,14 @@ class EpoClient:
         self._check_throttle(response, service="search")
         return parse_search_xml(response.content)
 
-    async def get_biblio(self, doc: DocdbNumber) -> dict[str, Any]:
+    async def get_biblio(self, doc: DocdbNumber) -> PatentRecord:
         """Fetch bibliographic data for a single patent.
 
         Args:
             doc: Patent number in DOCDB format.
 
         Returns:
-            Parsed bibliographic metadata dict (see :func:`parse_biblio_xml`).
+            Parsed bibliographic metadata record (see :func:`parse_biblio_xml`).
 
         Raises:
             EpoRateLimitedError: When the EPO traffic light is not green.

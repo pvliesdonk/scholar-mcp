@@ -13,6 +13,8 @@ import aiosqlite
 
 from ._record_types import (
     BookRecord,  # noqa: TC001 — runtime import needed for get_type_hints()
+    PaperRecord,  # noqa: TC001 — runtime import needed for get_type_hints()
+    PatentRecord,  # noqa: TC001 — runtime import needed for get_type_hints()
     StandardRecord,  # noqa: TC001 — runtime import needed for get_type_hints()
 )
 
@@ -356,14 +358,14 @@ class ScholarCache:
     # Papers
     # ------------------------------------------------------------------
 
-    async def get_paper(self, paper_id: str) -> dict[str, Any] | None:
+    async def get_paper(self, paper_id: str) -> PaperRecord | None:
         """Return cached paper data or None if missing/stale.
 
         Args:
             paper_id: S2 paper ID.
 
         Returns:
-            Paper dict or None.
+            Paper record or None.
         """
         db = _require_open(self._db)
         async with db.execute(
@@ -376,12 +378,12 @@ class ScholarCache:
             return None
         return json.loads(row[0])  # type: ignore[no-any-return]
 
-    async def set_paper(self, paper_id: str, data: dict[str, Any]) -> None:
+    async def set_paper(self, paper_id: str, data: PaperRecord) -> None:
         """Cache paper data.
 
         Args:
             paper_id: S2 paper ID.
-            data: Paper metadata dict.
+            data: Paper metadata record.
         """
         db = _require_open(self._db)
         await db.execute(
@@ -573,14 +575,14 @@ class ScholarCache:
     # Patents
     # ------------------------------------------------------------------
 
-    async def get_patent(self, patent_id: str) -> dict[str, Any] | None:
+    async def get_patent(self, patent_id: str) -> PatentRecord | None:
         """Return cached patent bibliographic data or None if missing/stale.
 
         Args:
             patent_id: Normalised patent ID (e.g. ``EP.1234567.A1``).
 
         Returns:
-            Patent dict or None.
+            Patent record or None.
         """
         db = _require_open(self._db)
         async with db.execute(
@@ -591,12 +593,12 @@ class ScholarCache:
             return None
         return json.loads(row[0])  # type: ignore[no-any-return]
 
-    async def set_patent(self, patent_id: str, data: dict[str, Any]) -> None:
+    async def set_patent(self, patent_id: str, data: PatentRecord) -> None:
         """Cache patent bibliographic data.
 
         Args:
             patent_id: Normalised patent ID.
-            data: Patent metadata dict.
+            data: Patent metadata record.
         """
         db = _require_open(self._db)
         await db.execute(

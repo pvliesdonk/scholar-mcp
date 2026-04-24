@@ -23,6 +23,8 @@ from typing import Any
 
 from lxml import etree
 
+from ._record_types import PatentRecord
+
 logger = logging.getLogger(__name__)
 
 # XML namespaces used in EPO OPS responses.
@@ -123,7 +125,7 @@ def _parse_classification(cls_el: etree._Element) -> str:
 # ---------------------------------------------------------------------------
 
 
-def parse_biblio_xml(xml_bytes: bytes) -> dict[str, Any]:
+def parse_biblio_xml(xml_bytes: bytes) -> PatentRecord:
     """Parse an EPO OPS biblio endpoint XML response.
 
     Extracts bibliographic metadata from the first ``exchange-document``
@@ -250,19 +252,19 @@ def parse_biblio_xml(xml_bytes: bytes) -> dict[str, Any]:
     url_num = pub_country + pub_number + pub_kind
     url = f"https://worldwide.espacenet.com/patent/search/family/{family_id}/publication/{url_num}"
 
-    return {
-        "title": title,
-        "abstract": abstract,
-        "applicants": applicants,
-        "inventors": inventors,
-        "publication_number": publication_number,
-        "publication_date": pub_date,
-        "filing_date": filing_date,
-        "priority_date": priority_date,
-        "family_id": family_id,
-        "classifications": classifications,
-        "url": url,
-    }
+    return PatentRecord(
+        title=title,
+        abstract=abstract,
+        applicants=applicants,
+        inventors=inventors,
+        publication_number=publication_number,
+        publication_date=pub_date,
+        filing_date=filing_date,
+        priority_date=priority_date,
+        family_id=family_id,
+        classifications=classifications,
+        url=url,
+    )
 
 
 def parse_claims_xml(xml_data: bytes) -> str:
@@ -552,22 +554,22 @@ def _pick_lang(
     return first or ""
 
 
-def _empty_biblio() -> dict[str, Any]:
-    """Return an empty biblio dict with correct key structure.
+def _empty_biblio() -> PatentRecord:
+    """Return an empty biblio record with correct key structure.
 
     Returns:
-        Dictionary with all expected biblio keys set to empty values.
+        PatentRecord with all expected biblio keys set to empty values.
     """
-    return {
-        "title": "",
-        "abstract": "",
-        "applicants": [],
-        "inventors": [],
-        "publication_number": "",
-        "publication_date": "",
-        "filing_date": "",
-        "priority_date": "",
-        "family_id": "",
-        "classifications": [],
-        "url": "",
-    }
+    return PatentRecord(
+        title="",
+        abstract="",
+        applicants=[],
+        inventors=[],
+        publication_number="",
+        publication_date="",
+        filing_date="",
+        priority_date="",
+        family_id="",
+        classifications=[],
+        url="",
+    )

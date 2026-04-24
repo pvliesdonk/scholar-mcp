@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import httpx
 from fastmcp import FastMCP
@@ -19,6 +19,9 @@ from ._patent_numbers import is_patent_number, normalize
 from ._rate_limiter import RateLimitedError
 from ._s2_client import FIELD_SETS
 from ._server_deps import ServiceBundle, get_bundle
+
+if TYPE_CHECKING:
+    from ._record_types import PaperRecord
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +105,7 @@ def register_utility_tools(mcp: FastMCP) -> None:
 
         async def _execute(*, retry: bool = True) -> str:
             # Resolve papers via S2 (existing logic)
-            s2_results: list[dict[str, Any] | None] = []
+            s2_results: list[PaperRecord | None] = []
             if paper_ids:
                 try:
                     s2_results = await bundle.s2.batch_resolve(
@@ -117,7 +120,7 @@ def register_utility_tools(mcp: FastMCP) -> None:
                     )
 
             async def _resolve_paper(
-                idx: int, raw: str, s2_data: dict[str, Any] | None
+                idx: int, raw: str, s2_data: PaperRecord | None
             ) -> tuple[int, dict[str, Any]]:
                 if s2_data is not None:
                     paper_result: dict[str, Any] = {

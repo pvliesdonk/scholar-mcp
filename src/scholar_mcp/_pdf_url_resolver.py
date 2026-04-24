@@ -10,9 +10,12 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING
 
 import httpx
+
+if TYPE_CHECKING:
+    from ._record_types import PaperRecord
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +36,7 @@ class ResolvedPdf:
     source: str
 
 
-def _try_arxiv(paper: dict[str, Any]) -> ResolvedPdf | None:
+def _try_arxiv(paper: PaperRecord) -> ResolvedPdf | None:
     """Build arXiv PDF URL from externalIds.ArXiv."""
     ext = paper.get("externalIds") or {}
     arxiv_id = ext.get("ArXiv")
@@ -45,7 +48,7 @@ def _try_arxiv(paper: dict[str, Any]) -> ResolvedPdf | None:
     return None
 
 
-def _try_pmc(paper: dict[str, Any]) -> ResolvedPdf | None:
+def _try_pmc(paper: PaperRecord) -> ResolvedPdf | None:
     """Build PMC PDF URL from externalIds.PubMedCentral."""
     ext = paper.get("externalIds") or {}
     pmc_id = ext.get("PubMedCentral")
@@ -58,7 +61,7 @@ def _try_pmc(paper: dict[str, Any]) -> ResolvedPdf | None:
 
 
 async def _try_unpaywall(
-    paper: dict[str, Any],
+    paper: PaperRecord,
     email: str,
     http_client: httpx.AsyncClient | None = None,
 ) -> ResolvedPdf | None:
@@ -99,7 +102,7 @@ async def _try_unpaywall(
 
 
 async def resolve_alternative_pdf(
-    paper: dict[str, Any],
+    paper: PaperRecord,
     *,
     contact_email: str | None = None,
     http_client: httpx.AsyncClient | None = None,

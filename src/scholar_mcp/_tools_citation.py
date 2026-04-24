@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import httpx
 from fastmcp import FastMCP
@@ -14,6 +14,9 @@ from ._citation_formatter import format_bibtex, format_csl_json, format_ris
 from ._rate_limiter import RateLimitedError
 from ._s2_client import FIELD_SETS
 from ._server_deps import ServiceBundle, get_bundle
+
+if TYPE_CHECKING:
+    from ._record_types import PaperRecord
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +87,7 @@ def register_citation_tools(mcp: FastMCP) -> None:
                     }
                 )
 
-            papers: list[dict[str, Any]] = []
+            papers: list[PaperRecord] = []
             errors: list[dict[str, Any]] = []
 
             for raw_id, s2_data in zip(paper_ids, s2_results, strict=True):
