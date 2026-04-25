@@ -8,16 +8,14 @@ from collections import defaultdict
 from collections.abc import Sequence  # noqa: TC003  # used in TypeAlias (runtime)
 from typing import Any, Protocol, TypeAlias, cast, runtime_checkable
 
-from ._record_types import BookChapterRecord, BookRecord, StandardRecord
+from ._record_types import BookChapterRecord, BookRecord, PaperRecord, StandardRecord
 
 logger = logging.getLogger(__name__)
 
-#: Records the pipeline can enrich. Paper records flow through as
-#: generic ``dict[str, Any]`` (from S2/OpenAlex responses); domain
-#: objects use TypedDict-based records for field-level typing. All
-#: variants are dicts at runtime; enrichers mutate the underlying dict.
+#: Records the pipeline can enrich. All variants are plain dicts at
+#: runtime; enrichers mutate the underlying dict in place.
 EnrichableRecord: TypeAlias = (
-    dict[str, Any] | BookRecord | BookChapterRecord | StandardRecord
+    dict[str, Any] | PaperRecord | BookRecord | BookChapterRecord | StandardRecord
 )
 
 

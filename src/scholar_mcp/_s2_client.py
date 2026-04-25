@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
 
 from ._rate_limiter import RateLimiter, with_s2_retry, with_s2_try_once
+
+if TYPE_CHECKING:
+    from ._record_types import PaperRecord
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +76,7 @@ class S2Client:
         fields: str = FIELD_SETS["full"],
         *,
         retry: bool = True,
-    ) -> dict[str, Any]:
+    ) -> PaperRecord:
         """Fetch full metadata for a single paper.
 
         Args:
@@ -83,9 +86,11 @@ class S2Client:
                 of retrying.
 
         Returns:
-            Paper metadata dict.
+            Paper metadata record.
         """
-        return await self._get(f"/paper/{identifier}", retry=retry, fields=fields)
+        return await self._get(  # type: ignore[return-value]
+            f"/paper/{identifier}", retry=retry, fields=fields
+        )
 
     async def search_papers(
         self,
@@ -253,7 +258,7 @@ class S2Client:
         limit: int = 10,
         fields: str,
         retry: bool = True,
-    ) -> list[dict[str, Any]]:
+    ) -> list[PaperRecord]:
         """Fetch paper recommendations from S2 recommendations endpoint.
 
         Args:
@@ -264,10 +269,10 @@ class S2Client:
             retry: If False, raise :class:`RateLimitedError` on 429.
 
         Returns:
-            List of recommended paper dicts.
+            List of recommended paper records.
         """
 
-        async def _call() -> list[dict[str, Any]]:
+        async def _call() -> list[PaperRecord]:
             body: dict[str, Any] = {
                 "positivePaperIds": positive_ids,
                 "negativePaperIds": negative_ids or [],
@@ -286,7 +291,7 @@ class S2Client:
 
     async def batch_resolve(
         self, ids: list[str], *, fields: str, retry: bool = True
-    ) -> list[dict[str, Any] | None]:
+    ) -> list[PaperRecord | None]:
         """Resolve a batch of paper IDs using the S2 batch endpoint.
 
         Args:
@@ -295,10 +300,10 @@ class S2Client:
             retry: If False, raise :class:`RateLimitedError` on 429.
 
         Returns:
-            List of paper dicts (None for unresolved items, preserving order).
+            List of paper records (None for unresolved items, preserving order).
         """
 
-        async def _call() -> list[dict[str, Any] | None]:
+        async def _call() -> list[PaperRecord | None]:
             r = await self._client.post(
                 "/paper/batch",
                 json={"ids": ids},

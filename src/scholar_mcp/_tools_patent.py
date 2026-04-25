@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING, Any, Literal
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from ._record_types import PaperRecord
+
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
 
@@ -675,7 +677,7 @@ async def _fetch_patent_sections(
                     doi_ids.append(f"DOI:{npl['doi']}")
 
             # Batch resolve DOIs via S2
-            s2_results: list[dict[str, Any] | None] = [None] * len(doi_ids)
+            s2_results: list[PaperRecord | None] = [None] * len(doi_ids)
             if doi_ids:
                 try:
                     s2_results = await s2.batch_resolve(
@@ -688,7 +690,7 @@ async def _fetch_patent_sections(
                     s2_results = [None] * len(doi_ids)
 
             # Build resolved NPL list
-            s2_map: dict[int, dict[str, Any] | None] = dict(
+            s2_map: dict[int, PaperRecord | None] = dict(
                 zip(doi_indices, s2_results, strict=True)
             )
             for i, npl in enumerate(npl_refs):
@@ -791,8 +793,7 @@ async def _get_citing_patents(
         doc = DocdbNumber(ref["country"], ref["number"], ref.get("kind", ""))
         try:
             biblio = await epo.get_biblio(doc)
-            biblio["match_source"] = "epo_search"
-            patents.append(biblio)
+            patents.append({**biblio, "match_source": "epo_search"})
         except (RateLimitedError, EpoRateLimitedError):
             raise
         except Exception:
