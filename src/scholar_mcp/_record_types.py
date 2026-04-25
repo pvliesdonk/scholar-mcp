@@ -31,7 +31,7 @@ class S2ExternalIds(TypedDict, total=False):
     MAG: str
     ACL: str
     DBLP: str
-    CorpusId: str
+    CorpusId: int
 
 
 class S2Tldr(TypedDict, total=False):
@@ -47,7 +47,6 @@ class S2OpenAccessPdf(TypedDict, total=False):
     url: str
     status: str
     license: str | None
-    disclaimer: str
 
 
 class PaperRecord(TypedDict, total=False):
