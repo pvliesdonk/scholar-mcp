@@ -17,9 +17,13 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
 ]
 dependencies = [
+<<<<<<< before updating
     # fastmcp + httpx + uvicorn come transitively via fastmcp-pvl-core;
     # only list deps scholar uses DIRECTLY here.
     "fastmcp-pvl-core>=1.0,<2",
+=======
+    "fastmcp-pvl-core>=1.2.0,<2",
+>>>>>>> after updating
     "typer>=0.12",
     # PROJECT-DEPS-START — domain dependencies; kept across copier update
     "httpx",
@@ -35,6 +39,13 @@ dependencies = [
 mcp = ["fastmcp[tasks]>=3.2.0,<4"]
 all = ["fastmcp[tasks]>=3.2.0,<4"]
 # PROJECT-EXTRAS-END
+<<<<<<< before updating
+=======
+
+# Tooling lives under PEP 735 [dependency-groups] (not [project.optional-dependencies])
+# so it never ships to PyPI consumers and never lands in the security-audit input.
+[dependency-groups]
+>>>>>>> after updating
 dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21",
@@ -49,6 +60,12 @@ docs = [
     "mkdocs-material>=9.5",
     "mkdocstrings[python]>=0.24",
     "mkdocs-llmstxt>=0.2",
+]
+
+docs = [
+    "mkdocs-material>=9.7.6",
+    "mkdocstrings[python]>=0.28",
+    "mkdocs-llmstxt>=0.5",
 ]
 
 [project.scripts]
@@ -82,6 +99,7 @@ ignore = ["E501"]
 # FastMCP dependency injection pattern — B008 is a false positive here.
 # Context/FastMCP/Service imports must stay runtime (not TYPE_CHECKING) for
 # DI resolution — TC001/TC002/TC003.
+<<<<<<< before updating
 "src/scholar_mcp/server.py" = ["ARG001", "B008", "TC002"]
 "src/scholar_mcp/cli.py" = ["B008", "TC002", "TC003"]
 "src/scholar_mcp/_server_apps.py" = ["TC002"]
@@ -110,6 +128,22 @@ ignore = ["E501"]
 "src/scholar_mcp/_server_prompts.py" = ["B008", "TC002"]
 # pytest fixtures need runtime imports; Path used in signatures needs to be importable at runtime.
 "tests/*.py" = ["ARG001", "ARG002", "TC001", "TC002", "TC003"]
+=======
+# PROJECT-RUFF-IGNORES-START — replace, extend, or override the entries below
+# for your project's real source/test paths (split _server_apps.py into
+# per-domain modules, rename tests, add per-file overrides as needed); kept
+# across copier update.
+"src/scholar_mcp/cli.py" = ["B008"]
+"src/scholar_mcp/_server_deps.py" = ["B008", "TC002", "TC003"]
+"src/scholar_mcp/_server_apps.py" = ["B008", "TC001", "TC002"]
+"src/scholar_mcp/tools.py" = ["B008", "TC001", "TC002"]
+"src/scholar_mcp/resources.py" = ["B008", "TC001", "TC002"]
+"src/scholar_mcp/prompts.py" = ["B008", "TC002"]
+"tests/conftest.py" = ["TC002", "TC003"]
+"tests/test_smoke.py" = ["TC002", "TC003"]
+"tests/test_tools.py" = ["TC002"]
+# PROJECT-RUFF-IGNORES-END
+>>>>>>> after updating
 
 [tool.ruff.lint.isort]
 known-first-party = ["scholar_mcp"]

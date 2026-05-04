@@ -14,10 +14,20 @@ from importlib.metadata import version as _pkg_version
 from fastmcp import FastMCP
 from fastmcp.server.event_store import EventStore
 from fastmcp_pvl_core import (
+<<<<<<< before updating
     ServerConfig,
+=======
+    ServerConfig,  # noqa: F401  — re-exported for downstream projects' convenience
+>>>>>>> after updating
     build_auth,
     build_instructions,
     configure_logging_from_env,
+<<<<<<< before updating
+=======
+    register_file_exchange,
+    register_server_info_tool,
+    resolve_auth_mode,
+>>>>>>> after updating
     wire_middleware_stack,
 )
 from fastmcp_pvl_core import (
@@ -94,10 +104,20 @@ def make_server(
     """Construct the Scholar MCP FastMCP server.
 
     Args:
+<<<<<<< before updating
         transport: ``"stdio"`` / ``"http"`` / ``"sse"``.  Tools that depend
             on HTTP transport (e.g. artifact downloads) are wired only when
             transport != ``"stdio"``.
         config: Optional pre-loaded config; defaults to env-based load.
+=======
+        transport: ``"stdio"`` / ``"http"`` / ``"sse"``.  Used here for
+            logging only; MCP File Exchange wiring is gated by
+            ``register_file_exchange`` reading
+            ``SCHOLAR_MCP_TRANSPORT`` / ``FASTMCP_TRANSPORT`` and
+            ``SCHOLAR_MCP_FILE_EXCHANGE_ENABLED`` (default true on
+            HTTP/SSE, false on stdio).
+        config: Optional pre-loaded config; default loads from env.
+>>>>>>> after updating
 
     Returns:
         A configured :class:`fastmcp.FastMCP` instance.
@@ -127,9 +147,14 @@ def make_server(
     server_name = config.server_name or _DEFAULT_SERVER_NAME
 
     logger.info(
+<<<<<<< before updating
         "Server config: name=%s version=%s auth=%s mode=%s cache_dir=%s",
         server_name,
+=======
+        "Server config: version=%s name=scholar-mcp transport=%s auth=%s",
+>>>>>>> after updating
         pkg_ver,
+        transport,
         auth_mode,
         "read-only" if config.read_only else "read-write",
         config.cache_dir,
@@ -158,6 +183,7 @@ def make_server(
     register_resources(mcp)
     register_prompts(mcp)
 
+<<<<<<< before updating
     if config.read_only:
         mcp.disable(tags={"write"})
     if not config.epo_configured:
@@ -165,5 +191,42 @@ def make_server(
         # otherwise the model sees ``search_patents``/etc. in its tool list and
         # fails at call time with an auth error.
         mcp.disable(tags={"patent"})
+=======
+    register_server_info_tool(
+        mcp,
+        server_name="scholar-mcp",
+        server_version=pkg_ver,
+        # DOMAIN-UPSTREAM-START — wire upstream version reporting for servers
+        # that talk to a remote service (paperless-mcp, etc.). The provider is
+        # a zero-arg callable; the simplest pattern is a module-level upstream
+        # client (typically constructed from env vars at import time) whose
+        # version method is referenced here. ``CurrentContext()`` is a FastMCP
+        # DI marker — it only resolves to a live context when used as a
+        # parameter default in a tool/resource handler, so it cannot be called
+        # directly from a zero-arg provider.
+        # Uncomment the kwargs below as additional arguments to this call:
+        # upstream_version=lambda: _upstream_client.remote_version(),
+        # upstream_label="paperless",
+        # DOMAIN-UPSTREAM-END
+    )
+
+    # DOMAIN-WIRING-START — project-specific wiring (custom HTTP routes,
+    # transforms, mode toggles, alternative middleware, additional registrations);
+    # kept across copier update. Leave empty for projects that don't customise
+    # make_server() beyond the standard scaffold.
+    # DOMAIN-WIRING-END
+
+    # To publish files from a tool body, capture the returned handle
+    # — see docs/guides/file-exchange.md for the module-level singleton
+    # pattern (e.g. ``_file_exchange = register_file_exchange(...)``).
+    register_file_exchange(
+        mcp,
+        namespace="scholar-mcp",
+        env_prefix=_ENV_PREFIX,
+        transport="auto",
+        # produces=("application/octet-stream",),  # uncomment + customise per project
+        # consumer_sink=_my_sink,                  # uncomment if this server consumes file_refs
+    )
+>>>>>>> after updating
 
     return mcp
