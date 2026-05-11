@@ -18,6 +18,7 @@ from fastmcp_pvl_core import (
     build_auth,
     build_instructions,
     configure_logging_from_env,
+    register_file_exchange,
     wire_middleware_stack,
 )
 from fastmcp_pvl_core import (
@@ -94,9 +95,12 @@ def make_server(
     """Construct the Scholar MCP FastMCP server.
 
     Args:
-        transport: ``"stdio"`` / ``"http"`` / ``"sse"``.  Tools that depend
-            on HTTP transport (e.g. artifact downloads) are wired only when
-            transport != ``"stdio"``.
+        transport: ``"stdio"`` / ``"http"`` / ``"sse"``.  Logged for
+            operational visibility and passed through to
+            ``register_file_exchange`` (``"stdio"`` disables the facade by
+            default; anything else is treated as HTTP-class).
+            ``SCHOLAR_MCP_FILE_EXCHANGE_ENABLED`` can override the
+            on/off default per-transport.
         config: Optional pre-loaded config; defaults to env-based load.
 
     Returns:
@@ -127,9 +131,10 @@ def make_server(
     server_name = config.server_name or _DEFAULT_SERVER_NAME
 
     logger.info(
-        "Server config: name=%s version=%s auth=%s mode=%s cache_dir=%s",
+        "Server config: name=%s version=%s transport=%s auth=%s mode=%s cache_dir=%s",
         server_name,
         pkg_ver,
+        transport,
         auth_mode,
         "read-only" if config.read_only else "read-write",
         config.cache_dir,
@@ -165,5 +170,18 @@ def make_server(
         # otherwise the model sees ``search_patents``/etc. in its tool list and
         # fails at call time with an auth error.
         mcp.disable(tags={"patent"})
+
+    # To publish files from a tool body, capture the returned handle
+    # — see docs/guides/file-exchange.md for the module-level singleton
+    # pattern (e.g. ``_file_exchange = register_file_exchange(...)``).
+    # We pass our resolved transport explicitly (rather than "auto") so the
+    # CLI ``--transport`` flag wins over ``SCHOLAR_MCP_TRANSPORT`` /
+    # ``FASTMCP_TRANSPORT`` env vars, which the facade's "auto" mode reads.
+    register_file_exchange(
+        mcp,
+        namespace="scholar-mcp",
+        env_prefix=_ENV_PREFIX,
+        transport="stdio" if transport == "stdio" else "http",
+    )
 
     return mcp

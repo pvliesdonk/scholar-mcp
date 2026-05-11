@@ -153,6 +153,32 @@ class TestPatentToolGating:
         assert len(patent_tools) > 0
 
 
+class TestFileExchange:
+    """File-exchange facade wires create_download_link / fetch_file on HTTP only."""
+
+    async def test_create_download_link_registered_for_http_with_base_url(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """When transport=http AND SCHOLAR_MCP_BASE_URL is set, create_download_link appears.
+
+        The facade only registers ``create_download_link`` when both an
+        artifact store can be built (needs ``BASE_URL``) and the producer
+        side is enabled (default on HTTP).
+        """
+        monkeypatch.setenv("SCHOLAR_MCP_READ_ONLY", "false")
+        monkeypatch.setenv("SCHOLAR_MCP_BASE_URL", "https://example.invalid")
+        server = make_server(transport="http")
+        tool_names = {t.name for t in await server.list_tools()}
+        assert "create_download_link" in tool_names
+
+    async def test_file_exchange_tools_absent_for_stdio(self) -> None:
+        """Default stdio transport leaves the facade off — no producer or consumer tool."""
+        server = make_server()
+        tool_names = {t.name for t in await server.list_tools()}
+        assert "create_download_link" not in tool_names
+        assert "fetch_file" not in tool_names
+
+
 class TestResolveAuthMode:
     """Tests for _resolve_auth_mode() auto-detection and explicit overrides."""
 

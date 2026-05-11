@@ -8,6 +8,7 @@ Step-by-step guides for common use cases.
 | Protect my server with authentication | [Authentication](authentication.md) |
 | Convert PDFs to Markdown | [PDF Conversion](pdf-conversion.md) |
 | Explore citation networks | [Citation Graphs](citation-graphs.md) |
+| Pass files between co-deployed MCP servers | [File Exchange](file-exchange.md) |
 | Deploy with Docker Compose | [Docker](../deployment/docker.md) |
 | Run as a systemd service | [systemd](../deployment/systemd.md) |
 | Set up OIDC with Authelia or Keycloak | [OIDC](../deployment/oidc.md) |
