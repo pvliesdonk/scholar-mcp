@@ -14,10 +14,20 @@ from importlib.metadata import version as _pkg_version
 from fastmcp import FastMCP
 from fastmcp.server.event_store import EventStore
 from fastmcp_pvl_core import (
+<<<<<<< before updating
     ServerConfig,
+=======
+    ServerConfig,  # noqa: F401  — re-exported for downstream projects' convenience
+>>>>>>> after updating
     build_auth,
     build_instructions,
     configure_logging_from_env,
+<<<<<<< before updating
+=======
+    register_file_exchange,
+    register_server_info_tool,
+    resolve_auth_mode,
+>>>>>>> after updating
     wire_middleware_stack,
 )
 from fastmcp_pvl_core import (
@@ -94,10 +104,20 @@ def make_server(
     """Construct the Scholar MCP FastMCP server.
 
     Args:
+<<<<<<< before updating
         transport: ``"stdio"`` / ``"http"`` / ``"sse"``.  Tools that depend
             on HTTP transport (e.g. artifact downloads) are wired only when
             transport != ``"stdio"``.
         config: Optional pre-loaded config; defaults to env-based load.
+=======
+        transport: ``"stdio"`` / ``"http"`` / ``"sse"``.  Used here for
+            logging only; MCP File Exchange wiring is gated by
+            ``register_file_exchange`` reading
+            ``SCHOLAR_MCP_TRANSPORT`` / ``FASTMCP_TRANSPORT`` and
+            ``SCHOLAR_MCP_FILE_EXCHANGE_ENABLED`` (default true on
+            HTTP/SSE, false on stdio).
+        config: Optional pre-loaded config; default loads from env.
+>>>>>>> after updating
 
     Returns:
         A configured :class:`fastmcp.FastMCP` instance.
@@ -127,9 +147,14 @@ def make_server(
     server_name = config.server_name or _DEFAULT_SERVER_NAME
 
     logger.info(
+<<<<<<< before updating
         "Server config: name=%s version=%s auth=%s mode=%s cache_dir=%s",
         server_name,
+=======
+        "Server config: version=%s name=scholar-mcp transport=%s auth=%s",
+>>>>>>> after updating
         pkg_ver,
+        transport,
         auth_mode,
         "read-only" if config.read_only else "read-write",
         config.cache_dir,
@@ -154,10 +179,27 @@ def make_server(
 
     wire_middleware_stack(mcp)
 
+    # Optional: enable opt-in per-subject authorization on tools / resources /
+    # prompts.  See fastmcp-pvl-core's README "Authorization" section for the
+    # design.  Tools, resources, and prompts opt in by setting
+    # ``meta={"required_scope": "<scope>"}``; absence of the key means
+    # unrestricted.  The middleware is only installed when ``acl_path`` is set.
+    #
+    # from fastmcp_pvl_core import (
+    #     AuthorizationMiddleware,
+    #     load_acl,
+    #     make_acl_authorizer,
+    # )
+    #
+    # if config.acl_path is not None:
+    #     authorizer = make_acl_authorizer(load_acl(config.acl_path))
+    #     mcp.add_middleware(AuthorizationMiddleware(authorizer=authorizer))
+
     register_tools(mcp)
     register_resources(mcp)
     register_prompts(mcp)
 
+<<<<<<< before updating
     if config.read_only:
         mcp.disable(tags={"write"})
     if not config.epo_configured:
@@ -165,5 +207,91 @@ def make_server(
         # otherwise the model sees ``search_patents``/etc. in its tool list and
         # fails at call time with an auth error.
         mcp.disable(tags={"patent"})
+=======
+    register_server_info_tool(
+        mcp,
+        server_name="scholar-mcp",
+        server_version=pkg_ver,
+        # DOMAIN-UPSTREAM-START — wire upstream version reporting for servers
+        # that talk to a remote service (paperless-mcp, etc.). The provider is
+        # a zero-arg callable; the simplest pattern is a module-level upstream
+        # client (typically constructed from env vars at import time) whose
+        # version method is referenced here. ``CurrentContext()`` is a FastMCP
+        # DI marker — it only resolves to a live context when used as a
+        # parameter default in a tool/resource handler, so it cannot be called
+        # directly from a zero-arg provider.
+        # Uncomment the kwargs below as additional arguments to this call:
+        # upstream_version=lambda: _upstream_client.remote_version(),
+        # upstream_label="paperless",
+        # DOMAIN-UPSTREAM-END
+    )
+
+    # DOMAIN-WIRING-START — project-specific wiring (custom HTTP routes,
+    # transforms, mode toggles, alternative middleware, additional registrations);
+    # kept across copier update. Leave empty for projects that don't customise
+    # make_server() beyond the standard scaffold.
+    # DOMAIN-WIRING-END
+
+    # DOMAIN-FILE-EXCHANGE-START — file-exchange wiring (download direction
+    # always; upload direction opt-in by uncommenting). Kept across copier
+    # update so opt-in customisations (consumer_sink=, produces=, upload
+    # receiver) survive subsequent template updates.
+    #
+    # To publish files from a tool body, capture the returned handle
+    # — see docs/guides/file-exchange.md for the module-level singleton
+    # pattern (e.g. ``_file_exchange = register_file_exchange(...)``).
+    register_file_exchange(
+        mcp,
+        namespace="scholar-mcp",
+        env_prefix=_ENV_PREFIX,
+        transport="auto",
+        # produces=("application/octet-stream",),  # uncomment + customise per project
+        # consumer_sink=_my_sink,                  # uncomment if this server consumes file_refs
+    )
+
+    # Optional upload direction — uncomment + flesh out the helpers below
+    # to accept agent-pushed files via POST /<namespace>/uploads/{token}.
+    # The route mounts only when transport is HTTP/SSE AND
+    # SCHOLAR_MCP_BASE_URL is set; sync receivers run in a thread.
+    # See docs/guides/file-exchange.md for the full pattern. When
+    # uncommenting, move the two ``from`` imports below to the
+    # module-level import block at the top of this file.
+    #
+    # from typing import Any
+    #
+    # from fastmcp_pvl_core import (
+    #     UploadRecord,
+    #     register_file_exchange_upload,
+    # )
+    #
+    # def _validate_upload_target(target_id: str, extra: dict[str, Any] | None) -> None:
+    #     """Pre-link validator: reject obviously bad target_ids in-band.
+    #
+    #     Runs inside create_upload_link before the token is minted, so an
+    #     LLM gets a clean tool error rather than after a wasted upload
+    #     round-trip.
+    #     """
+    #     # Example: reject anything outside the domain's allowlist.
+    #     # raise ValueError(f"target_id not allowed: {target_id}")
+    #     pass
+    #
+    # def _upload_receiver(record: UploadRecord, body: bytes) -> dict[str, Any]:
+    #     """Commit the uploaded bytes. Raise ValueError → 400,
+    #     FileExistsError → 409, anything else → 500 (with traceback
+    #     logged). Return value MUST be a dict — non-dict returns are
+    #     treated as receiver bugs (500 + WARNING log)."""
+    #     # TODO: replace with your storage logic.
+    #     return {"path": record.target_id, "size_bytes": len(body)}
+    #
+    # register_file_exchange_upload(
+    #     mcp,
+    #     namespace="scholar-mcp",
+    #     env_prefix=_ENV_PREFIX,
+    #     transport="auto",
+    #     receiver=_upload_receiver,
+    #     pre_link_validator=_validate_upload_target,
+    # )
+    # DOMAIN-FILE-EXCHANGE-END
+>>>>>>> after updating
 
     return mcp

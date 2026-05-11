@@ -36,6 +36,7 @@ theme:
 
 plugins:
   - search
+<<<<<<< before updating
   - llmstxt:
       full_output: llms-full.txt
       markdown_description: >
@@ -60,6 +61,30 @@ plugins:
           - deployment/docker.md: Docker Compose with docling-serve, Traefik, volumes, UID/GID
           - deployment/systemd.md: systemd service — package install, security hardening
           - deployment/oidc.md: OIDC authentication setup with Authelia
+=======
+  # Generates llms.txt + llms-full.txt for the README badge.
+  # Sections mirror `nav:` below — keep them aligned when customising
+  # (both blocks are sentinel-protected so customise both as a unit).
+  # `guides/*.md` and `deployment/*.md` use globs deliberately so new pages
+  # in those directories are auto-indexed without a sections-list update.
+  - llmstxt:
+      full_output: llms-full.txt
+      sections:
+        # PROJECT-LLMSTXT-SECTIONS-START — keep aligned with `nav:` below;
+        # kept across copier update.
+        Getting Started:
+          - index.md
+          - installation.md
+          - configuration.md
+        Guides:
+          - guides/*.md
+        MCP Interface:
+          - tools/index.md
+          - prompts.md
+        Deployment:
+          - deployment/*.md
+        # PROJECT-LLMSTXT-SECTIONS-END
+>>>>>>> after updating
   - mkdocstrings:
       handlers:
         python:
@@ -98,6 +123,9 @@ exclude_docs: |
   design.md
 
 nav:
+  # PROJECT-NAV-START — replace with your real navigation; kept across copier
+  # update. Keep aligned with the `llmstxt` plugin's sentinel-protected
+  # `sections:` block above.
   - Home: index.md
   - Installation: installation.md
   - Configuration: configuration.md
@@ -108,9 +136,17 @@ nav:
       - Claude Code Plugin: guides/claude-code-plugin.md
       - Claude Desktop: guides/claude-desktop.md
       - Authentication: guides/authentication.md
+<<<<<<< before updating
       - PDF Conversion: guides/pdf-conversion.md
       - Citation Graphs: guides/citation-graphs.md
+=======
+      - File Exchange: guides/file-exchange.md
+  - MCP Interface:
+      - Tools: tools/index.md
+      - Prompts: prompts.md
+>>>>>>> after updating
   - Deployment:
       - Docker: deployment/docker.md
       - systemd: deployment/systemd.md
       - OIDC Authentication: deployment/oidc.md
+  # PROJECT-NAV-END

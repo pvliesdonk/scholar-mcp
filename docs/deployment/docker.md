@@ -89,6 +89,7 @@ networks:
 See [Configuration](../configuration.md) for the full reference. Key variables for Docker:
 
 | Variable | Default | Description |
+<<<<<<< before updating
 |---|---|---|
 | `SCHOLAR_MCP_S2_API_KEY` | -- | Semantic Scholar API key (optional; ~1 req/s without, ~10 req/s with) |
 | `SCHOLAR_MCP_CACHE_DIR` | `/data/scholar-mcp` | Cache and PDF storage directory |
@@ -97,6 +98,15 @@ See [Configuration](../configuration.md) for the full reference. Key variables f
 | `SCHOLAR_MCP_BEARER_TOKEN` | -- | Bearer token for HTTP auth |
 | `FASTMCP_LOG_LEVEL` | `INFO` | Logging level (use `-v` or set to `DEBUG` for verbose output) |
 | `FASTMCP_ENABLE_RICH_LOGGING` | `true` | Set `false` for structured JSON logging with aggregators |
+=======
+|----------|---------|-------------|
+| `SCHOLAR_MCP_READ_ONLY` | `true` | Disable write tools |
+| `SCHOLAR_MCP_BEARER_TOKEN` | — | Enable bearer token auth |
+| `SCHOLAR_MCP_LOG_LEVEL` | `INFO` | Log level |
+| `SCHOLAR_MCP_INSTRUCTIONS` | (dynamic) | System instructions for LLM context |
+| `SCHOLAR_MCP_DEBUG_PORT` | — | Remote-debugger TCP port (see [Remote debugging](#remote-debugging); requires `--build-arg DEBUG=true` image) |
+| `SCHOLAR_MCP_DEBUG_WAIT` | `false` | Block startup until IDE attaches (see [Remote debugging](#remote-debugging)) |
+>>>>>>> after updating
 
 For OIDC authentication, see [OIDC deployment](oidc.md).
 
@@ -116,6 +126,7 @@ volumes:
 
 ## UID/GID
 
+<<<<<<< before updating
 The image runs as a non-root user with UID/GID 1000 by default. To match your host user for bind mounts, set build args:
 
 ```yaml
@@ -138,3 +149,65 @@ services:
 | `v1` | Latest minor in 1.x |
 
 Multi-arch: `linux/amd64` and `linux/arm64`.
+=======
+Set `PUID` and `PGID` in your `.env` file to match the owner of bind-mounted
+directories (default 1000/1000).
+
+## Remote debugging
+
+Production images ship without `debugpy` to keep the image lean.  To attach a remote Python debugger from VS Code or PyCharm:
+
+1. **Build with the debug extra:**
+
+    ```bash
+    docker build --build-arg DEBUG=true -t scholar-mcp:debug .
+    ```
+
+    This installs the `[debug]` optional-dependency group (which pulls `debugpy` transitively from `fastmcp-pvl-core`).  Default builds (`DEBUG=false`) skip it.
+
+2. **Run with the debug env vars set and the port mapped:**
+
+    ```bash
+    docker run --rm \
+      -e SCHOLAR_MCP_DEBUG_PORT=5678 \
+      -e SCHOLAR_MCP_DEBUG_WAIT=true \
+      -p 127.0.0.1:5678:5678 \
+      -p 8000:8000 \
+      scholar-mcp:debug
+    ```
+
+    | Env var | Effect |
+    |---------|--------|
+    | `SCHOLAR_MCP_DEBUG_PORT` | TCP port the debugger listens on (any value parsing to ``0`` disables; non-numeric or out-of-range values log a WARNING and the listener stays off) |
+    | `SCHOLAR_MCP_DEBUG_WAIT` | When truthy (``1``/``true``/``yes``/``on``), block startup until the IDE attaches.  Default is non-blocking. |
+
+3. **Attach from VS Code** — add a launch config:
+
+    ```json
+    {
+      "name": "Attach to scholar-mcp",
+      "type": "debugpy",
+      "request": "attach",
+      "connect": { "host": "localhost", "port": 5678 }
+    }
+    ```
+
+    PyCharm uses *Run → Edit Configurations → Python Debug Server* with the same host/port.
+
+!!! danger "Never publish the debug port on a public network"
+    The debug listener binds `0.0.0.0` inside the container so the IDE can reach it from the host, but **debugpy's DAP protocol is unauthenticated** — any peer that can reach the port has arbitrary code execution as the server process.  Always bind the port mapping to localhost (`-p 127.0.0.1:5678:5678`) or tunnel via `kubectl port-forward` / SSH.  Production images should be built with default `DEBUG=false`.
+
+When the helper is invoked but `debugpy` isn't installed (e.g. someone sets `DEBUG_PORT` on a non-debug image), it logs a WARNING and continues — safe failure mode.
+
+
+<!-- DOMAIN-DOCKER-EXTRA-START -->
+<!-- Project-specific notes for Docker deployment; kept across copier update. -->
+
+## Project-specific notes
+
+<!-- Add domain-specific caveats here (e.g. "the /data/uploads volume must
+     be writable by UID Y", "container needs cap_add: SYS_PTRACE for
+     debugging tools"). Use sub-headings to organize if needed. -->
+
+<!-- DOMAIN-DOCKER-EXTRA-END -->
+>>>>>>> after updating

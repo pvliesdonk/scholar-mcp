@@ -62,6 +62,21 @@ Authorization: Bearer your-generated-token
 - Development and testing environments
 - Any scenario where full OIDC is overkill
 
+### Mapped bearer tokens (multi-subject)
+
+The bearer-token mode above shares one subject across every authenticated caller — by default the library's `bearer-anon`, override with `SCHOLAR_MCP_BEARER_DEFAULT_SUBJECT`.  For audit logs and authorization that distinguish callers, switch to mapped-token mode by pointing `SCHOLAR_MCP_BEARER_TOKENS_FILE` at a TOML file:
+
+```toml
+# tokens.toml
+[tokens]
+"ghp_alice_xxxxxxxx" = "user:alice@example.com"
+"sk_ci_yyyyyyyy"     = "service:ci-bot"
+```
+
+Each token resolves to a distinct subject string for downstream attribution.  Subject strings are opaque — the `<kind>:<id>` convention (`user:`, `service:`, `token:`) is documentation only.  When `BEARER_TOKENS_FILE` is set it overrides `BEARER_TOKEN` (a `WARNING` is logged if both are present).  A missing or malformed file aborts startup with `ConfigurationError` rather than silently denying every request.
+
+For the per-tool authorization that consumes these subjects, see [Authorization (opt-in)](https://github.com/pvliesdonk/scholar-mcp/blob/main/README.md#authorization-opt-in) in the project README.
+
 ---
 
 ## Remote auth
@@ -254,3 +269,16 @@ These upstream issues are actively tracked:
 - [modelcontextprotocol/python-sdk#1326](https://github.com/modelcontextprotocol/python-sdk/issues/1326) — SSE refresh deadlock
 
 When these are resolved, OIDC sessions should persist indefinitely via automatic token refresh with no changes needed server-side.
+
+
+<!-- DOMAIN-AUTH-EXTRA-START -->
+<!-- Project-specific notes for authentication; kept across copier update. -->
+
+## Project-specific notes
+
+<!-- Add domain-specific caveats here (e.g. "paperless-mcp tokens expire
+     every 60 min", "this server requires the 'admin' scope for write tools",
+     "bearer-token middleware skips /health for liveness probes"). Use
+     sub-headings to organize if needed. -->
+
+<!-- DOMAIN-AUTH-EXTRA-END -->

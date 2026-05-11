@@ -103,7 +103,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/p/scholar-mcp
+      url: https://pypi.org/p/pvliesdonk-scholar-mcp
 
     permissions:
       id-token: write
@@ -221,7 +221,7 @@ jobs:
 
   publish-linux-packages:
     needs: release
-    if: needs.release.outputs.released == 'true'
+    if: needs.release.outputs.released == 'true' && !inputs.prerelease
     runs-on: ubuntu-latest
 
     permissions:
@@ -405,8 +405,13 @@ jobs:
 
       - name: Install mcp-publisher
         env:
-          MCP_PUBLISHER_VERSION: v1.5.0
-          MCP_PUBLISHER_SHA256: 79bbb73ba048c5906034f73ef6286d7763bd53cf368ea0b358fc593ed360cbd5
+          # v1.7.x is the first that requests the per-deployment OIDC audience
+          # the registry now requires (PR modelcontextprotocol/registry#1229,
+          # merged 2026-04-30 — production registry expects audience
+          # `https://registry.modelcontextprotocol.io`; v1.5.0 still requests
+          # `mcp-registry` and fails token exchange with HTTP 401).
+          MCP_PUBLISHER_VERSION: v1.7.6
+          MCP_PUBLISHER_SHA256: bcc96ca630cae4cf503b4550bd4a17462d42ad4819273bee56f4385bb059ddee
         run: |
           curl -sL "https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz" -o mcp-publisher.tar.gz
           echo "${MCP_PUBLISHER_SHA256}  mcp-publisher.tar.gz" | sha256sum -c

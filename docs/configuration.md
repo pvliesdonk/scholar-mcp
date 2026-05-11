@@ -13,6 +13,7 @@ All settings are controlled via environment variables with the `SCHOLAR_MCP_` pr
 | `FASTMCP_LOG_LEVEL` | `INFO` | Logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL`. Controls all output (application and middleware). The `-v` CLI flag sets this to `DEBUG`. |
 | `FASTMCP_ENABLE_RICH_LOGGING` | `true` | Set to `false` for plain/JSON-structured output suitable for log aggregation tools (Loki, Datadog, Splunk). When `true`, output uses Rich formatting (colors, timestamps). |
 
+<<<<<<< before updating
 ## PDF Conversion
 
 These settings are only needed if you want to use the PDF conversion tools. They require a running [docling-serve](https://github.com/DS4SD/docling-serve) instance.
@@ -157,3 +158,43 @@ Rate limiting is automatic and not configurable:
 - **With API key**: ~0.1s between Semantic Scholar requests
 - **Without API key**: ~1.1s between requests
 - **Retry**: automatic exponential backoff on HTTP 429 (up to 3 retries)
+=======
+## MCP File Exchange
+
+These variables control [MCP File Exchange](guides/file-exchange.md)
+participation — pass-by-reference file transfer between co-deployed
+servers (and HTTP fallback for remote clients). All are optional; the
+defaults are sensible for both stdio and HTTP deployments.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SCHOLAR_MCP_FILE_EXCHANGE_ENABLED` | `true` on HTTP/SSE, `false` on stdio | Master switch. Set `false` to opt out entirely. |
+| `SCHOLAR_MCP_FILE_EXCHANGE_PRODUCE` | `true` | Allow this server to mint `FileRef` objects via `handle.publish(...)`. |
+| `SCHOLAR_MCP_FILE_EXCHANGE_CONSUME` | `true` | Master toggle for the consumer side. **Only effective when `consumer_sink=` is wired in `server.py`** — without that argument, `fetch_file` is never registered no matter how this var is set. See [the guide](guides/file-exchange.md#consuming-files-consumer_sink). |
+| `SCHOLAR_MCP_FILE_EXCHANGE_TTL` | `3600` | Lifetime in seconds for download links and exchange-volume records. |
+| `SCHOLAR_MCP_UPLOAD_ENABLED` | `true` on HTTP/SSE, `false` on stdio | Master switch for the upload direction. **Only effective when `register_file_exchange_upload(...)` is uncommented in `server.py`** — without that call, no upload route is mounted regardless of this var. Also requires `SCHOLAR_MCP_BASE_URL` to be set so `create_upload_link` can mint usable URLs. See [the guide](guides/file-exchange.md#uploading-files-receiver). |
+| `SCHOLAR_MCP_UPLOAD_MAX_BYTES` | `10485760` (10 MiB) | Maximum POST body size for the upload route. Bodies exceeding this return HTTP 413. |
+| `SCHOLAR_MCP_UPLOAD_TTL` | `300` | Default lifetime in seconds for upload links. Caller-requested TTL is clamped to `SCHOLAR_MCP_UPLOAD_TTL_MAX`. |
+| `SCHOLAR_MCP_UPLOAD_TTL_MAX` | `3600` | Operator ceiling for caller-requested upload-link TTL. |
+| `SCHOLAR_MCP_BASE_URL` | unset | Public base URL of this server. Required for the `http` transfer method — the `create_download_link` tool and (when upload is wired) the `create_upload_link` tool both build URLs against it. Also referenced by the OIDC guide and the universal-variables list above — set it once and every consumer picks it up. |
+
+Note the upload-direction variables are namespaced under `_UPLOAD_*`,
+not `_FILE_EXCHANGE_UPLOAD_*` — this matches the upstream
+`fastmcp-pvl-core` 2.1.0 contract. The download-direction variables
+keep the historical `_FILE_EXCHANGE_*` namespace.
+
+The deployer also controls three **unprefixed** environment variables
+shared by every co-deployed server:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MCP_EXCHANGE_DIR` | unset | Path to a directory shared between co-deployed MCP servers. When set, the `exchange://` transfer method activates; when unset, only the HTTP method is available. |
+| `MCP_EXCHANGE_ID` | persisted in `.exchange-id` | Optional explicit exchange-group identifier; first server to start writes a UUID into `${MCP_EXCHANGE_DIR}/.exchange-id`, subsequent starts must agree. |
+| `MCP_EXCHANGE_NAMESPACE` | the server's `namespace=` argument | Override the namespace used in `exchange://` URIs for this process. |
+
+<!-- DOMAIN-CONFIG-VARS-START -->
+## Domain variables
+
+Document your project-specific variables here.
+<!-- DOMAIN-CONFIG-VARS-END -->
+>>>>>>> after updating

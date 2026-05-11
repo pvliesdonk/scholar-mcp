@@ -23,7 +23,7 @@ jobs:
         run: uv python install 3.12
 
       - name: Install dependencies
-        run: uv sync --all-extras
+        run: uv sync --all-extras --all-groups
 
       - name: Run ruff check
         run: uv run ruff check src/ tests/
@@ -46,7 +46,7 @@ jobs:
         run: uv python install 3.12
 
       - name: Install dependencies
-        run: uv sync --all-extras
+        run: uv sync --all-extras --all-groups
 
       - name: Run mypy
         run: uv run mypy src/ tests/
@@ -82,7 +82,7 @@ jobs:
         run: uv python install ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: uv sync --all-extras
+        run: uv sync --all-extras --all-groups
 
       - name: Run tests with coverage
         run: uv run pytest --cov --cov-report=xml
@@ -193,7 +193,13 @@ jobs:
         run: uv python install 3.12
 
       - name: Export dependency list (excluding local project)
-        run: uv export --all-extras --frozen --no-emit-project --no-hashes -o ${{ runner.temp }}/requirements.txt
+        # `dev` is uv's only auto-activated default group, so --no-default-groups
+        # excludes it; `docs` is non-default and never exported unless explicitly
+        # requested via --group/--all-groups (neither passed here). Net effect:
+        # only runtime + user-defined extras land in the audit input — avoids
+        # spurious CVE reports against tooling (pip-audit's own `pip` dep, etc.)
+        # that does not run in production.
+        run: uv export --all-extras --no-default-groups --frozen --no-emit-project --no-hashes -o ${{ runner.temp }}/requirements.txt
 
       - name: Run pip-audit
         run: uvx pip-audit --strict --progress-spinner off -r ${{ runner.temp }}/requirements.txt

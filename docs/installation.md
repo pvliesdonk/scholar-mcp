@@ -78,6 +78,19 @@ See [systemd deployment](deployment/systemd.md) for configuration details.
 ```bash
 git clone https://github.com/pvliesdonk/scholar-mcp.git
 cd scholar-mcp
+<<<<<<< before updating
 uv sync --extra dev --extra mcp
 uv run scholar-mcp serve
+=======
+uv sync --all-extras --all-groups
+>>>>>>> after updating
 ```
+
+<!-- DOMAIN-INSTALL-EXTRA-START -->
+
+## Project-specific notes
+
+_Add domain-specific install notes here, e.g. system dependencies, optional
+extras, or custom configuration steps._
+
+<!-- DOMAIN-INSTALL-EXTRA-END -->

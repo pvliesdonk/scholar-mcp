@@ -27,6 +27,7 @@ class ProjectConfig:
     directly on this dataclass.
     """
 
+<<<<<<< before updating
     # CONFIG-FIELDS-START — scholar domain fields; kept across copier update
     server: ServerConfig = field(default_factory=ServerConfig)
     server_name: str | None = None
@@ -49,6 +50,33 @@ class ProjectConfig:
         """True when both EPO OPS credentials are set."""
         return (
             self.epo_consumer_key is not None and self.epo_consumer_secret is not None
+=======
+    # CONFIG-FIELDS-START — add domain fields below; kept across copier update
+    # (uncommenting the Path-typed examples below also requires adding
+    #  ``from pathlib import Path`` to the imports at the top of this file.)
+    # (example)
+    # vault_path: Path = Path("/data/vault")
+    #
+    # (example: enable optional authorization — see fastmcp-pvl-core's
+    #  README "Authorization" section for the full opt-in story.  Absence
+    #  of the path means no authorization middleware is installed.)
+    # acl_path: Path | None = None
+    # CONFIG-FIELDS-END
+
+    @classmethod
+    def from_env(cls) -> ProjectConfig:
+        """Load :class:`ProjectConfig` from ``SCHOLAR_MCP_*`` env vars."""
+        return cls(
+            server=ServerConfig.from_env(_ENV_PREFIX),
+            # CONFIG-FROM-ENV-START — populate domain fields below; kept across copier update
+            # (example)
+            # vault_path=Path(env(_ENV_PREFIX, "VAULT_PATH", "/data/vault")),
+            #
+            # (example: load ``acl_path`` from ``SCHOLAR_MCP_ACL_PATH``;
+            #  unset env var means no authorization middleware.)
+            # acl_path=Path(_p) if (_p := env(_ENV_PREFIX, "ACL_PATH")) else None,
+            # CONFIG-FROM-ENV-END
+>>>>>>> after updating
         )
 
 

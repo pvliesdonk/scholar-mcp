@@ -4,6 +4,7 @@ A [FastMCP](https://github.com/jlowin/fastmcp) server for the scholarly citation
 
 ## What it does
 
+<<<<<<< before updating
 Scholar MCP exposes 27 tools that let LLM-powered applications search, cross-reference, and retrieve scholarly sources across four peer domains:
 
 - **Papers** -- full-text search (year, venue, field, citation filters); single-paper lookup by DOI / S2 ID / arXiv / ACM / PubMed; author profile and name search; forward citations, backward references, BFS citation graph, shortest-path bridge discovery; recommendations from positive/negative examples; BibTeX/CSL-JSON/RIS citation generation; OpenAlex enrichment (affiliations, funders, OA status, and concepts).
@@ -92,3 +93,20 @@ See [Installation](installation.md) for all methods including Linux packages.
 - [Claude Code plugin](guides/claude-code-plugin.md) -- install as a Claude Code plugin
 - [Claude Desktop setup](guides/claude-desktop.md) -- get started with Claude Desktop
 - [Docker deployment](deployment/docker.md) -- production Docker Compose setup
+=======
+- [Installation](installation.md)
+- [Configuration](configuration.md)
+- [Tools](tools/index.md)
+
+<!-- DOMAIN-INDEX-FEATURES-START -->
+## Features
+
+- _Add features specific to your server here._
+<!-- DOMAIN-INDEX-FEATURES-END -->
+
+<!-- DOMAIN-INDEX-USE-CASES-START -->
+## What you can do
+
+- _Add usage examples here._
+<!-- DOMAIN-INDEX-USE-CASES-END -->
+>>>>>>> after updating

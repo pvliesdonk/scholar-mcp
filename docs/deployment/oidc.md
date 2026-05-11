@@ -200,3 +200,15 @@ labels:
 
 - **Dedicated hostname** (preferred): give the MCP server its own hostname (e.g., `myservice.example.com`) so discovery routes do not collide.
 - **External auth gateway**: use `mcp-auth-proxy` as a sidecar instead of native OIDC. The MCP server runs unauthenticated behind the proxy, and the proxy handles OAuth discovery at its own routes.
+
+
+<!-- DOMAIN-OIDC-EXTRA-START -->
+<!-- Project-specific notes for OIDC deployment; kept across copier update. -->
+
+## Project-specific notes
+
+<!-- Add domain-specific caveats here (e.g. "Keycloak requires X claim",
+     "Authelia token-cache quirk for /admin paths", "this server's audience
+     claim must include 'mcp'"). Use sub-headings to organize if needed. -->
+
+<!-- DOMAIN-OIDC-EXTRA-END -->

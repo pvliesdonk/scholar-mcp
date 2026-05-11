@@ -27,6 +27,11 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      # Required by anthropics/claude-code-action@v1: setupGitHubToken() mints
+      # a Claude-app GitHub token via OIDC token exchange, which needs
+      # id-token: write at the job level. Without it the agent steps retry
+      # 3x then abort on "Could not fetch an OIDC token".
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -84,6 +89,9 @@ jobs:
       - name: Read template ref + collect conflict files
         if: steps.changes.outputs.changed == 'true'
         id: meta
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          PREVIOUS_COMMIT: ${{ steps.copier.outputs.prev_ref }}
         run: |
           set -euo pipefail
           # Parse `_commit:` from .copier-answers.yml without depending on
@@ -94,6 +102,25 @@ jobs:
             echo "::error::could not read _commit from .copier-answers.yml"
             exit 1
           fi
+          # Detect whether the template ref actually changed (agent jobs B/C
+          # should fire even when no conflicts but the template advanced).
+          if [ -n "${PREVIOUS_COMMIT}" ] && [ "${PREVIOUS_COMMIT}" != "${ref}" ]; then
+            template_advanced=true
+          else
+            template_advanced=false
+          fi
+          echo "template_advanced=${template_advanced}" >> "$GITHUB_OUTPUT"
+          # Surface previous_commit / new_ref under stable names so the
+          # downstream agent + aggregator steps can reference them via
+          # `steps.meta.outputs.*` regardless of which earlier step produced
+          # the value.  `previous_commit` may be empty on first-ever update.
+          echo "previous_commit=${PREVIOUS_COMMIT}" >> "$GITHUB_OUTPUT"
+          echo "new_ref=${ref}" >> "$GITHUB_OUTPUT"
+          # Pre-detect any existing PR on the copier/update branch so the
+          # aggregator's overflow-comment step has a PR number to post to
+          # (set to 0 when no PR exists yet — overflow posting is best-effort).
+          pr_number=$(gh pr view copier/update --json number --jq .number 2>/dev/null || echo 0)
+          echo "pr_number=${pr_number}" >> "$GITHUB_OUTPUT"
           # `--conflict=inline` writes standard `<<<<<<< before updating`
           # markers (not `.rej` sidecars).  Collect files that contain at
           # least one conflict marker; skip binary files with `git grep -I`.
@@ -131,6 +158,192 @@ jobs:
             printf '%s\n' "${conflict_files}"
             echo "CONFLICT_FILES_EOF"
           } >> "$GITHUB_OUTPUT"
+
+      - name: Clone template at both refs (for agent context)
+        id: clone-template
+        # Provides /tmp/template at both old (downstream's previous _commit)
+        # and new (just-applied) refs so the three claude-code agent steps can
+        # read template-side history (CHANGELOG, conflict files at the old
+        # ref, excluded-file evolution diffs).
+        # Failure-tolerant: if clone fails, agent steps see the missing dir
+        # and write error placeholders; PR still opens.
+        if: steps.changes.outputs.changed == 'true' && (steps.meta.outputs.conflict_count > 0 || steps.meta.outputs.template_advanced == 'true')
+        continue-on-error: true
+        env:
+          PREVIOUS_COMMIT: ${{ steps.meta.outputs.previous_commit }}
+          TEMPLATE_REPO: ${{ steps.meta.outputs.template_repo }}
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/template
+          if [ -z "${TEMPLATE_REPO}" ]; then
+            echo "::notice::template_repo unresolved; skipping clone (agent steps will skip)"
+            exit 0
+          fi
+          git clone --filter=blob:none \
+            "https://github.com/${TEMPLATE_REPO}.git" \
+            /tmp/template
+          # Verify both refs are reachable
+          git -C /tmp/template fetch --tags
+          if [ -n "${PREVIOUS_COMMIT}" ]; then
+            git -C /tmp/template rev-parse "${PREVIOUS_COMMIT}^{commit}" >/dev/null
+          fi
+          echo "template_clone_ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Check claude-code token availability
+        id: agent-prereq
+        if: steps.changes.outputs.changed == 'true'
+        # Detect whether the downstream repo has CLAUDE_CODE_OAUTH_TOKEN
+        # configured. Without it, the three agent steps skip and the
+        # aggregator renders "agent disabled" placeholders.
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          if [ -n "${CLAUDE_CODE_OAUTH_TOKEN}" ]; then
+            echo "agent_enabled=true"  >> "$GITHUB_OUTPUT"
+          else
+            echo "agent_enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::CLAUDE_CODE_OAUTH_TOKEN not set; skipping agent analysis. Set in repo secrets to enable."
+          fi
+
+      # Jobs A, B, C are independent — they share no data dependency, only
+      # the cloned `/tmp/template` workspace and the per-job env vars.
+      # Currently sequential for simplicity (single workflow job, fewer
+      # `needs:` edges); could be parallelized into separate jobs if wall-
+      # clock latency becomes an issue. Don't make A→B→C serial for
+      # ordering reasons — there is no ordering reason. Agent JSON outputs
+      # land in distinct `/tmp/agent-job-{a,b,c}.json` files; the
+      # aggregator step reads each independently.
+      #
+      # Each agent step has TWO sub-steps:
+      #   1. Pre-render its prompt via `envsubst` and capture into a step
+      #      output (heredoc form for multi-line content).
+      #   2. Invoke claude-code-action with `prompt:` set to the rendered
+      #      content. claude-code-action@v1 only accepts `prompt:` (a
+      #      string) as a public input — there is NO `prompt_file:` input
+      #      on the user-facing wrapper (the action internally writes the
+      #      resolved prompt to `${RUNNER_TEMP}/claude-prompts/claude-prompt.txt`
+      #      from the `prompt:` value).
+      #
+      # envsubst's restricted-form `'${VAR1} ${VAR2}'` only substitutes
+      # those listed; any other `$VAR` references in the prompt body
+      # (e.g. shell-pattern examples) stay literal.
+      #
+      # Multi-line `CONFLICT_FILES_LIST` is safe via envsubst's file-to-file
+      # I/O — no argv quoting. Same pattern is used in release.yml.jinja's
+      # mcpb manifest rendering.
+      #
+      # Each agent step constrains tool access via `claude_args
+      # --allowed-tools` to enforce the spec's per-job tool boundaries
+      # (Job A: file read/write + git commit on the working tree; Jobs B/C:
+      # read everywhere, plus a bare Write — narrowed to the single output
+      # JSON at /tmp/agent-job-{b,c}.json by prose in each job's prompt).
+      # The path-scoped Write(//tmp/agent-job-b.json) form documented at
+      # code.claude.com/docs/en/permissions empirically doesn't match the
+      # agent's single-slash invocations under the SDK shipped with
+      # claude-code-action@v1, so the prose constraint is what's narrow.
+
+      - name: Pre-render Job A prompt
+        id: prepare-prompt-a
+        if: |
+          steps.changes.outputs.changed == 'true' &&
+          steps.agent-prereq.outputs.agent_enabled == 'true' &&
+          steps.meta.outputs.conflict_count > 0 &&
+          steps.clone-template.outputs.template_clone_ok == 'true'
+        env:
+          PREVIOUS_COMMIT: ${{ steps.meta.outputs.previous_commit }}
+          NEW_REF: ${{ steps.meta.outputs.new_ref }}
+          CONFLICT_FILES_LIST: ${{ steps.meta.outputs.conflict_files }}
+        run: |
+          envsubst '${PREVIOUS_COMMIT} ${NEW_REF} ${CONFLICT_FILES_LIST}' \
+            < scripts/copier_update_prompts/job_a.md \
+            > /tmp/agent-prompt-a.md
+          {
+            echo "prompt<<PROMPT_EOF"
+            cat /tmp/agent-prompt-a.md
+            echo "PROMPT_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Agent Job A — Conflict resolution
+        if: |
+          steps.changes.outputs.changed == 'true' &&
+          steps.agent-prereq.outputs.agent_enabled == 'true' &&
+          steps.meta.outputs.conflict_count > 0 &&
+          steps.clone-template.outputs.template_clone_ok == 'true'
+        continue-on-error: true
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: ${{ steps.prepare-prompt-a.outputs.prompt }}
+          claude_args: |
+            --allowed-tools "Read,Edit,Write,Bash(git status:*),Bash(git diff:*),Bash(git add:*),Bash(git commit:*),Bash(git rev-parse:*),Bash(git -C /tmp/template:*)"
+
+      - name: Pre-render Job B prompt
+        id: prepare-prompt-b
+        if: |
+          steps.changes.outputs.changed == 'true' &&
+          steps.agent-prereq.outputs.agent_enabled == 'true' &&
+          steps.meta.outputs.template_advanced == 'true' &&
+          steps.clone-template.outputs.template_clone_ok == 'true'
+        env:
+          PREVIOUS_COMMIT: ${{ steps.meta.outputs.previous_commit }}
+          NEW_REF: ${{ steps.meta.outputs.new_ref }}
+        run: |
+          envsubst '${PREVIOUS_COMMIT} ${NEW_REF}' \
+            < scripts/copier_update_prompts/job_b.md \
+            > /tmp/agent-prompt-b.md
+          {
+            echo "prompt<<PROMPT_EOF"
+            cat /tmp/agent-prompt-b.md
+            echo "PROMPT_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Agent Job B — Changelog triage
+        if: |
+          steps.changes.outputs.changed == 'true' &&
+          steps.agent-prereq.outputs.agent_enabled == 'true' &&
+          steps.meta.outputs.template_advanced == 'true' &&
+          steps.clone-template.outputs.template_clone_ok == 'true'
+        continue-on-error: true
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: ${{ steps.prepare-prompt-b.outputs.prompt }}
+          claude_args: |
+            --allowed-tools "Read,Write,Bash(cat:*),Bash(git -C /tmp/template:*)"
+
+      - name: Pre-render Job C prompt
+        id: prepare-prompt-c
+        if: |
+          steps.changes.outputs.changed == 'true' &&
+          steps.agent-prereq.outputs.agent_enabled == 'true' &&
+          steps.meta.outputs.template_advanced == 'true' &&
+          steps.clone-template.outputs.template_clone_ok == 'true'
+        env:
+          PREVIOUS_COMMIT: ${{ steps.meta.outputs.previous_commit }}
+          NEW_REF: ${{ steps.meta.outputs.new_ref }}
+        run: |
+          envsubst '${PREVIOUS_COMMIT} ${NEW_REF}' \
+            < scripts/copier_update_prompts/job_c.md \
+            > /tmp/agent-prompt-c.md
+          {
+            echo "prompt<<PROMPT_EOF"
+            cat /tmp/agent-prompt-c.md
+            echo "PROMPT_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Agent Job C — Excluded-file evolution
+        if: |
+          steps.changes.outputs.changed == 'true' &&
+          steps.agent-prereq.outputs.agent_enabled == 'true' &&
+          steps.meta.outputs.template_advanced == 'true' &&
+          steps.clone-template.outputs.template_clone_ok == 'true'
+        continue-on-error: true
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: ${{ steps.prepare-prompt-c.outputs.prompt }}
+          claude_args: |
+            --allowed-tools "Read,Write,Bash(cat:*),Bash(git -C /tmp/template:*)"
 
       - name: Ensure PR labels exist
         if: steps.changes.outputs.changed == 'true'
@@ -174,19 +387,27 @@ jobs:
         id: diff
         run: |
           set -euo pipefail
-          # `copier/update` is always `main + 1 commit` because the previous
-          # step does `git checkout -B` off the checked-out default branch
-          # before making a single commit, so HEAD~1..HEAD captures exactly
-          # this update's delta — no merge-base math needed.
-          diff_count=$(git diff --name-only HEAD~1 HEAD | wc -l | tr -d ' ')
+          # `copier/update` may have 1 or 2 commits ahead of main:
+          #   1 commit  — the chore(copier) commit only (no Job A auto-commit
+          #               because no conflicts arose, or Job A didn't run).
+          #   2 commits — Job A's "auto-resolve N trivial conflicts" commit
+          #               (made on default branch, carried forward into
+          #               copier/update via `git checkout -B`) PLUS the chore
+          #               commit on top.
+          # Always diff against main rather than HEAD~1 so Job A's
+          # auto-resolved files are reflected in the diff stat regardless
+          # of how many commits are stacked.
+          git fetch origin main --depth=50
+          diff_count=$(git diff --name-only origin/main HEAD | wc -l | tr -d ' ')
           echo "diff_count=${diff_count}" >> "$GITHUB_OUTPUT"
           {
             echo "diff_stat<<DIFF_STAT_EOF"
-            git diff --stat HEAD~1 HEAD
+            git diff --stat origin/main HEAD
             echo "DIFF_STAT_EOF"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Open or update PR
+      - name: Build #49 body content
+        id: build-body
         if: steps.changes.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
@@ -199,8 +420,7 @@ jobs:
           DIFF_STAT: ${{ steps.diff.outputs.diff_stat }}
         run: |
           set -euo pipefail
-          branch="copier/update"
-          title="chore(copier): update to ${REF}"
+          mkdir -p /tmp/aggregator
 
           # Fetch release notes for the target ref.  Empty when the release
           # isn't cut yet (e.g. a manual `--vcs-ref` run targeting an unreleased
@@ -257,10 +477,70 @@ jobs:
           body+=$'\n\n'"---"
           body+=$'\n\n'"> **Note:** \`--skip-answered\` was passed, so any **new** template variables introduced since the last update were silently filled with their copier defaults. Skim \`.copier-answers.yml\` for unexpected new keys."
 
+          # Persist for the aggregator (Compose PR body) and as the fallback
+          # body when the aggregator step fails.
+          printf '%s' "${body}" > /tmp/aggregator/existing-body.md
+
+      - name: Compose PR body via aggregator
+        id: compose
+        # Reads the existing #49-shaped body data + three /tmp/agent-job-*.json
+        # files (any may be missing/errored) and writes the composed PR body.
+        # Failure-tolerant: if aggregator crashes, PR still opens with the
+        # existing #49 body (no agent sections).
+        if: steps.changes.outputs.changed == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          AGENT_ENABLED: ${{ steps.agent-prereq.outputs.agent_enabled }}
+          CONFLICT_COUNT: ${{ steps.meta.outputs.conflict_count }}
+          TEMPLATE_ADVANCED: ${{ steps.meta.outputs.template_advanced }}
+          PR_NUMBER: ${{ steps.meta.outputs.pr_number || '0' }}
+        run: |
+          set -euo pipefail
+
+          python3 scripts/copier_update_aggregator.py \
+            --existing-body /tmp/aggregator/existing-body.md \
+            --agent-enabled "${AGENT_ENABLED}" \
+            $( [ -f /tmp/agent-job-a.json ] && echo "--job-a /tmp/agent-job-a.json" ) \
+            $( [ -f /tmp/agent-job-b.json ] && echo "--job-b /tmp/agent-job-b.json" ) \
+            $( [ -f /tmp/agent-job-c.json ] && echo "--job-c /tmp/agent-job-c.json" ) \
+            --conflict-count "${CONFLICT_COUNT}" \
+            --template-advanced "${TEMPLATE_ADVANCED}" \
+            --output-body /tmp/aggregator/composed-body.md \
+            --overflow-dir /tmp/aggregator/overflow
+
+          echo "composed_body_path=/tmp/aggregator/composed-body.md" >> "$GITHUB_OUTPUT"
+
+          # Post overflow comments if any (best-effort: requires PR_NUMBER>0).
+          if [ "${PR_NUMBER}" != "0" ] && [ -d /tmp/aggregator/overflow ]; then
+            for overflow_file in /tmp/aggregator/overflow/overflow-*.md; do
+              [ -f "$overflow_file" ] || continue
+              gh pr comment "${PR_NUMBER}" --body-file "$overflow_file" || true
+            done
+          fi
+
+      - name: Open or update PR
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          REF: ${{ steps.meta.outputs.ref }}
+        run: |
+          set -euo pipefail
+          branch="copier/update"
+          title="chore(copier): update to ${REF}"
+
+          # Prefer the aggregator's composed body; fall back to the plain
+          # #49 body if the aggregator step failed (continue-on-error: true).
+          if [ -f /tmp/aggregator/composed-body.md ]; then
+            body_file=/tmp/aggregator/composed-body.md
+          else
+            body_file=/tmp/aggregator/existing-body.md
+          fi
+
           if gh pr view "${branch}" --json state --jq '.state' 2>/dev/null | grep -q OPEN; then
             gh pr edit "${branch}" \
               --title "${title}" \
-              --body "${body}" \
+              --body-file "${body_file}" \
               --add-label copier \
               --add-label dependencies
           else
@@ -268,7 +548,7 @@ jobs:
               --base main \
               --head "${branch}" \
               --title "${title}" \
-              --body "${body}" \
+              --body-file "${body_file}" \
               --label copier \
               --label dependencies
           fi

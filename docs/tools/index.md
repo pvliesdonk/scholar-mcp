@@ -1,5 +1,6 @@
 # Tools
 
+<<<<<<< before updating
 Scholar MCP provides 28 tools organised by scholarly source type: **Papers**, **Patents**, **Books**, and **Standards** are peer source domains; the remaining sections (Cross-source Utility, PDF Conversion, Task Polling) are cross-cutting. All tools return JSON.
 
 !!! info "Coverage by domain"
@@ -752,3 +753,16 @@ The `hint` field gives expected duration — keep polling until the task complet
 List all active (non-expired) background tasks.
 
 **Returns:** JSON list of `{"task_id": "...", "status": "..."}` dicts.
+=======
+The tools registered in this server are listed below. See the
+[FastMCP tools documentation](https://gofastmcp.com/servers/tools)
+for the full tool API.
+
+<!-- DOMAIN-TOOLS-LIST-START -->
+## ping
+
+Health-check tool — returns `"pong"` if the service is alive.
+Replace with real tools per the scaffold in
+`src/scholar_mcp/tools.py`.
+<!-- DOMAIN-TOOLS-LIST-END -->
+>>>>>>> after updating
