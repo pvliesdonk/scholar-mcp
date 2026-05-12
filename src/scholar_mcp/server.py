@@ -20,6 +20,7 @@ from fastmcp_pvl_core import (
     build_instructions,
     configure_logging_from_env,
     register_file_exchange,
+    register_server_info_tool,
     wire_middleware_stack,
 )
 from fastmcp_pvl_core import (
@@ -191,9 +192,30 @@ def make_server(
         # fails at call time with an auth error.
         mcp.disable(tags={"patent"})
 
+    register_server_info_tool(
+        mcp,
+        server_name="scholar-mcp",
+        server_version=pkg_ver,
+        # DOMAIN-UPSTREAM-START — wire upstream version reporting for servers
+        # that talk to a single remote service. Scholar consumes multiple
+        # upstreams (S2/OpenAlex/EPO/OpenLibrary/...) with no canonical
+        # "the upstream", so this block stays empty by default. Uncomment if
+        # we ever want to surface a primary upstream's version through
+        # get_server_info.
+        # upstream_version=lambda: _upstream_client.remote_version(),
+        # upstream_label="semantic-scholar",
+        # DOMAIN-UPSTREAM-END
+    )
+
+    # DOMAIN-WIRING-START — project-specific wiring (custom HTTP routes,
+    # transforms, mode toggles, alternative middleware, additional registrations);
+    # kept across copier update. Leave empty for projects that don't customise
+    # make_server() beyond the standard scaffold.
+    # DOMAIN-WIRING-END
+
     # Capture the FileExchangeHandle into the module-level singleton so tool
     # bodies can call ``get_file_exchange().publish(...)`` once they start
-    # producing FileRefs (tracked in #176).  We pass our resolved transport
+    # producing FileRefs (tracked in #176). We pass our resolved transport
     # explicitly (rather than "auto") so the CLI ``--transport`` flag wins
     # over ``SCHOLAR_MCP_TRANSPORT`` / ``FASTMCP_TRANSPORT`` env vars, which
     # the facade's "auto" mode reads.

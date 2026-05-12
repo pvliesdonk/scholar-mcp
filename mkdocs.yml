@@ -37,7 +37,8 @@ theme:
 plugins:
   - search
   # Generates llms.txt + llms-full.txt for the README badge.
-  # Sections mirror `nav:` below — keep them aligned when customising.
+  # Sections mirror `nav:` below — keep them aligned when customising
+  # (both blocks are sentinel-protected so customise both as a unit).
   - llmstxt:
       full_output: llms-full.txt
       markdown_description: >
@@ -46,6 +47,8 @@ plugins:
         search, citation graph traversal, recommendations, and PDF-to-Markdown
         conversion over the Model Context Protocol.
       sections:
+        # PROJECT-LLMSTXT-SECTIONS-START — keep aligned with `nav:` below;
+        # kept across copier update.
         Getting Started:
           - index.md: Overview — features, architecture, and quick start
           - installation.md: Installation from PyPI, uv, Docker, or Linux packages
@@ -63,6 +66,7 @@ plugins:
           - deployment/docker.md: Docker Compose with docling-serve, Traefik, volumes, UID/GID
           - deployment/systemd.md: systemd service — package install, security hardening
           - deployment/oidc.md: OIDC authentication setup with Authelia
+        # PROJECT-LLMSTXT-SECTIONS-END
   - mkdocstrings:
       handlers:
         python:
@@ -101,6 +105,9 @@ exclude_docs: |
   design.md
 
 nav:
+  # PROJECT-NAV-START — replace with your real navigation; kept across copier
+  # update. Keep aligned with the `llmstxt` plugin's sentinel-protected
+  # `sections:` block above.
   - Home: index.md
   - Installation: installation.md
   - Configuration: configuration.md
@@ -118,3 +125,4 @@ nav:
       - Docker: deployment/docker.md
       - systemd: deployment/systemd.md
       - OIDC Authentication: deployment/oidc.md
+  # PROJECT-NAV-END

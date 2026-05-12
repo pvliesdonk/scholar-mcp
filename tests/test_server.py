@@ -155,6 +155,36 @@ class TestPatentToolGating:
         assert len(patent_tools) > 0
 
 
+class TestServerInfoTool:
+    """make_server() registers the get_server_info tool from pvl-core."""
+
+    async def test_get_server_info_registered(self) -> None:
+        """get_server_info is registered and visible in default (read-only) mode."""
+        server = make_server()
+        tool_names = {t.name for t in await server.list_tools()}
+        assert "get_server_info" in tool_names
+
+    async def test_get_server_info_payload_shape(self) -> None:
+        """Calling get_server_info returns scholar's identity and version keys.
+
+        Locks in that this server wires the pvl-core helper (catches an
+        accidental swap to a custom tool that names itself get_server_info
+        but returns a different payload).
+        """
+        import json
+
+        from mcp.types import TextContent
+
+        server = make_server()
+        result = await server.call_tool("get_server_info")
+        first = result.content[0]
+        assert isinstance(first, TextContent)
+        payload = json.loads(first.text)
+        assert payload["server_name"] == "scholar-mcp"
+        assert isinstance(payload["server_version"], str) and payload["server_version"]
+        assert "core_version" in payload
+
+
 class TestFileExchange:
     """File-exchange facade wires create_download_link / fetch_file on HTTP only."""
 
