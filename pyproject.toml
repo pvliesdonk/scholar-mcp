@@ -19,7 +19,7 @@ classifiers = [
 dependencies = [
     # fastmcp + httpx + uvicorn come transitively via fastmcp-pvl-core;
     # only list deps scholar uses DIRECTLY here.
-    "fastmcp-pvl-core>=1.2.0,<2",
+    "fastmcp-pvl-core>=1.2.0,<3",
     "typer>=0.12",
     # PROJECT-DEPS-START — domain dependencies; kept across copier update
     "httpx",
