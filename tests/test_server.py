@@ -184,6 +184,28 @@ class TestServerInfoTool:
         assert isinstance(payload["server_version"], str) and payload["server_version"]
         assert "core_version" in payload
 
+    async def test_get_server_info_uses_configured_server_name(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A custom SCHOLAR_MCP_SERVER_NAME flows through to get_server_info.
+
+        Regression guard: the register_server_info_tool call must pass the
+        resolved server_name variable, not a hardcoded literal — otherwise
+        operators reading get_server_info see a different name than the one
+        used by the FastMCP instance and operational logs.
+        """
+        import json
+
+        from mcp.types import TextContent
+
+        monkeypatch.setenv("SCHOLAR_MCP_SERVER_NAME", "scholar-mcp-prod")
+        server = make_server()
+        result = await server.call_tool("get_server_info")
+        first = result.content[0]
+        assert isinstance(first, TextContent)
+        payload = json.loads(first.text)
+        assert payload["server_name"] == "scholar-mcp-prod"
+
 
 class TestFileExchange:
     """File-exchange facade wires create_download_link / fetch_file on HTTP only."""
@@ -220,6 +242,32 @@ class TestFileExchange:
         monkeypatch.setattr(server_module, "_file_exchange", None)
         with pytest.raises(RuntimeError, match="file exchange is not initialised"):
             get_file_exchange()
+
+    def test_namespace_uses_configured_server_name(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A custom SCHOLAR_MCP_SERVER_NAME flows into the file-exchange namespace.
+
+        pvl-core uses ``namespace`` as both ``FileRef.origin_server`` and the
+        exchange-routing namespace, so peers must see the same identity the
+        operator configured — not the scaffold default. Regression guard for
+        the hardcode-vs-resolved pattern (sibling of
+        ``TestServerInfoTool.test_get_server_info_uses_configured_server_name``).
+        """
+        captured: dict[str, object] = {}
+
+        def _spy(*_args: object, **kwargs: object) -> object:
+            captured.update(kwargs)
+            return MagicMock()  # FileExchangeHandle stand-in
+
+        # Reset _file_exchange via monkeypatch so the MagicMock written by
+        # _spy doesn't leak across tests (monkeypatch restores the original
+        # value on teardown regardless of what make_server overwrites).
+        monkeypatch.setattr(server_module, "_file_exchange", None)
+        monkeypatch.setenv("SCHOLAR_MCP_SERVER_NAME", "scholar-mcp-prod")
+        monkeypatch.setattr(server_module, "register_file_exchange", _spy)
+        make_server()
+        assert captured["namespace"] == "scholar-mcp-prod"
 
     def test_get_file_exchange_returns_handle_after_make_server(
         self, monkeypatch: pytest.MonkeyPatch

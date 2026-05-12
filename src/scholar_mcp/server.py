@@ -194,7 +194,7 @@ def make_server(
 
     register_server_info_tool(
         mcp,
-        server_name="scholar-mcp",
+        server_name=server_name,
         server_version=pkg_ver,
         # DOMAIN-UPSTREAM-START — wire upstream version reporting for servers
         # that talk to a single remote service. Scholar consumes multiple
@@ -222,7 +222,11 @@ def make_server(
     global _file_exchange
     _file_exchange = register_file_exchange(
         mcp,
-        namespace="scholar-mcp",
+        # ``namespace`` is the server's logical name per pvl-core's docstring —
+        # used as ``FileRef.origin_server`` and the exchange namespace. Pass the
+        # resolved ``server_name`` so peers see the same identity as
+        # ``get_server_info`` / FastMCP / the startup log.
+        namespace=server_name,
         env_prefix=_ENV_PREFIX,
         transport="stdio" if transport == "stdio" else "http",
     )
