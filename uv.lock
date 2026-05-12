@@ -797,15 +797,15 @@ tasks = [
 
 [[package]]
 name = "fastmcp-pvl-core"
-version = "1.2.0"
+version = "2.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "fastmcp" },
     { name = "httpx" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/28/60/b759ac74d360c96eac9dcecbb82f0fa600aff717fd1e4f110b220b825169/fastmcp_pvl_core-1.2.0.tar.gz", hash = "sha256:539f520a29edbb4e4b546d6b24f7b145a7c2436e2fc5ed2dab235649394442a5", size = 214954, upload-time = "2026-04-27T16:50:10.411Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/6d/4a/161f08dd9ce9feec3ef72687bb4112f377cd7afaa45b81add3e6281b2ff1/fastmcp_pvl_core-2.1.0.tar.gz", hash = "sha256:46bf41e032c15d4533fbd032cb4d9dbadf852f0509973b9e0b23c1cbbe7b49ca", size = 333983, upload-time = "2026-05-10T09:06:02.342Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/60/76/a9767c163361ccdd2f9ea0150573130cde6e8f2dcca1d942ceaff00d198c/fastmcp_pvl_core-1.2.0-py3-none-any.whl", hash = "sha256:6ad2f588751393e8efa2b1b2bf5d4adc4aea89c94874d90a0cb1f242bda0fde7", size = 55774, upload-time = "2026-04-27T16:50:09.142Z" },
+    { url = "https://files.pythonhosted.org/packages/5c/de/2918c68e3423dc7562f0d6df48cd99f23cd322f8a7db9be1292b5e8d4368/fastmcp_pvl_core-2.1.0-py3-none-any.whl", hash = "sha256:d5baf34f6f1cf425d6e4e104fbe8a584d9d97dd2035561bb5a4e9bc85d6ac53f", size = 89834, upload-time = "2026-05-10T09:06:00.755Z" },
 ]
 
 [[package]]
@@ -1925,7 +1925,7 @@ requires-dist = [
     { name = "beautifulsoup4", specifier = ">=4.14.3" },
     { name = "fastmcp", extras = ["tasks"], marker = "extra == 'all'", specifier = ">=3.2.0,<4" },
     { name = "fastmcp", extras = ["tasks"], marker = "extra == 'mcp'", specifier = ">=3.2.0,<4" },
-    { name = "fastmcp-pvl-core", specifier = ">=1.2.0,<2" },
+    { name = "fastmcp-pvl-core", specifier = ">=2.1.0,<3" },
     { name = "httpx" },
     { name = "lxml", specifier = ">=5.0" },
     { name = "python-epo-ops-client", specifier = ">=4.2" },
