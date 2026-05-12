@@ -2,12 +2,12 @@
 
 Reads /tmp/agent-job-{a,b,c}.json (or paths passed via CLI), validates each
 against an inline schema, and composes a markdown PR body that extends the
-existing #49-shaped body (delta/notes/diff/conflicts) with three new sections
+existing PR-body content (delta/notes/diff/conflicts) with three new sections
 (conflict resolutions, changelog triage, excluded-file evolution).
 
 Failure-tolerant: missing/skipped/rate-limited/errored agent outputs render
-as state-specific placeholders without affecting other sections. The existing
-#49 sections always render regardless of agent state.
+as state-specific placeholders without affecting other sections. The
+existing PR-body sections always render regardless of agent state.
 
 Exit codes:
 - 0: composed body written successfully (even if some sections are placeholders)
@@ -164,9 +164,11 @@ def _render_job_b(data: dict | None, template_advanced: bool = True) -> str:
 
     # Sort by PR# ascending for deterministic body across re-runs
     # (LLM-emitted entry order may vary; canonical sort collapses that variance).
-    # `lstrip("#")` tolerates LLM-emitted prefixes like `"#89"`. `or 0` covers
-    # null values. Without coercion a single bad entry would degrade the whole
-    # section to an error placeholder via _safe_render's TypeError catch.
+    # `lstrip("#")` tolerates LLM-emitted prefixes like `"#89"`. `or "0"` covers
+    # null values — and also a literal `pr_number: 0` (falsy in Python). Since
+    # PR #0 does not exist on GitHub, conflating it with null here is safe.
+    # Without coercion a single bad entry would degrade the whole section to an
+    # error placeholder via _safe_render's TypeError catch.
     entries = sorted(
         entries,
         key=lambda e: int(str(e.get("pr_number") or "0").lstrip("#") or "0"),
@@ -280,7 +282,7 @@ def _disabled_section(section_title: str) -> str:
 
 
 def compose_body(inputs: AggregatorInputs) -> str:
-    """Compose the full PR body from existing #49 content + agent JSON outputs."""
+    """Compose the full PR body from existing PR-body content + agent JSON outputs."""
     parts = [inputs.existing_body.rstrip(), "", "---", "", "## Agent analysis", ""]
 
     if not inputs.agent_enabled:
@@ -338,7 +340,11 @@ def _safe_render(section_title: str, render_fn: Callable[[], str]) -> str:
     """
     try:
         return render_fn()
-    except (KeyError, TypeError, ValueError, AttributeError):
+    except (KeyError, IndexError, TypeError, ValueError, AttributeError):
+        # IndexError is defensive — current render paths access items by key
+        # (raising KeyError, already caught), but a future render that indexes
+        # into a list field would raise IndexError on empty input. Including it
+        # here keeps per-section isolation honest if such a path is added.
         return _placeholder(section_title, "error")
 
 
@@ -393,7 +399,7 @@ def compose_body_with_overflow(
 
         if not sections:
             # All agent sections already spilled; can't reduce further
-            # (existing #49 body alone exceeds the limit). Bail.
+            # (existing PR body alone exceeds the limit). Bail.
             break
 
         sections.sort(key=lambda s: s[2] - s[1], reverse=True)
@@ -429,7 +435,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--existing-body",
         type=Path,
         required=True,
-        help="Path to the existing #49-shaped body markdown.",
+        help="Path to the existing PR-body markdown.",
     )
     p.add_argument("--agent-enabled", choices=["true", "false"], required=True)
     p.add_argument(

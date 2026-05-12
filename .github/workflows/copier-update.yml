@@ -259,7 +259,8 @@ jobs:
           steps.changes.outputs.changed == 'true' &&
           steps.agent-prereq.outputs.agent_enabled == 'true' &&
           steps.meta.outputs.conflict_count > 0 &&
-          steps.clone-template.outputs.template_clone_ok == 'true'
+          steps.clone-template.outputs.template_clone_ok == 'true' &&
+          steps.prepare-prompt-a.outcome == 'success'
         continue-on-error: true
         uses: anthropics/claude-code-action@v1
         with:
@@ -293,7 +294,8 @@ jobs:
           steps.changes.outputs.changed == 'true' &&
           steps.agent-prereq.outputs.agent_enabled == 'true' &&
           steps.meta.outputs.template_advanced == 'true' &&
-          steps.clone-template.outputs.template_clone_ok == 'true'
+          steps.clone-template.outputs.template_clone_ok == 'true' &&
+          steps.prepare-prompt-b.outcome == 'success'
         continue-on-error: true
         uses: anthropics/claude-code-action@v1
         with:
@@ -327,7 +329,8 @@ jobs:
           steps.changes.outputs.changed == 'true' &&
           steps.agent-prereq.outputs.agent_enabled == 'true' &&
           steps.meta.outputs.template_advanced == 'true' &&
-          steps.clone-template.outputs.template_clone_ok == 'true'
+          steps.clone-template.outputs.template_clone_ok == 'true' &&
+          steps.prepare-prompt-c.outcome == 'success'
         continue-on-error: true
         uses: anthropics/claude-code-action@v1
         with:
@@ -474,10 +477,10 @@ jobs:
 
       - name: Compose PR body via aggregator
         id: compose
-        # Reads the existing #49-shaped body data + three /tmp/agent-job-*.json
+        # Reads the existing PR body content + three /tmp/agent-job-*.json
         # files (any may be missing/errored) and writes the composed PR body.
         # Failure-tolerant: if aggregator crashes, PR still opens with the
-        # existing #49 body (no agent sections).
+        # existing PR body content (no agent sections).
         if: steps.changes.outputs.changed == 'true'
         continue-on-error: true
         env:
@@ -489,12 +492,20 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Pre-compute optional --job-* flags. Under ``set -euo pipefail`` a bare
+          # ``$( [ -f x ] && echo ... )`` returns exit 1 from the subshell when the
+          # file is missing; in GNU bash that doesn't propagate to set -e because
+          # the substitution is a word in a larger command, but it's fragile across
+          # shells. The ``|| true`` makes the success-path explicit.
+          job_a_flag=$( [ -f /tmp/agent-job-a.json ] && echo "--job-a /tmp/agent-job-a.json" || true )
+          job_b_flag=$( [ -f /tmp/agent-job-b.json ] && echo "--job-b /tmp/agent-job-b.json" || true )
+          job_c_flag=$( [ -f /tmp/agent-job-c.json ] && echo "--job-c /tmp/agent-job-c.json" || true )
           python3 scripts/copier_update_aggregator.py \
             --existing-body /tmp/aggregator/existing-body.md \
             --agent-enabled "${AGENT_ENABLED}" \
-            $( [ -f /tmp/agent-job-a.json ] && echo "--job-a /tmp/agent-job-a.json" ) \
-            $( [ -f /tmp/agent-job-b.json ] && echo "--job-b /tmp/agent-job-b.json" ) \
-            $( [ -f /tmp/agent-job-c.json ] && echo "--job-c /tmp/agent-job-c.json" ) \
+            ${job_a_flag} \
+            ${job_b_flag} \
+            ${job_c_flag} \
             --conflict-count "${CONFLICT_COUNT}" \
             --template-advanced "${TEMPLATE_ADVANCED}" \
             --output-body /tmp/aggregator/composed-body.md \
@@ -521,7 +532,7 @@ jobs:
           title="chore(copier): update to ${REF}"
 
           # Prefer the aggregator's composed body; fall back to the plain
-          # #49 body if the aggregator step failed (continue-on-error: true).
+          # PR body if the aggregator step failed (continue-on-error: true).
           if [ -f /tmp/aggregator/composed-body.md ]; then
             body_file=/tmp/aggregator/composed-body.md
           else

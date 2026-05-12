@@ -69,7 +69,7 @@ git add <files-you-modified>
 # the PR branch under the auto-resolve commit.
 git diff --cached --name-only
 
-git commit -m "auto-resolve N trivial conflicts (claude-code)" --author="claude-code <claude-code@anthropic.com>"
+git commit -m "auto-resolve N trivial conflicts (claude-code)" --author="github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
 ```
 
 Capture the commit SHA via `git rev-parse HEAD`.
