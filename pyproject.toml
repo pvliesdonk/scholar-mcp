@@ -35,6 +35,10 @@ dependencies = [
 mcp = ["fastmcp[tasks]>=3.2.0,<4"]
 all = ["fastmcp[tasks]>=3.2.0,<4"]
 # PROJECT-EXTRAS-END
+
+# Tooling lives under PEP 735 [dependency-groups] (not [project.optional-dependencies])
+# so it never ships to PyPI consumers and never lands in the security-audit input.
+[dependency-groups]
 dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21",
@@ -46,9 +50,9 @@ dev = [
     "respx>=0.20",
 ]
 docs = [
-    "mkdocs-material>=9.5",
-    "mkdocstrings[python]>=0.24",
-    "mkdocs-llmstxt>=0.2",
+    "mkdocs-material>=9.7.6",
+    "mkdocstrings[python]>=0.28",
+    "mkdocs-llmstxt>=0.5",
 ]
 
 [project.scripts]

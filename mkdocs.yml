@@ -36,6 +36,8 @@ theme:
 
 plugins:
   - search
+  # Generates llms.txt + llms-full.txt for the README badge.
+  # Sections mirror `nav:` below — keep them aligned when customising.
   - llmstxt:
       full_output: llms-full.txt
       markdown_description: >
