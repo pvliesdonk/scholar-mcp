@@ -110,6 +110,13 @@ def make_server(*, transport: str = "stdio", ...) -> FastMCP:
     return mcp
 ```
 
+!!! tip "Why scholar passes `transport` explicitly"
+    Scholar's own `make_server()` passes the resolved transport explicitly
+    (`"stdio" if transport == "stdio" else "http"`) instead of `"auto"`.
+    The `"auto"` mode reads `SCHOLAR_MCP_TRANSPORT` / `FASTMCP_TRANSPORT`
+    from the env, which can silently disagree with the CLI
+    `--transport` flag. Passing it through guarantees the CLI flag wins.
+
 Then in a tool body:
 
 ```python
