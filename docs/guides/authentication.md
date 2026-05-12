@@ -169,7 +169,16 @@ openssl rand -hex 32
 
 ### Auth has no effect
 
-Authentication only works with HTTP transport. If you're using `--transport stdio`, auth is silently ignored. Switch to `--transport http`.
+FastMCP's stdio transport doesn't enforce auth on incoming messages (stdio messages have no `Authorization` header) — but auth provider construction still runs at startup regardless of transport, and the server logs a `WARNING: auth_configured_but_stdio_skips_enforcement` line when this happens so you don't mis-read startup logs as proof of enforcement.
+
+Per-mode behaviour on `--transport stdio`:
+
+- **bearer-single / bearer-mapped**: the verifier is built but never consulted. Safe to set, just inert.
+- **`remote` mode** (`SCHOLAR_MCP_BASE_URL` + `SCHOLAR_MCP_OIDC_CONFIG_URL`, no client id/secret): OIDC discovery fires against the configured URL inside pvl-core's `build_remote_auth`. Discovery failure raises `ConfigurationError: OIDC discovery failed at …` and the server refuses to start (pvl-core ≥ 2.0 fail-loud).
+- **`oidc-proxy` mode** (all four OIDC env vars set: `BASE_URL` + `OIDC_CONFIG_URL` + `OIDC_CLIENT_ID` + `OIDC_CLIENT_SECRET`): discovery fires inside FastMCP's `OIDCProxy.__init__` and currently propagates raw `httpx.HTTPError` / `pydantic.ValidationError` rather than `ConfigurationError` (asymmetry between pvl-core layers; tracked upstream). The CLI does not currently catch these — operators see the raw traceback.
+- **`multi` mode** (bearer + OIDC together): inherits the OIDC failure mode of whichever sub-mode applies (`remote` or `oidc-proxy`) per above.
+
+Recommendation: leave OIDC env vars unset on stdio deployments. Switch to `--transport http` to actually exercise auth.
 
 ### Bearer token not working
 

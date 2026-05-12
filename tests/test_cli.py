@@ -126,3 +126,28 @@ def test_serve_import_error_exits_1() -> None:
     with patch.dict("sys.modules", {"scholar_mcp.server": None}):
         result = CliRunner().invoke(app, ["serve"])
     assert result.exit_code == 1
+
+
+def test_serve_configuration_error_prints_clean_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ConfigurationError from make_server is caught at the CLI boundary.
+
+    Locks in the operator-facing error path: pvl-core 2.x raises
+    ``ConfigurationError`` on real auth misconfig; the CLI must catch it,
+    print the actionable message via ``typer.echo`` (so it survives
+    ``FASTMCP_LOG_LEVEL=CRITICAL`` filtering), and exit non-zero — instead
+    of letting the multi-screen rich traceback bubble.
+    """
+    import httpx
+
+    monkeypatch.setenv("SCHOLAR_MCP_BASE_URL", "https://mcp.example.com")
+    monkeypatch.setenv("SCHOLAR_MCP_OIDC_CONFIG_URL", "https://bad.url/oidc")
+    runner = CliRunner()
+    with patch("httpx.get", side_effect=httpx.ConnectError("fail")):
+        result = runner.invoke(app, ["serve", "--transport", "http"])
+    assert result.exit_code == 1
+    # typer.echo(..., err=True) lands on stderr; CliRunner in newer click
+    # versions exposes it via .stderr (separate from .stdout).
+    assert "configuration error" in result.stderr.lower()
+    assert "OIDC discovery failed" in result.stderr

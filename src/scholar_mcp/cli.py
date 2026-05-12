@@ -88,7 +88,23 @@ def serve(
         )
         raise typer.Exit(code=1) from exc
 
-    server = make_server(transport=transport)
+    from fastmcp_pvl_core import ConfigurationError
+
+    try:
+        server = make_server(transport=transport)
+    except ConfigurationError as exc:
+        # pvl-core 2.x raises this on real auth misconfig (OIDC discovery
+        # failure, missing httpx, incomplete discovery doc). The exception
+        # message is operator-actionable on its own; don't bury it under a
+        # multi-screen rich traceback. Print to stderr via ``typer.echo``
+        # rather than ``logger.error`` so the message is visible even if
+        # the operator runs with ``FASTMCP_LOG_LEVEL=CRITICAL`` or another
+        # level that filters ERROR. Operators who want the full chain can
+        # re-run with ``-v`` (FASTMCP_LOG_LEVEL=DEBUG) — the DEBUG line
+        # below renders the traceback when the level allows it.
+        typer.echo(f"ERROR: configuration error: {exc}", err=True)
+        logger.debug("configuration_error_traceback", exc_info=True)
+        raise typer.Exit(code=1) from exc
     env_http_path = os.environ.get(f"{_ENV_PREFIX}_HTTP_PATH")
     path = normalise_http_path(http_path or env_http_path)
 

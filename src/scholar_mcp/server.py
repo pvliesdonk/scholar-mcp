@@ -76,21 +76,44 @@ def _resolve_auth_mode() -> str | None:
 
 
 def _build_remote_auth() -> object | None:
-    """Backward-compat wrapper around ``fastmcp_pvl_core.build_remote_auth``."""
+    """Backward-compat wrapper around ``fastmcp_pvl_core.build_remote_auth``.
+
+    Raises:
+        ConfigurationError: under pvl-core 2.x the underlying builder raises
+            on OIDC discovery failure / missing ``httpx`` / incomplete
+            discovery document instead of returning ``None``. ``None`` is
+            still returned when no remote-auth config is present at all.
+    """
     from fastmcp_pvl_core import build_remote_auth
 
     return build_remote_auth(_load_server_config())
 
 
 def _build_bearer_auth() -> object | None:
-    """Backward-compat wrapper around ``fastmcp_pvl_core.build_bearer_auth``."""
+    """Backward-compat wrapper around ``fastmcp_pvl_core.build_bearer_auth``.
+
+    Raises:
+        ConfigurationError: under pvl-core 2.x the underlying builder raises
+            when ``SCHOLAR_MCP_BEARER_TOKENS_FILE`` is set but the file is
+            missing, unparseable, or schema-invalid.
+    """
     from fastmcp_pvl_core import build_bearer_auth
 
     return build_bearer_auth(_load_server_config())
 
 
 def _build_oidc_auth() -> object | None:
-    """Backward-compat wrapper around ``fastmcp_pvl_core.build_oidc_proxy_auth``."""
+    """Backward-compat wrapper around ``fastmcp_pvl_core.build_oidc_proxy_auth``.
+
+    Note that pvl-core's ``build_oidc_proxy_auth`` itself does not raise
+    ``ConfigurationError`` — but it calls ``OIDCProxy(...)``, whose
+    ``__init__`` performs OIDC discovery against the configured
+    ``oidc_config_url``. Discovery failures raise raw ``httpx.HTTPError``
+    (network/HTTP) or ``pydantic.ValidationError`` (malformed discovery
+    doc) which propagate unchanged through this wrapper. Upstream issue
+    to normalise these to ``ConfigurationError`` for symmetry with the
+    remote-auth path is tracked separately.
+    """
     from fastmcp_pvl_core import build_oidc_proxy_auth
 
     return build_oidc_proxy_auth(_load_server_config())
@@ -134,14 +157,40 @@ def make_server(
     configure_logging_from_env()
 
     auth = build_auth(config.server)
-    auth_mode = _core_resolve_auth_mode(config.server) if auth is not None else "none"
+    auth_mode = _core_resolve_auth_mode(config.server)
+    # Belt-and-braces invariant: pvl-core 2.x's build_auth returns None iff
+    # resolve_auth_mode returns "none", and raises ConfigurationError on real
+    # misconfig (no silent downgrade). A mismatch would indicate a pvl-core
+    # regression that silently degraded a configured auth mode to None.
+    # Explicit raise rather than ``assert`` so the guard survives
+    # ``python -O`` / ``PYTHONOPTIMIZE=1``.
+    if (auth is None) != (auth_mode == "none"):
+        raise RuntimeError(
+            f"pvl-core auth/mode invariant violation: auth={auth!r} "
+            f"mode={auth_mode!r} — refusing to start an unauthenticated "
+            "server while resolve_auth_mode reports a configured mode"
+        )
     if auth_mode == "none":
         logger.warning(
             "No auth configured — server accepts unauthenticated connections"
         )
-    elif auth_mode == "multi":
-        logger.info("Multi-auth enabled: bearer + OIDC")
+    elif transport == "stdio":
+        # FastMCP's stdio transport skips auth enforcement on incoming
+        # messages (stdio has no Authorization header), so a configured
+        # verifier is built but never consulted. Log this as a WARNING
+        # rather than the misleading "Auth enabled: mode=X" so operators
+        # don't trust startup logs that promise enforcement they won't get.
+        logger.warning(
+            "auth_configured_but_stdio_skips_enforcement mode=%s — "
+            "FastMCP's stdio transport bypasses all auth providers; "
+            "switch to --transport http to actually exercise auth",
+            auth_mode,
+        )
     else:
+        # Unified shape across all non-"none" modes (bearer-single,
+        # bearer-mapped, oidc-proxy, remote, multi). Sub-builders emit their
+        # own DEBUG lines if operators need the bearer/OIDC sub-mode for
+        # multi-auth deployments.
         logger.info("Auth enabled: mode=%s", auth_mode)
 
     try:

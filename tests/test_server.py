@@ -83,7 +83,7 @@ class TestAuthModeSelection:
             server = make_server(transport="http")
 
         assert isinstance(server.auth, MultiAuth)
-        assert "Multi-auth enabled" in caplog.text
+        assert "Auth enabled: mode=multi" in caplog.text
 
     def test_multi_auth_structure(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """OIDCProxy must be server= (not in verifiers=) for OAuth routes to mount."""
@@ -323,58 +323,56 @@ class TestResolveAuthMode:
 class TestBuildRemoteAuth:
     """Tests for _build_remote_auth() — OIDC discovery and RemoteAuthProvider.
 
-    Semantics changed in the fastmcp-pvl-core retrofit: the helper now
-    returns ``None`` on misconfiguration / discovery failure and logs
-    rather than raising ``RuntimeError``.
+    Semantics under fastmcp-pvl-core 2.x: ``build_remote_auth`` raises
+    ``ConfigurationError`` on misconfiguration / discovery failure rather
+    than silently returning ``None``. The intent (per pvl-core's release
+    notes) is to page operators on real misconfig instead of producing a
+    degraded server. ``None`` is still returned when no remote-auth config
+    is present at all (the "not requested" case).
     """
 
     def test_returns_none_without_vars(self) -> None:
         assert _build_remote_auth() is None
 
-    def test_returns_none_on_discovery_failure(
-        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_raises_on_discovery_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("SCHOLAR_MCP_BASE_URL", "https://mcp.example.com")
         monkeypatch.setenv("SCHOLAR_MCP_OIDC_CONFIG_URL", "https://bad.url/oidc")
         import httpx
+        from fastmcp_pvl_core import ConfigurationError
 
         with (
             patch("httpx.get", side_effect=httpx.ConnectError("fail")),
-            caplog.at_level(logging.ERROR),
+            pytest.raises(ConfigurationError, match="OIDC discovery failed"),
         ):
-            result = _build_remote_auth()
-        assert result is None
-        assert "discovery_failed" in caplog.text
+            _build_remote_auth()
 
-    def test_returns_none_on_missing_jwks(
-        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_raises_on_missing_jwks(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("SCHOLAR_MCP_BASE_URL", "https://mcp.example.com")
         monkeypatch.setenv("SCHOLAR_MCP_OIDC_CONFIG_URL", "https://auth.example.com/d")
+        from fastmcp_pvl_core import ConfigurationError
+
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"issuer": "https://auth.example.com"}
         mock_resp.raise_for_status = MagicMock()
         with (
             patch("httpx.get", return_value=mock_resp),
-            caplog.at_level(logging.ERROR),
+            pytest.raises(ConfigurationError),
         ):
-            result = _build_remote_auth()
-        assert result is None
+            _build_remote_auth()
 
-    def test_returns_none_on_missing_issuer(
-        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_raises_on_missing_issuer(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("SCHOLAR_MCP_BASE_URL", "https://mcp.example.com")
         monkeypatch.setenv("SCHOLAR_MCP_OIDC_CONFIG_URL", "https://auth.example.com/d")
+        from fastmcp_pvl_core import ConfigurationError
+
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"jwks_uri": "https://auth.example.com/jwks.json"}
         mock_resp.raise_for_status = MagicMock()
         with (
             patch("httpx.get", return_value=mock_resp),
-            caplog.at_level(logging.ERROR),
+            pytest.raises(ConfigurationError),
         ):
-            result = _build_remote_auth()
-        assert result is None
+            _build_remote_auth()
 
     def test_success(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from fastmcp.server.auth import RemoteAuthProvider
@@ -426,37 +424,74 @@ class TestBuildRemoteAuth:
         with patch("httpx.get", return_value=mock_resp), caplog.at_level(logging.INFO):
             server = make_server(transport="http")
         assert isinstance(server.auth, MultiAuth)
-        assert "Multi-auth enabled" in caplog.text
+        assert "Auth enabled: mode=multi" in caplog.text
 
-    def test_make_server_skips_oidc_for_stdio(
+    def test_make_server_propagates_oidc_failure_on_stdio(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """make_server() skips OIDC setup for stdio transport."""
-        monkeypatch.setenv("SCHOLAR_MCP_BASE_URL", "https://mcp.example.com")
-        monkeypatch.setenv("SCHOLAR_MCP_OIDC_CONFIG_URL", "https://auth.example.com/d")
-        # No httpx mock needed — _build_remote_auth should never be called
-        server = make_server(transport="stdio")
-        assert server.auth is None
+        """make_server(transport=stdio) does NOT magically skip OIDC discovery.
 
-    def test_make_server_remote_discovery_failure_returns_no_auth(
-        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
-    ) -> None:
-        """make_server() falls back to no-auth when remote discovery fails.
-
-        Semantics changed post-retrofit: core's build_remote_auth logs and
-        returns None on discovery failure instead of raising.
+        Under pvl-core 2.x, the auth pipeline is transport-agnostic — if the
+        operator set OIDC env vars they get OIDC, and discovery failure
+        raises ``ConfigurationError`` regardless of transport. This locks in
+        that scholar does not silently degrade stdio servers that happen to
+        have unreachable OIDC config (which pre-2.x's silent-degradation
+        behavior had been accidentally tolerant of).
         """
         import httpx
+        from fastmcp_pvl_core import ConfigurationError
 
         monkeypatch.setenv("SCHOLAR_MCP_BASE_URL", "https://mcp.example.com")
         monkeypatch.setenv("SCHOLAR_MCP_OIDC_CONFIG_URL", "https://bad.url/oidc")
         with (
             patch("httpx.get", side_effect=httpx.ConnectError("fail")),
-            caplog.at_level(logging.ERROR),
+            pytest.raises(ConfigurationError, match="OIDC discovery failed"),
         ):
-            server = make_server(transport="http")
-        assert server.auth is None
-        assert "discovery_failed" in caplog.text
+            make_server(transport="stdio")
+
+    def test_make_server_propagates_remote_discovery_failure(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """make_server(transport=http) propagates ConfigurationError on OIDC discovery failure.
+
+        pvl-core 2.x raises ``ConfigurationError`` on remote/multi auth discovery
+        failures rather than degrading silently — the intent is that operators
+        get paged on misconfig instead of running an unauthed server thinking
+        they have auth. scholar passes the exception through.
+        """
+        import httpx
+        from fastmcp_pvl_core import ConfigurationError
+
+        monkeypatch.setenv("SCHOLAR_MCP_BASE_URL", "https://mcp.example.com")
+        monkeypatch.setenv("SCHOLAR_MCP_OIDC_CONFIG_URL", "https://bad.url/oidc")
+        with (
+            patch("httpx.get", side_effect=httpx.ConnectError("fail")),
+            pytest.raises(ConfigurationError, match="OIDC discovery failed"),
+        ):
+            make_server(transport="http")
+
+
+class TestAuthModeInvariant:
+    """make_server() refuses to start if build_auth and resolve_auth_mode disagree.
+
+    Locks in the explicit invariant raise that catches a future pvl-core
+    regression where ``build_auth`` silently downgraded a configured mode to
+    ``None``. Tested with monkeypatching because the invariant cannot be
+    triggered through normal env-var config (pvl-core 2.x maintains the
+    invariant correctly today).
+    """
+
+    def test_raises_on_auth_mode_mismatch(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Force build_auth to return None while resolve_auth_mode still
+        # claims a non-"none" mode — the asymmetry we want to catch.
+        monkeypatch.setattr(server_module, "build_auth", lambda _config: None)
+        monkeypatch.setattr(
+            server_module, "_core_resolve_auth_mode", lambda _config: "bearer-single"
+        )
+        with pytest.raises(RuntimeError, match="invariant violation"):
+            make_server()
 
 
 class TestMiddlewareStack:
