@@ -138,3 +138,15 @@ services:
 | `v1` | Latest minor in 1.x |
 
 Multi-arch: `linux/amd64` and `linux/arm64`.
+
+
+<!-- DOMAIN-DOCKER-EXTRA-START -->
+<!-- Project-specific notes for Docker deployment; kept across copier update. -->
+
+## Project-specific notes
+
+<!-- Add domain-specific caveats here (e.g. "the /data/uploads volume must
+     be writable by UID Y", "container needs cap_add: SYS_PTRACE for
+     debugging tools"). Use sub-headings to organize if needed. -->
+
+<!-- DOMAIN-DOCKER-EXTRA-END -->
