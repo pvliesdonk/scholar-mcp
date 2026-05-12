@@ -221,7 +221,7 @@ jobs:
 
   publish-linux-packages:
     needs: release
-    if: needs.release.outputs.released == 'true'
+    if: needs.release.outputs.released == 'true' && !inputs.prerelease
     runs-on: ubuntu-latest
 
     permissions:

@@ -1898,6 +1898,11 @@ dependencies = [
 all = [
     { name = "fastmcp", extra = ["tasks"] },
 ]
+mcp = [
+    { name = "fastmcp", extra = ["tasks"] },
+]
+
+[package.dev-dependencies]
 dev = [
     { name = "diff-cover" },
     { name = "mypy" },
@@ -1913,34 +1918,37 @@ docs = [
     { name = "mkdocs-material" },
     { name = "mkdocstrings", extra = ["python"] },
 ]
-mcp = [
-    { name = "fastmcp", extra = ["tasks"] },
-]
 
 [package.metadata]
 requires-dist = [
     { name = "aiosqlite" },
     { name = "beautifulsoup4", specifier = ">=4.14.3" },
-    { name = "diff-cover", marker = "extra == 'dev'", specifier = ">=9.0" },
     { name = "fastmcp", extras = ["tasks"], marker = "extra == 'all'", specifier = ">=3.2.0,<4" },
     { name = "fastmcp", extras = ["tasks"], marker = "extra == 'mcp'", specifier = ">=3.2.0,<4" },
     { name = "fastmcp-pvl-core", specifier = ">=1.2.0,<2" },
     { name = "httpx" },
     { name = "lxml", specifier = ">=5.0" },
-    { name = "mkdocs-llmstxt", marker = "extra == 'docs'", specifier = ">=0.2" },
-    { name = "mkdocs-material", marker = "extra == 'docs'", specifier = ">=9.5" },
-    { name = "mkdocstrings", extras = ["python"], marker = "extra == 'docs'", specifier = ">=0.24" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0" },
-    { name = "pip-audit", marker = "extra == 'dev'", specifier = ">=2.7" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "python-epo-ops-client", specifier = ">=4.2" },
-    { name = "respx", marker = "extra == 'dev'", specifier = ">=0.20" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1" },
     { name = "typer", specifier = ">=0.12" },
 ]
-provides-extras = ["mcp", "all", "dev", "docs"]
+provides-extras = ["mcp", "all"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "diff-cover", specifier = ">=9.0" },
+    { name = "mypy", specifier = ">=1.0" },
+    { name = "pip-audit", specifier = ">=2.7" },
+    { name = "pytest", specifier = ">=7.0" },
+    { name = "pytest-asyncio", specifier = ">=0.21" },
+    { name = "pytest-cov", specifier = ">=4.0" },
+    { name = "respx", specifier = ">=0.20" },
+    { name = "ruff", specifier = ">=0.1" },
+]
+docs = [
+    { name = "mkdocs-llmstxt", specifier = ">=0.5" },
+    { name = "mkdocs-material", specifier = ">=9.7.6" },
+    { name = "mkdocstrings", extras = ["python"], specifier = ">=0.28" },
+]
 
 [[package]]
 name = "py-key-value-aio"

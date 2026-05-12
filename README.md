@@ -81,7 +81,7 @@ Installing the bare `pvliesdonk-scholar-mcp` package is enough for library use (
 ```bash
 git clone https://github.com/pvliesdonk/scholar-mcp.git
 cd scholar-mcp
-uv sync --all-extras --dev
+uv sync --all-extras --all-groups
 ```
 
 ### Docker
@@ -167,7 +167,7 @@ Pre-commit runs a subset of the gate on each commit; see `.pre-commit-config.yam
 
 ```bash
 rm -rf .venv
-uv sync --all-extras --dev
+uv sync --all-extras --all-groups
 ```
 
 `uv run python -m pytest` also works as a one-shot workaround (bypasses the stale entry-script shim).
