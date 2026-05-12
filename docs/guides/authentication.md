@@ -254,3 +254,16 @@ These upstream issues are actively tracked:
 - [modelcontextprotocol/python-sdk#1326](https://github.com/modelcontextprotocol/python-sdk/issues/1326) — SSE refresh deadlock
 
 When these are resolved, OIDC sessions should persist indefinitely via automatic token refresh with no changes needed server-side.
+
+
+<!-- DOMAIN-AUTH-EXTRA-START -->
+<!-- Project-specific notes for authentication; kept across copier update. -->
+
+## Project-specific notes
+
+<!-- Add domain-specific caveats here (e.g. "paperless-mcp tokens expire
+     every 60 min", "this server requires the 'admin' scope for write tools",
+     "bearer-token middleware skips /health for liveness probes"). Use
+     sub-headings to organize if needed. -->
+
+<!-- DOMAIN-AUTH-EXTRA-END -->
