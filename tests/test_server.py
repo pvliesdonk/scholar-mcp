@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from unittest.mock import MagicMock, patch
 
@@ -12,6 +13,7 @@ from fastmcp.server.middleware.logging import (
     StructuredLoggingMiddleware,
 )
 from fastmcp.server.middleware.timing import TimingMiddleware
+from mcp.types import TextContent
 
 from scholar_mcp import server as server_module
 from scholar_mcp.server import (
@@ -171,12 +173,9 @@ class TestServerInfoTool:
         accidental swap to a custom tool that names itself get_server_info
         but returns a different payload).
         """
-        import json
-
-        from mcp.types import TextContent
-
         server = make_server()
         result = await server.call_tool("get_server_info")
+        assert result.content, "get_server_info returned empty content"
         first = result.content[0]
         assert isinstance(first, TextContent)
         payload = json.loads(first.text)
@@ -194,13 +193,10 @@ class TestServerInfoTool:
         operators reading get_server_info see a different name than the one
         used by the FastMCP instance and operational logs.
         """
-        import json
-
-        from mcp.types import TextContent
-
         monkeypatch.setenv("SCHOLAR_MCP_SERVER_NAME", "scholar-mcp-prod")
         server = make_server()
         result = await server.call_tool("get_server_info")
+        assert result.content, "get_server_info returned empty content"
         first = result.content[0]
         assert isinstance(first, TextContent)
         payload = json.loads(first.text)
