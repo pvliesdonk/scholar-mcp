@@ -94,7 +94,7 @@ def _build_bearer_auth() -> object | None:
 
     Raises:
         ConfigurationError: under pvl-core 2.x the underlying builder raises
-            when ``{PREFIX}_BEARER_TOKENS_FILE`` is set but the file is
+            when ``SCHOLAR_MCP_BEARER_TOKENS_FILE`` is set but the file is
             missing, unparseable, or schema-invalid.
     """
     from fastmcp_pvl_core import build_bearer_auth
