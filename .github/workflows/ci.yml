@@ -193,7 +193,10 @@ jobs:
         run: uv python install 3.12
 
       - name: Export dependency list (excluding local project)
-        run: uv export --all-extras --frozen --no-emit-project --no-hashes -o ${{ runner.temp }}/requirements.txt
+        # Exclude `dev` and `docs` extras — they bring in tooling (pip-audit,
+        # ruff, mypy, mkdocs, ...) that does not run in production. pip-audit's
+        # own dep on `pip` triggers spurious CVE reports against pip itself.
+        run: uv export --all-extras --no-extra dev --no-extra docs --frozen --no-emit-project --no-hashes -o ${{ runner.temp }}/requirements.txt
 
       - name: Run pip-audit
         run: uvx pip-audit --strict --progress-spinner off -r ${{ runner.temp }}/requirements.txt

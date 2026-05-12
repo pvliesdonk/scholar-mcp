@@ -13,9 +13,11 @@ from fastmcp.server.middleware.logging import (
 )
 from fastmcp.server.middleware.timing import TimingMiddleware
 
+from scholar_mcp import server as server_module
 from scholar_mcp.server import (
     _build_remote_auth,
     _resolve_auth_mode,
+    get_file_exchange,
     make_server,
 )
 
@@ -151,6 +153,60 @@ class TestPatentToolGating:
             t for t in await server.list_tools() if "patent" in (t.tags or set())
         ]
         assert len(patent_tools) > 0
+
+
+class TestFileExchange:
+    """File-exchange facade wires create_download_link / fetch_file on HTTP only."""
+
+    async def test_create_download_link_registered_for_http_with_base_url(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """When transport=http AND SCHOLAR_MCP_BASE_URL is set, create_download_link appears.
+
+        The facade only registers ``create_download_link`` when both an
+        artifact store can be built (needs ``BASE_URL``) and the producer
+        side is enabled (default on HTTP).
+        """
+        # create_download_link is tagged {"write"} so it is hidden in
+        # read-only mode; force read-write so the HTTP+BASE_URL gate is
+        # what's actually under test, not read-only gating.
+        monkeypatch.setenv("SCHOLAR_MCP_READ_ONLY", "false")
+        monkeypatch.setenv("SCHOLAR_MCP_BASE_URL", "https://example.invalid")
+        server = make_server(transport="http")
+        tool_names = {t.name for t in await server.list_tools()}
+        assert "create_download_link" in tool_names
+
+    async def test_file_exchange_tools_absent_for_stdio(self) -> None:
+        """Default stdio transport leaves the facade off — no producer or consumer tool."""
+        server = make_server()
+        tool_names = {t.name for t in await server.list_tools()}
+        assert "create_download_link" not in tool_names
+        assert "fetch_file" not in tool_names
+
+    def test_get_file_exchange_raises_before_make_server(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """get_file_exchange() raises if the module singleton hasn't been set yet."""
+        monkeypatch.setattr(server_module, "_file_exchange", None)
+        with pytest.raises(RuntimeError, match="file exchange is not initialised"):
+            get_file_exchange()
+
+    def test_get_file_exchange_returns_handle_after_make_server(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """After make_server(), the singleton holds the registered handle.
+
+        Uses monkeypatch on the module global so the singleton is restored to
+        whatever it was before this test ran (rather than leaking the handle
+        from this test into subsequent test cases in the same pytest session).
+        """
+        monkeypatch.setattr(server_module, "_file_exchange", None)
+        make_server()
+        handle = get_file_exchange()
+        assert handle is not None
+        # The returned handle is a FileExchangeHandle from fastmcp_pvl_core;
+        # verify the producer-side surface that tool bodies need is present.
+        assert hasattr(handle, "publish")
 
 
 class TestResolveAuthMode:

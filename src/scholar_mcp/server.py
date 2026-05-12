@@ -14,10 +14,12 @@ from importlib.metadata import version as _pkg_version
 from fastmcp import FastMCP
 from fastmcp.server.event_store import EventStore
 from fastmcp_pvl_core import (
+    FileExchangeHandle,
     ServerConfig,
     build_auth,
     build_instructions,
     configure_logging_from_env,
+    register_file_exchange,
     wire_middleware_stack,
 )
 from fastmcp_pvl_core import (
@@ -36,6 +38,25 @@ from scholar_mcp.config import _ENV_PREFIX, ProjectConfig
 logger = logging.getLogger(__name__)
 
 _DEFAULT_SERVER_NAME = "scholar-mcp"
+
+# Module-level singleton holding the FileExchangeHandle that
+# ``register_file_exchange`` returns from ``make_server()``.  Captured so tool
+# bodies can call ``get_file_exchange().publish(...)`` (see issue #176 for the
+# work that wires scholar tools to actually publish ``FileRef`` objects).
+_file_exchange: FileExchangeHandle | None = None
+
+
+def get_file_exchange() -> FileExchangeHandle:
+    """Return the file-exchange handle captured by ``make_server()``.
+
+    Raises:
+        RuntimeError: If ``make_server()`` has not run yet.
+    """
+    if _file_exchange is None:
+        raise RuntimeError(
+            "file exchange is not initialised — call make_server() first"
+        )
+    return _file_exchange
 
 
 def _load_server_config() -> ServerConfig:
@@ -94,9 +115,12 @@ def make_server(
     """Construct the Scholar MCP FastMCP server.
 
     Args:
-        transport: ``"stdio"`` / ``"http"`` / ``"sse"``.  Tools that depend
-            on HTTP transport (e.g. artifact downloads) are wired only when
-            transport != ``"stdio"``.
+        transport: ``"stdio"`` / ``"http"`` / ``"sse"``.  Logged for
+            operational visibility and passed through to
+            ``register_file_exchange`` (``"stdio"`` disables the facade by
+            default; anything else is treated as HTTP-class).
+            ``SCHOLAR_MCP_FILE_EXCHANGE_ENABLED`` can override the
+            on/off default per-transport.
         config: Optional pre-loaded config; defaults to env-based load.
 
     Returns:
@@ -127,9 +151,10 @@ def make_server(
     server_name = config.server_name or _DEFAULT_SERVER_NAME
 
     logger.info(
-        "Server config: name=%s version=%s auth=%s mode=%s cache_dir=%s",
+        "Server config: name=%s version=%s transport=%s auth=%s mode=%s cache_dir=%s",
         server_name,
         pkg_ver,
+        transport,
         auth_mode,
         "read-only" if config.read_only else "read-write",
         config.cache_dir,
@@ -165,5 +190,19 @@ def make_server(
         # otherwise the model sees ``search_patents``/etc. in its tool list and
         # fails at call time with an auth error.
         mcp.disable(tags={"patent"})
+
+    # Capture the FileExchangeHandle into the module-level singleton so tool
+    # bodies can call ``get_file_exchange().publish(...)`` once they start
+    # producing FileRefs (tracked in #176).  We pass our resolved transport
+    # explicitly (rather than "auto") so the CLI ``--transport`` flag wins
+    # over ``SCHOLAR_MCP_TRANSPORT`` / ``FASTMCP_TRANSPORT`` env vars, which
+    # the facade's "auto" mode reads.
+    global _file_exchange
+    _file_exchange = register_file_exchange(
+        mcp,
+        namespace="scholar-mcp",
+        env_prefix=_ENV_PREFIX,
+        transport="stdio" if transport == "stdio" else "http",
+    )
 
     return mcp
