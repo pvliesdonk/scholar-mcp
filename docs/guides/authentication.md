@@ -62,6 +62,21 @@ Authorization: Bearer your-generated-token
 - Development and testing environments
 - Any scenario where full OIDC is overkill
 
+### Mapped bearer tokens (multi-subject)
+
+The bearer-token mode above shares one subject across every authenticated caller — by default the library's `bearer-anon`, override with `SCHOLAR_MCP_BEARER_DEFAULT_SUBJECT`.  For audit logs and authorization that distinguish callers, switch to mapped-token mode by pointing `SCHOLAR_MCP_BEARER_TOKENS_FILE` at a TOML file:
+
+```toml
+# tokens.toml
+[tokens]
+"ghp_alice_xxxxxxxx" = "user:alice@example.com"
+"sk_ci_yyyyyyyy"     = "service:ci-bot"
+```
+
+Each token resolves to a distinct subject string for downstream attribution.  Subject strings are opaque — the `<kind>:<id>` convention (`user:`, `service:`, `token:`) is documentation only.  When `BEARER_TOKENS_FILE` is set it overrides `BEARER_TOKEN` (a `WARNING` is logged if both are present).  A missing or malformed file aborts startup with `ConfigurationError` rather than silently denying every request.
+
+For the per-tool authorization that consumes these subjects, see the **Authorization (opt-in)** section of the project [README](https://github.com/pvliesdonk/scholar-mcp#authorization-opt-in).
+
 ---
 
 ## Remote auth

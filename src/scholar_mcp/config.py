@@ -42,6 +42,12 @@ class ProjectConfig:
     epo_consumer_secret: str | None = None
     google_books_api_key: str | None = None
     github_token: str | None = None
+    # Opt-in per-subject authorization: uncomment to enable. See pvl-core's
+    # README "Authorization" section + scholar's README "Authorization
+    # (opt-in)" section for the wire-in story. Also requires uncommenting
+    # the matching AuthorizationMiddleware stanza in ``server.py`` and the
+    # env-load below in ``load_config``.
+    # acl_path: Path | None = None
     # CONFIG-FIELDS-END
 
     @property
@@ -71,6 +77,14 @@ def load_config() -> ProjectConfig:
     # GitHub-tooling env name users expect.
     github_token = os.environ.get("SCHOLAR_GITHUB_TOKEN") or None
 
+    # Opt-in per-subject authorization (see CONFIG-FIELDS-START comment above
+    # and scholar's README "Authorization (opt-in)" section). Activation
+    # requires THREE coordinated edits: (1) uncomment the ``acl_path`` field
+    # declaration above, (2) uncomment the env-load below, (3) uncomment the
+    # ``acl_path=acl_path`` kwarg in the ProjectConfig(...) call below — plus
+    # the matching AuthorizationMiddleware stanza in server.py.
+    # acl_path = Path(_p) if (_p := env(_ENV_PREFIX, "ACL_PATH")) else None
+
     config = ProjectConfig(
         server=server,
         server_name=server_name,
@@ -86,6 +100,7 @@ def load_config() -> ProjectConfig:
         epo_consumer_secret=env(_ENV_PREFIX, "EPO_CONSUMER_SECRET"),
         google_books_api_key=env(_ENV_PREFIX, "GOOGLE_BOOKS_API_KEY"),
         github_token=github_token,
+        # acl_path=acl_path,  # uncomment alongside the field + env-load above
     )
     # CONFIG-FROM-ENV-END
 

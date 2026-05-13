@@ -131,6 +131,45 @@ Core environment variables shared across all `fastmcp-pvl-core`-based services:
 
 Domain-specific variables go below under [Domain configuration](#domain-configuration).
 
+## Authorization (opt-in)
+
+This server inherits opt-in per-subject authorization from `fastmcp-pvl-core`.  The default posture is **off** — every authenticated caller can use every tool, resource, and prompt.  Turn it on by pointing `SCHOLAR_MCP_ACL_PATH` at a TOML ACL file; the middleware is installed only when the path is set, and individual tools opt in by declaring `meta={"required_scope": "<scope>"}` at registration.  A tool without `required_scope` is unrestricted regardless of caller.
+
+Wire it in by uncommenting the `acl_path` field in `src/scholar_mcp/config.py` and the `AuthorizationMiddleware` stanza in `src/scholar_mcp/server.py` — both ship as commented stubs in the scaffold.
+
+### ACL TOML schema
+
+```toml
+[subjects]
+"user:alice@example.com" = ["read", "write"]
+"user:admin@example.com" = ["*"]              # wildcard — any required scope passes
+"service:ci-bot"         = ["read"]
+"local"                  = ["*"]              # auth-disabled subject (no bearer / OIDC vars set)
+```
+
+- **Subject strings are opaque.** The `<kind>:<id>` convention is documentation only; the library treats each subject as a literal string.
+- **`*` is the only library-treated special scope** — it grants every required scope.  Subject-side wildcards (`*` as an ACL key) are rejected at load time.
+- **Scope vocabulary is domain-defined.** Per-project or per-folder gating is encoded into the scope string itself (e.g. `read:project-foo`, `write:vault/personal`); `fastmcp-pvl-core` treats every scope except `*` as opaque.
+
+### Subject ↔ bearer-token alignment
+
+The subject string used as a *value* in the bearer-tokens TOML (`SCHOLAR_MCP_BEARER_TOKENS_FILE`) is the same string used as a *key* in the ACL TOML.  Same string, opposite roles — keep the two files consistent when adding or removing a principal.  See [Mapped bearer tokens](docs/guides/authentication.md#mapped-bearer-tokens-multi-subject) in the authentication guide for the bearer-tokens TOML schema.
+
+In single-token mode (`SCHOLAR_MCP_BEARER_TOKEN`) every authenticated caller shares one subject — the library's default (currently `"bearer-anon"`), override with `SCHOLAR_MCP_BEARER_DEFAULT_SUBJECT`; reference *that* string as the ACL key.  When no auth is configured (no `SCHOLAR_MCP_BEARER_TOKEN`, `SCHOLAR_MCP_BEARER_TOKENS_FILE`, or OIDC env vars set — common in stdio dev rigs but also possible on HTTP), every request resolves to the literal subject `"local"` — reference that string as the ACL key for un-authenticated local sessions.
+
+### Load semantics
+
+The ACL file is loaded **once at server startup**.  Restart the server to pick up changes; live reload is not part of the initial implementation.  `load_acl` fails fast with `ConfigurationError` on every malformed condition, so a typo in the ACL file aborts startup rather than silently denying requests.
+
+### Privacy default
+
+Denied requests are logged at WARNING with the subject string for audit attribution.  The wire-side error payload **omits** the subject by default to limit cross-user information disclosure.  For internal-only servers where the subject is safe to surface to clients, construct the middleware with `AuthorizationMiddleware(..., expose_subject_in_error=True)`.
+
+### See also
+
+- [fastmcp-pvl-core README — Authorization](https://github.com/pvliesdonk/fastmcp-pvl-core#authorization-opt-in--authorizationmiddleware) — full design, the `check_authorization` per-call helper, and per-token subject mapping.
+- [Authorization submodule spec](https://github.com/pvliesdonk/fastmcp-pvl-core/blob/main/docs/specs/authorization-submodule.md) — design rationale and deviations table.
+
 ## GitHub secrets
 
 CI workflows reference three repository secrets. Configure them via **Settings → Secrets and variables → Actions** or with `gh secret set`:

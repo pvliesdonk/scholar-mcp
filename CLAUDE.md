@@ -64,6 +64,8 @@ The config is in `_skip_if_exists`, so domain-specific additions (shellcheck, ya
 
 Trivial exceptions: pure typo fixes and automated dependency bumps (Dependabot / Renovate) may skip the issue.
 
+**Bot reviewers (claude-review, gemini-code-assist) are merge gates, not pair reviewers.** Local review must be complete before the PR opens. If a bot finds anything on first run, the local review was incomplete — that is a discipline failure to investigate, not "address-and-move-on." Run a local code-review pass on the cumulative diff before `gh pr create`; the bots are not a substitute.
+
 ## GitHub Review Types
 
 GitHub has two distinct review mechanisms — **both must be read and addressed**:
