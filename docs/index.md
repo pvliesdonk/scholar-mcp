@@ -92,3 +92,16 @@ See [Installation](installation.md) for all methods including Linux packages.
 - [Claude Code plugin](guides/claude-code-plugin.md) -- install as a Claude Code plugin
 - [Claude Desktop setup](guides/claude-desktop.md) -- get started with Claude Desktop
 - [Docker deployment](deployment/docker.md) -- production Docker Compose setup
+
+<!-- DOMAIN-INDEX-FEATURES-START -->
+<!-- Future template-managed features section; kept across copier update.
+     Scholar's feature list is already documented in the "What it does"
+     body above (Papers / Patents / Books / Standards / Cross-source
+     Utility / PDF conversion / Async task queue). -->
+<!-- DOMAIN-INDEX-FEATURES-END -->
+
+<!-- DOMAIN-INDEX-USE-CASES-START -->
+<!-- Future template-managed use-cases section; kept across copier update.
+     Scholar's use cases are covered in the README "What you can do with it"
+     section and the Guides index. -->
+<!-- DOMAIN-INDEX-USE-CASES-END -->

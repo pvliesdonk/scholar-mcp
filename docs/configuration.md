@@ -114,7 +114,9 @@ When both bearer and OIDC auth are configured, the server uses multi-auth — ei
 
 | Variable | Default | Description |
 |---|---|---|
-| `SCHOLAR_MCP_BEARER_TOKEN` | -- | Static bearer token. When set, HTTP clients must send `Authorization: Bearer <token>`. |
+| `SCHOLAR_MCP_BEARER_TOKEN` | -- | Static bearer token. When set, HTTP clients must send `Authorization: Bearer <token>`. Every authenticated caller shares one subject (see `SCHOLAR_MCP_BEARER_DEFAULT_SUBJECT`). |
+| `SCHOLAR_MCP_BEARER_TOKENS_FILE` | -- | Path to a TOML file mapping bearer tokens to per-caller subjects. When set, takes precedence over `SCHOLAR_MCP_BEARER_TOKEN`. See [Mapped bearer tokens](guides/authentication.md#mapped-bearer-tokens-multi-subject) in the authentication guide. |
+| `SCHOLAR_MCP_BEARER_DEFAULT_SUBJECT` | `bearer-anon` | Single-token-mode subject string. Used as the ACL key when wiring opt-in authorization. |
 | `SCHOLAR_MCP_AUTH_MODE` | *(auto)* | Force auth mode: `remote` or `oidc-proxy`. When unset, auto-detected from which OIDC env vars are present. |
 | `SCHOLAR_MCP_BASE_URL` | -- | Public base URL of this server (e.g. `https://mcp.example.com`). Required for both OIDC modes. |
 | `SCHOLAR_MCP_OIDC_CONFIG_URL` | -- | OIDC discovery endpoint URL (e.g. `https://auth.example.com/.well-known/openid-configuration`). |
@@ -124,6 +126,7 @@ When both bearer and OIDC auth are configured, the server uses multi-auth — ei
 | `SCHOLAR_MCP_OIDC_AUDIENCE` | -- | Expected JWT audience claim. When set, the token's `aud` must match. Used by both modes. |
 | `SCHOLAR_MCP_OIDC_REQUIRED_SCOPES` | `openid` | Comma-separated required scopes (e.g. `openid,profile`). Used by both modes. |
 | `SCHOLAR_MCP_OIDC_VERIFY_ACCESS_TOKEN` | `false` | (`oidc-proxy` only) Set `true` to verify the upstream `access_token` as a JWT instead of the `id_token`. Use when your provider issues JWT access tokens. |
+| `SCHOLAR_MCP_ACL_PATH` | -- | (scaffold) Path to a TOML ACL file enabling opt-in per-subject authorization. Requires uncommenting the matching scaffold in `src/scholar_mcp/config.py` and `src/scholar_mcp/server.py`; see [Authorization (opt-in)](https://github.com/pvliesdonk/scholar-mcp#authorization-opt-in) in the README. |
 
 See [Authentication guide](guides/authentication.md) for setup instructions and [OIDC deployment](deployment/oidc.md) for provider-specific configuration.
 
@@ -157,3 +160,10 @@ Rate limiting is automatic and not configurable:
 - **With API key**: ~0.1s between Semantic Scholar requests
 - **Without API key**: ~1.1s between requests
 - **Retry**: automatic exponential backoff on HTTP 429 (up to 3 retries)
+
+<!-- DOMAIN-CONFIG-VARS-START -->
+<!-- Future project-specific config notes go here; kept across copier
+     update. Scholar's domain config is already documented in the
+     per-domain sections above (Core, PDF Conversion, EPO, Google Books,
+     Server, Authentication, Cache TTLs, Rate Limiting). -->
+<!-- DOMAIN-CONFIG-VARS-END -->

@@ -81,3 +81,10 @@ cd scholar-mcp
 uv sync --extra dev --extra mcp
 uv run scholar-mcp serve
 ```
+
+<!-- DOMAIN-INSTALL-EXTRA-START -->
+<!-- Future template-managed install-extras section; kept across copier
+     update. Scholar's install steps are already documented in the
+     per-method sections above (uvx / pip / Docker / Linux packages /
+     from source). -->
+<!-- DOMAIN-INSTALL-EXTRA-END -->
