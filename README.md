@@ -92,6 +92,8 @@ docker pull ghcr.io/pvliesdonk/scholar-mcp:latest
 
 A `compose.yml` ships at the repo root as a starting point — copy `.env.example` to `.env`, edit, and `docker compose up -d`.
 
+To attach a remote Python debugger (development only — the protocol is unauthenticated), see [Remote debugging](docs/deployment/docker.md#remote-debugging).
+
 ### Linux packages (.deb / .rpm)
 
 Download `.deb` or `.rpm` packages from the [GitHub Releases](https://github.com/pvliesdonk/scholar-mcp/releases) page. Both install a hardened systemd unit; env configuration is sourced from `/etc/scholar-mcp/env` (copy from the shipped `/etc/scholar-mcp/env.example`).

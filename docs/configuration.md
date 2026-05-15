@@ -161,6 +161,17 @@ Rate limiting is automatic and not configurable:
 - **Without API key**: ~1.1s between requests
 - **Retry**: automatic exponential backoff on HTTP 429 (up to 3 retries)
 
+## Remote debugging
+
+Optional development-only listener. Requires the `[debug]` extra (Docker images: built with `--build-arg DEBUG=true`; pip / uv installs: `pip install 'pvliesdonk-scholar-mcp[debug]'`). When `debugpy` isn't importable the helper logs a `WARNING` and continues — there's no hard failure.
+
+| Variable | Default | Description |
+|---|---|---|
+| `SCHOLAR_MCP_DEBUG_PORT` | -- | TCP port for the `debugpy` listener (e.g. `5678`). Unset = listener disabled. |
+| `SCHOLAR_MCP_DEBUG_WAIT` | `false` | Block startup until the IDE attaches. Useful for debugging early-startup code paths. |
+
+See [Docker deployment → Remote debugging](deployment/docker.md#remote-debugging) for the IDE-attach walkthrough.
+
 <!-- DOMAIN-CONFIG-VARS-START -->
 <!-- Future project-specific config notes go here; kept across copier
      update. Scholar's domain config is already documented in the

@@ -108,6 +108,28 @@ def _placeholder(section_title: str, status: str) -> str:
     return f"### {section_title}\n\n{msg}\n"
 
 
+def _pr_label(entry: dict) -> str:
+    """Render an entry's pr_number as ``#N``, or ``#?`` when null/missing.
+
+    LLM-emitted entries without a PR reference would otherwise render as
+    the literal ``#None`` in the body via Python's ``None.__str__`` inside
+    an f-string.  Used by Job B's three render strata.
+    """
+    pr = entry.get("pr_number")
+    return f"#{pr}" if pr is not None else "#?"
+
+
+def _file_label(entry: dict) -> str:
+    """Render an entry's file as ``\\`name\\```, or ``\\`(unnamed)\\``` when null/missing.
+
+    Same null-safety rationale as :func:`_pr_label` but for Job C's file
+    field; without coercion a null ``file`` renders as the literal
+    backticked ``\\`None\\```.
+    """
+    name = entry.get("file")
+    return f"`{name}`" if name is not None else "`(unnamed)`"
+
+
 def _render_job_a(data: dict | None, conflict_count: int) -> str:
     """Render the 🔧 Conflict resolutions section."""
     if conflict_count == 0:
@@ -121,28 +143,33 @@ def _render_job_a(data: dict | None, conflict_count: int) -> str:
     if status != "ok":
         return _placeholder("🔧 Conflict resolutions", "error")
 
-    lines = ["### 🔧 Conflict resolutions", ""]
+    content: list[str] = []
     auto = data.get("auto_resolved", [])
     if auto:
-        lines.append("**Auto-committed by claude-code** — VERIFY before merging:")
-        lines.append("")
+        content.append("**Auto-committed by claude-code** — VERIFY before merging:")
+        content.append("")
         for item in auto:
-            lines.append(
+            content.append(
                 f"- `{item['file']}` (commit {item['commit_sha']}): "
                 f"_{item['articulation']}_"
             )
-        lines.append("")
+        content.append("")
     review = data.get("needs_review", [])
     if review:
-        lines.append(
+        content.append(
             "**Needs review** — conflict markers remain, operator must resolve:"
         )
-        lines.append("")
+        content.append("")
         for item in review:
-            lines.append(f"- `{item['file']}`: {item['reasoning']}")
-            lines.append(f"  Recommended approach: {item['recommended_resolution']}")
-        lines.append("")
-    return "\n".join(lines)
+            content.append(f"- `{item['file']}`: {item['reasoning']}")
+            content.append(f"  Recommended approach: {item['recommended_resolution']}")
+        content.append("")
+    if not content:
+        # Status was "ok" but the LLM reported neither auto-resolved nor
+        # needs-review entries.  Suppress the section entirely rather than
+        # emitting an orphaned `### 🔧` header above empty content.
+        return ""
+    return "\n".join(["### 🔧 Conflict resolutions", "", *content])
 
 
 def _render_job_b(data: dict | None, template_advanced: bool = True) -> str:
@@ -188,28 +215,44 @@ def _render_job_b(data: dict | None, template_advanced: bool = True) -> str:
         cls = e.get("classification")
         by_class[cls if cls in by_class else "informational"].append(e)
 
-    lines = ["### ✨ New features in this update", ""]
+    content: list[str] = []
     if by_class["needs-opt-in"]:
-        lines.append("**Needs your attention** (action-required):")
-        lines.append("")
+        content.append("**Needs your attention** (action-required):")
+        content.append("")
         for e in by_class["needs-opt-in"]:
-            lines.append(f"- #{e['pr_number']} {e['title']} — needs opt-in.")
-            lines.append(f"  {e['summary']}")
-        lines.append("")
+            content.append(f"- {_pr_label(e)} {e['title']} — needs opt-in.")
+            content.append(f"  {e['summary']}")
+        content.append("")
     if by_class["ships-automatically"]:
-        lines.append("**Ships through automatically** (informational):")
-        lines.append("")
+        content.append("**Ships through automatically** (informational):")
+        content.append("")
         for e in by_class["ships-automatically"]:
-            lines.append(f"- #{e['pr_number']} {e['title']} — applied this run")
-        lines.append("")
+            content.append(f"- {_pr_label(e)} {e['title']} — applied this run")
+        content.append("")
     if by_class["informational"]:
-        ids = ", ".join(f"#{e['pr_number']}" for e in by_class["informational"])
-        n = len(by_class["informational"])
-        lines.append(
-            f"**Internal / no downstream effect** ({n} {'entry' if n == 1 else 'entries'}): {ids}"
-        )
-        lines.append("")
-    return "\n".join(lines)
+        # Drop entries with null pr_number from the rollup — they'd render
+        # as the literal "#None" otherwise (LLM-emitted malformed entries
+        # without a PR reference can't be looked up anyway, so dropping
+        # them from the displayed list is preferable to a placeholder).
+        # The bullet strata above use ``_pr_label`` which coerces null to
+        # ``#?`` — preserves the entry where its prose detail is useful;
+        # the rollup is a tally so dropping is cleaner there.
+        rollup = [
+            e for e in by_class["informational"] if e.get("pr_number") is not None
+        ]
+        if rollup:
+            ids = ", ".join(_pr_label(e) for e in rollup)
+            n = len(rollup)
+            content.append(
+                f"**Internal / no downstream effect** ({n} {'entry' if n == 1 else 'entries'}): {ids}"
+            )
+            content.append("")
+    if not content:
+        # Entries existed but every stratum filtered out (e.g. all
+        # informational with null pr_number); suppress the section entirely
+        # rather than emit an orphaned `### ✨` header above empty content.
+        return ""
+    return "\n".join(["### ✨ New features in this update", "", *content])
 
 
 def _render_job_c(data: dict | None, template_advanced: bool = True) -> str:
@@ -246,28 +289,38 @@ def _render_job_c(data: dict | None, template_advanced: bool = True) -> str:
         cls = f.get("classification")
         by_class[cls if cls in by_class else "informational"].append(f)
 
-    lines = ["### 📦 Excluded-file upstream changes", ""]
+    content: list[str] = []
     if by_class["recommend-port"]:
-        lines.append("**Recommended to port** (action-required):")
-        lines.append("")
+        content.append("**Recommended to port** (action-required):")
+        content.append("")
         for f in by_class["recommend-port"]:
-            lines.append(f"- `{f['file']}`: {f['summary']}")
-            lines.append(f"  Diff: {f['diff_summary']}")
-        lines.append("")
+            content.append(f"- {_file_label(f)}: {f['summary']}")
+            content.append(f"  Diff: {f['diff_summary']}")
+        content.append("")
     if by_class["informational"]:
-        lines.append("**Informational**:")
-        lines.append("")
+        content.append("**Informational**:")
+        content.append("")
         for f in by_class["informational"]:
-            lines.append(f"- `{f['file']}`: {f['summary']}")
-        lines.append("")
+            content.append(f"- {_file_label(f)}: {f['summary']}")
+        content.append("")
     if by_class["skip"]:
-        names = ", ".join(f"`{f['file']}`" for f in by_class["skip"])
-        n = len(by_class["skip"])
-        lines.append(
-            f"**Skipped (template-internal)** ({n} {'file' if n == 1 else 'files'}): {names}"
-        )
-        lines.append("")
-    return "\n".join(lines)
+        # Drop entries with null file from the rollup — same rationale as
+        # Job B's informational rollup (see :func:`_render_job_b`).
+        rollup = [f for f in by_class["skip"] if f.get("file") is not None]
+        if rollup:
+            names = ", ".join(_file_label(f) for f in rollup)
+            n = len(rollup)
+            content.append(
+                f"**Skipped (template-internal)** ({n} {'file' if n == 1 else 'files'}): {names}"
+            )
+            content.append("")
+    if not content:
+        # Files existed but the skip rollup was the only non-empty
+        # stratum and every entry in it had null file (so the rollup
+        # got filtered out).  Suppress the section entirely rather
+        # than emit an orphaned `### 📦` header above empty content.
+        return ""
+    return "\n".join(["### 📦 Excluded-file upstream changes", "", *content])
 
 
 _DISABLED_NOTICE = (
@@ -283,7 +336,7 @@ def _disabled_section(section_title: str) -> str:
 
 def compose_body(inputs: AggregatorInputs) -> str:
     """Compose the full PR body from existing PR-body content + agent JSON outputs."""
-    parts = [inputs.existing_body.rstrip(), "", "---", "", "## Agent analysis", ""]
+    agent_sections: list[str] = []
 
     if not inputs.agent_enabled:
         # Per-section disabled placeholders so structure is consistent across
@@ -291,42 +344,52 @@ def compose_body(inputs: AggregatorInputs) -> str:
         # gets a skip notice; sections gated out (e.g. Job A with no conflicts)
         # are omitted entirely.
         if inputs.conflict_count > 0:
-            parts.append(_disabled_section("🔧 Conflict resolutions"))
+            agent_sections.append(_disabled_section("🔧 Conflict resolutions"))
         if inputs.template_advanced:
-            parts.append(_disabled_section("✨ New features in this update"))
-            parts.append(_disabled_section("📦 Excluded-file upstream changes"))
-        return "\n".join(parts) + "\n"
+            agent_sections.append(_disabled_section("✨ New features in this update"))
+            agent_sections.append(
+                _disabled_section("📦 Excluded-file upstream changes")
+            )
+    else:
+        # Each render is wrapped in try/except so a malformed item in one job's
+        # JSON (e.g. LLM emitted entry missing a required field) degrades to
+        # that section's error placeholder without nuking the other two
+        # sections.  See spec § Aggregator's four-state contract — sections
+        # must be independently failing.
+        section_a = _safe_render(
+            "🔧 Conflict resolutions",
+            lambda: _render_job_a(
+                _read_job_json(inputs.job_a_path), inputs.conflict_count
+            ),
+        )
+        if section_a:
+            agent_sections.append(section_a)
 
-    # Each render is wrapped in try/except so a malformed item in one job's
-    # JSON (e.g. LLM emitted entry missing a required field) degrades to that
-    # section's error placeholder without nuking the other two sections.
-    # See spec § Aggregator's four-state contract — sections must be
-    # independently failing.
-    section_a = _safe_render(
-        "🔧 Conflict resolutions",
-        lambda: _render_job_a(_read_job_json(inputs.job_a_path), inputs.conflict_count),
-    )
-    if section_a:
-        parts.append(section_a)
+        section_b = _safe_render(
+            "✨ New features in this update",
+            lambda: _render_job_b(
+                _read_job_json(inputs.job_b_path), inputs.template_advanced
+            ),
+        )
+        if section_b:
+            agent_sections.append(section_b)
 
-    section_b = _safe_render(
-        "✨ New features in this update",
-        lambda: _render_job_b(
-            _read_job_json(inputs.job_b_path), inputs.template_advanced
-        ),
-    )
-    if section_b:
-        parts.append(section_b)
+        section_c = _safe_render(
+            "📦 Excluded-file upstream changes",
+            lambda: _render_job_c(
+                _read_job_json(inputs.job_c_path), inputs.template_advanced
+            ),
+        )
+        if section_c:
+            agent_sections.append(section_c)
 
-    section_c = _safe_render(
-        "📦 Excluded-file upstream changes",
-        lambda: _render_job_c(
-            _read_job_json(inputs.job_c_path), inputs.template_advanced
-        ),
-    )
-    if section_c:
-        parts.append(section_c)
-
+    parts = [inputs.existing_body.rstrip()]
+    # Suppress the agent-analysis header entirely when no sections will follow
+    # it (e.g. agent_enabled=True with conflict_count=0 + template_advanced=False,
+    # or agent_disabled with both gates closed) — otherwise the body emits an
+    # orphaned `## Agent analysis` separator with nothing under it.
+    if agent_sections:
+        parts.extend(["", "---", "", "## Agent analysis", "", *agent_sections])
     return "\n".join(parts) + "\n"
 
 
