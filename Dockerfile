@@ -12,18 +12,30 @@ ENV UV_COMPILE_BYTECODE=1 \
 
 WORKDIR /app
 
+# Optional remote-debugger listener.  Default off so production images stay
+# lean; pass ``--build-arg DEBUG=true`` to install the ``[debug]`` extra
+# (debugpy) and bake the listener into the image.  Accepts the same boolean
+# vocabulary as runtime ``parse_bool`` (``true``/``1``/``yes``/``on``,
+# case-insensitive); anything else is treated as off.  See
+# ``docs/deployment/docker.md`` for the full attach workflow.
+ARG DEBUG=false
+
 # DOCKERFILE-UV-EXTRAS-START — append `--extra <name>` flags below to pull domain-specific extras; kept across copier update
-# Install dependencies first (cache layer).
+# Install dependencies first (cache layer).  The ``$( ... )`` shell
+# expansion appends ``--extra debug`` only when ``--build-arg DEBUG=true``;
+# default builds get the lean install.
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     --mount=type=bind,source=uv.lock,target=uv.lock \
-    uv sync --frozen --no-install-project --no-dev --extra all
+    uv sync --frozen --no-install-project --no-dev --extra all \
+        $( case "$DEBUG" in [Tt][Rr][Uu][Ee]|1|[Yy][Ee][Ss]|[Oo][Nn]) echo "--extra debug" ;; esac )
 
 # Copy source and install project.
 COPY pyproject.toml uv.lock README.md /app/
 COPY src/ /app/src/
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --extra all
+    uv sync --frozen --no-dev --extra all \
+        $( case "$DEBUG" in [Tt][Rr][Uu][Ee]|1|[Yy][Ee][Ss]|[Oo][Nn]) echo "--extra debug" ;; esac )
 # DOCKERFILE-UV-EXTRAS-END
 
 # Create non-root user with configurable UID/GID for bind-mount compatibility.
@@ -44,6 +56,12 @@ ENV PATH="/app/.venv/bin:$PATH" \
     FASTMCP_HOME=/data/state/fastmcp
 
 EXPOSE 8000
+# Remote debugger: ``EXPOSE`` is metadata — nothing actually listens unless
+# the image was built with ``--build-arg DEBUG=true`` (which installs
+# debugpy) AND ``SCHOLAR_MCP_DEBUG_PORT`` is set at runtime.  Always
+# declared so the toggled ``[debug]`` extra has a stable port surface
+# to reach with ``-p 127.0.0.1:5678:5678``.
+EXPOSE 5678
 
 # DOCKERFILE-VOLUMES-START — mounted volume list; kept across copier update
 VOLUME ["/data/service", "/data/state"]

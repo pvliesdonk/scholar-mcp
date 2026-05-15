@@ -33,6 +33,14 @@ dependencies = [
 [project.optional-dependencies]
 # PROJECT-EXTRAS-START — domain optional-dependency groups; kept across copier update
 mcp = ["fastmcp[tasks]>=3.2.0,<4"]
+# Pulls debugpy transitively via fastmcp-pvl-core's [debug] extra.  The
+# version range is inherited from the [project] dependency on
+# fastmcp-pvl-core above; pip resolves a single, consistent version.
+debug = ["fastmcp-pvl-core[debug]"]
+# ``all`` is the production-features rollup — what a published-package consumer
+# installs with ``pip install pvliesdonk-scholar-mcp[all]``.  Debug is opt-in
+# separately (``--extra debug`` or, in the Dockerfile, ``--build-arg DEBUG=true``)
+# so ``[all]`` images stay lean.  CI uses ``--all-extras`` which picks up both.
 all = ["fastmcp[tasks]>=3.2.0,<4"]
 # PROJECT-EXTRAS-END
 

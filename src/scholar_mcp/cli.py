@@ -16,7 +16,11 @@ from typing import TYPE_CHECKING, cast
 
 import httpx
 import typer
-from fastmcp_pvl_core import configure_logging_from_env, normalise_http_path
+from fastmcp_pvl_core import (
+    configure_logging_from_env,
+    maybe_start_debugpy,
+    normalise_http_path,
+)
 
 from scholar_mcp.config import _ENV_PREFIX
 
@@ -107,6 +111,18 @@ def serve(
         raise typer.Exit(code=1) from exc
     env_http_path = os.environ.get(f"{_ENV_PREFIX}_HTTP_PATH")
     path = normalise_http_path(http_path or env_http_path)
+
+    # Optional remote-debugger listener — placed in ``serve`` (not the
+    # typer root callback) so non-server commands like ``--help``,
+    # ``--version``, or future ``dump-config``-style subcommands are
+    # never blocked by ``SCHOLAR_MCP_DEBUG_WAIT=true``.  No-op
+    # unless ``SCHOLAR_MCP_DEBUG_PORT`` is set; ``debugpy`` is only
+    # present when the image was built with ``--build-arg DEBUG=true``
+    # (a missing import logs a WARNING and continues).  ``_root`` has
+    # already attached the StreamHandler by the time ``serve`` runs, so
+    # the helper's INFO/WARNING logs route through the configured
+    # formatter rather than Python's lastResort.
+    maybe_start_debugpy(_ENV_PREFIX)
 
     if transport != "http" and (
         host != "0.0.0.0" or port != 8000 or http_path is not None

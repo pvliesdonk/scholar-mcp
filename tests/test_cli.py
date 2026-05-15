@@ -121,6 +121,24 @@ def test_serve_stdio_invokes_make_server() -> None:
     mock_server.run.assert_called_once_with(transport="stdio")
 
 
+def test_serve_calls_maybe_start_debugpy() -> None:
+    """`serve` invokes ``maybe_start_debugpy`` with the scholar-mcp env prefix.
+
+    The call is a no-op unless ``SCHOLAR_MCP_DEBUG_PORT`` is set, but it must
+    happen on every ``serve`` invocation so operators can attach a debugger by
+    setting the env var without rebuilding or rewriting the entrypoint.
+    """
+    mock_server = MagicMock()
+    with (
+        patch("scholar_mcp.server.make_server", return_value=mock_server),
+        patch("scholar_mcp.server.build_event_store"),
+        patch("scholar_mcp.cli.maybe_start_debugpy") as mock_debugpy,
+    ):
+        result = CliRunner().invoke(app, ["serve"])
+    assert result.exit_code == 0
+    mock_debugpy.assert_called_once_with("SCHOLAR_MCP")
+
+
 def test_serve_import_error_exits_1() -> None:
     """If fastmcp isn't installed (import fails), serve exits 1."""
     with patch.dict("sys.modules", {"scholar_mcp.server": None}):
