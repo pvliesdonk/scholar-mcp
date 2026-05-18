@@ -7,8 +7,8 @@ files to each other by reference instead of by base64-in-context.
 The full specification lives in `fastmcp-pvl-core`'s docs:
 [`docs/specs/file-exchange.md`](https://github.com/pvliesdonk/fastmcp-pvl-core/blob/main/docs/specs/file-exchange.md).
 This page is the project-side guide: **what's wired by default, which
-env vars to set, and how to publish or consume `FileRef` objects from
-your tool bodies.**
+env vars to set, and how to publish, consume, or accept agent-uploaded
+`FileRef` objects from your tool bodies.**
 
 !!! note "Scholar MCP status"
     Scholar wires the file-exchange **facade** in `make_server()` so the
@@ -39,6 +39,10 @@ That single call:
 By default the feature is **on** for HTTP/SSE deployments and **off**
 for stdio. See [Configuration → MCP File Exchange](../configuration.md#mcp-file-exchange)
 for the env-var matrix.
+
+The **upload direction** is opt-in and not wired by default — see
+[Uploading files](#uploading-files-receiver) below for the
+`register_file_exchange_upload(...)` pattern.
 
 ## The two patterns
 
@@ -167,6 +171,101 @@ register_file_exchange(
 
 `consumes=` is advertised in the capability declaration; the LLM and
 peer servers use it to pick a destination for `fetch_file` calls.
+
+## Uploading files (`receiver=`)
+
+The download direction is producer-driven: this server `publish()`es
+a file, and a peer (or LLM tool) fetches it. The **upload direction**
+is the inverse — an agent or peer pushes bytes into this server, and
+a **receiver** in your code commits them.
+
+Wire it by uncommenting the `register_file_exchange_upload(...)`
+block in `src/scholar_mcp/server.py` (inside the
+`DOMAIN-FILE-EXCHANGE-START / END` sentinel) and supplying a
+`receiver`:
+
+```python
+from typing import Any
+
+from fastmcp_pvl_core import UploadRecord, register_file_exchange_upload
+
+
+# _vault is illustrative — replace with your domain's storage helper.
+def _upload_receiver(record: UploadRecord, body: bytes) -> dict[str, Any]:
+    # record.target_id, record.extra, record.max_bytes available.
+    path = _vault.write(record.target_id, body)
+    return {"path": str(path), "size_bytes": len(body)}
+
+register_file_exchange_upload(
+    mcp,
+    namespace="scholar-mcp",
+    env_prefix=_ENV_PREFIX,
+    receiver=_upload_receiver,
+)
+```
+
+Once registered, an LLM-visible `create_upload_link` tool appears.
+The agent calls it with a `target_id` (and optional `extra`,
+`ttl_seconds`, `max_bytes`); the helper mints a one-time HTTPS
+`POST /<namespace>/uploads/{token}` URL and returns it. The agent
+POSTs the bytes; the route hands them to your receiver.
+
+### Pre-link validation
+
+To reject bad `target_id`s **before** the token is minted — so an LLM
+sees a clean tool error rather than wastes a round-trip — supply
+`pre_link_validator`:
+
+```python
+def _validate_upload_target(target_id: str, extra: dict[str, Any] | None) -> None:
+    if not target_id.startswith("inbox/"):
+        raise ValueError(f"target_id must begin with 'inbox/': {target_id}")
+
+register_file_exchange_upload(
+    mcp,
+    namespace="scholar-mcp",
+    env_prefix=_ENV_PREFIX,
+    receiver=_upload_receiver,
+    pre_link_validator=_validate_upload_target,
+)
+```
+
+Raising `ValueError` surfaces the message verbatim to the caller.
+Other exceptions also propagate but are logged at ERROR with a
+`non-ValueError` marker so operators distinguish bugs from
+caller-input errors. Sync validators run in `asyncio.to_thread`
+automatically; `async def` validators run on the loop.
+
+### Receiver error contract
+
+The receiver runs **after** route-level checks pass. Oversized bodies
+(over `UPLOAD_MAX_BYTES`) return `413` and expired or already-consumed
+tokens return `404` before the receiver is invoked. Once the receiver
+runs, exceptions translate to status codes as follows:
+
+| Exception | Response | When to use |
+|-----------|----------|-------------|
+| `ValueError` | `400` Bad Request | Request body fails domain validation. |
+| `FileExistsError` | `409` Conflict | `target_id` collides with existing data. |
+| Anything else | `500` Internal Server Error | Server-side bug. Traceback is logged. |
+
+For `400` and `409`, the exception's `str(exc)` becomes the response
+body — frame those messages as caller-facing diagnostics. The `500`
+path returns a generic body and logs the traceback server-side. A
+returned `dict[str, Any]` produces `200` and is JSON-encoded into the
+response; non-dict returns are treated as receiver bugs (`500` with a
+WARNING log). Sync receivers run in `asyncio.to_thread` (blocking I/O
+does not stall the loop); `async def` receivers run on the loop.
+
+Tokens are **one-time** — every non-2xx response burns the link;
+retries call `create_upload_link` again. For uploads too large to
+buffer, use `stream_receiver=` (`AsyncIterator[bytes]` shape; **`async
+def` only** — sync stream receivers cannot iterate the body).
+Documented in the upstream `fastmcp-pvl-core` README — the template
+scaffolds the buffered shape only.
+
+See [Configuration → MCP File Exchange](../configuration.md#mcp-file-exchange)
+for the env-var matrix.
 
 ## Co-deploying two servers (docker-compose)
 

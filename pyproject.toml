@@ -17,8 +17,11 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
 ]
 dependencies = [
+<<<<<<< before updating
     # fastmcp + httpx + uvicorn come transitively via fastmcp-pvl-core;
     # only list deps scholar uses DIRECTLY here.
+=======
+>>>>>>> after updating
     "fastmcp-pvl-core>=2.1.0,<3",
     "typer>=0.12",
     # PROJECT-DEPS-START — domain dependencies; kept across copier update
