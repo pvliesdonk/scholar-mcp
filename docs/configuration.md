@@ -18,6 +18,7 @@ All settings are controlled via environment variables with the `SCHOLAR_MCP_` pr
 These settings are only needed if you want to use the PDF conversion tools. They require a running [docling-serve](https://github.com/DS4SD/docling-serve) instance.
 
 | Variable | Default | Description |
+<<<<<<< before updating
 |---|---|---|
 | `SCHOLAR_MCP_DOCLING_URL` | -- | Base URL of a running docling-serve instance (e.g. `http://localhost:5001`). When unset, the PDF conversion tools are still registered but will return an error. |
 | `SCHOLAR_MCP_VLM_API_URL` | -- | OpenAI-compatible VLM endpoint for formula and figure enrichment during PDF conversion. |
@@ -28,6 +29,23 @@ These settings are only needed if you want to use the PDF conversion tools. They
     When both `SCHOLAR_MCP_VLM_API_URL` and `SCHOLAR_MCP_VLM_API_KEY` are set, tools can request VLM-enriched conversion that extracts LaTeX formulas and generates figure descriptions. This produces higher-quality Markdown but is slower and costs API calls.
 
 ## EPO Open Patent Services
+=======
+|----------|---------|-------------|
+| `SCHOLAR_MCP_FILE_EXCHANGE_ENABLED` | `true` on HTTP/SSE, `false` on stdio | Master switch. Set `false` to opt out entirely. |
+| `SCHOLAR_MCP_FILE_EXCHANGE_PRODUCE` | `true` | Allow this server to mint `FileRef` objects via `handle.publish(...)`. |
+| `SCHOLAR_MCP_FILE_EXCHANGE_CONSUME` | `true` | Master toggle for the consumer side. **Only effective when `consumer_sink=` is wired in `server.py`** — without that argument, `fetch_file` is never registered no matter how this var is set. See [the guide](guides/file-exchange.md#consuming-files-consumer_sink). |
+| `SCHOLAR_MCP_FILE_EXCHANGE_TTL` | `3600` | Lifetime in seconds for download links and exchange-volume records. |
+| `SCHOLAR_MCP_UPLOAD_ENABLED` | `true` on HTTP/SSE, `false` on stdio | Master switch for the upload direction. **Only effective when `register_file_exchange_upload(...)` is uncommented in `server.py`** — without that call, no upload route is mounted regardless of this var. Also requires `SCHOLAR_MCP_BASE_URL` to be set so `create_upload_link` can mint usable URLs. See [the guide](guides/file-exchange.md#uploading-files-receiver). |
+| `SCHOLAR_MCP_UPLOAD_MAX_BYTES` | `10485760` (10 MiB) | Maximum POST body size for the upload route. Bodies exceeding this return HTTP 413. |
+| `SCHOLAR_MCP_UPLOAD_TTL` | `300` | Default lifetime in seconds for upload links. Caller-requested TTL is clamped to `SCHOLAR_MCP_UPLOAD_TTL_MAX`. |
+| `SCHOLAR_MCP_UPLOAD_TTL_MAX` | `3600` | Operator ceiling for caller-requested upload-link TTL. |
+| `SCHOLAR_MCP_BASE_URL` | unset | Public base URL of this server. Required for the `http` transfer method — the `create_download_link` tool and (when upload is wired) the `create_upload_link` tool both build URLs against it. Also referenced by the OIDC guide and the universal-variables list above — set it once and every consumer picks it up. |
+
+Note the upload-direction variables are namespaced under `_UPLOAD_*`,
+not `_FILE_EXCHANGE_UPLOAD_*` — this matches the upstream
+`fastmcp-pvl-core` 2.1.0 contract. The download-direction variables
+keep the historical `_FILE_EXCHANGE_*` namespace.
+>>>>>>> after updating
 
 These settings enable patent search via the [EPO Open Patent Services (OPS)](https://www.epo.org/en/searching-for-patents/data/web-services/ops) API. Both variables must be set for patent tools to be enabled; if either is missing, the `search_patents` and `get_patent` tools are automatically hidden.
 

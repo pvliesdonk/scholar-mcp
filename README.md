@@ -121,6 +121,16 @@ For library usage (embedding the domain logic without the MCP transport), import
 
 The server registers a built-in `get_server_info` tool (via `fastmcp_pvl_core.register_server_info_tool`) so operators can confirm the deployed version with a single MCP call. The default response carries `server_name`, `server_version`, and `core_version`. Servers that talk to a remote upstream wire upstream version reporting inside the `DOMAIN-UPSTREAM-START` / `DOMAIN-UPSTREAM-END` sentinel in `src/scholar_mcp/server.py` — see [`CLAUDE.md`](CLAUDE.md#server-info-tool-get_server_info) for the wiring pattern.
 
+### File exchange
+
+The server scaffolds [MCP File Exchange](docs/guides/file-exchange.md)
+wiring — download direction is registered by default (on for HTTP/SSE,
+off for stdio); an upload direction ships fully commented-out for
+opt-in via `register_file_exchange_upload(...)`. See the guide for
+producing / consuming / uploading patterns and the env-var matrix, or
+[`CLAUDE.md`](CLAUDE.md#file-exchange-register_file_exchange--opt-in-upload)
+for the wiring pattern.
+
 ## Configuration
 
 Core environment variables shared across all `fastmcp-pvl-core`-based services:
