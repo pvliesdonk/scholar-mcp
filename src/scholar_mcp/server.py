@@ -17,13 +17,15 @@ from fastmcp_pvl_core import (
     ServerConfig,
     build_auth,
     build_instructions,
-    build_kv_store as build_kv_store,  # re-exported for downstream projects' convenience
     configure_logging_from_env,
     register_server_info_tool,
     wire_middleware_stack,
 )
 from fastmcp_pvl_core import (
     build_event_store as _core_build_event_store,
+)
+from fastmcp_pvl_core import (
+    build_kv_store as build_kv_store,  # re-exported for downstream projects' convenience
 )
 from fastmcp_pvl_core import (
     resolve_auth_mode as _core_resolve_auth_mode,
