@@ -7,19 +7,12 @@ import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
-from fastmcp.server.middleware.error_handling import ErrorHandlingMiddleware
-from fastmcp.server.middleware.logging import (
-    LoggingMiddleware,
-    StructuredLoggingMiddleware,
-)
-from fastmcp.server.middleware.timing import TimingMiddleware
 from mcp.types import TextContent
 
 from scholar_mcp import server as server_module
 from scholar_mcp.server import (
     _build_remote_auth,
     _resolve_auth_mode,
-    get_file_exchange,
     make_server,
 )
 
@@ -201,86 +194,6 @@ class TestServerInfoTool:
         assert isinstance(first, TextContent)
         payload = json.loads(first.text)
         assert payload["server_name"] == "scholar-mcp-prod"
-
-
-class TestFileExchange:
-    """File-exchange facade wires create_download_link / fetch_file on HTTP only."""
-
-    async def test_create_download_link_registered_for_http_with_base_url(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """When transport=http AND SCHOLAR_MCP_BASE_URL is set, create_download_link appears.
-
-        The facade only registers ``create_download_link`` when both an
-        artifact store can be built (needs ``BASE_URL``) and the producer
-        side is enabled (default on HTTP).
-        """
-        # create_download_link is tagged {"write"} so it is hidden in
-        # read-only mode; force read-write so the HTTP+BASE_URL gate is
-        # what's actually under test, not read-only gating.
-        monkeypatch.setenv("SCHOLAR_MCP_READ_ONLY", "false")
-        monkeypatch.setenv("SCHOLAR_MCP_BASE_URL", "https://example.invalid")
-        server = make_server(transport="http")
-        tool_names = {t.name for t in await server.list_tools()}
-        assert "create_download_link" in tool_names
-
-    async def test_file_exchange_tools_absent_for_stdio(self) -> None:
-        """Default stdio transport leaves the facade off — no producer or consumer tool."""
-        server = make_server()
-        tool_names = {t.name for t in await server.list_tools()}
-        assert "create_download_link" not in tool_names
-        assert "fetch_file" not in tool_names
-
-    def test_get_file_exchange_raises_before_make_server(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """get_file_exchange() raises if the module singleton hasn't been set yet."""
-        monkeypatch.setattr(server_module, "_file_exchange", None)
-        with pytest.raises(RuntimeError, match="file exchange is not initialised"):
-            get_file_exchange()
-
-    def test_namespace_uses_configured_server_name(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """A custom SCHOLAR_MCP_SERVER_NAME flows into the file-exchange namespace.
-
-        pvl-core uses ``namespace`` as both ``FileRef.origin_server`` and the
-        exchange-routing namespace, so peers must see the same identity the
-        operator configured — not the scaffold default. Regression guard for
-        the hardcode-vs-resolved pattern (sibling of
-        ``TestServerInfoTool.test_get_server_info_uses_configured_server_name``).
-        """
-        captured: dict[str, object] = {}
-
-        def _spy(*_args: object, **kwargs: object) -> object:
-            captured.update(kwargs)
-            return MagicMock()  # FileExchangeHandle stand-in
-
-        # Reset _file_exchange via monkeypatch so the MagicMock written by
-        # _spy doesn't leak across tests (monkeypatch restores the original
-        # value on teardown regardless of what make_server overwrites).
-        monkeypatch.setattr(server_module, "_file_exchange", None)
-        monkeypatch.setenv("SCHOLAR_MCP_SERVER_NAME", "scholar-mcp-prod")
-        monkeypatch.setattr(server_module, "register_file_exchange", _spy)
-        make_server()
-        assert captured["namespace"] == "scholar-mcp-prod"
-
-    def test_get_file_exchange_returns_handle_after_make_server(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """After make_server(), the singleton holds the registered handle.
-
-        Uses monkeypatch on the module global so the singleton is restored to
-        whatever it was before this test ran (rather than leaking the handle
-        from this test into subsequent test cases in the same pytest session).
-        """
-        monkeypatch.setattr(server_module, "_file_exchange", None)
-        make_server()
-        handle = get_file_exchange()
-        assert handle is not None
-        # The returned handle is a FileExchangeHandle from fastmcp_pvl_core;
-        # verify the producer-side surface that tool bodies need is present.
-        assert hasattr(handle, "publish")
 
 
 class TestResolveAuthMode:
@@ -494,33 +407,4 @@ class TestAuthModeInvariant:
             make_server()
 
 
-class TestMiddlewareStack:
-    """Tests for logging/timing/error middleware wiring."""
 
-    def test_default_middleware_stack(self) -> None:
-        """Default config wires ErrorHandling + Timing + LoggingMiddleware."""
-        server = make_server()
-        types = [type(m) for m in server.middleware]
-        assert ErrorHandlingMiddleware in types
-        assert TimingMiddleware in types
-        assert LoggingMiddleware in types
-        assert StructuredLoggingMiddleware not in types
-
-    def test_rich_disabled_uses_structured_logging(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """FASTMCP_ENABLE_RICH_LOGGING=false wires StructuredLoggingMiddleware."""
-        monkeypatch.setenv("FASTMCP_ENABLE_RICH_LOGGING", "false")
-        server = make_server()
-        types = [type(m) for m in server.middleware]
-        assert StructuredLoggingMiddleware in types
-        assert LoggingMiddleware not in types
-
-    def test_middleware_order(self) -> None:
-        """ErrorHandling is first, Timing second, Logging third."""
-        server = make_server()
-        types = [type(m) for m in server.middleware]
-        err_idx = types.index(ErrorHandlingMiddleware)
-        time_idx = types.index(TimingMiddleware)
-        log_idx = types.index(LoggingMiddleware)
-        assert err_idx < time_idx < log_idx

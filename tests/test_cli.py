@@ -29,11 +29,11 @@ def test_cache_help() -> None:
     assert "clear" in result.output
 
 
-def test_cache_stats_no_db() -> None:
+def test_cache_stats_no_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """With no real DB, stats should exit gracefully with code 0."""
+    monkeypatch.chdir(tmp_path)
     runner = CliRunner()
-    with runner.isolated_filesystem():
-        result = runner.invoke(app, ["cache", "stats"])
+    result = runner.invoke(app, ["cache", "stats"])
     assert result.exit_code == 0
     assert "No cache database found" in result.output
 
@@ -49,11 +49,11 @@ def test_cache_stats_with_db(tmp_path: Path) -> None:
     assert "papers:" in result.output
 
 
-def test_cache_clear_no_db() -> None:
+def test_cache_clear_no_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """With no real DB, clear should exit gracefully with code 0."""
+    monkeypatch.chdir(tmp_path)
     runner = CliRunner()
-    with runner.isolated_filesystem():
-        result = runner.invoke(app, ["cache", "clear"])
+    result = runner.invoke(app, ["cache", "clear"])
     assert result.exit_code == 0
     assert "No cache database found" in result.output
 
