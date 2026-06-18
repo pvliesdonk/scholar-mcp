@@ -108,6 +108,8 @@ mcpb install scholar-mcp-<version>.mcpb
 
 Claude Desktop prompts for required env vars via a GUI wizard — no manual JSON editing needed.
 
+For manual Claude Desktop configuration and setup options, see [Claude Desktop deployment](docs/deployment/claude-desktop.md).
+
 ## Quick start
 
 ```bash
@@ -129,7 +131,7 @@ Core environment variables shared across all `fastmcp-pvl-core`-based services:
 |---|---|---|
 | `FASTMCP_LOG_LEVEL` | `INFO` | Log level for FastMCP internals and app loggers (`DEBUG` / `INFO` / `WARNING` / `ERROR`). The `-v` CLI flag overrides to `DEBUG`. |
 | `FASTMCP_ENABLE_RICH_LOGGING` | `true` | Set to `false` for plain / structured JSON log output. |
-| `SCHOLAR_MCP_EVENT_STORE_URL` | `memory://` | Event store backend for HTTP session persistence — `memory://` (dev), `file:///path` (survives restarts). |
+| `SCHOLAR_MCP_KV_STORE_URL` | `file:///data/state` | Persistent-state backend URL for pvl-core subsystems — `file:///path` (survives restarts), `memory://` (dev/ephemeral). |
 
 Domain-specific variables go below under [Domain configuration](#domain-configuration).
 

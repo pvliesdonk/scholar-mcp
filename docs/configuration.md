@@ -13,6 +13,7 @@ All settings are controlled via environment variables with the `SCHOLAR_MCP_` pr
 | `FASTMCP_LOG_LEVEL` | `INFO` | Logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL`. Controls all output (application and middleware). The `-v` CLI flag sets this to `DEBUG`. |
 | `FASTMCP_ENABLE_RICH_LOGGING` | `true` | Set to `false` for plain/JSON-structured output suitable for log aggregation tools (Loki, Datadog, Splunk). When `true`, output uses Rich formatting (colors, timestamps). |
 
+
 ## PDF Conversion
 
 These settings are only needed if you want to use the PDF conversion tools. They require a running [docling-serve](https://github.com/DS4SD/docling-serve) instance.
@@ -100,6 +101,7 @@ Authentication is optional. When no auth variables are set, the server accepts u
 ### Auth modes
 
 The server supports two OIDC modes, auto-detected from environment variables:
+
 
 | Mode | When selected | How it works |
 |---|---|---|

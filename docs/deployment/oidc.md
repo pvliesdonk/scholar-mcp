@@ -9,8 +9,8 @@ Optional token-based authentication for HTTP deployments. OIDC activates automat
 
 | Variable | Description |
 |----------|-------------|
-| `SCHOLAR_MCP_BASE_URL` | Public base URL of the server (e.g. `https://mcp.example.com`; include prefix when mounted under subpath, e.g. `https://mcp.example.com/myservice`) |
-| `SCHOLAR_MCP_OIDC_CONFIG_URL` | OIDC discovery endpoint (e.g. `https://auth.example.com/.well-known/openid-configuration`) |
+| `SCHOLAR_MCP_BASE_URL` | Public base URL of the server (such as `https://mcp.example.com`; include prefix when mounted under subpath, such as `https://mcp.example.com/myservice`) |
+| `SCHOLAR_MCP_OIDC_CONFIG_URL` | OIDC discovery endpoint (such as `https://auth.example.com/.well-known/openid-configuration`) |
 | `SCHOLAR_MCP_OIDC_CLIENT_ID` | OIDC client ID registered with your provider |
 | `SCHOLAR_MCP_OIDC_CLIENT_SECRET` | OIDC client secret |
 
@@ -18,8 +18,8 @@ Optional token-based authentication for HTTP deployments. OIDC activates automat
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY` | ephemeral | JWT signing key. **Required on Linux/Docker** — the default is ephemeral and invalidates tokens on restart |
-| `SCHOLAR_MCP_OIDC_AUDIENCE` | — | Expected JWT audience claim; leave unset if your provider does not set one |
+| `SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY` | ephemeral | JWT signing key. **Required on Linux/Docker**: the default is ephemeral and invalidates tokens on restart |
+| `SCHOLAR_MCP_OIDC_AUDIENCE` | n/a | Expected JWT audience claim; leave unset if your provider does not set one |
 | `SCHOLAR_MCP_OIDC_REQUIRED_SCOPES` | `openid` | Comma-separated required scopes |
 | `SCHOLAR_MCP_OIDC_VERIFY_ACCESS_TOKEN` | `false` | Set `true` to verify the upstream access token as JWT instead of the id token. Only needed when your provider issues JWT access tokens and you require audience-claim validation on that token |
 
@@ -41,7 +41,7 @@ openssl rand -hex 32
     Authelia does not support Dynamic Client Registration (RFC 7591). Clients must be registered manually in `configuration.yml`.
 
 !!! note "Opaque access tokens"
-    Authelia issues opaque (non-JWT) access tokens. This is handled automatically — the server verifies the `id_token` (always a standard JWT) instead. No extra configuration is needed.
+    Authelia issues opaque (non-JWT) access tokens. This is handled automatically: the server verifies the `id_token` (always a standard JWT) instead. No extra configuration is needed.
 
 ### 1. Register the client in Authelia
 
@@ -128,7 +128,7 @@ SCHOLAR_MCP_OIDC_CLIENT_SECRET=your-client-secret
 SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY=your-stable-hex-key
 ```
 
-For a prefixed deployment (e.g., `https://mcp.example.com/myservice/mcp`), see [Subpath Deployments](#subpath-deployments) below.
+For a prefixed deployment (such as `https://mcp.example.com/myservice/mcp`), see [Subpath Deployments](#subpath-deployments) below.
 
 ## Subpath Deployments
 
@@ -137,12 +137,12 @@ When OIDC is enabled behind a reverse-proxy subpath, `BASE_URL` and `HTTP_PATH` 
 | Variable | Purpose | Example |
 |----------|---------|---------|
 | `BASE_URL` | Public URL of the server, **including the subpath prefix** | `https://mcp.example.com/myservice` |
-| `HTTP_PATH` | Internal MCP endpoint mount point — **no subpath prefix** | `/mcp` |
+| `HTTP_PATH` | Internal MCP endpoint mount point (**no subpath prefix**) | `/mcp` |
 
 The reverse proxy strips the subpath prefix before forwarding to the application. FastMCP concatenates `BASE_URL + HTTP_PATH` to build the public resource URL, so including the prefix in both produces broken URLs with duplicated path segments.
 
 !!! danger "Do not duplicate the subpath"
-    Setting `BASE_URL=https://mcp.example.com/myservice` **and** `HTTP_PATH=/myservice/mcp` produces a duplicated resource URL: `https://mcp.example.com/myservice/myservice/mcp`. The subpath belongs in `BASE_URL` only.
+    Setting `BASE_URL=https://mcp.example.com/myservice` together with `HTTP_PATH=/myservice/mcp` produces a duplicated resource URL: `https://mcp.example.com/myservice/myservice/mcp`. The subpath belongs in `BASE_URL` only.
 
 ### Configuration
 
@@ -165,8 +165,8 @@ The reverse proxy must:
 
 1. **Strip the prefix** (`/myservice`) from operational routes before forwarding to the app
 2. **Forward OAuth discovery routes** to this service (without stripping prefixes):
-    - `/.well-known/oauth-authorization-server` — authorization server metadata
-    - `/.well-known/oauth-protected-resource/myservice/mcp` — protected resource metadata
+    - `/.well-known/oauth-authorization-server`: authorization server metadata
+    - `/.well-known/oauth-protected-resource/myservice/mcp`: protected resource metadata
 
 Example Traefik configuration:
 
@@ -198,17 +198,12 @@ labels:
 
 **Recommendations for shared-hostname scenarios:**
 
-- **Dedicated hostname** (preferred): give the MCP server its own hostname (e.g., `myservice.example.com`) so discovery routes do not collide.
+- **Dedicated hostname** (preferred): give the MCP server its own hostname (such as `myservice.example.com`) so discovery routes do not collide.
 - **External auth gateway**: use `mcp-auth-proxy` as a sidecar instead of native OIDC. The MCP server runs unauthenticated behind the proxy, and the proxy handles OAuth discovery at its own routes.
 
 
 <!-- DOMAIN-OIDC-EXTRA-START -->
-<!-- Project-specific notes for OIDC deployment; kept across copier update. -->
-
-## Project-specific notes
-
-<!-- Add domain-specific caveats here (e.g. "Keycloak requires X claim",
-     "Authelia token-cache quirk for /admin paths", "this server's audience
-     claim must include 'mcp'"). Use sub-headings to organize if needed. -->
-
+<!-- Project-specific notes for OIDC deployment go here; kept across copier
+     update. (E.g. "Keycloak requires X claim", "Authelia token-cache quirk
+     for /admin paths", "this server's audience claim must include 'mcp'".) -->
 <!-- DOMAIN-OIDC-EXTRA-END -->

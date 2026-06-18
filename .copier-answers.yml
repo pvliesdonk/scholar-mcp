@@ -1,5 +1,5 @@
 # Changes here will be overwritten by `copier update`.
-_commit: v1.5.1
+_commit: v2.1.2
 _src_path: https://github.com/pvliesdonk/fastmcp-server-template
 docker_registry: ghcr.io/pvliesdonk
 domain_description: FastMCP server for Semantic Scholar with OpenAlex enrichment and
@@ -7,6 +7,7 @@ domain_description: FastMCP server for Semantic Scholar with OpenAlex enrichment
 env_prefix: SCHOLAR_MCP
 github_org: pvliesdonk
 human_name: Scholar MCP
+include_mcp_apps_scaffold: false
 project_name: scholar-mcp
 pypi_name: pvliesdonk-scholar-mcp
 python_module: scholar_mcp

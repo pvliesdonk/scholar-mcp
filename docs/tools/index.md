@@ -4,6 +4,7 @@ Scholar MCP provides 28 tools organised by scholarly source type: **Papers**, **
 
 <!-- DOMAIN-TOOLS-LIST-START -->
 
+
 !!! info "Coverage by domain"
     Per-domain depth is uneven — papers currently have the richest tool surface (citation graph, recommendations, cross-referencing to all three other domains); standards are the leanest. That reflects public data availability, not a value hierarchy. Parity work is tracked in [GitHub issues](https://github.com/pvliesdonk/scholar-mcp/issues) and [milestones](https://github.com/pvliesdonk/scholar-mcp/milestones).
 
@@ -754,4 +755,5 @@ The `hint` field gives expected duration — keep polling until the task complet
 List all active (non-expired) background tasks.
 
 **Returns:** JSON list of `{"task_id": "...", "status": "..."}` dicts.
+
 <!-- DOMAIN-TOOLS-LIST-END -->

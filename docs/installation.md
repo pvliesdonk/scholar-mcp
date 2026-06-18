@@ -28,6 +28,7 @@ pip install 'pvliesdonk-scholar-mcp[mcp]'
 scholar-mcp serve
 ```
 
+
 The `[mcp]` extra installs FastMCP and uvicorn. Without it, you get only the library (API clients and cache) without the MCP server.
 
 ## With Docker
@@ -87,4 +88,5 @@ uv run scholar-mcp serve
      update. Scholar's install steps are already documented in the
      per-method sections above (uvx / pip / Docker / Linux packages /
      from source). -->
+
 <!-- DOMAIN-INSTALL-EXTRA-END -->
