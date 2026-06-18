@@ -39,6 +39,13 @@ extra:
     provider: mike
     default: latest
 
+extra_javascript:
+  - path: javascripts/config-wizard/wizard.js
+    type: module
+
+extra_css:
+  - stylesheets/config-wizard.css
+
 plugins:
   - search
   # Generates llms.txt + llms-full.txt for the README badge.
@@ -58,6 +65,7 @@ plugins:
           - index.md: Overview — features, architecture, and quick start
           - installation.md: Installation from PyPI, uv, Docker, or Linux packages
           - configuration.md: All environment variables with types and defaults
+          - configuration-generator.md: Browser-based configuration generator
         Guides:
           - guides/index.md: Guide overview — which guide to read
           - guides/claude-desktop.md: Claude Desktop setup (basic, API key, PDF, OpenAlex)
@@ -113,8 +121,10 @@ nav:
   # update. Keep aligned with the `llmstxt` plugin's sentinel-protected
   # `sections:` block above.
   - Home: index.md
-  - Installation: installation.md
-  - Configuration: configuration.md
+  - Getting Started:
+      - Installation: installation.md
+      - Configuration: configuration.md
+      - Configuration Generator: configuration-generator.md
   - Guides:
       - Overview: guides/index.md
       - Claude Code Plugin: guides/claude-code-plugin.md

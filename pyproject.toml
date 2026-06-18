@@ -64,6 +64,10 @@ docs = [
     "mkdocs-llmstxt>=0.5",
 ]
 
+browser = [
+    "pytest-playwright>=0.5",
+]
+
 [project.scripts]
 scholar-mcp = "scholar_mcp.cli:main"
 
@@ -143,6 +147,7 @@ asyncio_mode = "auto"
 log_level = "WARNING"
 markers = [
     "live: tests that hit real network services; opt-in via `pytest -m live`",
+    "browser: end-to-end test that drives a headless browser (requires the 'browser' dependency group + 'playwright install chromium')",
 ]
 
 [tool.coverage.run]
@@ -189,6 +194,11 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["yaml"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# Optional browser-test dep; only installed in the `browser` dependency group.
+module = ["playwright", "playwright.*"]
 ignore_missing_imports = true
 
 # Tests use pytest idioms (untyped fixtures, monkey-patching, ad-hoc stubs,
