@@ -68,7 +68,7 @@ jobs:
           fi
 
       - name: Reject force bump on active pre-release series
-        if: steps.detect-rc.outputs.in_rc_series == 'true' && inputs.prerelease == false && (inputs.force == 'patch' || inputs.force == 'minor' || inputs.force == 'major')
+        if: steps.detect-rc.outputs.in_rc_series == 'true' && !inputs.prerelease && (inputs.force == 'patch' || inputs.force == 'minor' || inputs.force == 'major')
         run: |
           echo "::error::An active pre-release series is in progress targeting ${{ steps.detect-rc.outputs.rc_series_target }}."
           echo "::error::force=patch/minor/major with prerelease=false applies an additional bump on top of the series target and will skip ${{ steps.detect-rc.outputs.rc_series_target }}."
