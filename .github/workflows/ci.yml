@@ -237,13 +237,7 @@ jobs:
         run: uv export --all-extras --no-default-groups --frozen --no-emit-project --no-hashes -o ${{ runner.temp }}/requirements.txt
 
       - name: Run pip-audit
-        run: |
-          uvx pip-audit --strict --progress-spinner off \
-            --ignore-vuln CVE-2026-42561 \
-            -r ${{ runner.temp }}/requirements.txt
-          # CVE-2026-42561: python-multipart <0.0.27, pulled in transitively by
-          # fastmcp/starlette. Ignored until the upstream pin chain propagates
-          # the fix to 0.0.27. Remove once `uv lock` resolves >=0.0.27.
+        run: uvx pip-audit --strict --progress-spinner off -r ${{ runner.temp }}/requirements.txt
 
   secrets:
     name: Secret Detection

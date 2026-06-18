@@ -16,7 +16,7 @@ Last indexed: 2026-06-02 (commit 1e73de3). Confidence: 100%.
 repo is a scholarly research orchestration engine that ingests bibliographic queries and document identifiers, processes them through a multi-source retrieval pipeline (Semantic Scholar, OpenAlex, OpenLibrary, and Patent databases), and synthesizes enriched metadata and document content into structured MCP (Model Context Protocol) server responses. By abstracting complex API interactions and document parsing into a unified toolset, it enables LLMs to perform automated literature reviews, citation enrichment, and document analysis. - **Core Language:** Python (60.3%)
 - **Documentation:** Markdown (22.9%)
 - **Configuration & Infrastructure:** YAML (9.5%), Shell (3.9%), JSON (1.7%), TOML (1.1%)
-- **Key Dependencies:** 
+- **Key Dependencies:**
     - **MCP (Model Context Protocol):** Provides the communication layer for LLM-integrated tool execution. - **Docling:** Used for document parsing and content extraction.
 ### Key Modules
 | Module | Purpose | Owner |

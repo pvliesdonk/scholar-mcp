@@ -44,3 +44,4 @@ docs/superpowers/
 *.npy
 *.npz
 .playwright-mcp/
+.mcp.json

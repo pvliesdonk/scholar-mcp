@@ -55,13 +55,7 @@
         {
           "name": "FASTMCP_LOG_LEVEL",
           "description": "Log level (DEBUG, INFO, WARNING, ERROR)",
-          "default": "INFO",
-          "choices": [
-            "DEBUG",
-            "INFO",
-            "WARNING",
-            "ERROR"
-          ]
+          "default": "INFO"
         },
         {
           "name": "SCHOLAR_MCP_KV_STORE_URL",
@@ -76,13 +70,11 @@
         {
           "name": "PUID",
           "description": "Run as this UID (Docker entrypoint)",
-          "format": "number",
           "default": "1000"
         },
         {
           "name": "PGID",
           "description": "Run as this GID (Docker entrypoint)",
-          "format": "number",
           "default": "1000"
         },
         {
