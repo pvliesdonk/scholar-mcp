@@ -81,7 +81,7 @@ def test_normalize_isbn_invalid_returns_as_is() -> None:
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `cd /mnt/code/scholar-mcp/.claude/worktrees/feat+citation-generation && uv run pytest tests/test_cache_books.py -v`
-Expected: FAIL — `isbn10_to_isbn13` and `normalize_isbn` not importable.
+Expected: FAIL, `isbn10_to_isbn13` and `normalize_isbn` not importable.
 
 - [ ] **Step 3: Implement ISBN utilities in `_cache.py`**
 
@@ -181,7 +181,7 @@ async def test_set_and_get_book_search(cache: ScholarCache) -> None:
 - [ ] **Step 6: Run cache tests to verify they fail**
 
 Run: `cd /mnt/code/scholar-mcp/.claude/worktrees/feat+citation-generation && uv run pytest tests/test_cache_books.py -v -k "cache"`
-Expected: FAIL — `get_book_by_isbn` not an attribute of ScholarCache.
+Expected: FAIL, `get_book_by_isbn` not an attribute of ScholarCache.
 
 - [ ] **Step 7: Add book TTLs and schema tables to `_cache.py`**
 
@@ -271,7 +271,7 @@ Add after the patent search section (after line 661) in `src/scholar_mcp/_cache.
         """Return cached book data by Open Library work ID or None.
 
         Args:
-            work_id: Open Library work ID (e.g. ``OL1168083W``).
+            work_id: Open Library work ID (such as ``OL1168083W``).
 
         Returns:
             Book metadata dict or None.
@@ -550,7 +550,7 @@ def test_normalize_book_from_edition() -> None:
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `cd /mnt/code/scholar-mcp/.claude/worktrees/feat+citation-generation && uv run pytest tests/test_openlibrary_client.py -v`
-Expected: FAIL — module `_openlibrary_client` has no `OpenLibraryClient` (it currently holds the OpenAlex client, different file).
+Expected: FAIL, module `_openlibrary_client` has no `OpenLibraryClient` (it currently holds the OpenAlex client, different file).
 
 - [ ] **Step 3: Implement the Open Library client**
 
@@ -639,7 +639,7 @@ class OpenLibraryClient:
         """Fetch work-level metadata.
 
         Args:
-            work_id: Open Library work ID (e.g. ``OL1168083W``).
+            work_id: Open Library work ID (such as ``OL1168083W``).
 
         Returns:
             Open Library work dict, or None if not found.
@@ -1017,7 +1017,7 @@ async def test_get_book_by_work_id(
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `cd /mnt/code/scholar-mcp/.claude/worktrees/feat+citation-generation && uv run pytest tests/test_tools_books.py -v`
-Expected: FAIL — `_tools_books` module not found.
+Expected: FAIL, `_tools_books` module not found.
 
 - [ ] **Step 3: Implement `_tools_books.py`**
 
@@ -1073,7 +1073,7 @@ def register_book_tools(mcp: FastMCP) -> None:
         use search_papers instead.
 
         Args:
-            query: Search query — title, author name, ISBN, or keywords.
+            query: Search query, title, author name, ISBN, or keywords.
             limit: Maximum results to return (max 50).
 
         Returns:
@@ -1118,8 +1118,8 @@ def register_book_tools(mcp: FastMCP) -> None:
         """Fetch book metadata by ISBN or Open Library ID.
 
         Args:
-            identifier: ISBN-10, ISBN-13, Open Library work ID (e.g.
-                OL1168083W), or edition ID (e.g. OL1429049M).
+            identifier: ISBN-10, ISBN-13, Open Library work ID (such as
+                OL1168083W), or edition ID (such as OL1429049M).
             include_editions: If true, fetch the work and list editions.
 
         Returns:
@@ -1354,7 +1354,7 @@ async def test_enrichment_uses_cache_on_second_call(
     await enrich_books([paper1], bundle)
     assert "book_metadata" in paper1
 
-    # Second call — API should not be hit (cache)
+    # Second call, API should not be hit (cache)
     paper2 = _make_paper(isbn="9780201633610")
     await enrich_books([paper2], bundle)
     assert "book_metadata" in paper2
@@ -1382,7 +1382,7 @@ async def test_enrichment_batch_multiple_papers(
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `cd /mnt/code/scholar-mcp/.claude/worktrees/feat+citation-generation && uv run pytest tests/test_book_enrichment.py -v`
-Expected: FAIL — `_book_enrichment` module not found.
+Expected: FAIL, `_book_enrichment` module not found.
 
 - [ ] **Step 3: Implement `_book_enrichment.py`**
 
@@ -1637,7 +1637,7 @@ async def test_get_paper_no_enrichment_for_regular_paper(mcp: FastMCP) -> None:
 - [ ] **Step 2: Run integration tests to verify they fail**
 
 Run: `cd /mnt/code/scholar-mcp/.claude/worktrees/feat+citation-generation && uv run pytest tests/test_book_enrichment_integration.py -v`
-Expected: FAIL — `get_paper` does not call enrichment yet.
+Expected: FAIL, `get_paper` does not call enrichment yet.
 
 - [ ] **Step 3: Hook enrichment into `get_paper` in `_tools_search.py`**
 
@@ -1658,7 +1658,7 @@ with:
             return json.dumps(fetched)
 ```
 
-Also enrich cached results — replace the cache hit return (line 139):
+Also enrich cached results, replace the cache hit return (line 139):
 ```python
             return json.dumps(data)
 ```
@@ -1750,9 +1750,9 @@ git commit -m "feat: hook book enrichment into get_paper, get_citations, get_ref
 Read `docs/tools/index.md` and `README.md` to understand their current structure, then add documentation for the two new tools (`search_books`, `get_book`) and the auto-enrichment behavior following the existing patterns.
 
 Document:
-- `search_books` — parameters, return format, examples
-- `get_book` — parameters, identifier formats, return format
-- Auto-enrichment — when it triggers, what `book_metadata` contains
+- `search_books`, parameters, return format, examples
+- `get_book`, parameters, identifier formats, return format
+- Auto-enrichment, when it triggers, what `book_metadata` contains
 - Open Library as data source (no API key needed)
 
 - [ ] **Step 2: Commit documentation**
@@ -1777,7 +1777,7 @@ Create 10 GitHub issues for the deferred items listed in the spec (`docs/specs/2
 9. Book recommendation via subjects (F6)
 10. Patent-to-book cross-referencing (F7)
 
-Use `gh issue create` for each. Apply labels as appropriate (e.g. `enhancement`, `good first issue` for simpler ones).
+Use `gh issue create` for each. Apply labels as appropriate (such as `enhancement`, `good first issue` for simpler ones).
 
 - [ ] **Step 4: Final full test suite run**
 

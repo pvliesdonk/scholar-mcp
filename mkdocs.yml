@@ -34,6 +34,11 @@ theme:
   icon:
     repo: fontawesome/brands/github
 
+extra:
+  version:
+    provider: mike
+    default: latest
+
 plugins:
   - search
   # Generates llms.txt + llms-full.txt for the README badge.
@@ -59,7 +64,6 @@ plugins:
           - guides/authentication.md: Authentication modes — bearer token, OIDC, and troubleshooting
           - guides/pdf-conversion.md: PDF conversion with docling-serve and VLM enrichment
           - guides/citation-graphs.md: Citation graph traversal, bridge papers, and caching
-          - guides/file-exchange.md: MCP File Exchange convention for passing files between co-deployed servers
         Tools:
           - tools/index.md: All 13 MCP tools with parameters, return values, and usage tips
         Deployment:
@@ -111,8 +115,6 @@ nav:
   - Home: index.md
   - Installation: installation.md
   - Configuration: configuration.md
-  - Tools:
-      - Overview: tools/index.md
   - Guides:
       - Overview: guides/index.md
       - Claude Code Plugin: guides/claude-code-plugin.md
@@ -120,9 +122,12 @@ nav:
       - Authentication: guides/authentication.md
       - PDF Conversion: guides/pdf-conversion.md
       - Citation Graphs: guides/citation-graphs.md
-      - File Exchange: guides/file-exchange.md
+  - MCP Interface:
+      - Tools: tools/index.md
+      - Prompts: prompts.md
   - Deployment:
       - Docker: deployment/docker.md
       - systemd: deployment/systemd.md
       - OIDC Authentication: deployment/oidc.md
+      - Claude Desktop: deployment/claude-desktop.md
   # PROJECT-NAV-END

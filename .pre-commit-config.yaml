@@ -23,6 +23,17 @@ repos:
         pass_filenames: false
         args: [src/]
 
+  - repo: https://github.com/errata-ai/vale
+    # Keep in sync with the `version:` field in the ci.yml Vale job.
+    rev: v3.14.2
+    hooks:
+      - id: vale
+        # CI uses `--glob=!docs/superpowers/**` at invocation time (directory
+        # traversal); pre-commit passes individual filenames so --glob has no
+        # effect. Use `exclude` to achieve the same skip at the hook level.
+        files: ^docs/
+        exclude: ^docs/superpowers/
+
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:

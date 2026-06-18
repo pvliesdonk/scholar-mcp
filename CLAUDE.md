@@ -89,11 +89,31 @@ Every issue, PR, and code change must consider documentation impact. Before clos
 
 ## Logging Standard
 
+### Scope
+
+This standard governs **first-party code only** — `src/scholar_mcp/` and
+`tests/`. Two categories of log output are explicitly **out of scope**; do not
+try to make them conform:
+
+- **FastMCP middleware stack** (`fastmcp-pvl-core` timing / logging /
+  error-handling middleware): emits conforming, bare-event-name-first lines
+  automatically. Tool-call lines carry `tool=<name>`. Governed by
+  `fastmcp-pvl-core` itself (see pvliesdonk/fastmcp-pvl-core#90); no
+  first-party code needed.
+- **`uvicorn.access` and `mcp.server.lowlevel.server` log lines**: upstream
+  transport / SDK output. `configure_logging_from_env` raises their effective
+  level to `WARNING`, suppressing per-request `INFO` output at the default
+  level; at `DEBUG` they are reset to `NOTSET` so the root logger governs
+  their effective level via propagation (pvliesdonk/fastmcp-pvl-core#91).
+  `uvicorn.error` is intentionally not suppressed — it carries startup and
+  bind failures. Do not silence or reformat any of these — they are out of
+  scope by design.
+
 ### Framework
 - Standard library `logging` throughout. Every module: `logger = logging.getLogger(__name__)`.
 - No `print()` for operational output. No third-party logging libraries.
 - FastMCP middleware handles tool invocation, timing, and error logging automatically.
-- All logging goes through FastMCP's `configure_logging()` for uniform output. `FASTMCP_LOG_LEVEL` is the single log level control; the `-v` CLI flag sets it to `DEBUG`. `FASTMCP_ENABLE_RICH_LOGGING=false` switches to plain/JSON output.
+- All first-party logging goes through FastMCP's `configure_logging_from_env()` for uniform output. `FASTMCP_LOG_LEVEL` is the single log level control; the `-v` CLI flag sets it to `DEBUG`. `FASTMCP_ENABLE_RICH_LOGGING=false` switches to plain/JSON output.
 
 ### Log Levels
 | Level | Use for |
@@ -144,7 +164,7 @@ For services that talk to a remote upstream (e.g. paperless, an HTTP API), wire 
 
 Shared infrastructure (auth providers, middleware stack, logging bootstrap, event store factory, CLI scaffolding, release pipeline, Docker entrypoint, nfpm packaging, mcpb bundle) lives upstream in two places:
 
-- [`fastmcp-pvl-core`](https://github.com/pvliesdonk/fastmcp-pvl-core) — the Python library that provides `ServerConfig`, auth builders, middleware helpers, MCP File Exchange (`register_file_exchange`), and the `make_serve_parser` / `configure_logging_from_env` / `normalise_http_path` CLI helpers.
+- [`fastmcp-pvl-core`](https://github.com/pvliesdonk/fastmcp-pvl-core) — the Python library that provides `ServerConfig`, auth builders, middleware helpers, and the `make_serve_parser` / `configure_logging_from_env` / `normalise_http_path` CLI helpers.
 - [`fastmcp-server-template`](https://github.com/pvliesdonk/fastmcp-server-template) — the copier template this project was generated from. Ships the CI/release workflows, `Dockerfile`, `packaging/nfpm.yaml`, `packaging/mcpb/*`, `scripts/bump_manifests.py`, server.py skeleton, `.gemini/config.yaml` (gemini-code-assist scope control), and this very section of CLAUDE.md.
 
 Fixes and improvements to shared code land in those repos and propagate here via `copier update` against the template's latest tag — run manually or via the weekly `.github/workflows/copier-update.yml` cron. Starter files listed in `_skip_if_exists` (e.g. `scripts/bump_manifests.py`, `packaging/mcpb/*`, the `tools.py` / `resources.py` / `prompts.py` / `domain.py` scaffolds, `README.md`, `CHANGELOG.md`, `LICENSE`, `.env.example`) are written once and require manual reconciliation on template updates — review `_skip_if_exists` in the template's `copier.yml` if you need to force-sync a file. Domain-specific code (tools, resources, prompts, and the fields and logic inside the `CONFIG-FIELDS-START` / `CONFIG-FIELDS-END` and `CONFIG-FROM-ENV-START` / `CONFIG-FROM-ENV-END` sentinels) stays in this repo.

@@ -151,10 +151,10 @@ class StandardRecord(TypedDict, total=False):
 Add TTL constants after the existing `_BOOK_SUBJECT_TTL` line:
 
 ```python
-_STANDARD_TTL = 90 * 86400        # 90 days — standards rarely change
+_STANDARD_TTL = 90 * 86400        # 90 days, standards rarely change
 _STANDARD_ALIAS_TTL = 90 * 86400  # 90 days
 _STANDARD_SEARCH_TTL = 7 * 86400  # 7 days
-_STANDARD_INDEX_TTL = 7 * 86400   # 7 days — re-scrape weekly
+_STANDARD_INDEX_TTL = 7 * 86400   # 7 days, re-scrape weekly
 ```
 
 Add to `_SCHEMA` string (append before the closing `"""`):
@@ -259,7 +259,7 @@ async def get_standard_alias(self, raw: str) -> str | None:
     """Return canonical identifier for a raw alias string, or None.
 
     Args:
-        raw: Raw alias string (e.g. ``"rfc9000"``).
+        raw: Raw alias string (such as ``"rfc9000"``).
 
     Returns:
         Canonical identifier string or None.
@@ -326,7 +326,7 @@ async def get_standards_index(self, body: str) -> list[dict[str, Any]] | None:
     """Return cached standards catalogue index for a body, or None if stale.
 
     Args:
-        body: Standards body name (e.g. ``"ETSI"``).
+        body: Standards body name (such as ``"ETSI"``).
 
     Returns:
         List of stub dicts (identifier, title, url) or None.
@@ -371,7 +371,7 @@ After the Book methods block, add:
     async def set_standards_index(self, body: str, data: list[dict[str, Any]]) -> None: ...
 ```
 
-Also add `StandardRecord` import to `_protocols.py` — actually it is not needed for the protocol methods (they use `dict[str, Any]`). Keep `_protocols.py` imports as-is.
+Also add `StandardRecord` import to `_protocols.py`, actually it is not needed for the protocol methods (they use `dict[str, Any]`). Keep `_protocols.py` imports as-is.
 
 - [ ] **Step 6: Run tests to verify they pass**
 
@@ -511,7 +511,7 @@ def test_resolve_unknown_returns_none() -> None:
 
 
 def test_resolve_iec_series_returns_none() -> None:
-    # IEC 62443 is Tier 2 — not handled by local Tier 1 resolver
+    # IEC 62443 is Tier 2, not handled by local Tier 1 resolver
     result = _resolve_identifier_local("62443")
     assert result is None
 ```
@@ -762,7 +762,7 @@ async def test_ietf_search(respx_mock: respx.MockRouter) -> None:
 ```
 pytest tests/test_standards_client.py::test_ietf_get_rfc -v
 ```
-Expected: `ImportError` or `AttributeError` — `_IETFFetcher` not defined yet
+Expected: `ImportError` or `AttributeError`, `_IETFFetcher` not defined yet
 
 - [ ] **Step 3: Add `_IETFFetcher` to `_standards_client.py`**
 
@@ -791,7 +791,7 @@ class _IETFFetcher:
         self._limiter = limiter
 
     async def get(self, identifier: str) -> StandardRecord | None:
-        """Fetch a single RFC by identifier (e.g. "RFC 9000").
+        """Fetch a single RFC by identifier (such as "RFC 9000").
 
         Args:
             identifier: Canonical RFC identifier.
@@ -851,7 +851,7 @@ def _normalize_ietf(obj: dict) -> StandardRecord:  # type: ignore[type-arg]
     Returns:
         Populated StandardRecord.
     """
-    name = obj.get("name", "")  # e.g. "rfc9000"
+    name = obj.get("name", "")  # such as "rfc9000"
     n = re.sub(r"[^\d]", "", name)
     identifier = f"RFC {int(n)}" if n else name.upper()
     return StandardRecord(
@@ -995,7 +995,7 @@ async def test_nist_get_not_found(respx_mock: respx.MockRouter) -> None:
 ```
 pytest tests/test_standards_client.py -k "nist" -v
 ```
-Expected: `ImportError` — `_NISTFetcher` not defined
+Expected: `ImportError`, `_NISTFetcher` not defined
 
 - [ ] **Step 3: Add `_NISTFetcher` to `_standards_client.py`**
 
@@ -1045,7 +1045,7 @@ class _NISTFetcher:
         """Search NIST publications by keyword in identifier or title.
 
         Args:
-            query: Search string (e.g. "800-53", "FIPS 140").
+            query: Search string (such as "800-53", "FIPS 140").
             limit: Maximum results.
 
         Returns:
@@ -1067,7 +1067,7 @@ class _NISTFetcher:
         Searches the catalogue and returns the first exact or close match.
 
         Args:
-            identifier: Canonical NIST identifier (e.g. "NIST SP 800-53 Rev. 5").
+            identifier: Canonical NIST identifier (such as "NIST SP 800-53 Rev. 5").
 
         Returns:
             Populated StandardRecord or None if not found.
@@ -1231,7 +1231,7 @@ async def test_w3c_get_not_found(respx_mock: respx.MockRouter) -> None:
 ```
 pytest tests/test_standards_client.py -k "w3c" -v
 ```
-Expected: `ImportError` — `_W3CFetcher` not defined
+Expected: `ImportError`, `_W3CFetcher` not defined
 
 - [ ] **Step 3: Add `_W3CFetcher` to `_standards_client.py`**
 
@@ -1287,7 +1287,7 @@ class _W3CFetcher:
         """Fetch a single W3C specification by identifier.
 
         Args:
-            identifier: Human-readable identifier (e.g. "WCAG 2.1").
+            identifier: Human-readable identifier (such as "WCAG 2.1").
 
         Returns:
             Populated StandardRecord or None if not found.
@@ -1451,7 +1451,7 @@ async def test_etsi_search_cached_index_skips_network(respx_mock: respx.MockRout
     http = httpx.AsyncClient()
     fetcher = _ETSIFetcher(http, RateLimiter(delay=0.0))
     await fetcher.search("303 645", limit=5)
-    await fetcher.search("303 645", limit=5)  # second call — should use in-memory index
+    await fetcher.search("303 645", limit=5)  # second call, should use in-memory index
     await http.aclose()
     assert call_count == 1  # network called only once
 
@@ -1475,7 +1475,7 @@ async def test_etsi_get(respx_mock: respx.MockRouter) -> None:
 ```
 pytest tests/test_standards_client.py -k "etsi" -v
 ```
-Expected: `ImportError` — `_ETSIFetcher` not defined
+Expected: `ImportError`, `_ETSIFetcher` not defined
 
 - [ ] **Step 4: Add `_ETSIFetcher` to `_standards_client.py`**
 
@@ -1494,7 +1494,7 @@ class _ETSIFetcher:
 
     On first call, builds an in-memory index from the catalogue page (a few
     seconds). Subsequent calls search the in-memory index without network I/O.
-    The index is rebuilt when ``_index`` is None (e.g. after process restart).
+    The index is rebuilt when ``_index`` is None (such as after process restart).
 
     Args:
         http: Shared httpx async client.
@@ -1599,7 +1599,7 @@ class _ETSIFetcher:
         """Fetch a single ETSI standard by canonical identifier.
 
         Args:
-            identifier: Canonical identifier (e.g. "ETSI EN 303 645").
+            identifier: Canonical identifier (such as "ETSI EN 303 645").
 
         Returns:
             Populated StandardRecord or None if not found.
@@ -1678,13 +1678,13 @@ async def test_standards_client_search_body_filter(respx_mock: respx.MockRouter)
 ```
 pytest tests/test_standards_client.py -k "standards_client" -v
 ```
-Expected: `ImportError` — `StandardsClient` not defined
+Expected: `ImportError`, `StandardsClient` not defined
 
 - [ ] **Step 3: Add `StandardsClient` to `_standards_client.py`**
 
 ```python
 # ---------------------------------------------------------------------------
-# StandardsClient — public orchestrator
+# StandardsClient, public orchestrator
 # ---------------------------------------------------------------------------
 
 _STANDARDS_DELAY = 0.5  # shared default for API-backed fetchers
@@ -1770,7 +1770,7 @@ class StandardsClient:
             if fetcher:
                 return await fetcher.get(canonical)
 
-        # No local resolution — try each fetcher
+        # No local resolution, try each fetcher
         for fetcher in self._fetchers.values():
             result = await fetcher.get(identifier)
             if result is not None:
@@ -1803,7 +1803,7 @@ class StandardsClient:
             # Return a stub if fetcher fails
             return [StandardRecord(identifier=canonical, body=body, title="", full_text_available=False)]
 
-        # No local resolution — fall back to API search across all bodies
+        # No local resolution, fall back to API search across all bodies
         results = await self.search(raw, limit=5)
         return results
 
@@ -1822,7 +1822,7 @@ pytest tests/test_standards_client.py -k "standards_client" -v
 ```
 Expected: 2 tests PASS
 
-- [ ] **Step 5: Update `_server_deps.py` — add `standards` to `ServiceBundle` and lifespan**
+- [ ] **Step 5: Update `_server_deps.py`, add `standards` to `ServiceBundle` and lifespan**
 
 In `ServiceBundle` dataclass, after `tasks: TaskQueue`:
 
@@ -1851,7 +1851,7 @@ In the `finally` block, after `await s2.aclose()`, add:
         await standards.aclose()
 ```
 
-- [ ] **Step 6: Update `_server_tools.py` — add `register_standards_tools` call**
+- [ ] **Step 6: Update `_server_tools.py`, add `register_standards_tools` call**
 
 ```python
     from ._tools_standards import register_standards_tools
@@ -1861,7 +1861,7 @@ In the `finally` block, after `await s2.aclose()`, add:
 
 (Add after the `register_book_tools(mcp)` call.)
 
-- [ ] **Step 7: Update `tests/conftest.py` — add `standards` to ServiceBundle fixture**
+- [ ] **Step 7: Update `tests/conftest.py`, add `standards` to ServiceBundle fixture**
 
 Add import:
 ```python
@@ -2023,7 +2023,7 @@ async def test_resolve_uses_alias_cache(mcp: FastMCP, bundle: ServiceBundle) -> 
 ```
 pytest tests/test_tools_standards.py -v
 ```
-Expected: tools exist in empty stub — tests fail with `ToolNotFoundError`
+Expected: tools exist in empty stub, tests fail with `ToolNotFoundError`
 
 - [ ] **Step 3: Implement `resolve_standard_identifier` in `_tools_standards.py`**
 
@@ -2106,7 +2106,7 @@ def register_standards_tools(mcp: FastMCP) -> None:
             # Return with stub record when fetch fails
             return json.dumps({"canonical": canonical, "body": body, "record": None})
 
-        # 3. API fallback — search all sources
+        # 3. API fallback, search all sources
         candidates = await bundle.standards.resolve(raw)
         if not candidates:
             return json.dumps({"canonical": None, "body": None, "record": None})
@@ -2236,7 +2236,7 @@ Add inside `register_standards_tools`, after `resolve_standard_identifier`:
 
         Args:
             query: Identifier, title, or free text.
-            body: Optional filter — "NIST", "IETF", "W3C", or "ETSI".
+            body: Optional filter, "NIST", "IETF", "W3C", or "ETSI".
             limit: Maximum results (max 50).
 
         Returns:
@@ -2369,7 +2369,7 @@ Add inside `register_standards_tools`, after `search_standards`:
     ) -> str:
         """Retrieve a standard by identifier (canonical or fuzzy).
 
-        Resolves fuzzy inputs (e.g. "rfc9000", "nist 800-53") to their
+        Resolves fuzzy inputs (such as "rfc9000", "nist 800-53") to their
         canonical form before fetching. With ``fetch_full_text=True`` and
         docling configured, downloads and converts the full text.
 
@@ -2416,7 +2416,7 @@ Add inside `register_standards_tools`, after `search_standards`:
         return json.dumps(record)
 ```
 
-Also add the `_handle_full_text` helper (stub for now — full implementation in Task 11):
+Also add the `_handle_full_text` helper (stub for now, full implementation in Task 11):
 
 ```python
 async def _handle_full_text(record: dict, bundle: ServiceBundle) -> str:  # type: ignore[type-arg]
@@ -2496,7 +2496,7 @@ async def test_get_standard_fetch_full_text_queues_task(
             "get_standard", {"identifier": "RFC 9000", "fetch_full_text": True}
         )
     data = json.loads(result.content[0].text)
-    # Should return task ID (queued) or inline result — either is acceptable
+    # Should return task ID (queued) or inline result, either is acceptable
     assert "identifier" in data or "task_id" in data or "queued" in data
 
 
@@ -2638,7 +2638,7 @@ Search standards by identifier, title, or free text.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `query` | string | — | Identifier, title, or free text |
+| `query` | string |, | Identifier, title, or free text |
 | `body` | string | null | Filter to one body: `NIST`, `IETF`, `W3C`, `ETSI` |
 | `limit` | integer | 10 | Max results (max 50) |
 
@@ -2649,7 +2649,7 @@ full text via docling.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `identifier` | string | — | Canonical or fuzzy identifier |
+| `identifier` | string |, | Canonical or fuzzy identifier |
 | `fetch_full_text` | boolean | false | Fetch and convert full text via docling |
 
 ### `resolve_standard_identifier`
@@ -2658,7 +2658,7 @@ Normalise a messy citation string to its canonical form and body.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `raw` | string | — | Messy citation string (e.g. `"rfc9000"`, `"nist 800-53"`) |
+| `raw` | string |, | Messy citation string (such as `"rfc9000"`, `"nist 800-53"`) |
 ```
 
 - [ ] **Step 2: Create v0.8.0 milestone on GitHub**
@@ -2667,7 +2667,7 @@ Normalise a messy citation string to its canonical form and body.
 gh api repos/pvliesdonk/scholar-mcp/milestones \
   --method POST \
   -f title="v0.8.0" \
-  -f description="Standards support — NIST, IETF, W3C, ETSI Tier 1 fetchers, unified StandardsClient, three new tools, full-text via docling"
+  -f description="Standards support, NIST, IETF, W3C, ETSI Tier 1 fetchers, unified StandardsClient, three new tools, full-text via docling"
 ```
 
 - [ ] **Step 3: File deferred Tier 2 issues**
@@ -2743,7 +2743,7 @@ gh issue create \
   --repo pvliesdonk/scholar-mcp \
   --title "feat: BibLaTeX @techreport / @manual citation output for standards (F4)" \
   --label "enhancement" \
-  --body "F4: Ensure generate_citations produces correct BibLaTeX output for StandardRecord. Typically @techreport (NIST, IETF) or @manual (ISO, W3C). Different bodies have different citation conventions — may need per-body templates. Depends on v0.8.0 StandardsClient framework and the existing generate_citations feature."
+  --body "F4: Ensure generate_citations produces correct BibLaTeX output for StandardRecord. Typically @techreport (NIST, IETF) or @manual (ISO, W3C). Different bodies have different citation conventions, may need per-body templates. Depends on v0.8.0 StandardsClient framework and the existing generate_citations feature."
 
 gh issue create \
   --repo pvliesdonk/scholar-mcp \
@@ -2753,7 +2753,7 @@ gh issue create \
 
 gh issue create \
   --repo pvliesdonk/scholar-mcp \
-  --title "feat: standards lifecycle tracking — detect withdrawn/superseded citations" \
+  --title "feat: standards lifecycle tracking, detect withdrawn/superseded citations" \
   --label "enhancement" \
   --body "F6: Alert when a cited standard is withdrawn or superseded. Useful for literature reviews: 'this 2015 paper cites ISO/IEC 27001:2013, now superseded by 27001:2022'. Requires periodic catalogue refresh and a diff mechanism. Depends on v0.8.0 StandardsClient and cache."
 
@@ -2761,7 +2761,7 @@ gh issue create \
   --repo pvliesdonk/scholar-mcp \
   --title "feat: IEEE Xplore institutional access for full-text standards" \
   --label "enhancement" \
-  --body "F7: If institutional access is available (e.g. TNO IEEE Xplore), add authenticated API access to IEEE standards full text. Would promote IEEE from Tier 2 to Tier 1 for authenticated users. Requires API key and auth handling. Depends on Tier 2 IEEE metadata support."
+  --body "F7: If institutional access is available (such as TNO IEEE Xplore), add authenticated API access to IEEE standards full text. Would promote IEEE from Tier 2 to Tier 1 for authenticated users. Requires API key and auth handling. Depends on Tier 2 IEEE metadata support."
 
 gh issue create \
   --repo pvliesdonk/scholar-mcp \
@@ -2783,7 +2783,7 @@ Tier 2 and Tier 3 issues → v0.9.0 (create if it doesn't exist):
 ```bash
 MILESTONE_ID=$(gh api repos/pvliesdonk/scholar-mcp/milestones --jq '.[] | select(.title=="v0.9.0") | .number')
 if [ -z "$MILESTONE_ID" ]; then
-  MILESTONE_ID=$(gh api repos/pvliesdonk/scholar-mcp/milestones --method POST -f title="v0.9.0" -f description="Standards Tier 2 — ISO, IEC, IEEE, CEN/CENELEC metadata; Common Criteria; enrichment integration" --jq '.number')
+  MILESTONE_ID=$(gh api repos/pvliesdonk/scholar-mcp/milestones --method POST -f title="v0.9.0" -f description="Standards Tier 2, ISO, IEC, IEEE, CEN/CENELEC metadata; Common Criteria; enrichment integration" --jq '.number')
 fi
 echo "v0.9.0 milestone: $MILESTONE_ID"
 ```

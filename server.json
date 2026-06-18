@@ -53,6 +53,31 @@
           "default": "true"
         },
         {
+          "name": "FASTMCP_LOG_LEVEL",
+          "description": "Log level (DEBUG, INFO, WARNING, ERROR)",
+          "default": "INFO"
+        },
+        {
+          "name": "SCHOLAR_MCP_KV_STORE_URL",
+          "description": "Persistent-state backend URL for pvl-core subsystems. Schemes: file:///path (survives restarts), memory:// (dev/ephemeral).",
+          "default": "file:///data/state"
+        },
+        {
+          "name": "SCHOLAR_MCP_SERVER_NAME",
+          "description": "MCP server name shown to clients",
+          "default": "scholar-mcp"
+        },
+        {
+          "name": "PUID",
+          "description": "Run as this UID (Docker entrypoint)",
+          "default": "1000"
+        },
+        {
+          "name": "PGID",
+          "description": "Run as this GID (Docker entrypoint)",
+          "default": "1000"
+        },
+        {
           "name": "SCHOLAR_MCP_BEARER_TOKEN",
           "description": "Static bearer token for authentication (optional)",
           "required": false

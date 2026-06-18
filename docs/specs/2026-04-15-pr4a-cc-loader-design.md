@@ -1,4 +1,4 @@
-# PR 4a — Common Criteria Framework + Protection Profiles Loader
+# PR 4a, Common Criteria Framework + Protection Profiles Loader
 
 **Date:** 2026-04-15
 **Closes:** scholar-mcp#84
@@ -11,7 +11,7 @@ The v0.9.0 standards rollout originally bundled CEN/CENELEC + Common Criteria in
 
 ## Summary
 
-Ship Common Criteria as a Tier 2 sync-only body covering two record categories: ~15 framework documents (CC:2022, CC:2017, ISO/IEC 15408 / 18045 dual publications) and ~500 Protection Profiles. CC has no live API, so the loader is sync-only — the existing `body=` dispatch pattern in `StandardsClient` is preserved by registering a thin cache-only `_CCFetcher` that surfaces a "run sync" hint on cache miss.
+Ship Common Criteria as a Tier 2 sync-only body covering two record categories: ~15 framework documents (CC:2022, CC:2017, ISO/IEC 15408 / 18045 dual publications) and ~500 Protection Profiles. CC has no live API, so the loader is sync-only, the existing `body=` dispatch pattern in `StandardsClient` is preserved by registering a thin cache-only `_CCFetcher` that surfaces a "run sync" hint on cache miss.
 
 ## Scope decisions made during brainstorming
 
@@ -19,13 +19,13 @@ Ship Common Criteria as a Tier 2 sync-only body covering two record categories: 
 
 CC has three potential record categories:
 
-1. **Framework documents** — `CC:2022`, `CC:2017`, `ISO/IEC 15408`, CEM. ~15 documents. **In scope.** This is what academic citations primarily reference.
-2. **Protection Profiles** — published security requirement specifications. ~500 documents. **In scope.** Common in security-research papers.
-3. **Certified products** — ~6700 product certifications. **Out of scope** (deferred to #131 — academic citations rarely reference individual product certs).
+1. **Framework documents**, `CC:2022`, `CC:2017`, `ISO/IEC 15408`, CEM. ~15 documents. **In scope.** This is what academic citations primarily reference.
+2. **Protection Profiles**, published security requirement specifications. ~500 documents. **In scope.** Common in security-research papers.
+3. **Certified products**, ~6700 product certifications. **Out of scope** (deferred to #131, academic citations rarely reference individual product certs).
 
 ### CC ↔ ISO/IEC 15408 modeling: parallel publication, not joint committee
 
-CC and ISO/IEC 15408 are **parallel publications** of the same content under two different publishers — not a single joint committee output. PR 2/3 used a joint-`body` model (`ISO/IEC`, `IEC/IEEE`, `ISO/IEC/IEEE`) for true joint committee outputs that have a single canonical citation form. CC ↔ ISO 15408 has two distinct citation forms (`CC:2022` OR `ISO/IEC 15408` — never joined), so it gets a different model: **two records cross-linked via the `related` field**.
+CC and ISO/IEC 15408 are **parallel publications** of the same content under two different publishers, not a single joint committee output. PR 2/3 used a joint-`body` model (`ISO/IEC`, `IEC/IEEE`, `ISO/IEC/IEEE`) for true joint committee outputs that have a single canonical citation form. CC ↔ ISO 15408 has two distinct citation forms (`CC:2022` OR `ISO/IEC 15408`, never joined), so it gets a different model: **two records cross-linked via the `related` field**.
 
 | Storage relationship | When to use | Storage model |
 |---|---|---|
@@ -42,15 +42,15 @@ Decision: **ISO loader denylists the 15408 family; CC loader owns those records 
 
 ### Protection Profile identifier extraction: hybrid
 
-The `pps.csv` columns include URLs like `KECS-PP-0822-2017_PP_EN.pdf`, `BSI-CC-PP-0099-V2-2017.pdf`, `ANSSI-CC-PP-2014_01.pdf` — these contain stable scheme IDs but there's no dedicated ID column.
+The `pps.csv` columns include URLs like `KECS-PP-0822-2017_PP_EN.pdf`, `BSI-CC-PP-0099-V2-2017.pdf`, `ANSSI-CC-PP-2014_01.pdf`, these contain stable scheme IDs but there's no dedicated ID column.
 
 Decision: **per-scheme regex with composite fallback.** Maintain a `_PP_SCHEME_PATTERNS` dict keyed by 2-letter scheme code (KR, DE, FR, US, ES, …) with one regex per scheme. On no match, fall back to the composite form `f"CC PP {scheme}-{name}"` so we never drop a record. Logged at DEBUG when fallback fires.
 
-### No live fetcher — cache-only `_CCFetcher`
+### No live fetcher, cache-only `_CCFetcher`
 
 CC has no live API (the portal HTML is unstructured and rate-limited; we don't HTML-scrape). Instead of skipping `_fetchers["CC"]` registration entirely, we register a thin cache-only wrapper that:
 
-- Returns `cache.get_standard(identifier)` directly on `.get()` — no network.
+- Returns `cache.get_standard(identifier)` directly on `.get()`, no network.
 - Logs `WARNING` on cache miss with a `run sync-standards --body CC` hint so operators see the gap.
 - Delegates `.search(query)` to `cache.search_synced_standards(query, source="CC", limit=...)`.
 
@@ -60,7 +60,7 @@ This keeps the `_StandardsFetcher` Protocol uniform across all bodies and makes 
 
 | File | Change |
 |---|---|
-| `src/scholar_mcp/_sync_cc.py` | **New** — `CCFrameworkEntry` dataclass, `_FRAMEWORK_DOCS` constant (~15 entries), `_PP_SCHEME_PATTERNS` per-scheme regex dict, `_extract_pp_id` helper with composite fallback, `_pp_row_to_record` mapper, `CCLoader` orchestrating Phase 1 (framework) → Phase 2 (PP CSV, content-hash gated) → Phase 3 (withdrawal detection with >50% guard) |
+| `src/scholar_mcp/_sync_cc.py` | **New**, `CCFrameworkEntry` dataclass, `_FRAMEWORK_DOCS` constant (~15 entries), `_PP_SCHEME_PATTERNS` per-scheme regex dict, `_extract_pp_id` helper with composite fallback, `_pp_row_to_record` mapper, `CCLoader` orchestrating Phase 1 (framework) → Phase 2 (PP CSV, content-hash gated) → Phase 3 (withdrawal detection with >50% guard) |
 | `src/scholar_mcp/_sync_relaton.py` | Add `_RELATON_SKIP_SLUGS: dict[str, frozenset[str]]` constant; apply it during the tarball iteration to skip the 15408 family under `body="ISO"` |
 | `src/scholar_mcp/_standards_client.py` | Add CC regex groups to `resolve_identifier_local` (`_CC_VERSION_RE`, `_CC_PART_RE`, `_CEM_RE`, `_CC_PP_RE`); add `_CCFetcher` class; register `_fetchers["CC"] = _CCFetcher(cache=cache)` |
 | `src/scholar_mcp/cli.py` | Extend `_select_loaders` to construct `CCLoader()` for `--body CC` and include in `--body all` |
@@ -81,14 +81,14 @@ No changes to: `_cache.py`, `_protocols.py`, `_server_deps.py`, `_server_tools.p
 ```
 cli._select_loaders({"CC"}) → CCLoader()
   → CCLoader.sync(cache):
-      # Phase 1 — framework documents (no network, hard-coded table)
+      # Phase 1, framework documents (no network, hard-coded table)
       for entry in _FRAMEWORK_DOCS:
           for record in _framework_to_records(entry):     # 1 or 2 records per entry
               cache.set_standard(record["identifier"], record, source="CC", synced=True)
               for alias in _framework_aliases(entry):
                   cache.set_standard_alias(alias, record["identifier"])
 
-      # Phase 2 — Protection Profiles, content-hash gated
+      # Phase 2, Protection Profiles, content-hash gated
       csv_bytes = await _fetch_pps_csv(http)
       csv_hash = hashlib.sha256(csv_bytes).hexdigest()
       prev = await cache.get_sync_run("CC")
@@ -103,7 +103,7 @@ cli._select_loaders({"CC"}) → CCLoader()
               continue
           cache.set_standard(record["identifier"], record, source="CC", synced=True)
 
-      # Phase 3 — withdrawal detection (same >50% guard as RelatonLoader)
+      # Phase 3, withdrawal detection (same >50% guard as RelatonLoader)
       prev_ids = await cache.list_synced_standard_ids(source="CC")
       missing = prev_ids - current_ids
       if len(missing) > 0.5 * len(prev_ids):
@@ -118,7 +118,7 @@ cli._select_loaders({"CC"}) → CCLoader()
       return report
 ```
 
-### Live fetch — none
+### Live fetch, none
 
 CC has no live API. `_CCFetcher.get(identifier)` queries the cache directly:
 
@@ -148,10 +148,10 @@ get_standard("CC PP unknown-scheme-Some Random Name V1.0")    # fallback form
 
 ## Error Handling (per CLAUDE.md Logging Standard)
 
-- **Phase 1 failures** — pure dict construction, no external errors. Bugs in `_FRAMEWORK_DOCS` surface as test failures.
+- **Phase 1 failures**, pure dict construction, no external errors. Bugs in `_FRAMEWORK_DOCS` surface as test failures.
 - **Phase 2 fetch errors** (HTTP, timeout, malformed CSV at parse-init time): `logger.error("cc_pp_fetch_failed err=%s", exc, exc_info=True)`. Returns `SyncReport(added=phase1_count, errors=[...])`. CLI exit 1 (hard fail for this body).
 - **Phase 2 row-parse errors** (per-row): `logger.warning("cc_pp_row_parse_error name=%s", row_name)`, increment `errors` counter, continue.
-- **PP ID extraction fallback** (no scheme regex match): `logger.debug("cc_pp_id_fallback scheme=%s name=%s", scheme, name)`. Not an error — by design.
+- **PP ID extraction fallback** (no scheme regex match): `logger.debug("cc_pp_id_fallback scheme=%s name=%s", scheme, name)`. Not an error, by design.
 - **Withdrawal-pass abort** (>50% missing): `logger.warning("cc_withdrawal_aborted missing=%s prev=%s", ...)`. Returns report without marking anything withdrawn.
 - **`_CCFetcher` cache miss**: `logger.warning("cc_cache_miss identifier=%s hint=run sync-standards --body CC", id)`. Returns `None` to caller.
 
@@ -172,9 +172,9 @@ TDD throughout. Coverage targets: ≥80% patch.
 - `test_extract_pp_id_unknown_scheme_falls_back_to_composite`
 
 **Framework table:**
-- `test_framework_to_records_dual_publication` — verifies CC + ISO records, `related` cross-link both ways.
-- `test_framework_to_records_cc_only` — `iso_identifier=None` → 1 record.
-- `test_framework_records_have_free_pdf_url` — `full_text_url` shared, `full_text_available=True` on both.
+- `test_framework_to_records_dual_publication`, verifies CC + ISO records, `related` cross-link both ways.
+- `test_framework_to_records_cc_only`, `iso_identifier=None` → 1 record.
+- `test_framework_records_have_free_pdf_url`, `full_text_url` shared, `full_text_available=True` on both.
 - `test_framework_records_aliases_include_fuzzy_forms`.
 
 **PP CSV parsing:**
@@ -186,7 +186,7 @@ TDD throughout. Coverage targets: ≥80% patch.
 - `test_cc_loader_resync_changed_csv_detects_updates`
 - `test_cc_loader_withdrawal_detection`
 - `test_cc_loader_withdrawal_abort_on_majority_missing`
-- `test_cc_loader_owns_iso_15408_records` — CC writes both `CC:2022 Part 1` and `ISO/IEC 15408-1:2022`; verifies the dual record's `source="CC"`, `full_text_available=True`, `related` cross-link, and free-PDF `full_text_url`
+- `test_cc_loader_owns_iso_15408_records`, CC writes both `CC:2022 Part 1` and `ISO/IEC 15408-1:2022`; verifies the dual record's `source="CC"`, `full_text_available=True`, `related` cross-link, and free-PDF `full_text_url`
 
 **HTTP error paths:**
 - `test_cc_loader_csv_fetch_404`, `test_cc_loader_csv_fetch_timeout`.
@@ -206,19 +206,19 @@ TDD throughout. Coverage targets: ≥80% patch.
 
 ### Live smoke (pytest `-m live`, opt-in)
 
-- `test_live_fetch_cc_pps_csv_real` — real `pps.csv`, ≥100 records, ≥5 distinct schemes.
-- `test_live_framework_pdf_urls_resolve_real` — HEAD all `_FRAMEWORK_DOCS[*].cc_pdf_url`, expect 200.
+- `test_live_fetch_cc_pps_csv_real`, real `pps.csv`, ≥100 records, ≥5 distinct schemes.
+- `test_live_framework_pdf_urls_resolve_real`, HEAD all `_FRAMEWORK_DOCS[*].cc_pdf_url`, expect 200.
 
 ## PR Layout
 
 Single PR `feat/standards-cc-loader`, six ordered commits:
 
-1. `feat(standards): ISO loader denylist for shared-ownership slugs` — adds `_RELATON_SKIP_SLUGS` and the 15408 family entries. Independent test coverage. Lands first as the prerequisite.
-2. `feat(standards): CC framework table + dual-publication record builder` — `_sync_cc.py` skeleton, `CCFrameworkEntry`, `_FRAMEWORK_DOCS`, `_framework_to_records`. Pure data + transform.
-3. `feat(standards): CC Protection Profile CSV parser + per-scheme regex` — `_extract_pp_id`, `_pp_row_to_record`, fixture. No HTTP yet.
-4. `feat(standards): CCLoader sync orchestration + content-hash gate` — `CCLoader` class, mocked-HTTP integration tests, withdrawal guard.
-5. `feat(standards): register CC in StandardsClient + CLI + identifier regex` — `_CCFetcher`, `_fetchers["CC"]`, regex groups, `_select_loaders` extension.
-6. `docs(standards): Common Criteria body in README and standards guide` — user-facing docs.
+1. `feat(standards): ISO loader denylist for shared-ownership slugs`, adds `_RELATON_SKIP_SLUGS` and the 15408 family entries. Independent test coverage. Lands first as the prerequisite.
+2. `feat(standards): CC framework table + dual-publication record builder`, `_sync_cc.py` skeleton, `CCFrameworkEntry`, `_FRAMEWORK_DOCS`, `_framework_to_records`. Pure data + transform.
+3. `feat(standards): CC Protection Profile CSV parser + per-scheme regex`, `_extract_pp_id`, `_pp_row_to_record`, fixture. No HTTP yet.
+4. `feat(standards): CCLoader sync orchestration + content-hash gate`, `CCLoader` class, mocked-HTTP integration tests, withdrawal guard.
+5. `feat(standards): register CC in StandardsClient + CLI + identifier regex`, `_CCFetcher`, `_fetchers["CC"]`, regex groups, `_select_loaders` extension.
+6. `docs(standards): Common Criteria body in README and standards guide`, user-facing docs.
 
 Each commit independently green on `uv run pytest -x -q`, `uv run ruff check --fix . && uv run ruff format --check .`, `uv run mypy src/`. No squash on merge.
 
@@ -239,13 +239,13 @@ Manifest version bumps handled by release workflow.
 
 Filed as follow-ups:
 
-- **#131** — Common Criteria certified-products dataset (sec-certs JSON, ~6700 records)
-- **#132** — CC Supporting Documents and Guidance Documents loader
-- **#133** — CEM Supplements and Application Notes
-- **#134** — Auto-discover CC framework documents from portal HTML
+- **#131**, Common Criteria certified-products dataset (sec-certs JSON, ~6700 records)
+- **#132**, CC Supporting Documents and Guidance Documents loader
+- **#133**, CEM Supplements and Application Notes
+- **#134**, Auto-discover CC framework documents from portal HTML
 
 Explicitly **not** doing in PR 4a:
 
 - Live HTML scraping of the CC portal.
-- Modifying `StandardRecord` shape — the existing schema covers everything.
-- Cache-schema migration — none needed.
+- Modifying `StandardRecord` shape, the existing schema covers everything.
+- Cache-schema migration, none needed.

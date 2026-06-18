@@ -1,4 +1,4 @@
-# v0.5.0 Book & Citation Polish — Implementation Plan
+# v0.5.0 Book & Citation Polish, Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -140,7 +140,7 @@ def normalize_book(
 ) -> BookRecord:
 ```
 
-No other code changes needed — the return dicts already match the BookRecord shape.
+No other code changes needed, the return dicts already match the BookRecord shape.
 
 - [ ] **Step 2: Run existing tests to verify no breakage**
 
@@ -191,7 +191,7 @@ async def _resolve_isbn(isbn: str, bundle: ServiceBundle) -> str:
     return json.dumps(book)
 ```
 
-Update `_resolve_work` (line 144) — add `BookRecord` annotation to the `book` variable:
+Update `_resolve_work` (line 144), add `BookRecord` annotation to the `book` variable:
 
 ```python
     book: BookRecord = {
@@ -232,7 +232,7 @@ Update `_to_enrichment_dict` (line 83):
 def _to_enrichment_dict(book: BookRecord) -> dict[str, Any]:
 ```
 
-Update `_enrich_one` (line 67) — annotate the `book` variable:
+Update `_enrich_one` (line 67), annotate the `book` variable:
 
 ```python
         book: BookRecord = normalize_book(edition, source="edition")
@@ -274,7 +274,7 @@ Update these method signatures in `ScholarCache`:
     async def set_book_search(self, query: str, data: list[BookRecord]) -> None:
 ```
 
-The method bodies remain unchanged — `json.loads()` returns `Any` and the type annotation on the return guides consumers.
+The method bodies remain unchanged, `json.loads()` returns `Any` and the type annotation on the return guides consumers.
 
 - [ ] **Step 2: Run full test suite to verify no breakage**
 
@@ -294,7 +294,7 @@ git commit -m "refactor(types): BookRecord in cache method signatures (#63)"
 - Create: `src/scholar_mcp/_protocols.py`
 - Test: `tests/test_protocols.py`
 
-- [ ] **Step 1: Write failing test — verify ScholarCache satisfies the protocol**
+- [ ] **Step 1: Write failing test, verify ScholarCache satisfies the protocol**
 
 ```python
 # tests/test_protocols.py
@@ -430,7 +430,7 @@ Change the `cache` field on `ServiceBundle` (line 51):
     cache: CacheProtocol
 ```
 
-Keep the `ScholarCache` import — it's still needed in `make_service_lifespan` to construct the instance (line 118).
+Keep the `ScholarCache` import, it's still needed in `make_service_lifespan` to construct the instance (line 118).
 
 - [ ] **Step 2: Update _fetch_patent_sections cache parameter**
 
@@ -590,7 +590,7 @@ Add to `OpenLibraryClient` in `_openlibrary_client.py` (after `get_edition`):
         """Fetch author metadata by key.
 
         Args:
-            author_key: Open Library author key (e.g. ``/authors/OL34184A``).
+            author_key: Open Library author key (such as ``/authors/OL34184A``).
 
         Returns:
             Author dict with ``name`` field, or None if not found.
@@ -682,7 +682,7 @@ async def _resolve_author_keys(
     """Resolve Open Library author keys to author names.
 
     Args:
-        author_keys: List of OL author keys (e.g. ``/authors/OL34184A``).
+        author_keys: List of OL author keys (such as ``/authors/OL34184A``).
         bundle: Service bundle with openlibrary client.
 
     Returns:
@@ -703,7 +703,7 @@ def _extract_author_keys(work: dict[str, Any]) -> list[str]:
         work: Open Library work dict.
 
     Returns:
-        List of author key strings (e.g. ``/authors/OL34184A``).
+        List of author key strings (such as ``/authors/OL34184A``).
     """
     keys: list[str] = []
     for entry in work.get("authors") or []:
@@ -775,7 +775,7 @@ Expected: PASS
 
 - [ ] **Step 5: Update existing ISBN tests to mock work+author endpoints**
 
-Existing tests like `test_get_book_isbn_cache_hit` and `test_get_book_by_isbn` only mock the `/isbn/` endpoint. After this change, `_resolve_isbn` also calls `_enrich_authors_from_work` which fetches the work. Since `_enrich_authors_from_work` catches all exceptions, existing tests won't break — but they should be updated to also mock the work+author endpoints for proper coverage. Add the work and author mocks to each existing ISBN test that uses `SAMPLE_EDITION_RESPONSE`:
+Existing tests like `test_get_book_isbn_cache_hit` and `test_get_book_by_isbn` only mock the `/isbn/` endpoint. After this change, `_resolve_isbn` also calls `_enrich_authors_from_work` which fetches the work. Since `_enrich_authors_from_work` catches all exceptions, existing tests won't break, but they should be updated to also mock the work+author endpoints for proper coverage. Add the work and author mocks to each existing ISBN test that uses `SAMPLE_EDITION_RESPONSE`:
 
 ```python
     respx_mock.get("/works/OL1168083W.json").mock(
@@ -1030,10 +1030,10 @@ Stacked on: #PR1_NUMBER (BookRecord + CacheProtocol)
 Closes #74
 
 ## Test plan
-- [ ] \`test_get_book_isbn_enriches_authors\` — ISBN lookup resolves authors
-- [ ] \`test_get_book_edition_enriches_authors\` — edition ID lookup resolves authors
-- [ ] \`test_get_book_work_resolves_authors\` — work ID lookup resolves authors
-- [ ] \`test_to_enrichment_dict_includes_authors\` — enrichment dict has authors
+- [ ] \`test_get_book_isbn_enriches_authors\`, ISBN lookup resolves authors
+- [ ] \`test_get_book_edition_enriches_authors\`, edition ID lookup resolves authors
+- [ ] \`test_get_book_work_resolves_authors\`, work ID lookup resolves authors
+- [ ] \`test_to_enrichment_dict_includes_authors\`, enrichment dict has authors
 - [ ] All existing book tests still pass
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)" \
@@ -1130,7 +1130,7 @@ Add to `OpenLibraryClient` in `_openlibrary_client.py`:
         """Fetch books for a subject.
 
         Args:
-            subject: Subject slug (e.g. ``machine_learning``).
+            subject: Subject slug (such as ``machine_learning``).
             limit: Maximum number of works to return.
 
         Returns:
@@ -1215,7 +1215,7 @@ def normalize_subject(subject: str) -> str:
     """Normalize a subject string for the Open Library subject API.
 
     Args:
-        subject: Free-text subject (e.g. ``"Machine Learning"``).
+        subject: Free-text subject (such as ``"Machine Learning"``).
 
     Returns:
         Lowercase slug with spaces replaced by underscores.
@@ -1508,7 +1508,7 @@ Inside `register_book_tools(mcp)`, add after the `get_book` tool:
         topic, sorted by edition count (a proxy for popularity).
 
         Args:
-            subject: Subject or topic (e.g. "machine learning",
+            subject: Subject or topic (such as "machine learning",
                 "algorithms", "computer vision").
             limit: Maximum results to return (max 50).
 
@@ -1588,9 +1588,9 @@ Stacked on: #PR2_NUMBER (ISBN author enrichment)
 Closes #69
 
 ## Test plan
-- [ ] \`test_recommend_books_returns_results\` — results normalized correctly
-- [ ] \`test_recommend_books_caches_results\` — cache populated after first call
-- [ ] \`test_recommend_books_empty_subject\` — returns empty list for unknown subjects
+- [ ] \`test_recommend_books_returns_results\`, results normalized correctly
+- [ ] \`test_recommend_books_caches_results\`, cache populated after first call
+- [ ] \`test_recommend_books_empty_subject\`, returns empty list for unknown subjects
 - [ ] All existing tests still pass
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)" \
@@ -2077,10 +2077,10 @@ Stacked on: #PR3_NUMBER (recommend_books)
 Closes #65
 
 ## Test plan
-- [ ] \`TestInferEntryType\` — book detection with ISBN, publisher, fallback
-- [ ] \`TestFormatBibtexBook\` — @book entry, fields, author fallback
-- [ ] \`TestFormatCslJsonBook\` — book type, publisher, ISBN, author fallback
-- [ ] \`TestFormatRisBook\` — BOOK type, PB/SN tags, author fallback
+- [ ] \`TestInferEntryType\`, book detection with ISBN, publisher, fallback
+- [ ] \`TestFormatBibtexBook\`, @book entry, fields, author fallback
+- [ ] \`TestFormatCslJsonBook\`, book type, publisher, ISBN, author fallback
+- [ ] \`TestFormatRisBook\`, BOOK type, PB/SN tags, author fallback
 - [ ] All existing citation tests still pass
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)" \

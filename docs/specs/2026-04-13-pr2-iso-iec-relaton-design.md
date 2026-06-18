@@ -1,7 +1,7 @@
-# PR 2 — ISO + IEC Relaton Loader Design
+# PR 2, ISO + IEC Relaton Loader Design
 
 > Sub-spec of [`2026-04-13-standards-tier2-design.md`](2026-04-13-standards-tier2-design.md).
-> PR 1 (`feat(standards): v0.9.0 PR 1/5 — sync infrastructure foundation`) is merged at
+> PR 1 (`feat(standards): v0.9.0 PR 1/5, sync infrastructure foundation`) is merged at
 > commit `2dcbc72`. This document captures the PR-2-specific decisions and surface
 > needed before plan-writing.
 
@@ -14,9 +14,9 @@ metadata via the Relaton YAML dumps at `relaton/relaton-data-iso` and
 ## Decisions taken during brainstorming
 
 1. **Joint-standard `body` value: `"ISO/IEC"`.** Standards present in both dumps under a
-   joint identifier (e.g. `ISO/IEC 27001:2022`, `ISO/IEC 15408:2022`) get
+   joint identifier (such as `ISO/IEC 27001:2022`, `ISO/IEC 15408:2022`) get
    `StandardRecord.body = "ISO/IEC"`. The `_SYNC_BODIES` CLI choice tuple stays
-   `(ISO, IEC, IEEE, CEN, CC, all)` — `"ISO/IEC"` is never a sync source, only a stored
+   `(ISO, IEC, IEEE, CEN, CC, all)`, `"ISO/IEC"` is never a sync source, only a stored
    body value. The `source` column on the row records which loader actually wrote it
    (`"ISO"` or `"IEC"`); `body` reflects the standard's true joint nature.
 
@@ -25,7 +25,7 @@ metadata via the Relaton YAML dumps at `relaton/relaton-data-iso` and
    `https://raw.githubusercontent.com/relaton/relaton-data-iso/main/data/{slug}.yaml`
    request. Parsed via the same `_yaml_to_record` mapper as sync. Cached as a 90-day
    live record (`synced=False`). Avoids the false-negative trap of "not found until
-   sync runs." No HTML scraping — `raw.githubusercontent.com` is rate-limit free, no
+   sync runs." No HTML scraping, `raw.githubusercontent.com` is rate-limit free, no
    auth needed, deterministic format.
 
 3. **GitHub auth: optional `SCHOLAR_GITHUB_TOKEN` env.** Default unauthenticated path
@@ -59,7 +59,7 @@ docs/
 | `src/scholar_mcp/_record_types.py` | `StandardRecord.body` docstring lists `"ISO/IEC"` as valid |
 | `src/scholar_mcp/_standards_client.py` | New regex groups for ISO/IEC/IEEE in `resolve_identifier_local`; register `RelatonLiveFetcher` for `ISO`, `IEC`, `ISO/IEC` keys in `StandardsClient._fetchers` |
 | `src/scholar_mcp/cli.py` | `_select_loaders` returns real `RelatonLoader` instances (was empty list in PR 1) |
-| `src/scholar_mcp/_cache.py` | New `list_synced_standard_ids(source: str) -> set[str]` method — required by withdrawn-detection step |
+| `src/scholar_mcp/_cache.py` | New `list_synced_standard_ids(source: str) -> set[str]` method, required by withdrawn-detection step |
 | `src/scholar_mcp/_protocols.py` | `CacheProtocol` gains the same method |
 | `src/scholar_mcp/config.py` | New `github_token: str \| None` field, `SCHOLAR_GITHUB_TOKEN` env var |
 | `README.md` | "Tier 2 standards" section under Features; sync-standards example shows ISO+IEC working |
@@ -126,13 +126,13 @@ class RelatonLoader:
                for alias in aliases:
                    await cache.set_standard_alias(alias, record["identifier"])
 
-4. # Withdrawn detection — guarded against partial-tarball disasters
+4. # Withdrawn detection, guarded against partial-tarball disasters
    prev_ids = await cache.list_synced_standard_ids(source=body)
    missing = prev_ids - current_ids
    if prev_ids and len(missing) > 0.5 * len(prev_ids):
        errors.append(
            f"withdrawal pass aborted: {len(missing)}/{len(prev_ids)} ids missing "
-           "(>50% — likely partial sync)"
+           "(>50%, likely partial sync)"
        )
    else:
        for ident in missing:
@@ -166,7 +166,7 @@ def _canonical_identifier_and_body(yaml_doc: dict) -> tuple[str, str]:
 
 Maps a parsed Relaton YAML to (record, alias_list). Returns `(None, [])` on schema
 mismatches that prevent extracting an identifier or title. Field mapping per parent
-spec (lines 195–207). Errors are non-fatal — caller adds them to `SyncReport.errors`.
+spec (lines 195–207). Errors are non-fatal, caller adds them to `SyncReport.errors`.
 
 ### `_relaton_live.RelatonLiveFetcher`
 
@@ -181,14 +181,14 @@ class RelatonLiveFetcher:
 ```
 
 Algorithm:
-1. `slug = _identifier_to_relaton_slug(identifier)` — e.g. `"ISO 9001:2015"` →
+1. `slug = _identifier_to_relaton_slug(identifier)`, such as `"ISO 9001:2015"` →
    `"iso-9001-2015"`, `"ISO/IEC 27001:2022"` → `"iso-iec-27001-2022"`. Returns `None`
    for forms it can't slugify.
 2. Choose repo order by the canonical identifier prefix: `ISO` or `ISO/IEC` → try
    `relaton-data-iso` first; `IEC` → try `relaton-data-iec` first. The other repo is
    the fallback. `GET https://raw.githubusercontent.com/relaton/{repo}/main/data/{slug}.yaml`.
    First HTTP 200 wins. 404 on both → return stub record `{identifier, body, title="",
-   full_text_available=False}` (per existing `Fetcher` "resolved-locally-but-fetch-failed"
+   full_text_available=False}` (per existing `Fetcher` "resolved-locally but-fetch-failed"
    convention).
 3. Parse via `_yaml_to_record` (imported from `_sync_relaton`). The mapper is shared so
    live and synced records have identical shape.
@@ -219,7 +219,7 @@ _IEC_RE          = re.compile(r"(?i)\biec\s*(\d{1,5}(?:-\d+)*)\s*[:\s-]\s*(\d{4}
 Returned canonicals: `"ISO/IEC 27001:2022"`, `"ISO 9001:2015"`, `"IEC 62443-3-3:2020"`.
 
 The bare `27001:2022` form (no body prefix) is ambiguous and **deliberately not
-matched** — that path is left to the broader sync-time alias rows.
+matched**, that path is left to the broader sync-time alias rows.
 
 ## Tests
 
@@ -227,52 +227,52 @@ Layered like `_sync_standards.py`'s tests in PR 1.
 
 ### `test_sync_relaton.py`
 
-- `test_yaml_to_record_plain_iso` — single ISO entry → correct fields
-- `test_yaml_to_record_joint_iso_iec` — joint entry → `body="ISO/IEC"`, identifier in `ISO/IEC` form
-- `test_yaml_to_record_missing_identifier` — returns `(None, errors)`
-- `test_canonical_identifier_iec_only` — IEC-only entry → `body="IEC"`
-- `test_loader_cold_sync_inserts_records` — empty cache + fixture tarball → `added` matches fixture count
-- `test_loader_resync_same_sha_returns_unchanged` — second call with same SHA → no API/tarball fetch, `unchanged > 0`
-- `test_loader_force_resyncs_despite_same_sha` — `force=True` bypasses SHA check
-- `test_loader_modified_record_increments_updated` — fixture entry edited → `updated == 1`
-- `test_loader_removed_record_marked_withdrawn` — fixture entry removed → row `status="withdrawn"`, `withdrawn == 1`
-- `test_loader_withdrawal_pass_aborts_on_mass_disappearance` — sync with a tarball missing >50% of prior ids → `withdrawn == 0`, error appended to report, prior rows retain previous `status`
-- `test_loader_joint_dedup_iso_then_iec` — sync ISO then IEC → joint records single-row, aliases merged
-- `test_loader_joint_dedup_iec_then_iso` — reverse order → identical final state
-- `test_loader_uses_token_when_present` — `SCHOLAR_GITHUB_TOKEN` set → Authorization header sent (assert via respx)
+- `test_yaml_to_record_plain_iso`, single ISO entry → correct fields
+- `test_yaml_to_record_joint_iso_iec`, joint entry → `body="ISO/IEC"`, identifier in `ISO/IEC` form
+- `test_yaml_to_record_missing_identifier`, returns `(None, errors)`
+- `test_canonical_identifier_iec_only`, IEC-only entry → `body="IEC"`
+- `test_loader_cold_sync_inserts_records`, empty cache + fixture tarball → `added` matches fixture count
+- `test_loader_resync_same_sha_returns_unchanged`, second call with same SHA → no API/tarball fetch, `unchanged > 0`
+- `test_loader_force_resyncs_despite_same_sha`, `force=True` bypasses SHA check
+- `test_loader_modified_record_increments_updated`, fixture entry edited → `updated == 1`
+- `test_loader_removed_record_marked_withdrawn`, fixture entry removed → row `status="withdrawn"`, `withdrawn == 1`
+- `test_loader_withdrawal_pass_aborts_on_mass_disappearance`, sync with a tarball missing >50% of prior ids → `withdrawn == 0`, error appended to report, prior rows retain previous `status`
+- `test_loader_joint_dedup_iso_then_iec`, sync ISO then IEC → joint records single-row, aliases merged
+- `test_loader_joint_dedup_iec_then_iso`, reverse order → identical final state
+- `test_loader_uses_token_when_present`, `SCHOLAR_GITHUB_TOKEN` set → Authorization header sent (assert via respx)
 
 ### `test_relaton_live.py`
 
-- `test_identifier_to_slug_iso` / `_joint` / `_iec` / `_with_amendment` — slug shapes
-- `test_identifier_to_slug_returns_none_for_unsupported` — odd form → `None`
-- `test_live_fetch_iso_hit` — respx returns YAML, fetcher returns parsed record
-- `test_live_fetch_falls_back_to_iec_when_iso_404` — first repo 404 → second repo wins
-- `test_live_fetch_returns_stub_when_both_404` — neither repo has it → stub record
-- `test_live_fetch_caches_as_live_record` — second call returns from cache, no HTTP
+- `test_identifier_to_slug_iso` / `_joint` / `_iec` / `_with_amendment`, slug shapes
+- `test_identifier_to_slug_returns_none_for_unsupported`, odd form → `None`
+- `test_live_fetch_iso_hit`, respx returns YAML, fetcher returns parsed record
+- `test_live_fetch_falls_back_to_iec_when_iso_404`, first repo 404 → second repo wins
+- `test_live_fetch_returns_stub_when_both_404`, neither repo has it → stub record
+- `test_live_fetch_caches_as_live_record`, second call returns from cache, no HTTP
 
 ### `test_standards_client.py` additions
 
-- `test_resolve_identifier_iso_plain` — `"ISO 9001:2015"` → `("ISO 9001:2015", "ISO")`
-- `test_resolve_identifier_iso_no_space` — `"ISO9001:2015"` → same
-- `test_resolve_identifier_iso_iec_joint` — `"ISO/IEC 27001:2022"` → `("ISO/IEC 27001:2022", "ISO/IEC")`
-- `test_resolve_identifier_iec_only` — `"IEC 62443-3-3:2020"` → `("IEC 62443-3-3:2020", "IEC")`
+- `test_resolve_identifier_iso_plain`, `"ISO 9001:2015"` → `("ISO 9001:2015", "ISO")`
+- `test_resolve_identifier_iso_no_space`, `"ISO9001:2015"` → same
+- `test_resolve_identifier_iso_iec_joint`, `"ISO/IEC 27001:2022"` → `("ISO/IEC 27001:2022", "ISO/IEC")`
+- `test_resolve_identifier_iec_only`, `"IEC 62443-3-3:2020"` → `("IEC 62443-3-3:2020", "IEC")`
 
 ### `test_cli_sync_standards.py` updates
 
 The PR-1 monkeypatched stub-loader tests are kept. Add:
 
-- `test_sync_standards_iso_real_loader` — invoke with respx-mocked GitHub API + fixture
+- `test_sync_standards_iso_real_loader`, invoke with respx-mocked GitHub API + fixture
   tarball; assert exit 0 and `added > 0`.
 
 ## HTTP mocking
 
 All `httpx` calls go through `respx` per existing convention. Tarball mocking returns a
 real gzipped tarball built in the test from `tests/fixtures/standards/relaton_iso_sample/`
-contents — exercises the real `tarfile` extraction code path.
+contents, exercises the real `tarfile` extraction code path.
 
 ## Out of scope (deferred to later PRs)
 
-- IEEE loader (PR 3 — trivial config addition once PR 2's `RelatonLoader` ships)
+- IEEE loader (PR 3, trivial config addition once PR 2's `RelatonLoader` ships)
 - CC and CEN loaders (PR 4)
 - Enrichment integration (PR 5)
 - Nightly `pytest -m live` smoke job (separate workflow PR)
@@ -287,8 +287,8 @@ contents — exercises the real `tarfile` extraction code path.
 
 | Risk | Mitigation |
 |---|---|
-| Relaton tarball is large (~50 MB for ISO) — memory pressure during streaming | Use `tarfile.open(fileobj=stream, mode="r|gz")` which reads members sequentially; never load full tarball into memory; the YAML files themselves are small |
-| Joint-standard detection misses an edge case (e.g. `docidentifier` list contains `ISO`+`IEC`+`ISO/IEC` all three) | Decision rule prefers explicit `ISO/IEC` typed entry when present; otherwise infers from co-occurrence. Fixture covers both shapes |
-| Slug helper diverges from upstream renaming | Live fallback degrades to stub on 404 — never crashes. Synced records (which use the real upstream filenames from the tarball) are unaffected |
+| Relaton tarball is large (~50 MB for ISO), memory pressure during streaming | Use `tarfile.open(fileobj=stream, mode="r|gz")` which reads members sequentially; never load full tarball into memory; the YAML files themselves are small |
+| Joint-standard detection misses an edge case (such as `docidentifier` list contains `ISO`+`IEC`+`ISO/IEC` all three) | Decision rule prefers explicit `ISO/IEC` typed entry when present; otherwise infers from co-occurrence. Fixture covers both shapes |
+| Slug helper diverges from upstream renaming | Live fallback degrades to stub on 404, never crashes. Synced records (which use the real upstream filenames from the tarball) are unaffected |
 | GitHub API quota exhaustion under repeated `--force` testing | `SCHOLAR_GITHUB_TOKEN` env var lifts limit to 5,000 req/hr; documented |
-| Withdrawn detection wrongly nukes records if a sync runs against a partially-extracted tarball | If `current_ids` is suspiciously small (e.g. <50% of `prev_ids`), abort the withdrawal pass and add an error to the report. Threshold tunable; starts at 50% |
+| Withdrawn detection wrongly nukes records if a sync runs against a partially extracted tarball | If `current_ids` is suspiciously small (such as <50% of `prev_ids`), abort the withdrawal pass and add an error to the report. Threshold tunable; starts at 50% |

@@ -3,11 +3,6 @@ name: Documentation
 on:
   push:
     branches: [main]
-    # Tag-push is a SMOKE TEST: it runs `build` only (confirms docs still
-    # compile against a release tag) — the `upload-artifact` and `deploy`
-    # steps below are gated on `github.event_name == 'release'`, so actual
-    # GitHub Pages deployment still only happens via the release event.
-    tags: ["v*"]
   pull_request:
     branches: [main]
   release:
@@ -17,26 +12,22 @@ on:
 permissions:
   contents: read
 
-# Include github.event_name so tag-push and release runs don't share a
-# concurrency key — without this, the tag-push run fired by ``git push``
-# and the release run fired by ``release:published`` collide on the same
-# ref+workflow key and `cancel-in-progress: true` cancels whichever
-# arrived first (usually the one carrying the deployment).
+# Include event_name so push/PR/release runs on the same ref get separate
+# concurrency buckets and don't cancel each other.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
   build:
+    # Validation only: strict docs build. Never deploys; publishing happens
+    # in `deploy` on release:published.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
         with:
           # On release events the triggering tag may move after the workflow is
-          # queued (the release workflow pushes a version-bump commit and
-          # updates the tag). Checkout main explicitly on releases to avoid the
-          # "ref does not point to the expected commit" error from
-          # actions/checkout's SHA-verification.
+          # queued (semantic-release pushes a version-bump commit); build main.
           ref: ${{ github.event_name == 'release' && 'main' || github.ref }}
 
       - name: Install uv
@@ -53,23 +44,62 @@ jobs:
       - name: Build documentation
         run: uv run mkdocs build --strict
 
-      - name: Upload artifact
-        if: github.event_name == 'release'
-        uses: actions/upload-pages-artifact@v5
-        with:
-          path: site/
-
   deploy:
+    # Publish versioned docs with mike, serving from the gh-pages branch:
+    #   stable release (prerelease=false) -> version <major.minor> + `latest` alias (default)
+    #   rc prerelease  (prerelease=true)  -> single rolling `unstable` version
+    #
+    # One-time setup before the first deploy (per-project, cannot be templated):
+    #   1. Seed gh-pages:
+    #        uv run mike deploy --push --update-aliases unstable --title "unstable (<ver>)"
+    #   2. Repo Settings -> Pages -> Deploy from a branch -> gh-pages / (root).
+    #   Order matters: seed (1) before switching source (2) so the site is never empty.
     if: github.event_name == 'release'
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
     needs: build
+    # Serialize all release deploys (no cancellation) so two releases close
+    # together never push to gh-pages concurrently.
+    concurrency:
+      group: ${{ github.workflow }}-deploy
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v5
+      # `needs: build` is a sequencing gate only — mike drives its own
+      # build internally; no artifact is passed from the build job.
+      - uses: actions/checkout@v6
+        with:
+          # Full history required: mike reads and pushes the gh-pages branch.
+          fetch-depth: 0
+          ref: main
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --no-default-groups --group docs --frozen
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Publish versioned docs
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+          # GitHub renders the JSON boolean as the string "true"/"false".
+          PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          version="${TAG#v}"
+          if [ "$PRERELEASE" = "true" ]; then
+            uv run mike deploy --push unstable --title "unstable (${version})"
+          else
+            minor="$(echo "$version" | cut -d. -f1-2)"
+            uv run mike deploy --push --update-aliases --title "$version" "$minor" latest
+            uv run mike set-default --push latest
+          fi

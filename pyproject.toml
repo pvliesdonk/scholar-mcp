@@ -58,6 +58,7 @@ dev = [
     "respx>=0.20",
 ]
 docs = [
+    "mike>=2",
     "mkdocs-material>=9.7.6",
     "mkdocstrings[python]>=0.28",
     "mkdocs-llmstxt>=0.5",

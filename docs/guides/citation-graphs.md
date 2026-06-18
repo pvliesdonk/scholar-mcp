@@ -81,7 +81,7 @@ get_citation_graph(
 ### Controlling graph size
 
 !!! tip "Start small"
-    Begin with `depth=1` and `max_nodes=50`. Citation graphs grow exponentially with depth -- a popular paper at `depth=2, direction=both` can easily hit 10,000+ nodes.
+    Begin with `depth=1` and `max_nodes=50`. Citation graphs grow exponentially with depth; a popular paper at `depth=2, direction=both` can easily hit 10,000+ nodes.
 
 The `max_nodes` parameter is a hard cap. Once reached, the BFS stops and `stats.truncated` is set to `true`. Filters help focus the graph:
 
@@ -113,9 +113,9 @@ The response contains:
 }
 ```
 
-- **nodes** -- full paper metadata for each paper in the graph
-- **edges** -- directed edges from citing paper to cited paper
-- **stats.truncated** -- if `true`, the graph was cut short by `max_nodes`
+- **nodes**: full paper metadata for each paper in the graph
+- **edges**: directed edges from citing paper to cited paper
+- **stats.truncated**: if `true`, the graph was cut short by `max_nodes`
 
 ## Bridge papers
 
@@ -162,4 +162,4 @@ The response includes the full path with metadata for each paper:
 | Reference lists | 7 days | `get_references` results reused by graph BFS |
 | ID aliases | permanent | DOI-to-S2-ID mappings never expire |
 
-The cache significantly reduces API calls for repeated exploration in the same area. A `get_citation_graph` at `depth=2` that returns 100 nodes might only make 10-20 API calls if the neighborhood was partially explored before.
+The cache cuts API calls for repeated exploration in the same area. A `get_citation_graph` at `depth=2` that returns 100 nodes might only make 10-20 API calls if the neighborhood was partially explored before.

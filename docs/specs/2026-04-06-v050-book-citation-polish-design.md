@@ -51,11 +51,11 @@ be absent in edge cases (cache deserialization, partial API responses).
 
 ### Files changed
 
-- **New**: `_record_types.py` — BookRecord definition
-- `_openlibrary_client.py` — `normalize_book()` return type → `BookRecord`
-- `_tools_books.py` — internal functions use `BookRecord`
-- `_book_enrichment.py` — `_to_enrichment_dict()` returns BookRecord-shaped dict
-- `_cache.py` — book cache methods use `BookRecord` in signatures
+- **New**: `_record_types.py`, BookRecord definition
+- `_openlibrary_client.py`, `normalize_book()` return type → `BookRecord`
+- `_tools_books.py`, internal functions use `BookRecord`
+- `_book_enrichment.py`, `_to_enrichment_dict()` returns BookRecord-shaped dict
+- `_cache.py`, book cache methods use `BookRecord` in signatures
 
 ### Follow-up
 
@@ -73,9 +73,9 @@ until PaperRecord/PatentRecord are defined.
 
 ### Files changed
 
-- **New**: `_protocols.py` — CacheProtocol definition
-- `_server_deps.py` — `ServiceBundle.cache` type: `ScholarCache` → `CacheProtocol`
-- `_tools_patent.py` — `_fetch_patent_sections` cache param: `Any` → `CacheProtocol`
+- **New**: `_protocols.py`, CacheProtocol definition
+- `_server_deps.py`, `ServiceBundle.cache` type: `ScholarCache` → `CacheProtocol`
+- `_tools_patent.py`, `_fetch_patent_sections` cache param: `Any` → `CacheProtocol`
 - Import `ScholarCache` only in `_server_deps.py` where the concrete instance
   is created
 
@@ -102,7 +102,7 @@ or edition ID, fetch the work record and resolve author references.
 
 ```python
 async def get_author(self, author_key: str) -> dict[str, Any] | None:
-    """Fetch author by key (e.g. /authors/OL123A)."""
+    """Fetch author by key (such as /authors/OL123A)."""
 ```
 
 ### New helper: `_enrich_authors_from_work()`
@@ -123,9 +123,9 @@ async def _enrich_authors_from_work(
 
 ### Call sites
 
-- `_resolve_isbn()` — after `normalize_book()`, before caching
-- `_resolve_edition()` — after `normalize_book()`, before caching
-- `_resolve_work()` — already has the work dict in hand, so resolve author
+- `_resolve_isbn()`, after `normalize_book()`, before caching
+- `_resolve_edition()`, after `normalize_book()`, before caching
+- `_resolve_work()`, already has the work dict in hand, so resolve author
   keys directly (extract author keys from the work, fetch each via
   `get_author()`, set names on the book dict) rather than calling
   `_enrich_authors_from_work()` which would re-fetch the work. Factor out
@@ -256,12 +256,12 @@ Each issue gets tests alongside its implementation:
 - `src/scholar_mcp/_protocols.py`
 
 ### Modified files
-- `src/scholar_mcp/_openlibrary_client.py` — BookRecord return type, get_author(), get_subject()
-- `src/scholar_mcp/_tools_books.py` — BookRecord types, _enrich_authors_from_work(), recommend_books tool
-- `src/scholar_mcp/_cache.py` — BookRecord in signatures, get/set_book_subject methods
-- `src/scholar_mcp/_server_deps.py` — ServiceBundle.cache type → CacheProtocol
-- `src/scholar_mcp/_tools_patent.py` — cache param type → CacheProtocol
-- `src/scholar_mcp/_citation_formatter.py` — @book entry type, book-specific fields in all three formatters
-- `src/scholar_mcp/_book_enrichment.py` — BookRecord type usage
-- `src/scholar_mcp/_server_tools.py` — no changes needed (book tools already registered)
+- `src/scholar_mcp/_openlibrary_client.py`, BookRecord return type, get_author(), get_subject()
+- `src/scholar_mcp/_tools_books.py`, BookRecord types, _enrich_authors_from_work(), recommend_books tool
+- `src/scholar_mcp/_cache.py`, BookRecord in signatures, get/set_book_subject methods
+- `src/scholar_mcp/_server_deps.py`, ServiceBundle.cache type → CacheProtocol
+- `src/scholar_mcp/_tools_patent.py`, cache param type → CacheProtocol
+- `src/scholar_mcp/_citation_formatter.py`, @book entry type, book-specific fields in all three formatters
+- `src/scholar_mcp/_book_enrichment.py`, BookRecord type usage
+- `src/scholar_mcp/_server_tools.py`, no changes needed (book tools already registered)
 - Test files for each feature

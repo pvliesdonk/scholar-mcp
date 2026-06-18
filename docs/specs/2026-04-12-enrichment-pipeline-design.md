@@ -15,8 +15,8 @@ architecture from day one.
 
 | Issue | Decision |
 |-------|----------|
-| #62 Pipeline | Foundation-first — build before features |
-| #66 WorldCat | Permalink only (always populate `worldcat_url` on BookRecord). No API client — OCLC APIs require institutional subscription with no free tier. |
+| #62 Pipeline | Foundation-first, build before features |
+| #66 WorldCat | Permalink only (always populate `worldcat_url` on BookRecord). No API client, OCLC APIs require institutional subscription with no free tier. |
 | #67 CrossRef | Pipeline-controlled enricher, start DOI-only predicate |
 | #68 Covers | Inline `download_cover` param on `get_book`, no separate tool |
 | #64 Chapters | Integrated into `batch_resolve` + patent NPL citations, no new tool |
@@ -29,12 +29,12 @@ architecture from day one.
 ```python
 @runtime_checkable
 class Enricher(Protocol):
-    name: str              # e.g. "openalex", "crossref", "google_books"
+    name: str              # such as "openalex", "crossref", "google_books"
     phase: int             # execution order group (0 = primary, 1 = secondary)
-    tags: frozenset[str]   # e.g. {"papers"}, {"books"}, {"papers", "books"}
+    tags: frozenset[str]   # such as {"papers"}, {"books"}, {"papers", "books"}
 
     def can_enrich(self, record: dict[str, Any]) -> bool:
-        """Fast predicate — no I/O. Checks if this enricher applies."""
+        """Fast predicate, no I/O. Checks if this enricher applies."""
         ...
 
     async def enrich(self, record: dict[str, Any], bundle: ServiceBundle) -> None:
@@ -63,19 +63,19 @@ class EnrichmentPipeline:
 
 **Execution flow:**
 
-1. Filter enrichers by `tags` (if provided) — e.g. `tags={"books"}` skips
+1. Filter enrichers by `tags` (if provided), such as `tags={"books"}` skips
    OpenAlex paper enricher.
 2. For each phase (ascending order):
    - For each enricher in the phase, for each record: check `can_enrich(record)`.
    - Run all matching `(enricher, record)` pairs concurrently, bounded by
      `concurrency` semaphore.
    - Wait for all phase work to complete before moving to next phase.
-3. Errors in individual `enrich()` calls are caught and logged at DEBUG — never
+3. Errors in individual `enrich()` calls are caught and logged at DEBUG, never
    propagate.
 
 ### File location
 
-New file: `src/scholar_mcp/_enrichment.py` — contains `Enricher` protocol and
+New file: `src/scholar_mcp/_enrichment.py`, contains `Enricher` protocol and
 `EnrichmentPipeline` class. Each enricher lives in a dedicated file
 (`_enricher_openalex.py`, `_enricher_openlibrary.py`, etc.) for clear
 single-responsibility boundaries.
@@ -109,8 +109,8 @@ New file: `src/scholar_mcp/_crossref_client.py`
 
 Methods:
 
-- `get_by_doi(doi: str) -> dict | None` — fetch `/works/{doi}`
-- `search_chapters(title: str) -> list[dict]` — query with
+- `get_by_doi(doi: str) -> dict | None`, fetch `/works/{doi}`
+- `search_chapters(title: str) -> list[dict]`, query with
   `filter=type:book-chapter&query.bibliographic={title}` (future use)
 
 ### CrossRefEnricher
@@ -145,12 +145,12 @@ New file: `src/scholar_mcp/_google_books_client.py`
 - Base URL: `https://www.googleapis.com/books/v1/volumes`
 - Optional API key: `SCHOLAR_MCP_GOOGLE_BOOKS_API_KEY` (unauthenticated =
   1000 req/day).
-- Rate limiter: 0.5s delay (conservative for unauthenticated use).
+- Rate limiter: 0.5 s delay (conservative for unauthenticated use).
 
 Methods:
 
-- `search_by_isbn(isbn: str) -> dict | None` — query `?q=isbn:{isbn}`
-- `get_volume(volume_id: str) -> dict | None` — fetch volume details
+- `search_by_isbn(isbn: str) -> dict | None`, query `?q=isbn:{isbn}`
+- `get_volume(volume_id: str) -> dict | None`, fetch volume details
   including preview pages
 
 ### GoogleBooksEnricher
@@ -174,7 +174,7 @@ Added to `_tools_books.py`:
 - Queries Google Books API for volume, checks `accessInfo.viewability`.
 - If preview is available (`PARTIAL` or `ALL_PAGES`), returns the
   `searchInfo.textSnippet` and `volumeInfo.description` as the excerpt. Google
-  Books does not expose full chapter text via API — the excerpt is a
+  Books does not expose full chapter text via API, the excerpt is a
   publisher-provided summary and/or search snippet, not paginated content.
 - Returns: `{"excerpt": "...", "description": "...", "source": "google_books",
   "preview_available": true/false, "preview_link": "..."}`.
@@ -192,7 +192,7 @@ New field: `google_books_api_key: str | None`, loaded from
 
 ## 4. WorldCat Permalink (#66)
 
-Simplified scope — OCLC APIs require institutional subscription with no free
+Simplified scope, OCLC APIs require institutional subscription with no free
 tier available. The full holdings tool is deferred.
 
 ### Implementation
@@ -208,13 +208,13 @@ No new client, no config, no API calls.
 
 ## 5. Cover Image Caching (#68)
 
-Inline on `get_book` — no separate tool.
+Inline on `get_book`, no separate tool.
 
 ### Parameter additions to `get_book`
 
-- `download_cover: bool = False` — when true, download and cache the cover
+- `download_cover: bool = False`, when true, download and cache the cover
   image locally.
-- `cover_size: str = "M"` — accepts `"S"`, `"M"`, `"L"`. Controls Open Library
+- `cover_size: str = "M"`, accepts `"S"`, `"M"`, `"L"`. Controls Open Library
   cover size variant.
 
 ### Behavior
@@ -244,7 +244,7 @@ points to the remote URL.
 
 ## 6. Chapter-Level Resolution (#64)
 
-Integrated into `batch_resolve` and patent citation resolution — no new tool.
+Integrated into `batch_resolve` and patent citation resolution, no new tool.
 
 ### BookChapterRecord
 
@@ -316,7 +316,7 @@ CrossRef didn't cover.
 | `_book_enrichment.py` | Refactor into `OpenLibraryEnricher` class implementing `Enricher` protocol |
 | `_tools_citation.py` | Refactor inline OpenAlex enrichment into `OpenAlexEnricher`; replace ad-hoc calls with `bundle.enrichment.enrich()` |
 | `_tools_books.py` | Add `download_cover`/`cover_size` params to `get_book`; add `get_book_excerpt` tool; run enrichment pipeline on book results |
-| `_tools_utility.py` | Chapter-aware `batch_resolve` — attach `chapter_info` when patterns match |
+| `_tools_utility.py` | Chapter-aware `batch_resolve`, attach `chapter_info` when patterns match |
 | `_tools_patent.py` | Chapter-aware NPL citation resolution |
 
 ## Enricher Registry at Startup
@@ -336,17 +336,17 @@ No new required configuration. Everything degrades gracefully.
 
 ## Implementation Order
 
-1. **#62** Enrichment pipeline — protocol, pipeline class, migrate OpenAlex + OpenLibrary enrichers
-2. **#67** CrossRef — client, enricher, cache
-3. **#61** Google Books — client, enricher, cache, `get_book_excerpt` tool
-4. **#66** WorldCat — `worldcat_url` field in `normalize_book()`
-5. **#68** Covers — `download_cover`/`cover_size` on `get_book`
-6. **#64** Chapters — parser, integrate into `batch_resolve` + patent citations
+1. **#62** Enrichment pipeline, protocol, pipeline class, migrate OpenAlex + OpenLibrary enrichers
+2. **#67** CrossRef, client, enricher, cache
+3. **#61** Google Books, client, enricher, cache, `get_book_excerpt` tool
+4. **#66** WorldCat, `worldcat_url` field in `normalize_book()`
+5. **#68** Covers, `download_cover`/`cover_size` on `get_book`
+6. **#64** Chapters, parser, integrate into `batch_resolve` + patent citations
 
 Steps 4–6 are independent of each other and could be parallelized.
 
 ## What's NOT Changing
 
-- No public MCP tool renames — existing tool names stay the same.
-- No new required configuration — all new features are zero-config or optional.
-- No breaking changes to existing tool output shapes — new fields are additive.
+- No public MCP tool renames, existing tool names stay the same.
+- No new required configuration, all new features are zero-config or optional.
+- No breaking changes to existing tool output shapes, new fields are additive.

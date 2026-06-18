@@ -2,7 +2,7 @@
 
 **Date**: 2026-04-07
 **Status**: Draft
-**Scope**: Tier 1 standards support — NIST, IETF, W3C, ETSI — with catalogue index caching, three new tools, and optional full-text via docling
+**Scope**: Tier 1 standards support, NIST, IETF, W3C, ETSI, with catalogue index caching, three new tools, and optional full-text via docling
 
 ## Overview
 
@@ -10,7 +10,7 @@ Academic papers in security, systems engineering, and regulatory-adjacent fields
 
 ### Milestone
 
-v0.8.0 — Standards support (Tier 1)
+v0.8.0, Standards support (Tier 1)
 
 ### Out of scope for this milestone
 
@@ -23,9 +23,9 @@ v0.8.0 — Standards support (Tier 1)
 ### Design Decisions
 
 - **Unified `StandardsClient`**: All four source fetchers and the identifier resolver live in `_standards_client.py` behind a single `StandardsClient`. `ServiceBundle` gains one field, and the tools layer stays thin. Avoids proliferating four separate client files and keeps multi-source routing logic in one place.
-- **Catalogue index for scraped sources**: ETSI has no search API. On first use, `StandardsClient` scrapes the ETSI catalogue inline (catalogue is compact — a few seconds) and caches the index for 7 days. Subsequent searches query the local index. This pattern is reserved for scraped sources; API-backed sources (NIST, IETF, W3C) query their APIs directly.
+- **Catalogue index for scraped sources**: ETSI has no search API. On first use, `StandardsClient` scrapes the ETSI catalogue inline (catalogue is compact, a few seconds) and caches the index for 7 days. Subsequent searches query the local index. This pattern is reserved for scraped sources; API-backed sources (NIST, IETF, W3C) query their APIs directly.
 - **Full text via docling**: `get_standard` with `fetch_full_text=True` uses the same docling pipeline as `fetch_paper_pdf`. Queued via `TaskQueue` when docling is configured and `full_text_available=True`.
-- **Lazy alias cache**: Resolved identifier mappings are persisted in the cache so that repeated fuzzy inputs (e.g. `"nist 800-53"`) are returned instantly from cache without re-running regex or network calls.
+- **Lazy alias cache**: Resolved identifier mappings are persisted in the cache so that repeated fuzzy inputs (such as `"nist 800-53"`) are returned instantly from cache without re-running regex or network calls.
 
 ## Data Model
 
@@ -64,7 +64,7 @@ def resolve_identifier(raw: str) -> tuple[str, str] | None:
     """Return (canonical_identifier, body) or None."""
 ```
 
-### Stage 1 — Local regex (no network)
+### Stage 1, Local regex (no network)
 
 A table of compiled patterns matched in priority order:
 
@@ -81,13 +81,13 @@ Body-specific normalization rules:
 - **W3C**: normalize version separators, strip `"W3C"` prefix
 - **ETSI**: normalize spacing, uppercase type designator
 
-### Stage 2 — API fallback
+### Stage 2, API fallback
 
 Called only when Stage 1 returns `None`. The resolver identifies the most likely body from any recognizable fragment in the raw string and calls that body's `search(query, limit=3)`. The top result is accepted if the normalized raw string is a case-insensitive substring of the result title, or the result identifier matches the raw string after stripping non-alphanumeric characters. If unresolved, returns `None`.
 
 ### Ambiguity
 
-When a raw string resolves to multiple candidates (e.g. `"62443"` → IEC 62443-1-1, 62443-2-1, 62443-3-3, etc.), the resolver returns all candidates. The `resolve_standard_identifier` tool surfaces these with `"ambiguous": true`.
+When a raw string resolves to multiple candidates (such as `"62443"` → IEC 62443-1-1, 62443-2-1, 62443-3-3, etc.), the resolver returns all candidates. The `resolve_standard_identifier` tool surfaces these with `"ambiguous": true`.
 
 ### Alias cache integration
 
@@ -113,7 +113,7 @@ async def get(identifier: str) -> StandardRecord | None: ...
 ### IETF (`datatracker.ietf.org` + `rfc-editor.org`)
 
 - **Metadata**: `https://www.rfc-editor.org/rfc/rfc{n}.json`
-- **Full text**: `https://www.rfc-editor.org/rfc/rfc{n}.html` (HTML), `.txt` (plain), `.pdf` (PDF) — all free
+- **Full text**: `https://www.rfc-editor.org/rfc/rfc{n}.html` (HTML), `.txt` (plain), `.pdf` (PDF), all free
 - **Search**: `https://datatracker.ietf.org/doc/search/?rfcs=on&q={query}`
 - **Rate limit**: 0.5 req/s
 - `full_text_available: True`
@@ -128,7 +128,7 @@ async def get(identifier: str) -> StandardRecord | None: ...
 
 ### ETSI (`etsi.org`)
 
-- **No official API** — catalogue scraped from `https://www.etsi.org/standards-search/`
+- **No official API**, catalogue scraped from `https://www.etsi.org/standards-search/`
 - **Index strategy**: on first call, scrape the catalogue inline to populate `standards_index["ETSI"]` (compact catalogue, ~seconds). Subsequent searches query the local index only. Index TTL: 7 days.
 - **Full text PDF**: `https://www.etsi.org/deliver/etsi_{type}/{range}/{number}/{version}/...` (pattern-constructed from catalogue metadata)
 - **Rate limit**: 2 req/s delay; aggressive caching
@@ -149,10 +149,10 @@ New tables added to `_cache.py` following existing TTL patterns.
 
 TTL constants:
 ```python
-_STANDARD_TTL = 90 * 86400        # 90 days — standards rarely change
+_STANDARD_TTL = 90 * 86400        # 90 days, standards rarely change
 _STANDARD_ALIAS_TTL = 90 * 86400  # 90 days
 _STANDARD_SEARCH_TTL = 7 * 86400  # 7 days
-_STANDARD_INDEX_TTL = 7 * 86400   # 7 days — re-scrape weekly
+_STANDARD_INDEX_TTL = 7 * 86400   # 7 days, re-scrape weekly
 ```
 
 ### Cache methods added to `ScholarCache`
@@ -201,7 +201,7 @@ class ServiceBundle:
     standards: StandardsClient   # always available, no credentials needed
 ```
 
-Created in `make_service_lifespan`, closed on shutdown. `standards` is not optional — Tier 1 sources require no API keys.
+Created in `make_service_lifespan`, closed on shutdown. `standards` is not optional, Tier 1 sources require no API keys.
 
 ## Tools (`_tools_standards.py`)
 
@@ -213,7 +213,7 @@ Search standards by identifier, title, or free text.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `query` | str | — | Identifier, title, or free text |
+| `query` | str |, | Identifier, title, or free text |
 | `body` | str \| None | None | Filter: `"NIST"`, `"IETF"`, `"W3C"`, `"ETSI"` |
 | `limit` | int | 10 | Max results (max 50) |
 
@@ -231,7 +231,7 @@ Resolve and retrieve a single standard by identifier (canonical or fuzzy).
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `identifier` | str | — | Canonical or fuzzy identifier |
+| `identifier` | str |, | Canonical or fuzzy identifier |
 | `fetch_full_text` | bool | False | Fetch + convert via docling if available |
 
 Flow:
@@ -250,7 +250,7 @@ Normalize a messy citation string to canonical form.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `raw` | str | — | Messy citation string (e.g. `"iso27001"`, `"nist 800-53"`) |
+| `raw` | str |, | Messy citation string (such as `"iso27001"`, `"nist 800-53"`) |
 
 Returns when unambiguous:
 ```json
@@ -284,7 +284,7 @@ MCP annotations: `readOnlyHint=True, destructiveHint=False, openWorldHint=False`
 
 ### `tests/test_standards_client.py`
 
-- Identifier resolver — all fuzzy inputs from wishlist test cases
+- Identifier resolver, all fuzzy inputs from wishlist test cases
 - Per-fetcher: mock HTTP responses → assert correct `StandardRecord` shape and field mapping
 - ETSI index: cold index triggers inline scrape; warm index skips network; stale index (>7 days) re-scrapes
 - Alias cache round-trip: resolve once → assert alias written; resolve again → assert no HTTP call made
@@ -333,7 +333,7 @@ Auto-detect standard-like citation strings in `get_paper` / `get_references` / `
 BibLaTeX `@techreport` / `@manual` output for `StandardRecord`. Per-body templates where bodies have distinct citation conventions.
 
 ### F1: National standards mirrors (NEN, DIN, BSI, AFNOR)
-Extend alias resolution for national identifier forms (e.g. `"NEN-EN-ISO/IEC 27001"`).
+Extend alias resolution for national identifier forms (such as `"NEN-EN-ISO/IEC 27001"`).
 
 ### F2: Public.Resource.Org
 Standards incorporated by reference into US law. Coverage spotty but legally open.
