@@ -78,6 +78,7 @@ function field(q, secrets) {
 
 let SPEC = null;
 let ROOT = null;
+let _writeTimer = null;
 
 function render() {
   const spec = SPEC;
@@ -176,7 +177,10 @@ function render() {
   }
 
   ROOT.replaceChildren(core, drawer, warnings, out);
-  writeUrlState(spec);
+  // Debounce URL writes: browsers throttle history.replaceState to ~100
+  // calls/10 s, and URL sync is a "share" feature, not live feedback.
+  clearTimeout(_writeTimer);
+  _writeTimer = setTimeout(() => writeUrlState(spec), 300);
 
   // Restore focus + caret to the field the user was editing.
   if (activeQid) {
