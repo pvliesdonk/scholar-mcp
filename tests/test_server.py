@@ -405,6 +405,3 @@ class TestAuthModeInvariant:
         )
         with pytest.raises(RuntimeError, match="invariant violation"):
             make_server()
-
-
-
