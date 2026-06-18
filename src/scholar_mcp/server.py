@@ -17,7 +17,7 @@ from fastmcp_pvl_core import (
     ServerConfig,
     build_auth,
     build_instructions,
-    build_kv_store,  # noqa: F401  — re-exported for downstream projects' convenience
+    build_kv_store as build_kv_store,  # re-exported for downstream projects' convenience
     configure_logging_from_env,
     register_server_info_tool,
     wire_middleware_stack,
