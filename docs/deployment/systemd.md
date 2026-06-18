@@ -43,7 +43,7 @@ Set the cache directory and (optionally) your Semantic Scholar API key:
 
 ```bash
 SCHOLAR_MCP_CACHE_DIR=/var/lib/scholar-mcp
-# Optional but recommended — without a key, requests are limited to ~1 req/s
+# Optional but recommended, without a key, requests are limited to ~1 req/s
 SCHOLAR_MCP_S2_API_KEY=your-key-here
 ```
 
@@ -69,7 +69,7 @@ The service runs in HTTP mode on port 8000 by default.
 
 ## Security hardening
 
-The systemd unit includes comprehensive security directives:
+The systemd unit includes detailed security directives:
 
 | Directive | Effect |
 |---|---|
@@ -147,7 +147,7 @@ Common causes:
 
 ### FastMCP not installed
 
-If the post-install script failed (e.g. no internet during package install):
+If the post-install script failed (such as no internet during package install):
 
 ```bash
 sudo /opt/scholar-mcp/venv/bin/pip install 'pvliesdonk-scholar-mcp[mcp]'

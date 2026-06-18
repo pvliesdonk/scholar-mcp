@@ -1,4 +1,4 @@
-# Tier 2 standards sync -- ISO, IEC & IEEE
+# Tier 2 standards sync: ISO, IEC & IEEE
 
 Scholar MCP caches ISO, IEC, and IEEE standards metadata locally. The source of truth
 is the community-maintained Relaton YAML dumps at
@@ -41,7 +41,7 @@ docker compose run --rm scholar-mcp scholar-mcp sync-standards
 ```
 
 The `docker compose run` form is preferred when running outside of an already-running
-stack — it picks up the correct UID/GID from the entrypoint and inherits all env vars
+stack, it picks up the correct UID/GID from the entrypoint and inherits all env vars
 from the `environment:` / `env_file:` declarations in `compose.yml`.
 
 To sync only a specific body:
@@ -53,7 +53,7 @@ docker compose run --rm scholar-mcp scholar-mcp sync-standards --body ISO
 
 ## Cron / systemd scheduling
 
-Daily resync is plenty -- Relaton dumps move slowly and the SHA check skips the
+Daily resync is plenty; Relaton dumps move slowly and the SHA check skips the
 tarball fetch when nothing has changed.
 
 ```cron
@@ -83,7 +83,7 @@ WantedBy=timers.target
 ## GitHub rate limiting
 
 The sync makes 2 GitHub API calls per body (`/commits/{branch}` and `/tarball/{sha}`).
-Unauthenticated clients get 60 requests per hour per IP -- more than enough for daily
+Unauthenticated clients get 60 requests per hour per IP, more than enough for daily
 cron. For repeated `--force` testing, set `SCHOLAR_GITHUB_TOKEN` to a personal access
 token (no scopes required for public-repo reads) to lift the limit to 5,000 req/hr:
 
@@ -145,24 +145,24 @@ IEEE metadata comes from the [`relaton/relaton-data-ieee`](https://github.com/re
 
 ### Supported identifier forms
 
-- `IEEE 1003.1-2024`, `IEEE 802.11-2020` — plain IEEE standards
-- `IEEE Std 1588-2019` — the `Std` token is accepted (upstream convention)
-- `IEC/IEEE 61588-2021` — joint standards hosted in the IEEE repo
-- `ISO/IEC/IEEE 42010-2011` — triple-joint standards (ISO + IEC + IEEE committees)
+- `IEEE 1003.1-2024`, `IEEE 802.11-2020`, plain IEEE standards
+- `IEEE Std 1588-2019`, the `Std` token is accepted (upstream convention)
+- `IEC/IEEE 61588-2021`, joint standards hosted in the IEEE repo
+- `ISO/IEC/IEEE 42010-2011`, triple-joint standards (ISO + IEC + IEEE committees)
 
-For joint standards the stored `body` field reflects the true joint nature (e.g. `"ISO/IEC/IEEE"`), while dispatch still routes through the `"IEEE"` fetcher key. Per-body filename conventions differ between repositories: ISO/IEC use lowercase-hyphen (`iso-9001-2015.yaml`), IEEE uses uppercase-underscore (`IEEE_1003.1-2024.yaml`, `ISO_IEC_IEEE_42010-2011.yaml`).
+For joint standards the stored `body` field reflects the true joint nature (such as `"ISO/IEC/IEEE"`), while dispatch still routes through the `"IEEE"` fetcher key. Per-body filename conventions differ between repositories: ISO/IEC use lowercase-hyphen (`iso-9001-2015.yaml`), IEEE uses uppercase-underscore (`IEEE_1003.1-2024.yaml`, `ISO_IEC_IEEE_42010-2011.yaml`).
 
 ### Not yet supported (filed follow-ups)
 
-- `ANSI/IEEE Std 754-1985` and other historical ANSI-co-branded identifiers — see [#127](https://github.com/pvliesdonk/scholar-mcp/issues/127)
-- `AIEE 11-1937` and other pre-IEEE AIEE identifiers — see [#127](https://github.com/pvliesdonk/scholar-mcp/issues/127)
-- `IEEE P802.11-REVme` unpublished drafts — see [#128](https://github.com/pvliesdonk/scholar-mcp/issues/128)
-- Explicit `body="IEC/IEEE"` / `body="ISO/IEC/IEEE"` search dispatch — see [#129](https://github.com/pvliesdonk/scholar-mcp/issues/129). Today, use identifier lookup or `body="IEEE"` which returns joints too.
-- IEEE Xplore authenticated full-text — see [#92](https://github.com/pvliesdonk/scholar-mcp/issues/92)
+- `ANSI/IEEE Std 754-1985` and other historical ANSI-co-branded identifiers, see [#127](https://github.com/pvliesdonk/scholar-mcp/issues/127)
+- `AIEE 11-1937` and other pre-IEEE AIEE identifiers, see [#127](https://github.com/pvliesdonk/scholar-mcp/issues/127)
+- `IEEE P802.11-REVme` unpublished drafts, see [#128](https://github.com/pvliesdonk/scholar-mcp/issues/128)
+- Explicit `body="IEC/IEEE"` / `body="ISO/IEC/IEEE"` search dispatch, see [#129](https://github.com/pvliesdonk/scholar-mcp/issues/129). Today, use identifier lookup or `body="IEEE"` which returns joints too.
+- IEEE Xplore authenticated full-text, see [#92](https://github.com/pvliesdonk/scholar-mcp/issues/92)
 
 ## Common Criteria
 
-Common Criteria metadata is sync-only — there's no live API for the CC portal. Run:
+Common Criteria metadata is sync-only, there's no live API for the CC portal. Run:
 
 ```bash
 scholar-mcp sync-standards --body CC
@@ -170,15 +170,15 @@ scholar-mcp sync-standards --body CC
 
 to populate the local cache. Two record categories load:
 
-### Framework documents (~15 records)
+### Core CC documents (~15 records)
 
-The CC framework — `CC:2022`, `CC:2017` (CC 3.1 Revision 5), and the Common Evaluation Methodology (CEM) — ships as a hard-coded table in `_sync_cc.py`. Updates land manually when CCRA publishes a new release (every ~5 years).
+The core CC documents (`CC:2022`, `CC:2017` (CC 3.1 Revision 5), and the Common Evaluation Methodology (CEM)) are stored in a hard-coded table in `_sync_cc.py`. Updates land manually when CCRA publishes a new release (every ~5 years).
 
-CC framework documents that are also published as ISO/IEC 15408 / 18045 (parts 1-3) write **two records** under one `source="CC"` sync — one with `body="CC"` (`CC:2022 Part 1`), one with `body="ISO/IEC"` (`ISO/IEC 15408-1:2022`). Both records share the same free CC PDF as `full_text_url`. The `related` field on each cross-links to the other.
+CC core documents that are also published as ISO/IEC 15408 / 18045 (parts 1-3) write **two records** under one `source="CC"` sync, one with `body="CC"` (`CC:2022 Part 1`), one with `body="ISO/IEC"` (`ISO/IEC 15408-1:2022`). Both records share the same free CC PDF as `full_text_url`. The `related` field on each cross-links to the other.
 
-Why two records? CC and ISO/IEC 15408 are **parallel publications**, not a joint committee output. Real-world citations use either form (`CC:2022` or `ISO/IEC 15408`) but never a joined form. To keep returned metadata matching what the LLM looked up, we store one record per publishing body.
+Why two records? CC and ISO/IEC 15408 are **parallel publications**, not a joint committee output. Existing citations use either form (`CC:2022` or `ISO/IEC 15408`) but never a joined form. To keep returned metadata matching what the LLM looked up, we store one record per publishing body.
 
-To prevent collision with the existing ISO loader, the ISO loader has a small denylist (`_RELATON_SKIP_SLUGS`) covering the 15408 / 18045 family — those records are owned exclusively by the CC loader, which has the freely-downloadable PDFs (vs. ISO's paywalled metadata).
+To prevent collision with the existing ISO loader, the ISO loader has a small denylist (`_RELATON_SKIP_SLUGS`) covering the 15408 / 18045 family, those records are owned exclusively by the CC loader, which has the freely downloadable PDFs (vs. ISO's paywalled metadata).
 
 ### Protection Profiles (~500 records)
 
@@ -203,10 +203,10 @@ Loaded from `https://www.commoncriteriaportal.org/pps/pps.csv`. Identifier extra
 
 ### Not yet supported (filed follow-ups)
 
-- ~6700 certified product certifications from sec-certs JSON — see [#131](https://github.com/pvliesdonk/scholar-mcp/issues/131)
-- CC Supporting Documents and Guidance Documents — see [#132](https://github.com/pvliesdonk/scholar-mcp/issues/132)
-- CEM Supplements and Application Notes — see [#133](https://github.com/pvliesdonk/scholar-mcp/issues/133)
-- Auto-discovery of new framework documents from the portal HTML — see [#134](https://github.com/pvliesdonk/scholar-mcp/issues/134)
+- ~6700 certified product certifications from sec-certs JSON, see [#131](https://github.com/pvliesdonk/scholar-mcp/issues/131)
+- CC Supporting Documents and Guidance Documents, see [#132](https://github.com/pvliesdonk/scholar-mcp/issues/132)
+- CEM Supplements and Application Notes, see [#133](https://github.com/pvliesdonk/scholar-mcp/issues/133)
+- Auto-discovery of new core documents from the portal HTML, see [#134](https://github.com/pvliesdonk/scholar-mcp/issues/134)
 
 ## CEN/CENELEC (European Norms)
 
@@ -232,22 +232,22 @@ to populate the local cache. Unlike ISO/IEC/IEEE (which sync from upstream Relat
 
 ### Supported identifier forms
 
-- `EN 55032:2015` — plain European Norm
-- `EN ISO 13849-1:2023` — ISO standard adopted as EN
-- `EN IEC 62443-3-3:2020` — IEC standard adopted as EN
-- `EN ISO/IEC 27001:2022` — ISO/IEC joint adopted as EN
+- `EN 55032:2015`, plain European Norm
+- `EN ISO 13849-1:2023`, ISO standard adopted as EN
+- `EN IEC 62443-3-3:2020`, IEC standard adopted as EN
+- `EN ISO/IEC 27001:2022`, ISO/IEC joint adopted as EN
 
-All dispatch to `body="CEN"`. No cross-linking to the ISO/IEC records — the `EN ISO` / `EN IEC` prefix is self-documenting.
+All dispatch to `body="CEN"`. No cross-linking to the ISO/IEC records, the `EN ISO` / `EN IEC` prefix is self-documenting.
 
 ### Table maintenance
 
-The `_HARMONISED_STANDARDS` table in `_sync_cen.py` needs periodic review when the EU Commission publishes new implementing decisions. See [#139](https://github.com/pvliesdonk/scholar-mcp/issues/139) for the quarterly cadence. If EUR-Lex infrastructure stabilises, [#137](https://github.com/pvliesdonk/scholar-mcp/issues/137) would automate this via Formex XML parsing.
+The `_HARMONISED_STANDARDS` table in `_sync_cen.py` needs periodic review when the EU Commission issues new decisions. See [#139](https://github.com/pvliesdonk/scholar-mcp/issues/139) for the quarterly cadence. If EUR-Lex infrastructure stabilises, [#137](https://github.com/pvliesdonk/scholar-mcp/issues/137) would automate this via Formex XML parsing.
 
 ### Not yet supported
 
 - Full CEN/CENELEC catalogue beyond harmonised standards
-- Live scrape fallback from `standards.cencenelec.eu` — see [#138](https://github.com/pvliesdonk/scholar-mcp/issues/138)
-- EUR-Lex Formex XML automated sync — see [#137](https://github.com/pvliesdonk/scholar-mcp/issues/137)
+- Live scrape fallback from `standards.cencenelec.eu`, see [#138](https://github.com/pvliesdonk/scholar-mcp/issues/138)
+- EUR-Lex Formex XML automated sync, see [#137](https://github.com/pvliesdonk/scholar-mcp/issues/137)
 
 ## Auto-enrichment
 
@@ -255,7 +255,7 @@ When `get_citations`, `get_references`, or `get_citation_graph` return S2 citati
 
 ### Which citations trigger enrichment
 
-Citations whose title IS a standard — short, identifier-dominated titles:
+Citations whose title IS a standard, short, identifier-dominated titles:
 
 | Citation title | Coverage | Triggers? |
 |---|---|---|
@@ -274,16 +274,16 @@ Citations that mention a standard but are papers ABOUT it:
 
 ### What `standard_metadata` contains
 
-A `StandardRecord` dict — the same shape returned by `get_standard`:
+A `StandardRecord` dict, the same shape returned by `get_standard`:
 
-- `identifier` — canonical form (e.g., `"RFC 9000"`, `"ISO 9001:2015"`)
-- `title` — full standard title
-- `body` — standards body (`"IETF"`, `"ISO"`, `"IEEE"`, `"CC"`, `"CEN"`, etc.)
-- `status` — `"published"`, `"withdrawn"`, `"harmonised"`, etc.
-- `full_text_url` — direct link to the freely-downloadable document (when available)
-- `full_text_available` — `True` for Tier 1 sources (IETF, NIST, W3C, ETSI) and CC
-- `related` — cross-linked identifiers (e.g., CC ↔ ISO/IEC 15408)
+- `identifier`, canonical form (such as `"RFC 9000"`, `"ISO 9001:2015"`)
+- `title`, full standard title
+- `body`, standards body (`"IETF"`, `"ISO"`, `"IEEE"`, `"CC"`, `"CEN"`, etc.)
+- `status`, `"published"`, `"withdrawn"`, `"harmonised"`, etc.
+- `full_text_url`, direct link to the freely downloadable document (when available)
+- `full_text_available`, `True` for Tier 1 sources (IETF, NIST, W3C, ETSI) and CC
+- `related`, cross-linked identifiers (such as CC ↔ ISO/IEC 15408)
 
 ### Tier 2 bodies require sync
 
-ISO, IEC, IEEE, CC, and CEN metadata comes from the synced cache. If `sync-standards` hasn't been run, Tier 2 citations won't get enriched (Tier 1 citations — RFC, NIST SP, WCAG, ETSI — always work via live API lookup).
+ISO, IEC, IEEE, CC, and CEN metadata comes from the synced cache. If `sync-standards` hasn't been run, Tier 2 citations won't get enriched (Tier 1 citations, RFC, NIST SP, WCAG, ETSI, always work via live API lookup).

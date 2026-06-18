@@ -6,7 +6,7 @@
 
 ## Overview
 
-Semantic Scholar indexes some books and book chapters, but coverage is patchy —
+Semantic Scholar indexes some books and book chapters, but coverage is patchy.
 often missing abstracts, DOIs, ISBNs, or publisher info. Books surface
 frequently as citation graph nodes that cannot be meaningfully resolved. This
 feature adds book-aware enrichment and standalone book lookup using Open Library
@@ -26,7 +26,7 @@ as the data source.
   dataclasses.
 - **Server-side enrichment on strong signals only**: Auto-enrichment triggers on
   S2 `publicationTypes` containing "Book"/"BookChapter" or `externalIds.ISBN`
-  being present. No fuzzy title heuristics — the LLM client can call
+  being present. No fuzzy title heuristics, the LLM client can call
   `search_books` / `get_book` directly when it has its own context suggesting
   something is a book.
 - **Always available**: Open Library requires no API key, so book tools are
@@ -49,7 +49,7 @@ Thin async wrapper around Open Library's REST API using httpx.
 ### Rate Limiting
 
 Open Library asks for ~100 req/min politeness. A dedicated `RateLimiter`
-instance with ~0.6s delay enforces this, following the existing rate limiter
+instance with ~0.6 s delay enforces this, following the existing rate limiter
 pattern in `_rate_limiter.py`.
 
 ### Client Interface
@@ -70,7 +70,7 @@ shape is handled by callers (tools, enrichment function).
 
 Add `openlibrary: OpenLibraryClient` to `ServiceBundle`. Created in the
 lifespan factory, closed on shutdown. Unlike `docling` and `epo`, this field is
-not optional — Open Library is always available.
+not optional, Open Library is always available.
 
 ## Cache Layer
 
@@ -81,7 +81,7 @@ New tables in `_cache.py` following existing patterns (SQLite, TTL-based expiry)
 | Table | Key | TTL | Content |
 |-------|-----|-----|---------|
 | `books_isbn` | ISBN-13 (normalized) | 30 days | Book metadata dict as JSON |
-| `books_openlibrary` | OL work ID (e.g. `OL123W`) | 30 days | Book metadata dict as JSON |
+| `books_openlibrary` | OL work ID (such as `OL123W`) | 30 days | Book metadata dict as JSON |
 | `books_search` | Query string hash | 7 days | Search result list as JSON |
 
 ### Cache Methods
@@ -99,7 +99,7 @@ Added to `ScholarCache`:
 
 All ISBNs are stored as ISBN-13. If a 10-digit ISBN is provided, it is converted
 to ISBN-13 before cache lookup or storage. Conversion uses the standard
-check-digit algorithm — no external library required.
+check-digit algorithm, no external library required.
 
 ## Book Record Shape
 
@@ -111,7 +111,7 @@ Plain dict with the following keys:
     "authors": list[str],
     "publisher": str | None,
     "year": int | None,
-    "edition": str | None,              # e.g. "3rd edition"
+    "edition": str | None,              # such as "3rd edition"
     "isbn_10": str | None,
     "isbn_13": str | None,
     "openlibrary_work_id": str | None,
@@ -148,7 +148,7 @@ Search for books by title, author, ISBN, or free text.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `query` | string | yes | — | Title, author, ISBN, or free text |
+| `query` | string | yes |, | Title, author, ISBN, or free text |
 | `limit` | int | no | 10 | Max results (max 50) |
 
 **Behavior:**
@@ -172,7 +172,7 @@ Resolve a single book by ISBN or Open Library ID.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `identifier` | string | yes | — | ISBN-10, ISBN-13, or OL work/edition ID |
+| `identifier` | string | yes |, | ISBN-10, ISBN-13, or OL work/edition ID |
 | `include_editions` | bool | no | false | List all available editions |
 
 **Behavior:**
@@ -210,15 +210,15 @@ Per paper, enrichment is attempted when either:
 1. `publicationTypes` contains `"Book"` or `"BookChapter"`
 2. `externalIds` contains an `ISBN` key
 
-If neither condition is met, the paper is skipped. There are no fuzzy heuristics
-— the LLM client can use `search_books` / `get_book` when it has its own signal.
+If neither condition is met, the paper is skipped; no fuzzy heuristics
+The LLM client can use `search_books` / `get_book` when it has its own signal.
 
 ### Lookup Strategy
 
 - If ISBN present: cache lookup (`get_book_by_isbn`), then
   `openlibrary.get_by_isbn(isbn)` on miss
 - If no ISBN but condition 1 matched (publicationTypes only): skip enrichment.
-  This is intentional — title-based search is too unreliable for automatic
+  This is intentional, title-based search is too unreliable for automatic
   enrichment. The LLM can call `search_books` directly when it has context.
 
 ### Mutation
@@ -254,18 +254,18 @@ bound.
 
 Called before `return` in:
 
-- `get_paper` — single paper (list of one)
-- `get_references` — list of referenced papers
-- `get_citations` — list of citing papers
-- `get_citation_graph` — full graph result list
+- `get_paper`, single paper (list of one)
+- `get_references`, list of referenced papers
+- `get_citations`, list of citing papers
+- `get_citation_graph`, full graph result list
 
 ## Testing
 
 ### Test ISBNs
 
-- `9781119643012` — Anderson, *Security Engineering* 3rd ed.
-- `9780735611313` — Howard & LeBlanc, *Writing Secure Code* 2nd ed.
-- `9780201633610` — Gamma et al., *Design Patterns*
+- `9781119643012`, Anderson, *Security Engineering*, third ed.
+- `9780735611313`, Howard & LeBlanc, *Writing Secure Code*, second ed.
+- `9780201633610`, Gamma et al., *Design Patterns*
 
 ### Test Strategy
 

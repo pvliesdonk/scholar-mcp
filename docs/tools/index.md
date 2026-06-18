@@ -6,7 +6,7 @@ Scholar MCP provides 28 tools organised by scholarly source type: **Papers**, **
 
 
 !!! info "Coverage by domain"
-    Per-domain depth is uneven — papers currently have the richest tool surface (citation graph, recommendations, cross-referencing to all three other domains); standards are the leanest. That reflects public data availability, not a value hierarchy. Parity work is tracked in [GitHub issues](https://github.com/pvliesdonk/scholar-mcp/issues) and [milestones](https://github.com/pvliesdonk/scholar-mcp/milestones).
+    Per-domain depth is uneven, papers currently have the richest tool surface (citation graph, recommendations, cross-referencing to all three other domains); standards are the leanest. That reflects public data availability, not a value hierarchy. Parity work is tracked in [GitHub issues](https://github.com/pvliesdonk/scholar-mcp/issues) and [milestones](https://github.com/pvliesdonk/scholar-mcp/milestones).
 
 All tools include [MCP tool annotations](https://spec.modelcontextprotocol.io/specification/2025-03-26/server/tools/#annotations):
 
@@ -29,7 +29,7 @@ When a tool queues an operation, it returns:
 
 Poll with `get_task_result` to check status and retrieve the result. Task results expire after 10 minutes (S2 tools) or 1 hour (PDF tools).
 
-## Papers — Search & Retrieval
+## Papers, Search & Retrieval
 
 ### `search_papers`
 
@@ -41,20 +41,20 @@ Full-text search across the Semantic Scholar corpus.
 | `fields` | string | `"compact"` | Field set: `compact`, `standard`, or `full` |
 | `limit` | int | `10` | Results per page (max 100) |
 | `offset` | int | `0` | Pagination offset |
-| `year_start` | int | -- | Filter: earliest publication year |
-| `year_end` | int | -- | Filter: latest publication year |
-| `fields_of_study` | list[string] | -- | S2 field-of-study names (e.g. `["Computer Science", "Physics"]`) |
-| `venue` | string | -- | Filter by venue name |
-| `min_citations` | int | -- | Minimum citation count |
+| `year_start` | int | _(none)_ | Filter: earliest publication year |
+| `year_end` | int | _(none)_ | Filter: latest publication year |
+| `fields_of_study` | list[string] | _(none)_ | S2 field-of-study names (such as `["Computer Science", "Physics"]`) |
+| `venue` | string | _(none)_ | Filter by venue name |
+| `min_citations` | int | _(none)_ | Minimum citation count |
 | `sort` | string | `"relevance"` | Sort order: `relevance`, `citations`, or `year` |
 
 **Returns:** `{"data": [...], "total": N}` where each item contains the requested field set.
 
 **Field sets:**
 
-- **compact** -- `paperId`, `title`, `year`, `venue`, `citationCount`
-- **standard** -- compact + `authors`, `externalIds`, `abstract`
-- **full** -- standard + `tldr`, `openAccessPdf`, `fieldsOfStudy`, `referenceCount`
+- **compact**: `paperId`, `title`, `year`, `venue`, `citationCount`
+- **standard**: compact + `authors`, `externalIds`, `abstract`
+- **full**: standard + `tldr`, `openAccessPdf`, `fieldsOfStudy`, `referenceCount`
 
 ---
 
@@ -68,7 +68,7 @@ Fetch full metadata for a single paper.
 
 **Returns:** Full paper metadata (always uses the `full` field set) or `{"error": "not_found"}`.
 
-Results are cached for 30 days. Identifier aliases (e.g. DOI to S2 ID) are cached permanently.
+Results are cached for 30 days. Identifier aliases (such as DOI to S2 ID) are cached permanently.
 
 ---
 
@@ -89,11 +89,11 @@ Fetch an author profile or search by name.
 
 ---
 
-## Papers — Citation Graph
+## Papers, Citation Graph
 
 ### `get_citations`
 
-Forward citations -- papers that cite the given paper.
+Forward citations: papers that cite the given paper.
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
@@ -101,10 +101,10 @@ Forward citations -- papers that cite the given paper.
 | `fields` | string | `"compact"` | Field set for citing papers |
 | `limit` | int | `20` | Max results (max 1000) |
 | `offset` | int | `0` | Pagination offset |
-| `year_start` | int | -- | Filter: earliest year |
-| `year_end` | int | -- | Filter: latest year |
-| `fields_of_study` | list[string] | -- | Field-of-study filter |
-| `min_citations` | int | -- | Minimum citation count filter |
+| `year_start` | int | _(none)_ | Filter: earliest year |
+| `year_end` | int | _(none)_ | Filter: latest year |
+| `fields_of_study` | list[string] | _(none)_ | Field-of-study filter |
+| `min_citations` | int | _(none)_ | Minimum citation count filter |
 
 **Returns:** `{"data": [{"citingPaper": {...}}, ...]}`.
 
@@ -112,7 +112,7 @@ Forward citations -- papers that cite the given paper.
 
 ### `get_references`
 
-Backward references -- papers cited by the given paper.
+Backward references: papers cited by the given paper.
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
@@ -131,14 +131,14 @@ BFS traversal from one or more seed papers, collecting nodes and edges.
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `seed_ids` | list[string] | *(required)* | 1--10 seed paper IDs |
+| `seed_ids` | list[string] | *(required)* | 1 to 10 seed paper IDs |
 | `direction` | string | `"citations"` | `citations` (forward), `references` (backward), or `both` |
-| `depth` | int | `1` | BFS depth (1--3, clamped) |
+| `depth` | int | `1` | BFS depth (1 to 3, clamped) |
 | `max_nodes` | int | `100` | Hard cap on collected nodes |
-| `year_start` | int | -- | Filter: earliest year |
-| `year_end` | int | -- | Filter: latest year |
-| `fields_of_study` | list[string] | -- | Field-of-study filter |
-| `min_citations` | int | -- | Minimum citation count filter |
+| `year_start` | int | _(none)_ | Filter: earliest year |
+| `year_end` | int | _(none)_ | Filter: latest year |
+| `fields_of_study` | list[string] | _(none)_ | Field-of-study filter |
+| `min_citations` | int | _(none)_ | Minimum citation count filter |
 
 **Returns:**
 
@@ -156,7 +156,7 @@ BFS traversal from one or more seed papers, collecting nodes and edges.
 ```
 
 !!! tip "Controlling graph size"
-    Start with `depth=1` and a small `max_nodes` to get an overview, then increase as needed. `depth=3` with `direction=both` can produce very large graphs.
+    Start with `depth=1` and a small `max_nodes` to get an overview, then increase as needed. `depth=3` with `direction=both` can produce large graphs.
 
 See [Citation Graphs guide](../guides/citation-graphs.md) for usage patterns.
 
@@ -190,7 +190,7 @@ Or `{"found": false}` if no path exists within `max_depth`.
 
 ---
 
-## Papers — Recommendations
+## Papers, Recommendations
 
 ### `recommend_papers`
 
@@ -198,19 +198,19 @@ Paper recommendations based on positive (and optional negative) examples.
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `positive_ids` | list[string] | *(required)* | 1--5 S2 paper IDs as positive examples |
-| `negative_ids` | list[string] | -- | S2 paper IDs to steer recommendations away from |
+| `positive_ids` | list[string] | *(required)* | 1 to 5 S2 paper IDs as positive examples |
+| `negative_ids` | list[string] | _(none)_ | S2 paper IDs to steer recommendations away from |
 | `limit` | int | `10` | Number of recommendations |
 | `fields` | string | `"standard"` | Field set for returned papers |
 
 **Returns:** JSON list of recommended papers.
 
 !!! tip
-    Recommendations work best with 3--5 positive examples that represent the topic you're interested in. Adding 1--2 negative examples that are close but off-topic helps narrow results.
+    Recommendations work best with 3 to 5 positive examples that represent the topic you're interested in. Adding 1 to 2 negative examples that are close but off-topic helps narrow results.
 
 ---
 
-## Papers — Enrichment
+## Papers, Enrichment
 
 ### `enrich_paper`
 
@@ -227,18 +227,18 @@ Augment Semantic Scholar metadata with OpenAlex data.
 |---|---|
 | `affiliations` | Institution display names from author affiliations |
 | `funders` | Funding organization names |
-| `oa_status` | Open access status string (e.g. `gold`, `green`, `hybrid`); also includes `is_oa` boolean |
+| `oa_status` | Open access status string (such as `gold`, `green`, `hybrid`); also includes `is_oa` boolean |
 | `concepts` | List of `{"name": "...", "score": 0.95}` topic concepts |
 
 Results are cached for 30 days.
 
 ---
 
-## Papers — Citation Generation
+## Papers, Citation Generation
 
 ### `generate_citations`
 
-Generate formatted citations for one or more papers. Resolves papers via Semantic Scholar, optionally enriches with OpenAlex metadata, and formats as BibTeX, CSL-JSON, or RIS.
+Generate formatted citations for one or more papers. Output formats: BibTeX, CSL-JSON, and RIS. Paper resolution uses Semantic Scholar, with optional OpenAlex enrichment for affiliations and open-access status.
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
@@ -248,7 +248,7 @@ Generate formatted citations for one or more papers. Resolves papers via Semanti
 
 **BibTeX output** includes entry type inference (`@article`, `@inproceedings`, `@misc`, `@book`), proper author formatting (`{Last}, First`), title casing preservation, DOI, arXiv eprint fields, and special character escaping. Papers with `book_metadata` (ISBN or publisher) are emitted as `@book` entries with `publisher`, `edition`, and `isbn` fields.
 
-**CSL-JSON output** returns `{"citations": [...], "errors": [...]}` -- the citations array contains standard CSL-JSON objects compatible with Zotero, Mendeley, Pandoc, and other CSL processors. Book entries use `type: "book"` with `publisher` and `ISBN` fields.
+**CSL-JSON output** returns `{"citations": [...], "errors": [...]}`; the citations array contains standard CSL-JSON objects compatible with Zotero, Mendeley, Pandoc, and other CSL processors. Book entries use `type: "book"` with `publisher` and `ISBN` fields.
 
 **RIS output** uses standard RIS tags (`TY`, `AU`, `TI`, `PY`, `JO`/`BT`, `DO`, `UR`, `AB`, `ER`). Book entries use `TY - BOOK` with `PB` (publisher) and `SN` (ISBN) tags.
 
@@ -265,7 +265,7 @@ Book tools use [Open Library](https://openlibrary.org/) and [Google Books](https
 
 ### `search_books`
 
-Search for books by title, author, or free text via Open Library. For best results, use the `title` and `author` parameters rather than `query` — they use dedicated search indexes and return far better results.
+Search for books by title, author, or free text via Open Library. For best results, use the `title` and `author` parameters rather than `query`, they use dedicated search indexes and return far better results.
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
@@ -276,7 +276,7 @@ Search for books by title, author, or free text via Open Library. For best resul
 
 At least one of `query`, `title`, or `author` must be provided.
 
-When only `query` is given, it is first tried as a title search (better relevance) and falls back to free-text if no results are found. When `author` is given with multiple tokens (e.g. "Frank Duffy") and initial results are thin, a broadened search is automatically attempted to catch name variants (e.g. Frank → Francis).
+When only `query` is given, it is first tried as a title search (better relevance) and falls back to free-text if no results are found. When `author` is given with multiple tokens (such as "Frank Duffy") and initial results are thin, a broadened search is automatically attempted to catch name variants (such as Frank → Francis).
 
 **Returns:** JSON list of book records. Each record contains:
 
@@ -367,7 +367,7 @@ Recommend books for a subject via the Open Library subject API. Results are sort
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `subject` | string | *(required)* | Subject or topic (e.g. "machine learning", "algorithms", "computer vision") |
+| `subject` | string | *(required)* | Subject or topic (such as machine learning, algorithms, or computer vision) |
 | `limit` | int | `10` | Maximum results to return (max 50) |
 
 **Returns:** A JSON list of book records. Each record has the same shape as `search_books` results, with fields populated from the Open Library subject API (title, authors, Open Library work ID, cover URL). ISBN and edition fields are `null` since subject results are work-level.
@@ -387,15 +387,15 @@ When `get_paper`, `get_citations`, `get_references`, or `get_citation_graph` ret
 
 **Trigger condition:** `externalIds.ISBN` is present and non-empty.
 
-**Added field:** `book_metadata` — a dict containing:
+**Added field:** `book_metadata`, a dict containing:
 
 | Field | Description |
 |---|---|
 | `publisher` | Publisher name |
-| `edition` | Edition string (e.g. `"2nd ed."`) |
+| `edition` | Edition string (such as `"2nd ed."`) |
 | `isbn_13` | ISBN-13 |
 | `cover_url` | Cover image URL (from Open Library covers) |
-| `openlibrary_work_id` | Open Library work ID (e.g. `OL17953442W`) |
+| `openlibrary_work_id` | Open Library work ID (such as `OL17953442W`) |
 | `description` | Work description, if available |
 | `subjects` | List of subject strings |
 | `page_count` | Page count, if known |
@@ -403,7 +403,7 @@ When `get_paper`, `get_citations`, `get_references`, or `get_citation_graph` ret
 
 CrossRef enrichment adds publisher metadata, page ranges, and container titles to paper results when a DOI is available. Google Books enrichment adds `google_books_url` and `snippet` to book records when an ISBN is present.
 
-Enrichment failures are silently skipped — if a source is unreachable or returns no data, the record is returned without that enrichment layer. Up to 5 concurrent requests are made per batch.
+Enrichment failures are silently skipped, if a source is unreachable or returns no data, the record is returned without that enrichment layer. Up to 5 concurrent requests are made per batch.
 
 ---
 
@@ -415,13 +415,13 @@ Resolve up to 100 paper, patent, or book identifiers to full metadata in a singl
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `identifiers` | list[string] | *(required)* | Up to 100 IDs: S2 paper IDs, `DOI:xxx`, plain DOIs, patent numbers (e.g. `EP1234567A1`), or ISBNs (prefixed `ISBN:`, e.g. `ISBN:9780262035613`) |
+| `identifiers` | list[string] | *(required)* | Up to 100 IDs: S2 paper IDs, `DOI:xxx`, plain DOIs, patent numbers (such as `EP1234567A1`), or ISBNs (prefixed `ISBN:`, such as `ISBN:9780262035613`) |
 | `fields` | string | `"standard"` | Field set (applies to paper results only) |
 
 **Returns:** JSON list of resolved items:
 
-- **Paper results** have a `"paper"` key. Papers not found in Semantic Scholar are automatically tried via OpenAlex (by DOI); results from OpenAlex include `"source": "openalex"`. When the citation string contains chapter patterns (e.g. "Chapter 3", "pp. 45-67"), a `chapter_info` dict is attached with parsed chapter/page information.
-- **Patent results** have a `"patent"` key and `"source_type": "patent"`. Patent numbers are auto-detected by their two-letter country prefix (e.g. `EP`, `US`, `WO`) and routed to the EPO OPS API.
+- **Paper results** have a `"paper"` key. Papers not found in Semantic Scholar are automatically tried via OpenAlex (by DOI); results from OpenAlex include `"source": "openalex"`. When the citation string contains chapter patterns (such as "Chapter 3" or "pp. 45-67"), a `chapter_info` dict is attached with parsed chapter/page information.
+- **Patent results** have a `"patent"` key and `"source_type": "patent"`. Patent numbers are auto-detected by their two-letter country prefix (such as `EP`, `US`, `WO`) and routed to the EPO OPS API.
 - **Book results** have a `"book"` key and `"source_type": "book"`. ISBNs (prefixed with `ISBN:`) are routed to Open Library.
 - **Unresolved items** have an `"error"` key.
 
@@ -438,14 +438,14 @@ Search for patents across 100+ patent offices via the EPO Open Patent Services (
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `query` | string | -- | Keyword search — searches patent titles and abstracts. Optional when using structured filters. |
-| `cpc_classification` | string | -- | CPC classification code filter (e.g. `"H01M10/00"`) |
-| `applicant` | string | -- | Applicant (assignee) name filter |
-| `inventor` | string | -- | Inventor name filter |
-| `date_from` | string | -- | Earliest date (`YYYY-MM-DD`) |
-| `date_to` | string | -- | Latest date (`YYYY-MM-DD`) |
+| `query` | string | _(none)_ | Keyword search, searches patent titles and abstracts. Optional when using structured filters. |
+| `cpc_classification` | string | _(none)_ | CPC classification code filter (such as `"H01M10/00"`) |
+| `applicant` | string | _(none)_ | Applicant (assignee) name filter |
+| `inventor` | string | _(none)_ | Inventor name filter |
+| `date_from` | string | _(none)_ | Earliest date (`YYYY-MM-DD`) |
+| `date_to` | string | _(none)_ | Latest date (`YYYY-MM-DD`) |
 | `date_type` | string | `"publication"` | Date field: `publication`, `filing`, or `priority` |
-| `jurisdiction` | string | -- | Country code filter (e.g. `EP`, `US`, `WO`) |
+| `jurisdiction` | string | _(none)_ | Country code filter (such as `EP`, `US`, `WO`) |
 | `limit` | int | `10` | Results per page (max 100) |
 | `offset` | int | `0` | Pagination offset |
 
@@ -454,7 +454,7 @@ At least one parameter must be provided.
 **Returns:** `{"total_count": N, "references": [...]}` where each reference has `country`, `number`, and `kind` fields.
 
 !!! tip "Query syntax"
-    The tool translates parameters into EPO CQL internally. `query` searches titles and abstracts only — it will not find patents where the keyword appears only in inventor/applicant names. To find all patents by an inventor or from an applicant, omit `query` and use only the structured filters (e.g. `inventor="Smith"`). Combining `query` with filters applies both constraints.
+    The tool translates parameters into EPO CQL internally. `query` searches titles and abstracts only, it will not find patents where the keyword appears only in inventor/applicant names. To find all patents by an inventor or from an applicant, omit `query` and use only the structured filters (such as `inventor="Smith"`). Combining `query` with filters applies both constraints.
 
 ---
 
@@ -464,7 +464,7 @@ Fetch detailed information for a single patent by its publication number.
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `patent_number` | string | *(required)* | Patent number in any format (e.g. `EP1234567A1`, `WO2024/123456`, `US11,234,567B2`) |
+| `patent_number` | string | *(required)* | Patent number in any format (such as `EP1234567A1`, `WO2024/123456`, `US11,234,567B2`) |
 | `sections` | list[string] | `["biblio"]` | Sections to retrieve |
 
 **Available sections:**
@@ -517,13 +517,13 @@ Sections are fetched concurrently where possible (cache lookups run in parallel;
 }
 ```
 
-When `citations` is requested, non-patent literature (NPL) references are resolved against Semantic Scholar on a best-effort basis. References with a DOI are resolved with `"confidence": "high"`. References without a DOI or that fail to resolve have `"confidence": null`. When citation strings contain chapter patterns (e.g. "Ch. 5", "pp. 112-130"), a `chapter_info` dict is included with parsed chapter and page information.
+When `citations` is requested, non-patent literature (NPL) references are resolved against Semantic Scholar on a best-effort basis. References with a DOI are resolved with `"confidence": "high"`. References without a DOI or that fail to resolve have `"confidence": null`. When citation strings contain chapter patterns (such as "Ch. 5" or "pp. 112-130"), a `chapter_info` dict is included with parsed chapter and page information.
 
 ---
 
 ### `get_citing_patents`
 
-Find patents that cite a given academic paper. Coverage is incomplete -- relies on EPO OPS citation search, which does not capture all patent-to-paper citations. Best results with DOIs of well-known papers.
+Find patents that cite a given academic paper. Coverage is incomplete; relies on EPO OPS citation search, which does not capture all patent-to-paper citations. Best results with DOIs of well-known papers.
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
@@ -554,12 +554,12 @@ Download a patent PDF via authenticated EPO OPS and optionally convert to Markdo
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `patent_number` | string | *(required)* | Patent number in any format (e.g. `EP3491801B1`, `US10123456B2`, `WO2024/123456`) |
+| `patent_number` | string | *(required)* | Patent number in any format (such as `EP3491801B1`, `US10123456B2`, `WO2024/123456`) |
 | `use_vlm` | bool | `false` | Enable VLM enrichment for formulas and figures |
 
 **Returns:** `{"pdf_path": "/data/scholar-mcp/pdfs/<stem>.pdf", "markdown": "...", "md_path": "/data/scholar-mcp/md/<stem>.md"}` when docling is configured, or just `{"pdf_path": "..."}` without it.
 
-Not all patents have full text available via OPS — WO and older EP patents sometimes lack PDFs. Returns `{"error": "pdf_not_available"}` in that case.
+Not all patents have full text available via OPS, WO and older EP patents sometimes lack PDFs. Returns `{"error": "pdf_not_available"}` in that case.
 
 !!! note "Write-tagged"
     This tool is write-tagged and hidden when `SCHOLAR_MCP_READ_ONLY=true`. It also requires EPO OPS credentials.
@@ -578,7 +578,7 @@ Normalise a messy citation string to its canonical form and body.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `raw` | string | — | Messy citation string (e.g. `"rfc9000"`, `"nist 800-53"`) |
+| `raw` | string |, | Messy citation string (such as `"rfc9000"`, `"nist 800-53"`) |
 
 ---
 
@@ -588,7 +588,7 @@ Search standards by identifier, title, or free text.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `query` | string | — | Identifier, title, or free text |
+| `query` | string |, | Identifier, title, or free text |
 | `body` | string | null | Filter to one body: `NIST`, `IETF`, `W3C`, `ETSI` |
 | `limit` | integer | 10 | Max results (max 50) |
 
@@ -601,7 +601,7 @@ full text via docling.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `identifier` | string | — | Canonical or fuzzy identifier |
+| `identifier` | string |, | Canonical or fuzzy identifier |
 | `fetch_full_text` | boolean | false | Fetch and convert full text via docling |
 
 ---
@@ -609,7 +609,7 @@ full text via docling.
 ### `get_sync_status`
 
 Reports the last run of each Tier 2 standards sync. Returns one record per
-body — see `scholar-mcp sync-standards` in the CLI docs.
+body, see `scholar-mcp sync-standards` in the CLI docs.
 
 **Returns:** `{"runs": [{"body", "upstream_ref", "added", "updated", "unchanged", "withdrawn", "errors", "started_at", "finished_at"}]}`.
 An empty `runs` list means no sync has been run yet.
@@ -631,8 +631,8 @@ Download the PDF for a paper. Tries the Semantic Scholar open-access URL first, 
 
 **Returns:** `{"path": "/data/scholar-mcp/pdfs/<id>.pdf", "source": "s2_oa"}` or an error:
 
-- `{"error": "no_oa_pdf"}` -- no PDF URL found from any source
-- `{"error": "download_failed"}` -- HTTP error downloading the PDF
+- `{"error": "no_oa_pdf"}`: no PDF URL found from any source
+- `{"error": "download_failed"}`: HTTP error downloading the PDF
 
 The `source` field indicates where the PDF was obtained: `s2_oa`, `arxiv`, `pmc`, or `unpaywall`.
 
@@ -649,20 +649,20 @@ Convert a local PDF file to Markdown via docling-serve.
 
 **Returns:** `{"markdown": "...", "path": "/data/scholar-mcp/md/<name>.md", "vlm_used": true/false}`.
 
-When `use_vlm` is requested but VLM is not configured, the response includes a `vlm_skip_reason` field (e.g. `"vlm_api_url_not_configured"`).
+When `use_vlm` is requested but VLM is not configured, the response includes a `vlm_skip_reason` field (such as `"vlm_api_url_not_configured"`).
 
 !!! tip "Start without VLM"
-    Standard conversion handles most papers well. Only retry with `use_vlm=true` when the result has garbled formulas or missing figure descriptions. VLM enrichment processes each formula and figure image individually via an external vision model, which is significantly slower.
+    Standard conversion handles most papers well. Only retry with `use_vlm=true` when the result has garbled formulas or missing figure descriptions. VLM enrichment processes each formula and figure image individually via an external vision model, which is slower.
 
 **Caching:** Standard and VLM conversions are cached separately (`<stem>.md` vs `<stem>_vlm.md`), so switching modes never overwrites a previous conversion.
 
-Requires `SCHOLAR_MCP_DOCLING_URL` to be set. VLM enrichment additionally requires `SCHOLAR_MCP_VLM_API_URL` and `SCHOLAR_MCP_VLM_API_KEY`.
+Requires `SCHOLAR_MCP_DOCLING_URL` to be set. VLM enrichment also requires `SCHOLAR_MCP_VLM_API_URL` and `SCHOLAR_MCP_VLM_API_KEY`.
 
 ---
 
 ### `fetch_and_convert`
 
-Full pipeline: resolve paper, download PDF, convert to Markdown. Uses the same alternative source fallback as `fetch_paper_pdf`.
+Full paper-to-Markdown pipeline: downloads and converts the PDF, using the same fallback sources as `fetch_paper_pdf`.
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
@@ -682,10 +682,10 @@ Full pipeline: resolve paper, download PDF, convert to Markdown. Uses the same a
 }
 ```
 
-Partial results are returned if a later stage fails (e.g. metadata + error if no OA PDF is available). The `pdf_source` field indicates the download source. When VLM is requested but not configured, the response includes `vlm_skip_reason`.
+Partial results are returned if a later stage fails (such as metadata + error if no OA PDF is available). The `pdf_source` field indicates the download source. When VLM is requested but not configured, the response includes `vlm_skip_reason`.
 
 !!! tip "Start without VLM"
-    Same advice as `convert_pdf_to_markdown` — try standard first, add VLM only if formulas or figures are missing. VLM and standard conversions are cached separately (`<id>.md` vs `<id>_vlm.md`).
+    Same advice as `convert_pdf_to_markdown`, try standard first, add VLM only if formulas or figures are missing. VLM and standard conversions are cached separately (`<id>.md` vs `<id>_vlm.md`).
 
 See [PDF Conversion guide](../guides/pdf-conversion.md) for setup instructions.
 
@@ -693,12 +693,12 @@ See [PDF Conversion guide](../guides/pdf-conversion.md) for setup instructions.
 
 ### `fetch_pdf_by_url`
 
-Download a PDF from any URL and optionally convert to Markdown. Use this when you have found an alternative PDF link (e.g. from an author's homepage, a preprint server, or an institutional repository).
+Download a PDF from any URL and optionally convert to Markdown. Use this when you have found an alternative PDF link (such as from an author's homepage, a preprint server, or an institutional repository).
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `url` | string | *(required)* | Direct URL to a PDF file |
-| `filename` | string | -- | Filename stem for caching (e.g. `"smith2024_attention"`). Derived from the URL if omitted. |
+| `filename` | string | _(none)_ | Filename stem for caching (such as `"smith2024_attention"`). Derived from the URL if omitted. |
 | `use_vlm` | bool | `false` | Enable VLM enrichment for formulas and figures |
 
 **Returns:** On success (with docling configured):
@@ -734,7 +734,7 @@ Poll for the result of a background task.
 
 Status values: `pending`, `running`, `completed`, `failed`. The `result` field contains the original tool output as a JSON string (only present when `completed`). On `failed`, an `error` field describes the failure.
 
-While the task is in progress (`pending` or `running`), the response includes extra fields:
+The response includes extra fields while the task is in progress (`pending` or `running`):
 
 ```json
 {
@@ -746,7 +746,7 @@ While the task is in progress (`pending` or `running`), the response includes ex
 }
 ```
 
-The `hint` field gives expected duration — keep polling until the task completes.
+The `hint` field gives expected duration, keep polling until the task completes.
 
 ---
 

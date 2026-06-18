@@ -201,7 +201,7 @@ async def test_pipeline_concurrency_bounded() -> None:
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_enrichment.py -x -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'scholar_mcp._enrichment'`
+Expected: FAIL, `ModuleNotFoundError: No module named 'scholar_mcp._enrichment'`
 
 - [ ] **Step 3: Implement the Enricher protocol and EnrichmentPipeline**
 
@@ -224,10 +224,10 @@ class Enricher(Protocol):
     """Protocol for pluggable record enrichers.
 
     Attributes:
-        name: Short identifier for logging (e.g. ``"openalex"``).
+        name: Short identifier for logging (such as ``"openalex"``).
         phase: Execution order group. Lower phases run first.
         tags: Record-type tags this enricher applies to
-            (e.g. ``frozenset({"papers"})``).
+            (such as ``frozenset({"papers"})``).
     """
 
     name: str
@@ -235,7 +235,7 @@ class Enricher(Protocol):
     tags: frozenset[str]
 
     def can_enrich(self, record: dict[str, Any]) -> bool:
-        """Fast predicate — no I/O. Check if this enricher applies.
+        """Fast predicate, no I/O. Check if this enricher applies.
 
         Args:
             record: Record dict to inspect.
@@ -350,7 +350,7 @@ git commit -m "feat: add Enricher protocol and EnrichmentPipeline (#62)"
 
 ---
 
-## Task 2: OpenAlexEnricher — Extract from _tools_citation.py (#62 migration)
+## Task 2: OpenAlexEnricher, Extract from _tools_citation.py (#62 migration)
 
 **Files:**
 - Create: `src/scholar_mcp/_enricher_openalex.py`
@@ -439,13 +439,13 @@ async def test_enrich_handles_error_silently() -> None:
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_enricher_openalex.py -x -v`
-Expected: FAIL — `ModuleNotFoundError`
+Expected: FAIL, `ModuleNotFoundError`
 
 - [ ] **Step 3: Implement OpenAlexEnricher**
 
 ```python
 # src/scholar_mcp/_enricher_openalex.py
-"""OpenAlex enricher — fills missing venue metadata via DOI lookup."""
+"""OpenAlex enricher, fills missing venue metadata via DOI lookup."""
 
 from __future__ import annotations
 
@@ -518,7 +518,7 @@ git commit -m "feat: extract OpenAlexEnricher from inline citation logic (#62)"
 
 ---
 
-## Task 3: OpenLibraryEnricher — Refactor _book_enrichment.py (#62 migration)
+## Task 3: OpenLibraryEnricher, Refactor _book_enrichment.py (#62 migration)
 
 **Files:**
 - Create: `src/scholar_mcp/_enricher_openlibrary.py`
@@ -602,13 +602,13 @@ async def test_enrich_handles_error_silently() -> None:
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_enricher_openlibrary.py -x -v`
-Expected: FAIL — `ModuleNotFoundError`
+Expected: FAIL, `ModuleNotFoundError`
 
 - [ ] **Step 3: Implement OpenLibraryEnricher**
 
 ```python
 # src/scholar_mcp/_enricher_openlibrary.py
-"""Open Library enricher — adds book metadata to papers with ISBNs."""
+"""Open Library enricher, adds book metadata to papers with ISBNs."""
 
 from __future__ import annotations
 
@@ -848,7 +848,7 @@ async def test_get_by_doi_returns_none_on_error(client: CrossRefClient) -> None:
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_crossref_client.py -x -v`
-Expected: FAIL — `ModuleNotFoundError`
+Expected: FAIL, `ModuleNotFoundError`
 
 - [ ] **Step 3: Implement CrossRefClient**
 
@@ -880,7 +880,7 @@ class CrossRefClient:
         """Fetch CrossRef work metadata by DOI.
 
         Args:
-            doi: DOI string (e.g. ``10.1234/test``).
+            doi: DOI string (such as ``10.1234/test``).
 
         Returns:
             CrossRef work message dict, or None if not found.
@@ -1108,13 +1108,13 @@ async def test_enrich_handles_error_silently() -> None:
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_enricher_crossref.py -x -v`
-Expected: FAIL — `ModuleNotFoundError`
+Expected: FAIL, `ModuleNotFoundError`
 
 - [ ] **Step 3: Implement CrossRefEnricher**
 
 ```python
 # src/scholar_mcp/_enricher_crossref.py
-"""CrossRef enricher — fills sparse paper metadata via DOI lookup."""
+"""CrossRef enricher, fills sparse paper metadata via DOI lookup."""
 
 from __future__ import annotations
 
@@ -1342,7 +1342,7 @@ async def test_get_volume_returns_none_on_404(client: GoogleBooksClient) -> None
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_google_books_client.py -x -v`
-Expected: FAIL — `ModuleNotFoundError`
+Expected: FAIL, `ModuleNotFoundError`
 
 - [ ] **Step 3: Implement GoogleBooksClient**
 
@@ -1642,13 +1642,13 @@ async def test_enrich_handles_error_silently() -> None:
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_enricher_google_books.py -x -v`
-Expected: FAIL — `ModuleNotFoundError`
+Expected: FAIL, `ModuleNotFoundError`
 
 - [ ] **Step 3: Implement GoogleBooksEnricher**
 
 ```python
 # src/scholar_mcp/_enricher_google_books.py
-"""Google Books enricher — populates preview URL and snippet on book records."""
+"""Google Books enricher, populates preview URL and snippet on book records."""
 
 from __future__ import annotations
 
@@ -1912,7 +1912,7 @@ async def test_get_book_download_cover(bundle, tmp_path, monkeypatch):
         mock_client_cls.return_value = mock_client
 
         # Call get_book with download_cover=True
-        # (exact invocation depends on tool registration pattern —
+        # (exact invocation depends on tool registration pattern.
         #  test through the internal helper or via FastMCP test client)
 ```
 
@@ -2069,7 +2069,7 @@ def test_has_chapter_info() -> None:
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_chapter_parser.py -x -v`
-Expected: FAIL — `ModuleNotFoundError`
+Expected: FAIL, `ModuleNotFoundError`
 
 - [ ] **Step 3: Add BookChapterRecord to _record_types.py**
 
@@ -2238,7 +2238,7 @@ Add to `tests/test_tools_utility.py` (follow existing test patterns in the file)
 A test that passes a citation string containing chapter/page patterns to
 `batch_resolve` and asserts that the result contains `chapter_info` when
 the resolved paper has `book_metadata`. The exact test wiring depends on the
-existing test patterns — read the file first and follow them.
+existing test patterns, read the file first and follow them.
 
 Key assertion:
 ```python

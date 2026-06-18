@@ -42,7 +42,7 @@ Four tools are available once configured:
 |---|---|
 | `fetch_paper_pdf` | Downloads the PDF for a paper (tries OA, then ArXiv/PMC/Unpaywall) |
 | `convert_pdf_to_markdown` | Converts a local PDF file to Markdown |
-| `fetch_and_convert` | Full pipeline: find paper, download PDF, convert to Markdown |
+| `fetch_and_convert` | Full pipeline: looks up the paper and downloads and converts its PDF |
 | `fetch_pdf_by_url` | Downloads a PDF from any URL and optionally converts to Markdown |
 
 PDFs are stored in `$SCHOLAR_MCP_CACHE_DIR/pdfs/` and Markdown files in `$SCHOLAR_MCP_CACHE_DIR/md/`.
@@ -63,7 +63,7 @@ When VLM is configured, tools accept a `use_vlm=true` parameter that:
 - Generates text descriptions of figures
 - Produces higher-quality Markdown for math-heavy and figure-heavy papers
 
-VLM enrichment runs on top of the standard OCR pipeline — it processes each extracted formula and figure image individually via the configured vision model, not full pages.
+VLM enrichment runs on top of the standard OCR pipeline, it processes each extracted formula and figure image individually via the configured vision model, not full pages.
 
 !!! tip "Start without VLM"
     Standard conversion handles most papers well. Only retry with `use_vlm=true` when the result has garbled formulas or missing figure descriptions.
@@ -78,7 +78,7 @@ VLM and standard conversions are cached separately:
 - Standard: `$SCHOLAR_MCP_CACHE_DIR/md/<name>.md`
 - VLM: `$SCHOLAR_MCP_CACHE_DIR/md/<name>_vlm.md`
 
-Switching between modes never overwrites a previous conversion. When VLM is requested but not configured, the response includes a `vlm_skip_reason` field explaining why (e.g. `"vlm_api_url_not_configured"`).
+Switching between modes never overwrites a previous conversion. When VLM is requested but not configured, the response includes a `vlm_skip_reason` field explaining why (such as `"vlm_api_url_not_configured"`).
 
 ## Docker Compose with docling-serve
 
@@ -113,15 +113,15 @@ All PDF tools run in the background and return a task ID immediately:
 
 Use `get_task_result` with the `task_id` to poll for completion. PDF task results are retained for 1 hour.
 
-The only exception is `convert_pdf_to_markdown` when the markdown output file already exists locally — in that case, the cached result is returned directly.
+The only exception is `convert_pdf_to_markdown` when the markdown output file already exists locally, in that case, the cached result is returned directly.
 
 ## Alternative PDF sources
 
 When a paper has no open-access PDF URL in Semantic Scholar, `fetch_paper_pdf` and `fetch_and_convert` automatically try alternative sources:
 
-1. **ArXiv** — If the paper has an `externalIds.ArXiv` field, the PDF is fetched from `arxiv.org/pdf/<id>.pdf`.
-2. **PubMed Central** — If the paper has a `PubMedCentral` external ID, the PDF is fetched from NCBI.
-3. **Unpaywall** — If the paper has a DOI and `SCHOLAR_MCP_CONTACT_EMAIL` is set, the [Unpaywall API](https://unpaywall.org/products/api) is queried for an OA PDF location.
+1. **ArXiv**, If the paper has an `externalIds.ArXiv` field, the PDF is fetched from `arxiv.org/pdf/<id>.pdf`.
+2. **PubMed Central**, If the paper has a `PubMedCentral` external ID, the PDF is fetched from NCBI.
+3. **Unpaywall**, If the paper has a DOI and `SCHOLAR_MCP_CONTACT_EMAIL` is set, the [Unpaywall API](https://unpaywall.org/products/api) is queried for an OA PDF location.
 
 The `source` field in the response indicates where the PDF came from: `s2_oa`, `arxiv`, `pmc`, or `unpaywall`.
 

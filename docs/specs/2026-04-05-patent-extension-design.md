@@ -16,7 +16,7 @@ papers and patents, enabling cross-referencing between the two document types.
 - **Approach 1 (Flat Module Addition)**: New modules follow existing patterns
   (`_epo_client.py`, `_tools_patent.py`) rather than introducing a backend
   abstraction layer. Migration to a protocol-based abstraction (Approach 2) is
-  straightforward if a third backend (e.g., PatentsView) is added later.
+  straightforward if a third backend (such as PatentsView) is added later.
 - **Minimal tool surface**: 3 new tools + 1 extended, not the 10 from the
   original wish list. Reduces LLM context overhead.
 - **Graceful degradation**: Patent tools are hidden (not registered) when EPO
@@ -30,21 +30,21 @@ papers and patents, enabling cross-referencing between the two document types.
 ### `search_patents`
 
 Search for patents by keyword, classification, applicant, inventor, or date
-range. The query is natural language — the tool translates it to EPO CQL
+range. The query is natural language, the tool translates it to EPO CQL
 internally.
 
 **Inputs**:
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `query` | string | yes | — | Natural language search query, translated to CQL |
-| `cpc_classification` | string | no | — | CPC classification code filter |
-| `applicant` | string | no | — | Applicant name filter |
-| `inventor` | string | no | — | Inventor name filter |
-| `date_from` | string | no | — | Start date (ISO format YYYY-MM-DD) |
-| `date_to` | string | no | — | End date (ISO format YYYY-MM-DD) |
+| `query` | string | yes |, | Natural language search query, translated to CQL |
+| `cpc_classification` | string | no |, | CPC classification code filter |
+| `applicant` | string | no |, | Applicant name filter |
+| `inventor` | string | no |, | Inventor name filter |
+| `date_from` | string | no |, | Start date (ISO format YYYY-MM-DD) |
+| `date_to` | string | no |, | End date (ISO format YYYY-MM-DD) |
 | `date_type` | string | no | `publication` | Date field to filter: `priority`, `publication`, or `filing` |
-| `jurisdiction` | string | no | — | Country code filter (e.g., EP, US, WO) |
+| `jurisdiction` | string | no |, | Country code filter (such as EP, US, WO) |
 | `limit` | int | no | 10 | Max results (max 100) |
 | `offset` | int | no | 0 | Pagination offset |
 
@@ -70,17 +70,17 @@ from multiple EPO OPS endpoints into one response.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `patent_number` | string | yes | — | Patent number in any format (EP1234567, WO2024/123456, US11234567B2, etc.) |
+| `patent_number` | string | yes |, | Patent number in any format (EP1234567, WO2024/123456, US11234567B2, etc.) |
 | `sections` | list[string] | no | `["biblio"]` | Sections to include: `biblio`, `claims`, `description`, `family`, `legal`, `citations` |
 
 **Output**: Patent record with requested sections. Section contents:
 
-- **biblio**: title, abstract, applicant(s), inventor(s), publication number,
+- **biblio**: title, abstract, applicant or applicants, inventor or inventors, publication number,
   publication date, filing date, priority date, CPC/IPC classifications, URL
 - **claims**: numbered claims text (English preferred)
 - **description**: full patent description text
 - **family**: list of family members (publication number, jurisdiction, dates,
-  kind code) — same invention filed in multiple countries
+  kind code), same invention filed in multiple countries
 - **legal**: chronological list of legal events (filing, publication, grant,
   opposition, lapse) with dates and descriptions
 - **citations**: patent references and non-patent literature (NPL) references.
@@ -92,7 +92,7 @@ from multiple EPO OPS endpoints into one response.
 
 **Description** (shown to LLM):
 > Get detailed information about a single patent. Accepts patent numbers in any
-> format (EP, WO, US, etc.). By default returns bibliographic data only — use
+> format (EP, WO, US, etc.). By default returns bibliographic data only, use
 > the sections parameter to request additional detail (claims, description,
 > family members, legal status, cited references). When sections includes
 > 'citations', non-patent literature references are resolved to Semantic Scholar
@@ -110,7 +110,7 @@ cross-reference: paper → patents.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `paper_id` | string | yes | — | Paper identifier (DOI preferred, also accepts S2 ID, arXiv ID) |
+| `paper_id` | string | yes |, | Paper identifier (DOI preferred, also accepts S2 ID, arXiv ID) |
 | `limit` | int | no | 10 | Max results |
 
 **Output**: List of patent biblio records with `match_source` field
@@ -124,9 +124,9 @@ cross-reference: paper → patents.
 **MCP Annotations**: `readOnlyHint=True, destructiveHint=False, openWorldHint=True`
 
 **Description** (shown to LLM):
-> Find patents that cite a given academic paper. Coverage is incomplete — relies
+> Find patents that cite a given academic paper. Coverage is incomplete, relies
 > on EPO OPS citation search and OpenAlex, which do not capture all
-> patent-to-paper citations. Best results with well-known, highly-cited papers.
+> patent-to-paper citations. Best results with well-known, highly cited papers.
 > Returns confirmed matches only, not an exhaustive list. Provide a DOI for best
 > matching accuracy.
 
@@ -167,7 +167,7 @@ the library's caching or throttling middleware.
 
 Constructor: `consumer_key`, `consumer_secret`.
 
-The underlying `epo_ops.Client` is synchronous — all calls go through
+The underlying `epo_ops.Client` is synchronous, all calls go through
 `asyncio.to_thread()`, consistent with the existing pattern for blocking calls.
 
 **Methods** (all return parsed Python dicts/strings, no XML):
@@ -185,7 +185,7 @@ All methods accept `DocdbNumber` objects (from `_patent_numbers.py`).
 
 ### XML Parsing (`_epo_xml.py`)
 
-Focused parsers per endpoint — no generic XML→dict conversion:
+Focused parsers per endpoint, no generic XML→dict conversion:
 
 - `parse_biblio_xml(xml_bytes)` → dict (title, abstract, applicants, inventors,
   pub number, dates, classifications, cited refs split into patent/NPL)
@@ -202,14 +202,14 @@ Uses `lxml` for XPath queries against namespaced XML (`ops:`, `reg:`, `exch:`).
 **`DocdbNumber`**: dataclass with `country`, `number`, `kind` fields and a
 `.docdb` property returning `CC.number.kind` format.
 
-- `normalize(raw: str) -> DocdbNumber` — parse any accepted format
-- `is_patent_number(raw: str) -> bool` — heuristic for `batch_resolve`
+- `normalize(raw: str) -> DocdbNumber`, parse any accepted format
+- `is_patent_number(raw: str) -> bool`, heuristic for `batch_resolve`
   auto-detection
 
 Accepted input formats: `EP1234567`, `EP 1234567 A1`, `EP1234567A1`,
 `WO2024/123456`, `WO2024123456`, `US11,234,567`, `US11234567B2`, etc.
 
-Normalization happens at the tool layer boundary — tools normalize inputs before
+Normalization happens at the tool layer boundary, tools normalize inputs before
 passing to `EpoClient`.
 
 ## Configuration
@@ -218,8 +218,8 @@ passing to `EpoClient`.
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `SCHOLAR_MCP_EPO_CONSUMER_KEY` | no | — | EPO OPS consumer key |
-| `SCHOLAR_MCP_EPO_CONSUMER_SECRET` | no | — | EPO OPS consumer secret |
+| `SCHOLAR_MCP_EPO_CONSUMER_KEY` | no |, | EPO OPS consumer key |
+| `SCHOLAR_MCP_EPO_CONSUMER_SECRET` | no |, | EPO OPS consumer secret |
 
 Both must be set for patent tools to be enabled.
 
@@ -244,7 +244,7 @@ Backends available: Semantic Scholar (authenticated), OpenAlex, EPO OPS
 ```
 or:
 ```
-Backends available: Semantic Scholar (anonymous), OpenAlex — EPO OPS not configured (patent tools disabled)
+Backends available: Semantic Scholar (anonymous), OpenAlex, EPO OPS not configured (patent tools disabled)
 ```
 
 ### Conditional Tool Registration
@@ -283,7 +283,7 @@ response header. The `EpoClient` inspects this after each response:
 - **Yellow/Red**: raise `RateLimitedError` → triggers task queue background retry
 - **Black**: raise hard error (daily quota exhausted)
 
-No separate `RateLimiter` instance needed — the traffic light is server-side
+No separate `RateLimiter` instance needed, the traffic light is server-side
 quota feedback, not a client-side delay.
 
 ### Task Queue Integration
@@ -343,8 +343,8 @@ limitations.
 
 ### New Python Dependencies
 
-- `python-epo-ops-client` (>=4.2.1) — EPO OPS auth, transport
-- `lxml` — XML parsing
+- `python-epo-ops-client` (>=4.2.1), EPO OPS auth, transport
+- `lxml`, XML parsing
 
 ### New Dev Dependencies
 
@@ -366,7 +366,7 @@ Patent-specific error cases:
 
 ## Implementation Phases
 
-### Phase 1 — Foundation
+### Phase 1, Foundation
 
 - `_patent_numbers.py` (normalization + detection)
 - `_epo_xml.py` (XML parsers for biblio + search)
@@ -378,7 +378,7 @@ Patent-specific error cases:
 - Conditional tool registration in `_server_tools.py`
 - Tests + docs
 
-### Phase 2 — Full Detail
+### Phase 2, Full Detail
 
 - `_epo_xml.py`: parsers for claims, description, family, legal
 - `_epo_client.py`: remaining endpoint methods
@@ -387,7 +387,7 @@ Patent-specific error cases:
 - Concurrent section fetching with semaphore
 - Tests + docs
 
-### Phase 3 — Cross-Referencing
+### Phase 3, Cross-Referencing
 
 - `_epo_xml.py`: cited references parsing (patent refs + NPL split)
 - `_tools_patent.py`: `get_patent` citations section with NPL→S2 resolution
@@ -395,17 +395,17 @@ Patent-specific error cases:
 - `_tools_utility.py`: extended `batch_resolve` with patent support
 - Tests + docs
 
-### Phase 4 — Future (Out of Scope)
+### Phase 4, Future (Out of Scope)
 
 Tracked as GitHub issues:
 
-- Patent PDF retrieval (`fetch_patent_pdf`) — #43
-- Patent-to-Markdown conversion (`convert_patent_to_markdown`) — #44
-- USPTO PatentsView / Open Data Portal integration — #45
-- Backend abstraction layer (Approach 2) — #46
-- Patent-paper co-citation analysis — #47
-- CPC classification browser — #48
-- Obsidian Vault patent note integration — #49
-- BibTeX/RIS export for patent citation formats — #50
-- WIPO PATENTSCOPE integration — #51
-- Patent monitoring / alerts — #52
+- Patent PDF retrieval (`fetch_patent_pdf`), #43
+- Patent-to-Markdown conversion (`convert_patent_to_markdown`), #44
+- USPTO PatentsView / Open Data Portal integration, #45
+- Backend abstraction layer (Approach 2), #46
+- Patent-paper co-citation analysis, #47
+- CPC classification browser, #48
+- Obsidian Vault patent note integration, #49
+- BibTeX/RIS export for patent citation formats, #50
+- WIPO PATENTSCOPE integration, #51
+- Patent monitoring / alerts, #52

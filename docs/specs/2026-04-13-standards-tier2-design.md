@@ -7,7 +7,7 @@
 
 ## Overview
 
-Extends the Tier 1 standards framework (NIST, IETF, W3C, ETSI — already shipped) with
+Extends the Tier 1 standards framework (NIST, IETF, W3C, ETSI, already shipped) with
 Tier 2 and Tier 3 coverage: ISO, IEC, IEEE, CEN/CENELEC, and Common Criteria. Adds an
 out-of-band catalogue-sync mechanism that populates the local SQLite cache from
 community-curated bulk dumps, avoiding paywalled HTML scraping at MCP-server runtime.
@@ -19,7 +19,7 @@ that look like standards references gain structured metadata.
 - ISO metadata lookup (scholar-mcp#80)
 - IEC metadata lookup (scholar-mcp#81)
 - IEEE metadata lookup (scholar-mcp#82)
-- CEN/CENELEC metadata lookup (scholar-mcp#83) — harmonised-standards subset only
+- CEN/CENELEC metadata lookup (scholar-mcp#83), harmonised-standards subset only
 - Common Criteria portal integration (scholar-mcp#84)
 - Standards auto-enrichment in `get_paper` / `get_references` / `get_citations` (scholar-mcp#85)
 
@@ -27,15 +27,15 @@ that look like standards references gain structured metadata.
 
 - Price field population (all Tier 2 records carry `price=None`)
 - Full CEN/CENELEC catalogue beyond CE-marking harmonised standards
-- Tier 1 migration to Relaton (scholar-mcp#120 — separate investigation)
-- IEEE Xplore authenticated full-text (F7 — future)
-- Citation formatting (`@techreport` / `@manual` BibLaTeX) for `StandardRecord` (F4 — future)
+- Tier 1 migration to Relaton (scholar-mcp#120, separate investigation)
+- IEEE Xplore authenticated full-text (F7, future)
+- Citation formatting (`@techreport` / `@manual` BibLaTeX) for `StandardRecord` (F4, future)
 
 ## Design Decisions
 
 - **Out-of-band sync via CLI.** A new `scholar-mcp sync-standards` subcommand materialises
   catalogue data from published dumps into the local cache. MCP-server runtime reads the
-  cache exactly as it does for live-fetched records — no live scraping of paywalled
+  cache exactly as it does for live-fetched records, no live scraping of paywalled
   catalogues. User runs sync on first install and schedules periodic refresh via cron /
   launchd / systemd timer.
 - **Format-aligned loader modules.** Data-source format, not body, is the axis of
@@ -43,7 +43,7 @@ that look like standards references gain structured metadata.
   `_sync_cc.py` handles Common Criteria CSV + sec-certs JSON; `_sync_cen.py` handles
   EUR-Lex Formex XML plus a live-scrape fallback.
 - **Single `standards` table for synced and live-fetched records.** Synced entries are
-  indistinguishable from live-fetched entries at the record level — same `StandardRecord`
+  indistinguishable from live-fetched entries at the record level, same `StandardRecord`
   shape, same cache-read paths. Only populate path changes.
 - **Enrichment via existing `Enricher` protocol.** `StandardsEnricher` slots into the
   existing pipeline at phase 2, behaves identically to `CrossRefEnricher` /
@@ -53,7 +53,7 @@ that look like standards references gain structured metadata.
   once under canonical `ISO/IEC 27001:2022` with alias rows for `IEC 27001:2022` and
   `27001:2022`. CC↔ISO 15408 dual-identifier pairs write one record with both alias forms.
 - **Longer cache TTLs.** `_STANDARD_INDEX_TTL` and `_STANDARD_SEARCH_TTL` bumped from 7 to
-  30 days — standards are effectively append-only, and 7 days was over-conservative.
+  30 days, standards are effectively append-only, and 7 days was over-conservative.
   Synced records don't TTL-expire at all; they're refreshed only via explicit re-sync.
 
 ## Module Layout
@@ -64,7 +64,7 @@ src/scholar_mcp/
   _sync_relaton.py       # shared YAML loader; config-driven (ISO, IEC, IEEE)
   _sync_cc.py            # Common Criteria CSV + sec-certs JSON
   _sync_cen.py           # EUR-Lex Formex XML + live-scrape fallback
-  _enricher_standards.py # StandardsEnricher — plugs into EnrichmentPipeline
+  _enricher_standards.py # StandardsEnricher, plugs into EnrichmentPipeline
 ```
 
 Only additive changes to `_standards_client.py`: `StandardsClient.search()` gains a
@@ -91,7 +91,7 @@ Designed for unattended operation under cron / CI / launchd.
 
 ## Cache Schema Changes
 
-### Existing `standards` table — new columns
+### Existing `standards` table, new columns
 
 | Column | Type | Semantics |
 |---|---|---|
@@ -108,9 +108,9 @@ SHA / `Last-Modified`.
 | Column | Type |
 |---|---|
 | `body` | `TEXT PRIMARY KEY` (one row per body; updated per run) |
-| `started_at` | `REAL` — Unix epoch seconds, consistent with `cached_at` elsewhere |
-| `finished_at` | `REAL` — Unix epoch seconds |
-| `upstream_ref` | `TEXT` — commit SHA, `Last-Modified`, or similar |
+| `started_at` | `REAL`, Unix epoch seconds, consistent with `cached_at` elsewhere |
+| `finished_at` | `REAL`, Unix epoch seconds |
+| `upstream_ref` | `TEXT`, commit SHA, `Last-Modified`, or similar |
 | `added` | `INTEGER` |
 | `updated` | `INTEGER` |
 | `unchanged` | `INTEGER` |
@@ -120,7 +120,7 @@ SHA / `Last-Modified`.
 `started_at` / `finished_at` are floats (Unix epoch), matching
 `SyncReport.started_at: float` and `cached_at REAL` on the sibling
 `standards` / `books` / `papers` tables. MCP tools and JSON serialisation
-render them as numeric timestamps — agents can format them locally as
+render them as numeric timestamps, agents can format them locally as
 needed.
 
 Backs a new `get_sync_status` MCP tool/resource that surfaces per-body freshness.
@@ -128,7 +128,7 @@ Backs a new `get_sync_status` MCP tool/resource that surfaces per-body freshness
 ### Existing TTL constants
 
 ```python
-_STANDARD_TTL          = 90 * 86400  # unchanged — live-fetched record expiry
+_STANDARD_TTL          = 90 * 86400  # unchanged, live-fetched record expiry
 _STANDARD_ALIAS_TTL    = 90 * 86400  # unchanged
 _STANDARD_SEARCH_TTL   = 30 * 86400  # bumped 7 → 30
 _STANDARD_INDEX_TTL    = 30 * 86400  # bumped 7 → 30
@@ -164,7 +164,7 @@ The dispatcher in `_standards_sync.py` runs all selected loaders concurrently (o
 `asyncio.Task` per body), aggregates reports, writes one row per body to
 `standards_sync_runs`, and prints the stdout summary.
 
-### `_sync_relaton.py` — shared YAML loader
+### `_sync_relaton.py`, shared YAML loader
 
 Covers ISO, IEC, IEEE via a body-config table:
 
@@ -182,12 +182,12 @@ Per-body sync loop:
    (`GET /repos/{repo}/commits/{branch}`). If it equals the
    `standards_sync_runs.upstream_ref` for this body and `not force`, report `unchanged`.
 2. Stream-download tarball from `/repos/{repo}/tarball/{sha}`. Don't persist raw YAML to
-   disk — extract in-process.
+   disk, extract in-process.
 3. For each `data/*.yaml`: parse, map Relaton `BibliographicItem` → `StandardRecord`,
    upsert via `cache.set_standard()`, and write `cache.set_standard_alias()` for every
    `docidentifier` variant.
 4. Compute withdrawn set: identifiers present in the previous SHA's key set but absent in
-   the current → upsert with `status="withdrawn"`. Never delete — citations may still
+   the current → upsert with `status="withdrawn"`. Never delete, citations may still
    reference withdrawn standards.
 
 ### Relaton → `StandardRecord` field mapping
@@ -206,19 +206,19 @@ Per-body sync loop:
 | `link[type=src]` | `url` |
 | `link[type=obp]`, `link[type=pub]` | `full_text_url` (may be `None` for paywalled) |
 
-`price` is absent from Relaton — always `None` for Tier 2 synced entries.
+`price` is absent from Relaton, always `None` for Tier 2 synced entries.
 `full_text_available` is `False` for ISO / IEC / IEEE; `True` only when `full_text_url`
 points to a freely accessible document (rare for Tier 2).
 
-### `_sync_cc.py` — Common Criteria
+### `_sync_cc.py`, Common Criteria
 
 Two upstream sources merged under `body="CC"`:
 
-1. **Certified products** — `https://www.commoncriteriaportal.org/products/certified_products.csv`.
+1. **Certified products**, `https://www.commoncriteriaportal.org/products/certified_products.csv`.
    `If-Modified-Since`-gated. Columns map to `identifier = f"CC Cert {scheme}-{name}"`,
    `status="certified"` or `"archived"` (based on `Archived Date`),
    `full_text_url = Cert Report URL`, `published_date = Cert Date`.
-2. **Protection Profiles** — `crocs-muni/sec-certs` weekly JSON (MIT-licensed). Maps to
+2. **Protection Profiles**, `crocs-muni/sec-certs` weekly JSON (MIT-licensed). Maps to
    separate PP records with `identifier = f"CC PP {scheme}-{name}"`.
 
 Cross-identifier aliasing: each CC record writes alias rows for `CC:2022` / `CC:2017` and
@@ -228,7 +228,7 @@ requirement.
 
 Full text for CC is freely downloadable; `full_text_available=True` for all CC records.
 
-### `_sync_cen.py` — EUR-Lex Formex XML + live fallback
+### `_sync_cen.py`, EUR-Lex Formex XML + live fallback
 
 Walks the EU Commission's published Implementing Decisions for each directive that cites
 harmonised standards (MD, EMC, RED, MDR, GPSR, CRA, …). Downloads each Formex XML from
@@ -240,14 +240,14 @@ EUR-Lex, extracts the standards-list annex, maps each row to a `StandardRecord`:
   removes them.
 - `supersedes` / `superseded_by` populated from cross-references in the decision.
 
-**Live fallback** — for citations referencing non-harmonised ENs, a `Fetcher`-shaped
+**Live fallback**, for citations referencing non-harmonised ENs, a `Fetcher`-shaped
 helper (`_live_get(identifier)`) inside `_sync_cen.py` is registered as
 `StandardsClient._fetchers["CEN"]`:
 
 - Single HTTP GET to `https://standards.cencenelec.eu/…/search?q={identifier}`.
 - Parse first result via `selectolax` / `lxml`.
 - Rate limit 2 req/s.
-- On error / empty response: return stub `StandardRecord(identifier=..., body="CEN", title="", full_text_available=False)` — same "resolved-locally-but-fetch-failed" pattern as Tier 1 uses today.
+- On error / empty response: return stub `StandardRecord(identifier=..., body="CEN", title="", full_text_available=False)`, same "resolved-locally but-fetch-failed" pattern as Tier 1 uses today.
 - Successful live fetches cached as 90-day-TTL live records (not synced records).
 
 Full CEN/CENELEC catalogue beyond harmonised standards is explicitly out of scope.
@@ -267,7 +267,7 @@ Joint and cross-referenced identifiers resolve to a canonical form:
 | `EN 55032:2015` | `EN 55032:2015` | `CEN` |
 | `CC:2022`, `ISO/IEC 15408:2022` | `ISO/IEC 15408:2022` (with CC alias) | `ISO/IEC` |
 
-ETSI priority over CEN is preserved — the existing `_ETSI_RE` requires an explicit `ETSI`
+ETSI priority over CEN is preserved, the existing `_ETSI_RE` requires an explicit `ETSI`
 prefix specifically to avoid false positives with other European bodies.
 
 Joint ISO/IEC standards always use the canonical `ISO/IEC {n}` form, regardless of which
@@ -278,7 +278,7 @@ No duplicate records.
 
 ## Enrichment Integration
 
-### `_enricher_standards.py` — `StandardsEnricher`
+### `_enricher_standards.py`, `StandardsEnricher`
 
 ```python
 class StandardsEnricher:
@@ -304,20 +304,20 @@ class StandardsEnricher:
 ```
 
 Registered in `_build_enrichment_pipeline()` alongside existing enrichers. Phase 2 lets
-phase 0 (OpenAlex, CrossRef) and phase 1 (OpenLibrary, GoogleBooks) complete first —
+phase 0 (OpenAlex, CrossRef) and phase 1 (OpenLibrary, GoogleBooks) complete first.
 some S2 references only become recognisable as standards after DOI/title enrichment.
 
-### Trigger — `_looks_like_standard(text)`
+### Trigger, `_looks_like_standard(text)`
 
 Two signals, OR-combined:
 
 1. **Regex match** via the extended `resolve_identifier_local` (NIST, IETF, W3C, ETSI
    from today plus new ISO, IEC, IEEE, CEN, CC groups).
-2. **Body-prefix heuristic** — tokens in `{"ISO", "IEC", "IEEE", "NIST", "RFC", "ETSI", "CC:", "FIPS", "WCAG", "CEN"}` appearing at word boundaries in the first ~40 characters.
+2. **Body-prefix heuristic**, tokens in `{"ISO", "IEC", "IEEE", "NIST", "RFC", "ETSI", "CC:", "FIPS", "WCAG", "CEN"}` appearing at word boundaries in the first ~40 characters.
 
 Deliberately broad. False positives (text matches prefix but doesn't actually reference a
 standard) cost one cache-lookup that returns `None`. False negatives (real standard
-reference missed) leave the record unenriched — worse.
+reference missed) leave the record unenriched, worse.
 
 ### Attachment point
 
@@ -332,7 +332,7 @@ record typing in `_record_types.py` (kept as documentation; paper records remain
 ```
 
 Downstream tools (`get_paper`, `get_references`, `get_citations`) serialise whatever's
-present — no changes to their return shape beyond passing enricher output through.
+present, no changes to their return shape beyond passing enricher output through.
 
 ### Cache-aware resolution
 
@@ -346,7 +346,7 @@ is empty.
 
 ## Testing
 
-### Unit tests — offline fixtures only for CI
+### Unit tests, offline fixtures only for CI
 
 ```
 tests/
@@ -381,7 +381,7 @@ Coverage targets:
 
 HTTP mocking uses `respx` per existing test convention.
 
-### Integration smoke tests — `pytest -m live`
+### Integration smoke tests, `pytest -m live`
 
 One test per body that hits the real upstream. Skipped by default, run nightly via a
 dedicated CI job. Catches upstream schema drift. Not counted toward the 80% patch-coverage
@@ -392,17 +392,17 @@ gate.
 Per CLAUDE.md hard gate: `README.md` and `docs/**` updated in the same commit as code
 changes.
 
-- **`README.md`** — new "Tier 2 standards" subsection under Features; `scholar-mcp
+- **`README.md`**, new "Tier 2 standards" subsection under Features; `scholar-mcp
   sync-standards` in Quick Start; note first sync is a one-time multi-minute operation.
-- **`docs/guides/standards.md`** (new) — tier taxonomy, sync cadence recommendations
+- **`docs/guides/standards.md`** (new), tier taxonomy, sync cadence recommendations
   (weekly cron suggested), scheduling examples for cron / launchd / systemd timer,
   troubleshooting (empty results → run sync).
-- **`docs/tools/index.md`** — `search_standards` / `get_standard` /
+- **`docs/tools/index.md`**, `search_standards` / `get_standard` /
   `resolve_standard_identifier` behaviour updates; new `get_sync_status` tool/resource.
-- **`docs/specs/2026-04-07-standards-support-design.md`** — mark the "Deferred issues"
+- **`docs/specs/2026-04-07-standards-support-design.md`**, mark the "Deferred issues"
   section as superseded by this spec.
-- **`docs/ops/standards-sync.md`** (new) — operational guidance for production deployments.
-- **`.claude-plugin/plugin/skills/scholar-workflow/SKILL.md`** — update standards workflow
+- **`docs/ops/standards-sync.md`** (new), operational guidance for production deployments.
+- **`.claude-plugin/plugin/skills/scholar-workflow/SKILL.md`**, update standards workflow
   section to reflect Tier 2 + Tier 3 coverage.
 
 ## Rollout
@@ -410,19 +410,19 @@ changes.
 Five PRs, each independently shippable under the CLAUDE.md hard gates (CI, lint, mypy,
 ≥80% patch coverage, docs, manifest version lockstep):
 
-1. **PR 1 — Sync infrastructure.** `_standards_sync.py`, `SyncReport`, CLI subcommand,
+1. **PR 1, Sync infrastructure.** `_standards_sync.py`, `SyncReport`, CLI subcommand,
    `standards.source` + `standards.synced_at` columns, `standards_sync_runs` table, new
    `get_sync_status` tool, TTL constant bumps. Dispatcher works; zero loaders registered.
    Green CI.
-2. **PR 2 — scholar-mcp#80 + scholar-mcp#81 (ISO + IEC).** Shared Relaton loader. ISO /
+2. **PR 2, scholar-mcp#80 + scholar-mcp#81 (ISO + IEC).** Shared Relaton loader. ISO /
    IEC body config. Extended `resolve_identifier_local` regex. Joint-standard dedup
    implemented + tested. Fixtures for both.
-3. **PR 3 — scholar-mcp#82 (IEEE).** Reuses PR 2's Relaton loader; trivial config addition
+3. **PR 3, scholar-mcp#82 (IEEE).** Reuses PR 2's Relaton loader; trivial config addition
    (`ietf-tools/relaton-data-ieee`) + regex group. Fixtures.
-4. **PR 4 — scholar-mcp#83 + scholar-mcp#84 (CEN/CENELEC + Common Criteria).**
+4. **PR 4, scholar-mcp#83 + scholar-mcp#84 (CEN/CENELEC + Common Criteria).**
    `_sync_cc.py` (CSV + sec-certs JSON + cross-ID aliasing). `_sync_cen.py` (Formex
    harvester + live fallback). Pairs because neither uses Relaton.
-5. **PR 5 — scholar-mcp#85 (enrichment).** `_enricher_standards.py` wired into
+5. **PR 5, scholar-mcp#85 (enrichment).** `_enricher_standards.py` wired into
    `_build_enrichment_pipeline`. New TypedDict attachment-field conventions documented
    in `_record_types.py`. Cold-cache guard. Final minor-version bump (v0.9.0 release
    tag).
@@ -446,4 +446,4 @@ Each PR bumps the patch version in `server.json`,
 - **CEN live fallback brittleness.** Live fallback is already a known-fragile pattern
   (see pvliesdonk/scholar-mcp#102 ETSI Cloudflare). Stub records on failure keep the
   resolver path non-blocking for the enricher. If CEN adds Cloudflare, the Formex-XML
-  harmonised subset is still usable — only non-harmonised ENs degrade to `not_found`.
+  harmonised subset is still usable, only non-harmonised ENs degrade to `not_found`.

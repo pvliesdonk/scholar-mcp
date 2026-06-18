@@ -42,7 +42,7 @@
 
 ---
 
-## Phase 1 — Foundation
+## Phase 1, Foundation
 
 ### Task 1: Add Dependencies
 
@@ -181,7 +181,7 @@ class TestIsPatentNumber:
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_patent_numbers.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'scholar_mcp._patent_numbers'`
+Expected: FAIL, `ModuleNotFoundError: No module named 'scholar_mcp._patent_numbers'`
 
 - [ ] **Step 3: Implement _patent_numbers.py**
 
@@ -204,10 +204,10 @@ _PATENT_RE = re.compile(
     r"[\s.]*"  # optional separator
     r"(?P<number>[\d,/]+)"  # digits with optional commas/slashes
     r"[\s.]*"  # optional separator
-    r"(?P<kind>[A-Za-z]\d{0,2})?$"  # optional kind code (e.g., A1, B2)
+    r"(?P<kind>[A-Za-z]\d{0,2})?$"  # optional kind code (such as A1, B2)
 )
 
-# Known patent country codes (subset — covers major offices)
+# Known patent country codes (subset, covers major offices)
 _PATENT_COUNTRIES = frozenset({
     "EP", "WO", "US", "JP", "CN", "KR", "DE", "FR", "GB", "CA", "AU",
     "IN", "BR", "RU", "TW", "IL", "NZ", "SG", "HK", "AT", "BE", "CH",
@@ -429,7 +429,7 @@ class TestParseBiblioXml:
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_epo_xml.py::TestParseBiblioXml -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'scholar_mcp._epo_xml'`
+Expected: FAIL, `ModuleNotFoundError: No module named 'scholar_mcp._epo_xml'`
 
 - [ ] **Step 3: Implement parse_biblio_xml in _epo_xml.py**
 
@@ -437,7 +437,7 @@ Expected: FAIL — `ModuleNotFoundError: No module named 'scholar_mcp._epo_xml'`
 """XML parsers for EPO OPS API responses.
 
 Each parser extracts structured data from EPO's namespaced XML into
-plain Python dicts. All XML handling is contained here — consumers
+plain Python dicts. All XML handling is contained here, consumers
 only see clean data.
 """
 
@@ -694,7 +694,7 @@ class TestParseSearchXml:
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_epo_xml.py::TestParseSearchXml -v`
-Expected: FAIL — `ImportError: cannot import name 'parse_search_xml'`
+Expected: FAIL, `ImportError: cannot import name 'parse_search_xml'`
 
 - [ ] **Step 3: Add parse_search_xml to _epo_xml.py**
 
@@ -748,7 +748,7 @@ git commit -m "feat: add EPO XML search results parser"
 
 ---
 
-### Task 5: Configuration — EPO Environment Variables
+### Task 5: Configuration, EPO Environment Variables
 
 **Files:**
 - Modify: `src/scholar_mcp/config.py`
@@ -806,7 +806,7 @@ def test_epo_configured_partial(monkeypatch) -> None:
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/ -k "test_epo" -v`
-Expected: FAIL — `AttributeError: 'ServerConfig' object has no attribute 'epo_consumer_key'`
+Expected: FAIL, `AttributeError: 'ServerConfig' object has no attribute 'epo_consumer_key'`
 
 - [ ] **Step 3: Add EPO fields to ServerConfig and load_config**
 
@@ -1009,7 +1009,7 @@ class TestEpoClientRateLimiting:
     async def test_green_does_not_raise(
         self, epo_client: EpoClient
     ) -> None:
-        # Default fixture uses green — should not raise
+        # Default fixture uses green, should not raise
         result = await epo_client.search("ta=test")
         assert result["total_count"] == 1
 ```
@@ -1017,7 +1017,7 @@ class TestEpoClientRateLimiting:
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_epo_client.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'scholar_mcp._epo_client'`
+Expected: FAIL, `ModuleNotFoundError: No module named 'scholar_mcp._epo_client'`
 
 - [ ] **Step 3: Implement _epo_client.py**
 
@@ -1029,7 +1029,7 @@ Disables the library's built-in caching and throttling middleware
 so the MCP server uses its own cache and task queue.
 
 All methods are async (sync calls run via asyncio.to_thread).
-All methods return parsed Python dicts — XML handling is internal.
+All methods return parsed Python dicts, XML handling is internal.
 """
 
 from __future__ import annotations
@@ -1117,7 +1117,7 @@ class EpoClient:
         """Search patents using CQL query.
 
         Args:
-            cql_query: EPO CQL query string (e.g., 'ta="solar cell"').
+            cql_query: EPO CQL query string (such as 'ta="solar cell"').
             range_begin: Start index (1-based).
             range_end: End index.
 
@@ -1183,7 +1183,7 @@ git commit -m "feat: add EPO OPS client wrapper with search and biblio"
 
 ---
 
-### Task 7: Cache — Patent Tables
+### Task 7: Cache, Patent Tables
 
 **Files:**
 - Modify: `src/scholar_mcp/_cache.py`
@@ -1244,7 +1244,7 @@ class TestPatentCache:
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_cache.py::TestPatentCache -v`
-Expected: FAIL — `AttributeError: 'ScholarCache' object has no attribute 'set_patent'`
+Expected: FAIL, `AttributeError: 'ScholarCache' object has no attribute 'set_patent'`
 
 - [ ] **Step 3: Add patent tables to _cache.py**
 
@@ -1461,7 +1461,7 @@ git commit -m "feat: add patent cache tables with per-type TTLs"
 
 ---
 
-### Task 8: ServiceBundle — Add Optional EpoClient
+### Task 8: ServiceBundle, Add Optional EpoClient
 
 **Files:**
 - Modify: `src/scholar_mcp/_server_deps.py`
@@ -1486,7 +1486,7 @@ epo: EpoClient | None
 In `make_service_lifespan`, after the docling block and before building the bundle:
 
 ```python
-# EPO OPS (optional — patent tools only available when configured)
+# EPO OPS (optional, patent tools only available when configured)
 epo: EpoClient | None = None
 if config.epo_configured:
     epo = EpoClient(
@@ -1537,7 +1537,7 @@ git commit -m "feat: add optional EpoClient to ServiceBundle"
 
 ---
 
-### Task 9: Patent Tools — search_patents + get_patent (biblio)
+### Task 9: Patent Tools, search_patents + get_patent (biblio)
 
 **Files:**
 - Create: `src/scholar_mcp/_tools_patent.py`
@@ -1666,7 +1666,7 @@ class TestGetPatentLogic:
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_tools_patent.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'scholar_mcp._tools_patent'`
+Expected: FAIL, `ModuleNotFoundError: No module named 'scholar_mcp._tools_patent'`
 
 - [ ] **Step 3: Implement _tools_patent.py**
 
@@ -1866,13 +1866,13 @@ def register_patent_tools(mcp: FastMCP) -> None:
 
         Args:
             query: Natural language search query.
-            cpc_classification: CPC classification code filter (e.g., H04L29/06).
+            cpc_classification: CPC classification code filter (such as H04L29/06).
             applicant: Applicant/assignee name filter.
             inventor: Inventor name filter.
             date_from: Start date filter (YYYY-MM-DD).
             date_to: End date filter (YYYY-MM-DD).
             date_type: Which date to filter on: publication, filing, or priority.
-            jurisdiction: Country code filter (e.g., EP, US, WO).
+            jurisdiction: Country code filter (such as EP, US, WO).
             limit: Maximum results to return (max 100).
             offset: Pagination offset.
         """
@@ -1925,7 +1925,7 @@ def register_patent_tools(mcp: FastMCP) -> None:
         """Get detailed information about a single patent.
 
         Accepts patent numbers in any format (EP, WO, US, etc.). By default
-        returns bibliographic data only -- use the sections parameter to
+        returns bibliographic data only; use the sections parameter to
         request additional detail (claims, description, family members,
         legal status, cited references). When sections includes 'citations',
         non-patent literature references are resolved to Semantic Scholar
@@ -1992,7 +1992,7 @@ Import and call `register_patent_tools` conditionally. The registration function
 
 Looking at the existing pattern: `register_tools(mcp, *, transport)` imports modules and calls `register_*_tools(mcp)`. The bundle is available at request time via `Depends(get_bundle)`.
 
-For conditional registration, we need to defer — patent tools are always registered but use `assert bundle.epo is not None` at call time. However, the spec says tools should be **hidden** when EPO is not configured.
+For conditional registration, we need to defer, patent tools are always registered but use `assert bundle.epo is not None` at call time. However, the spec says tools should be **hidden** when EPO is not configured.
 
 The cleanest approach: register patent tools into a separate `FastMCP` tag, then disable that tag when EPO is not configured. Similar to how write tools use `tags={"write"}`.
 
@@ -2038,7 +2038,7 @@ if not config.epo_configured:
     mcp.disable(tags={"patent"})
 ```
 
-Note: `load_config()` may already be called earlier in `create_server()` — reuse the existing config variable.
+Note: `load_config()` may already be called earlier in `create_server()`, reuse the existing config variable.
 
 - [ ] **Step 4: Run full test suite**
 
@@ -2072,7 +2072,7 @@ Document `SCHOLAR_MCP_EPO_CONSUMER_KEY` and `SCHOLAR_MCP_EPO_CONSUMER_SECRET`. I
 1. Register at https://developers.epo.org/user/register
 2. Wait for email confirmation
 3. Log in, navigate to "My Apps"
-4. Click "Add a new App", choose a name (e.g. "scholar-mcp")
+4. Click "Add a new App," choose a name (such as "scholar-mcp")
 5. Select "Non-paying" access method
 6. Copy Consumer Key and Consumer Secret to env vars
 
@@ -2089,7 +2089,7 @@ git commit -m "docs: add patent tools and EPO configuration documentation"
 
 ---
 
-## Phase 2 — Full Detail
+## Phase 2, Full Detail
 
 ### Task 12: EPO XML Claims + Description Parsers
 
@@ -2171,7 +2171,7 @@ class TestParseDescriptionXml:
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_epo_xml.py -k "Claims or Description" -v`
-Expected: FAIL — `ImportError`
+Expected: FAIL, `ImportError`
 
 - [ ] **Step 3: Implement parse_claims_xml and parse_description_xml**
 
@@ -2357,7 +2357,7 @@ class TestParseLegalXml:
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_epo_xml.py -k "Family or Legal" -v`
-Expected: FAIL — `ImportError`
+Expected: FAIL, `ImportError`
 
 - [ ] **Step 3: Implement parse_family_xml and parse_legal_xml**
 
@@ -2432,7 +2432,7 @@ git commit -m "feat: add EPO XML family and legal status parsers"
 
 ---
 
-### Task 14: EPO Client — Remaining Methods
+### Task 14: EPO Client, Remaining Methods
 
 **Files:**
 - Modify: `src/scholar_mcp/_epo_client.py`
@@ -2547,7 +2547,7 @@ class TestEpoClientLegal:
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_epo_client.py -k "Claims or Description or Family or Legal" -v`
-Expected: FAIL — `AttributeError: 'EpoClient' object has no attribute 'get_claims'`
+Expected: FAIL, `AttributeError: 'EpoClient' object has no attribute 'get_claims'`
 
 - [ ] **Step 3: Add remaining methods to EpoClient**
 
@@ -2632,7 +2632,7 @@ git commit -m "feat: add claims, description, family, legal to EPO client"
 
 ---
 
-### Task 15: get_patent — Full Sections with Concurrent Fetching
+### Task 15: get_patent, Full Sections with Concurrent Fetching
 
 **Files:**
 - Modify: `src/scholar_mcp/_tools_patent.py`
@@ -2696,7 +2696,7 @@ class TestGetPatentFullSections:
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_tools_patent.py::TestGetPatentFullSections -v`
-Expected: FAIL — claims not handled yet
+Expected: FAIL, claims not handled yet
 
 - [ ] **Step 3: Extend _get_patent_execute with all sections**
 
@@ -2826,9 +2826,9 @@ git commit -m "docs: add full get_patent section documentation"
 
 ---
 
-## Phase 3 — Cross-Referencing
+## Phase 3, Cross-Referencing
 
-### Task 17: EPO XML — Cited References Parsing
+### Task 17: EPO XML, Cited References Parsing
 
 **Files:**
 - Modify: `src/scholar_mcp/_epo_xml.py`
@@ -2898,7 +2898,7 @@ class TestParseCitationsFromBiblio:
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_epo_xml.py::TestParseCitationsFromBiblio -v`
-Expected: FAIL — `ImportError`
+Expected: FAIL, `ImportError`
 
 - [ ] **Step 3: Implement parse_citations_from_biblio**
 
@@ -3208,7 +3208,7 @@ class TestGetCitingPatentsLogic:
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_tools_patent.py::TestGetCitingPatentsLogic -v`
-Expected: FAIL — `ImportError: cannot import name '_get_citing_patents_execute'`
+Expected: FAIL, `ImportError: cannot import name '_get_citing_patents_execute'`
 
 - [ ] **Step 3: Implement get_citing_patents**
 
@@ -3282,7 +3282,7 @@ async def get_citing_patents(
 ) -> str:
     """Find patents that cite a given academic paper.
 
-    Coverage is incomplete -- relies on EPO OPS citation search and
+    Coverage is incomplete; relies on EPO OPS citation search and
     OpenAlex, which do not capture all patent-to-paper citations.
     Best results with well-known, highly-cited papers. Returns
     confirmed matches only, not an exhaustive list. Provide a DOI
@@ -3448,10 +3448,10 @@ git commit -m "docs: add cross-referencing and batch_resolve patent documentatio
 
 After all phases are complete, verify:
 
-- [ ] `uv run pytest tests/ -v` — all tests pass
-- [ ] `uv run ruff check src/ tests/` — no lint errors
-- [ ] `uv run mypy src/scholar_mcp/` — no type errors
-- [ ] Server starts without EPO credentials: `SCHOLAR_MCP_EPO_CONSUMER_KEY= scholar-mcp serve --transport stdio` — patent tools hidden, paper tools work
+- [ ] `uv run pytest tests/ -v`, all tests pass
+- [ ] `uv run ruff check src/ tests/`, no lint errors
+- [ ] `uv run mypy src/scholar_mcp/`, no type errors
+- [ ] Server starts without EPO credentials: `SCHOLAR_MCP_EPO_CONSUMER_KEY= scholar-mcp serve --transport stdio`, patent tools hidden, paper tools work
 - [ ] Server starts with EPO credentials: patent tools visible
 - [ ] `search_patents` returns results for a known query
 - [ ] `get_patent` returns biblio for a known patent number

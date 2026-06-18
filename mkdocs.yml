@@ -64,7 +64,6 @@ plugins:
           - guides/authentication.md: Authentication modes — bearer token, OIDC, and troubleshooting
           - guides/pdf-conversion.md: PDF conversion with docling-serve and VLM enrichment
           - guides/citation-graphs.md: Citation graph traversal, bridge papers, and caching
-          - guides/file-exchange.md: MCP File Exchange convention for passing files between co-deployed servers
         Tools:
           - tools/index.md: All 13 MCP tools with parameters, return values, and usage tips
         Deployment:

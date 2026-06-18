@@ -93,7 +93,7 @@ See [Configuration](../configuration.md) for the full reference. Key variables f
 | `SCHOLAR_MCP_S2_API_KEY` | n/a | Semantic Scholar API key (optional; ~1 req/s without, ~10 req/s with) |
 | `SCHOLAR_MCP_CACHE_DIR` | `/data/scholar-mcp` | Cache and PDF storage directory |
 | `SCHOLAR_MCP_READ_ONLY` | `true` | Set `false` to enable PDF tools |
-| `SCHOLAR_MCP_DOCLING_URL` | n/a | docling-serve URL (e.g. `http://docling-serve:5001`) |
+| `SCHOLAR_MCP_DOCLING_URL` | n/a | docling-serve URL (such as `http://docling-serve:5001`) |
 | `SCHOLAR_MCP_BEARER_TOKEN` | n/a | Bearer token for HTTP auth |
 | `FASTMCP_LOG_LEVEL` | `INFO` | Logging level (use `-v` or set to `DEBUG` for verbose output) |
 | `FASTMCP_ENABLE_RICH_LOGGING` | `true` | Set `false` for structured JSON logging with aggregators |
