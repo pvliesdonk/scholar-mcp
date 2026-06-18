@@ -171,7 +171,7 @@ function render() {
 
   const warnings = document.createElement("div");
   warnings.className = "cfg-warnings";
-  for (const g of spec.guards) {
+  for (const g of (spec.guards ?? [])) {
     if (Object.entries(g.when).every(([k, vals]) => vals.includes(answers[k]))) {
       const w = document.createElement("div");
       w.className = `cfg-${g.level}`;
