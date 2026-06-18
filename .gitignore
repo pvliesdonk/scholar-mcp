@@ -39,6 +39,13 @@ site/
 .claude/worktrees/
 .claude/settings.local.json
 docs/superpowers/
+.repowise/
+
+# Vale downloaded styles (fetched by `vale sync`; not checked in)
+.vale/styles/Google/
+.vale/styles/ai-tells/
+.vale/styles/proselint/
+.vale/styles/write-good/
 
 # --- Scholar-specific local artifacts
 *.npy
