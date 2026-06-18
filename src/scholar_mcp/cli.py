@@ -97,7 +97,7 @@ def serve(
     try:
         server = make_server(transport=transport)
     except ConfigurationError as exc:
-        # pvl-core 2.x raises this on real auth misconfig (OIDC discovery
+        # pvl-core raises this on real auth misconfig (OIDC discovery
         # failure, missing httpx, incomplete discovery doc). The exception
         # message is operator-actionable on its own; don't bury it under a
         # multi-screen rich traceback. Print to stderr via ``typer.echo``

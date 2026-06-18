@@ -14,17 +14,18 @@ from importlib.metadata import version as _pkg_version
 from fastmcp import FastMCP
 from fastmcp.server.event_store import EventStore
 from fastmcp_pvl_core import (
-    FileExchangeHandle,
     ServerConfig,
     build_auth,
     build_instructions,
     configure_logging_from_env,
-    register_file_exchange,
     register_server_info_tool,
     wire_middleware_stack,
 )
 from fastmcp_pvl_core import (
     build_event_store as _core_build_event_store,
+)
+from fastmcp_pvl_core import (
+    build_kv_store as build_kv_store,  # re-exported for downstream projects' convenience
 )
 from fastmcp_pvl_core import (
     resolve_auth_mode as _core_resolve_auth_mode,
@@ -39,25 +40,6 @@ from scholar_mcp.config import _ENV_PREFIX, ProjectConfig
 logger = logging.getLogger(__name__)
 
 _DEFAULT_SERVER_NAME = "scholar-mcp"
-
-# Module-level singleton holding the FileExchangeHandle that
-# ``register_file_exchange`` returns from ``make_server()``.  Captured so tool
-# bodies can call ``get_file_exchange().publish(...)`` (see issue #176 for the
-# work that wires scholar tools to actually publish ``FileRef`` objects).
-_file_exchange: FileExchangeHandle | None = None
-
-
-def get_file_exchange() -> FileExchangeHandle:
-    """Return the file-exchange handle captured by ``make_server()``.
-
-    Raises:
-        RuntimeError: If ``make_server()`` has not run yet.
-    """
-    if _file_exchange is None:
-        raise RuntimeError(
-            "file exchange is not initialised — call make_server() first"
-        )
-    return _file_exchange
 
 
 def _load_server_config() -> ServerConfig:
@@ -79,10 +61,10 @@ def _build_remote_auth() -> object | None:
     """Backward-compat wrapper around ``fastmcp_pvl_core.build_remote_auth``.
 
     Raises:
-        ConfigurationError: under pvl-core 2.x the underlying builder raises
-            on OIDC discovery failure / missing ``httpx`` / incomplete
-            discovery document instead of returning ``None``. ``None`` is
-            still returned when no remote-auth config is present at all.
+        ConfigurationError: The underlying builder raises on OIDC discovery
+            failure / missing ``httpx`` / incomplete discovery document
+            instead of returning ``None``. ``None`` is still returned when
+            no remote-auth config is present at all.
     """
     from fastmcp_pvl_core import build_remote_auth
 
@@ -93,8 +75,8 @@ def _build_bearer_auth() -> object | None:
     """Backward-compat wrapper around ``fastmcp_pvl_core.build_bearer_auth``.
 
     Raises:
-        ConfigurationError: under pvl-core 2.x the underlying builder raises
-            when ``SCHOLAR_MCP_BEARER_TOKENS_FILE`` is set but the file is
+        ConfigurationError: The underlying builder raises when
+            ``SCHOLAR_MCP_BEARER_TOKENS_FILE`` is set but the file is
             missing, unparseable, or schema-invalid.
     """
     from fastmcp_pvl_core import build_bearer_auth
@@ -139,13 +121,9 @@ def make_server(
     """Construct the Scholar MCP FastMCP server.
 
     Args:
-        transport: ``"stdio"`` / ``"http"`` / ``"sse"``.  Logged for
-            operational visibility and passed through to
-            ``register_file_exchange`` (``"stdio"`` disables the facade by
-            default; anything else is treated as HTTP-class).
-            ``SCHOLAR_MCP_FILE_EXCHANGE_ENABLED`` can override the
-            on/off default per-transport.
-        config: Optional pre-loaded config; defaults to env-based load.
+        transport: ``"stdio"`` / ``"http"`` / ``"sse"``.  Used here for
+            logging only.
+        config: Optional pre-loaded config; default loads from env.
 
     Returns:
         A configured :class:`fastmcp.FastMCP` instance.
@@ -158,7 +136,7 @@ def make_server(
 
     auth = build_auth(config.server)
     auth_mode = _core_resolve_auth_mode(config.server)
-    # Belt-and-braces invariant: pvl-core 2.x's build_auth returns None iff
+    # Belt-and-braces invariant: build_auth returns None iff
     # resolve_auth_mode returns "none", and raises ConfigurationError on real
     # misconfig (no silent downgrade). A mismatch would indicate a pvl-core
     # regression that silently degraded a configured auth mode to None.
@@ -277,23 +255,5 @@ def make_server(
     # kept across copier update. Leave empty for projects that don't customise
     # make_server() beyond the standard scaffold.
     # DOMAIN-WIRING-END
-
-    # Capture the FileExchangeHandle into the module-level singleton so tool
-    # bodies can call ``get_file_exchange().publish(...)`` once they start
-    # producing FileRefs (tracked in #176). We pass our resolved transport
-    # explicitly (rather than "auto") so the CLI ``--transport`` flag wins
-    # over ``SCHOLAR_MCP_TRANSPORT`` / ``FASTMCP_TRANSPORT`` env vars, which
-    # the facade's "auto" mode reads.
-    global _file_exchange
-    _file_exchange = register_file_exchange(
-        mcp,
-        # ``namespace`` is the server's logical name per pvl-core's docstring —
-        # used as ``FileRef.origin_server`` and the exchange namespace. Pass the
-        # resolved ``server_name`` so peers see the same identity as
-        # ``get_server_info`` / FastMCP / the startup log.
-        namespace=server_name,
-        env_prefix=_ENV_PREFIX,
-        transport="stdio" if transport == "stdio" else "http",
-    )
 
     return mcp

@@ -29,11 +29,11 @@ def test_cache_help() -> None:
     assert "clear" in result.output
 
 
-def test_cache_stats_no_db() -> None:
+def test_cache_stats_no_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """With no real DB, stats should exit gracefully with code 0."""
+    monkeypatch.chdir(tmp_path)
     runner = CliRunner()
-    with runner.isolated_filesystem():
-        result = runner.invoke(app, ["cache", "stats"])
+    result = runner.invoke(app, ["cache", "stats"])
     assert result.exit_code == 0
     assert "No cache database found" in result.output
 
@@ -49,11 +49,11 @@ def test_cache_stats_with_db(tmp_path: Path) -> None:
     assert "papers:" in result.output
 
 
-def test_cache_clear_no_db() -> None:
+def test_cache_clear_no_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """With no real DB, clear should exit gracefully with code 0."""
+    monkeypatch.chdir(tmp_path)
     runner = CliRunner()
-    with runner.isolated_filesystem():
-        result = runner.invoke(app, ["cache", "clear"])
+    result = runner.invoke(app, ["cache", "clear"])
     assert result.exit_code == 0
     assert "No cache database found" in result.output
 
@@ -151,7 +151,7 @@ def test_serve_configuration_error_prints_clean_message(
 ) -> None:
     """ConfigurationError from make_server is caught at the CLI boundary.
 
-    Locks in the operator-facing error path: pvl-core 2.x raises
+    Locks in the operator-facing error path: pvl-core raises
     ``ConfigurationError`` on real auth misconfig; the CLI must catch it,
     print the actionable message via ``typer.echo`` (so it survives
     ``FASTMCP_LOG_LEVEL=CRITICAL`` filtering), and exit non-zero — instead
