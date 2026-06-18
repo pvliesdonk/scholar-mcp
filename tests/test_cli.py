@@ -151,7 +151,7 @@ def test_serve_configuration_error_prints_clean_message(
 ) -> None:
     """ConfigurationError from make_server is caught at the CLI boundary.
 
-    Locks in the operator-facing error path: pvl-core 2.x raises
+    Locks in the operator-facing error path: pvl-core raises
     ``ConfigurationError`` on real auth misconfig; the CLI must catch it,
     print the actionable message via ``typer.echo`` (so it survives
     ``FASTMCP_LOG_LEVEL=CRITICAL`` filtering), and exit non-zero — instead

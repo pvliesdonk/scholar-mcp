@@ -61,10 +61,10 @@ def _build_remote_auth() -> object | None:
     """Backward-compat wrapper around ``fastmcp_pvl_core.build_remote_auth``.
 
     Raises:
-        ConfigurationError: under pvl-core 2.x the underlying builder raises
-            on OIDC discovery failure / missing ``httpx`` / incomplete
-            discovery document instead of returning ``None``. ``None`` is
-            still returned when no remote-auth config is present at all.
+        ConfigurationError: The underlying builder raises on OIDC discovery
+            failure / missing ``httpx`` / incomplete discovery document
+            instead of returning ``None``. ``None`` is still returned when
+            no remote-auth config is present at all.
     """
     from fastmcp_pvl_core import build_remote_auth
 
@@ -75,8 +75,8 @@ def _build_bearer_auth() -> object | None:
     """Backward-compat wrapper around ``fastmcp_pvl_core.build_bearer_auth``.
 
     Raises:
-        ConfigurationError: under pvl-core 2.x the underlying builder raises
-            when ``SCHOLAR_MCP_BEARER_TOKENS_FILE`` is set but the file is
+        ConfigurationError: The underlying builder raises when
+            ``SCHOLAR_MCP_BEARER_TOKENS_FILE`` is set but the file is
             missing, unparseable, or schema-invalid.
     """
     from fastmcp_pvl_core import build_bearer_auth
@@ -136,7 +136,7 @@ def make_server(
 
     auth = build_auth(config.server)
     auth_mode = _core_resolve_auth_mode(config.server)
-    # Belt-and-braces invariant: pvl-core 2.x's build_auth returns None iff
+    # Belt-and-braces invariant: build_auth returns None iff
     # resolve_auth_mode returns "none", and raises ConfigurationError on real
     # misconfig (no silent downgrade). A mismatch would indicate a pvl-core
     # regression that silently degraded a configured auth mode to None.

@@ -236,12 +236,11 @@ class TestResolveAuthMode:
 class TestBuildRemoteAuth:
     """Tests for _build_remote_auth() — OIDC discovery and RemoteAuthProvider.
 
-    Semantics under fastmcp-pvl-core 2.x: ``build_remote_auth`` raises
-    ``ConfigurationError`` on misconfiguration / discovery failure rather
-    than silently returning ``None``. The intent (per pvl-core's release
-    notes) is to page operators on real misconfig instead of producing a
-    degraded server. ``None`` is still returned when no remote-auth config
-    is present at all (the "not requested" case).
+    ``build_remote_auth`` raises ``ConfigurationError`` on misconfiguration
+    / discovery failure rather than silently returning ``None``. The intent
+    is to page operators on real misconfig instead of producing a degraded
+    server. ``None`` is still returned when no remote-auth config is
+    present at all (the "not requested" case).
     """
 
     def test_returns_none_without_vars(self) -> None:
@@ -344,12 +343,11 @@ class TestBuildRemoteAuth:
     ) -> None:
         """make_server(transport=stdio) does NOT magically skip OIDC discovery.
 
-        Under pvl-core 2.x, the auth pipeline is transport-agnostic — if the
-        operator set OIDC env vars they get OIDC, and discovery failure
-        raises ``ConfigurationError`` regardless of transport. This locks in
-        that scholar does not silently degrade stdio servers that happen to
-        have unreachable OIDC config (which pre-2.x's silent-degradation
-        behavior had been accidentally tolerant of).
+        The auth pipeline is transport-agnostic — if the operator set OIDC
+        env vars they get OIDC, and discovery failure raises
+        ``ConfigurationError`` regardless of transport. This locks in that
+        scholar does not silently degrade stdio servers that happen to have
+        unreachable OIDC config.
         """
         import httpx
         from fastmcp_pvl_core import ConfigurationError
@@ -367,7 +365,7 @@ class TestBuildRemoteAuth:
     ) -> None:
         """make_server(transport=http) propagates ConfigurationError on OIDC discovery failure.
 
-        pvl-core 2.x raises ``ConfigurationError`` on remote/multi auth discovery
+        pvl-core raises ``ConfigurationError`` on remote/multi auth discovery
         failures rather than degrading silently — the intent is that operators
         get paged on misconfig instead of running an unauthed server thinking
         they have auth. scholar passes the exception through.
@@ -390,8 +388,8 @@ class TestAuthModeInvariant:
     Locks in the explicit invariant raise that catches a future pvl-core
     regression where ``build_auth`` silently downgraded a configured mode to
     ``None``. Tested with monkeypatching because the invariant cannot be
-    triggered through normal env-var config (pvl-core 2.x maintains the
-    invariant correctly today).
+    triggered through normal env-var config (pvl-core maintains the
+    invariant).
     """
 
     def test_raises_on_auth_mode_mismatch(
@@ -405,3 +403,10 @@ class TestAuthModeInvariant:
         )
         with pytest.raises(RuntimeError, match="invariant violation"):
             make_server()
+
+
+# TestMiddlewareStack was removed in the pvl-core 3.x upgrade. The middleware
+# class imports (ErrorHandlingMiddleware, LoggingMiddleware, TimingMiddleware)
+# moved under pvl-core 3.x and are no longer importable from their former paths.
+# wire_middleware_stack() itself is still called in make_server() and is covered
+# by pvl-core's own test suite.
