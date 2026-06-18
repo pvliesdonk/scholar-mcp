@@ -24,7 +24,11 @@ function writeUrlState(spec) {
     if (answers[q.id] !== undefined && answers[q.id] !== "") params.set(q.id, answers[q.id]);
   }
   const qs = params.toString();
-  history.replaceState(null, "", qs ? `#${qs}` : location.pathname + location.search);
+  try {
+    history.replaceState(null, "", qs ? `#${qs}` : location.pathname + location.search);
+  } catch {
+    // SecurityError in sandboxed iframes — URL state is best-effort.
+  }
 }
 
 function field(q, secrets) {
@@ -207,7 +211,11 @@ async function init() {
   try {
     const resp = await fetch(specUrl);
     if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}`);
-    SPEC = await resp.json();
+    const spec = await resp.json();
+    if (!spec || typeof spec !== "object" || !Array.isArray(spec.questions)) {
+      throw new Error("wizard-spec.json is malformed (missing questions array)");
+    }
+    SPEC = spec;
   } catch (e) {
     ROOT.textContent = `Failed to load the configuration generator: ${e.message}`;
     return;
