@@ -6,9 +6,7 @@
     "SCHOLAR_MCP_EPO_CONSUMER_KEY",
     "SCHOLAR_MCP_EPO_CONSUMER_SECRET",
     "SCHOLAR_MCP_GOOGLE_BOOKS_API_KEY",
-    "SCHOLAR_MCP_VLM_API_KEY",
-    "SCHOLAR_MCP_OIDC_CLIENT_SECRET",
-    "SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY"
+    "SCHOLAR_MCP_VLM_API_KEY"
   ],
   "questions": [
     {
@@ -40,8 +38,7 @@
       "label": "Read-only mode",
       "help": "When enabled, PDF download and conversion tools are hidden. Recommended for shared or untrusted deployments.",
       "type": "bool",
-      "var": "SCHOLAR_MCP_READ_ONLY",
-      "default": true
+      "var": "SCHOLAR_MCP_READ_ONLY"
     },
     {
       "id": "bearer_token",
@@ -118,6 +115,7 @@
     {
       "id": "log_level",
       "label": "Log level",
+      "help": "Verbosity level: DEBUG, INFO, WARNING (default), or ERROR.",
       "type": "text",
       "var": "FASTMCP_LOG_LEVEL",
       "advancedGroup": "Logging"

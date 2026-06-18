@@ -16,4 +16,6 @@
 .cfg-pre { background: var(--md-code-bg-color); padding: 0.75rem; border-radius: 6px; overflow-x: auto; white-space: pre; }
 .cfg-warn { color: #b26a00; }
 [data-md-color-scheme="slate"] .cfg-warn { color: #e0a83a; }
+.cfg-error { color: #c0392b; }
+[data-md-color-scheme="slate"] .cfg-error { color: #e74c3c; }
 .cfg-info { color: var(--md-default-fg-color--light); }
