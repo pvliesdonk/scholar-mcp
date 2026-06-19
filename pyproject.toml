@@ -56,6 +56,7 @@ dev = [
     "mypy>=1.0",
     "pip-audit>=2.7",
     "respx>=0.20",
+    "jsonschema>=4.18",
 ]
 docs = [
     "mike>=2",
@@ -225,6 +226,10 @@ disable_error_code = [
     "union-attr",
     "var-annotated",
 ]
+
+[[tool.mypy.overrides]]
+module = ["jsonschema", "jsonschema.*"]
+ignore_missing_imports = true
 
 [tool.pyright]
 # Point Pyright at the uv-managed venv so editor diagnostics resolve
