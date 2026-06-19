@@ -1,0 +1,133 @@
+{
+  "version": 1,
+  "secretKeys": [
+    "SCHOLAR_MCP_BEARER_TOKEN",
+    "SCHOLAR_MCP_S2_API_KEY",
+    "SCHOLAR_MCP_EPO_CONSUMER_KEY",
+    "SCHOLAR_MCP_EPO_CONSUMER_SECRET",
+    "SCHOLAR_MCP_GOOGLE_BOOKS_API_KEY",
+    "SCHOLAR_MCP_VLM_API_KEY"
+  ],
+  "questions": [
+    {
+      "id": "deployment",
+      "label": "Where will the server run?",
+      "help": "Local stdio for Claude Desktop/Code, or an HTTP server for Docker/systemd.",
+      "type": "select",
+      "options": [
+        { "value": "local", "label": "Local (Claude Desktop / Claude Code, stdio)" },
+        { "value": "server", "label": "Server (HTTP — Docker / Compose / systemd)" }
+      ]
+    },
+    {
+      "id": "s2_api_key",
+      "label": "Semantic Scholar API key",
+      "help": "Strongly recommended. Unauthenticated requests are rate-limited to ~1 req/s; authenticated requests get ~10 req/s. Get one at semanticscholar.org/product/api.",
+      "type": "text",
+      "var": "SCHOLAR_MCP_S2_API_KEY"
+    },
+    {
+      "id": "contact_email",
+      "label": "Contact email",
+      "help": "Sent in the OpenAlex User-Agent header for polite-pool access. Also enables Unpaywall PDF lookups.",
+      "type": "text",
+      "var": "SCHOLAR_MCP_CONTACT_EMAIL"
+    },
+    {
+      "id": "read_only",
+      "label": "Read-only mode",
+      "help": "When enabled, PDF download and conversion tools are hidden. Recommended for shared or untrusted deployments.",
+      "type": "bool",
+      "var": "SCHOLAR_MCP_READ_ONLY"
+    },
+    {
+      "id": "bearer_token",
+      "label": "Bearer token",
+      "help": "Static token for HTTP auth. Any non-empty string enables bearer auth. Browser-only — never included in shareable links.",
+      "type": "text",
+      "var": "SCHOLAR_MCP_BEARER_TOKEN",
+      "showIf": { "deployment": ["server"] }
+    },
+    {
+      "id": "epo_consumer_key",
+      "label": "EPO OPS consumer key",
+      "help": "Required for patent search tools. Register at developers.epo.org.",
+      "type": "text",
+      "var": "SCHOLAR_MCP_EPO_CONSUMER_KEY",
+      "advancedGroup": "Patents"
+    },
+    {
+      "id": "epo_consumer_secret",
+      "label": "EPO OPS consumer secret",
+      "help": "Required alongside the consumer key for EPO OPS access.",
+      "type": "text",
+      "var": "SCHOLAR_MCP_EPO_CONSUMER_SECRET",
+      "advancedGroup": "Patents"
+    },
+    {
+      "id": "docling_url",
+      "label": "Docling URL",
+      "help": "Base URL of a running docling-serve instance (e.g. http://localhost:5001). Required for PDF conversion.",
+      "type": "text",
+      "var": "SCHOLAR_MCP_DOCLING_URL",
+      "advancedGroup": "PDF Conversion"
+    },
+    {
+      "id": "vlm_api_url",
+      "label": "VLM API URL",
+      "help": "OpenAI-compatible endpoint for formula/figure enrichment during PDF conversion.",
+      "type": "text",
+      "var": "SCHOLAR_MCP_VLM_API_URL",
+      "advancedGroup": "PDF Conversion"
+    },
+    {
+      "id": "vlm_api_key",
+      "label": "VLM API key",
+      "help": "API key for the VLM endpoint.",
+      "type": "text",
+      "var": "SCHOLAR_MCP_VLM_API_KEY",
+      "advancedGroup": "PDF Conversion"
+    },
+    {
+      "id": "vlm_model",
+      "label": "VLM model",
+      "help": "Model name used with the VLM endpoint.",
+      "type": "text",
+      "var": "SCHOLAR_MCP_VLM_MODEL",
+      "advancedGroup": "PDF Conversion"
+    },
+    {
+      "id": "google_books_api_key",
+      "label": "Google Books API key",
+      "help": "Optional. Unlocks higher rate limits for the Google Books enricher. Without it, the enricher works at 1000 requests/day.",
+      "type": "text",
+      "var": "SCHOLAR_MCP_GOOGLE_BOOKS_API_KEY",
+      "advancedGroup": "Books"
+    },
+    {
+      "id": "cache_dir",
+      "label": "Cache directory",
+      "help": "Path for the SQLite database and downloaded PDFs.",
+      "type": "text",
+      "var": "SCHOLAR_MCP_CACHE_DIR",
+      "advancedGroup": "Advanced"
+    },
+    {
+      "id": "log_level",
+      "label": "Log level",
+      "help": "Verbosity level: DEBUG, INFO, WARNING (default), or ERROR.",
+      "type": "text",
+      "var": "FASTMCP_LOG_LEVEL",
+      "advancedGroup": "Logging"
+    },
+    {
+      "id": "rich_logging",
+      "label": "Rich logging",
+      "help": "Disable for plain/JSON output suitable for log aggregators (Loki, Datadog, Splunk).",
+      "type": "bool",
+      "var": "FASTMCP_ENABLE_RICH_LOGGING",
+      "advancedGroup": "Logging"
+    }
+  ],
+  "guards": []
+}
