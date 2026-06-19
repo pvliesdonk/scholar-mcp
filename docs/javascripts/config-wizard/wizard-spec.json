@@ -1,5 +1,10 @@
 {
   "version": 1,
+  "meta": {
+    "projectName": "scholar-mcp",
+    "dockerImage": "ghcr.io/pvliesdonk/scholar-mcp:latest",
+    "envPrefix": "SCHOLAR_MCP"
+  },
   "secretKeys": [
     "SCHOLAR_MCP_BEARER_TOKEN",
     "SCHOLAR_MCP_S2_API_KEY",
