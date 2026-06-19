@@ -24,7 +24,11 @@ function writeUrlState(spec) {
     if (answers[q.id] !== undefined && answers[q.id] !== "") params.set(q.id, answers[q.id]);
   }
   const qs = params.toString();
-  history.replaceState(null, "", qs ? `#${qs}` : location.pathname + location.search);
+  try {
+    history.replaceState(null, "", qs ? `#${qs}` : location.pathname + location.search);
+  } catch {
+    // history.replaceState throws in sandboxed iframes — safe to ignore.
+  }
 }
 
 function field(q, secrets) {
@@ -78,6 +82,7 @@ function field(q, secrets) {
 
 let SPEC = null;
 let ROOT = null;
+let _writeTimer = null;
 
 function render() {
   const spec = SPEC;
@@ -166,7 +171,7 @@ function render() {
 
   const warnings = document.createElement("div");
   warnings.className = "cfg-warnings";
-  for (const g of spec.guards) {
+  for (const g of (spec.guards ?? [])) {
     if (Object.entries(g.when).every(([k, vals]) => vals.includes(answers[k]))) {
       const w = document.createElement("div");
       w.className = `cfg-${g.level}`;
@@ -175,13 +180,21 @@ function render() {
     }
   }
 
-  ROOT.replaceChildren(core, drawer, warnings, out);
-  writeUrlState(spec);
+  if (Object.keys(advanced).length > 0) {
+    ROOT.replaceChildren(core, drawer, warnings, out);
+  } else {
+    ROOT.replaceChildren(core, warnings, out);
+  }
+  // Debounce URL writes: browsers throttle history.replaceState to ~100
+  // calls/10 s, and URL sync is a "share" feature, not live feedback.
+  clearTimeout(_writeTimer);
+  _writeTimer = setTimeout(() => writeUrlState(spec), 300);
 
   // Restore focus + caret to the field the user was editing.
   if (activeQid) {
+    const escaped = CSS.escape(activeQid);
     const restored = ROOT.querySelector(
-      `.cfg-field[data-qid="${activeQid}"] input, .cfg-field[data-qid="${activeQid}"] select`,
+      `.cfg-field[data-qid="${escaped}"] input, .cfg-field[data-qid="${escaped}"] select`,
     );
     if (restored) {
       restored.focus();
@@ -203,15 +216,26 @@ async function init() {
   try {
     const resp = await fetch(specUrl);
     if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}`);
-    SPEC = await resp.json();
+    const spec = await resp.json();
+    if (!spec || typeof spec !== "object" || !Array.isArray(spec.questions)) {
+      throw new Error("wizard-spec.json is malformed (missing questions array)");
+    }
+    SPEC = spec;
   } catch (e) {
     ROOT.textContent = `Failed to load the configuration generator: ${e.message}`;
     return;
   }
   readUrlState(SPEC);
+  // Initialize all answers so guards that match [""] fire on the first render.
+  // Secrets are excluded from URL hydration (readUrlState skips them) so they
+  // also need this default, ensuring guards referencing secret question IDs
+  // evaluate correctly before the user has typed anything.
   for (const q of SPEC.questions) {
-    if (answers[q.id] === undefined && q.type === "select" && q.options?.length) {
+    if (answers[q.id] !== undefined) continue;
+    if (q.type === "select" && q.options?.length) {
       answers[q.id] = q.options[0].value;
+    } else {
+      answers[q.id] = "";
     }
   }
   render();

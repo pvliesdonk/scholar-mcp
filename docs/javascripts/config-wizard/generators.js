@@ -77,7 +77,7 @@ function dockerEnvMap(map) {
 // value and would silently truncate the value on load).
 const dotenvQuote = (v) => {
   const s = String(v);
-  if (!/[#"'\\\s]/.test(s)) return s;
+  if (!/[#"'\\\s$]/.test(s)) return s;
   return `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\$/g, '\\$')}"`;
 };
 
