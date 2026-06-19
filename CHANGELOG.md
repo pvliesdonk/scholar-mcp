@@ -2,6 +2,76 @@
 
 <!-- version list -->
 
+## v1.8.2 (2026-06-19)
+
+### Bug Fixes
+
+- Correct S2ExternalIds.CorpusId type and drop unverified disclaimer
+  ([`95e28b5`](https://github.com/pvliesdonk/scholar-mcp/commit/95e28b5a572c9f9904a313aa6495b7517209cf20))
+
+### Chores
+
+- Update copier template to latest (#212)
+  ([#212](https://github.com/pvliesdonk/scholar-mcp/pull/212),
+  [`432f23f`](https://github.com/pvliesdonk/scholar-mcp/commit/432f23f88f16fe9f053911624b563066bd8bba36))
+
+- Update copier template to v2.2.0 (config wizard) (#217)
+  ([#217](https://github.com/pvliesdonk/scholar-mcp/pull/217),
+  [`c2ae55c`](https://github.com/pvliesdonk/scholar-mcp/commit/c2ae55c54f8253bb30309a27b86e3d04cc7127e2))
+
+- Upgrade fastmcp-pvl-core to 3.2.0 (#211)
+  ([#211](https://github.com/pvliesdonk/scholar-mcp/pull/211),
+  [`f8da485`](https://github.com/pvliesdonk/scholar-mcp/commit/f8da485edf6016691d01aca11fa946f426c6150b))
+
+- **copier**: Update template from v1.2.0 to v1.2.1 (#178)
+  ([#178](https://github.com/pvliesdonk/scholar-mcp/pull/178),
+  [`4ec4c76`](https://github.com/pvliesdonk/scholar-mcp/commit/4ec4c7642a83439f1b0f1c97b3b2d191c8f9eaca))
+
+- **copier**: Update template from v1.2.1 to v1.2.2 (#185)
+  ([#185](https://github.com/pvliesdonk/scholar-mcp/pull/185),
+  [`9dab790`](https://github.com/pvliesdonk/scholar-mcp/commit/9dab79031763f594e5525347b7b91101d08b380f))
+
+- **copier**: Update template from v1.2.2 to v1.3.0 (#187)
+  ([#187](https://github.com/pvliesdonk/scholar-mcp/pull/187),
+  [`c51f9c3`](https://github.com/pvliesdonk/scholar-mcp/commit/c51f9c368aa0d9b61c149ce825370b236ac85124))
+
+- **copier**: Update template from v1.3.0 to v1.4.0 (#189)
+  ([#189](https://github.com/pvliesdonk/scholar-mcp/pull/189),
+  [`a203ba9`](https://github.com/pvliesdonk/scholar-mcp/commit/a203ba9bb807144d87ef45743f04728a7a086c3b))
+
+- **copier**: Update template from v1.4.0 to v1.5.0 (#195)
+  ([#195](https://github.com/pvliesdonk/scholar-mcp/pull/195),
+  [`4f17e78`](https://github.com/pvliesdonk/scholar-mcp/commit/4f17e78684353b2681fe211680bedc41ffd8dbf0))
+
+- **copier**: Update template from v1.5.0 to v1.5.1 (#198)
+  ([#198](https://github.com/pvliesdonk/scholar-mcp/pull/198),
+  [`1e73de3`](https://github.com/pvliesdonk/scholar-mcp/commit/1e73de36959d73bb92993c27e337aece094bb37b))
+
+- **copier**: Update to v1.2.0
+  ([`fdf8faf`](https://github.com/pvliesdonk/scholar-mcp/commit/fdf8faf8d8346b201f2531be9086d6049d604655))
+
+- **deps**: Bump fastmcp-pvl-core from 1.2.0 to 2.1.0 (v1.5.0 precursor) (#191)
+  ([#191](https://github.com/pvliesdonk/scholar-mcp/pull/191),
+  [`905c334`](https://github.com/pvliesdonk/scholar-mcp/commit/905c334e0735120fab096902ff7546a5586c6c58))
+
+- **deps**: Bump urllib3 to 2.7.0 for two high-severity CVEs (#183)
+  ([#183](https://github.com/pvliesdonk/scholar-mcp/pull/183),
+  [`18c560d`](https://github.com/pvliesdonk/scholar-mcp/commit/18c560de7534ad076b980b819279c05ff5b26fb9))
+
+- **deps**: Bundle CVE-driven uv.lock bumps
+  ([`e5bb373`](https://github.com/pvliesdonk/scholar-mcp/commit/e5bb373d7c05f51798534af8df36e0eca8c8921f))
+
+### Documentation
+
+- Fix stale scaffold references in README and prompts page
+  ([`6a79f0f`](https://github.com/pvliesdonk/scholar-mcp/commit/6a79f0f3b9df709a7bb05601ad7f969f961dece1))
+
+### Refactoring
+
+- Add PaperRecord and PatentRecord TypedDicts
+  ([`cf594e6`](https://github.com/pvliesdonk/scholar-mcp/commit/cf594e6b3aec13ea1c583d0e76f09e401b503ef4))
+
+
 ## v1.8.1 (2026-04-23)
 
 ### Chores
