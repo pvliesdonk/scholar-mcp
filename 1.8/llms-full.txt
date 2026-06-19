@@ -1,0 +1,2401 @@
+# Scholar MCP Server
+
+> FastMCP server for Semantic Scholar with OpenAlex enrichment and docling PDF conversion
+
+scholar-mcp is a FastMCP server for Semantic Scholar with OpenAlex enrichment and docling PDF conversion. It exposes 13 tools for paper search, citation graph traversal, recommendations, and PDF-to-Markdown conversion over the Model Context Protocol.
+
+
+# Getting Started
+
+# Scholar MCP Server
+
+A [FastMCP](https://github.com/jlowin/fastmcp) server for the scholarly citation landscape (**papers**, **patents**, **books**, and **standards**), giving LLMs a unified way to search, cross-reference, and retrieve prior art across all four source types via [Semantic Scholar](https://www.semanticscholar.org/), [EPO Open Patent Services](https://www.epo.org/en/searching-for-patents/data/web-services/ops), [Open Library](https://openlibrary.org/), and standards bodies, with [OpenAlex](https://openalex.org/) enrichment and optional [docling-serve](https://github.com/DS4SD/docling-serve) PDF/full-text conversion.
+
+## What it does
+
+Scholar MCP exposes 27 tools that let LLM-powered applications search, cross-reference, and retrieve scholarly sources across four peer domains:
+
+- **Papers**: full-text search (year, venue, field, citation filters); single-paper lookup by DOI / S2 ID / arXiv / ACM / PubMed; author profile and name search; forward citations, backward references, BFS citation graph, shortest-path bridge discovery; recommendations from positive/negative examples; BibTeX/CSL-JSON/RIS citation generation; OpenAlex enrichment (affiliations, funders, OA status, and concepts).
+- **Patents**: search across 100+ patent offices via EPO OPS with CPC / applicant / inventor / jurisdiction filters; biblio, claims, description, family, legal and citations sections; NPL-to-paper resolution via Semantic Scholar and paper-to-patent citation discovery; patent PDF download via EPO OPS.
+- **Books**: search by title/author/keywords via Open Library; lookup by ISBN or Open Library ID; subject recommendations. Papers with an ISBN are automatically enriched with publisher/edition/cover/subject metadata.
+- **Standards**: identifier resolution, search, and metadata retrieval for NIST, IETF, W3C, and ETSI, with optional full-text fetch and Markdown conversion via docling.
+- **Cross-source Utility**: resolve up to 100 mixed identifiers (paper DOIs, patent numbers, ISBNs) to full metadata in one call.
+- **PDF conversion**: download PDFs and convert to Markdown via [docling-serve](https://github.com/DS4SD/docling-serve), with optional VLM enrichment for formulas and figures; automatic fallback to ArXiv, PubMed Central, and Unpaywall; direct URL download for alternative versions.
+- **Async task queue**: long-running operations return immediately with a task ID; poll for results with `get_task_result`.
+
+Results are cached in a local SQLite database with per-table TTLs to reduce API calls and speed up repeated lookups.
+
+Coverage by domain
+
+Per-domain depth varies: papers have the richest tool surface and standards the least. That reflects public data availability, not a value hierarchy: writing a paper typically needs all four source types for citations and prior art. Parity work is tracked in [GitHub issues](https://github.com/pvliesdonk/scholar-mcp/issues) and [milestones](https://github.com/pvliesdonk/scholar-mcp/milestones), the roadmap shows intent, not a completeness commitment.
+
+## Quick start
+
+```
+/plugin marketplace add pvliesdonk/claude-plugins
+/plugin install scholar-mcp@pvliesdonk
+```
+
+```
+uvx --from pvliesdonk-scholar-mcp scholar-mcp serve
+```
+
+```
+pip install 'pvliesdonk-scholar-mcp[mcp]'
+scholar-mcp serve
+```
+
+```
+docker run -v scholar-mcp-data:/data/scholar-mcp \
+           ghcr.io/pvliesdonk/scholar-mcp:latest
+```
+
+API key optional but recommended
+
+The server works without a Semantic Scholar API key, but unauthenticated requests are limited to ~1 req/s and will hit 429 throttles quickly during multi-step operations like citation graph traversal. [Request a free key](https://www.semanticscholar.org/product/api#api-key-form) to get ~10 req/s. Pass it via `SCHOLAR_MCP_S2_API_KEY=your-key`.
+
+See [Installation](https://pvliesdonk.github.io/scholar-mcp/1.8/installation/index.md) for all methods including Linux packages.
+
+## Architecture
+
+```
+┌───────────────────────────────────────────────────────────────┐
+│                       MCP Client                              │
+│             (Claude Desktop, Claude Code, etc.)               │
+└──────────────────────────┬────────────────────────────────────┘
+                           │ stdio / HTTP / SSE
+┌──────────────────────────▼────────────────────────────────────┐
+│                  scholar-mcp (FastMCP)                        │
+│                                                               │
+│  ┌────────┐ ┌────────┐ ┌────────┐ ┌───────────┐ ┌──────────┐  │
+│  │ Papers │ │Patents │ │ Books  │ │ Standards │ │   PDF    │  │
+│  │  (10)  │ │  (4)   │ │  (3)   │ │    (3)    │ │   (4)    │  │
+│  └────┬───┘ └────┬───┘ └────┬───┘ └─────┬─────┘ └─────┬────┘  │
+│       │         │          │           │             │       │
+│       + Cross-source Utility (1) · Task Polling (2)          │
+│                                                               │
+│  ┌────▼─────────▼──────────▼───────────▼─────────────▼────┐  │
+│  │                  SQLite Cache (TTL)                    │  │
+│  └───┬──────┬──────────┬───────┬──────────┬─────────┬─────┘  │
+└──────┼──────┼──────────┼───────┼──────────┼─────────┼────────┘
+       │      │          │       │          │         │
+  ┌────▼───┐ ┌▼────────┐ ┌▼────┐ ┌▼──────┐ ┌▼───────┐ ┌▼──────┐
+  │Semantic│ │OpenAlex │ │ EPO │ │ Open  │ │ NIST / │ │docling│
+  │Scholar │ │   API   │ │ OPS │ │Library│ │  IETF /│ │ -serve│
+  │  API   │ │         │ │     │ │       │ │  W3C / │ │(opt.) │
+  │        │ │         │ │     │ │       │ │  ETSI  │ │       │
+  └────────┘ └─────────┘ └─────┘ └───────┘ └────────┘ └───────┘
+```
+
+## Next steps
+
+- [Installation](https://pvliesdonk.github.io/scholar-mcp/1.8/installation/index.md): all installation methods
+- [Configuration](https://pvliesdonk.github.io/scholar-mcp/1.8/configuration/index.md): environment variable reference
+- [Tools](https://pvliesdonk.github.io/scholar-mcp/1.8/tools/index.md): full tool reference with parameters
+- [Claude Code plugin](https://pvliesdonk.github.io/scholar-mcp/1.8/guides/claude-code-plugin/index.md): install as a Claude Code plugin
+- [Claude Desktop setup](https://pvliesdonk.github.io/scholar-mcp/1.8/guides/claude-desktop/index.md): get started with Claude Desktop
+- [Docker deployment](https://pvliesdonk.github.io/scholar-mcp/1.8/deployment/docker/index.md): production Docker Compose setup
+
+# Installation
+
+## As a Claude Code plugin
+
+```
+/plugin marketplace add pvliesdonk/claude-plugins
+/plugin install scholar-mcp@pvliesdonk
+```
+
+See [Claude Code Plugin guide](https://pvliesdonk.github.io/scholar-mcp/1.8/guides/claude-code-plugin/index.md) for configuration and details.
+
+## With `uvx` (recommended)
+
+[`uvx`](https://docs.astral.sh/uv/) runs the server in an isolated environment without installing anything globally:
+
+```
+uvx --from pvliesdonk-scholar-mcp scholar-mcp serve
+```
+
+Package name vs. command
+
+The PyPI package is `pvliesdonk-scholar-mcp`. The CLI command installed is `scholar-mcp`. The `--from` flag is needed because the package and command names differ.
+
+## With `pip`
+
+```
+pip install 'pvliesdonk-scholar-mcp[mcp]'
+scholar-mcp serve
+```
+
+The `[mcp]` extra installs FastMCP and uvicorn. Without it, you get only the library (API clients and cache) without the MCP server.
+
+## With Docker
+
+```
+docker run -v scholar-mcp-data:/data/scholar-mcp \
+           ghcr.io/pvliesdonk/scholar-mcp:latest
+```
+
+The image is available for `linux/amd64` and `linux/arm64`. See [Docker deployment](https://pvliesdonk.github.io/scholar-mcp/1.8/deployment/docker/index.md) for Docker Compose with docling-serve.
+
+For early adopters who want to try the latest release candidate, an `:unstable` tag is published by the release workflow's pre-release mode. It tracks the latest `rc` build and may include in-progress features. Pre-releases are Docker-only, they are not published to PyPI or as Linux packages. The floating `:latest`, `:vN`, and `:vN.M` tags only move on stable releases.
+
+```
+docker run -v scholar-mcp-data:/data/scholar-mcp \
+           ghcr.io/pvliesdonk/scholar-mcp:unstable
+```
+
+## Linux packages
+
+Download `.deb` or `.rpm` from the [latest release](https://github.com/pvliesdonk/scholar-mcp/releases/latest):
+
+```
+sudo dpkg -i scholar-mcp_*.deb
+sudo systemctl enable --now scholar-mcp
+```
+
+```
+sudo rpm -i scholar-mcp-*.rpm
+sudo systemctl enable --now scholar-mcp
+```
+
+The package installs:
+
+- A systemd service (`scholar-mcp.service`)
+- A Python venv at `/opt/scholar-mcp/venv/`
+- An example config at `/etc/scholar-mcp/env.example`
+- A dedicated `scholar-mcp` system user
+
+See [systemd deployment](https://pvliesdonk.github.io/scholar-mcp/1.8/deployment/systemd/index.md) for configuration details.
+
+## From source
+
+```
+git clone https://github.com/pvliesdonk/scholar-mcp.git
+cd scholar-mcp
+uv sync --extra dev --extra mcp
+uv run scholar-mcp serve
+```
+
+# Configuration
+
+All settings are controlled via environment variables with the `SCHOLAR_MCP_` prefix. No configuration file is needed.
+
+## Core
+
+| Variable                      | Default             | Description                                                                                                                                                                                                                                                                                                                |
+| ----------------------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SCHOLAR_MCP_S2_API_KEY`      | *(none)*            | [Semantic Scholar API key](https://www.semanticscholar.org/product/api#api-key-form). Optional, but strongly recommended: unauthenticated requests are limited to ~1 req/s while authenticated requests get ~10 req/s.                                                                                                     |
+| `SCHOLAR_MCP_READ_ONLY`       | `true`              | When `true`, all write-tagged tools are hidden. Set to `false` to enable PDF download and conversion.                                                                                                                                                                                                                      |
+| `SCHOLAR_MCP_CACHE_DIR`       | `/data/scholar-mcp` | Directory for the SQLite cache database (`cache.db`) and downloaded PDFs (`pdfs/`, `md/`).                                                                                                                                                                                                                                 |
+| `SCHOLAR_MCP_CONTACT_EMAIL`   | *(none)*            | Included in the OpenAlex `User-Agent` header for [polite pool](https://docs.openalex.org/how-to-use-the-api/rate-limits-and-authentication#the-polite-pool) access. Also enables [Unpaywall](https://unpaywall.org/products/api) lookups as a PDF fallback source when a paper has no open-access URL in Semantic Scholar. |
+| `FASTMCP_LOG_LEVEL`           | `INFO`              | Logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL`. Controls all output (application and middleware). The `-v` CLI flag sets this to `DEBUG`.                                                                                                                                                               |
+| `FASTMCP_ENABLE_RICH_LOGGING` | `true`              | Set to `false` for plain/JSON-structured output suitable for log aggregation tools (Loki, Datadog, Splunk). When `true`, output uses Rich formatting (colors, timestamps).                                                                                                                                                 |
+
+## PDF Conversion
+
+These settings are only needed if you want to use the PDF conversion tools. They require a running [docling-serve](https://github.com/DS4SD/docling-serve) instance.
+
+| Variable                  | Default  | Description                                                                                                                                                         |
+| ------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SCHOLAR_MCP_DOCLING_URL` | *(none)* | Base URL of a running docling-serve instance (such as `http://localhost:5001`). When unset, the PDF conversion tools are still registered but will return an error. |
+| `SCHOLAR_MCP_VLM_API_URL` | *(none)* | OpenAI-compatible VLM endpoint for formula and figure enrichment during PDF conversion.                                                                             |
+| `SCHOLAR_MCP_VLM_API_KEY` | *(none)* | API key for the VLM endpoint.                                                                                                                                       |
+| `SCHOLAR_MCP_VLM_MODEL`   | `gpt-4o` | Model name to use with the VLM endpoint.                                                                                                                            |
+
+VLM enrichment
+
+When both `SCHOLAR_MCP_VLM_API_URL` and `SCHOLAR_MCP_VLM_API_KEY` are set, tools can request VLM-enriched conversion that extracts LaTeX formulas and generates figure descriptions. This produces higher-quality Markdown but is slower and costs API calls.
+
+## EPO Open Patent Services
+
+These settings enable patent search via the [EPO Open Patent Services (OPS)](https://www.epo.org/en/searching-for-patents/data/web-services/ops) API. Both variables must be set for patent tools to be enabled; if either is missing, the `search_patents` and `get_patent` tools are automatically hidden.
+
+| Variable                          | Default  | Description                                                            |
+| --------------------------------- | -------- | ---------------------------------------------------------------------- |
+| `SCHOLAR_MCP_EPO_CONSUMER_KEY`    | *(none)* | EPO OPS consumer key. Optional; patent tools are hidden when unset.    |
+| `SCHOLAR_MCP_EPO_CONSUMER_SECRET` | *(none)* | EPO OPS consumer secret. Optional; patent tools are hidden when unset. |
+
+Graceful degradation
+
+When credentials are not configured, patent tools are silently omitted from the tool list. Paper search and all other tools continue to work normally without EPO credentials.
+
+### Registering for EPO OPS access
+
+EPO OPS provides free access to bibliographic data for 100+ patent offices. Follow these steps to obtain credentials:
+
+1. Register at <https://developers.epo.org/user/register>. Fill in your name, email, and organisation.
+1. Wait for an email confirmation and click the verification link.
+1. Log in to the [EPO developer portal](https://developers.epo.org/).
+1. Navigate to **My Apps** in the top menu.
+1. Click **Add a new App** and choose a name (such as `scholar-mcp`).
+1. Select **Non-paying** as the access method (provides free access with standard rate limits).
+1. Copy the generated **Consumer Key** and **Consumer Secret** to your environment:
+
+```
+export SCHOLAR_MCP_EPO_CONSUMER_KEY="your-consumer-key"
+export SCHOLAR_MCP_EPO_CONSUMER_SECRET="your-consumer-secret"
+```
+
+Or in `claude_desktop_config.json`:
+
+```
+{
+  "mcpServers": {
+    "scholar": {
+      "command": "uvx",
+      "args": ["--from", "pvliesdonk-scholar-mcp", "scholar-mcp", "serve"],
+      "env": {
+        "SCHOLAR_MCP_S2_API_KEY": "your-s2-key",
+        "SCHOLAR_MCP_EPO_CONSUMER_KEY": "your-consumer-key",
+        "SCHOLAR_MCP_EPO_CONSUMER_SECRET": "your-consumer-secret"
+      }
+    }
+  }
+}
+```
+
+## Google Books
+
+Google Books integration is available without configuration (unauthenticated, 1000 requests/day). An API key unlocks higher rate limits.
+
+| Variable                           | Default  | Description                                                                                                                                                                  |
+| ---------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SCHOLAR_MCP_GOOGLE_BOOKS_API_KEY` | *(none)* | [Google Books API key](https://developers.google.com/books/docs/v1/using#APIKey). Optional, the enricher and `get_book_excerpt` tool work without it at reduced rate limits. |
+
+## Server
+
+| Variable                   | Default            | Description                                                                                                                                              |
+| -------------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SCHOLAR_MCP_SERVER_NAME`  | `scholar-mcp`      | MCP server display name shown to clients.                                                                                                                |
+| `SCHOLAR_MCP_INSTRUCTIONS` | *(auto-generated)* | Custom system-level instructions for LLM clients. When unset, auto-generated instructions describe available tools and the current read-only/write mode. |
+| `SCHOLAR_MCP_HTTP_PATH`    | `/mcp`             | Mount path for HTTP transport.                                                                                                                           |
+
+## Authentication
+
+Authentication is optional. When no auth variables are set, the server accepts unauthenticated connections.
+
+Warning
+
+Authentication only applies to the HTTP transport. stdio connections (such as Claude Desktop) are always unauthenticated since the client spawns the server process directly.
+
+### Auth modes
+
+The server supports two OIDC modes, auto-detected from environment variables:
+
+| Mode           | When selected                                                                                  | How it works                                                                                                                                                |
+| -------------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **remote**     | `BASE_URL` + `OIDC_CONFIG_URL` set (no client credentials)                                     | The external auth provider (such as Authelia behind a reverse proxy) handles the full OAuth flow; the server validates the resulting JWTs locally via JWKS. |
+| **oidc-proxy** | All four OIDC vars set (`BASE_URL`, `OIDC_CONFIG_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`) | The MCP server acts as an OAuth proxy, handling the OIDC authorization flow itself.                                                                         |
+
+Auto-detection prefers `oidc-proxy` when all four vars are present. Override with `SCHOLAR_MCP_AUTH_MODE=remote` or `SCHOLAR_MCP_AUTH_MODE=oidc-proxy`.
+
+When both bearer and OIDC auth are configured, the server uses multi-auth, either mechanism is accepted.
+
+### Variables
+
+| Variable                               | Default       | Description                                                                                                                                                                                                                                                                                           |
+| -------------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SCHOLAR_MCP_BEARER_TOKEN`             | *(none)*      | Static bearer token. When set, HTTP clients must send `Authorization: Bearer <token>`. Every authenticated caller shares one subject (see `SCHOLAR_MCP_BEARER_DEFAULT_SUBJECT`).                                                                                                                      |
+| `SCHOLAR_MCP_BEARER_TOKENS_FILE`       | *(none)*      | Path to a TOML file mapping bearer tokens to per-caller subjects. When set, takes precedence over `SCHOLAR_MCP_BEARER_TOKEN`. See [Mapped bearer tokens](https://pvliesdonk.github.io/scholar-mcp/1.8/guides/authentication/#mapped-bearer-tokens-multi-subject) in the authentication guide.         |
+| `SCHOLAR_MCP_BEARER_DEFAULT_SUBJECT`   | `bearer-anon` | Single-token-mode subject string. Used as the ACL key when wiring opt-in authorization.                                                                                                                                                                                                               |
+| `SCHOLAR_MCP_AUTH_MODE`                | *(auto)*      | Force auth mode: `remote` or `oidc-proxy`. When unset, auto-detected from which OIDC env vars are present.                                                                                                                                                                                            |
+| `SCHOLAR_MCP_BASE_URL`                 | *(none)*      | Public base URL of this server (such as `https://mcp.example.com`). Required for both OIDC modes.                                                                                                                                                                                                     |
+| `SCHOLAR_MCP_OIDC_CONFIG_URL`          | *(none)*      | OIDC discovery endpoint URL (such as `https://auth.example.com/.well-known/openid-configuration`).                                                                                                                                                                                                    |
+| `SCHOLAR_MCP_OIDC_CLIENT_ID`           | *(none)*      | OIDC client ID registered with your identity provider. Only needed for `oidc-proxy` mode.                                                                                                                                                                                                             |
+| `SCHOLAR_MCP_OIDC_CLIENT_SECRET`       | *(none)*      | OIDC client secret. Only needed for `oidc-proxy` mode.                                                                                                                                                                                                                                                |
+| `SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY`     | *(ephemeral)* | JWT signing key for OIDC proxy sessions. **Required on Linux/Docker** for `oidc-proxy` mode; the ephemeral default invalidates all sessions on restart. Generate with: `openssl rand -hex 32`.                                                                                                        |
+| `SCHOLAR_MCP_OIDC_AUDIENCE`            | *(none)*      | Expected JWT audience claim. When set, the token's `aud` must match. Used by both modes.                                                                                                                                                                                                              |
+| `SCHOLAR_MCP_OIDC_REQUIRED_SCOPES`     | `openid`      | Comma-separated required scopes (such as `openid,profile`). Used by both modes.                                                                                                                                                                                                                       |
+| `SCHOLAR_MCP_OIDC_VERIFY_ACCESS_TOKEN` | `false`       | (`oidc-proxy` only) Set `true` to verify the upstream `access_token` as a JWT instead of the `id_token`. Use when your provider issues JWT access tokens.                                                                                                                                             |
+| `SCHOLAR_MCP_ACL_PATH`                 | *(none)*      | (scaffold) Path to a TOML ACL file enabling opt-in per-subject authorization. Requires uncommenting the matching scaffold in `src/scholar_mcp/config.py` and `src/scholar_mcp/server.py`; see [Authorization (opt-in)](https://github.com/pvliesdonk/scholar-mcp#authorization-opt-in) in the README. |
+
+See [Authentication guide](https://pvliesdonk.github.io/scholar-mcp/1.8/guides/authentication/index.md) for setup instructions and [OIDC deployment](https://pvliesdonk.github.io/scholar-mcp/1.8/deployment/oidc/index.md) for provider-specific configuration.
+
+## Cache TTLs
+
+Cache expiry is not configurable via environment variables. The built-in TTLs are:
+
+| Table          | TTL      | Description                                                  |
+| -------------- | -------- | ------------------------------------------------------------ |
+| `papers`       | 30 days  | Paper metadata                                               |
+| `authors`      | 30 days  | Author profiles                                              |
+| `citations`    | 7 days   | Citation lists (paper IDs)                                   |
+| `refs`         | 7 days   | Reference lists (paper IDs)                                  |
+| `openalex`     | 30 days  | OpenAlex enrichment data                                     |
+| `crossref`     | 30 days  | CrossRef metadata (publisher, page ranges, container titles) |
+| `google_books` | 30 days  | Google Books volume data (preview links, descriptions)       |
+| `id_aliases`   | *(none)* | Identifier-to-S2-ID mappings (never expires)                 |
+
+Use the CLI to manage the cache:
+
+```
+scholar-mcp cache stats          # Show row counts and DB size
+scholar-mcp cache clear          # Clear all (preserves id_aliases)
+scholar-mcp cache clear --older-than 7   # Clear entries older than 7 days
+```
+
+## Rate Limiting
+
+Rate limiting is automatic and not configurable:
+
+- **With API key**: ~0.1 s between Semantic Scholar requests
+- **Without API key**: ~1.1 s between requests
+- **Retry**: automatic exponential backoff on HTTP 429 (up to 3 retries)
+
+## Remote debugging
+
+Optional development-only listener. Requires the `[debug]` extra (Docker images: built with `--build-arg DEBUG=true`; pip / uv installs: `pip install 'pvliesdonk-scholar-mcp[debug]'`). When `debugpy` isn't importable the helper logs a `WARNING` and continues, there's no hard failure.
+
+| Variable                 | Default  | Description                                                                          |
+| ------------------------ | -------- | ------------------------------------------------------------------------------------ |
+| `SCHOLAR_MCP_DEBUG_PORT` | *(none)* | TCP port for the `debugpy` listener (such as `5678`). Unset = listener disabled.     |
+| `SCHOLAR_MCP_DEBUG_WAIT` | `false`  | Block startup until the IDE attaches. Useful for debugging early startup code paths. |
+
+See [Docker deployment → Remote debugging](https://pvliesdonk.github.io/scholar-mcp/1.8/deployment/docker/#remote-debugging) for the IDE-attach walkthrough.
+
+# Configuration Generator
+
+Answer a few questions and copy a ready-to-use configuration for your exact deployment. Everything runs in your browser; nothing you type is sent anywhere. Secret fields (tokens, keys) are never included in the shareable link; replace the `<YOUR_...>` placeholders if you leave them blank.
+
+Loading the configuration generator…
+# Guides
+
+# Guides
+
+Step-by-step guides for common use cases.
+
+| I want to…                            | Guide                                                                                           |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Set up with Claude Desktop            | [Claude Desktop](https://pvliesdonk.github.io/scholar-mcp/1.8/guides/claude-desktop/index.md)   |
+| Protect my server with authentication | [Authentication](https://pvliesdonk.github.io/scholar-mcp/1.8/guides/authentication/index.md)   |
+| Convert PDFs to Markdown              | [PDF Conversion](https://pvliesdonk.github.io/scholar-mcp/1.8/guides/pdf-conversion/index.md)   |
+| Explore citation networks             | [Citation Graphs](https://pvliesdonk.github.io/scholar-mcp/1.8/guides/citation-graphs/index.md) |
+| Deploy with Docker Compose            | [Docker](https://pvliesdonk.github.io/scholar-mcp/1.8/deployment/docker/index.md)               |
+| Run as a systemd service              | [systemd](https://pvliesdonk.github.io/scholar-mcp/1.8/deployment/systemd/index.md)             |
+| Set up OIDC with Authelia or Keycloak | [OIDC](https://pvliesdonk.github.io/scholar-mcp/1.8/deployment/oidc/index.md)                   |
+
+# Claude Desktop Setup
+
+This guide walks you through setting up Scholar MCP with Claude Desktop, from basic search to full PDF conversion.
+
+## Step 1: Basic setup
+
+Add the server to your Claude Desktop configuration (`claude_desktop_config.json`):
+
+```
+~/Library/Application Support/Claude/claude_desktop_config.json
+```
+
+```
+%APPDATA%\Claude\claude_desktop_config.json
+```
+
+```
+~/.config/Claude/claude_desktop_config.json
+```
+
+```
+{
+  "mcpServers": {
+    "scholar": {
+      "command": "uvx",
+      "args": ["--from", "pvliesdonk-scholar-mcp", "scholar-mcp", "serve"],
+      "env": {}
+    }
+  }
+}
+```
+
+Restart Claude Desktop. You should see the Scholar MCP tools in the tool list.
+
+Note
+
+Without an API key, Semantic Scholar limits you to ~1 request per second. This works fine for occasional lookups but may feel slow during multi-step explorations.
+
+## Step 2: Add an API key
+
+[Request a Semantic Scholar API key](https://www.semanticscholar.org/product/api#api-key-form) (free, approval usually takes a few days).
+
+```
+{
+  "mcpServers": {
+    "scholar": {
+      "command": "uvx",
+      "args": ["--from", "pvliesdonk-scholar-mcp", "scholar-mcp", "serve"],
+      "env": {
+        "SCHOLAR_MCP_S2_API_KEY": "your-key-here"
+      }
+    }
+  }
+}
+```
+
+This bumps the rate limit to ~10 req/s, making graph traversals and batch operations much faster.
+
+## Step 3: Enable PDF conversion
+
+To download and convert open-access PDFs, you need:
+
+1. A running [docling-serve](https://github.com/DS4SD/docling-serve) instance
+1. Write mode enabled (`READ_ONLY=false`)
+
+Start docling-serve:
+
+```
+docker run -p 5001:5001 ghcr.io/ds4sd/docling-serve:latest
+```
+
+Update your config:
+
+```
+{
+  "mcpServers": {
+    "scholar": {
+      "command": "uvx",
+      "args": ["--from", "pvliesdonk-scholar-mcp", "scholar-mcp", "serve"],
+      "env": {
+        "SCHOLAR_MCP_S2_API_KEY": "your-key-here",
+        "SCHOLAR_MCP_DOCLING_URL": "http://localhost:5001",
+        "SCHOLAR_MCP_READ_ONLY": "false",
+        "SCHOLAR_MCP_CACHE_DIR": "/tmp/scholar-mcp"
+      }
+    }
+  }
+}
+```
+
+Cache directory
+
+When running locally, set `SCHOLAR_MCP_CACHE_DIR` to a writable directory like `/tmp/scholar-mcp` or `~/.local/share/scholar-mcp`. The default (`/data/scholar-mcp`) is designed for Docker.
+
+## Step 4: Add OpenAlex polite pool
+
+Set your contact email to get faster OpenAlex rate limits:
+
+```
+{
+  "mcpServers": {
+    "scholar": {
+      "command": "uvx",
+      "args": ["--from", "pvliesdonk-scholar-mcp", "scholar-mcp", "serve"],
+      "env": {
+        "SCHOLAR_MCP_S2_API_KEY": "your-key-here",
+        "SCHOLAR_MCP_DOCLING_URL": "http://localhost:5001",
+        "SCHOLAR_MCP_READ_ONLY": "false",
+        "SCHOLAR_MCP_CACHE_DIR": "/tmp/scholar-mcp",
+        "SCHOLAR_MCP_CONTACT_EMAIL": "you@example.com"
+      }
+    }
+  }
+}
+```
+
+## Example prompts
+
+Once configured, try asking Claude:
+
+- *"Search for recent papers on retrieval-augmented generation published after 2023"*
+- *"Get the citation graph for this paper: DOI:10.48550/arXiv.2005.11401 with depth 2"*
+- *"Find a bridge paper connecting attention mechanisms and graph neural networks"*
+- *"Enrich this paper with OpenAlex data: DOI:10.1038/s41586-021-03819-2"*
+- *"Download and convert the PDF for arXiv:2005.11401 to Markdown"* (requires Step 3)
+
+# Authentication
+
+This guide covers how to protect your MCP server with authentication. Choose the mode that fits your deployment.
+
+Transport requirement
+
+Authentication only works with HTTP transport (`--transport http` or `sse`). It has no effect with `--transport stdio`.
+
+## Auth modes
+
+The server supports five authentication modes:
+
+| Mode             | When to use                                                                              | Configuration                                                                                       |
+| ---------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| **Multi-auth**   | Mixed clients, such as Claude web (OIDC) + Claude Code (bearer token) on the same server | Set `SCHOLAR_MCP_BEARER_TOKEN` + OIDC vars (either remote or oidc-proxy)                            |
+| **Remote**       | Behind a reverse proxy that handles OAuth (such as Traefik + Authelia)                   | Set `SCHOLAR_MCP_BASE_URL` + `SCHOLAR_MCP_OIDC_CONFIG_URL` only                                     |
+| **OIDC proxy**   | Production with user identity, SSO, multi-user access, server handles OAuth directly     | Set all four OIDC variables (`BASE_URL`, `OIDC_CONFIG_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`) |
+| **Bearer token** | Simple deployments behind a VPN, Docker compose stacks, development                      | Set `SCHOLAR_MCP_BEARER_TOKEN` only                                                                 |
+| **No auth**      | Local stdio usage, trusted networks                                                      | Default (nothing to configure)                                                                      |
+
+The OIDC mode is auto-detected from environment variables: `oidc-proxy` when all four OIDC vars are present, `remote` when only `BASE_URL` + `OIDC_CONFIG_URL` are set. Override with `SCHOLAR_MCP_AUTH_MODE=remote` or `SCHOLAR_MCP_AUTH_MODE=oidc-proxy`.
+
+When both bearer token and OIDC (either mode) are configured, the server accepts **either** credential: a valid bearer token or a valid OIDC session. This is useful when different clients require different authentication flows against the same server instance.
+
+______________________________________________________________________
+
+## Bearer token
+
+The simplest way to protect your server. A single static token shared between server and clients.
+
+### Setup
+
+1. Generate a random token:
+
+   ```
+   openssl rand -hex 32
+   ```
+
+1. Set the environment variable:
+
+   ```
+   SCHOLAR_MCP_BEARER_TOKEN=your-generated-token
+   ```
+
+1. Start the server with HTTP transport:
+
+   ```
+   scholar-mcp serve --transport http --port 8000
+   ```
+
+### Client usage
+
+Clients must include the token in every request:
+
+```
+Authorization: Bearer your-generated-token
+```
+
+### When to use bearer token
+
+- Deployments behind a VPN or firewall
+- Docker compose stacks where services communicate internally
+- Development and testing environments
+- Any scenario where full OIDC is overkill
+
+### Mapped bearer tokens (multi-subject)
+
+The bearer-token mode above shares one subject across every authenticated caller. By default this is the library's `bearer-anon`; override with `SCHOLAR_MCP_BEARER_DEFAULT_SUBJECT`. For audit logs and authorization that distinguish callers, switch to mapped-token mode by pointing `SCHOLAR_MCP_BEARER_TOKENS_FILE` at a TOML file:
+
+```
+# tokens.toml
+[tokens]
+"ghp_alice_xxxxxxxx" = "user:alice@example.com"
+"sk_ci_yyyyyyyy"     = "service:ci-bot"
+```
+
+Each token resolves to a distinct subject string for downstream attribution. Subject strings are opaque: the `<kind>:<id>` convention (`user:`, `service:`, `token:`) is documentation only. When `BEARER_TOKENS_FILE` is set it overrides `BEARER_TOKEN` (a `WARNING` is logged if both are present). A missing or malformed file aborts startup with `ConfigurationError` rather than silently denying every request.
+
+For the per-tool authorization that consumes these subjects, see the **Authorization (opt-in)** section of the project [README](https://github.com/pvliesdonk/scholar-mcp#authorization-opt-in).
+
+______________________________________________________________________
+
+## Remote auth
+
+Use this when your server sits behind a reverse proxy (such as Traefik + Authelia) that handles the full OAuth/OIDC flow. The MCP server validates JWTs locally using the OIDC provider's JWKS endpoint, no client credentials needed.
+
+### How it works
+
+```
+Client → Reverse proxy (Authelia) → scholar-mcp (JWT validation only)
+```
+
+1. Client connects to the server
+1. The reverse proxy's auth middleware (Authelia) handles the OAuth flow
+1. Authelia issues a JWT and forwards the request with the token
+1. Scholar-mcp validates the JWT locally via the provider's JWKS keys
+
+### Required variables
+
+| Variable                      | Description                                                                                   |
+| ----------------------------- | --------------------------------------------------------------------------------------------- |
+| `SCHOLAR_MCP_BASE_URL`        | Public base URL (such as `https://mcp.example.com`)                                           |
+| `SCHOLAR_MCP_OIDC_CONFIG_URL` | OIDC discovery endpoint (such as `https://auth.example.com/.well-known/openid-configuration`) |
+
+### Optional variables
+
+| Variable                           | Default  | Description                     |
+| ---------------------------------- | -------- | ------------------------------- |
+| `SCHOLAR_MCP_OIDC_AUDIENCE`        | *(none)* | Expected JWT audience claim     |
+| `SCHOLAR_MCP_OIDC_REQUIRED_SCOPES` | `openid` | Comma-separated required scopes |
+
+### When to use remote auth
+
+- Deployments behind Traefik + Authelia, Caddy + Authentik, or similar reverse-proxy auth stacks
+- When the OIDC provider issues opaque access tokens (such as Authelia), the proxy handles the token exchange
+- When you don't want to register the MCP server as an OIDC client
+
+______________________________________________________________________
+
+## OIDC proxy
+
+Full OAuth 2.1 authentication using an external identity provider. The MCP server itself acts as an OAuth proxy, supports user login flows, SSO, and multi-user access control without an external auth reverse proxy.
+
+### How it works
+
+The server uses FastMCP's built-in `OIDCProxy`. No external auth sidecar needed:
+
+```
+Client → scholar-mcp (OIDCProxy) → OIDC Provider
+```
+
+1. Client connects to the server
+1. Server redirects to the OIDC provider for login
+1. Provider authenticates the user and returns a code
+1. Server exchanges the code for tokens
+1. Subsequent requests include the JWT
+
+### Required variables
+
+| Variable                         | Description                                         |
+| -------------------------------- | --------------------------------------------------- |
+| `SCHOLAR_MCP_BASE_URL`           | Public base URL (such as `https://mcp.example.com`) |
+| `SCHOLAR_MCP_OIDC_CONFIG_URL`    | OIDC discovery endpoint                             |
+| `SCHOLAR_MCP_OIDC_CLIENT_ID`     | Client ID registered with your provider             |
+| `SCHOLAR_MCP_OIDC_CLIENT_SECRET` | Client secret                                       |
+
+### Optional variables
+
+| Variable                               | Default   | Description                                                                                                                       |
+| -------------------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY`     | ephemeral | JWT signing key (**required on Linux/Docker**)                                                                                    |
+| `SCHOLAR_MCP_OIDC_AUDIENCE`            | n/a       | Expected JWT audience claim; leave unset if your provider does not set one                                                        |
+| `SCHOLAR_MCP_OIDC_REQUIRED_SCOPES`     | `openid`  | Comma-separated required scopes                                                                                                   |
+| `SCHOLAR_MCP_OIDC_VERIFY_ACCESS_TOKEN` | `false`   | Set `true` to verify the access token as a JWT instead of the id token; useful for audience-claim validation on JWT access tokens |
+
+JWT signing key on Linux/Docker
+
+Without `OIDC_JWT_SIGNING_KEY`, FastMCP generates an ephemeral key that invalidates all tokens on restart. Always set a stable key in production:
+
+```
+openssl rand -hex 32
+```
+
+Long-running sessions
+
+Current MCP clients do not reliably refresh tokens; see [Known Limitations](#known-limitations-mcp-oauth-token-refresh). Configure **all** token lifetimes (access, id, refresh) on your identity provider to cover a full workday (8 hours or more). For simpler deployments, bearer token auth is unaffected by these limitations.
+
+For the full OIDC reference (env vars, Docker Compose, subpath deployments, architecture):
+
+- [OIDC Authentication reference](https://pvliesdonk.github.io/scholar-mcp/1.8/deployment/oidc/index.md)
+
+______________________________________________________________________
+
+## Troubleshooting
+
+### "invalid client" error
+
+The `client_id` and/or `redirect_uris` in your OIDC provider config don't match the values in your `.env` file. Verify both sides match exactly.
+
+### Tokens invalidated after restart
+
+You're missing `SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY`. Without it, FastMCP generates an ephemeral key on each startup. Generate and set a stable key:
+
+```
+openssl rand -hex 32
+```
+
+### Auth has no effect
+
+FastMCP's stdio transport doesn't enforce auth on incoming messages (stdio messages have no `Authorization` header), but auth provider construction still runs at startup regardless of transport, and the server logs a `WARNING: auth_configured_but_stdio_skips_enforcement` line when this happens so you don't mis-read startup logs as proof of enforcement.
+
+Per-mode behaviour on `--transport stdio`:
+
+- **bearer-single / bearer-mapped**: the verifier is built but never consulted. Safe to set, just inert.
+- **`remote` mode** (`SCHOLAR_MCP_BASE_URL` + `SCHOLAR_MCP_OIDC_CONFIG_URL`, no client id/secret): OIDC discovery fires against the configured URL inside pvl-core's `build_remote_auth`. Discovery failure raises `ConfigurationError: OIDC discovery failed at …` and the server refuses to start (pvl-core ≥ 2.0 fail-loud).
+- **`oidc-proxy` mode** (all four OIDC env vars set: `BASE_URL` + `OIDC_CONFIG_URL` + `OIDC_CLIENT_ID` + `OIDC_CLIENT_SECRET`): discovery fires inside FastMCP's `OIDCProxy.__init__` and currently propagates raw `httpx.HTTPError` / `pydantic.ValidationError` rather than `ConfigurationError` (asymmetry between pvl-core layers; tracked upstream). The CLI does not currently catch these, operators see the raw traceback.
+- **`multi` mode** (bearer + OIDC together): inherits the OIDC failure mode of whichever sub-mode applies (`remote` or `oidc-proxy`) per above.
+
+Recommendation: leave OIDC env vars unset on stdio deployments. Switch to `--transport http` to actually exercise auth.
+
+### Bearer token not working
+
+- Verify the env var is set and non-empty (whitespace-only values are ignored)
+- Check that clients send `Authorization: Bearer <token>` (not `Basic` or other schemes)
+- If OIDC is also configured, multi-auth is active: both bearer and OIDC are accepted simultaneously
+
+### OIDC redirect fails
+
+- Verify `BASE_URL` matches your public URL exactly (including any subpath prefix)
+- For subpath deployments, see the [subpath deployment guide](https://pvliesdonk.github.io/scholar-mcp/1.8/deployment/oidc/#subpath-deployments); `BASE_URL` must include the prefix, `HTTP_PATH` must not
+- Check that `redirect_uris` in your provider config includes your callback URL (such as `https://mcp.example.com/auth/callback`)
+
+### Session drops after token expiry
+
+**Symptom:** the MCP client works for a period (often ~1 hour), then starts returning 401 errors or stops responding. Restarting the client fixes it temporarily.
+
+**Root cause:** this is almost always a token lifetime issue, not a server bug. Check three things:
+
+1. **id_token lifetime** (most common): When using `verify_id_token` mode (the default for Authelia), the server re-validates the upstream `id_token` on every request. If your provider's `id_token` lifetime is shorter than the `access_token` lifetime, the session dies at the `id_token` expiry, even though the access token is still valid. Authelia defaults `id_token` to 1 hour. **Fix: set `id_token` lifetime to match `access_token`** in your provider config.
+1. **access_token lifetime**: If both `id_token` and `access_token` are set correctly but sessions still drop, check that the provider's `expires_in` response matches your configured lifetime.
+1. **No refresh token**: See [Known Limitations](#known-limitations-mcp-oauth-token-refresh) below; current MCP clients cannot refresh tokens, so sessions are limited to the token lifetime.
+
+**Workaround:** configure **all** token lifetimes on your identity provider to cover a full workday:
+
+```
+# Authelia example
+lifespans:
+  custom:
+    mcp_long_lived:
+      access_token: '8h'
+      id_token: '8h'        # must match access_token for verify_id_token mode
+      refresh_token: '30d'
+```
+
+### Opaque access tokens (Authelia)
+
+Authelia issues opaque (non-JWT) access tokens. This is handled automatically: the server verifies the `id_token` instead. No extra configuration needed.
+
+______________________________________________________________________
+
+## Known Limitations: MCP OAuth token refresh
+
+Ecosystem-wide issue
+
+The limitations below affect **all** OAuth-protected MCP servers, not just this one. They are caused by issues in the MCP client implementations (Claude Code, Claude.ai, Claude Desktop) and the MCP Python SDK. Check the linked tracking issues for current status.
+
+### The problem
+
+MCP clients cannot maintain sessions beyond the token lifetime because token refresh does not work. When tokens expire, the session drops and requires manual re-authentication. This affects every provider: Authelia, Keycloak, Google, and others.
+
+### Why refresh doesn't work
+
+Three independent issues prevent token refresh:
+
+| Layer              | Issue                                                                                                                          | Impact                                                                                         |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| **Claude Code**    | Stores refresh tokens but never uses them ([claude-code#21333](https://github.com/anthropics/claude-code/issues/21333))        | Refresh tokens are obtained and saved but never sent back to refresh expired access tokens     |
+| **Claude Code**    | Never requests `offline_access` scope ([claude-code#7744](https://github.com/anthropics/claude-code/issues/7744))              | Most OIDC providers won't issue a refresh token without this scope                             |
+| **MCP Python SDK** | Token refresh deadlocks inside SSE streams ([python-sdk#1326](https://github.com/modelcontextprotocol/python-sdk/issues/1326)) | Even with a valid refresh token, the SDK hangs when attempting refresh during an active stream |
+
+The server-side refresh architecture (FastMCP's `OAuthProxy.exchange_refresh_token()`) is correctly implemented and would work, but it requires the client to initiate the refresh, which none of the current clients do reliably.
+
+### What works today
+
+**Bearer token auth** is unaffected by all of the above. If your deployment allows it (such as Claude Code with env vars, or API clients), bearer tokens are the simplest and most reliable option.
+
+**Long token lifetimes** are the only viable workaround for OIDC. Set all three lifetimes (access, id, refresh) to cover your typical session duration:
+
+- `access_token: '8h'`: covers a workday
+- `id_token: '8h'`: **must match access_token** when using `verify_id_token` mode (critical for Authelia)
+- `refresh_token: '30d'`: ready for when clients support refresh
+- Include `offline_access` in provider-side scopes; no effect today, but enables refresh when clients are fixed
+
+### Tracking
+
+These upstream issues are actively tracked:
+
+- [anthropics/claude-code#21333](https://github.com/anthropics/claude-code/issues/21333): refresh tokens stored but never used
+- [anthropics/claude-code#7744](https://github.com/anthropics/claude-code/issues/7744): `offline_access` scope never requested
+- [modelcontextprotocol/python-sdk#1326](https://github.com/modelcontextprotocol/python-sdk/issues/1326): SSE refresh deadlock
+
+When these are resolved, OIDC sessions should persist indefinitely via automatic token refresh with no changes needed server-side.
+
+# PDF Conversion
+
+Scholar MCP can download open-access PDFs and convert them to Markdown using [docling-serve](https://github.com/DS4SD/docling-serve). This guide covers setup and usage.
+
+## Requirements
+
+- A running [docling-serve](https://github.com/DS4SD/docling-serve) instance
+- `SCHOLAR_MCP_READ_ONLY=false` (PDF tools are write-tagged)
+
+## Setup
+
+### 1. Start docling-serve
+
+The simplest way is Docker:
+
+```
+docker run -p 5001:5001 ghcr.io/ds4sd/docling-serve:latest
+```
+
+### 2. Configure scholar-mcp
+
+Set the docling URL and disable read-only mode:
+
+```
+export SCHOLAR_MCP_DOCLING_URL=http://localhost:5001
+export SCHOLAR_MCP_READ_ONLY=false
+```
+
+### 3. Verify
+
+Start the server and check the logs. You should see:
+
+```
+INFO scholar_mcp._server_deps: docling_configured url=http://localhost:5001
+```
+
+## Tools
+
+Four tools are available once configured:
+
+| Tool                      | What it does                                                         |
+| ------------------------- | -------------------------------------------------------------------- |
+| `fetch_paper_pdf`         | Downloads the PDF for a paper (tries OA, then ArXiv/PMC/Unpaywall)   |
+| `convert_pdf_to_markdown` | Converts a local PDF file to Markdown                                |
+| `fetch_and_convert`       | Full pipeline: looks up the paper and downloads and converts its PDF |
+| `fetch_pdf_by_url`        | Downloads a PDF from any URL and optionally converts to Markdown     |
+
+PDFs are stored in `$SCHOLAR_MCP_CACHE_DIR/pdfs/` and Markdown files in `$SCHOLAR_MCP_CACHE_DIR/md/`.
+
+## VLM enrichment
+
+Standard conversion uses OCR only. For papers with complex formulas or figures, you can enable VLM (Vision-Language Model) enrichment:
+
+```
+export SCHOLAR_MCP_VLM_API_URL=https://api.openai.com/v1
+export SCHOLAR_MCP_VLM_API_KEY=sk-...
+export SCHOLAR_MCP_VLM_MODEL=gpt-4o
+```
+
+When VLM is configured, tools accept a `use_vlm=true` parameter that:
+
+- Extracts LaTeX formulas from formula images
+- Generates text descriptions of figures
+- Produces higher-quality Markdown for math-heavy and figure-heavy papers
+
+VLM enrichment runs on top of the standard OCR pipeline, it processes each extracted formula and figure image individually via the configured vision model, not full pages.
+
+Start without VLM
+
+Standard conversion handles most papers well. Only retry with `use_vlm=true` when the result has garbled formulas or missing figure descriptions.
+
+Cost and speed
+
+VLM enrichment makes API calls to the configured endpoint for each formula and figure. This is slower and incurs additional costs compared to standard conversion.
+
+### Caching
+
+VLM and standard conversions are cached separately:
+
+- Standard: `$SCHOLAR_MCP_CACHE_DIR/md/<name>.md`
+- VLM: `$SCHOLAR_MCP_CACHE_DIR/md/<name>_vlm.md`
+
+Switching between modes never overwrites a previous conversion. When VLM is requested but not configured, the response includes a `vlm_skip_reason` field explaining why (such as `"vlm_api_url_not_configured"`).
+
+## Docker Compose with docling-serve
+
+```
+services:
+  scholar-mcp:
+    image: ghcr.io/pvliesdonk/scholar-mcp:latest
+    restart: unless-stopped
+    environment:
+      SCHOLAR_MCP_S2_API_KEY: "${SCHOLAR_MCP_S2_API_KEY}"
+      SCHOLAR_MCP_DOCLING_URL: "http://docling-serve:5001"
+      SCHOLAR_MCP_READ_ONLY: "false"
+      SCHOLAR_MCP_CACHE_DIR: "/data/scholar-mcp"
+    volumes:
+      - scholar-mcp-data:/data/scholar-mcp
+
+  docling-serve:
+    image: ghcr.io/ds4sd/docling-serve:latest
+    restart: unless-stopped
+
+volumes:
+  scholar-mcp-data:
+```
+
+## Async task queue
+
+All PDF tools run in the background and return a task ID immediately:
+
+```
+{"queued": true, "task_id": "a1b2c3d4e5f6", "tool": "fetch_paper_pdf"}
+```
+
+Use `get_task_result` with the `task_id` to poll for completion. PDF task results are retained for 1 hour.
+
+The only exception is `convert_pdf_to_markdown` when the markdown output file already exists locally, in that case, the cached result is returned directly.
+
+## Alternative PDF sources
+
+When a paper has no open-access PDF URL in Semantic Scholar, `fetch_paper_pdf` and `fetch_and_convert` automatically try alternative sources:
+
+1. **ArXiv**, If the paper has an `externalIds.ArXiv` field, the PDF is fetched from `arxiv.org/pdf/<id>.pdf`.
+1. **PubMed Central**, If the paper has a `PubMedCentral` external ID, the PDF is fetched from NCBI.
+1. **Unpaywall**, If the paper has a DOI and `SCHOLAR_MCP_CONTACT_EMAIL` is set, the [Unpaywall API](https://unpaywall.org/products/api) is queried for an OA PDF location.
+
+The `source` field in the response indicates where the PDF came from: `s2_oa`, `arxiv`, `pmc`, or `unpaywall`.
+
+For PDFs found through other means (author homepages, institutional repositories, etc.), use `fetch_pdf_by_url` with the direct URL.
+
+Enable Unpaywall
+
+Set `SCHOLAR_MCP_CONTACT_EMAIL` to your email address to enable Unpaywall lookups. This is also used for the OpenAlex polite pool.
+
+## Limitations
+
+- **Paywalled papers**: Alternative resolution only finds openly available versions. Truly paywalled papers require manual download followed by `convert_pdf_to_markdown`, or use `fetch_pdf_by_url` if you find a link.
+- **Conversion quality varies**: OCR quality depends on the PDF source. Scanned papers produce lower-quality results than born-digital PDFs.
+- **docling-serve polling**: Conversion is asynchronous internally. The server polls docling-serve for completion with a timeout of ~10 minutes (200 polls at 3-second intervals). This happens in the background task, so the MCP client is not blocked.
+
+# Citation Graphs
+
+Scholar MCP provides four tools for exploring citation networks. This guide covers common patterns and strategies.
+
+## Tools overview
+
+| Tool                 | Use case                                           |
+| -------------------- | -------------------------------------------------- |
+| `get_citations`      | "What papers cite this paper?"                     |
+| `get_references`     | "What papers does this paper cite?"                |
+| `get_citation_graph` | "Show me the citation network around these papers" |
+| `find_bridge_papers` | "How are these two papers connected?"              |
+
+## Basic exploration
+
+### Forward citations
+
+Find papers that cite a known paper:
+
+```
+get_citations("DOI:10.48550/arXiv.2005.11401", limit=20)
+```
+
+Use filters to narrow results:
+
+```
+get_citations(
+    "DOI:10.48550/arXiv.2005.11401",
+    year_start=2023,
+    min_citations=10,
+    fields_of_study=["Computer Science"]
+)
+```
+
+### Backward references
+
+Find papers cited by a given paper (its bibliography):
+
+```
+get_references("DOI:10.48550/arXiv.2005.11401", limit=50)
+```
+
+## Graph traversal
+
+`get_citation_graph` performs a BFS (breadth-first search) from seed papers, collecting nodes and edges.
+
+### Single-seed graph
+
+Start from one paper, explore its citation neighborhood:
+
+```
+get_citation_graph(
+    seed_ids=["CorpusId:218971783"],
+    direction="both",
+    depth=1,
+    max_nodes=50
+)
+```
+
+### Multi-seed graph
+
+Start from multiple papers to map a research area:
+
+```
+get_citation_graph(
+    seed_ids=["CorpusId:218971783", "CorpusId:237491837"],
+    direction="citations",
+    depth=2,
+    max_nodes=100
+)
+```
+
+### Direction strategies
+
+| Direction    | Use case                                 |
+| ------------ | ---------------------------------------- |
+| `citations`  | Find follow-up work and applications     |
+| `references` | Trace intellectual foundations           |
+| `both`       | Map the full neighborhood around a paper |
+
+### Controlling graph size
+
+Start small
+
+Begin with `depth=1` and `max_nodes=50`. Citation graphs grow exponentially with depth; a popular paper at `depth=2, direction=both` can easily hit 10,000+ nodes.
+
+The `max_nodes` parameter is a hard cap. Once reached, the BFS stops and `stats.truncated` is set to `true`. Filters help focus the graph:
+
+```
+get_citation_graph(
+    seed_ids=["CorpusId:218971783"],
+    direction="both",
+    depth=2,
+    max_nodes=100,
+    year_start=2020,
+    min_citations=5
+)
+```
+
+### Reading the results
+
+The response contains:
+
+```
+{
+  "nodes": [{"id": "...", "title": "...", "year": 2024, "citationCount": 42}],
+  "edges": [{"source": "id1", "target": "id2"}],
+  "stats": {
+    "total_nodes": 42,
+    "total_edges": 67,
+    "depth_reached": 2,
+    "truncated": false
+  }
+}
+```
+
+- **nodes**: full paper metadata for each paper in the graph
+- **edges**: directed edges from citing paper to cited paper
+- **stats.truncated**: if `true`, the graph was cut short by `max_nodes`
+
+## Bridge papers
+
+`find_bridge_papers` finds the shortest citation path between two papers. This is useful for:
+
+- Discovering how two research areas are connected
+- Finding seminal papers that bridge fields
+- Understanding intellectual lineage between works
+
+```
+find_bridge_papers(
+    source_id="CorpusId:218971783",
+    target_id="CorpusId:237491837",
+    max_depth=4,
+    direction="citations"
+)
+```
+
+The response includes the full path with metadata for each paper:
+
+```
+{
+  "found": true,
+  "path": [
+    {"paperId": "source", "title": "Attention Is All You Need", ...},
+    {"paperId": "bridge", "title": "BERT: Pre-training of...", ...},
+    {"paperId": "target", "title": "GPT-4 Technical Report", ...}
+  ]
+}
+```
+
+### Tips
+
+- **Direction matters**: `citations` follows forward citations (A cites B); `references` follows backward references. Try both if one direction doesn't find a path.
+- **Increase depth carefully**: Each additional depth level can make many API calls. Start with `max_depth=3` or `4`.
+- **Caching helps**: Citation and reference lists are cached for 7 days. Repeated bridge searches in the same area are fast.
+
+## Caching behavior
+
+| Data            | TTL       | Effect                                       |
+| --------------- | --------- | -------------------------------------------- |
+| Paper metadata  | 30 days   | Nodes reused across graph and bridge queries |
+| Citation lists  | 7 days    | `get_citations` results reused by graph BFS  |
+| Reference lists | 7 days    | `get_references` results reused by graph BFS |
+| ID aliases      | permanent | DOI-to-S2-ID mappings never expire           |
+
+The cache cuts API calls for repeated exploration in the same area. A `get_citation_graph` at `depth=2` that returns 100 nodes might only make 10-20 API calls if the neighborhood was partially explored before.
+# Tools
+
+# Tools
+
+Scholar MCP provides 28 tools organised by scholarly source type: **Papers**, **Patents**, **Books**, and **Standards** are peer source domains; the remaining sections (Cross-source Utility, PDF Conversion, Task Polling) are cross-cutting. All tools return JSON.
+
+Coverage by domain
+
+Per-domain depth is uneven, papers currently have the richest tool surface (citation graph, recommendations, cross-referencing to all three other domains); standards are the leanest. That reflects public data availability, not a value hierarchy. Parity work is tracked in [GitHub issues](https://github.com/pvliesdonk/scholar-mcp/issues) and [milestones](https://github.com/pvliesdonk/scholar-mcp/milestones).
+
+All tools include [MCP tool annotations](https://spec.modelcontextprotocol.io/specification/2025-03-26/server/tools/#annotations):
+
+- Read-only tools: `readOnlyHint=true`, `destructiveHint=false`, `openWorldHint=true`
+- Write tools (PDF): `readOnlyHint=false`, `destructiveHint=false`, `openWorldHint=true`
+- Task polling tools: `readOnlyHint=true`, `destructiveHint=false`, `openWorldHint=false`
+
+## Async Task Queue
+
+Long-running operations return immediately with a task ID instead of blocking:
+
+- **PDF tools** always queue (unless the result is already cached locally)
+- **S2 tools** queue when the Semantic Scholar API responds with HTTP 429 (rate limited)
+
+When a tool queues an operation, it returns:
+
+```
+{"queued": true, "task_id": "a1b2c3d4e5f6", "tool": "fetch_paper_pdf"}
+```
+
+Poll with `get_task_result` to check status and retrieve the result. Task results expire after 10 minutes (S2 tools) or 1 hour (PDF tools).
+
+## Papers, Search & Retrieval
+
+### `search_papers`
+
+Full-text search across the Semantic Scholar corpus.
+
+| Parameter         | Type         | Default       | Description                                                         |
+| ----------------- | ------------ | ------------- | ------------------------------------------------------------------- |
+| `query`           | string       | *(required)*  | Search query string                                                 |
+| `fields`          | string       | `"compact"`   | Field set: `compact`, `standard`, or `full`                         |
+| `limit`           | int          | `10`          | Results per page (max 100)                                          |
+| `offset`          | int          | `0`           | Pagination offset                                                   |
+| `year_start`      | int          | *(none)*      | Filter: earliest publication year                                   |
+| `year_end`        | int          | *(none)*      | Filter: latest publication year                                     |
+| `fields_of_study` | list[string] | *(none)*      | S2 field-of-study names (such as `["Computer Science", "Physics"]`) |
+| `venue`           | string       | *(none)*      | Filter by venue name                                                |
+| `min_citations`   | int          | *(none)*      | Minimum citation count                                              |
+| `sort`            | string       | `"relevance"` | Sort order: `relevance`, `citations`, or `year`                     |
+
+**Returns:** `{"data": [...], "total": N}` where each item contains the requested field set.
+
+**Field sets:**
+
+- **compact**: `paperId`, `title`, `year`, `venue`, `citationCount`
+- **standard**: compact + `authors`, `externalIds`, `abstract`
+- **full**: standard + `tldr`, `openAccessPdf`, `fieldsOfStudy`, `referenceCount`
+
+______________________________________________________________________
+
+### `get_paper`
+
+Fetch full metadata for a single paper.
+
+| Parameter    | Type   | Default      | Description                                          |
+| ------------ | ------ | ------------ | ---------------------------------------------------- |
+| `identifier` | string | *(required)* | DOI, S2 paper ID, `ARXIV:id`, `ACM:id`, or `PMID:id` |
+
+**Returns:** Full paper metadata (always uses the `full` field set) or `{"error": "not_found"}`.
+
+Results are cached for 30 days. Identifier aliases (such as DOI to S2 ID) are cached permanently.
+
+______________________________________________________________________
+
+### `get_author`
+
+Fetch an author profile or search by name.
+
+| Parameter    | Type   | Default      | Description                                                         |
+| ------------ | ------ | ------------ | ------------------------------------------------------------------- |
+| `identifier` | string | *(required)* | Numeric S2 author ID for direct lookup, or a name string for search |
+| `limit`      | int    | `20`         | Max publications to return (direct lookup)                          |
+| `offset`     | int    | `0`          | Pagination offset for publications                                  |
+
+**Returns:**
+
+- **Direct lookup** (numeric ID): author profile with paginated publications list
+- **Name search** (text): `{"candidates": [...]}` with up to 5 matching authors
+
+______________________________________________________________________
+
+## Papers, Citation Graph
+
+### `get_citations`
+
+Forward citations: papers that cite the given paper.
+
+| Parameter         | Type         | Default      | Description                   |
+| ----------------- | ------------ | ------------ | ----------------------------- |
+| `identifier`      | string       | *(required)* | Paper ID (DOI, S2 ID, etc.)   |
+| `fields`          | string       | `"compact"`  | Field set for citing papers   |
+| `limit`           | int          | `20`         | Max results (max 1000)        |
+| `offset`          | int          | `0`          | Pagination offset             |
+| `year_start`      | int          | *(none)*     | Filter: earliest year         |
+| `year_end`        | int          | *(none)*     | Filter: latest year           |
+| `fields_of_study` | list[string] | *(none)*     | Field-of-study filter         |
+| `min_citations`   | int          | *(none)*     | Minimum citation count filter |
+
+**Returns:** `{"data": [{"citingPaper": {...}}, ...]}`.
+
+______________________________________________________________________
+
+### `get_references`
+
+Backward references: papers cited by the given paper.
+
+| Parameter    | Type   | Default      | Description                 |
+| ------------ | ------ | ------------ | --------------------------- |
+| `identifier` | string | *(required)* | Paper ID (DOI, S2 ID, etc.) |
+| `fields`     | string | `"compact"`  | Field set for cited papers  |
+| `limit`      | int    | `50`         | Max results (max 1000)      |
+| `offset`     | int    | `0`          | Pagination offset           |
+
+**Returns:** `{"data": [{"citedPaper": {...}}, ...]}`.
+
+______________________________________________________________________
+
+### `get_citation_graph`
+
+BFS traversal from one or more seed papers, collecting nodes and edges.
+
+| Parameter         | Type         | Default       | Description                                               |
+| ----------------- | ------------ | ------------- | --------------------------------------------------------- |
+| `seed_ids`        | list[string] | *(required)*  | 1 to 10 seed paper IDs                                    |
+| `direction`       | string       | `"citations"` | `citations` (forward), `references` (backward), or `both` |
+| `depth`           | int          | `1`           | BFS depth (1 to 3, clamped)                               |
+| `max_nodes`       | int          | `100`         | Hard cap on collected nodes                               |
+| `year_start`      | int          | *(none)*      | Filter: earliest year                                     |
+| `year_end`        | int          | *(none)*      | Filter: latest year                                       |
+| `fields_of_study` | list[string] | *(none)*      | Field-of-study filter                                     |
+| `min_citations`   | int          | *(none)*      | Minimum citation count filter                             |
+
+**Returns:**
+
+```
+{
+  "nodes": [{"id": "...", "title": "...", "year": 2024, "citationCount": 42}, ...],
+  "edges": [{"source": "id1", "target": "id2"}, ...],
+  "stats": {
+    "total_nodes": 42,
+    "total_edges": 67,
+    "depth_reached": 2,
+    "truncated": false
+  }
+}
+```
+
+Controlling graph size
+
+Start with `depth=1` and a small `max_nodes` to get an overview, then increase as needed. `depth=3` with `direction=both` can produce large graphs.
+
+See [Citation Graphs guide](https://pvliesdonk.github.io/scholar-mcp/1.8/guides/citation-graphs/index.md) for usage patterns.
+
+______________________________________________________________________
+
+### `find_bridge_papers`
+
+Find the shortest citation path between two papers.
+
+| Parameter   | Type   | Default      | Description                          |
+| ----------- | ------ | ------------ | ------------------------------------ |
+| `source_id` | string | *(required)* | Starting paper ID                    |
+| `target_id` | string | *(required)* | Target paper ID                      |
+| `max_depth` | int    | `4`          | Maximum BFS depth                    |
+| `direction` | string | `"both"`     | `citations`, `references`, or `both` |
+
+**Returns:**
+
+```
+{
+  "found": true,
+  "path": [
+    {"paperId": "source", "title": "...", ...},
+    {"paperId": "bridge", "title": "...", ...},
+    {"paperId": "target", "title": "...", ...}
+  ]
+}
+```
+
+Or `{"found": false}` if no path exists within `max_depth`.
+
+______________________________________________________________________
+
+## Papers, Recommendations
+
+### `recommend_papers`
+
+Paper recommendations based on positive (and optional negative) examples.
+
+| Parameter      | Type         | Default      | Description                                     |
+| -------------- | ------------ | ------------ | ----------------------------------------------- |
+| `positive_ids` | list[string] | *(required)* | 1 to 5 S2 paper IDs as positive examples        |
+| `negative_ids` | list[string] | *(none)*     | S2 paper IDs to steer recommendations away from |
+| `limit`        | int          | `10`         | Number of recommendations                       |
+| `fields`       | string       | `"standard"` | Field set for returned papers                   |
+
+**Returns:** JSON list of recommended papers.
+
+Tip
+
+Recommendations work best with 3 to 5 positive examples that represent the topic you're interested in. Adding 1 to 2 negative examples that are close but off-topic helps narrow results.
+
+______________________________________________________________________
+
+## Papers, Enrichment
+
+### `enrich_paper`
+
+Augment Semantic Scholar metadata with OpenAlex data.
+
+| Parameter    | Type         | Default      | Description                                                            |
+| ------------ | ------------ | ------------ | ---------------------------------------------------------------------- |
+| `identifier` | string       | *(required)* | S2 paper ID or `DOI:xxx`                                               |
+| `fields`     | list[string] | *(required)* | Fields to retrieve: `affiliations`, `funders`, `oa_status`, `concepts` |
+
+**Available fields:**
+
+| Field          | Description                                                                                  |
+| -------------- | -------------------------------------------------------------------------------------------- |
+| `affiliations` | Institution display names from author affiliations                                           |
+| `funders`      | Funding organization names                                                                   |
+| `oa_status`    | Open access status string (such as `gold`, `green`, `hybrid`); also includes `is_oa` boolean |
+| `concepts`     | List of `{"name": "...", "score": 0.95}` topic concepts                                      |
+
+Results are cached for 30 days.
+
+______________________________________________________________________
+
+## Papers, Citation Generation
+
+### `generate_citations`
+
+Generate formatted citations for one or more papers. Output formats: BibTeX, CSL-JSON, and RIS. Paper resolution uses Semantic Scholar, with optional OpenAlex enrichment for affiliations and open-access status.
+
+| Parameter         | Type         | Default      | Description                                                 |
+| ----------------- | ------------ | ------------ | ----------------------------------------------------------- |
+| `paper_ids`       | list[string] | *(required)* | Paper identifiers (S2 IDs, DOIs, arXiv IDs, etc.). Max 100. |
+| `citation_format` | string       | `"bibtex"`   | Output format: `bibtex`, `csl-json`, or `ris`               |
+| `enrich`          | boolean      | `true`       | Attempt OpenAlex enrichment for missing venue data          |
+
+**BibTeX output** includes entry type inference (`@article`, `@inproceedings`, `@misc`, `@book`), proper author formatting (`{Last}, First`), title casing preservation, DOI, arXiv eprint fields, and special character escaping. Papers with `book_metadata` (ISBN or publisher) are emitted as `@book` entries with `publisher`, `edition`, and `isbn` fields.
+
+**CSL-JSON output** returns `{"citations": [...], "errors": [...]}`; the citations array contains standard CSL-JSON objects compatible with Zotero, Mendeley, Pandoc, and other CSL processors. Book entries use `type: "book"` with `publisher` and `ISBN` fields.
+
+**RIS output** uses standard RIS tags (`TY`, `AU`, `TI`, `PY`, `JO`/`BT`, `DO`, `UR`, `AB`, `ER`). Book entries use `TY - BOOK` with `PB` (publisher) and `SN` (ISBN) tags.
+
+Papers that fail to resolve are reported inline (BibTeX/RIS: as comments, CSL-JSON: in the errors array) rather than failing the entire request. When all papers fail, a structured error is returned: `{"error": "no_papers_resolved", "failed": [...]}`.
+
+Enrichment
+
+When `enrich` is enabled and a paper has no venue but has a DOI, the tool queries OpenAlex to fill in the venue name. This improves citation quality for papers where Semantic Scholar has incomplete metadata.
+
+______________________________________________________________________
+
+## Books
+
+Book tools use [Open Library](https://openlibrary.org/) and [Google Books](https://developers.google.com/books) as data sources. No API key is required (a Google Books API key is optional for higher rate limits). Rate limits are handled automatically; if an API is temporarily unavailable, calls queue and return a task ID (see [Async Task Queue](#async-task-queue)).
+
+### `search_books`
+
+Search for books by title, author, or free text via Open Library. For best results, use the `title` and `author` parameters rather than `query`, they use dedicated search indexes and return far better results.
+
+| Parameter | Type   | Default | Description                                          |
+| --------- | ------ | ------- | ---------------------------------------------------- |
+| `query`   | string | `null`  | Free-text fallback. Use `title`/`author` when known. |
+| `title`   | string | `null`  | Book title or partial title (recommended).           |
+| `author`  | string | `null`  | Author name (recommended).                           |
+| `limit`   | int    | `10`    | Maximum results to return (max 50)                   |
+
+At least one of `query`, `title`, or `author` must be provided.
+
+When only `query` is given, it is first tried as a title search (better relevance) and falls back to free-text if no results are found. When `author` is given with multiple tokens (such as "Frank Duffy") and initial results are thin, a broadened search is automatically attempted to catch name variants (such as Frank → Francis).
+
+**Returns:** JSON list of book records. Each record contains:
+
+```
+[
+  {
+    "title": "Deep Learning",
+    "authors": ["Ian Goodfellow", "Yoshua Bengio", "Aaron Courville"],
+    "publisher": "MIT Press",
+    "year": 2016,
+    "edition": null,
+    "isbn_10": "0262035618",
+    "isbn_13": "9780262035613",
+    "openlibrary_work_id": "OL17953442W",
+    "openlibrary_edition_id": "OL26423929M",
+    "cover_url": "https://covers.openlibrary.org/b/isbn/9780262035613-M.jpg",
+    "google_books_url": "https://books.google.com/books?id=Np9SDQAAQBAJ",
+    "worldcat_url": "https://www.worldcat.org/isbn/9780262035613",
+    "snippet": "An introduction to a broad range of topics in deep learning...",
+    "cover_path": null,
+    "subjects": ["Machine learning", "Artificial intelligence"],
+    "page_count": 800,
+    "description": null
+  }
+]
+```
+
+______________________________________________________________________
+
+### `get_book`
+
+Fetch full metadata for a single book by ISBN or Open Library identifier. Optionally download and cache the cover image locally.
+
+| Parameter          | Type   | Default      | Description                                                                      |
+| ------------------ | ------ | ------------ | -------------------------------------------------------------------------------- |
+| `identifier`       | string | *(required)* | ISBN-10, ISBN-13, Open Library work ID, or edition ID                            |
+| `include_editions` | bool   | `false`      | If true, fetch work and list editions                                            |
+| `download_cover`   | bool   | `false`      | If true, download and cache the cover image locally; adds `cover_path` to result |
+| `cover_size`       | string | `"M"`        | Cover image size: `S` (small), `M` (medium), or `L` (large)                      |
+
+**Identifier formats:**
+
+| Format                  | Example             |
+| ----------------------- | ------------------- |
+| ISBN-13                 | `9780262035613`     |
+| ISBN-10                 | `0262035618`        |
+| ISBN with hyphens       | `978-0-262-03561-3` |
+| Open Library work ID    | `OL17953442W`       |
+| Open Library edition ID | `OL26423929M`       |
+
+**Returns:** A single book record (same shape as items returned by `search_books`), or `{"error": "not_found", "identifier": "..."}` if not found.
+
+Results are cached. Work and edition lookups are cached by their respective Open Library IDs; ISBN lookups are also stored under the resolved ISBN-13. When `download_cover=true`, the cover image is saved to `<cache_dir>/covers/<isbn>_<size>.jpg` and the path is returned as `cover_path`.
+
+______________________________________________________________________
+
+### `get_book_excerpt`
+
+Fetch a book excerpt and description from Google Books by ISBN. Shows preview availability and a link to the Google Books preview page.
+
+| Parameter | Type   | Default      | Description        |
+| --------- | ------ | ------------ | ------------------ |
+| `isbn`    | string | *(required)* | ISBN-10 or ISBN-13 |
+
+**Returns:**
+
+```
+{
+  "title": "Deep Learning",
+  "authors": ["Ian Goodfellow", "Yoshua Bengio", "Aaron Courville"],
+  "description": "An introduction to a broad range of topics in deep learning...",
+  "snippet": "Deep learning is a form of machine learning that enables...",
+  "preview_link": "https://books.google.com/books?id=Np9SDQAAQBAJ&printsec=frontcover",
+  "preview_available": true
+}
+```
+
+Or `{"error": "not_found", "isbn": "..."}` if Google Books has no matching volume.
+
+Write-tagged
+
+This tool is write-tagged and hidden when `SCHOLAR_MCP_READ_ONLY=true`.
+
+______________________________________________________________________
+
+### `recommend_books`
+
+Recommend books for a subject via the Open Library subject API. Results are sorted by edition count (a proxy for popularity).
+
+| Parameter | Type   | Default      | Description                                                                 |
+| --------- | ------ | ------------ | --------------------------------------------------------------------------- |
+| `subject` | string | *(required)* | Subject or topic (such as machine learning, algorithms, or computer vision) |
+| `limit`   | int    | `10`         | Maximum results to return (max 50)                                          |
+
+**Returns:** A JSON list of book records. Each record has the same shape as `search_books` results, with fields populated from the Open Library subject API (title, authors, Open Library work ID, cover URL). ISBN and edition fields are `null` since subject results are work-level.
+
+Results are cached for 7 days, keyed by the normalized subject slug. Up to 50 results are fetched and cached; the `limit` parameter slices the cached pool on return.
+
+______________________________________________________________________
+
+## Auto-Enrichment
+
+Scholar MCP uses a phased enrichment pipeline that automatically augments paper and book results with metadata from multiple sources. Enrichment runs in two phases:
+
+- **Phase 0** (primary): OpenAlex (OA status, affiliations, funders, concepts) and CrossRef (publisher, page ranges, container titles)
+- **Phase 1** (secondary): Open Library (book metadata for papers with ISBNs) and Google Books (preview links, excerpts, snippets)
+
+When `get_paper`, `get_citations`, `get_references`, or `get_citation_graph` retrieves a paper that has an ISBN in its `externalIds` field, Open Library metadata is automatically fetched and attached as a `book_metadata` key on the paper record.
+
+**Trigger condition:** `externalIds.ISBN` is present and non-empty.
+
+**Added field:** `book_metadata`, a dict containing:
+
+| Field                 | Description                                                            |
+| --------------------- | ---------------------------------------------------------------------- |
+| `publisher`           | Publisher name                                                         |
+| `edition`             | Edition string (such as `"2nd ed."`)                                   |
+| `isbn_13`             | ISBN-13                                                                |
+| `cover_url`           | Cover image URL (from Open Library covers)                             |
+| `openlibrary_work_id` | Open Library work ID (such as `OL17953442W`)                           |
+| `description`         | Work description, if available                                         |
+| `subjects`            | List of subject strings                                                |
+| `page_count`          | Page count, if known                                                   |
+| `authors`             | List of author name strings (resolved from Open Library work metadata) |
+
+CrossRef enrichment adds publisher metadata, page ranges, and container titles to paper results when a DOI is available. Google Books enrichment adds `google_books_url` and `snippet` to book records when an ISBN is present.
+
+Enrichment failures are silently skipped, if a source is unreachable or returns no data, the record is returned without that enrichment layer. Up to 5 concurrent requests are made per batch.
+
+______________________________________________________________________
+
+## Cross-source Utility
+
+### `batch_resolve`
+
+Resolve up to 100 paper, patent, or book identifiers to full metadata in a single call.
+
+| Parameter     | Type         | Default      | Description                                                                                                                                           |
+| ------------- | ------------ | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `identifiers` | list[string] | *(required)* | Up to 100 IDs: S2 paper IDs, `DOI:xxx`, plain DOIs, patent numbers (such as `EP1234567A1`), or ISBNs (prefixed `ISBN:`, such as `ISBN:9780262035613`) |
+| `fields`      | string       | `"standard"` | Field set (applies to paper results only)                                                                                                             |
+
+**Returns:** JSON list of resolved items:
+
+- **Paper results** have a `"paper"` key. Papers not found in Semantic Scholar are automatically tried via OpenAlex (by DOI); results from OpenAlex include `"source": "openalex"`. When the citation string contains chapter patterns (such as "Chapter 3" or "pp. 45-67"), a `chapter_info` dict is attached with parsed chapter/page information.
+- **Patent results** have a `"patent"` key and `"source_type": "patent"`. Patent numbers are auto-detected by their two-letter country prefix (such as `EP`, `US`, `WO`) and routed to the EPO OPS API.
+- **Book results** have a `"book"` key and `"source_type": "book"`. ISBNs (prefixed with `ISBN:`) are routed to Open Library.
+- **Unresolved items** have an `"error"` key.
+
+______________________________________________________________________
+
+## Patents
+
+Credentials required
+
+Patent tools require EPO OPS credentials. When `SCHOLAR_MCP_EPO_CONSUMER_KEY` and `SCHOLAR_MCP_EPO_CONSUMER_SECRET` are not set, these tools are automatically hidden. See [EPO OPS configuration](https://pvliesdonk.github.io/scholar-mcp/1.8/configuration/#epo-open-patent-services) for setup instructions.
+
+### `search_patents`
+
+Search for patents across 100+ patent offices via the EPO Open Patent Services (OPS) API.
+
+| Parameter            | Type   | Default         | Description                                                                                   |
+| -------------------- | ------ | --------------- | --------------------------------------------------------------------------------------------- |
+| `query`              | string | *(none)*        | Keyword search, searches patent titles and abstracts. Optional when using structured filters. |
+| `cpc_classification` | string | *(none)*        | CPC classification code filter (such as `"H01M10/00"`)                                        |
+| `applicant`          | string | *(none)*        | Applicant (assignee) name filter                                                              |
+| `inventor`           | string | *(none)*        | Inventor name filter                                                                          |
+| `date_from`          | string | *(none)*        | Earliest date (`YYYY-MM-DD`)                                                                  |
+| `date_to`            | string | *(none)*        | Latest date (`YYYY-MM-DD`)                                                                    |
+| `date_type`          | string | `"publication"` | Date field: `publication`, `filing`, or `priority`                                            |
+| `jurisdiction`       | string | *(none)*        | Country code filter (such as `EP`, `US`, `WO`)                                                |
+| `limit`              | int    | `10`            | Results per page (max 100)                                                                    |
+| `offset`             | int    | `0`             | Pagination offset                                                                             |
+
+At least one parameter must be provided.
+
+**Returns:** `{"total_count": N, "references": [...]}` where each reference has `country`, `number`, and `kind` fields.
+
+Query syntax
+
+The tool translates parameters into EPO CQL internally. `query` searches titles and abstracts only, it will not find patents where the keyword appears only in inventor/applicant names. To find all patents by an inventor or from an applicant, omit `query` and use only the structured filters (such as `inventor="Smith"`). Combining `query` with filters applies both constraints.
+
+______________________________________________________________________
+
+### `get_patent`
+
+Fetch detailed information for a single patent by its publication number.
+
+| Parameter       | Type         | Default      | Description                                                                            |
+| --------------- | ------------ | ------------ | -------------------------------------------------------------------------------------- |
+| `patent_number` | string       | *(required)* | Patent number in any format (such as `EP1234567A1`, `WO2024/123456`, `US11,234,567B2`) |
+| `sections`      | list[string] | `["biblio"]` | Sections to retrieve                                                                   |
+
+**Available sections:**
+
+| Section       | Description                                                                             | Status    |
+| ------------- | --------------------------------------------------------------------------------------- | --------- |
+| `biblio`      | Bibliographic metadata (title, applicants, inventors, dates, classifications, abstract) | Available |
+| `claims`      | Patent claims text (English preferred)                                                  | Available |
+| `description` | Full patent description text (English preferred)                                        | Available |
+| `family`      | Patent family members across jurisdictions (country, number, kind, date)                | Available |
+| `legal`       | Legal status events (date, code, description)                                           | Available |
+| `citations`   | Patent and non-patent literature citations, with Semantic Scholar resolution for NPL    | Available |
+
+Sections are fetched concurrently where possible (cache lookups run in parallel; EPO API calls are serialised by the client). Each section is cached independently with appropriate TTLs.
+
+**Returns:** A JSON object with keys matching the requested sections:
+
+```
+{
+  "patent_number": "EP.1234567.A1",
+  "biblio": {
+    "title": "...",
+    "abstract": "...",
+    "applicants": ["..."],
+    "inventors": ["..."],
+    "publication_number": "EP.1234567.A1",
+    "publication_date": "2020-01-15",
+    "filing_date": "2019-06-01",
+    "priority_date": "2019-01-15",
+    "family_id": "12345678",
+    "classifications": ["H04L29/06"],
+    "url": "https://worldwide.espacenet.com/..."
+  },
+  "claims": "1. A method for...\n\n2. The method of claim 1...",
+  "family": [
+    {"country": "US", "number": "11234567", "kind": "B2", "date": "2021-03-01"}
+  ],
+  "legal": [
+    {"date": "2019-05-01", "code": "APPLICATION", "description": "Application filed"}
+  ],
+  "citations": {
+    "patent_refs": [
+      {"country": "US", "number": "9876543", "kind": "B2"}
+    ],
+    "npl_refs": [
+      {"raw": "Smith et al., \"Widget Processing\", 2018, doi:10.1234/test", "paper": {"paperId": "abc123", "title": "Widget Processing"}, "confidence": "high"},
+      {"raw": "Doe, \"Advanced Widgets\", Ch. 5, pp. 112-130, 2019", "confidence": null, "chapter_info": {"citation_source": "parsed", "chapter_number": 5, "page_start": 112, "page_end": 130}}
+    ]
+  }
+}
+```
+
+When `citations` is requested, non-patent literature (NPL) references are resolved against Semantic Scholar on a best-effort basis. References with a DOI are resolved with `"confidence": "high"`. References without a DOI or that fail to resolve have `"confidence": null`. When citation strings contain chapter patterns (such as "Ch. 5" or "pp. 112-130"), a `chapter_info` dict is included with parsed chapter and page information.
+
+______________________________________________________________________
+
+### `get_citing_patents`
+
+Find patents that cite a given academic paper. Coverage is incomplete; relies on EPO OPS citation search, which does not capture all patent-to-paper citations. Best results with DOIs of well-known papers.
+
+| Parameter  | Type   | Default      | Description                               |
+| ---------- | ------ | ------------ | ----------------------------------------- |
+| `paper_id` | string | *(required)* | Paper identifier (DOI preferred)          |
+| `limit`    | int    | `10`         | Maximum citing patents to return (max 25) |
+
+**Returns:**
+
+```
+{
+  "paper_id": "10.1234/test",
+  "patents": [
+    {"title": "...", "publication_number": "EP.9999999.A1", "match_source": "epo_search", ...}
+  ],
+  "total_count": 1,
+  "note": "Coverage is incomplete. Results come from EPO OPS citation search..."
+}
+```
+
+Incomplete coverage
+
+Not all patent-to-paper citations are captured by EPO OPS. Use this tool for discovery, not exhaustive analysis.
+
+______________________________________________________________________
+
+### `fetch_patent_pdf`
+
+Download a patent PDF via authenticated EPO OPS and optionally convert to Markdown.
+
+| Parameter       | Type   | Default      | Description                                                                          |
+| --------------- | ------ | ------------ | ------------------------------------------------------------------------------------ |
+| `patent_number` | string | *(required)* | Patent number in any format (such as `EP3491801B1`, `US10123456B2`, `WO2024/123456`) |
+| `use_vlm`       | bool   | `false`      | Enable VLM enrichment for formulas and figures                                       |
+
+**Returns:** `{"pdf_path": "/data/scholar-mcp/pdfs/<stem>.pdf", "markdown": "...", "md_path": "/data/scholar-mcp/md/<stem>.md"}` when docling is configured, or just `{"pdf_path": "..."}` without it.
+
+Not all patents have full text available via OPS, WO and older EP patents sometimes lack PDFs. Returns `{"error": "pdf_not_available"}` in that case.
+
+Write-tagged
+
+This tool is write-tagged and hidden when `SCHOLAR_MCP_READ_ONLY=true`. It also requires EPO OPS credentials.
+
+______________________________________________________________________
+
+## Standards
+
+Scholar MCP supports Tier 1 standards bodies (NIST, IETF, W3C, ETSI) with full metadata and optional full-text conversion. Tier 2 paywalled bodies (ISO, IEC, IEEE) are tracked in [GitHub issues](https://github.com/pvliesdonk/scholar-mcp/issues).
+
+### `resolve_standard_identifier`
+
+Normalise a messy citation string to its canonical form and body.
+
+| Parameter | Type   | Default | Description                                                  |
+| --------- | ------ | ------- | ------------------------------------------------------------ |
+| `raw`     | string | ,       | Messy citation string (such as `"rfc9000"`, `"nist 800-53"`) |
+
+______________________________________________________________________
+
+### `search_standards`
+
+Search standards by identifier, title, or free text.
+
+| Parameter | Type    | Default | Description                                       |
+| --------- | ------- | ------- | ------------------------------------------------- |
+| `query`   | string  | ,       | Identifier, title, or free text                   |
+| `body`    | string  | null    | Filter to one body: `NIST`, `IETF`, `W3C`, `ETSI` |
+| `limit`   | integer | 10      | Max results (max 50)                              |
+
+______________________________________________________________________
+
+### `get_standard`
+
+Retrieve a standard by identifier (canonical or fuzzy). Optionally fetches and converts full text via docling.
+
+| Parameter         | Type    | Default | Description                             |
+| ----------------- | ------- | ------- | --------------------------------------- |
+| `identifier`      | string  | ,       | Canonical or fuzzy identifier           |
+| `fetch_full_text` | boolean | false   | Fetch and convert full text via docling |
+
+______________________________________________________________________
+
+### `get_sync_status`
+
+Reports the last run of each Tier 2 standards sync. Returns one record per body, see `scholar-mcp sync-standards` in the CLI docs.
+
+**Returns:** `{"runs": [{"body", "upstream_ref", "added", "updated", "unchanged", "withdrawn", "errors", "started_at", "finished_at"}]}`. An empty `runs` list means no sync has been run yet.
+
+______________________________________________________________________
+
+## PDF Conversion
+
+Write-tagged tools
+
+All PDF tools are tagged as write operations. They are hidden by default when `SCHOLAR_MCP_READ_ONLY=true`. Set `SCHOLAR_MCP_READ_ONLY=false` to enable them.
+
+### `fetch_paper_pdf`
+
+Download the PDF for a paper. Tries the Semantic Scholar open-access URL first, then falls back to alternative sources: ArXiv (from `externalIds`), PubMed Central, and Unpaywall (by DOI, requires `SCHOLAR_MCP_CONTACT_EMAIL`).
+
+| Parameter    | Type   | Default      | Description                 |
+| ------------ | ------ | ------------ | --------------------------- |
+| `identifier` | string | *(required)* | Paper ID (DOI, S2 ID, etc.) |
+
+**Returns:** `{"path": "/data/scholar-mcp/pdfs/<id>.pdf", "source": "s2_oa"}` or an error:
+
+- `{"error": "no_oa_pdf"}`: no PDF URL found from any source
+- `{"error": "download_failed"}`: HTTP error downloading the PDF
+
+The `source` field indicates where the PDF was obtained: `s2_oa`, `arxiv`, `pmc`, or `unpaywall`.
+
+______________________________________________________________________
+
+### `convert_pdf_to_markdown`
+
+Convert a local PDF file to Markdown via docling-serve.
+
+| Parameter   | Type   | Default      | Description                                    |
+| ----------- | ------ | ------------ | ---------------------------------------------- |
+| `file_path` | string | *(required)* | Absolute path to a PDF file                    |
+| `use_vlm`   | bool   | `false`      | Enable VLM enrichment for formulas and figures |
+
+**Returns:** `{"markdown": "...", "path": "/data/scholar-mcp/md/<name>.md", "vlm_used": true/false}`.
+
+When `use_vlm` is requested but VLM is not configured, the response includes a `vlm_skip_reason` field (such as `"vlm_api_url_not_configured"`).
+
+Start without VLM
+
+Standard conversion handles most papers well. Only retry with `use_vlm=true` when the result has garbled formulas or missing figure descriptions. VLM enrichment processes each formula and figure image individually via an external vision model, which is slower.
+
+**Caching:** Standard and VLM conversions are cached separately (`<stem>.md` vs `<stem>_vlm.md`), so switching modes never overwrites a previous conversion.
+
+Requires `SCHOLAR_MCP_DOCLING_URL` to be set. VLM enrichment also requires `SCHOLAR_MCP_VLM_API_URL` and `SCHOLAR_MCP_VLM_API_KEY`.
+
+______________________________________________________________________
+
+### `fetch_and_convert`
+
+Full paper-to-Markdown pipeline: downloads and converts the PDF, using the same fallback sources as `fetch_paper_pdf`.
+
+| Parameter    | Type   | Default      | Description                 |
+| ------------ | ------ | ------------ | --------------------------- |
+| `identifier` | string | *(required)* | Paper ID (DOI, S2 ID, etc.) |
+| `use_vlm`    | bool   | `false`      | Enable VLM enrichment       |
+
+**Returns:** On full success:
+
+```
+{
+  "metadata": {"paperId": "...", "title": "...", ...},
+  "markdown": "# Paper Title\n...",
+  "pdf_path": "/data/scholar-mcp/pdfs/<id>.pdf",
+  "md_path": "/data/scholar-mcp/md/<id>.md",
+  "pdf_source": "s2_oa",
+  "vlm_used": false
+}
+```
+
+Partial results are returned if a later stage fails (such as metadata + error if no OA PDF is available). The `pdf_source` field indicates the download source. When VLM is requested but not configured, the response includes `vlm_skip_reason`.
+
+Start without VLM
+
+Same advice as `convert_pdf_to_markdown`, try standard first, add VLM only if formulas or figures are missing. VLM and standard conversions are cached separately (`<id>.md` vs `<id>_vlm.md`).
+
+See [PDF Conversion guide](https://pvliesdonk.github.io/scholar-mcp/1.8/guides/pdf-conversion/index.md) for setup instructions.
+
+______________________________________________________________________
+
+### `fetch_pdf_by_url`
+
+Download a PDF from any URL and optionally convert to Markdown. Use this when you have found an alternative PDF link (such as from an author's homepage, a preprint server, or an institutional repository).
+
+| Parameter  | Type   | Default      | Description                                                                                   |
+| ---------- | ------ | ------------ | --------------------------------------------------------------------------------------------- |
+| `url`      | string | *(required)* | Direct URL to a PDF file                                                                      |
+| `filename` | string | *(none)*     | Filename stem for caching (such as `"smith2024_attention"`). Derived from the URL if omitted. |
+| `use_vlm`  | bool   | `false`      | Enable VLM enrichment for formulas and figures                                                |
+
+**Returns:** On success (with docling configured):
+
+```
+{
+  "pdf_path": "/data/scholar-mcp/pdfs/<filename>.pdf",
+  "markdown": "# Paper Title\n...",
+  "md_path": "/data/scholar-mcp/md/<filename>.md",
+  "vlm_used": false
+}
+```
+
+Without docling, only `pdf_path` is returned. The PDF is cached by filename, so subsequent calls with the same filename return immediately.
+
+______________________________________________________________________
+
+## Task Polling
+
+### `get_task_result`
+
+Poll for the result of a background task.
+
+| Parameter | Type   | Default      | Description                            |
+| --------- | ------ | ------------ | -------------------------------------- |
+| `task_id` | string | *(required)* | Task ID returned by a queued operation |
+
+**Returns:**
+
+```
+{"task_id": "a1b2c3d4e5f6", "status": "completed", "result": "{...}"}
+```
+
+Status values: `pending`, `running`, `completed`, `failed`. The `result` field contains the original tool output as a JSON string (only present when `completed`). On `failed`, an `error` field describes the failure.
+
+The response includes extra fields while the task is in progress (`pending` or `running`):
+
+```
+{
+  "task_id": "a1b2c3d4e5f6",
+  "status": "running",
+  "elapsed_seconds": 45,
+  "tool": "convert_pdf_to_markdown",
+  "hint": "PDF conversion typically takes 1-5 minutes depending on page count."
+}
+```
+
+The `hint` field gives expected duration, keep polling until the task completes.
+
+______________________________________________________________________
+
+### `list_tasks`
+
+List all active (non-expired) background tasks.
+
+**Returns:** JSON list of `{"task_id": "...", "status": "..."}` dicts.
+# Deployment
+
+# Docker Deployment
+
+## Quick start
+
+```
+docker run -v scholar-mcp-data:/data/scholar-mcp \
+           ghcr.io/pvliesdonk/scholar-mcp:latest
+```
+
+The server listens on port 8000 with HTTP transport by default. Add `-e SCHOLAR_MCP_S2_API_KEY=your-key` for higher rate limits (see below).
+
+## Docker Compose
+
+### Basic setup
+
+```
+services:
+  scholar-mcp:
+    image: ghcr.io/pvliesdonk/scholar-mcp:latest
+    restart: unless-stopped
+    environment:
+      SCHOLAR_MCP_S2_API_KEY: "${SCHOLAR_MCP_S2_API_KEY}"
+      SCHOLAR_MCP_CACHE_DIR: "/data/scholar-mcp"
+    volumes:
+      - scholar-mcp-data:/data/scholar-mcp
+
+volumes:
+  scholar-mcp-data:
+```
+
+### With docling-serve (PDF conversion)
+
+```
+services:
+  scholar-mcp:
+    image: ghcr.io/pvliesdonk/scholar-mcp:latest
+    restart: unless-stopped
+    environment:
+      SCHOLAR_MCP_S2_API_KEY: "${SCHOLAR_MCP_S2_API_KEY}"
+      SCHOLAR_MCP_DOCLING_URL: "http://docling-serve:5001"
+      SCHOLAR_MCP_READ_ONLY: "false"
+      SCHOLAR_MCP_CACHE_DIR: "/data/scholar-mcp"
+      SCHOLAR_MCP_CONTACT_EMAIL: "${SCHOLAR_MCP_CONTACT_EMAIL:-}"
+    volumes:
+      - scholar-mcp-data:/data/scholar-mcp
+
+  docling-serve:
+    image: ghcr.io/ds4sd/docling-serve:latest
+    restart: unless-stopped
+
+volumes:
+  scholar-mcp-data:
+```
+
+### With Traefik reverse proxy
+
+```
+services:
+  scholar-mcp:
+    image: ghcr.io/pvliesdonk/scholar-mcp:latest
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - scholar-mcp-data:/data/scholar-mcp
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.scholar-mcp.rule=Host(`scholar-mcp.yourdomain.com`)"
+      - "traefik.http.routers.scholar-mcp.tls.certresolver=letsencrypt"
+      - "traefik.http.services.scholar-mcp.loadbalancer.server.port=8000"
+    networks:
+      - traefik
+
+  docling-serve:
+    image: ghcr.io/ds4sd/docling-serve:latest
+    restart: unless-stopped
+    networks:
+      - traefik
+
+volumes:
+  scholar-mcp-data:
+
+networks:
+  traefik:
+    external: true
+```
+
+## Environment variables
+
+See [Configuration](https://pvliesdonk.github.io/scholar-mcp/1.8/configuration/index.md) for the full reference. Key variables for Docker:
+
+| Variable                      | Default               | Description                                                                                                   |
+| ----------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `SCHOLAR_MCP_S2_API_KEY`      | n/a                   | Semantic Scholar API key (optional; ~1 req/s without, ~10 req/s with)                                         |
+| `SCHOLAR_MCP_CACHE_DIR`       | `/data/scholar-mcp`   | Cache and PDF storage directory                                                                               |
+| `SCHOLAR_MCP_READ_ONLY`       | `true`                | Set `false` to enable PDF tools                                                                               |
+| `SCHOLAR_MCP_DOCLING_URL`     | n/a                   | docling-serve URL (such as `http://docling-serve:5001`)                                                       |
+| `SCHOLAR_MCP_BEARER_TOKEN`    | n/a                   | Bearer token for HTTP auth                                                                                    |
+| `FASTMCP_LOG_LEVEL`           | `INFO`                | Logging level (use `-v` or set to `DEBUG` for verbose output)                                                 |
+| `FASTMCP_ENABLE_RICH_LOGGING` | `true`                | Set `false` for structured JSON logging with aggregators                                                      |
+| `SCHOLAR_MCP_INSTRUCTIONS`    | (computed at startup) | System instructions for LLM context                                                                           |
+| `SCHOLAR_MCP_DEBUG_PORT`      | n/a                   | Remote-debugger TCP port (see [Remote debugging](#remote-debugging); requires `--build-arg DEBUG=true` image) |
+| `SCHOLAR_MCP_DEBUG_WAIT`      | `false`               | Block startup until IDE attaches (see [Remote debugging](#remote-debugging))                                  |
+
+For OIDC authentication, see [OIDC deployment](https://pvliesdonk.github.io/scholar-mcp/1.8/deployment/oidc/index.md).
+
+## Volumes
+
+| Container path      | Purpose                                                    |
+| ------------------- | ---------------------------------------------------------- |
+| `/data/scholar-mcp` | SQLite cache database, downloaded PDFs, converted Markdown |
+| `/data/state`       | FastMCP OIDC state (only needed with OIDC auth)            |
+
+Use named volumes (shown above) for persistence. Bind mounts also work:
+
+```
+volumes:
+  - ./data/scholar-mcp:/data/scholar-mcp
+```
+
+## UID/GID
+
+The image runs as a non-root user with UID/GID 1000 by default. To match your host user for bind mounts, set build args:
+
+```
+services:
+  scholar-mcp:
+    build:
+      context: .
+      args:
+        APP_UID: 1000
+        APP_GID: 1000
+```
+
+## Image tags
+
+| Tag      | Description           |
+| -------- | --------------------- |
+| `latest` | Latest release        |
+| `v1.0.1` | Specific version      |
+| `v1.0`   | Latest patch in 1.0.x |
+| `v1`     | Latest minor in 1.x   |
+
+Multi-arch: `linux/amd64` and `linux/arm64`.
+
+## Remote debugging
+
+Production images ship without `debugpy` to keep the image lean. To attach a remote Python debugger from VS Code or PyCharm:
+
+1. **Build with the debug extra:**
+
+   ```
+   docker build --build-arg DEBUG=true -t scholar-mcp:debug .
+   ```
+
+   This installs the `[debug]` optional-dependency group (which pulls `debugpy` transitively from `fastmcp-pvl-core`). Default builds (`DEBUG=false`) skip it.
+
+1. **Run with the debug env vars set and the port mapped:**
+
+   ```
+   docker run --rm \
+     -e SCHOLAR_MCP_DEBUG_PORT=5678 \
+     -e SCHOLAR_MCP_DEBUG_WAIT=true \
+     -p 127.0.0.1:5678:5678 \
+     -p 8000:8000 \
+     scholar-mcp:debug
+   ```
+
+   | Env var                  | Effect                                                                                                                                            |
+   | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+   | `SCHOLAR_MCP_DEBUG_PORT` | TCP port the debugger listens on (any value parsing to `0` disables; non-numeric or out-of-range values log a WARNING and the listener stays off) |
+   | `SCHOLAR_MCP_DEBUG_WAIT` | When truthy (`1`/`true`/`yes`/`on`), block startup until the IDE attaches. Default is non-blocking.                                               |
+
+1. **Attach from VS Code**, adding a launch config:
+
+   ```
+   {
+     "name": "Attach to scholar-mcp",
+     "type": "debugpy",
+     "request": "attach",
+     "connect": { "host": "localhost", "port": 5678 }
+   }
+   ```
+
+   PyCharm uses *Run → Edit Configurations → Python Debug Server* with the same host/port.
+
+Never publish the debug port on a public network
+
+The debug listener binds `0.0.0.0` inside the container so the IDE can reach it from the host, but **debugpy's DAP protocol is unauthenticated**: any peer that can reach the port has arbitrary code execution as the server process. Always bind the port mapping to localhost (`-p 127.0.0.1:5678:5678`) or tunnel via `kubectl port-forward` / SSH. Production images should be built with default `DEBUG=false`.
+
+When the helper is invoked but `debugpy` isn't installed (say, someone sets `DEBUG_PORT` on a non-debug image), it logs a WARNING and continues; this is the safe failure mode.
+
+# systemd Deployment
+
+Scholar MCP provides `.deb` and `.rpm` packages with a pre-configured systemd service.
+
+## Installation
+
+Download the latest package from the [releases page](https://github.com/pvliesdonk/scholar-mcp/releases/latest):
+
+```
+sudo dpkg -i scholar-mcp_*.deb
+```
+
+```
+sudo rpm -i scholar-mcp-*.rpm
+```
+
+The package installs:
+
+| Path                                          | Description                                |
+| --------------------------------------------- | ------------------------------------------ |
+| `/usr/lib/systemd/system/scholar-mcp.service` | systemd unit file                          |
+| `/opt/scholar-mcp/venv/`                      | Python virtual environment with the server |
+| `/etc/scholar-mcp/env.example`                | Example configuration file                 |
+| `/var/lib/scholar-mcp/`                       | State directory (cache, PDFs)              |
+
+A dedicated `scholar-mcp` system user and group are created automatically.
+
+## Configuration
+
+Copy the example config and edit it:
+
+```
+sudo cp /etc/scholar-mcp/env.example /etc/scholar-mcp/env
+sudo chmod 600 /etc/scholar-mcp/env
+sudo nano /etc/scholar-mcp/env
+```
+
+Set the cache directory and (optionally) your Semantic Scholar API key:
+
+```
+SCHOLAR_MCP_CACHE_DIR=/var/lib/scholar-mcp
+# Optional but recommended, without a key, requests are limited to ~1 req/s
+SCHOLAR_MCP_S2_API_KEY=your-key-here
+```
+
+See [Configuration](https://pvliesdonk.github.io/scholar-mcp/1.8/configuration/index.md) for all available variables.
+
+## Starting the service
+
+```
+# Start the service
+sudo systemctl start scholar-mcp
+
+# Enable start on boot
+sudo systemctl enable scholar-mcp
+
+# Check status
+sudo systemctl status scholar-mcp
+
+# View logs
+sudo journalctl -u scholar-mcp -f
+```
+
+The service runs in HTTP mode on port 8000 by default.
+
+## Security hardening
+
+The systemd unit includes detailed security directives:
+
+| Directive                                          | Effect                                        |
+| -------------------------------------------------- | --------------------------------------------- |
+| `ProtectSystem=strict`                             | Filesystem is read-only except explicit paths |
+| `ProtectHome=yes`                                  | Home directories are inaccessible             |
+| `PrivateTmp=yes`                                   | Private `/tmp` namespace                      |
+| `ReadWritePaths=/var/lib/scholar-mcp`              | Only the state directory is writable          |
+| `NoNewPrivileges=yes`                              | Cannot gain privileges                        |
+| `PrivateDevices=yes`                               | No access to physical devices                 |
+| `ProtectKernelTunables=yes`                        | Kernel tunables are read-only                 |
+| `RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6` | Only Unix and IP sockets                      |
+| `SystemCallFilter=@system-service`                 | Restricted syscall set                        |
+| `MemoryDenyWriteExecute=no`                        | Required for Python JIT                       |
+
+## Upgrading
+
+Install the new package version:
+
+```
+sudo dpkg -i scholar-mcp_*.deb
+```
+
+```
+sudo rpm -U scholar-mcp-*.rpm
+```
+
+The post-install script automatically:
+
+1. Creates or updates the virtual environment
+1. Installs the matching version from PyPI
+1. Reloads systemd
+1. Restarts the service if it was running
+
+Your configuration in `/etc/scholar-mcp/env` is preserved.
+
+## Uninstalling
+
+```
+# Remove package (keeps config and data)
+sudo apt remove scholar-mcp
+
+# Remove everything including config
+sudo apt purge scholar-mcp
+```
+
+```
+sudo rpm -e scholar-mcp
+```
+
+State data in `/var/lib/scholar-mcp/` is intentionally preserved on removal. Delete it manually if no longer needed.
+
+## Troubleshooting
+
+### Service fails to start
+
+Check the logs:
+
+```
+sudo journalctl -u scholar-mcp --no-pager -n 50
+```
+
+Common causes:
+
+- **Missing config**: ensure `/etc/scholar-mcp/env` exists and is readable
+- **Permission denied on cache dir**: verify `/var/lib/scholar-mcp/` is owned by `scholar-mcp:scholar-mcp`
+- **Port in use**: another service is using port 8000; check with `ss -tlnp | grep 8000`
+
+### FastMCP not installed
+
+If the post-install script failed (such as no internet during package install):
+
+```
+sudo /opt/scholar-mcp/venv/bin/pip install 'pvliesdonk-scholar-mcp[mcp]'
+sudo systemctl restart scholar-mcp
+```
+
+# OIDC Authentication
+
+Optional token-based authentication for HTTP deployments. OIDC activates automatically when all four required environment variables are set. For an overview of all authentication modes (bearer token, OIDC, no auth), see the [Authentication guide](https://pvliesdonk.github.io/scholar-mcp/1.8/guides/authentication/index.md).
+
+Transport requirement
+
+OIDC requires `--transport http` (or `sse`). It has no effect with `--transport stdio`.
+
+## Required Variables
+
+| Variable                         | Description                                                                                                                                               |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SCHOLAR_MCP_BASE_URL`           | Public base URL of the server (such as `https://mcp.example.com`; include prefix when mounted under subpath, such as `https://mcp.example.com/myservice`) |
+| `SCHOLAR_MCP_OIDC_CONFIG_URL`    | OIDC discovery endpoint (such as `https://auth.example.com/.well-known/openid-configuration`)                                                             |
+| `SCHOLAR_MCP_OIDC_CLIENT_ID`     | OIDC client ID registered with your provider                                                                                                              |
+| `SCHOLAR_MCP_OIDC_CLIENT_SECRET` | OIDC client secret                                                                                                                                        |
+
+## Optional Variables
+
+| Variable                               | Default   | Description                                                                                                                                                                                    |
+| -------------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY`     | ephemeral | JWT signing key. **Required on Linux/Docker**: the default is ephemeral and invalidates tokens on restart                                                                                      |
+| `SCHOLAR_MCP_OIDC_AUDIENCE`            | n/a       | Expected JWT audience claim; leave unset if your provider does not set one                                                                                                                     |
+| `SCHOLAR_MCP_OIDC_REQUIRED_SCOPES`     | `openid`  | Comma-separated required scopes                                                                                                                                                                |
+| `SCHOLAR_MCP_OIDC_VERIFY_ACCESS_TOKEN` | `false`   | Set `true` to verify the upstream access token as JWT instead of the id token. Only needed when your provider issues JWT access tokens and you require audience-claim validation on that token |
+
+## JWT Signing Key
+
+The FastMCP default signing key is ephemeral (regenerated on startup), which forces clients to re-authenticate after every restart. Set a stable random secret to avoid this:
+
+```
+# Generate once, store in your .env file
+openssl rand -hex 32
+```
+
+Linux / Docker
+
+On Linux (including Docker), the ephemeral key is especially problematic because it does not persist across process restarts. Always set `SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY` in production.
+
+## Setup with Authelia
+
+Note
+
+Authelia does not support Dynamic Client Registration (RFC 7591). Clients must be registered manually in `configuration.yml`.
+
+Opaque access tokens
+
+Authelia issues opaque (non-JWT) access tokens. This is handled automatically: the server verifies the `id_token` (always a standard JWT) instead. No extra configuration is needed.
+
+### 1. Register the client in Authelia
+
+```
+identity_providers:
+  oidc:
+    clients:
+      - client_id: my-scholar-mcp
+        client_secret: '$pbkdf2-sha512$...'   # authelia crypto hash generate
+        redirect_uris:
+          - https://mcp.example.com/auth/callback
+        grant_types: [authorization_code]
+        response_types: [code]
+        pkce_challenge_method: S256
+        scopes: [openid, profile, email]
+```
+
+### 2. Set environment variables
+
+```
+SCHOLAR_MCP_BASE_URL=https://mcp.example.com
+SCHOLAR_MCP_OIDC_CONFIG_URL=https://auth.example.com/.well-known/openid-configuration
+SCHOLAR_MCP_OIDC_CLIENT_ID=my-scholar-mcp
+SCHOLAR_MCP_OIDC_CLIENT_SECRET=your-client-secret
+SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY=$(openssl rand -hex 32)
+```
+
+### 3. Start with HTTP transport
+
+```
+scholar-mcp serve --transport http --port 8000
+```
+
+## Architecture
+
+The server uses FastMCP's built-in `OIDCProxy` auth provider (not the external `mcp-auth-proxy` sidecar). The authentication flow:
+
+```
+Client → scholar-mcp (with OIDCProxy) → OIDC Provider (Authelia/Keycloak)
+```
+
+1. Client connects to the MCP server
+1. Server redirects to the OIDC provider for authentication
+1. Provider authenticates the user and returns a code
+1. Server exchanges the code for tokens
+1. Subsequent requests include the JWT token
+
+## Docker Compose with OIDC
+
+```
+services:
+  scholar-mcp:
+    image: ghcr.io/pvliesdonk/scholar-mcp:latest
+    env_file: .env
+    volumes:
+      - state-data:/data/state
+    environment:
+      FASTMCP_HOME: /data/state/fastmcp
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.scholar-mcp.rule=Host(`mcp.example.com`)"
+      - "traefik.http.routers.scholar-mcp.tls.certresolver=letsencrypt"
+      - "traefik.http.services.scholar-mcp.loadbalancer.server.port=8000"
+    networks:
+      - traefik
+
+volumes:
+  state-data:
+
+networks:
+  traefik:
+    external: true
+```
+
+With the corresponding `.env`:
+
+```
+SCHOLAR_MCP_READ_ONLY=true
+SCHOLAR_MCP_BASE_URL=https://mcp.example.com
+SCHOLAR_MCP_OIDC_CONFIG_URL=https://auth.example.com/.well-known/openid-configuration
+SCHOLAR_MCP_OIDC_CLIENT_ID=my-scholar-mcp
+SCHOLAR_MCP_OIDC_CLIENT_SECRET=your-client-secret
+SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY=your-stable-hex-key
+```
+
+For a prefixed deployment (such as `https://mcp.example.com/myservice/mcp`), see [Subpath Deployments](#subpath-deployments) below.
+
+## Subpath Deployments
+
+When OIDC is enabled behind a reverse-proxy subpath, `BASE_URL` and `HTTP_PATH` serve different roles:
+
+| Variable    | Purpose                                                    | Example                             |
+| ----------- | ---------------------------------------------------------- | ----------------------------------- |
+| `BASE_URL`  | Public URL of the server, **including the subpath prefix** | `https://mcp.example.com/myservice` |
+| `HTTP_PATH` | Internal MCP endpoint mount point (**no subpath prefix**)  | `/mcp`                              |
+
+The reverse proxy strips the subpath prefix before forwarding to the application. FastMCP concatenates `BASE_URL + HTTP_PATH` to build the public resource URL, so including the prefix in both produces broken URLs with duplicated path segments.
+
+Do not duplicate the subpath
+
+Setting `BASE_URL=https://mcp.example.com/myservice` together with `HTTP_PATH=/myservice/mcp` produces a duplicated resource URL: `https://mcp.example.com/myservice/myservice/mcp`. The subpath belongs in `BASE_URL` only.
+
+### Configuration
+
+Environment variables:
+
+```
+SCHOLAR_MCP_BASE_URL=https://mcp.example.com/myservice
+SCHOLAR_MCP_HTTP_PATH=/mcp
+```
+
+Register this callback URI in your OIDC provider:
+
+```
+https://mcp.example.com/myservice/auth/callback
+```
+
+### Reverse proxy routing
+
+The reverse proxy must:
+
+1. **Strip the prefix** (`/myservice`) from operational routes before forwarding to the app
+1. **Forward OAuth discovery routes** to this service (without stripping prefixes):
+   - `/.well-known/oauth-authorization-server`: authorization server metadata
+   - `/.well-known/oauth-protected-resource/myservice/mcp`: protected resource metadata
+
+Example Traefik configuration:
+
+```
+labels:
+  # Operational routes: strip /myservice prefix before forwarding
+  - "traefik.http.routers.mcp-app.rule=Host(`mcp.example.com`) && PathPrefix(`/myservice`)"
+  - "traefik.http.middlewares.strip-myservice.stripprefix.prefixes=/myservice"
+  - "traefik.http.routers.mcp-app.middlewares=strip-myservice"
+  - "traefik.http.services.mcp-app.loadbalancer.server.port=8000"
+  # OAuth discovery routes: forward without stripping
+  - "traefik.http.routers.mcp-wellknown.rule=Host(`mcp.example.com`) && (PathPrefix(`/.well-known/oauth-authorization-server`) || PathPrefix(`/.well-known/oauth-protected-resource/myservice/mcp`))"
+  - "traefik.http.routers.mcp-wellknown.service=mcp-app"
+```
+
+Note
+
+This configuration requires that no other OAuth service claims `/.well-known/oauth-authorization-server` on this hostname. See [Shared-hostname limitation](#shared-hostname-limitation) below.
+
+### Shared-hostname limitation
+
+Shared-hostname subpath with native OIDC is not supported
+
+When multiple OAuth-capable services share a hostname, native OIDC on a subpath does not work.
+
+**Why:** FastMCP serves the OAuth authorization-server metadata at `/.well-known/oauth-authorization-server` (host root), regardless of the subpath in `BASE_URL`. The FastMCP codebase contains an RFC 8414 path-aware override (`OIDCProxy.get_well_known_routes()`) that would serve it at `/.well-known/oauth-authorization-server/myservice`. However, this method is not wired into the route mounting flow and is effectively dead code.
+
+The protected-resource metadata (`/.well-known/oauth-protected-resource/myservice/mcp`) is correctly path-namespaced and does not collide. Only the authorization-server discovery route is the problem.
+
+This works when the MCP server is the **only** OAuth service on the hostname. It breaks when another service already owns `/.well-known/oauth-authorization-server`.
+
+**Recommendations for shared-hostname scenarios:**
+
+- **Dedicated hostname** (preferred): give the MCP server its own hostname (such as `myservice.example.com`) so discovery routes do not collide.
+- **External auth gateway**: use `mcp-auth-proxy` as a sidecar instead of native OIDC. The MCP server runs unauthenticated behind the proxy, and the proxy handles OAuth discovery at its own routes.
