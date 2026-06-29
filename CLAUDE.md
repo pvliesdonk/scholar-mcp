@@ -64,7 +64,9 @@ The config is in `_skip_if_exists`, so domain-specific additions (shellcheck, ya
 
 Trivial exceptions: pure typo fixes and automated dependency bumps (Dependabot / Renovate) may skip the issue.
 
+<!-- TEMPLATE-TRACKING-START -->
 **Bot reviewers (claude-review, gemini-code-assist) are merge gates, not pair reviewers.** Local review must be complete before the PR opens. If a bot finds anything on first run, the local review was incomplete — that is a discipline failure to investigate, not "address-and-move-on." Run a local code-review pass on the cumulative diff before `gh pr create`; the bots are not a substitute.
+<!-- TEMPLATE-TRACKING-END -->
 
 ## GitHub Review Types
 
@@ -141,6 +143,16 @@ Domain configuration composes `fastmcp_pvl_core.ServerConfig` inside your domain
 
 Env var prefix is `SCHOLAR_MCP_` — all env reads go through `fastmcp_pvl_core.env(_ENV_PREFIX, "SUFFIX", default)` so naming stays consistent.
 
+### Config wizard
+
+`docs/javascripts/config-wizard/wizard-spec.json` drives the guided-setup page. It is **domain-owned and write-once** (`_skip_if_exists`): the runtime (`wizard.js`, `generators.js`, `wizard-spec-schema.json`, the generic tests) is template-owned and re-rendered, but the spec itself is never re-rendered, so it does **not** auto-update when you add config or when the template grows new questions. Reconcile it by hand.
+
+Two rules keep the spec honest:
+
+- **Cover the `ServerConfig` surface.** The seed covers the full `ServerConfig` surface plus logging; the drift test enforces completeness, so no explicit field list needs hand-maintaining here. When you add a domain setting that an operator would plausibly configure, add a question for it. When you adopt a new upstream setting, surface it too.
+- **Coverage is CI-enforced:** `tests/test_config_wizard_drift.py` fails if the wizard offers a var no read site consumes (orphan) or omits a setting the server reads: both `ServerConfig` (via `server_config_env_suffixes()`) and your `ProjectConfig.from_env`. Offer every setting; hide niche ones with `advancedGroup`, never by omission. For the coverage check, the only escape is `_COVERED_BY_INFERENCE`, for settings with no dedicated control by design (for example, `AUTH_MODE`, inferred from which auth vars are set). For the orphan check, `FASTMCP_*` vars are exempt: their prefix never matches `SCHOLAR_MCP_`, so they sit outside the coverage check by construction, and they are read by FastMCP itself rather than by project code.
+- **Only offer vars the server actually consumes.** Every `var` must resolve to a real read site (`ServerConfig.from_env`, your `ProjectConfig.from_env`, the CLI, or a native `FASTMCP_*` var) — *advertised but unread* env vars (e.g. a hint that mentions `SCHOLAR_MCP_SERVER_NAME` while the scaffold hardcodes the name) must not appear. List secret-bearing vars in `secretKeys` so the wizard masks them and keeps them out of the shareable link. A question may legitimately have **no `var`** when it is a wizard-internal routing key — the seed's `auth` select drives `showIf` but maps to no single env var (auth mode is inferred by `ServerConfig` from which vars are set), so it is not an orphan. Gate `showIf`/`guards` on the questions that are actually visible, and make every `showIf` self-contained: because the runtime checks raw answers with no cascade, a question gated on `auth` must *also* gate on `deployment=server` (the gate on `auth` itself), or it leaks — and emits its var — when `auth` is hidden but its stale answer lingers.
+
 ### Tool icons
 
 Drop SVG / PNG / ICO / JPEG files into `src/scholar_mcp/static/icons/` and bulk-attach them to registered tools via `fastmcp_pvl_core.register_tool_icons(mcp, {"tool_name": "filename.svg"}, static_dir=...)` at the end of `register_tools()` — or attach at decoration time with `@mcp.tool(icons=[make_icon(STATIC / "x.svg")])` (where `STATIC = Path(__file__).parent / "static" / "icons"` is a shorthand you define at module level). The scaffold ships an empty `static/icons/` directory; commented-out wiring lives in `tools.py`.
@@ -154,12 +166,24 @@ These sentinel blocks in `Dockerfile` are preserved across `copier update`. Add 
 - `# DOCKERFILE-STATE-DIRS-START` / `-END` — state subdirectories created under `/data` (chowned to the runtime user)
 - `# DOCKERFILE-VOLUMES-START` / `-END` — `VOLUME` declarations on the final image
 
+## Tool Registration Checklist
+
+Every MCP tool you register must carry the full set of metadata below — not just the behaviour. A tool that works but lacks a title, hints, or docs is incomplete. When adding or changing a tool, verify each item:
+
+- **Title** — a human-readable `annotations.title` (e.g. `"Search Vault"`). Title-aware clients (notably VS Code, which honours only `title` and `readOnlyHint` among annotations) render this as the tool's label; without it they fall back to the raw machine name. Set it inline in the tool's `annotations={...}` dict.
+- **Behavioural hints** — `readOnlyHint`, and where they apply `destructiveHint` / `idempotentHint`, in the same `annotations` dict. These describe side effects accurately (a destructive tool must set `destructiveHint=True`).
+- **Icon** — an entry wired via `register_tool_icons(...)` or `@mcp.tool(icons=[...])` (see [Tool icons](#tool-icons)).
+- **Docstring** — a Google-style docstring; FastMCP surfaces it as the tool description and per-parameter docs.
+- **Docs entry** — a row in your published tools reference (e.g. `docs/tools/index.md`) so the tool is documented for users (per [Documentation Discipline](#documentation-discipline)).
+- **Enforcement test** — keep a test that enumerates the registered tools and asserts each carries the metadata above (at minimum a non-empty `annotations.title`). Enumerate the *full* registry, not just the client-facing listing, so app-only / hidden tools cannot slip past. Such a test turns this checklist into a CI gate: a future tool added without a title fails loudly rather than silently shipping its machine name.
+
 ## Server Info Tool (`get_server_info`)
 
 `make_server()` registers `get_server_info` (via `fastmcp_pvl_core.register_server_info_tool`) so operators can answer "is the latest fix actually deployed?" with a single MCP call. The default response carries `server_name`, `server_version`, and `core_version`.
 
 For services that talk to a remote upstream (e.g. paperless, an HTTP API), wire the upstream version inside the `DOMAIN-UPSTREAM-START` / `DOMAIN-UPSTREAM-END` sentinel in `src/scholar_mcp/server.py`. Pass `upstream_version=` (a zero-arg callable returning a dict / str / None) and optionally `upstream_label="<service>"` (default `"upstream"`). The simplest pattern is a module-level upstream client (typically constructed from env vars at import time) whose version method is referenced from the callable — `CurrentContext()` is a FastMCP DI marker that only resolves inside parameter defaults, so it cannot be called directly from a zero-arg provider. The block is preserved across `copier update`.
 
+<!-- TEMPLATE-TRACKING-START -->
 ## Shared Infrastructure
 
 Shared infrastructure (auth providers, middleware stack, logging bootstrap, event store factory, CLI scaffolding, release pipeline, Docker entrypoint, nfpm packaging, mcpb bundle) lives upstream in two places:
@@ -176,6 +200,7 @@ Fixes and improvements to shared code land in those repos and propagate here via
 - **Domain-only fix** (anything inside a `DOMAIN-*`, `CONFIG-*`, or `PROJECT-*` sentinel block, `tools.py`, `resources.py`, `prompts.py`, `domain.py`, `tests/`): PR on this repo directly.
 
 If a conflict marker appears in a copier-update bot PR, the conflict itself often signals a template bug — investigate whether the template's version needs fixing before resolving locally.
+<!-- TEMPLATE-TRACKING-END -->
 
 <!-- ===== TEMPLATE-OWNED SECTIONS END ===== -->
 

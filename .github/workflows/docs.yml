@@ -24,14 +24,14 @@ jobs:
     # in `deploy` on release:published.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           # On release events the triggering tag may move after the workflow is
           # queued (semantic-release pushes a version-bump commit); build main.
           ref: ${{ github.event_name == 'release' && 'main' || github.ref }}
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v8.1.0
+        uses: astral-sh/setup-uv@v8.2.0
         with:
           version: "latest"
 
@@ -50,8 +50,12 @@ jobs:
       - name: Install Chromium
         run: uv run playwright install --with-deps chromium
 
-      - name: Run config-wizard smoke test
-        run: uv run pytest tests/test_config_wizard_smoke.py -v -m browser
+      - name: Run config-wizard browser tests
+        # Both the template-owned smoke suite and the project-owned domain suite
+        # (test_config_wizard_domain.py). -m browser selects the browser-marked
+        # tests in each; the seeded domain placeholder is skipped until a
+        # consumer replaces it with real assertions.
+        run: uv run pytest tests/test_config_wizard_smoke.py tests/test_config_wizard_domain.py -v -m browser
 
   deploy:
     # Publish versioned docs with mike, serving from the gh-pages branch:
@@ -76,14 +80,14 @@ jobs:
     steps:
       # `needs: build` is a sequencing gate only — mike drives its own
       # build internally; no artifact is passed from the build job.
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           # Full history required: mike reads and pushes the gh-pages branch.
           fetch-depth: 0
           ref: main
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v8.1.0
+        uses: astral-sh/setup-uv@v8.2.0
         with:
           version: "latest"
 
