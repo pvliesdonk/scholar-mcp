@@ -26,7 +26,7 @@ from ._google_books_client import GoogleBooksClient
 from ._openalex_client import OpenAlexClient
 from ._openlibrary_client import OpenLibraryClient
 from ._rate_limiter import RateLimiter
-from ._s2_client import S2Client, run_keepalive
+from ._s2_client import KEEPALIVE_INTERVAL_SECONDS, S2Client, run_keepalive
 from ._standards_client import StandardsClient
 from ._task_queue import TaskQueue
 from .config import ProjectConfig, load_config
@@ -112,7 +112,9 @@ def _start_s2_keepalive(
     if not api_key:
         logger.info("s2_keepalive_not_started reason=no_api_key")
         return None
-    logger.info("s2_keepalive_started interval_days=7")
+    logger.info(
+        "s2_keepalive_started interval_days=%s", KEEPALIVE_INTERVAL_SECONDS // 86400
+    )
     return asyncio.create_task(run_keepalive(client))
 
 
