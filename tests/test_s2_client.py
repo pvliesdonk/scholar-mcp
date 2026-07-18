@@ -234,3 +234,30 @@ async def test_run_keepalive_rate_limited_logs_and_continues(
 
     assert route.call_count == 1
     assert "s2_keepalive_rate_limited" in caplog.text
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_run_keepalive_network_error_logs_and_continues(
+    respx_mock, client, caplog, monkeypatch
+):
+    """A network-level failure (httpx.HTTPError, not HTTPStatusError) logs
+    s2_keepalive_failed status=network_error but does not kill the loop."""
+    route = respx_mock.get(f"/paper/{KEEPALIVE_PAPER_ID}").mock(
+        side_effect=httpx.ConnectError("connection refused")
+    )
+    sleep_calls: list[float] = []
+
+    async def fake_sleep(seconds: float) -> None:
+        sleep_calls.append(seconds)
+        if len(sleep_calls) >= 1:
+            raise asyncio.CancelledError
+
+    monkeypatch.setattr("scholar_mcp._s2_client.asyncio.sleep", fake_sleep)
+    with (
+        caplog.at_level(logging.DEBUG, logger="scholar_mcp._s2_client"),
+        pytest.raises(asyncio.CancelledError),
+    ):
+        await run_keepalive(client)
+
+    assert route.call_count == 1
+    assert "s2_keepalive_failed status=network_error" in caplog.text
