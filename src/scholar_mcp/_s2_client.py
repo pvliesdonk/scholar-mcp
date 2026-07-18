@@ -399,10 +399,12 @@ async def run_keepalive(client: S2Client) -> None:
                 logger.error("s2_keepalive_key_forbidden", exc_info=True)
             else:
                 logger.warning(
-                    "s2_keepalive_failed status=%s", exc.response.status_code
+                    "s2_keepalive_failed status=%s",
+                    exc.response.status_code,
+                    exc_info=True,
                 )
         except httpx.HTTPError:
-            logger.warning("s2_keepalive_failed status=network_error")
+            logger.warning("s2_keepalive_failed status=network_error", exc_info=True)
         else:
             logger.debug("s2_keepalive_ok")
         await asyncio.sleep(KEEPALIVE_INTERVAL_SECONDS)

@@ -132,7 +132,6 @@ async def make_service_lifespan(
     config.cache_dir.mkdir(parents=True, exist_ok=True)
 
     s2 = S2Client(api_key=config.s2_api_key)
-    s2_keepalive_task = _start_s2_keepalive(s2, api_key=config.s2_api_key)
     ua = "scholar-mcp/0.1"
     if config.contact_email:
         ua = f"{ua} (mailto:{config.contact_email})"
@@ -203,6 +202,8 @@ async def make_service_lifespan(
     standards = StandardsClient(standards_http, cache_dir=config.cache_dir, cache=cache)
 
     enrichment = _build_enrichment_pipeline()
+
+    s2_keepalive_task = _start_s2_keepalive(s2, api_key=config.s2_api_key)
 
     bundle = ServiceBundle(
         s2=s2,

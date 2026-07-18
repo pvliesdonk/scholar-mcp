@@ -17,7 +17,7 @@ from ._epo_client import EpoRateLimitedError
 from ._openlibrary_client import normalize_book
 from ._patent_numbers import is_patent_number, normalize
 from ._rate_limiter import RateLimitedError
-from ._s2_client import FIELD_SETS, format_s2_error
+from ._s2_client import FIELD_SETS, format_s2_error, log_s2_error
 from ._server_deps import ServiceBundle, get_bundle
 
 if TYPE_CHECKING:
@@ -266,7 +266,8 @@ def register_utility_tools(mcp: FastMCP) -> None:
                         identifier, fields="externalIds,paperId", retry=retry
                     )
                     doi = (paper.get("externalIds") or {}).get("DOI")
-                except httpx.HTTPStatusError:
+                except httpx.HTTPStatusError as exc:
+                    log_s2_error(exc)
                     return json.dumps({"error": "not_found", "identifier": identifier})
 
             if not doi:
