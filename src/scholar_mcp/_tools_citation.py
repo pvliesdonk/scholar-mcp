@@ -12,7 +12,7 @@ from fastmcp.dependencies import Depends
 
 from ._citation_formatter import format_bibtex, format_csl_json, format_ris
 from ._rate_limiter import RateLimitedError
-from ._s2_client import FIELD_SETS
+from ._s2_client import FIELD_SETS, format_s2_error
 from ._server_deps import ServiceBundle, get_bundle
 
 if TYPE_CHECKING:
@@ -79,13 +79,7 @@ def register_citation_tools(mcp: FastMCP) -> None:
                     paper_ids, fields=FIELD_SETS["full"], retry=retry
                 )
             except httpx.HTTPStatusError as exc:
-                return json.dumps(
-                    {
-                        "error": "upstream_error",
-                        "status": exc.response.status_code,
-                        "detail": exc.response.text[:200],
-                    }
-                )
+                return format_s2_error(exc)
 
             papers: list[PaperRecord] = []
             errors: list[dict[str, Any]] = []
