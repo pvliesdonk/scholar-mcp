@@ -12,7 +12,7 @@ from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
 
 from ._rate_limiter import RateLimitedError
-from ._s2_client import FIELD_SETS
+from ._s2_client import FIELD_SETS, format_s2_error, log_s2_error
 from ._server_deps import ServiceBundle, get_bundle
 
 logger = logging.getLogger(__name__)
@@ -122,12 +122,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
                                     "identifier": identifier,
                                 }
                             )
-                        return json.dumps(
-                            {
-                                "error": "upstream_error",
-                                "status": exc.response.status_code,
-                            }
-                        )
+                        return format_s2_error(exc)
                     data = page.get("data") or []
                     for item in data:
                         cc = item.get("citingPaper", {}).get("citationCount")
@@ -175,12 +170,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
             except httpx.HTTPStatusError as exc:
                 if exc.response.status_code == 404:
                     return json.dumps({"error": "not_found", "identifier": identifier})
-                return json.dumps(
-                    {
-                        "error": "upstream_error",
-                        "status": exc.response.status_code,
-                    }
-                )
+                return format_s2_error(exc)
             data_list: list[dict[str, Any]] = result.get("data") or []  # type: ignore[assignment]
             citing_papers = [
                 item.get("citingPaper", {})
@@ -239,9 +229,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
             except httpx.HTTPStatusError as exc:
                 if exc.response.status_code == 404:
                     return json.dumps({"error": "not_found", "identifier": identifier})
-                return json.dumps(
-                    {"error": "upstream_error", "status": exc.response.status_code}
-                )
+                return format_s2_error(exc)
             papers = [
                 item.get("citedPaper", {})
                 for item in result.get("data") or []
@@ -573,7 +561,8 @@ def register_graph_tools(mcp: FastMCP) -> None:
                                 if item.get("citedPaper", {}).get("paperId")
                             ]
                             await bundle.cache.set_references(paper_id, cached)
-                        except httpx.HTTPStatusError:
+                        except httpx.HTTPStatusError as exc:
+                            log_s2_error(exc)
                             cached = []
                     neighbours.extend(cached)
                 if direction in ("citations", "both"):
@@ -593,7 +582,8 @@ def register_graph_tools(mcp: FastMCP) -> None:
                                 if item.get("citingPaper", {}).get("paperId")
                             ]
                             await bundle.cache.set_citations(paper_id, cached_cit)
-                        except httpx.HTTPStatusError:
+                        except httpx.HTTPStatusError as exc:
+                            log_s2_error(exc)
                             cached_cit = []
                     neighbours.extend(cached_cit)
                 return neighbours
