@@ -1314,6 +1314,89 @@ async def test_get_citation_graph_null_data_references(
     assert data["nodes"][0]["id"] == "p1"
 
 
+# --- get_citation_graph logs S2 403s at previously-silent sites (#232) ---
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_citation_graph_seed_resolution_403_logs_key_forbidden(
+    respx_mock: respx.MockRouter, mcp: FastMCP, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A 403 resolving seed metadata logs s2_key_forbidden but doesn't fail
+    the whole call — seeds fall back to title/year=None as before."""
+    respx_mock.post("/paper/batch").mock(
+        return_value=httpx.Response(403, json={"message": "Forbidden"})
+    )
+    respx_mock.get("/paper/p1/citations").mock(
+        return_value=httpx.Response(200, json={"data": []})
+    )
+    with caplog.at_level("WARNING", logger="scholar_mcp._s2_client"):
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "get_citation_graph",
+                {"seed_ids": ["p1"], "direction": "citations", "depth": 1},
+            )
+    data = json.loads(result.content[0].text)
+    assert data["nodes"][0]["id"] == "p1"
+    assert data["nodes"][0]["title"] is None
+    assert "s2_key_forbidden" in caplog.text
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_citation_graph_citation_expansion_403_logs_key_forbidden(
+    respx_mock: respx.MockRouter, mcp: FastMCP, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A 403 expanding citations logs s2_key_forbidden but doesn't fail the
+    whole call — that node's expansion is silently skipped as before."""
+    respx_mock.post("/paper/batch").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {"paperId": "p1", "title": "Seed", "year": 2020, "citationCount": 10}
+            ],
+        )
+    )
+    respx_mock.get("/paper/p1/citations").mock(
+        return_value=httpx.Response(403, json={"message": "Forbidden"})
+    )
+    with caplog.at_level("WARNING", logger="scholar_mcp._s2_client"):
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "get_citation_graph",
+                {"seed_ids": ["p1"], "direction": "citations", "depth": 1},
+            )
+    data = json.loads(result.content[0].text)
+    assert data["stats"]["total_nodes"] == 1
+    assert "s2_key_forbidden" in caplog.text
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_citation_graph_reference_expansion_403_logs_key_forbidden(
+    respx_mock: respx.MockRouter, mcp: FastMCP, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A 403 expanding references logs s2_key_forbidden but doesn't fail the
+    whole call — that node's expansion is silently skipped as before."""
+    respx_mock.post("/paper/batch").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {"paperId": "p1", "title": "Seed", "year": 2020, "citationCount": 10}
+            ],
+        )
+    )
+    respx_mock.get("/paper/p1/references").mock(
+        return_value=httpx.Response(403, json={"message": "Forbidden"})
+    )
+    with caplog.at_level("WARNING", logger="scholar_mcp._s2_client"):
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "get_citation_graph",
+                {"seed_ids": ["p1"], "direction": "references", "depth": 1},
+            )
+    data = json.loads(result.content[0].text)
+    assert data["stats"]["total_nodes"] == 1
+    assert "s2_key_forbidden" in caplog.text
+
+
 # --- Bug fix: get_citations applies min_citations client-side (#37) ---
 
 

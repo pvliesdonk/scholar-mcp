@@ -315,7 +315,9 @@ def register_graph_tools(mcp: FastMCP) -> None:
                     fields=FIELD_SETS["compact"],
                     retry=retry,
                 )
-            except (httpx.HTTPError, ValueError):
+            except (httpx.HTTPError, ValueError) as exc:
+                if isinstance(exc, httpx.HTTPStatusError):
+                    log_s2_error(exc)
                 seed_results = [None] * len(seed_batch)
 
             for seed_id, seed_data in zip(seed_batch, seed_results, strict=False):
@@ -410,6 +412,8 @@ def register_graph_tools(mcp: FastMCP) -> None:
                             s2_off += len(data)
                             if len(data) < batch or min_citations is None:
                                 break
+                    except httpx.HTTPStatusError as exc:
+                        log_s2_error(exc)
                     except httpx.HTTPError:
                         pass
 
@@ -457,6 +461,8 @@ def register_graph_tools(mcp: FastMCP) -> None:
                                     "direction": "cites",
                                 }
                             )
+                    except httpx.HTTPStatusError as exc:
+                        log_s2_error(exc)
                     except httpx.HTTPError:
                         pass
 
