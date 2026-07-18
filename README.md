@@ -244,6 +244,14 @@ All settings are controlled via environment variables with the `SCHOLAR_MCP_` pr
 | `SCHOLAR_MCP_CACHE_DIR` | `/data/scholar-mcp` | Directory for the SQLite cache database and downloaded PDFs |
 | `SCHOLAR_MCP_CONTACT_EMAIL` | — | Included in the OpenAlex User-Agent for [polite pool](https://docs.openalex.org/how-to-use-the-api/rate-limits-and-authentication#the-polite-pool) access (faster rate limits); also enables Unpaywall PDF lookups |
 
+Scholar-mcp pings Semantic Scholar once on startup and every 7 days
+thereafter to keep the configured key from being removed for inactivity
+(Semantic Scholar may remove keys unused for 60+ days). If S2 starts
+rejecting the key with `403 Forbidden`, this shows up in the server logs
+as `s2_key_forbidden` (on real tool calls) or `s2_keepalive_key_forbidden`
+(from the background keepalive) — grep for either to confirm a dead key
+versus a transient upstream issue.
+
 ### PDF Conversion (optional)
 
 | Variable | Default | Description |
