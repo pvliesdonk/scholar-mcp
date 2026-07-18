@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -24,6 +25,50 @@ FIELD_SETS: dict[str, str] = {
         "abstract,tldr,openAccessPdf,fieldsOfStudy,referenceCount"
     ),
 }
+
+
+def log_s2_error(exc: httpx.HTTPStatusError) -> None:
+    """Log an S2 upstream HTTP error at a level and event name operators can alert on.
+
+    A 403 gets its own event name (``s2_key_forbidden``) distinct from the
+    ordinary 429 retry-path logging in ``_rate_limiter.py`` — it is a
+    non-retryable failure class, most commonly an S2 API key that has been
+    revoked or removed for inactivity.
+
+    Args:
+        exc: The HTTP error raised by the S2 client.
+    """
+    status = exc.response.status_code
+    detail = exc.response.text[:200]
+    if status == 403:
+        logger.warning("s2_key_forbidden status=403 detail=%s", detail)
+    else:
+        logger.warning("s2_upstream_error status=%s detail=%s", status, detail)
+
+
+def format_s2_error(exc: httpx.HTTPStatusError) -> str:
+    """Log and format an S2 upstream HTTP error as a caller-facing JSON string.
+
+    Logs full detail server-side via :func:`log_s2_error`. The returned
+    JSON intentionally omits the raw upstream response body — LLM callers
+    get a generic, non-leaking message; operators get full detail from the
+    log line.
+
+    Args:
+        exc: The HTTP error raised by the S2 client.
+
+    Returns:
+        JSON string: ``{"error": "upstream_error", "status": <code>,
+        "detail": <generic message>}``.
+    """
+    log_s2_error(exc)
+    return json.dumps(
+        {
+            "error": "upstream_error",
+            "status": exc.response.status_code,
+            "detail": "Semantic Scholar API request failed; see server logs for details",
+        }
+    )
 
 
 class S2Client:
