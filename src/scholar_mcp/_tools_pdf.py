@@ -14,6 +14,7 @@ from fastmcp.dependencies import Depends
 
 from ._pdf_url_resolver import ResolvedPdf, resolve_alternative_pdf
 from ._rate_limiter import RateLimitedError
+from ._s2_client import format_s2_error
 from ._server_deps import ServiceBundle, get_bundle
 
 if TYPE_CHECKING:
@@ -134,12 +135,7 @@ def register_pdf_tools(mcp: FastMCP) -> None:
                         return json.dumps(
                             {"error": "not_found", "identifier": identifier}
                         )
-                    return json.dumps(
-                        {
-                            "error": "upstream_error",
-                            "status": exc.response.status_code,
-                        }
-                    )
+                    return format_s2_error(exc)
                 return await _download(p)
 
             task_id = bundle.tasks.submit(
@@ -155,12 +151,7 @@ def register_pdf_tools(mcp: FastMCP) -> None:
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 404:
                 return json.dumps({"error": "not_found", "identifier": identifier})
-            return json.dumps(
-                {
-                    "error": "upstream_error",
-                    "status": exc.response.status_code,
-                }
-            )
+            return format_s2_error(exc)
 
         oa_pdf = paper.get("openAccessPdf") or {}
         url = oa_pdf.get("url")
@@ -343,12 +334,7 @@ def register_pdf_tools(mcp: FastMCP) -> None:
             except httpx.HTTPStatusError as exc:
                 if exc.response.status_code == 404:
                     return json.dumps({"error": "not_found", "identifier": identifier})
-                return json.dumps(
-                    {
-                        "error": "upstream_error",
-                        "status": exc.response.status_code,
-                    }
-                )
+                return format_s2_error(exc)
 
             oa_pdf = paper.get("openAccessPdf") or {}
             url = oa_pdf.get("url")
