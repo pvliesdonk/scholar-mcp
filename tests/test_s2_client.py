@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 
@@ -6,9 +7,12 @@ import pytest
 
 from scholar_mcp._s2_client import (
     FIELD_SETS,
+    KEEPALIVE_INTERVAL_SECONDS,
+    KEEPALIVE_PAPER_ID,
     S2Client,
     format_s2_error,
     log_s2_error,
+    run_keepalive,
 )
 
 S2_BASE = "https://api.semanticscholar.org/graph/v1"
@@ -121,3 +125,112 @@ def test_format_s2_error_non_403_status_preserved():
     assert result["error"] == "upstream_error"
     assert result["status"] == 500
     assert "Internal Server Error" not in result["detail"]
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_run_keepalive_calls_immediately_then_on_interval(
+    respx_mock, client, caplog, monkeypatch
+):
+    """First call happens before any sleep; loop continues after success."""
+    route = respx_mock.get(f"/paper/{KEEPALIVE_PAPER_ID}").mock(
+        return_value=httpx.Response(200, json={"paperId": "x"})
+    )
+    sleep_calls: list[float] = []
+
+    async def fake_sleep(seconds: float) -> None:
+        sleep_calls.append(seconds)
+        if len(sleep_calls) >= 2:
+            raise asyncio.CancelledError
+
+    monkeypatch.setattr("scholar_mcp._s2_client.asyncio.sleep", fake_sleep)
+    with (
+        caplog.at_level(logging.DEBUG, logger="scholar_mcp._s2_client"),
+        pytest.raises(asyncio.CancelledError),
+    ):
+        await run_keepalive(client)
+
+    assert route.call_count == 2
+    assert sleep_calls == [KEEPALIVE_INTERVAL_SECONDS, KEEPALIVE_INTERVAL_SECONDS]
+    assert "s2_keepalive_ok" in caplog.text
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_run_keepalive_403_logs_and_continues(
+    respx_mock, client, caplog, monkeypatch
+):
+    """A 403 mid-loop logs s2_keepalive_key_forbidden but does not kill the loop."""
+    route = respx_mock.get(f"/paper/{KEEPALIVE_PAPER_ID}").mock(
+        side_effect=[
+            httpx.Response(403, json={"message": "Forbidden"}),
+            httpx.Response(200, json={"paperId": "x"}),
+        ]
+    )
+    sleep_calls: list[float] = []
+
+    async def fake_sleep(seconds: float) -> None:
+        sleep_calls.append(seconds)
+        if len(sleep_calls) >= 1:
+            raise asyncio.CancelledError
+
+    monkeypatch.setattr("scholar_mcp._s2_client.asyncio.sleep", fake_sleep)
+    with (
+        caplog.at_level(logging.DEBUG, logger="scholar_mcp._s2_client"),
+        pytest.raises(asyncio.CancelledError),
+    ):
+        await run_keepalive(client)
+
+    assert route.call_count == 1
+    assert "s2_keepalive_key_forbidden" in caplog.text
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_run_keepalive_other_failure_logs_warning_and_continues(
+    respx_mock, client, caplog, monkeypatch
+):
+    """A non-403 failure logs s2_keepalive_failed but does not kill the loop."""
+    route = respx_mock.get(f"/paper/{KEEPALIVE_PAPER_ID}").mock(
+        return_value=httpx.Response(500, text="boom")
+    )
+    sleep_calls: list[float] = []
+
+    async def fake_sleep(seconds: float) -> None:
+        sleep_calls.append(seconds)
+        if len(sleep_calls) >= 1:
+            raise asyncio.CancelledError
+
+    monkeypatch.setattr("scholar_mcp._s2_client.asyncio.sleep", fake_sleep)
+    with (
+        caplog.at_level(logging.DEBUG, logger="scholar_mcp._s2_client"),
+        pytest.raises(asyncio.CancelledError),
+    ):
+        await run_keepalive(client)
+
+    assert route.call_count == 1
+    assert "s2_keepalive_failed" in caplog.text
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_run_keepalive_rate_limited_logs_and_continues(
+    respx_mock, client, caplog, monkeypatch
+):
+    """A 429 (RateLimitedError, since get_paper is called with retry=False)
+    logs s2_keepalive_rate_limited but does not kill the loop."""
+    route = respx_mock.get(f"/paper/{KEEPALIVE_PAPER_ID}").mock(
+        return_value=httpx.Response(429, text="slow down")
+    )
+    sleep_calls: list[float] = []
+
+    async def fake_sleep(seconds: float) -> None:
+        sleep_calls.append(seconds)
+        if len(sleep_calls) >= 1:
+            raise asyncio.CancelledError
+
+    monkeypatch.setattr("scholar_mcp._s2_client.asyncio.sleep", fake_sleep)
+    with (
+        caplog.at_level(logging.DEBUG, logger="scholar_mcp._s2_client"),
+        pytest.raises(asyncio.CancelledError),
+    ):
+        await run_keepalive(client)
+
+    assert route.call_count == 1
+    assert "s2_keepalive_rate_limited" in caplog.text

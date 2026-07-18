@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from typing import TYPE_CHECKING, Any
 
 import httpx
 
-from ._rate_limiter import RateLimiter, with_s2_retry, with_s2_try_once
+from ._rate_limiter import (
+    RateLimitedError,
+    RateLimiter,
+    with_s2_retry,
+    with_s2_try_once,
+)
 
 if TYPE_CHECKING:
     from ._record_types import PaperRecord
@@ -25,6 +31,13 @@ FIELD_SETS: dict[str, str] = {
         "abstract,tldr,openAccessPdf,fieldsOfStudy,referenceCount"
     ),
 }
+
+KEEPALIVE_PAPER_ID = (
+    "ARXIV:1706.03762"  # "Attention Is All You Need" — stable, well-known
+)
+KEEPALIVE_INTERVAL_SECONDS = (
+    7 * 24 * 60 * 60
+)  # 7 days; well under S2's 60-day key-inactivity window
 
 
 def log_s2_error(exc: httpx.HTTPStatusError) -> None:
@@ -360,3 +373,36 @@ class S2Client:
         if retry:
             return await with_s2_retry(_call, self._limiter)  # type: ignore[no-any-return]
         return await with_s2_try_once(_call, self._limiter)  # type: ignore[no-any-return]
+
+
+async def run_keepalive(client: S2Client) -> None:
+    """Ping S2 periodically to keep the API key from being removed for inactivity.
+
+    Semantic Scholar may remove API keys that see no traffic for 60 days.
+    This loop fires an immediate cheap call on startup, then repeats every
+    :data:`KEEPALIVE_INTERVAL_SECONDS`. Each iteration's failure is caught
+    and logged so one bad cycle never stops future ones; only
+    ``asyncio.CancelledError`` (server shutdown) propagates out.
+
+    Args:
+        client: The S2 client to ping.
+    """
+    while True:
+        try:
+            await client.get_paper(KEEPALIVE_PAPER_ID, fields="paperId", retry=False)
+        except RateLimitedError:
+            # get_paper(retry=False) raises this (not HTTPStatusError) on a
+            # 429 — transient, try again next cycle.
+            logger.warning("s2_keepalive_rate_limited")
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 403:
+                logger.error("s2_keepalive_key_forbidden", exc_info=True)
+            else:
+                logger.warning(
+                    "s2_keepalive_failed status=%s", exc.response.status_code
+                )
+        except httpx.HTTPError:
+            logger.warning("s2_keepalive_failed status=network_error")
+        else:
+            logger.debug("s2_keepalive_ok")
+        await asyncio.sleep(KEEPALIVE_INTERVAL_SECONDS)
