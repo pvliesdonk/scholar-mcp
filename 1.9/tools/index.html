@@ -1,0 +1,3676 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="FastMCP server for Semantic Scholar with OpenAlex enrichment and docling PDF conversion">
+      
+      
+      
+        <link rel="canonical" href="https://pvliesdonk.github.io/scholar-mcp/1.9/tools/">
+      
+      
+        <link rel="prev" href="../guides/citation-graphs/">
+      
+      
+        <link rel="next" href="../prompts/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Tools - Scholar MCP Server</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../stylesheets/config-wizard.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#tools" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Scholar MCP Server" class="md-header__button md-logo" aria-label="Scholar MCP Server" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Scholar MCP Server
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Tools
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/pvliesdonk/scholar-mcp" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    pvliesdonk/scholar-mcp
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../installation/" class="md-tabs__link">
+          
+  
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../guides/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="./" class="md-tabs__link">
+          
+  
+  
+  MCP Interface
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../deployment/docker/" class="md-tabs__link">
+          
+  
+  
+  Deployment
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Scholar MCP Server" class="md-nav__button md-logo" aria-label="Scholar MCP Server" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Scholar MCP Server
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/pvliesdonk/scholar-mcp" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    pvliesdonk/scholar-mcp
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration-generator/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration Generator
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/claude-code-plugin/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Claude Code Plugin
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/claude-desktop/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Claude Desktop
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/authentication/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Authentication
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/pdf-conversion/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PDF Conversion
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/citation-graphs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Citation Graphs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Interface
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    MCP Interface
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tools
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tools
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#async-task-queue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Async Task Queue
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#papers-search-retrieval" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Papers, Search &amp; Retrieval
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Papers, Search &amp; Retrieval">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#search_papers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        search_papers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get_paper" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_paper
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get_author" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_author
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#papers-citation-graph" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Papers, Citation Graph
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Papers, Citation Graph">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get_citations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_citations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get_references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_references
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get_citation_graph" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_citation_graph
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#find_bridge_papers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        find_bridge_papers
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#papers-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Papers, Recommendations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Papers, Recommendations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#recommend_papers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        recommend_papers
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#papers-enrichment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Papers, Enrichment
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Papers, Enrichment">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#enrich_paper" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        enrich_paper
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#papers-citation-generation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Papers, Citation Generation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Papers, Citation Generation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#generate_citations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        generate_citations
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#books" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Books
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Books">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#search_books" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        search_books
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get_book" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_book
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get_book_excerpt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_book_excerpt
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#recommend_books" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        recommend_books
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#auto-enrichment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Auto-Enrichment
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cross-source-utility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cross-source Utility
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Cross-source Utility">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#batch_resolve" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        batch_resolve
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#patents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Patents
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Patents">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#search_patents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        search_patents
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get_patent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_patent
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get_citing_patents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_citing_patents
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fetch_patent_pdf" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fetch_patent_pdf
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#standards" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Standards
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Standards">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#resolve_standard_identifier" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        resolve_standard_identifier
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#search_standards" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        search_standards
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get_standard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_standard
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get_sync_status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_sync_status
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pdf-conversion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PDF Conversion
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="PDF Conversion">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#fetch_paper_pdf" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fetch_paper_pdf
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#convert_pdf_to_markdown" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        convert_pdf_to_markdown
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fetch_and_convert" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fetch_and_convert
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fetch_pdf_by_url" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fetch_pdf_by_url
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#task-polling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Task Polling
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Task Polling">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get_task_result" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_task_result
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#list_tasks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        list_tasks
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../prompts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prompts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Deployment
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../deployment/docker/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Docker
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../deployment/systemd/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    systemd
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../deployment/oidc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OIDC Authentication
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../deployment/claude-desktop/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Claude Desktop
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#async-task-queue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Async Task Queue
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#papers-search-retrieval" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Papers, Search &amp; Retrieval
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Papers, Search &amp; Retrieval">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#search_papers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        search_papers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get_paper" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_paper
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get_author" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_author
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#papers-citation-graph" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Papers, Citation Graph
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Papers, Citation Graph">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get_citations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_citations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get_references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_references
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get_citation_graph" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_citation_graph
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#find_bridge_papers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        find_bridge_papers
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#papers-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Papers, Recommendations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Papers, Recommendations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#recommend_papers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        recommend_papers
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#papers-enrichment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Papers, Enrichment
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Papers, Enrichment">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#enrich_paper" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        enrich_paper
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#papers-citation-generation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Papers, Citation Generation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Papers, Citation Generation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#generate_citations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        generate_citations
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#books" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Books
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Books">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#search_books" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        search_books
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get_book" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_book
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get_book_excerpt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_book_excerpt
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#recommend_books" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        recommend_books
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#auto-enrichment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Auto-Enrichment
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cross-source-utility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cross-source Utility
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Cross-source Utility">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#batch_resolve" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        batch_resolve
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#patents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Patents
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Patents">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#search_patents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        search_patents
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get_patent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_patent
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get_citing_patents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_citing_patents
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fetch_patent_pdf" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fetch_patent_pdf
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#standards" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Standards
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Standards">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#resolve_standard_identifier" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        resolve_standard_identifier
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#search_standards" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        search_standards
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get_standard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_standard
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get_sync_status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_sync_status
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pdf-conversion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PDF Conversion
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="PDF Conversion">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#fetch_paper_pdf" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fetch_paper_pdf
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#convert_pdf_to_markdown" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        convert_pdf_to_markdown
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fetch_and_convert" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fetch_and_convert
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fetch_pdf_by_url" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fetch_pdf_by_url
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#task-polling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Task Polling
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Task Polling">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get_task_result" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_task_result
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#list_tasks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        list_tasks
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="tools">Tools<a class="headerlink" href="#tools" title="Permanent link">&para;</a></h1>
+<p>Scholar MCP provides 28 tools organised by scholarly source type: <strong>Papers</strong>, <strong>Patents</strong>, <strong>Books</strong>, and <strong>Standards</strong> are peer source domains; the remaining sections (Cross-source Utility, PDF Conversion, Task Polling) are cross-cutting. All tools return JSON.</p>
+<!-- DOMAIN-TOOLS-LIST-START -->
+
+<div class="admonition info">
+<p class="admonition-title">Coverage by domain</p>
+<p>Per-domain depth is uneven, papers currently have the richest tool surface (citation graph, recommendations, cross-referencing to all three other domains); standards are the leanest. That reflects public data availability, not a value hierarchy. Parity work is tracked in <a href="https://github.com/pvliesdonk/scholar-mcp/issues">GitHub issues</a> and <a href="https://github.com/pvliesdonk/scholar-mcp/milestones">milestones</a>.</p>
+</div>
+<p>All tools include <a href="https://spec.modelcontextprotocol.io/specification/2025-03-26/server/tools/#annotations">MCP tool annotations</a>:</p>
+<ul>
+<li>Read-only tools: <code>readOnlyHint=true</code>, <code>destructiveHint=false</code>, <code>openWorldHint=true</code></li>
+<li>Write tools (PDF): <code>readOnlyHint=false</code>, <code>destructiveHint=false</code>, <code>openWorldHint=true</code></li>
+<li>Task polling tools: <code>readOnlyHint=true</code>, <code>destructiveHint=false</code>, <code>openWorldHint=false</code></li>
+</ul>
+<h2 id="async-task-queue">Async Task Queue<a class="headerlink" href="#async-task-queue" title="Permanent link">&para;</a></h2>
+<p>Long-running operations return immediately with a task ID instead of blocking:</p>
+<ul>
+<li><strong>PDF tools</strong> always queue (unless the result is already cached locally)</li>
+<li><strong>S2 tools</strong> queue when the Semantic Scholar API responds with HTTP 429 (rate limited)</li>
+</ul>
+<p>When a tool queues an operation, it returns:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="p">{</span><span class="nt">&quot;queued&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;task_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;a1b2c3d4e5f6&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;tool&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;fetch_paper_pdf&quot;</span><span class="p">}</span>
+</code></pre></div>
+<p>Poll with <code>get_task_result</code> to check status and retrieve the result. Task results expire after 10 minutes (S2 tools) or 1 hour (PDF tools).</p>
+<h2 id="papers-search-retrieval">Papers, Search &amp; Retrieval<a class="headerlink" href="#papers-search-retrieval" title="Permanent link">&para;</a></h2>
+<h3 id="search_papers"><code>search_papers</code><a class="headerlink" href="#search_papers" title="Permanent link">&para;</a></h3>
+<p>Full-text search across the Semantic Scholar corpus.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>query</code></td>
+<td>string</td>
+<td><em>(required)</em></td>
+<td>Search query string</td>
+</tr>
+<tr>
+<td><code>fields</code></td>
+<td>string</td>
+<td><code>"compact"</code></td>
+<td>Field set: <code>compact</code>, <code>standard</code>, or <code>full</code></td>
+</tr>
+<tr>
+<td><code>limit</code></td>
+<td>int</td>
+<td><code>10</code></td>
+<td>Results per page (max 100)</td>
+</tr>
+<tr>
+<td><code>offset</code></td>
+<td>int</td>
+<td><code>0</code></td>
+<td>Pagination offset</td>
+</tr>
+<tr>
+<td><code>year_start</code></td>
+<td>int</td>
+<td><em>(none)</em></td>
+<td>Filter: earliest publication year</td>
+</tr>
+<tr>
+<td><code>year_end</code></td>
+<td>int</td>
+<td><em>(none)</em></td>
+<td>Filter: latest publication year</td>
+</tr>
+<tr>
+<td><code>fields_of_study</code></td>
+<td>list[string]</td>
+<td><em>(none)</em></td>
+<td>S2 field-of-study names (such as <code>["Computer Science", "Physics"]</code>)</td>
+</tr>
+<tr>
+<td><code>venue</code></td>
+<td>string</td>
+<td><em>(none)</em></td>
+<td>Filter by venue name</td>
+</tr>
+<tr>
+<td><code>min_citations</code></td>
+<td>int</td>
+<td><em>(none)</em></td>
+<td>Minimum citation count</td>
+</tr>
+<tr>
+<td><code>sort</code></td>
+<td>string</td>
+<td><code>"relevance"</code></td>
+<td>Sort order: <code>relevance</code>, <code>citations</code>, or <code>year</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Returns:</strong> <code>{"data": [...], "total": N}</code> where each item contains the requested field set.</p>
+<p><strong>Field sets:</strong></p>
+<ul>
+<li><strong>compact</strong>: <code>paperId</code>, <code>title</code>, <code>year</code>, <code>venue</code>, <code>citationCount</code></li>
+<li><strong>standard</strong>: compact + <code>authors</code>, <code>externalIds</code>, <code>abstract</code></li>
+<li><strong>full</strong>: standard + <code>tldr</code>, <code>openAccessPdf</code>, <code>fieldsOfStudy</code>, <code>referenceCount</code></li>
+</ul>
+<hr />
+<h3 id="get_paper"><code>get_paper</code><a class="headerlink" href="#get_paper" title="Permanent link">&para;</a></h3>
+<p>Fetch full metadata for a single paper.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>identifier</code></td>
+<td>string</td>
+<td><em>(required)</em></td>
+<td>DOI, S2 paper ID, <code>ARXIV:id</code>, <code>ACM:id</code>, or <code>PMID:id</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Returns:</strong> Full paper metadata (always uses the <code>full</code> field set) or <code>{"error": "not_found"}</code>.</p>
+<p>Results are cached for 30 days. Identifier aliases (such as DOI to S2 ID) are cached permanently.</p>
+<hr />
+<h3 id="get_author"><code>get_author</code><a class="headerlink" href="#get_author" title="Permanent link">&para;</a></h3>
+<p>Fetch an author profile or search by name.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>identifier</code></td>
+<td>string</td>
+<td><em>(required)</em></td>
+<td>Numeric S2 author ID for direct lookup, or a name string for search</td>
+</tr>
+<tr>
+<td><code>limit</code></td>
+<td>int</td>
+<td><code>20</code></td>
+<td>Max publications to return (direct lookup)</td>
+</tr>
+<tr>
+<td><code>offset</code></td>
+<td>int</td>
+<td><code>0</code></td>
+<td>Pagination offset for publications</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Returns:</strong></p>
+<ul>
+<li><strong>Direct lookup</strong> (numeric ID): author profile with paginated publications list</li>
+<li><strong>Name search</strong> (text): <code>{"candidates": [...]}</code> with up to 5 matching authors</li>
+</ul>
+<hr />
+<h2 id="papers-citation-graph">Papers, Citation Graph<a class="headerlink" href="#papers-citation-graph" title="Permanent link">&para;</a></h2>
+<h3 id="get_citations"><code>get_citations</code><a class="headerlink" href="#get_citations" title="Permanent link">&para;</a></h3>
+<p>Forward citations: papers that cite the given paper.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>identifier</code></td>
+<td>string</td>
+<td><em>(required)</em></td>
+<td>Paper ID (DOI, S2 ID, etc.)</td>
+</tr>
+<tr>
+<td><code>fields</code></td>
+<td>string</td>
+<td><code>"compact"</code></td>
+<td>Field set for citing papers</td>
+</tr>
+<tr>
+<td><code>limit</code></td>
+<td>int</td>
+<td><code>20</code></td>
+<td>Max results (max 1000)</td>
+</tr>
+<tr>
+<td><code>offset</code></td>
+<td>int</td>
+<td><code>0</code></td>
+<td>Pagination offset</td>
+</tr>
+<tr>
+<td><code>year_start</code></td>
+<td>int</td>
+<td><em>(none)</em></td>
+<td>Filter: earliest year</td>
+</tr>
+<tr>
+<td><code>year_end</code></td>
+<td>int</td>
+<td><em>(none)</em></td>
+<td>Filter: latest year</td>
+</tr>
+<tr>
+<td><code>fields_of_study</code></td>
+<td>list[string]</td>
+<td><em>(none)</em></td>
+<td>Field-of-study filter</td>
+</tr>
+<tr>
+<td><code>min_citations</code></td>
+<td>int</td>
+<td><em>(none)</em></td>
+<td>Minimum citation count filter</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Returns:</strong> <code>{"data": [{"citingPaper": {...}}, ...]}</code>.</p>
+<hr />
+<h3 id="get_references"><code>get_references</code><a class="headerlink" href="#get_references" title="Permanent link">&para;</a></h3>
+<p>Backward references: papers cited by the given paper.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>identifier</code></td>
+<td>string</td>
+<td><em>(required)</em></td>
+<td>Paper ID (DOI, S2 ID, etc.)</td>
+</tr>
+<tr>
+<td><code>fields</code></td>
+<td>string</td>
+<td><code>"compact"</code></td>
+<td>Field set for cited papers</td>
+</tr>
+<tr>
+<td><code>limit</code></td>
+<td>int</td>
+<td><code>50</code></td>
+<td>Max results (max 1000)</td>
+</tr>
+<tr>
+<td><code>offset</code></td>
+<td>int</td>
+<td><code>0</code></td>
+<td>Pagination offset</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Returns:</strong> <code>{"data": [{"citedPaper": {...}}, ...]}</code>.</p>
+<hr />
+<h3 id="get_citation_graph"><code>get_citation_graph</code><a class="headerlink" href="#get_citation_graph" title="Permanent link">&para;</a></h3>
+<p>BFS traversal from one or more seed papers, collecting nodes and edges.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>seed_ids</code></td>
+<td>list[string]</td>
+<td><em>(required)</em></td>
+<td>1 to 10 seed paper IDs</td>
+</tr>
+<tr>
+<td><code>direction</code></td>
+<td>string</td>
+<td><code>"citations"</code></td>
+<td><code>citations</code> (forward), <code>references</code> (backward), or <code>both</code></td>
+</tr>
+<tr>
+<td><code>depth</code></td>
+<td>int</td>
+<td><code>1</code></td>
+<td>BFS depth (1 to 3, clamped)</td>
+</tr>
+<tr>
+<td><code>max_nodes</code></td>
+<td>int</td>
+<td><code>100</code></td>
+<td>Hard cap on collected nodes</td>
+</tr>
+<tr>
+<td><code>year_start</code></td>
+<td>int</td>
+<td><em>(none)</em></td>
+<td>Filter: earliest year</td>
+</tr>
+<tr>
+<td><code>year_end</code></td>
+<td>int</td>
+<td><em>(none)</em></td>
+<td>Filter: latest year</td>
+</tr>
+<tr>
+<td><code>fields_of_study</code></td>
+<td>list[string]</td>
+<td><em>(none)</em></td>
+<td>Field-of-study filter</td>
+</tr>
+<tr>
+<td><code>min_citations</code></td>
+<td>int</td>
+<td><em>(none)</em></td>
+<td>Minimum citation count filter</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Returns:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="p">{</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">&quot;nodes&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;year&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2024</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;citationCount&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">42</span><span class="p">},</span><span class="w"> </span><span class="err">...</span><span class="p">],</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nt">&quot;edges&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="nt">&quot;source&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;id1&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;target&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;id2&quot;</span><span class="p">},</span><span class="w"> </span><span class="err">...</span><span class="p">],</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nt">&quot;stats&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">    </span><span class="nt">&quot;total_nodes&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">42</span><span class="p">,</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">    </span><span class="nt">&quot;total_edges&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">67</span><span class="p">,</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">    </span><span class="nt">&quot;depth_reached&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">    </span><span class="nt">&quot;truncated&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="p">}</span>
+</code></pre></div>
+<div class="admonition tip">
+<p class="admonition-title">Controlling graph size</p>
+<p>Start with <code>depth=1</code> and a small <code>max_nodes</code> to get an overview, then increase as needed. <code>depth=3</code> with <code>direction=both</code> can produce large graphs.</p>
+</div>
+<p>See <a href="../guides/citation-graphs/">Citation Graphs guide</a> for usage patterns.</p>
+<hr />
+<h3 id="find_bridge_papers"><code>find_bridge_papers</code><a class="headerlink" href="#find_bridge_papers" title="Permanent link">&para;</a></h3>
+<p>Find the shortest citation path between two papers.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>source_id</code></td>
+<td>string</td>
+<td><em>(required)</em></td>
+<td>Starting paper ID</td>
+</tr>
+<tr>
+<td><code>target_id</code></td>
+<td>string</td>
+<td><em>(required)</em></td>
+<td>Target paper ID</td>
+</tr>
+<tr>
+<td><code>max_depth</code></td>
+<td>int</td>
+<td><code>4</code></td>
+<td>Maximum BFS depth</td>
+</tr>
+<tr>
+<td><code>direction</code></td>
+<td>string</td>
+<td><code>"both"</code></td>
+<td><code>citations</code>, <code>references</code>, or <code>both</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Returns:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="p">{</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">&quot;found&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="nt">&quot;path&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span><span class="p">{</span><span class="nt">&quot;paperId&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;source&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">},</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">    </span><span class="p">{</span><span class="nt">&quot;paperId&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;bridge&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">},</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">    </span><span class="p">{</span><span class="nt">&quot;paperId&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;target&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">}</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">  </span><span class="p">]</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="p">}</span>
+</code></pre></div>
+<p>Or <code>{"found": false}</code> if no path exists within <code>max_depth</code>.</p>
+<hr />
+<h2 id="papers-recommendations">Papers, Recommendations<a class="headerlink" href="#papers-recommendations" title="Permanent link">&para;</a></h2>
+<h3 id="recommend_papers"><code>recommend_papers</code><a class="headerlink" href="#recommend_papers" title="Permanent link">&para;</a></h3>
+<p>Paper recommendations based on positive (and optional negative) examples.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>positive_ids</code></td>
+<td>list[string]</td>
+<td><em>(required)</em></td>
+<td>1 to 5 S2 paper IDs as positive examples</td>
+</tr>
+<tr>
+<td><code>negative_ids</code></td>
+<td>list[string]</td>
+<td><em>(none)</em></td>
+<td>S2 paper IDs to steer recommendations away from</td>
+</tr>
+<tr>
+<td><code>limit</code></td>
+<td>int</td>
+<td><code>10</code></td>
+<td>Number of recommendations</td>
+</tr>
+<tr>
+<td><code>fields</code></td>
+<td>string</td>
+<td><code>"standard"</code></td>
+<td>Field set for returned papers</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Returns:</strong> JSON list of recommended papers.</p>
+<div class="admonition tip">
+<p class="admonition-title">Tip</p>
+<p>Recommendations work best with 3 to 5 positive examples that represent the topic you're interested in. Adding 1 to 2 negative examples that are close but off-topic helps narrow results.</p>
+</div>
+<hr />
+<h2 id="papers-enrichment">Papers, Enrichment<a class="headerlink" href="#papers-enrichment" title="Permanent link">&para;</a></h2>
+<h3 id="enrich_paper"><code>enrich_paper</code><a class="headerlink" href="#enrich_paper" title="Permanent link">&para;</a></h3>
+<p>Augment Semantic Scholar metadata with OpenAlex data.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>identifier</code></td>
+<td>string</td>
+<td><em>(required)</em></td>
+<td>S2 paper ID or <code>DOI:xxx</code></td>
+</tr>
+<tr>
+<td><code>fields</code></td>
+<td>list[string]</td>
+<td><em>(required)</em></td>
+<td>Fields to retrieve: <code>affiliations</code>, <code>funders</code>, <code>oa_status</code>, <code>concepts</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Available fields:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>affiliations</code></td>
+<td>Institution display names from author affiliations</td>
+</tr>
+<tr>
+<td><code>funders</code></td>
+<td>Funding organization names</td>
+</tr>
+<tr>
+<td><code>oa_status</code></td>
+<td>Open access status string (such as <code>gold</code>, <code>green</code>, <code>hybrid</code>); also includes <code>is_oa</code> boolean</td>
+</tr>
+<tr>
+<td><code>concepts</code></td>
+<td>List of <code>{"name": "...", "score": 0.95}</code> topic concepts</td>
+</tr>
+</tbody>
+</table>
+<p>Results are cached for 30 days.</p>
+<hr />
+<h2 id="papers-citation-generation">Papers, Citation Generation<a class="headerlink" href="#papers-citation-generation" title="Permanent link">&para;</a></h2>
+<h3 id="generate_citations"><code>generate_citations</code><a class="headerlink" href="#generate_citations" title="Permanent link">&para;</a></h3>
+<p>Generate formatted citations for one or more papers. Output formats: BibTeX, CSL-JSON, and RIS. Paper resolution uses Semantic Scholar, with optional OpenAlex enrichment for affiliations and open-access status.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>paper_ids</code></td>
+<td>list[string]</td>
+<td><em>(required)</em></td>
+<td>Paper identifiers (S2 IDs, DOIs, arXiv IDs, etc.). Max 100.</td>
+</tr>
+<tr>
+<td><code>citation_format</code></td>
+<td>string</td>
+<td><code>"bibtex"</code></td>
+<td>Output format: <code>bibtex</code>, <code>csl-json</code>, or <code>ris</code></td>
+</tr>
+<tr>
+<td><code>enrich</code></td>
+<td>boolean</td>
+<td><code>true</code></td>
+<td>Attempt OpenAlex enrichment for missing venue data</td>
+</tr>
+</tbody>
+</table>
+<p><strong>BibTeX output</strong> includes entry type inference (<code>@article</code>, <code>@inproceedings</code>, <code>@misc</code>, <code>@book</code>), proper author formatting (<code>{Last}, First</code>), title casing preservation, DOI, arXiv eprint fields, and special character escaping. Papers with <code>book_metadata</code> (ISBN or publisher) are emitted as <code>@book</code> entries with <code>publisher</code>, <code>edition</code>, and <code>isbn</code> fields.</p>
+<p><strong>CSL-JSON output</strong> returns <code>{"citations": [...], "errors": [...]}</code>; the citations array contains standard CSL-JSON objects compatible with Zotero, Mendeley, Pandoc, and other CSL processors. Book entries use <code>type: "book"</code> with <code>publisher</code> and <code>ISBN</code> fields.</p>
+<p><strong>RIS output</strong> uses standard RIS tags (<code>TY</code>, <code>AU</code>, <code>TI</code>, <code>PY</code>, <code>JO</code>/<code>BT</code>, <code>DO</code>, <code>UR</code>, <code>AB</code>, <code>ER</code>). Book entries use <code>TY - BOOK</code> with <code>PB</code> (publisher) and <code>SN</code> (ISBN) tags.</p>
+<p>Papers that fail to resolve are reported inline (BibTeX/RIS: as comments, CSL-JSON: in the errors array) rather than failing the entire request. When all papers fail, a structured error is returned: <code>{"error": "no_papers_resolved", "failed": [...]}</code>.</p>
+<div class="admonition tip">
+<p class="admonition-title">Enrichment</p>
+<p>When <code>enrich</code> is enabled and a paper has no venue but has a DOI, the tool queries OpenAlex to fill in the venue name. This improves citation quality for papers where Semantic Scholar has incomplete metadata.</p>
+</div>
+<hr />
+<h2 id="books">Books<a class="headerlink" href="#books" title="Permanent link">&para;</a></h2>
+<p>Book tools use <a href="https://openlibrary.org/">Open Library</a> and <a href="https://developers.google.com/books">Google Books</a> as data sources. No API key is required (a Google Books API key is optional for higher rate limits). Rate limits are handled automatically; if an API is temporarily unavailable, calls queue and return a task ID (see <a href="#async-task-queue">Async Task Queue</a>).</p>
+<h3 id="search_books"><code>search_books</code><a class="headerlink" href="#search_books" title="Permanent link">&para;</a></h3>
+<p>Search for books by title, author, or free text via Open Library. For best results, use the <code>title</code> and <code>author</code> parameters rather than <code>query</code>, they use dedicated search indexes and return far better results.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>query</code></td>
+<td>string</td>
+<td><code>null</code></td>
+<td>Free-text fallback. Use <code>title</code>/<code>author</code> when known.</td>
+</tr>
+<tr>
+<td><code>title</code></td>
+<td>string</td>
+<td><code>null</code></td>
+<td>Book title or partial title (recommended).</td>
+</tr>
+<tr>
+<td><code>author</code></td>
+<td>string</td>
+<td><code>null</code></td>
+<td>Author name (recommended).</td>
+</tr>
+<tr>
+<td><code>limit</code></td>
+<td>int</td>
+<td><code>10</code></td>
+<td>Maximum results to return (max 50)</td>
+</tr>
+</tbody>
+</table>
+<p>At least one of <code>query</code>, <code>title</code>, or <code>author</code> must be provided.</p>
+<p>When only <code>query</code> is given, it is first tried as a title search (better relevance) and falls back to free-text if no results are found. When <code>author</code> is given with multiple tokens (such as "Frank Duffy") and initial results are thin, a broadened search is automatically attempted to catch name variants (such as Frank → Francis).</p>
+<p><strong>Returns:</strong> JSON list of book records. Each record contains:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="p">[</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="p">{</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Deep Learning&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">    </span><span class="nt">&quot;authors&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;Ian Goodfellow&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;Yoshua Bengio&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;Aaron Courville&quot;</span><span class="p">],</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">    </span><span class="nt">&quot;publisher&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;MIT Press&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">    </span><span class="nt">&quot;year&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2016</span><span class="p">,</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">    </span><span class="nt">&quot;edition&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">    </span><span class="nt">&quot;isbn_10&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;0262035618&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">    </span><span class="nt">&quot;isbn_13&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;9780262035613&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">    </span><span class="nt">&quot;openlibrary_work_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;OL17953442W&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">    </span><span class="nt">&quot;openlibrary_edition_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;OL26423929M&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">    </span><span class="nt">&quot;cover_url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://covers.openlibrary.org/b/isbn/9780262035613-M.jpg&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="w">    </span><span class="nt">&quot;google_books_url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://books.google.com/books?id=Np9SDQAAQBAJ&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="w">    </span><span class="nt">&quot;worldcat_url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://www.worldcat.org/isbn/9780262035613&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="w">    </span><span class="nt">&quot;snippet&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;An introduction to a broad range of topics in deep learning...&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="w">    </span><span class="nt">&quot;cover_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
+<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="w">    </span><span class="nt">&quot;subjects&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;Machine learning&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;Artificial intelligence&quot;</span><span class="p">],</span>
+<a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="w">    </span><span class="nt">&quot;page_count&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">800</span><span class="p">,</span>
+<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="w">    </span><span class="nt">&quot;description&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span>
+<a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a><span class="p">]</span>
+</code></pre></div>
+<hr />
+<h3 id="get_book"><code>get_book</code><a class="headerlink" href="#get_book" title="Permanent link">&para;</a></h3>
+<p>Fetch full metadata for a single book by ISBN or Open Library identifier. Optionally download and cache the cover image locally.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>identifier</code></td>
+<td>string</td>
+<td><em>(required)</em></td>
+<td>ISBN-10, ISBN-13, Open Library work ID, or edition ID</td>
+</tr>
+<tr>
+<td><code>include_editions</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>If true, fetch work and list editions</td>
+</tr>
+<tr>
+<td><code>download_cover</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>If true, download and cache the cover image locally; adds <code>cover_path</code> to result</td>
+</tr>
+<tr>
+<td><code>cover_size</code></td>
+<td>string</td>
+<td><code>"M"</code></td>
+<td>Cover image size: <code>S</code> (small), <code>M</code> (medium), or <code>L</code> (large)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Identifier formats:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Format</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ISBN-13</td>
+<td><code>9780262035613</code></td>
+</tr>
+<tr>
+<td>ISBN-10</td>
+<td><code>0262035618</code></td>
+</tr>
+<tr>
+<td>ISBN with hyphens</td>
+<td><code>978-0-262-03561-3</code></td>
+</tr>
+<tr>
+<td>Open Library work ID</td>
+<td><code>OL17953442W</code></td>
+</tr>
+<tr>
+<td>Open Library edition ID</td>
+<td><code>OL26423929M</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Returns:</strong> A single book record (same shape as items returned by <code>search_books</code>), or <code>{"error": "not_found", "identifier": "..."}</code> if not found.</p>
+<p>Results are cached. Work and edition lookups are cached by their respective Open Library IDs; ISBN lookups are also stored under the resolved ISBN-13. When <code>download_cover=true</code>, the cover image is saved to <code>&lt;cache_dir&gt;/covers/&lt;isbn&gt;_&lt;size&gt;.jpg</code> and the path is returned as <code>cover_path</code>.</p>
+<hr />
+<h3 id="get_book_excerpt"><code>get_book_excerpt</code><a class="headerlink" href="#get_book_excerpt" title="Permanent link">&para;</a></h3>
+<p>Fetch a book excerpt and description from Google Books by ISBN. Shows preview availability and a link to the Google Books preview page.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>isbn</code></td>
+<td>string</td>
+<td><em>(required)</em></td>
+<td>ISBN-10 or ISBN-13</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Returns:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="p">{</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Deep Learning&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="nt">&quot;authors&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;Ian Goodfellow&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;Yoshua Bengio&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;Aaron Courville&quot;</span><span class="p">],</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span><span class="nt">&quot;description&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;An introduction to a broad range of topics in deep learning...&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span><span class="nt">&quot;snippet&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Deep learning is a form of machine learning that enables...&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">  </span><span class="nt">&quot;preview_link&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://books.google.com/books?id=Np9SDQAAQBAJ&amp;printsec=frontcover&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">  </span><span class="nt">&quot;preview_available&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="p">}</span>
+</code></pre></div>
+<p>Or <code>{"error": "not_found", "isbn": "..."}</code> if Google Books has no matching volume.</p>
+<div class="admonition note">
+<p class="admonition-title">Write-tagged</p>
+<p>This tool is write-tagged and hidden when <code>SCHOLAR_MCP_READ_ONLY=true</code>.</p>
+</div>
+<hr />
+<h3 id="recommend_books"><code>recommend_books</code><a class="headerlink" href="#recommend_books" title="Permanent link">&para;</a></h3>
+<p>Recommend books for a subject via the Open Library subject API. Results are sorted by edition count (a proxy for popularity).</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>subject</code></td>
+<td>string</td>
+<td><em>(required)</em></td>
+<td>Subject or topic (such as machine learning, algorithms, or computer vision)</td>
+</tr>
+<tr>
+<td><code>limit</code></td>
+<td>int</td>
+<td><code>10</code></td>
+<td>Maximum results to return (max 50)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Returns:</strong> A JSON list of book records. Each record has the same shape as <code>search_books</code> results, with fields populated from the Open Library subject API (title, authors, Open Library work ID, cover URL). ISBN and edition fields are <code>null</code> since subject results are work-level.</p>
+<p>Results are cached for 7 days, keyed by the normalized subject slug. Up to 50 results are fetched and cached; the <code>limit</code> parameter slices the cached pool on return.</p>
+<hr />
+<h2 id="auto-enrichment">Auto-Enrichment<a class="headerlink" href="#auto-enrichment" title="Permanent link">&para;</a></h2>
+<p>Scholar MCP uses a phased enrichment pipeline that automatically augments paper and book results with metadata from multiple sources. Enrichment runs in two phases:</p>
+<ul>
+<li><strong>Phase 0</strong> (primary): OpenAlex (OA status, affiliations, funders, concepts) and CrossRef (publisher, page ranges, container titles)</li>
+<li><strong>Phase 1</strong> (secondary): Open Library (book metadata for papers with ISBNs) and Google Books (preview links, excerpts, snippets)</li>
+</ul>
+<p>When <code>get_paper</code>, <code>get_citations</code>, <code>get_references</code>, or <code>get_citation_graph</code> retrieves a paper that has an ISBN in its <code>externalIds</code> field, Open Library metadata is automatically fetched and attached as a <code>book_metadata</code> key on the paper record.</p>
+<p><strong>Trigger condition:</strong> <code>externalIds.ISBN</code> is present and non-empty.</p>
+<p><strong>Added field:</strong> <code>book_metadata</code>, a dict containing:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>publisher</code></td>
+<td>Publisher name</td>
+</tr>
+<tr>
+<td><code>edition</code></td>
+<td>Edition string (such as <code>"2nd ed."</code>)</td>
+</tr>
+<tr>
+<td><code>isbn_13</code></td>
+<td>ISBN-13</td>
+</tr>
+<tr>
+<td><code>cover_url</code></td>
+<td>Cover image URL (from Open Library covers)</td>
+</tr>
+<tr>
+<td><code>openlibrary_work_id</code></td>
+<td>Open Library work ID (such as <code>OL17953442W</code>)</td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td>Work description, if available</td>
+</tr>
+<tr>
+<td><code>subjects</code></td>
+<td>List of subject strings</td>
+</tr>
+<tr>
+<td><code>page_count</code></td>
+<td>Page count, if known</td>
+</tr>
+<tr>
+<td><code>authors</code></td>
+<td>List of author name strings (resolved from Open Library work metadata)</td>
+</tr>
+</tbody>
+</table>
+<p>CrossRef enrichment adds publisher metadata, page ranges, and container titles to paper results when a DOI is available. Google Books enrichment adds <code>google_books_url</code> and <code>snippet</code> to book records when an ISBN is present.</p>
+<p>Enrichment failures are silently skipped, if a source is unreachable or returns no data, the record is returned without that enrichment layer. Up to 5 concurrent requests are made per batch.</p>
+<hr />
+<h2 id="cross-source-utility">Cross-source Utility<a class="headerlink" href="#cross-source-utility" title="Permanent link">&para;</a></h2>
+<h3 id="batch_resolve"><code>batch_resolve</code><a class="headerlink" href="#batch_resolve" title="Permanent link">&para;</a></h3>
+<p>Resolve up to 100 paper, patent, or book identifiers to full metadata in a single call.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>identifiers</code></td>
+<td>list[string]</td>
+<td><em>(required)</em></td>
+<td>Up to 100 IDs: S2 paper IDs, <code>DOI:xxx</code>, plain DOIs, patent numbers (such as <code>EP1234567A1</code>), or ISBNs (prefixed <code>ISBN:</code>, such as <code>ISBN:9780262035613</code>)</td>
+</tr>
+<tr>
+<td><code>fields</code></td>
+<td>string</td>
+<td><code>"standard"</code></td>
+<td>Field set (applies to paper results only)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Returns:</strong> JSON list of resolved items:</p>
+<ul>
+<li><strong>Paper results</strong> have a <code>"paper"</code> key. Papers not found in Semantic Scholar are automatically tried via OpenAlex (by DOI); results from OpenAlex include <code>"source": "openalex"</code>. When the citation string contains chapter patterns (such as "Chapter 3" or "pp. 45-67"), a <code>chapter_info</code> dict is attached with parsed chapter/page information.</li>
+<li><strong>Patent results</strong> have a <code>"patent"</code> key and <code>"source_type": "patent"</code>. Patent numbers are auto-detected by their two-letter country prefix (such as <code>EP</code>, <code>US</code>, <code>WO</code>) and routed to the EPO OPS API.</li>
+<li><strong>Book results</strong> have a <code>"book"</code> key and <code>"source_type": "book"</code>. ISBNs (prefixed with <code>ISBN:</code>) are routed to Open Library.</li>
+<li><strong>Unresolved items</strong> have an <code>"error"</code> key.</li>
+</ul>
+<hr />
+<h2 id="patents">Patents<a class="headerlink" href="#patents" title="Permanent link">&para;</a></h2>
+<div class="admonition note">
+<p class="admonition-title">Credentials required</p>
+<p>Patent tools require EPO OPS credentials. When <code>SCHOLAR_MCP_EPO_CONSUMER_KEY</code> and <code>SCHOLAR_MCP_EPO_CONSUMER_SECRET</code> are not set, these tools are automatically hidden. See <a href="../configuration/#epo-open-patent-services">EPO OPS configuration</a> for setup instructions.</p>
+</div>
+<h3 id="search_patents"><code>search_patents</code><a class="headerlink" href="#search_patents" title="Permanent link">&para;</a></h3>
+<p>Search for patents across 100+ patent offices via the EPO Open Patent Services (OPS) API.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>query</code></td>
+<td>string</td>
+<td><em>(none)</em></td>
+<td>Keyword search, searches patent titles and abstracts. Optional when using structured filters.</td>
+</tr>
+<tr>
+<td><code>cpc_classification</code></td>
+<td>string</td>
+<td><em>(none)</em></td>
+<td>CPC classification code filter (such as <code>"H01M10/00"</code>)</td>
+</tr>
+<tr>
+<td><code>applicant</code></td>
+<td>string</td>
+<td><em>(none)</em></td>
+<td>Applicant (assignee) name filter</td>
+</tr>
+<tr>
+<td><code>inventor</code></td>
+<td>string</td>
+<td><em>(none)</em></td>
+<td>Inventor name filter</td>
+</tr>
+<tr>
+<td><code>date_from</code></td>
+<td>string</td>
+<td><em>(none)</em></td>
+<td>Earliest date (<code>YYYY-MM-DD</code>)</td>
+</tr>
+<tr>
+<td><code>date_to</code></td>
+<td>string</td>
+<td><em>(none)</em></td>
+<td>Latest date (<code>YYYY-MM-DD</code>)</td>
+</tr>
+<tr>
+<td><code>date_type</code></td>
+<td>string</td>
+<td><code>"publication"</code></td>
+<td>Date field: <code>publication</code>, <code>filing</code>, or <code>priority</code></td>
+</tr>
+<tr>
+<td><code>jurisdiction</code></td>
+<td>string</td>
+<td><em>(none)</em></td>
+<td>Country code filter (such as <code>EP</code>, <code>US</code>, <code>WO</code>)</td>
+</tr>
+<tr>
+<td><code>limit</code></td>
+<td>int</td>
+<td><code>10</code></td>
+<td>Results per page (max 100)</td>
+</tr>
+<tr>
+<td><code>offset</code></td>
+<td>int</td>
+<td><code>0</code></td>
+<td>Pagination offset</td>
+</tr>
+</tbody>
+</table>
+<p>At least one parameter must be provided.</p>
+<p><strong>Returns:</strong> <code>{"total_count": N, "references": [...]}</code> where each reference has <code>country</code>, <code>number</code>, and <code>kind</code> fields.</p>
+<div class="admonition tip">
+<p class="admonition-title">Query syntax</p>
+<p>The tool translates parameters into EPO CQL internally. <code>query</code> searches titles and abstracts only, it will not find patents where the keyword appears only in inventor/applicant names. To find all patents by an inventor or from an applicant, omit <code>query</code> and use only the structured filters (such as <code>inventor="Smith"</code>). Combining <code>query</code> with filters applies both constraints.</p>
+</div>
+<hr />
+<h3 id="get_patent"><code>get_patent</code><a class="headerlink" href="#get_patent" title="Permanent link">&para;</a></h3>
+<p>Fetch detailed information for a single patent by its publication number.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>patent_number</code></td>
+<td>string</td>
+<td><em>(required)</em></td>
+<td>Patent number in any format (such as <code>EP1234567A1</code>, <code>WO2024/123456</code>, <code>US11,234,567B2</code>)</td>
+</tr>
+<tr>
+<td><code>sections</code></td>
+<td>list[string]</td>
+<td><code>["biblio"]</code></td>
+<td>Sections to retrieve</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Available sections:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Section</th>
+<th>Description</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>biblio</code></td>
+<td>Bibliographic metadata (title, applicants, inventors, dates, classifications, abstract)</td>
+<td>Available</td>
+</tr>
+<tr>
+<td><code>claims</code></td>
+<td>Patent claims text (English preferred)</td>
+<td>Available</td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td>Full patent description text (English preferred)</td>
+<td>Available</td>
+</tr>
+<tr>
+<td><code>family</code></td>
+<td>Patent family members across jurisdictions (country, number, kind, date)</td>
+<td>Available</td>
+</tr>
+<tr>
+<td><code>legal</code></td>
+<td>Legal status events (date, code, description)</td>
+<td>Available</td>
+</tr>
+<tr>
+<td><code>citations</code></td>
+<td>Patent and non-patent literature citations, with Semantic Scholar resolution for NPL</td>
+<td>Available</td>
+</tr>
+</tbody>
+</table>
+<p>Sections are fetched concurrently where possible (cache lookups run in parallel; EPO API calls are serialised by the client). Each section is cached independently with appropriate TTLs.</p>
+<p><strong>Returns:</strong> A JSON object with keys matching the requested sections:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="p">{</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">&quot;patent_number&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;EP.1234567.A1&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span><span class="nt">&quot;biblio&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">    </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">    </span><span class="nt">&quot;abstract&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">    </span><span class="nt">&quot;applicants&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;...&quot;</span><span class="p">],</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">    </span><span class="nt">&quot;inventors&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;...&quot;</span><span class="p">],</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">    </span><span class="nt">&quot;publication_number&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;EP.1234567.A1&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">    </span><span class="nt">&quot;publication_date&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2020-01-15&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">    </span><span class="nt">&quot;filing_date&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2019-06-01&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">    </span><span class="nt">&quot;priority_date&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2019-01-15&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">    </span><span class="nt">&quot;family_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;12345678&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="w">    </span><span class="nt">&quot;classifications&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;H04L29/06&quot;</span><span class="p">],</span>
+<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="w">    </span><span class="nt">&quot;url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://worldwide.espacenet.com/...&quot;</span>
+<a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="w">  </span><span class="p">},</span>
+<a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="w">  </span><span class="nt">&quot;claims&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;1. A method for...\n\n2. The method of claim 1...&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="w">  </span><span class="nt">&quot;family&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="w">    </span><span class="p">{</span><span class="nt">&quot;country&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;US&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;number&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;11234567&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;kind&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;B2&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;date&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2021-03-01&quot;</span><span class="p">}</span>
+<a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="w">  </span><span class="p">],</span>
+<a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="w">  </span><span class="nt">&quot;legal&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="w">    </span><span class="p">{</span><span class="nt">&quot;date&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2019-05-01&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;code&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;APPLICATION&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;description&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Application filed&quot;</span><span class="p">}</span>
+<a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a><span class="w">  </span><span class="p">],</span>
+<a id="__codelineno-5-23" name="__codelineno-5-23" href="#__codelineno-5-23"></a><span class="w">  </span><span class="nt">&quot;citations&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-5-24" name="__codelineno-5-24" href="#__codelineno-5-24"></a><span class="w">    </span><span class="nt">&quot;patent_refs&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-5-25" name="__codelineno-5-25" href="#__codelineno-5-25"></a><span class="w">      </span><span class="p">{</span><span class="nt">&quot;country&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;US&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;number&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;9876543&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;kind&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;B2&quot;</span><span class="p">}</span>
+<a id="__codelineno-5-26" name="__codelineno-5-26" href="#__codelineno-5-26"></a><span class="w">    </span><span class="p">],</span>
+<a id="__codelineno-5-27" name="__codelineno-5-27" href="#__codelineno-5-27"></a><span class="w">    </span><span class="nt">&quot;npl_refs&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-5-28" name="__codelineno-5-28" href="#__codelineno-5-28"></a><span class="w">      </span><span class="p">{</span><span class="nt">&quot;raw&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Smith et al., \&quot;Widget Processing\&quot;, 2018, doi:10.1234/test&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;paper&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;paperId&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;abc123&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Widget Processing&quot;</span><span class="p">},</span><span class="w"> </span><span class="nt">&quot;confidence&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;high&quot;</span><span class="p">},</span>
+<a id="__codelineno-5-29" name="__codelineno-5-29" href="#__codelineno-5-29"></a><span class="w">      </span><span class="p">{</span><span class="nt">&quot;raw&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Doe, \&quot;Advanced Widgets\&quot;, Ch. 5, pp. 112-130, 2019&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;confidence&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;chapter_info&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;citation_source&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;parsed&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;chapter_number&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">5</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;page_start&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">112</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;page_end&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">130</span><span class="p">}}</span>
+<a id="__codelineno-5-30" name="__codelineno-5-30" href="#__codelineno-5-30"></a><span class="w">    </span><span class="p">]</span>
+<a id="__codelineno-5-31" name="__codelineno-5-31" href="#__codelineno-5-31"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-5-32" name="__codelineno-5-32" href="#__codelineno-5-32"></a><span class="p">}</span>
+</code></pre></div>
+<p>When <code>citations</code> is requested, non-patent literature (NPL) references are resolved against Semantic Scholar on a best-effort basis. References with a DOI are resolved with <code>"confidence": "high"</code>. References without a DOI or that fail to resolve have <code>"confidence": null</code>. When citation strings contain chapter patterns (such as "Ch. 5" or "pp. 112-130"), a <code>chapter_info</code> dict is included with parsed chapter and page information.</p>
+<hr />
+<h3 id="get_citing_patents"><code>get_citing_patents</code><a class="headerlink" href="#get_citing_patents" title="Permanent link">&para;</a></h3>
+<p>Find patents that cite a given academic paper. Coverage is incomplete; relies on EPO OPS citation search, which does not capture all patent-to-paper citations. Best results with DOIs of well-known papers.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>paper_id</code></td>
+<td>string</td>
+<td><em>(required)</em></td>
+<td>Paper identifier (DOI preferred)</td>
+</tr>
+<tr>
+<td><code>limit</code></td>
+<td>int</td>
+<td><code>10</code></td>
+<td>Maximum citing patents to return (max 25)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Returns:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="p">{</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">&quot;paper_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;10.1234/test&quot;</span><span class="p">,</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span><span class="nt">&quot;patents&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">    </span><span class="p">{</span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;publication_number&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;EP.9999999.A1&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;match_source&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;epo_search&quot;</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">}</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">  </span><span class="p">],</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">  </span><span class="nt">&quot;total_count&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">  </span><span class="nt">&quot;note&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Coverage is incomplete. Results come from EPO OPS citation search...&quot;</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="p">}</span>
+</code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Incomplete coverage</p>
+<p>Not all patent-to-paper citations are captured by EPO OPS. Use this tool for discovery, not exhaustive analysis.</p>
+</div>
+<hr />
+<h3 id="fetch_patent_pdf"><code>fetch_patent_pdf</code><a class="headerlink" href="#fetch_patent_pdf" title="Permanent link">&para;</a></h3>
+<p>Download a patent PDF via authenticated EPO OPS and optionally convert to Markdown.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>patent_number</code></td>
+<td>string</td>
+<td><em>(required)</em></td>
+<td>Patent number in any format (such as <code>EP3491801B1</code>, <code>US10123456B2</code>, <code>WO2024/123456</code>)</td>
+</tr>
+<tr>
+<td><code>use_vlm</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Enable VLM enrichment for formulas and figures</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Returns:</strong> <code>{"pdf_path": "/data/scholar-mcp/pdfs/&lt;stem&gt;.pdf", "markdown": "...", "md_path": "/data/scholar-mcp/md/&lt;stem&gt;.md"}</code> when docling is configured, or just <code>{"pdf_path": "..."}</code> without it.</p>
+<p>Not all patents have full text available via OPS, WO and older EP patents sometimes lack PDFs. Returns <code>{"error": "pdf_not_available"}</code> in that case.</p>
+<div class="admonition note">
+<p class="admonition-title">Write-tagged</p>
+<p>This tool is write-tagged and hidden when <code>SCHOLAR_MCP_READ_ONLY=true</code>. It also requires EPO OPS credentials.</p>
+</div>
+<hr />
+<h2 id="standards">Standards<a class="headerlink" href="#standards" title="Permanent link">&para;</a></h2>
+<p>Scholar MCP supports Tier 1 standards bodies (NIST, IETF, W3C, ETSI) with full metadata and
+optional full-text conversion. Tier 2 paywalled bodies (ISO, IEC, IEEE) are tracked in
+<a href="https://github.com/pvliesdonk/scholar-mcp/issues">GitHub issues</a>.</p>
+<h3 id="resolve_standard_identifier"><code>resolve_standard_identifier</code><a class="headerlink" href="#resolve_standard_identifier" title="Permanent link">&para;</a></h3>
+<p>Normalise a messy citation string to its canonical form and body.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>raw</code></td>
+<td>string</td>
+<td>,</td>
+<td>Messy citation string (such as <code>"rfc9000"</code>, <code>"nist 800-53"</code>)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="search_standards"><code>search_standards</code><a class="headerlink" href="#search_standards" title="Permanent link">&para;</a></h3>
+<p>Search standards by identifier, title, or free text.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>query</code></td>
+<td>string</td>
+<td>,</td>
+<td>Identifier, title, or free text</td>
+</tr>
+<tr>
+<td><code>body</code></td>
+<td>string</td>
+<td>null</td>
+<td>Filter to one body: <code>NIST</code>, <code>IETF</code>, <code>W3C</code>, <code>ETSI</code></td>
+</tr>
+<tr>
+<td><code>limit</code></td>
+<td>integer</td>
+<td>10</td>
+<td>Max results (max 50)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="get_standard"><code>get_standard</code><a class="headerlink" href="#get_standard" title="Permanent link">&para;</a></h3>
+<p>Retrieve a standard by identifier (canonical or fuzzy). Optionally fetches and converts
+full text via docling.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>identifier</code></td>
+<td>string</td>
+<td>,</td>
+<td>Canonical or fuzzy identifier</td>
+</tr>
+<tr>
+<td><code>fetch_full_text</code></td>
+<td>boolean</td>
+<td>false</td>
+<td>Fetch and convert full text via docling</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="get_sync_status"><code>get_sync_status</code><a class="headerlink" href="#get_sync_status" title="Permanent link">&para;</a></h3>
+<p>Reports the last run of each Tier 2 standards sync. Returns one record per
+body, see <code>scholar-mcp sync-standards</code> in the CLI docs.</p>
+<p><strong>Returns:</strong> <code>{"runs": [{"body", "upstream_ref", "added", "updated", "unchanged", "withdrawn", "errors", "started_at", "finished_at"}]}</code>.
+An empty <code>runs</code> list means no sync has been run yet.</p>
+<hr />
+<h2 id="pdf-conversion">PDF Conversion<a class="headerlink" href="#pdf-conversion" title="Permanent link">&para;</a></h2>
+<div class="admonition warning">
+<p class="admonition-title">Write-tagged tools</p>
+<p>All PDF tools are tagged as write operations. They are hidden by default when <code>SCHOLAR_MCP_READ_ONLY=true</code>. Set <code>SCHOLAR_MCP_READ_ONLY=false</code> to enable them.</p>
+</div>
+<h3 id="fetch_paper_pdf"><code>fetch_paper_pdf</code><a class="headerlink" href="#fetch_paper_pdf" title="Permanent link">&para;</a></h3>
+<p>Download the PDF for a paper. Tries the Semantic Scholar open-access URL first, then falls back to alternative sources: ArXiv (from <code>externalIds</code>), PubMed Central, and Unpaywall (by DOI, requires <code>SCHOLAR_MCP_CONTACT_EMAIL</code>).</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>identifier</code></td>
+<td>string</td>
+<td><em>(required)</em></td>
+<td>Paper ID (DOI, S2 ID, etc.)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Returns:</strong> <code>{"path": "/data/scholar-mcp/pdfs/&lt;id&gt;.pdf", "source": "s2_oa"}</code> or an error:</p>
+<ul>
+<li><code>{"error": "no_oa_pdf"}</code>: no PDF URL found from any source</li>
+<li><code>{"error": "download_failed"}</code>: HTTP error downloading the PDF</li>
+</ul>
+<p>The <code>source</code> field indicates where the PDF was obtained: <code>s2_oa</code>, <code>arxiv</code>, <code>pmc</code>, or <code>unpaywall</code>.</p>
+<hr />
+<h3 id="convert_pdf_to_markdown"><code>convert_pdf_to_markdown</code><a class="headerlink" href="#convert_pdf_to_markdown" title="Permanent link">&para;</a></h3>
+<p>Convert a local PDF file to Markdown via docling-serve.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>file_path</code></td>
+<td>string</td>
+<td><em>(required)</em></td>
+<td>Absolute path to a PDF file</td>
+</tr>
+<tr>
+<td><code>use_vlm</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Enable VLM enrichment for formulas and figures</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Returns:</strong> <code>{"markdown": "...", "path": "/data/scholar-mcp/md/&lt;name&gt;.md", "vlm_used": true/false}</code>.</p>
+<p>When <code>use_vlm</code> is requested but VLM is not configured, the response includes a <code>vlm_skip_reason</code> field (such as <code>"vlm_api_url_not_configured"</code>).</p>
+<div class="admonition tip">
+<p class="admonition-title">Start without VLM</p>
+<p>Standard conversion handles most papers well. Only retry with <code>use_vlm=true</code> when the result has garbled formulas or missing figure descriptions. VLM enrichment processes each formula and figure image individually via an external vision model, which is slower.</p>
+</div>
+<p><strong>Caching:</strong> Standard and VLM conversions are cached separately (<code>&lt;stem&gt;.md</code> vs <code>&lt;stem&gt;_vlm.md</code>), so switching modes never overwrites a previous conversion.</p>
+<p>Requires <code>SCHOLAR_MCP_DOCLING_URL</code> to be set. VLM enrichment also requires <code>SCHOLAR_MCP_VLM_API_URL</code> and <code>SCHOLAR_MCP_VLM_API_KEY</code>.</p>
+<hr />
+<h3 id="fetch_and_convert"><code>fetch_and_convert</code><a class="headerlink" href="#fetch_and_convert" title="Permanent link">&para;</a></h3>
+<p>Full paper-to-Markdown pipeline: downloads and converts the PDF, using the same fallback sources as <code>fetch_paper_pdf</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>identifier</code></td>
+<td>string</td>
+<td><em>(required)</em></td>
+<td>Paper ID (DOI, S2 ID, etc.)</td>
+</tr>
+<tr>
+<td><code>use_vlm</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Enable VLM enrichment</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Returns:</strong> On full success:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="p">{</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">&quot;metadata&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;paperId&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">},</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span><span class="nt">&quot;markdown&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;# Paper Title\n...&quot;</span><span class="p">,</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">  </span><span class="nt">&quot;pdf_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/data/scholar-mcp/pdfs/&lt;id&gt;.pdf&quot;</span><span class="p">,</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">  </span><span class="nt">&quot;md_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/data/scholar-mcp/md/&lt;id&gt;.md&quot;</span><span class="p">,</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">  </span><span class="nt">&quot;pdf_source&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;s2_oa&quot;</span><span class="p">,</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">  </span><span class="nt">&quot;vlm_used&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="p">}</span>
+</code></pre></div>
+<p>Partial results are returned if a later stage fails (such as metadata + error if no OA PDF is available). The <code>pdf_source</code> field indicates the download source. When VLM is requested but not configured, the response includes <code>vlm_skip_reason</code>.</p>
+<div class="admonition tip">
+<p class="admonition-title">Start without VLM</p>
+<p>Same advice as <code>convert_pdf_to_markdown</code>, try standard first, add VLM only if formulas or figures are missing. VLM and standard conversions are cached separately (<code>&lt;id&gt;.md</code> vs <code>&lt;id&gt;_vlm.md</code>).</p>
+</div>
+<p>See <a href="../guides/pdf-conversion/">PDF Conversion guide</a> for setup instructions.</p>
+<hr />
+<h3 id="fetch_pdf_by_url"><code>fetch_pdf_by_url</code><a class="headerlink" href="#fetch_pdf_by_url" title="Permanent link">&para;</a></h3>
+<p>Download a PDF from any URL and optionally convert to Markdown. Use this when you have found an alternative PDF link (such as from an author's homepage, a preprint server, or an institutional repository).</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>url</code></td>
+<td>string</td>
+<td><em>(required)</em></td>
+<td>Direct URL to a PDF file</td>
+</tr>
+<tr>
+<td><code>filename</code></td>
+<td>string</td>
+<td><em>(none)</em></td>
+<td>Filename stem for caching (such as <code>"smith2024_attention"</code>). Derived from the URL if omitted.</td>
+</tr>
+<tr>
+<td><code>use_vlm</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Enable VLM enrichment for formulas and figures</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Returns:</strong> On success (with docling configured):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="p">{</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="nt">&quot;pdf_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/data/scholar-mcp/pdfs/&lt;filename&gt;.pdf&quot;</span><span class="p">,</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span><span class="nt">&quot;markdown&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;# Paper Title\n...&quot;</span><span class="p">,</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">  </span><span class="nt">&quot;md_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/data/scholar-mcp/md/&lt;filename&gt;.md&quot;</span><span class="p">,</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">  </span><span class="nt">&quot;vlm_used&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="p">}</span>
+</code></pre></div>
+<p>Without docling, only <code>pdf_path</code> is returned. The PDF is cached by filename, so subsequent calls with the same filename return immediately.</p>
+<hr />
+<h2 id="task-polling">Task Polling<a class="headerlink" href="#task-polling" title="Permanent link">&para;</a></h2>
+<h3 id="get_task_result"><code>get_task_result</code><a class="headerlink" href="#get_task_result" title="Permanent link">&para;</a></h3>
+<p>Poll for the result of a background task.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>task_id</code></td>
+<td>string</td>
+<td><em>(required)</em></td>
+<td>Task ID returned by a queued operation</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Returns:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="p">{</span><span class="nt">&quot;task_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;a1b2c3d4e5f6&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;completed&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;result&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;{...}&quot;</span><span class="p">}</span>
+</code></pre></div>
+<p>Status values: <code>pending</code>, <code>running</code>, <code>completed</code>, <code>failed</code>. The <code>result</code> field contains the original tool output as a JSON string (only present when <code>completed</code>). On <code>failed</code>, an <code>error</code> field describes the failure.</p>
+<p>The response includes extra fields while the task is in progress (<code>pending</code> or <code>running</code>):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="p">{</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="nt">&quot;task_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;a1b2c3d4e5f6&quot;</span><span class="p">,</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span><span class="nt">&quot;status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;running&quot;</span><span class="p">,</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">  </span><span class="nt">&quot;elapsed_seconds&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">45</span><span class="p">,</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">  </span><span class="nt">&quot;tool&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;convert_pdf_to_markdown&quot;</span><span class="p">,</span>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">  </span><span class="nt">&quot;hint&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;PDF conversion typically takes 1-5 minutes depending on page count.&quot;</span>
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="p">}</span>
+</code></pre></div>
+<p>The <code>hint</code> field gives expected duration, keep polling until the task completes.</p>
+<hr />
+<h3 id="list_tasks"><code>list_tasks</code><a class="headerlink" href="#list_tasks" title="Permanent link">&para;</a></h3>
+<p>List all active (non-expired) background tasks.</p>
+<p><strong>Returns:</strong> JSON list of <code>{"task_id": "...", "status": "..."}</code> dicts.</p>
+<!-- DOMAIN-TOOLS-LIST-END -->
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../javascripts/config-wizard/wizard.js" type="module"></script>
+      
+    
+  </body>
+</html>
