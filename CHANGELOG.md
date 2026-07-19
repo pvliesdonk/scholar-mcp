@@ -2,6 +2,21 @@
 
 <!-- version list -->
 
+## v1.9.0 (2026-07-19)
+
+### Chores
+
+- Update copier template to v2.3.0 (config-wizard ownership redesign) (#219)
+  ([#219](https://github.com/pvliesdonk/scholar-mcp/pull/219),
+  [`068b0a2`](https://github.com/pvliesdonk/scholar-mcp/commit/068b0a27b7ec228f758806d44f2c2dfc140a13d0))
+
+### Features
+
+- S2 API key liveness (keepalive + distinguishable 403 logging) (#231)
+  ([#231](https://github.com/pvliesdonk/scholar-mcp/pull/231),
+  [`f04a19d`](https://github.com/pvliesdonk/scholar-mcp/commit/f04a19dc672e637b5e45fd5b8086bfd2c6833c95))
+
+
 ## v1.8.2 (2026-06-19)
 
 ### Bug Fixes
