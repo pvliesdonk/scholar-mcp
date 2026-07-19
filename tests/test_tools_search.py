@@ -221,7 +221,7 @@ async def test_get_paper_upstream_error_non_404(
     data = json.loads(result.content[0].text)
     assert data["error"] == "upstream_error"
     assert data["status"] == 500
-    assert "Server Error" in data["detail"]
+    assert "Server Error" not in data["detail"]
 
 
 @pytest.mark.respx(base_url=S2_BASE)

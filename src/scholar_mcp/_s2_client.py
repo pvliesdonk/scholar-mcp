@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 from typing import TYPE_CHECKING, Any
 
 import httpx
 
-from ._rate_limiter import RateLimiter, with_s2_retry, with_s2_try_once
+from ._rate_limiter import (
+    RateLimitedError,
+    RateLimiter,
+    with_s2_retry,
+    with_s2_try_once,
+)
 
 if TYPE_CHECKING:
     from ._record_types import PaperRecord
@@ -24,6 +31,57 @@ FIELD_SETS: dict[str, str] = {
         "abstract,tldr,openAccessPdf,fieldsOfStudy,referenceCount"
     ),
 }
+
+KEEPALIVE_PAPER_ID = (
+    "ARXIV:1706.03762"  # "Attention Is All You Need" — stable, well-known
+)
+KEEPALIVE_INTERVAL_SECONDS = (
+    7 * 24 * 60 * 60
+)  # 7 days; well under S2's 60-day key-inactivity window
+
+
+def log_s2_error(exc: httpx.HTTPStatusError) -> None:
+    """Log an S2 upstream HTTP error at a level and event name operators can alert on.
+
+    A 403 gets its own event name (``s2_key_forbidden``) distinct from the
+    ordinary 429 retry-path logging in ``_rate_limiter.py`` — it is a
+    non-retryable failure class, most commonly an S2 API key that has been
+    revoked or removed for inactivity.
+
+    Args:
+        exc: The HTTP error raised by the S2 client.
+    """
+    status = exc.response.status_code
+    detail = exc.response.text[:200]
+    if status == 403:
+        logger.warning("s2_key_forbidden status=403 detail=%s", detail)
+    else:
+        logger.warning("s2_upstream_error status=%s detail=%s", status, detail)
+
+
+def format_s2_error(exc: httpx.HTTPStatusError) -> str:
+    """Log and format an S2 upstream HTTP error as a caller-facing JSON string.
+
+    Logs full detail server-side via :func:`log_s2_error`. The returned
+    JSON intentionally omits the raw upstream response body — LLM callers
+    get a generic, non-leaking message; operators get full detail from the
+    log line.
+
+    Args:
+        exc: The HTTP error raised by the S2 client.
+
+    Returns:
+        JSON string: ``{"error": "upstream_error", "status": <code>,
+        "detail": <generic message>}``.
+    """
+    log_s2_error(exc)
+    return json.dumps(
+        {
+            "error": "upstream_error",
+            "status": exc.response.status_code,
+            "detail": "Semantic Scholar API request failed; see server logs for details",
+        }
+    )
 
 
 class S2Client:
@@ -315,3 +373,38 @@ class S2Client:
         if retry:
             return await with_s2_retry(_call, self._limiter)  # type: ignore[no-any-return]
         return await with_s2_try_once(_call, self._limiter)  # type: ignore[no-any-return]
+
+
+async def run_keepalive(client: S2Client) -> None:
+    """Ping S2 periodically to keep the API key from being removed for inactivity.
+
+    Semantic Scholar may remove API keys that see no traffic for 60 days.
+    This loop fires an immediate cheap call on startup, then repeats every
+    :data:`KEEPALIVE_INTERVAL_SECONDS`. Each iteration's failure is caught
+    and logged so one bad cycle never stops future ones; only
+    ``asyncio.CancelledError`` (server shutdown) propagates out.
+
+    Args:
+        client: The S2 client to ping.
+    """
+    while True:
+        try:
+            await client.get_paper(KEEPALIVE_PAPER_ID, fields="paperId", retry=False)
+        except RateLimitedError:
+            # get_paper(retry=False) raises this (not HTTPStatusError) on a
+            # 429 — transient, try again next cycle.
+            logger.warning("s2_keepalive_rate_limited")
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 403:
+                logger.error("s2_keepalive_key_forbidden", exc_info=True)
+            else:
+                logger.warning(
+                    "s2_keepalive_failed status=%s",
+                    exc.response.status_code,
+                    exc_info=True,
+                )
+        except httpx.HTTPError:
+            logger.warning("s2_keepalive_failed status=network_error", exc_info=True)
+        else:
+            logger.debug("s2_keepalive_ok")
+        await asyncio.sleep(KEEPALIVE_INTERVAL_SECONDS)

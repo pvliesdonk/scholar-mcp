@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -24,7 +26,7 @@ from ._google_books_client import GoogleBooksClient
 from ._openalex_client import OpenAlexClient
 from ._openlibrary_client import OpenLibraryClient
 from ._rate_limiter import RateLimiter
-from ._s2_client import S2Client
+from ._s2_client import KEEPALIVE_INTERVAL_SECONDS, S2Client, run_keepalive
 from ._standards_client import StandardsClient
 from ._task_queue import TaskQueue
 from .config import ProjectConfig, load_config
@@ -93,6 +95,27 @@ def _build_enrichment_pipeline() -> EnrichmentPipeline:
             GoogleBooksEnricher(),
         ]
     )
+
+
+def _start_s2_keepalive(
+    client: S2Client, *, api_key: str | None
+) -> asyncio.Task[None] | None:
+    """Start the S2 keepalive background task if an API key is configured.
+
+    Args:
+        client: The S2 client to keep alive.
+        api_key: The configured S2 API key, or None.
+
+    Returns:
+        The created task, or None if no API key is configured.
+    """
+    if not api_key:
+        logger.info("s2_keepalive_not_started reason=no_api_key")
+        return None
+    logger.info(
+        "s2_keepalive_started interval_days=%s", KEEPALIVE_INTERVAL_SECONDS // 86400
+    )
+    return asyncio.create_task(run_keepalive(client))
 
 
 @asynccontextmanager
@@ -182,6 +205,8 @@ async def make_service_lifespan(
 
     enrichment = _build_enrichment_pipeline()
 
+    s2_keepalive_task = _start_s2_keepalive(s2, api_key=config.s2_api_key)
+
     bundle = ServiceBundle(
         s2=s2,
         openalex=openalex,
@@ -199,6 +224,10 @@ async def make_service_lifespan(
     try:
         yield {"bundle": bundle}
     finally:
+        if s2_keepalive_task is not None:
+            s2_keepalive_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await s2_keepalive_task
         await s2.aclose()
         await openalex_http.aclose()
         await crossref_http.aclose()

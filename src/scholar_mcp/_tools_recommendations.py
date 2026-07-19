@@ -11,7 +11,7 @@ from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
 
 from ._rate_limiter import RateLimitedError
-from ._s2_client import FIELD_SETS
+from ._s2_client import FIELD_SETS, format_s2_error
 from ._server_deps import ServiceBundle, get_bundle
 
 logger = logging.getLogger(__name__)
@@ -67,13 +67,7 @@ def register_recommendation_tools(mcp: FastMCP) -> None:
                     retry=retry,
                 )
             except httpx.HTTPStatusError as exc:
-                return json.dumps(
-                    {
-                        "error": "upstream_error",
-                        "status": exc.response.status_code,
-                        "detail": exc.response.text[:200],
-                    }
-                )
+                return format_s2_error(exc)
             return json.dumps(result)
 
         try:
