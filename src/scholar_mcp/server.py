@@ -18,6 +18,7 @@ from fastmcp_pvl_core import (
     build_auth,
     build_instructions,
     configure_logging_from_env,
+    env,
     register_server_info_tool,
     wire_middleware_stack,
 )
@@ -134,6 +135,16 @@ def make_server(
         config = load_config()
     configure_logging_from_env()
 
+    # Operator overrides: SERVER_NAME renames this instance; INSTRUCTIONS
+    # replaces the default instructions text (the latter is the override that
+    # build_instructions' hint advertises). Both fall back when unset/empty.
+    server_name = env(_ENV_PREFIX, "SERVER_NAME", "scholar-mcp")
+    instructions = env(_ENV_PREFIX, "INSTRUCTIONS") or build_instructions(
+        read_only=True,
+        env_prefix=_ENV_PREFIX,
+        domain_line="FastMCP server for Semantic Scholar with OpenAlex enrichment and docling PDF conversion",
+    )
+
     auth = build_auth(config.server)
     auth_mode = _core_resolve_auth_mode(config.server)
     # Belt-and-braces invariant: build_auth returns None iff
@@ -179,9 +190,14 @@ def make_server(
     server_name = config.server_name or _DEFAULT_SERVER_NAME
 
     logger.info(
+<<<<<<< before updating
         "Server config: name=%s version=%s transport=%s auth=%s mode=%s cache_dir=%s",
         server_name,
+=======
+        "Server config: version=%s name=%s transport=%s auth=%s",
+>>>>>>> after updating
         pkg_ver,
+        server_name,
         transport,
         auth_mode,
         "read-only" if config.read_only else "read-write",
@@ -190,6 +206,7 @@ def make_server(
 
     mcp = FastMCP(
         name=server_name,
+<<<<<<< before updating
         instructions=build_instructions(
             read_only=config.read_only,
             env_prefix=_ENV_PREFIX,
@@ -202,26 +219,14 @@ def make_server(
             ),
         ),
         lifespan=make_service_lifespan,
+=======
+        instructions=instructions,
+        lifespan=server_lifespan,
+>>>>>>> after updating
         auth=auth,
     )
 
     wire_middleware_stack(mcp)
-
-    # Optional: enable opt-in per-subject authorization on tools / resources /
-    # prompts.  See fastmcp-pvl-core's README "Authorization" section for the
-    # design.  Tools, resources, and prompts opt in by setting
-    # ``meta={"required_scope": "<scope>"}``; absence of the key means
-    # unrestricted.  The middleware is only installed when ``acl_path`` is set.
-    #
-    # from fastmcp_pvl_core import (
-    #     AuthorizationMiddleware,
-    #     load_acl,
-    #     make_acl_authorizer,
-    # )
-    #
-    # if config.acl_path is not None:
-    #     authorizer = make_acl_authorizer(load_acl(config.acl_path))
-    #     mcp.add_middleware(AuthorizationMiddleware(authorizer=authorizer))
 
     register_tools(mcp)
     register_resources(mcp)

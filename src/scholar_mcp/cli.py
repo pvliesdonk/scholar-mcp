@@ -72,9 +72,21 @@ def _root(
 
 @app.command()
 def serve(
+<<<<<<< before updating
     transport: str = typer.Option("stdio", help="MCP transport (stdio / http / sse)."),
     host: str = typer.Option("0.0.0.0", help="Bind host (http only)."),
     port: int = typer.Option(8000, help="Bind port (http only)."),
+=======
+    transport: Transport = typer.Option(
+        "stdio", help="MCP transport (stdio / http / sse)."
+    ),
+    host: str | None = typer.Option(
+        None, help=f"Bind host (http only; default: ${_ENV_PREFIX}_HOST or 127.0.0.1)."
+    ),
+    port: int | None = typer.Option(
+        None, help=f"Bind port (http only; default: ${_ENV_PREFIX}_PORT or 8000)."
+    ),
+>>>>>>> after updating
     http_path: str | None = typer.Option(
         None,
         "--http-path",
@@ -142,9 +154,15 @@ def serve(
         event_store = build_event_store()
         app_ = server.http_app(path=path, event_store=event_store)
         uvicorn.run(
+<<<<<<< before updating
             app_,
             host=host,
             port=port,
+=======
+            server.http_app(path=path, event_store=event_store),
+            host=host if host is not None else config.server.host,
+            port=port if port is not None else config.server.port,
+>>>>>>> after updating
             lifespan="on",
             timeout_graceful_shutdown=0,
         )
@@ -308,6 +326,19 @@ def _select_loaders(
     if body.upper() == "ALL":
         return registered
     return [loader for loader in registered if loader.body == body.upper()]
+
+
+# DOMAIN-COMMANDS-START — add domain @app.command()s (and their helpers) below; kept across copier update
+# Domain CLI subcommands live here so the rest of this file stays byte-identical
+# to the template and applies cleanly on copier update. Use function-local
+# imports for domain modules (as ``serve`` does) to keep the top-level import
+# surface template-owned.
+# (example)
+# @app.command()
+# def widgets() -> None:
+#     """List widgets."""
+#     typer.echo("...")
+# DOMAIN-COMMANDS-END
 
 
 def main() -> None:

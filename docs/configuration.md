@@ -13,6 +13,23 @@ All settings are controlled via environment variables with the `SCHOLAR_MCP_` pr
 | `FASTMCP_LOG_LEVEL` | `INFO` | Logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL`. Controls all output (application and middleware). The `-v` CLI flag sets this to `DEBUG`. |
 | `FASTMCP_ENABLE_RICH_LOGGING` | `true` | Set to `false` for plain/JSON-structured output suitable for log aggregation tools (Loki, Datadog, Splunk). When `true`, output uses Rich formatting (colors, timestamps). |
 
+<<<<<<< before updating
+=======
+## Server identity
+
+These two are read by the scaffold's `make_server()` (not by
+`ServerConfig`), so an operator can rename an instance or override its
+instructions without editing template-owned code:
+
+- `SCHOLAR_MCP_SERVER_NAME`: the server name reported to clients and
+  by `get_server_info`. Defaults to `scholar-mcp`.
+- `SCHOLAR_MCP_INSTRUCTIONS`: replaces the default MCP instructions
+  text. Unset, the scaffold builds the default (which advertises this
+  override).
+
+<!-- DOMAIN-CONFIG-VARS-START -->
+## Domain variables
+>>>>>>> after updating
 
 ## PDF Conversion
 

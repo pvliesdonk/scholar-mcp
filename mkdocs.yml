@@ -5,6 +5,15 @@ repo_url: https://github.com/pvliesdonk/scholar-mcp
 repo_name: pvliesdonk/scholar-mcp
 edit_uri: edit/main/docs/
 
+# Internal dev docs live under docs/ but are NOT part of the published site.
+# Keep this set in lockstep with the Vale exclusion (ci.yml vale_flags glob +
+# the pre-commit `- id: vale` exclude); see the Documentation Conventions
+# section in CLAUDE.md. superpowers/ is also gitignored.
+exclude_docs: |
+  design/**
+  decisions/**
+  superpowers/**
+
 theme:
   name: material
   palette:

@@ -122,7 +122,7 @@ Full OAuth 2.1 authentication using an external identity provider. The MCP serve
 
 ### How it works
 
-The server uses FastMCP's built-in `OIDCProxy`. No external auth sidecar needed:
+The server proxies OIDC itself, with no external auth sidecar to deploy:
 
 ```
 Client → scholar-mcp (OIDCProxy) → OIDC Provider
