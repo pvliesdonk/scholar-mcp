@@ -120,7 +120,6 @@ networks:
 With the corresponding `.env`:
 
 ```bash
-SCHOLAR_MCP_READ_ONLY=true
 SCHOLAR_MCP_BASE_URL=https://mcp.example.com
 SCHOLAR_MCP_OIDC_CONFIG_URL=https://auth.example.com/.well-known/openid-configuration
 SCHOLAR_MCP_OIDC_CLIENT_ID=my-scholar-mcp

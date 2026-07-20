@@ -13,15 +13,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v8.1.0
+        uses: astral-sh/setup-uv@v8.2.0
         with:
           version: "latest"
 
       - name: Cache Python interpreter
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.local/share/uv/python
           key: uv-python-3.12-${{ runner.os }}
@@ -31,6 +31,7 @@ jobs:
 
       - name: Install dependencies
         run: uv sync --all-extras --all-groups
+
 
       - name: Run ruff check
         run: uv run ruff check src/ tests/
@@ -43,15 +44,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v8.1.0
+        uses: astral-sh/setup-uv@v8.2.0
         with:
           version: "latest"
 
       - name: Cache Python interpreter
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.local/share/uv/python
           key: uv-python-3.12-${{ runner.os }}
@@ -89,15 +90,15 @@ jobs:
           - python-version: "3.14"
             experimental: true
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v8.1.0
+        uses: astral-sh/setup-uv@v8.2.0
         with:
           version: "latest"
 
       - name: Cache Python interpreter
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           # `uv python install` writes to UV_PYTHON_INSTALL_DIR, which is
           # separate from the uv package cache and not covered by setup-uv's
@@ -117,7 +118,7 @@ jobs:
 
       - name: Upload coverage to Codecov
         if: matrix.python-version == '3.13'
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@v7
         with:
           files: ./coverage.xml
           fail_ci_if_error: false
@@ -211,15 +212,15 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v8.1.0
+        uses: astral-sh/setup-uv@v8.2.0
         with:
           version: "latest"
 
       - name: Cache Python interpreter
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.local/share/uv/python
           key: uv-python-3.12-${{ runner.os }}
@@ -245,12 +246,12 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Run gitleaks
-        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7  # v2
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e  # v3.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -266,7 +267,7 @@ jobs:
       # need to add `pull-requests: write` here too.
       checks: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Cache Vale style packages
         # Cache only the downloaded pack directories — NOT .vale/styles/config/.
@@ -277,7 +278,7 @@ jobs:
         # Pack list mirrors the Packages = line in .vale.ini; if you add or
         # remove a pack, update both. Bump the v1- prefix to evict all cached
         # packs if Vale changes pack format backward-incompatibly.
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             .vale/styles/Google
@@ -301,14 +302,26 @@ jobs:
           # pre-commit hook `rev:` in .pre-commit-config.yaml — template-ci
           # asserts the two stay synchronized.
           version: "3.14.2"
-          files: docs
-          # Working specs follow internal conventions, not user-facing prose
-          # style — exclude from linting. NO inner single quotes around the
-          # glob value: vale-action splits `vale_flags` on whitespace and
-          # passes argv elements directly (no shell), so literal quotes here
-          # would be passed through to Vale, the glob would match no files,
-          # and CI would silently exit 0. Verified empirically.
-          vale_flags: "--glob=!docs/superpowers/**"
+          # Lint the published docs site plus the user-facing README. Both are
+          # operator-facing prose and must stay Vale-clean. Internal dev docs
+          # are excluded via the glob below. Multiple paths MUST be a JSON
+          # array: vale-action only splits the `files` string when `separator`
+          # is set (it defaults to empty), so a space- or comma-joined string
+          # silently falls back to linting the whole repo (".").
+          files: '["docs", "README.md"]'
+          # Dev-reference docs (working specs, design notes, ADRs) follow
+          # internal conventions, not user-facing prose style — exclude from
+          # linting. This mirrors the mkdocs `exclude_docs:` block, which keeps
+          # design/** and decisions/** out of the published site. Use ONE
+          # `--glob` with brace alternation: Vale honors only a single `--glob`
+          # pattern (a repeated flag keeps just the last), so the subtrees must
+          # be combined as `{a,b,c}`. NO inner single quotes around the glob
+          # value: vale-action splits `vale_flags` on whitespace and passes
+          # argv elements directly (no shell), so literal quotes here would be
+          # passed through to Vale, the glob would match no files, and CI would
+          # silently exit 0. Verified empirically. Keep the subtree set in sync
+          # with the pre-commit `- id: vale` exclude (template-ci asserts it).
+          vale_flags: "--glob=!docs/{superpowers,design,decisions}/**"
           # Failure gating is controlled by MinAlertLevel = error in
           # .vale.ini (governs both what Vale prints AND its exit code)
           # combined with fail_on_error below — only error-severity
@@ -324,3 +337,52 @@ jobs:
           # don't gate PRs that don't touch them. To enforce repo-wide
           # cleanliness, set this to `nofilter`.
           filter_mode: added
+
+
+  structure:
+    name: Structural Quality (diff)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Diff-scoped, so only meaningful on a PR (needs a base branch to compare).
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.2.0
+        with:
+          version: "latest"
+
+      - name: Cache Python interpreter
+        uses: actions/cache@v6
+        with:
+          path: ~/.local/share/uv/python
+          key: uv-python-3.12-${{ runner.os }}
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-extras --all-groups
+
+      - name: Fetch base branch
+        run: git fetch origin ${{ github.base_ref }} --depth=50
+
+      - name: Structural quality (changed lines only)
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          # Skip when the diff touches no Python — mirrors the diff-cover guard.
+          HAS_PY=$(git diff --name-only "origin/${BASE_REF}...HEAD" | grep -c '\.py$' || true)
+          if [ "$HAS_PY" -eq 0 ]; then
+            echo "No Python source changes — skipping structural diff gate"
+            exit 0
+          fi
+          uv run diff-quality --violations=ruff.check \
+            --options="--extend-select=C901,PLR0911,PLR0912,PLR0913,PLR0915,S" \
+            --compare-branch="origin/${BASE_REF}" --fail-under=100
+

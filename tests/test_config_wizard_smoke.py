@@ -10,8 +10,9 @@ Two kinds of tests live here, both template-owned and spec-agnostic:
   every spec shares (the ``deployment`` question exists; output carries the
   project identity from ``meta``).
 * Generator unit tests import ``generators.js`` directly and feed it synthetic
-  specs, so they exercise ``dockerVolume`` / ``dockerPath`` behaviour without
-  depending on this project's questions.
+  specs, so they exercise generator behaviour (``dockerVolume`` / ``dockerPath``
+  mapping, ``validateSpec`` rejection of malformed specs) without depending on
+  this project's questions.
 
 Domain-specific assertions belong in ``test_config_wizard_domain.py``.
 """
@@ -33,14 +34,47 @@ if typing.TYPE_CHECKING:
     from playwright.sync_api import Browser, Page
 
 SITE = Path(__file__).resolve().parent.parent / "site"
+_DOCS_WIZARD = (
+    Path(__file__).resolve().parent.parent / "docs" / "javascripts" / "config-wizard"
+)
+_SITE_WIZARD = SITE / "javascripts" / "config-wizard"
 
 pytestmark = pytest.mark.browser
+
+
+def _stale_wizard_assets() -> list[str]:
+    """Names of wizard assets whose built copy is missing or differs from source.
+
+    mkdocs copies the ``docs/javascripts/config-wizard`` files into ``site/``
+    verbatim, so a byte mismatch means ``site/`` is stale relative to the source
+    these tests actually exercise. Comparing bytes (not mtimes) is robust across
+    fresh checkouts, where mtimes carry no build ordering.
+    """
+    stale: list[str] = []
+    for src in sorted(_DOCS_WIZARD.glob("*")):
+        if not src.is_file():
+            continue
+        built = _SITE_WIZARD / src.name
+        if not built.is_file() or built.read_bytes() != src.read_bytes():
+            stale.append(src.name)
+    return stale
 
 
 @pytest.fixture(scope="module")
 def site_url() -> typing.Iterator[str]:
     if not (SITE / "configuration-generator" / "index.html").exists():
         pytest.skip("site/ not built -- run `uv run mkdocs build` first")
+    # A built-but-stale site/ (source edited under docs/ without rebuilding)
+    # would silently run these tests against outdated assets and false-fail.
+    # Skip with an actionable message instead. CI always builds fresh, so this
+    # only ever trips locally.
+    stale = _stale_wizard_assets()
+    if stale:
+        pytest.skip(
+            "site/ is stale relative to docs/ ("
+            + ", ".join(stale)
+            + ") -- rebuild with `uv run mkdocs build`"
+        )
     handler = functools.partial(
         http.server.SimpleHTTPRequestHandler, directory=str(SITE)
     )
@@ -113,6 +147,75 @@ def _eval_generators(page: Page, body: str) -> typing.Any:
         + ")(g); }"
     )
     return page.evaluate(script)
+
+
+def test_validate_spec_accepts_complete_spec(page: Page) -> None:
+    err = _eval_generators(
+        page,
+        """(g) => {
+          const spec = { version: 1,
+            meta: { projectName: 'demo', dockerImage: 'img:latest', envPrefix: 'DEMO' },
+            secretKeys: [],
+            questions: [{ id: 'deployment', label: 'W', type: 'select' }],
+            guards: [] };
+          try { g.validateSpec(spec); return null; } catch (e) { return e.message; }
+        }""",
+    )
+    assert err is None
+
+
+def test_validate_spec_rejects_missing_questions(page: Page) -> None:
+    err = _eval_generators(
+        page,
+        """(g) => {
+          const spec = { version: 1,
+            meta: { projectName: 'demo', dockerImage: 'img:latest', envPrefix: 'DEMO' } };
+          try { g.validateSpec(spec); return null; } catch (e) { return e.message; }
+        }""",
+    )
+    assert err is not None
+    assert "missing questions array" in err
+
+
+def test_validate_spec_rejects_missing_meta(page: Page) -> None:
+    err = _eval_generators(
+        page,
+        """(g) => {
+          const spec = { version: 1, questions: [{ id: 'deployment', label: 'W', type: 'select' }] };
+          try { g.validateSpec(spec); return null; } catch (e) { return e.message; }
+        }""",
+    )
+    assert err is not None
+    assert "missing meta block" in err
+
+
+def test_validate_spec_rejects_empty_meta(page: Page) -> None:
+    # meta is an object but lacks the fields the generators dereference: the
+    # exact gap the old `typeof meta === 'object'` guard let through.
+    err = _eval_generators(
+        page,
+        """(g) => {
+          const spec = { version: 1, meta: {},
+            questions: [{ id: 'deployment', label: 'W', type: 'select' }] };
+          try { g.validateSpec(spec); return null; } catch (e) { return e.message; }
+        }""",
+    )
+    assert err is not None
+    assert "meta.projectName missing or empty" in err
+
+
+def test_validate_spec_rejects_empty_meta_field(page: Page) -> None:
+    err = _eval_generators(
+        page,
+        """(g) => {
+          const spec = { version: 1,
+            meta: { projectName: 'demo', dockerImage: '', envPrefix: 'DEMO' },
+            questions: [{ id: 'deployment', label: 'W', type: 'select' }] };
+          try { g.validateSpec(spec); return null; } catch (e) { return e.message; }
+        }""",
+    )
+    assert err is not None
+    assert "meta.dockerImage missing or empty" in err
 
 
 def test_docker_volume_adds_mount_and_fixes_container_path(page: Page) -> None:
@@ -231,3 +334,62 @@ def test_compose_quotes_yaml_typed_env_values(page: Page) -> None:
     assert 'DEMO_FLAG: "true"' in result
     assert "DEMO_FLAG: true\n" not in result
     assert 'DEMO_PORT: "8080"' in result
+
+
+# A two-level showIf chain (child gates on `auth`, `auth` gates on `deployment`)
+# mirrors the auth/OIDC structure every shipped spec uses. These two tests pin
+# the runtime behaviour the spec-level cascade test (in
+# test_config_wizard_spec_schema.py) is a static proxy for: isVisible does NOT
+# cascade, so buildEnvMap emits a child's var whenever the child's own showIf is
+# satisfied by the raw answers — even if the gating question is itself hidden by
+# a stale answer. A self-contained child showIf is what closes the leak.
+def _cascade_spec(child_showif: str) -> str:
+    return (
+        "{ version: 1,"
+        " meta: { projectName: 'demo', dockerImage: 'img:latest', envPrefix: 'DEMO' },"
+        " secretKeys: [],"
+        " questions: ["
+        "   { id: 'deployment', label: 'D', type: 'select',"
+        "     options: [{ value: 'local', label: 'L' }, { value: 'server', label: 'S' }] },"
+        "   { id: 'auth', label: 'A', type: 'select', showIf: { deployment: ['server'] },"
+        "     options: [{ value: 'none', label: 'N' }, { value: 'oidc', label: 'O' }] },"
+        "   { id: 'oidc_url', label: 'U', type: 'text', var: 'DEMO_OIDC_CONFIG_URL',"
+        "     showIf: " + child_showif + " },"
+        " ],"
+        " guards: [] }"
+    )
+
+
+# Stale state from configuring OIDC under deployment='server' (the auth answer
+# AND a filled-in oidc_url value), then flipping deployment back to 'local'.
+_STALE = "{ deployment: 'local', auth: 'oidc', oidc_url: 'https://auth.example.com' }"
+
+
+def test_buildenvmap_leaks_without_self_contained_showif(page: Page) -> None:
+    # Child gated ONLY on auth (the pre-fix shape). The stale auth answer keeps
+    # the child visible, so its filled-in value is still emitted after deployment
+    # flips back to 'local'. This documents the leak the cascade gate prevents.
+    result = _eval_generators(
+        page,
+        "(g) => {"
+        "  const spec = " + _cascade_spec("{ auth: ['oidc'] }") + ";"
+        "  return g.buildEnvMap(spec, " + _STALE + ");"
+        "}",
+    )
+    assert result.get("DEMO_OIDC_CONFIG_URL") == "https://auth.example.com"
+
+
+def test_buildenvmap_self_contained_showif_blocks_stale_answer(page: Page) -> None:
+    # Child gated on BOTH deployment and auth (the fixed shape). The same stale
+    # state no longer leaks because deployment='local' fails the child's own
+    # deployment gate, so isVisible is false and the var is not emitted.
+    result = _eval_generators(
+        page,
+        "(g) => {"
+        "  const spec = "
+        + _cascade_spec("{ deployment: ['server'], auth: ['oidc'] }")
+        + ";"
+        "  return g.buildEnvMap(spec, " + _STALE + ");"
+        "}",
+    )
+    assert "DEMO_OIDC_CONFIG_URL" not in result
