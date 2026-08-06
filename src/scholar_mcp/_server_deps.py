@@ -29,7 +29,7 @@ from ._rate_limiter import RateLimiter
 from ._s2_client import KEEPALIVE_INTERVAL_SECONDS, S2Client, run_keepalive
 from ._standards_client import StandardsClient
 from ._task_queue import TaskQueue
-from .config import ProjectConfig, load_config
+from .config import ProjectConfig
 
 if TYPE_CHECKING:
     from ._protocols import CacheProtocol
@@ -130,7 +130,7 @@ async def make_service_lifespan(
     Yields:
         Dict mapping ``"bundle"`` to the :class:`ServiceBundle`.
     """
-    config = load_config()
+    config = ProjectConfig.from_env()
     config.cache_dir.mkdir(parents=True, exist_ok=True)
 
     s2 = S2Client(api_key=config.s2_api_key)

@@ -18,6 +18,7 @@ from fastmcp_pvl_core import (
     build_auth,
     build_instructions,
     configure_logging_from_env,
+    env,
     register_server_info_tool,
     wire_middleware_stack,
 )
@@ -121,18 +122,33 @@ def make_server(
     """Construct the Scholar MCP FastMCP server.
 
     Args:
-        transport: ``"stdio"`` / ``"http"`` / ``"sse"``.  Used here for
-            logging only.
+        transport: ``"stdio"`` / ``"http"`` / ``"sse"``.  Gates any
+            transport-specific wiring added in the DOMAIN-WIRING block
+            (e.g. HTTP-only custom routes, which cannot be served under
+            stdio) and appears as ``transport=%s`` in the startup log.
         config: Optional pre-loaded config; default loads from env.
 
     Returns:
         A configured :class:`fastmcp.FastMCP` instance.
     """
-    if config is None:
-        from scholar_mcp.config import load_config
-
-        config = load_config()
+    config = config or ProjectConfig.from_env()
     configure_logging_from_env()
+
+    # Operator overrides: SERVER_NAME renames this instance; INSTRUCTIONS
+    # replaces the default instructions text (the latter is the override that
+    # build_instructions' hint advertises). Both fall back when unset/empty.
+    server_name = env(_ENV_PREFIX, "SERVER_NAME") or _DEFAULT_SERVER_NAME
+    instructions = env(_ENV_PREFIX, "INSTRUCTIONS") or build_instructions(
+        read_only=config.read_only,
+        env_prefix=_ENV_PREFIX,
+        domain_line=(
+            "Scholar MCP — academic literature server: Semantic Scholar + "
+            "OpenAlex + Crossref + OpenLibrary + Google Books + EPO (patents) "
+            "+ standards (ISO/IEC/IEEE/CEN/CC) enrichment and docling PDF "
+            "conversion.  Read-only tools are always available; write-tagged "
+            "tools (cache writes) are hidden in read-only mode."
+        ),
+    )
 
     auth = build_auth(config.server)
     auth_mode = _core_resolve_auth_mode(config.server)
@@ -176,12 +192,10 @@ def make_server(
     except PackageNotFoundError:
         pkg_ver = "unknown"
 
-    server_name = config.server_name or _DEFAULT_SERVER_NAME
-
     logger.info(
-        "Server config: name=%s version=%s transport=%s auth=%s mode=%s cache_dir=%s",
-        server_name,
+        "Server config: version=%s name=%s transport=%s auth=%s mode=%s cache_dir=%s",
         pkg_ver,
+        server_name,
         transport,
         auth_mode,
         "read-only" if config.read_only else "read-write",
@@ -190,38 +204,12 @@ def make_server(
 
     mcp = FastMCP(
         name=server_name,
-        instructions=build_instructions(
-            read_only=config.read_only,
-            env_prefix=_ENV_PREFIX,
-            domain_line=(
-                "Scholar MCP — academic literature server: Semantic Scholar + "
-                "OpenAlex + Crossref + OpenLibrary + Google Books + EPO (patents) "
-                "+ standards (ISO/IEC/IEEE/CEN/CC) enrichment and docling PDF "
-                "conversion.  Read-only tools are always available; write-tagged "
-                "tools (cache writes) are hidden in read-only mode."
-            ),
-        ),
+        instructions=instructions,
         lifespan=make_service_lifespan,
         auth=auth,
     )
 
     wire_middleware_stack(mcp)
-
-    # Optional: enable opt-in per-subject authorization on tools / resources /
-    # prompts.  See fastmcp-pvl-core's README "Authorization" section for the
-    # design.  Tools, resources, and prompts opt in by setting
-    # ``meta={"required_scope": "<scope>"}``; absence of the key means
-    # unrestricted.  The middleware is only installed when ``acl_path`` is set.
-    #
-    # from fastmcp_pvl_core import (
-    #     AuthorizationMiddleware,
-    #     load_acl,
-    #     make_acl_authorizer,
-    # )
-    #
-    # if config.acl_path is not None:
-    #     authorizer = make_acl_authorizer(load_acl(config.acl_path))
-    #     mcp.add_middleware(AuthorizationMiddleware(authorizer=authorizer))
 
     register_tools(mcp)
     register_resources(mcp)
