@@ -12,17 +12,18 @@ import logging
 import os
 from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Literal, cast
 
 import httpx
 import typer
 from fastmcp_pvl_core import (
+    build_event_store,
     configure_logging_from_env,
     maybe_start_debugpy,
     normalise_http_path,
 )
 
-from scholar_mcp.config import _ENV_PREFIX
+from scholar_mcp.config import _ENV_PREFIX, ProjectConfig
 
 if TYPE_CHECKING:
     from scholar_mcp._standards_sync import Loader
@@ -36,24 +37,8 @@ app = typer.Typer(
     add_completion=False,
     rich_markup_mode=None,
 )
-cache_app = typer.Typer(
-    name="cache",
-    help="Manage the Scholar MCP local cache.",
-    no_args_is_help=True,
-    rich_markup_mode=None,
-)
-app.add_typer(cache_app, name="cache")
 
-
-class _Body(StrEnum):
-    """Standards bodies known to ``sync-standards``.  Case-insensitive on CLI."""
-
-    ISO = "ISO"
-    IEC = "IEC"
-    IEEE = "IEEE"
-    CEN = "CEN"
-    CC = "CC"
-    ALL = "all"
+Transport = Literal["stdio", "http", "sse"]
 
 
 @app.callback()
@@ -72,9 +57,15 @@ def _root(
 
 @app.command()
 def serve(
-    transport: str = typer.Option("stdio", help="MCP transport (stdio / http / sse)."),
-    host: str = typer.Option("0.0.0.0", help="Bind host (http only)."),
-    port: int = typer.Option(8000, help="Bind port (http only)."),
+    transport: Transport = typer.Option(
+        "stdio", help="MCP transport (stdio / http / sse)."
+    ),
+    host: str | None = typer.Option(
+        None, help=f"Bind host (http only; default: ${_ENV_PREFIX}_HOST or 127.0.0.1)."
+    ),
+    port: int | None = typer.Option(
+        None, help=f"Bind port (http only; default: ${_ENV_PREFIX}_PORT or 8000)."
+    ),
     http_path: str | None = typer.Option(
         None,
         "--http-path",
@@ -84,7 +75,7 @@ def serve(
 ) -> None:
     """Run the MCP server."""
     try:
-        from scholar_mcp.server import build_event_store, make_server
+        from scholar_mcp.server import make_server
     except ImportError as exc:
         logger.error(
             "FastMCP is not installed. Install with: "
@@ -93,24 +84,6 @@ def serve(
         raise typer.Exit(code=1) from exc
 
     from fastmcp_pvl_core import ConfigurationError
-
-    try:
-        server = make_server(transport=transport)
-    except ConfigurationError as exc:
-        # pvl-core raises this on real auth misconfig (OIDC discovery
-        # failure, missing httpx, incomplete discovery doc). The exception
-        # message is operator-actionable on its own; don't bury it under a
-        # multi-screen rich traceback. Print to stderr via ``typer.echo``
-        # rather than ``logger.error`` so the message is visible even if
-        # the operator runs with ``FASTMCP_LOG_LEVEL=CRITICAL`` or another
-        # level that filters ERROR. Operators who want the full chain can
-        # re-run with ``-v`` (FASTMCP_LOG_LEVEL=DEBUG) — the DEBUG line
-        # below renders the traceback when the level allows it.
-        typer.echo(f"ERROR: configuration error: {exc}", err=True)
-        logger.debug("configuration_error_traceback", exc_info=True)
-        raise typer.Exit(code=1) from exc
-    env_http_path = os.environ.get(f"{_ENV_PREFIX}_HTTP_PATH")
-    path = normalise_http_path(http_path or env_http_path)
 
     # Optional remote-debugger listener — placed in ``serve`` (not the
     # typer root callback) so non-server commands like ``--help``,
@@ -124,8 +97,28 @@ def serve(
     # formatter rather than Python's lastResort.
     maybe_start_debugpy(_ENV_PREFIX)
 
+    try:
+        # Config loading is inside the guard: ``ServerConfig.from_env``
+        # raises ``ConfigurationError`` on a malformed value (e.g. a
+        # non-integer SCHOLAR_MCP_PORT) just like the auth builders do on
+        # real auth misconfig (OIDC discovery failure, missing httpx,
+        # incomplete discovery doc). The exception message is
+        # operator-actionable on its own; don't bury it under a
+        # multi-screen rich traceback. Print to stderr via ``typer.echo``
+        # rather than ``logger.error`` so the message is visible even if
+        # the operator runs with ``FASTMCP_LOG_LEVEL=CRITICAL`` or another
+        # level that filters ERROR. Operators who want the full chain can
+        # re-run with ``-v`` (FASTMCP_LOG_LEVEL=DEBUG) — the DEBUG line
+        # below renders the traceback when the level allows it.
+        config = ProjectConfig.from_env()
+        server = make_server(transport=transport, config=config)
+    except ConfigurationError as exc:
+        typer.echo(f"ERROR: configuration error: {exc}", err=True)
+        logger.debug("configuration_error_traceback", exc_info=True)
+        raise typer.Exit(code=1) from exc
+
     if transport != "http" and (
-        host != "0.0.0.0" or port != 8000 or http_path is not None
+        host is not None or port is not None or http_path is not None
     ):
         logger.warning("--host, --port and --path are only used with --transport http")
 
@@ -139,23 +132,43 @@ def serve(
             )
             raise typer.Exit(code=1) from exc
 
-        event_store = build_event_store()
-        app_ = server.http_app(path=path, event_store=event_store)
+        path = normalise_http_path(
+            http_path or os.environ.get(f"{_ENV_PREFIX}_HTTP_PATH")
+        )
+        event_store = build_event_store(_ENV_PREFIX, config.server)
+        # lifespan="on" is essential: FastMCP's lifespan (startup/shutdown
+        # hooks, including service init) runs through the ASGI lifespan
+        # protocol.
         uvicorn.run(
-            app_,
-            host=host,
-            port=port,
+            server.http_app(path=path, event_store=event_store),
+            host=host if host is not None else config.server.host,
+            port=port if port is not None else config.server.port,
             lifespan="on",
             timeout_graceful_shutdown=0,
         )
     else:
-        from typing import Literal
-        from typing import cast as type_cast
+        server.run(transport=transport)
 
-        transport_literal = type_cast(
-            "Literal['stdio', 'http', 'sse', 'streamable-http']", transport
-        )
-        server.run(transport=transport_literal)
+
+# DOMAIN-COMMANDS-START — add domain @app.command()s (and their helpers) below; kept across copier update
+cache_app = typer.Typer(
+    name="cache",
+    help="Manage the Scholar MCP local cache.",
+    no_args_is_help=True,
+    rich_markup_mode=None,
+)
+app.add_typer(cache_app, name="cache")
+
+
+class _Body(StrEnum):
+    """Standards bodies known to ``sync-standards``.  Case-insensitive on CLI."""
+
+    ISO = "ISO"
+    IEC = "IEC"
+    IEEE = "IEEE"
+    CEN = "CEN"
+    CC = "CC"
+    ALL = "all"
 
 
 @app.command("sync-standards")
@@ -184,12 +197,11 @@ def sync_standards(
     """
     from scholar_mcp._cache import ScholarCache
     from scholar_mcp._standards_sync import format_reports, run_sync
-    from scholar_mcp.config import load_config
 
     async def _run() -> int:
         from scholar_mcp._standards_sync import SyncReport
 
-        config = load_config()
+        config = ProjectConfig.from_env()
         db_path = (cache_dir or config.cache_dir) / "cache.db"
         c = ScholarCache(db_path)
         await c.open()
@@ -228,10 +240,9 @@ def cache_stats(
 ) -> None:
     """Show cache statistics (row counts, file size)."""
     from scholar_mcp._cache import ScholarCache
-    from scholar_mcp.config import load_config
 
     async def _run() -> None:
-        config = load_config()
+        config = ProjectConfig.from_env()
         db_path = (cache_dir or config.cache_dir) / "cache.db"
         if not db_path.exists():
             typer.echo("No cache database found.")
@@ -263,10 +274,9 @@ def cache_clear(
     With ``--older-than N``, removes only entries older than N days.
     """
     from scholar_mcp._cache import ScholarCache
-    from scholar_mcp.config import load_config
 
     async def _run() -> None:
-        config = load_config()
+        config = ProjectConfig.from_env()
         db_path = (cache_dir or config.cache_dir) / "cache.db"
         if not db_path.exists():
             typer.echo("No cache database found.")
@@ -308,6 +318,9 @@ def _select_loaders(
     if body.upper() == "ALL":
         return registered
     return [loader for loader in registered if loader.body == body.upper()]
+
+
+# DOMAIN-COMMANDS-END
 
 
 def main() -> None:

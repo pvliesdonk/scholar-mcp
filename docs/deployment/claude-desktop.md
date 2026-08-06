@@ -22,7 +22,7 @@ Or download the `.mcpb` bundle from the [GitHub Releases](https://github.com/pvl
 
 ### 2. Configure Claude Desktop
 
-If you installed via `.mcpb`, skip this step, Claude Desktop was configured automatically by the wizard.
+If you installed via `.mcpb`, skip this step. Claude Desktop was configured automatically by the wizard.
 
 Otherwise, add the server to your Claude Desktop configuration file. The path varies by operating system:
 
@@ -36,9 +36,7 @@ Otherwise, add the server to your Claude Desktop configuration file. The path va
     "scholar-mcp": {
       "command": "scholar-mcp",
       "args": ["serve"],
-      "env": {
-        "SCHOLAR_MCP_READ_ONLY": "true"
-      }
+      "env": {}
     }
   }
 }
@@ -66,7 +64,7 @@ Restart the application to pick up the new configuration. If the server connects
 
 ### "Command not found"
 
-Ensure `scholar-mcp` is on your PATH. If installed in a virtualenv, use the full path to the binary. Replace only the `"command"` value in your existing config, keep `"args"` and `"env"` as-is.
+Ensure `scholar-mcp` is on your PATH. If installed in a virtualenv, use the full path to the binary. Replace only the `"command"` value in your existing config and keep `"args"` and `"env"` as-is.
 
 macOS/Linux:
 
@@ -76,9 +74,7 @@ macOS/Linux:
     "scholar-mcp": {
       "command": "/Users/me/.venvs/mcp/bin/scholar-mcp",
       "args": ["serve"],
-      "env": {
-        "SCHOLAR_MCP_READ_ONLY": "true"
-      }
+      "env": {}
     }
   }
 }
@@ -92,9 +88,7 @@ Windows (`Scripts\` not `bin\`, `.exe` suffix):
     "scholar-mcp": {
       "command": "C:\\Users\\me\\.venvs\\mcp\\Scripts\\scholar-mcp.exe",
       "args": ["serve"],
-      "env": {
-        "SCHOLAR_MCP_READ_ONLY": "true"
-      }
+      "env": {}
     }
   }
 }

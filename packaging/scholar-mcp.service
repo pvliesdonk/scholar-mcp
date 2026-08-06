@@ -9,6 +9,12 @@ Type=simple
 User=scholar-mcp
 Group=scholar-mcp
 
+# Bind a reachable address by default: the CLI's own fallback is loopback
+# (127.0.0.1), which would make a packaged install unreachable from other
+# hosts. EnvironmentFile settings below override this, so operators can
+# restrict the bind in /etc/scholar-mcp/env.
+Environment=SCHOLAR_MCP_HOST=0.0.0.0
+
 # Configuration via environment file
 EnvironmentFile=-/etc/scholar-mcp/env
 

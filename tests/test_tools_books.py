@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from contextlib import asynccontextmanager
+from dataclasses import replace
 
 import httpx
 import pytest
@@ -584,7 +585,7 @@ async def test_get_book_download_cover_saves_file(
     """download_cover=True downloads the cover image and returns cover_path."""
     from unittest.mock import AsyncMock, patch
 
-    bundle.config.read_only = False
+    bundle.config = replace(bundle.config, read_only=False)
     respx_mock.get("/isbn/9780201633610.json").mock(
         return_value=httpx.Response(200, json=SAMPLE_EDITION_RESPONSE)
     )
@@ -631,7 +632,7 @@ async def test_get_book_download_cover_uses_cache(
     bundle: ServiceBundle,
 ) -> None:
     """When cover file already exists on disk, no HTTP download is made."""
-    bundle.config.read_only = False
+    bundle.config = replace(bundle.config, read_only=False)
     respx_mock.get("/isbn/9780201633610.json").mock(
         return_value=httpx.Response(200, json=SAMPLE_EDITION_RESPONSE)
     )
@@ -668,7 +669,7 @@ async def test_get_book_download_cover_read_only(
     bundle: ServiceBundle,
 ) -> None:
     """In read-only mode, download_cover returns cover_error instead."""
-    bundle.config.read_only = True
+    bundle.config = replace(bundle.config, read_only=True)
     respx_mock.get("/isbn/9780201633610.json").mock(
         return_value=httpx.Response(200, json=SAMPLE_EDITION_RESPONSE)
     )

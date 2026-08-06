@@ -829,15 +829,15 @@ tasks = [
 
 [[package]]
 name = "fastmcp-pvl-core"
-version = "3.2.0"
+version = "4.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "fastmcp" },
     { name = "httpx" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/38/05/2d414878c6575ab9b82418fd61b9b9d47c93104041764ec0a6e1c34e0135/fastmcp_pvl_core-3.2.0.tar.gz", hash = "sha256:0bcd3dced86305a69c727e4e7779c33a3f57b275c8b302ea330c0817fa1066fc", size = 331755, upload-time = "2026-06-03T17:01:34.772Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/76/5c/5d1ea65b94bd2c31a4c778f4a887c763082e9e25075d61486c214825c845/fastmcp_pvl_core-4.5.0.tar.gz", hash = "sha256:a271ce9d177c5c0ff6d3f447633615cedd1d7d9c0aae88f49e7b08ac2bd80413", size = 426242, upload-time = "2026-07-25T15:37:33.868Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/2b/12/b15f31ef4fa85d39b5c0c0bc9cbcb5202b0ad595cd03f72467307d23e393/fastmcp_pvl_core-3.2.0-py3-none-any.whl", hash = "sha256:71b2760ec491bdfd9ad131f489795b1dd5bdc31a62552ef4f5df8beba3308dff", size = 52644, upload-time = "2026-06-03T17:01:33.133Z" },
+    { url = "https://files.pythonhosted.org/packages/d0/53/b43f7f64d4159a55d3810823ea5e9d6136afb78257afcda9a5821d3fc1c1/fastmcp_pvl_core-4.5.0-py3-none-any.whl", hash = "sha256:bca8cf2d3078f87b1a9fb676b70307db44eeaad7cf2e0131d86cbfaf9c2d06f5", size = 82987, upload-time = "2026-07-25T15:37:32.549Z" },
 ]
 
 [package.optional-dependencies]
@@ -2038,7 +2038,7 @@ wheels = [
 
 [[package]]
 name = "pvliesdonk-scholar-mcp"
-version = "1.8.2"
+version = "1.9.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiosqlite" },
@@ -2089,7 +2089,7 @@ requires-dist = [
     { name = "beautifulsoup4", specifier = ">=4.14.3" },
     { name = "fastmcp", extras = ["tasks"], marker = "extra == 'all'", specifier = ">=3.2.0,<4" },
     { name = "fastmcp", extras = ["tasks"], marker = "extra == 'mcp'", specifier = ">=3.2.0,<4" },
-    { name = "fastmcp-pvl-core", specifier = ">=3.2.0,<4" },
+    { name = "fastmcp-pvl-core", specifier = ">=4.5.0,<5" },
     { name = "fastmcp-pvl-core", extras = ["debug"], marker = "extra == 'debug'" },
     { name = "httpx" },
     { name = "lxml", specifier = ">=5.0" },

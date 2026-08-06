@@ -1,54 +1,154 @@
-"""Project configuration for scholar-mcp.
+"""Configuration for Scholar MCP.
 
-Composes ``fastmcp_pvl_core.ServerConfig`` for transport/auth/event-store
-fields; adds Scholar domain fields below.
+Composes :class:`fastmcp_pvl_core.ServerConfig` via the domain
+:class:`ProjectConfig` dataclass — never inherits.
+
+Add domain-specific fields between the CONFIG-FIELDS sentinels, populate
+them in ``from_env`` between the CONFIG-FROM-ENV sentinels, and enforce
+their invariants in ``__post_init__`` between the CONFIG-VALIDATE
+sentinels; copier update preserves all three blocks across template
+updates.
 """
 
 from __future__ import annotations
 
-import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from fastmcp_pvl_core import ServerConfig, env, parse_bool
-
-logger = logging.getLogger(__name__)
+from fastmcp_pvl_core import (
+    ServerConfig,
+    env,
+    parse_bool,
+)
 
 _ENV_PREFIX = "SCHOLAR_MCP"
 
 
-@dataclass
+@dataclass(frozen=True)
 class ProjectConfig:
-    """Scholar-mcp configuration loaded from environment variables.
+    """Domain config for Scholar MCP.  Compose — don't inherit."""
 
-    The ``server`` field carries generic FastMCP server config (transport,
-    auth, event store).  Domain fields (API keys, cache dir, etc.) live
-    directly on this dataclass.
-    """
-
-    # CONFIG-FIELDS-START — scholar domain fields; kept across copier update
     server: ServerConfig = field(default_factory=ServerConfig)
-    server_name: str | None = None
-    read_only: bool = True
-    s2_api_key: str | None = None
-    docling_url: str | None = None
-    vlm_api_url: str | None = None
-    vlm_api_key: str | None = None
-    vlm_model: str = "gpt-4o"
-    cache_dir: Path = field(default_factory=lambda: Path("/data/scholar-mcp"))
-    contact_email: str | None = None
-    epo_consumer_key: str | None = None
-    epo_consumer_secret: str | None = None
-    google_books_api_key: str | None = None
+
+    # CONFIG-FIELDS-START — add domain fields below; kept across copier update
+    read_only: bool = field(
+        default=True,
+        metadata={
+            "help": (
+                "When true, write-tagged tools (PDF download and conversion "
+                "cache writes) are hidden. Set false to enable them."
+            ),
+            "tags": ("mode",),
+        },
+    )
+    s2_api_key: str | None = field(
+        default=None,
+        metadata={
+            "help": (
+                "Semantic Scholar API key. Optional but strongly recommended: "
+                "unauthenticated requests are limited to ~1 req/s."
+            ),
+            "tags": ("s2",),
+        },
+    )
+    docling_url: str | None = field(
+        default=None,
+        metadata={
+            "help": (
+                "Base URL of a running docling-serve instance for PDF "
+                "conversion (e.g. http://localhost:5001). When unset, PDF "
+                "conversion tools return an error."
+            ),
+            "tags": ("pdf",),
+        },
+    )
+    vlm_api_url: str | None = field(
+        default=None,
+        metadata={
+            "help": (
+                "OpenAI-compatible VLM endpoint for formula and figure "
+                "enrichment during PDF conversion."
+            ),
+            "tags": ("pdf",),
+        },
+    )
+    vlm_api_key: str | None = field(
+        default=None,
+        metadata={
+            "help": "API key for the VLM endpoint.",
+            "tags": ("pdf",),
+        },
+    )
+    vlm_model: str = field(
+        default="gpt-4o",
+        metadata={
+            "help": "Model name to use with the VLM endpoint.",
+            "tags": ("pdf",),
+        },
+    )
+    cache_dir: Path = field(
+        default=Path("/data/scholar-mcp"),
+        metadata={
+            "help": (
+                "Directory for the SQLite cache database (cache.db) and "
+                "downloaded PDFs (pdfs/, md/)."
+            ),
+            "tags": ("cache",),
+        },
+    )
+    contact_email: str | None = field(
+        default=None,
+        metadata={
+            "help": (
+                "Contact email for the OpenAlex polite pool (improves rate "
+                "limits). Also enables Unpaywall lookups as a PDF fallback "
+                "source."
+            ),
+            "tags": ("enrichment",),
+        },
+    )
+    epo_consumer_key: str | None = field(
+        default=None,
+        metadata={
+            "help": (
+                "EPO Open Patent Services consumer key. Optional; patent "
+                "tools are hidden when unset."
+            ),
+            "tags": ("patents",),
+        },
+    )
+    epo_consumer_secret: str | None = field(
+        default=None,
+        metadata={
+            "help": (
+                "EPO Open Patent Services consumer secret. Optional; patent "
+                "tools are hidden when unset."
+            ),
+            "tags": ("patents",),
+        },
+    )
+    google_books_api_key: str | None = field(
+        default=None,
+        metadata={
+            "help": (
+                "Google Books API key. Optional; book tools work "
+                "unauthenticated at reduced rate limits."
+            ),
+            "tags": ("books",),
+        },
+    )
+    # Populated from SCHOLAR_GITHUB_TOKEN (not SCHOLAR_MCP_GITHUB_TOKEN) — the
+    # conventional GitHub-tooling env name users expect. The non-prefixed read
+    # is invisible to the domain env-var scan, so the var is declared in
+    # config-presentation.domain.yml instead of via field metadata.
     github_token: str | None = None
     # Opt-in per-subject authorization: uncomment to enable. See pvl-core's
     # README "Authorization" section + scholar's README "Authorization
     # (opt-in)" section for the wire-in story. Also requires uncommenting
     # the matching AuthorizationMiddleware stanza in ``server.py`` and the
-    # env-load below in ``load_config``.
+    # env-load in ``from_env`` below.
     # acl_path: Path | None = None
-    # CONFIG-FIELDS-END
 
     @property
     def epo_configured(self) -> bool:
@@ -57,54 +157,52 @@ class ProjectConfig:
             self.epo_consumer_key is not None and self.epo_consumer_secret is not None
         )
 
+    # CONFIG-FIELDS-END
 
-def load_config() -> ProjectConfig:
-    """Load configuration from environment variables.
+    def __post_init__(self) -> None:
+        """Validate composed domain fields.  Raise ``ValueError`` when invalid.
 
-    Reads all generic ``ServerConfig`` env vars (BASE_URL, BEARER_TOKEN,
-    OIDC_*, EVENT_STORE_URL, etc.) plus scholar's domain fields — see
-    ``fastmcp_pvl_core.ServerConfig.from_env`` for the generic set.
-    """
-    server = ServerConfig.from_env(env_prefix=_ENV_PREFIX)
+        Runs on EVERY construction path — ``from_env`` and a direct
+        ``ProjectConfig(field=...)`` alike.  That is what makes this the right
+        home for a field invariant: ``env_float`` / ``env_int`` bounds check
+        only the *env-sourced* value, never the default, so a direct
+        construction slips past them.  They also cannot express an exclusive
+        bound (their ``minimum`` / ``maximum`` are inclusive, so "must be > 0"
+        lets ``0`` through) or a cross-field rule (A requires B,
+        mutually-exclusive pairs).  All three belong here.
 
-    # CONFIG-FROM-ENV-START — scholar domain reads; kept across copier update
-    server_name = env(_ENV_PREFIX, "SERVER_NAME")
-    read_only = parse_bool(env(_ENV_PREFIX, "READ_ONLY", "true"))
+        The dataclass is ``frozen=True``: read fields freely, but plain
+        assignment raises.  To *normalise* rather than merely check, use
+        ``object.__setattr__(self, "name", value)``.
+        """
+        # CONFIG-VALIDATE-START — validate domain fields below; kept across copier update
+        # (no domain invariants yet — scholar's fields are all independently
+        #  optional; add cross-field rules here when one appears)
+        # CONFIG-VALIDATE-END
 
-    cache_dir = Path(env(_ENV_PREFIX, "CACHE_DIR") or "/data/scholar-mcp")
-
-    # SCHOLAR_GITHUB_TOKEN (not SCHOLAR_MCP_GITHUB_TOKEN) — conventional
-    # GitHub-tooling env name users expect.
-    github_token = os.environ.get("SCHOLAR_GITHUB_TOKEN") or None
-
-    # Opt-in per-subject authorization (see CONFIG-FIELDS-START comment above
-    # and scholar's README "Authorization (opt-in)" section). Activation
-    # requires THREE coordinated edits: (1) uncomment the ``acl_path`` field
-    # declaration above, (2) uncomment the env-load below, (3) uncomment the
-    # ``acl_path=acl_path`` kwarg in the ProjectConfig(...) call below — plus
-    # the matching AuthorizationMiddleware stanza in server.py.
-    # acl_path = Path(_p) if (_p := env(_ENV_PREFIX, "ACL_PATH")) else None
-
-    config = ProjectConfig(
-        server=server,
-        server_name=server_name,
-        read_only=read_only,
-        s2_api_key=env(_ENV_PREFIX, "S2_API_KEY"),
-        docling_url=env(_ENV_PREFIX, "DOCLING_URL"),
-        vlm_api_url=env(_ENV_PREFIX, "VLM_API_URL"),
-        vlm_api_key=env(_ENV_PREFIX, "VLM_API_KEY"),
-        vlm_model=env(_ENV_PREFIX, "VLM_MODEL", "gpt-4o"),
-        cache_dir=cache_dir,
-        contact_email=env(_ENV_PREFIX, "CONTACT_EMAIL"),
-        epo_consumer_key=env(_ENV_PREFIX, "EPO_CONSUMER_KEY"),
-        epo_consumer_secret=env(_ENV_PREFIX, "EPO_CONSUMER_SECRET"),
-        google_books_api_key=env(_ENV_PREFIX, "GOOGLE_BOOKS_API_KEY"),
-        github_token=github_token,
-        # acl_path=acl_path,  # uncomment alongside the field + env-load above
-    )
-    # CONFIG-FROM-ENV-END
-
-    logger.debug(
-        "load_config: read_only=%s cache_dir=%s", config.read_only, config.cache_dir
-    )
-    return config
+    @classmethod
+    def from_env(cls) -> ProjectConfig:
+        """Load :class:`ProjectConfig` from ``SCHOLAR_MCP_*`` env vars."""
+        return cls(
+            server=ServerConfig.from_env(_ENV_PREFIX),
+            # CONFIG-FROM-ENV-START — populate domain fields below; kept across copier update
+            read_only=parse_bool(env(_ENV_PREFIX, "READ_ONLY", "true")),
+            s2_api_key=env(_ENV_PREFIX, "S2_API_KEY"),
+            docling_url=env(_ENV_PREFIX, "DOCLING_URL"),
+            vlm_api_url=env(_ENV_PREFIX, "VLM_API_URL"),
+            vlm_api_key=env(_ENV_PREFIX, "VLM_API_KEY"),
+            vlm_model=env(_ENV_PREFIX, "VLM_MODEL", "gpt-4o") or "gpt-4o",
+            cache_dir=Path(
+                env(_ENV_PREFIX, "CACHE_DIR", "/data/scholar-mcp")
+                or "/data/scholar-mcp"
+            ),
+            contact_email=env(_ENV_PREFIX, "CONTACT_EMAIL"),
+            epo_consumer_key=env(_ENV_PREFIX, "EPO_CONSUMER_KEY"),
+            epo_consumer_secret=env(_ENV_PREFIX, "EPO_CONSUMER_SECRET"),
+            google_books_api_key=env(_ENV_PREFIX, "GOOGLE_BOOKS_API_KEY"),
+            # SCHOLAR_GITHUB_TOKEN — see the github_token field comment above.
+            github_token=os.environ.get("SCHOLAR_GITHUB_TOKEN") or None,
+            # Opt-in authorization (see CONFIG-FIELDS-START comment above):
+            # acl_path=Path(_p) if (_p := env(_ENV_PREFIX, "ACL_PATH")) else None,
+            # CONFIG-FROM-ENV-END
+        )

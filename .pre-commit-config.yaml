@@ -1,3 +1,8 @@
+
+# `pre-commit install` wires both stages so the pre-push structural gate is
+# installed alongside the commit-time hooks.
+default_install_hook_types: [pre-commit, pre-push]
+
 repos:
   - repo: local
     hooks:
@@ -19,20 +24,31 @@ repos:
         name: mypy
         language: system
         entry: uv run mypy
-        files: ^src/
+        files: ^(src|tests)/
+        types: [python]
         pass_filenames: false
-        args: [src/]
+        args: [src/, tests/]
 
-  - repo: https://github.com/errata-ai/vale
-    # Keep in sync with the `version:` field in the ci.yml Vale job.
-    rev: v3.14.2
-    hooks:
-      - id: vale
-        # CI uses `--glob=!docs/superpowers/**` at invocation time (directory
-        # traversal); pre-commit passes individual filenames so --glob has no
-        # effect. Use `exclude` to achieve the same skip at the hook level.
-        files: ^docs/
-        exclude: ^docs/superpowers/
+
+      # Structural-health gate: strict ruff structural rules on CHANGED LINES
+      # ONLY (diff vs origin/main), mirroring the CI `structure` job. NOTE the
+      # base is hardcoded `origin/main` here while CI compares against the PR's
+      # actual base (`github.base_ref`); the two coincide for a PR targeting
+      # `main` and diverge only for a non-main base branch.
+      # bash -c so the shell — not pre-commit's arg splitter — owns the
+      # --options quoting. Pre-push (not commit-time): a commit has no base to
+      # compare and may be partial; pre-push sees the full branch range CI checks.
+      - id: structural-diff-gate
+        name: structural quality (diff vs origin/main)
+        entry: bash -c 'uv run diff-quality --violations=ruff.check --options="--extend-select=C901,PLR0911,PLR0912,PLR0913,PLR0915,S" --compare-branch=origin/main --fail-under=100'
+        language: system
+        pass_filenames: false
+        # Skip the hook when the push has no Python (with pass_filenames: false,
+        # pre-commit still uses `types` to decide whether to run at all). Mirrors
+        # the CI structure job's `HAS_PY` docs-only skip.
+        types: [python]
+        stages: [pre-push]
+
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
@@ -42,3 +58,89 @@ repos:
       - id: check-yaml
       - id: check-added-large-files
       - id: check-json
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+
+  # Vale prose lint for docs/**. Requires Vale on PATH (`brew install vale`,
+  # `apt install vale`, or download from https://vale.sh/docs/install).
+  # First commit touching docs/ or .vale.ini auto-runs `vale sync` because
+  # the style-pack dirs are missing; subsequent commits are no-ops. Adding a
+  # new package to .vale.ini's `Packages =` line, or bumping a pinned URL
+  # version, does NOT re-sync automatically — the hard-coded pack-dir checks
+  # below don't see the new package, and bumped-version dirs still
+  # exist on disk. After such .vale.ini edits, run `vale sync` manually
+  # (or `rm -rf .vale/styles/<pack>` to force re-sync via the hook).
+  #
+  # `.vale.ini`'s `Packages =` is the source of truth, and THREE places in
+  # this project restate it by hand: the `for p in` list below, `BasedOnStyles`
+  # in .vale.ini, and the cache `path:` in .github/workflows/ci.yml. Change
+  # `Packages =` and all three must change with it — a pack missing from the
+  # list below leaves this hook blind to it, so `vale sync` never fires and
+  # the `vale` hook right after exits `E100 [loadStyles]`.
+  - repo: local
+    hooks:
+      - id: vale-sync
+        name: vale sync (download style packages if missing)
+        # Loud-fail if Vale isn't on PATH OR if `vale sync` fails (network,
+        # bad URL, etc.). Both error modes silently exited 0 in earlier
+        # iterations: bash's brace-group returns the exit status of its
+        # LAST command, which was `break` (always 0), masking sync failures
+        # and "vale: command not found". `command -v vale` plus `exit 1` on
+        # sync failure plug both holes — without them the next hook (`vale`)
+        # runs against un-synced packs and fails with a PACKAGING error that
+        # reads like a prose failure. Verified against the pinned Vale
+        # (3.14.2): a missing StylesPath directory gives `E201 Invalid value`
+        # and a present StylesPath missing a BasedOnStyles pack gives
+        # `E100 [loadStyles] … does not exist on StylesPath`; both exit 2.
+        # (An earlier revision of this comment said Vale exits 0 here — a
+        # silent pass. It does not, at this version. The hook still earns its
+        # place: it stops a packs problem being read as prose debt.)
+        language: system
+        entry: |
+          bash -c '
+            command -v vale >/dev/null 2>&1 || {
+              echo "vale not on PATH — install: https://vale.sh/docs/install" >&2
+              exit 1
+            }
+            for p in Google proselint write-good ai-tells; do
+              if [ ! -d ".vale/styles/$p" ]; then
+                vale sync || exit 1
+                break
+              fi
+            done
+          '
+        pass_filenames: false
+        files: ^(docs/|\.vale\.ini$)
+        # Align trigger scope with the `vale` lint hook below — no point
+        # checking sync state on commits that only touch the excluded
+        # working-specs subtree.
+        exclude: ^docs/superpowers/
+
+  - repo: https://github.com/vale-cli/vale
+    rev: v3.14.2
+    hooks:
+      - id: vale
+        # MUST run after `vale-sync` above. Pre-commit runs hooks in
+        # declaration order; if vale precedes vale-sync on a fresh clone the
+        # packs aren't populated and Vale exits 2 with `E201`/`E100` — a
+        # packaging failure wearing the shape of a prose failure.
+        # Upstream hook has `types: [text]`; this `files:` scopes to the
+        # user-facing docs site plus the README. Net scope: any text file
+        # under docs/ (minus the dev-reference subtrees — working specs,
+        # design notes, ADRs) plus README.md. Matches the CI step's
+        # `vale ... --glob='!docs/{superpowers,design,decisions}/**'
+        # docs README.md` exactly. Keep the dev-reference subtree set in
+        # sync with the CI vale_flags glob; template-ci asserts they match.
+        files: ^(docs/|README\.md$)
+        exclude: ^docs/(superpowers|design|decisions)/
+
+# DOMAIN-HOOKS-START — add domain-specific hooks (shellcheck, yamllint,
+# project linters, etc.) below as full `- repo:` blocks indented to match the
+# `repos:` list above; kept across copier update. Everything OUTSIDE this
+# block is template-owned and re-rendered on update, which keeps the hook
+# pins and the structural-gate wiring above in lockstep with the re-rendered
+# tests that assert on them.
+# DOMAIN-HOOKS-END

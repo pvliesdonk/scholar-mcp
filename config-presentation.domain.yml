@@ -1,0 +1,31 @@
+# Domain presentation layer — YOURS to edit.  Preserved across copier update.
+#
+# Domain env vars are discovered automatically from your ProjectConfig's
+# CONFIG-FIELDS block, using each field's `metadata={"help": ..., "tags": ...}`.
+# Declare a var here only when it is read somewhere the scan cannot see it —
+# a deprecated alias no longer read inside ProjectConfig.from_env, or a var
+# read outside ProjectConfig.from_env entirely.
+#
+# Same shape as the template-owned config-presentation.yml.  `{PREFIX}` is
+# substituted with your env_prefix.
+#
+# A var's `default:` key controls whether it renders required, the same way
+# a dataclass field does: omit `default:` entirely to mark the var required,
+# or give it `default: null` (or a real default) to mark it optional.
+vars:
+  # Read as SCHOLAR_GITHUB_TOKEN (no _MCP_) via os.environ inside
+  # ProjectConfig.from_env — the conventional GitHub-tooling env name users
+  # expect. Non-prefixed, so the AST scan of from_env cannot see it.
+  - name: "SCHOLAR_GITHUB_TOKEN"
+    type_name: "str"
+    default: null
+    help: >-
+      GitHub token used to raise rate limits when fetching standards documents
+      from GitHub. Optional; unauthenticated requests work at reduced limits.
+    tags: [standards]
+
+# Extra wizard questions specific to this project.
+wizard_routing: []
+
+# Extra wizard guards specific to this project.
+wizard_guards: []

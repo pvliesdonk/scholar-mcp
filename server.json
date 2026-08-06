@@ -1,9 +1,10 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.pvliesdonk/scholar-mcp",
-  "title": "Scholar MCP Server",
-  "description": "Scholarly-sources MCP: papers, patents, books, standards — search and cross-reference prior art.",
+  "title": "Scholar MCP",
+  "description": "FastMCP server for Semantic Scholar with OpenAlex enrichment and docling PDF conversion",
   "version": "1.9.0",
+  "websiteUrl": "https://pvliesdonk.github.io/scholar-mcp/",
   "repository": {
     "url": "https://github.com/pvliesdonk/scholar-mcp",
     "source": "github"
@@ -12,21 +13,95 @@
     {
       "registryType": "pypi",
       "identifier": "pvliesdonk-scholar-mcp",
-      "version": "1.9.0",
+      "version": "0.1.0",
+      "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"
       },
       "environmentVariables": [
         {
-          "name": "SCHOLAR_MCP_READ_ONLY",
-          "description": "Set to 'false' to enable write tools (default: true)",
-          "required": false,
+          "name": "SCHOLAR_MCP_KV_STORE_URL",
+          "description": "Persistent-state backend URL shared by every pvl-core subsystem that needs state. `memory://` is in-process and lost on restart; `file:///path` persists on one server; `redis://`, `dynamodb://` and `mongodb://` each need their matching extra. Defaults to `file:///data/state` when unset.",
+          "default": "file:///data/state"
+        },
+        {
+          "name": "SCHOLAR_MCP_SERVER_NAME",
+          "description": "Rename this server instance; defaults to the project name."
+        },
+        {
+          "name": "SCHOLAR_MCP_INSTRUCTIONS",
+          "description": "Replaces the default MCP instructions text sent to clients."
+        },
+        {
+          "name": "FASTMCP_LOG_LEVEL",
+          "description": "Log level for FastMCP internals and app loggers (DEBUG / INFO / WARNING / ERROR / CRITICAL). The -v CLI flag overrides to DEBUG.",
+          "default": "INFO",
+          "choices": [
+            "DEBUG",
+            "INFO",
+            "WARNING",
+            "ERROR",
+            "CRITICAL"
+          ]
+        },
+        {
+          "name": "FASTMCP_ENABLE_RICH_LOGGING",
+          "description": "Set false for plain or structured JSON log output.",
+          "format": "boolean",
           "default": "true"
         },
         {
-          "name": "SCHOLAR_MCP_BEARER_TOKEN",
-          "description": "Static bearer token for authentication (optional)",
-          "required": false
+          "name": "SCHOLAR_GITHUB_TOKEN",
+          "description": "GitHub token used to raise rate limits when fetching standards documents from GitHub. Optional; unauthenticated requests work at reduced limits."
+        },
+        {
+          "name": "SCHOLAR_MCP_READ_ONLY",
+          "description": "When true, write-tagged tools (PDF download and conversion cache writes) are hidden. Set false to enable them.",
+          "format": "boolean",
+          "default": "true"
+        },
+        {
+          "name": "SCHOLAR_MCP_S2_API_KEY",
+          "description": "Semantic Scholar API key. Optional but strongly recommended: unauthenticated requests are limited to ~1 req/s."
+        },
+        {
+          "name": "SCHOLAR_MCP_DOCLING_URL",
+          "description": "Base URL of a running docling-serve instance for PDF conversion (e.g. http://localhost:5001). When unset, PDF conversion tools return an error."
+        },
+        {
+          "name": "SCHOLAR_MCP_VLM_API_URL",
+          "description": "OpenAI-compatible VLM endpoint for formula and figure enrichment during PDF conversion."
+        },
+        {
+          "name": "SCHOLAR_MCP_VLM_API_KEY",
+          "description": "API key for the VLM endpoint."
+        },
+        {
+          "name": "SCHOLAR_MCP_VLM_MODEL",
+          "description": "Model name to use with the VLM endpoint.",
+          "default": "gpt-4o"
+        },
+        {
+          "name": "SCHOLAR_MCP_CACHE_DIR",
+          "description": "Directory for the SQLite cache database (cache.db) and downloaded PDFs (pdfs/, md/).",
+          "format": "filepath",
+          "default": "/data/scholar-mcp"
+        },
+        {
+          "name": "SCHOLAR_MCP_CONTACT_EMAIL",
+          "description": "Contact email for the OpenAlex polite pool (improves rate limits). Also enables Unpaywall lookups as a PDF fallback source."
+        },
+        {
+          "name": "SCHOLAR_MCP_EPO_CONSUMER_KEY",
+          "description": "EPO Open Patent Services consumer key. Optional; patent tools are hidden when unset."
+        },
+        {
+          "name": "SCHOLAR_MCP_EPO_CONSUMER_SECRET",
+          "description": "EPO Open Patent Services consumer secret. Optional; patent tools are hidden when unset."
+        },
+        {
+          "name": "SCHOLAR_MCP_GOOGLE_BOOKS_API_KEY",
+          "description": "Google Books API key. Optional; book tools work unauthenticated at reduced rate limits."
         }
       ]
     },
@@ -47,65 +122,173 @@
       ],
       "environmentVariables": [
         {
-          "name": "SCHOLAR_MCP_READ_ONLY",
-          "description": "Set to 'false' to enable write tools (default: true)",
-          "required": false,
-          "default": "true"
+          "name": "SCHOLAR_MCP_BASE_URL",
+          "description": "Public base URL of the deployed server, e.g. `https://mcp.example.com`. Required for OIDC. Also the fallback source of the MCP Apps domain when `app_domain` is unset.",
+          "placeholder": "https://mcp.example.com"
         },
         {
-          "name": "FASTMCP_LOG_LEVEL",
-          "description": "Log level (DEBUG, INFO, WARNING, ERROR)",
-          "default": "INFO"
+          "name": "SCHOLAR_MCP_BEARER_TOKEN",
+          "description": "Single shared bearer token; enables bearer auth unless `bearer_tokens_file` is set, which takes precedence.",
+          "placeholder": "<secret>",
+          "isSecret": true
+        },
+        {
+          "name": "SCHOLAR_MCP_OIDC_CONFIG_URL",
+          "description": "OIDC discovery document URL, e.g. `https://auth.example.com/.well-known/openid-configuration`.",
+          "placeholder": "https://auth.example.com/.well-known/openid-configuration"
+        },
+        {
+          "name": "SCHOLAR_MCP_OIDC_CLIENT_ID",
+          "description": "OIDC client identifier registered with the provider.",
+          "placeholder": "mcp-client"
+        },
+        {
+          "name": "SCHOLAR_MCP_OIDC_CLIENT_SECRET",
+          "description": "OIDC client secret registered with the provider.",
+          "placeholder": "your-client-secret",
+          "isSecret": true
+        },
+        {
+          "name": "SCHOLAR_MCP_OIDC_AUDIENCE",
+          "description": "Expected `aud` claim; tokens issued for another audience are rejected.",
+          "placeholder": "mcp-api"
+        },
+        {
+          "name": "SCHOLAR_MCP_OIDC_REQUIRED_SCOPES",
+          "description": "Scopes a caller must present, space- or comma-separated. Defaults to `openid` in oidc-proxy mode.",
+          "default": "openid"
+        },
+        {
+          "name": "SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY",
+          "description": "Signing key for issued JWTs; used in oidc-proxy mode only. When unset, the key is derived deterministically from `oidc_client_secret`, so tokens survive a restart — but rotating that secret invalidates every issued token. Set this explicitly to decouple token validity from secret rotation. Generate with `openssl rand -hex 32`.",
+          "default": "derived",
+          "isSecret": true
+        },
+        {
+          "name": "SCHOLAR_MCP_OIDC_VERIFY_ACCESS_TOKEN",
+          "description": "Validate the access token instead of the id token.",
+          "format": "boolean",
+          "default": "false"
         },
         {
           "name": "SCHOLAR_MCP_KV_STORE_URL",
-          "description": "Persistent-state backend URL for pvl-core subsystems. Schemes: file:///path (survives restarts), memory:// (dev/ephemeral).",
+          "description": "Persistent-state backend URL shared by every pvl-core subsystem that needs state. `memory://` is in-process and lost on restart; `file:///path` persists on one server; `redis://`, `dynamodb://` and `mongodb://` each need their matching extra. Defaults to `file:///data/state` when unset.",
           "default": "file:///data/state"
         },
         {
+          "name": "SCHOLAR_MCP_APP_DOMAIN",
+          "description": "MCP Apps iframe domain, used for CSP sandboxing. Overrides the host derived from `base_url`."
+        },
+        {
+          "name": "SCHOLAR_MCP_AUTH_MODE",
+          "description": "Explicit auth-mode override, accepting `remote` or `oidc-proxy` (case- and whitespace-insensitive). When unset the mode is auto-detected from which auth variables are set; the override exists because having all four OIDC variables set is ambiguous between those two modes. Other values are ignored with a warning."
+        },
+        {
+          "name": "SCHOLAR_MCP_BEARER_TOKENS_FILE",
+          "description": "Path to a TOML file mapping bearer tokens to subjects; overrides the single-token `bearer_token` mode.",
+          "format": "filepath",
+          "placeholder": "/etc/scholar-mcp/tokens.toml"
+        },
+        {
+          "name": "SCHOLAR_MCP_BEARER_DEFAULT_SUBJECT",
+          "description": "Subject assigned to the single-token bearer mode; ignored when `bearer_tokens_file` is set, since mapped mode carries per-token subjects.",
+          "default": "bearer-anon"
+        },
+        {
           "name": "SCHOLAR_MCP_SERVER_NAME",
-          "description": "MCP server name shown to clients",
-          "default": "scholar-mcp"
+          "description": "Rename this server instance; defaults to the project name."
+        },
+        {
+          "name": "SCHOLAR_MCP_INSTRUCTIONS",
+          "description": "Replaces the default MCP instructions text sent to clients."
+        },
+        {
+          "name": "SCHOLAR_MCP_HTTP_PATH",
+          "description": "Mount path for the MCP endpoint.",
+          "default": "/mcp"
         },
         {
           "name": "PUID",
-          "description": "Run as this UID (Docker entrypoint)",
+          "description": "Run the server process as this UID; the container entrypoint chowns writable paths to match.",
+          "format": "number",
           "default": "1000"
         },
         {
           "name": "PGID",
-          "description": "Run as this GID (Docker entrypoint)",
+          "description": "Run the server process as this GID; pair with PUID to match the owner of a mounted volume.",
+          "format": "number",
           "default": "1000"
         },
         {
-          "name": "SCHOLAR_MCP_BEARER_TOKEN",
-          "description": "Static bearer token for authentication (optional)",
-          "required": false
+          "name": "FASTMCP_LOG_LEVEL",
+          "description": "Log level for FastMCP internals and app loggers (DEBUG / INFO / WARNING / ERROR / CRITICAL). The -v CLI flag overrides to DEBUG.",
+          "default": "INFO",
+          "choices": [
+            "DEBUG",
+            "INFO",
+            "WARNING",
+            "ERROR",
+            "CRITICAL"
+          ]
         },
         {
-          "name": "SCHOLAR_MCP_BASE_URL",
-          "description": "Public base URL of this server, required for OIDC (e.g. https://mcp.example.com)",
-          "required": false
+          "name": "FASTMCP_ENABLE_RICH_LOGGING",
+          "description": "Set false for plain or structured JSON log output.",
+          "format": "boolean",
+          "default": "true"
         },
         {
-          "name": "SCHOLAR_MCP_OIDC_CONFIG_URL",
-          "description": "OIDC discovery endpoint URL (e.g. https://auth.example.com/.well-known/openid-configuration)",
-          "required": false
+          "name": "SCHOLAR_GITHUB_TOKEN",
+          "description": "GitHub token used to raise rate limits when fetching standards documents from GitHub. Optional; unauthenticated requests work at reduced limits."
         },
         {
-          "name": "SCHOLAR_MCP_OIDC_CLIENT_ID",
-          "description": "OIDC client ID",
-          "required": false
+          "name": "SCHOLAR_MCP_READ_ONLY",
+          "description": "When true, write-tagged tools (PDF download and conversion cache writes) are hidden. Set false to enable them.",
+          "format": "boolean",
+          "default": "true"
         },
         {
-          "name": "SCHOLAR_MCP_OIDC_CLIENT_SECRET",
-          "description": "OIDC client secret",
-          "required": false
+          "name": "SCHOLAR_MCP_S2_API_KEY",
+          "description": "Semantic Scholar API key. Optional but strongly recommended: unauthenticated requests are limited to ~1 req/s."
         },
         {
-          "name": "SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY",
-          "description": "JWT signing key — required on Linux/Docker to survive restarts (generate with: openssl rand -hex 32)",
-          "required": false
+          "name": "SCHOLAR_MCP_DOCLING_URL",
+          "description": "Base URL of a running docling-serve instance for PDF conversion (e.g. http://localhost:5001). When unset, PDF conversion tools return an error."
+        },
+        {
+          "name": "SCHOLAR_MCP_VLM_API_URL",
+          "description": "OpenAI-compatible VLM endpoint for formula and figure enrichment during PDF conversion."
+        },
+        {
+          "name": "SCHOLAR_MCP_VLM_API_KEY",
+          "description": "API key for the VLM endpoint."
+        },
+        {
+          "name": "SCHOLAR_MCP_VLM_MODEL",
+          "description": "Model name to use with the VLM endpoint.",
+          "default": "gpt-4o"
+        },
+        {
+          "name": "SCHOLAR_MCP_CACHE_DIR",
+          "description": "Directory for the SQLite cache database (cache.db) and downloaded PDFs (pdfs/, md/).",
+          "format": "filepath",
+          "default": "/data/scholar-mcp"
+        },
+        {
+          "name": "SCHOLAR_MCP_CONTACT_EMAIL",
+          "description": "Contact email for the OpenAlex polite pool (improves rate limits). Also enables Unpaywall lookups as a PDF fallback source."
+        },
+        {
+          "name": "SCHOLAR_MCP_EPO_CONSUMER_KEY",
+          "description": "EPO Open Patent Services consumer key. Optional; patent tools are hidden when unset."
+        },
+        {
+          "name": "SCHOLAR_MCP_EPO_CONSUMER_SECRET",
+          "description": "EPO Open Patent Services consumer secret. Optional; patent tools are hidden when unset."
+        },
+        {
+          "name": "SCHOLAR_MCP_GOOGLE_BOOKS_API_KEY",
+          "description": "Google Books API key. Optional; book tools work unauthenticated at reduced rate limits."
         }
       ]
     }

@@ -117,7 +117,8 @@ def test_serve_stdio_invokes_make_server() -> None:
     ):
         result = CliRunner().invoke(app, ["serve"])
     assert result.exit_code == 0
-    mock_make_server.assert_called_once_with(transport="stdio")
+    assert mock_make_server.call_count == 1
+    assert mock_make_server.call_args.kwargs["transport"] == "stdio"
     mock_server.run.assert_called_once_with(transport="stdio")
 
 
@@ -169,3 +170,79 @@ def test_serve_configuration_error_prints_clean_message(
     # versions exposes it via .stderr (separate from .stdout).
     assert "configuration error" in result.stderr.lower()
     assert "OIDC discovery failed" in result.stderr
+
+
+def test_serve_bad_port_prints_clean_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A malformed SCHOLAR_MCP_PORT produces the one-line operator message.
+
+    Regression guard for the config-loading path (#251): the template's
+    ``serve`` shape loads config outside any error handling, so adopting it
+    verbatim would replace this message with a multi-screen rich traceback.
+    ``ServerConfig.from_env`` raises ``ConfigurationError`` on a non-integer
+    port; the CLI must catch it on this path exactly as it does on the auth
+    misconfig path covered above.
+    """
+    monkeypatch.setenv("SCHOLAR_MCP_PORT", "notanumber")
+    runner = CliRunner()
+    result = runner.invoke(app, ["serve", "--transport", "http"])
+    assert result.exit_code == 1
+    assert "configuration error" in result.stderr.lower()
+    assert "SCHOLAR_MCP_PORT" in result.stderr
+
+
+def test_serve_http_binds_env_host_over_loopback_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The http transport resolves host/port from flags, env, then defaults.
+
+    Pins the v3.x bind-resolution chain (#250): with no ``--host`` the server
+    binds ``SCHOLAR_MCP_HOST``, falling back to core's loopback default. The
+    packaged systemd unit relies on the env layer (it sets
+    ``SCHOLAR_MCP_HOST=0.0.0.0``) to stay reachable, so the env hop must keep
+    working.
+    """
+    mock_server = MagicMock()
+    monkeypatch.setenv("SCHOLAR_MCP_HOST", "0.0.0.0")
+    monkeypatch.setenv("SCHOLAR_MCP_PORT", "9137")
+    with (
+        patch("scholar_mcp.server.make_server", return_value=mock_server),
+        patch("uvicorn.run") as mock_run,
+    ):
+        result = CliRunner().invoke(app, ["serve", "--transport", "http"])
+    assert result.exit_code == 0
+    assert mock_run.call_count == 1
+    assert mock_run.call_args.kwargs["host"] == "0.0.0.0"
+    assert mock_run.call_args.kwargs["port"] == 9137
+
+
+def test_serve_http_explicit_host_flag_wins(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An explicit ``--host``/``--port`` overrides the env-derived config."""
+    mock_server = MagicMock()
+    monkeypatch.setenv("SCHOLAR_MCP_HOST", "0.0.0.0")
+    with (
+        patch("scholar_mcp.server.make_server", return_value=mock_server),
+        patch("uvicorn.run") as mock_run,
+    ):
+        result = CliRunner().invoke(
+            app,
+            ["serve", "--transport", "http", "--host", "127.0.0.1", "--port", "8123"],
+        )
+    assert result.exit_code == 0
+    assert mock_run.call_args.kwargs["host"] == "127.0.0.1"
+    assert mock_run.call_args.kwargs["port"] == 8123
+
+
+def test_serve_warns_when_http_flags_used_without_http() -> None:
+    """--host/--port/--path with a non-http transport logs a warning."""
+    mock_server = MagicMock()
+    with (
+        patch("scholar_mcp.server.make_server", return_value=mock_server),
+        patch("scholar_mcp.cli.logger") as mock_logger,
+    ):
+        result = CliRunner().invoke(app, ["serve", "--host", "0.0.0.0"])
+    assert result.exit_code == 0
+    assert mock_logger.warning.called
