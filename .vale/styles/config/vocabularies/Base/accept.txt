@@ -34,6 +34,7 @@ deps
 deserialization
 docstring
 httpx
+lockfile
 lxml
 monkeypatched
 mypy

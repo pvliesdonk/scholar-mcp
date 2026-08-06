@@ -208,6 +208,7 @@ def test_serve_http_binds_env_host_over_loopback_default(
     monkeypatch.setenv("SCHOLAR_MCP_PORT", "9137")
     with (
         patch("scholar_mcp.server.make_server", return_value=mock_server),
+        patch("scholar_mcp.cli.build_event_store"),
         patch("uvicorn.run") as mock_run,
     ):
         result = CliRunner().invoke(app, ["serve", "--transport", "http"])
@@ -225,6 +226,7 @@ def test_serve_http_explicit_host_flag_wins(
     monkeypatch.setenv("SCHOLAR_MCP_HOST", "0.0.0.0")
     with (
         patch("scholar_mcp.server.make_server", return_value=mock_server),
+        patch("scholar_mcp.cli.build_event_store"),
         patch("uvicorn.run") as mock_run,
     ):
         result = CliRunner().invoke(

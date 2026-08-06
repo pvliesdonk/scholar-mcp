@@ -13,3 +13,13 @@ name: "CodeQL config"
 # This scaffold ships no filters: suppress an alert only after you've
 # confirmed it's a false positive for a path that actually exists, so a
 # real finding is never silently hidden.
+
+# Reviewed false positive (PR #257): CodeQL's
+# py/clear-text-storage-sensitive-data fires on gen_config_surface.py's
+# artifact writer (`target.write_text`), but the rendered env files'
+# "sensitive" content is the literal placeholder examples from
+# config-presentation.yml (e.g. OIDC_CLIENT_SECRET=your-client-secret) —
+# no real secret ever flows through the generator. The script is vendored
+# byte-identical from fastmcp-server-template, where it is also analyzed.
+paths-ignore:
+  - scripts/gen_config_surface.py
