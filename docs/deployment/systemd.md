@@ -67,7 +67,7 @@ sudo journalctl -u scholar-mcp -f
 
 The service runs in HTTP mode on port 8000 by default.
 
-The unit binds `0.0.0.0` (all interfaces) via `Environment=SCHOLAR_MCP_HOST=0.0.0.0` so the packaged server is reachable from other hosts. The CLI's own fallback is `127.0.0.1` (loopback only) — to restrict the packaged service to loopback (typical behind a same-host reverse proxy), set `SCHOLAR_MCP_HOST=127.0.0.1` in `/etc/scholar-mcp/env`, which overrides the unit's default.
+The unit binds `0.0.0.0` (all interfaces) via `Environment=SCHOLAR_MCP_HOST=0.0.0.0` so the packaged server is reachable from other hosts. The bare CLI falls back to `127.0.0.1` (loopback only). To restrict the packaged service to loopback (typical behind a same-host reverse proxy), set `SCHOLAR_MCP_HOST=127.0.0.1` in `/etc/scholar-mcp/env`; that file overrides the unit default.
 
 ## Security hardening
 

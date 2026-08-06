@@ -15,6 +15,7 @@ Traefik
 
 # --- HTTP / URL terminology ---
 hostname
+loopback
 subpath
 URIs
 
