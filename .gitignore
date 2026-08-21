@@ -36,8 +36,13 @@ site/
 # --- Development / ecosystem ignores (don't ship)
 .mcpregistry_*
 .worktrees/
-.claude/worktrees/
-.claude/settings.local.json
+# Everything under .claude/ is local EXCEPT skills/ — that subtree ships the
+# contributor-facing authoring skill(s), template-owned and re-rendered on
+# copier update.  .claude/CLAUDE.md is project-owned and tracked, so it needs
+# its own negation.
+.claude/*
+!.claude/skills/
+!.claude/CLAUDE.md
 docs/superpowers/
 .repowise/
 

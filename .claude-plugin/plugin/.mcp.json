@@ -2,8 +2,10 @@
   "scholar-mcp": {
     "command": "uvx",
     "args": [
-      "--from", "pvliesdonk-scholar-mcp[mcp]==1.6.0",
-      "scholar-mcp", "serve"
+      "--from",
+      "pvliesdonk-scholar-mcp[mcp]==1.9.0",
+      "scholar-mcp",
+      "serve"
     ],
     "env": {
       "SCHOLAR_MCP_S2_API_KEY": "${SCHOLAR_MCP_S2_API_KEY}",
