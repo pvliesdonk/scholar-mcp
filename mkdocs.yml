@@ -77,7 +77,7 @@ plugins:
           - guides/pdf-conversion.md: PDF conversion with docling-serve and VLM enrichment
           - guides/citation-graphs.md: Citation graph traversal, bridge papers, and caching
         Tools:
-          - tools/index.md: All 13 MCP tools with parameters, return values, and usage tips
+          - tools/index.md: All MCP tools with parameters, return values, and usage tips
         Deployment:
           - deployment/docker.md: Docker Compose with docling-serve, Traefik, volumes, UID/GID
           - deployment/systemd.md: systemd service — package install, security hardening
