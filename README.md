@@ -90,6 +90,12 @@ uv sync --all-extras --all-groups
 docker pull ghcr.io/pvliesdonk/scholar-mcp:latest
 ```
 
+To run the newest merged code instead of the newest release, use the rolling `edge` tag. It is rebuilt on every merge to `main` and carries no version identity. See [Image tags](docs/deployment/docker.md#image-tags) for the full tag list.
+
+```bash
+docker pull ghcr.io/pvliesdonk/scholar-mcp:edge
+```
+
 A `compose.yml` ships at the repo root as a starting point. Copy `.env.example` to `.env`, edit, and `docker compose up -d`.
 
 To attach a remote Python debugger (development only; the protocol is unauthenticated), see [Remote debugging](docs/deployment/docker.md#remote-debugging).
@@ -109,6 +115,18 @@ mcpb install scholar-mcp-<version>.mcpb
 Claude Desktop prompts for required env vars via a GUI wizard, with no manual JSON editing needed.
 
 For manual Claude Desktop configuration and setup options, see [Claude Desktop deployment](docs/deployment/claude-desktop.md).
+
+## Release channels
+
+Artifacts ship on three channels. Each row lists exactly what that channel publishes.
+
+| Channel | Version identity | Artifacts |
+|---|---|---|
+| `edge` (rolling) | None; the commit is the identity | Docker image `:edge` rebuilt on every merge to `main`; `.mcpb` bundle as the `mcpb-bundle-edge` workflow artifact; rolling `unstable` docs version. It leaves no git tag, GitHub release, or PyPI entry behind. |
+| Pre-release | `vX.Y.Z-rc.N`, cut from a `release/X.Y` branch | GitHub release with wheels, `sdist`, `.mcpb` bundle, and SBOM attached; Docker image under its immutable `vX.Y.Z-rc.N` tag only. Skips PyPI, `.deb`/`.rpm` packages, the plugin marketplace, the MCP registry, and the docs deploy. |
+| Stable | `vX.Y.Z` | Everything: PyPI, Docker (version tag plus ordering-aware `latest` / `vX` / `vX.Y`), `.deb`/`.rpm`, GitHub release assets (wheels, `sdist`, `.mcpb` bundle, SBOM), plugin marketplace and MCP registry entries (when the release is the newest stable), versioned docs with an ordering-aware `latest` alias. |
+
+The PyPI split is deliberate: `edge` and pre-release builds never reach PyPI, where every ordinary installer would see them. A pre-release's wheels are still attached to its GitHub release and installable by URL for anyone who opts in. Rolling pointers are ordering-aware, so a patch release cut from an old `release/X.Y` branch never moves `latest`-style tags back to older content. See [Release process](docs/deployment/release-process.md) for the full model.
 
 ## Quick start
 
@@ -184,9 +202,9 @@ CI workflows reference three repository secrets. Configure them via **Settings â
 
 | Secret | Used by | How to generate |
 |---|---|---|
-| `RELEASE_TOKEN` | `release.yml`, `copier-update.yml`, `renovate.yml`, `bootstrap.yml` | Fine-grained PAT at <https://github.com/settings/personal-access-tokens/new> with `contents: write`, `pull_requests: write`, and `administration: write` (bootstrap sets branch protection + auto-merge). Scoped to this repo. |
+| `RELEASE_TOKEN` | `release.yml`, `release-notes.yml`, `copier-update.yml`, `renovate.yml`, `bootstrap.yml` | Fine-grained PAT at <https://github.com/settings/personal-access-tokens/new> with `contents: write`, `pull_requests: write`, and `administration: write` (bootstrap applies the repository rulesets + auto-merge). Must belong to a repository admin: the shipped rulesets grant bypass to the admin role, and the release workflow's direct pushes rely on it. Scoped to this repo. |
 | `CODECOV_TOKEN` | `ci.yml` | <https://codecov.io>: sign in with GitHub and add the repo. The upload token is on its settings page. |
-| `CLAUDE_CODE_OAUTH_TOKEN` | `claude.yml`, `claude-code-review.yml` | Run `claude setup-token` locally and paste the result. |
+| `CLAUDE_CODE_OAUTH_TOKEN` | `claude.yml`, `claude-code-review.yml`, `release-notes.yml` | Run `claude setup-token` locally and paste the result. |
 
 ```bash
 gh secret set RELEASE_TOKEN
@@ -196,9 +214,11 @@ gh secret set CLAUDE_CODE_OAUTH_TOKEN
 
 > Dependency updates are handled by **Renovate** (`renovate.yml`), which reuses
 > `RELEASE_TOKEN`. It maintains `uv.lock` and auto-merges patch/minor bumps once
-> the `CI Success` check is green; `bootstrap.yml` enables auto-merge and branch
-> protection on first push. GitHub Actions are updated in the copier template
-> and arrive via `copier update`, not per-repo.
+> the `CI Success` check is green; `bootstrap.yml` enables auto-merge and applies
+> the repository rulesets (`.github/rulesets/`) on first push. See
+> [Repository Protection](docs/deployment/repository-protection.md) for the
+> per-branch posture and bypass model. GitHub Actions are updated in the copier
+> template and arrive via `copier update`, not per-repo.
 
 `GITHUB_TOKEN` is auto-provided; no action needed.
 
