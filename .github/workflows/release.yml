@@ -223,7 +223,7 @@ jobs:
             type=raw,value=unstable,enable=${{ inputs.prerelease }}
           labels: |
             org.opencontainers.image.title=scholar-mcp
-            org.opencontainers.image.description=FastMCP server for Semantic Scholar with OpenAlex enrichment and docling PDF conversion
+            org.opencontainers.image.description=FastMCP server for scholarly sources (papers, patents, books, and standards) with metadata enrichment and docling PDF conversion
             org.opencontainers.image.vendor=pvliesdonk
             io.modelcontextprotocol.server.name=io.github.pvliesdonk/scholar-mcp
 
