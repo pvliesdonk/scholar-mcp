@@ -82,6 +82,10 @@ plugins:
           - deployment/docker.md: Docker Compose with docling-serve, Traefik, volumes, UID/GID
           - deployment/systemd.md: systemd service — package install, security hardening
           - deployment/oidc.md: OIDC authentication setup with Authelia
+        # Glob deliberately: each minor's release-notes page is auto-indexed
+        # without a sections-list update (same rationale as guides/*).
+        Release Notes:
+          - releases/*.md
         # PROJECT-LLMSTXT-SECTIONS-END
   - mkdocstrings:
       handlers:
@@ -144,4 +148,10 @@ nav:
       - systemd: deployment/systemd.md
       - OIDC Authentication: deployment/oidc.md
       - Claude Desktop: deployment/claude-desktop.md
+      - Release Process: deployment/release-process.md
+      - Repository Protection: deployment/repository-protection.md
+  # Landing page only, deliberately: per-minor pages stay out of nav so a new
+  # release never needs a nav edit (mkdocs treats not-in-nav pages as INFO,
+  # so `--strict` stays green); the landing page and search link them.
+  - Release Notes: releases/index.md
   # PROJECT-NAV-END

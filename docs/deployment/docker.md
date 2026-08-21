@@ -84,6 +84,22 @@ networks:
     external: true
 ```
 
+## Image tags
+
+| Tag | Contents | Updated by |
+|-----|----------|------------|
+| `latest` | Newest stable release | Each stable release that is newest across all series |
+| `vX.Y.Z` | That exact release (pre-releases included, as `vX.Y.Z-rc.N`) | Never (immutable) |
+| `vX.Y`, `vX` | Newest stable release in that series | Each stable release that is newest in its series |
+| `edge` | Newest commit on `main` | Every merge to `main` |
+
+Rolling tags are ordering-aware: a patch release cut from an old `release/X.Y` branch after a newer stable has shipped updates its own series tags but never `latest`. A pre-release pushes only its immutable `vX.Y.Z-rc.N` tag. To run the latest merged code, use `edge`, which follows `main` continuously and carries no version identity. To find the commit behind an `edge` image, read its `org.opencontainers.image.revision` label:
+
+```bash
+docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' \
+  ghcr.io/pvliesdonk/scholar-mcp:edge
+```
+
 ## Environment variables
 
 See [Configuration](../configuration.md) for the full reference. Key variables for Docker:
@@ -130,17 +146,6 @@ services:
         APP_UID: 1000
         APP_GID: 1000
 ```
-
-## Image tags
-
-| Tag | Description |
-|---|---|
-| `latest` | Latest release |
-| `v1.0.1` | Specific version |
-| `v1.0` | Latest patch in 1.0.x |
-| `v1` | Latest minor in 1.x |
-
-Multi-arch: `linux/amd64` and `linux/arm64`.
 
 ## Remote debugging
 

@@ -2,9 +2,12 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, "release/**"]
   pull_request:
-    branches: [main]
+    # release/** keeps backport PRs CI-gated: the shipped rulesets
+    # (.github/rulesets/) require the CI Success check on release/* exactly
+    # as on main, which deadlocks unless CI actually runs there.
+    branches: [main, "release/**"]
   workflow_dispatch:
 
 jobs:
@@ -409,19 +412,48 @@ jobs:
         run: git fetch origin ${{ github.base_ref }} --depth=50
 
       - name: Structural quality (changed lines only)
+        # One implementation, shared with the pre-push hook. The explicit
+        # STRUCTURAL_GATE_BASE pins the PR's actual base branch (main or a
+        # release/X.Y for backport PRs); the script's no-Python skip and the
+        # diff-quality invocation live in the script.
         env:
-          BASE_REF: ${{ github.base_ref }}
-        run: |
-          # Skip when the diff touches no Python — mirrors the diff-cover guard.
-          HAS_PY=$(git diff --name-only "origin/${BASE_REF}...HEAD" | grep -c '\.py$' || true)
-          if [ "$HAS_PY" -eq 0 ]; then
-            echo "No Python source changes — skipping structural diff gate"
-            exit 0
-          fi
-          uv run diff-quality --violations=ruff.check \
-            --options="--extend-select=C901,PLR0911,PLR0912,PLR0913,PLR0915,S" \
-            --compare-branch="origin/${BASE_REF}" --fail-under=100
+          STRUCTURAL_GATE_BASE: origin/${{ github.base_ref }}
+        run: bash scripts/structural_gate.sh
 
+
+  pr-title:
+    name: PR Title
+    # A squash merge takes the pull-request title as the commit subject, and
+    # python-semantic-release drops a subject it cannot parse from
+    # CHANGELOG.md silently — not under a fallback heading, absent. This is
+    # the last point at which that subject can still be corrected.
+    #
+    # PR-only by design: the writers to `main` outside a merge are PSR's own
+    # release commit and the automated merge-back, both machine-generated and
+    # already conformant. On push/dispatch the job is skipped, which the
+    # `ci-success` aggregate below treats as a pass.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check pull-request title
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        # Read the CURRENT title from the API rather than from
+        # `github.event.pull_request.title`. A re-run replays the original
+        # event payload, so an author who fixes the title would otherwise have
+        # to push a commit to clear a red check that a retitle already fixed.
+        run: |
+          set -euo pipefail
+          TITLE="$(gh api "repos/${REPO}/pulls/${PR_NUMBER}" --jq .title)"
+          python3 scripts/check_pr_title.py "$TITLE"
 
   ci-success:
     name: CI Success
@@ -436,6 +468,7 @@ jobs:
       - audit
       - secrets
       - vale
+      - pr-title
 
       - structure
 
