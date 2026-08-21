@@ -62,15 +62,6 @@ plugins:
   # (both blocks are sentinel-protected so customise both as a unit).
   - llmstxt:
       full_output: llms-full.txt
-      # No hard-coded tool count here on purpose: the number already drifts
-      # between README.md and docs/tools/index.md, and a fourth copy would be
-      # one more thing to keep in step. docs/tools/index.md is the inventory.
-      markdown_description: >
-        scholar-mcp is a FastMCP server for scholarly sources (papers, patents,
-        books, and standards) with metadata enrichment and docling PDF
-        conversion. It exposes tools for search, citation graph traversal,
-        recommendations, citation formatting, and PDF-to-Markdown conversion
-        over the Model Context Protocol.
       sections:
         # PROJECT-LLMSTXT-SECTIONS-START — keep aligned with `nav:` below;
         # kept across copier update.
