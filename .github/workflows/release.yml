@@ -1,10 +1,20 @@
+# Prerelease-ness is a property of the BRANCH, not of a dispatch flag (see
+# [tool.semantic_release.branches] in pyproject.toml): dispatching from `main`
+# cuts a stable release; dispatching from a short-lived `release/X.Y`
+# stabilisation branch cuts an rc by default, or the final stable X.Y.Z when
+# the `finalize` box is checked.  Every publish gate below derives from PSR's
+# own outputs (`is_prerelease`) and from tag ordering — never from a dispatch
+# input — so a mismatched dispatch cannot open a stable-only gate for an rc.
+# After any release cut from a `release/*` branch, the `merge-back` job merges
+# the branch back into `main`; without that, the tag is unreachable from
+# `main` and PSR deadlocks there ("already released" forever).
 name: Release
 
 on:
   workflow_dispatch:
     inputs:
       force:
-        description: 'Force version bump type (empty = auto from commits). patch/minor/major override commit analysis. Ignored when pre-release box is checked and an rc series is already active — the revision is advanced automatically.'
+        description: 'Force version bump type (empty = auto from commits). patch/minor/major override commit analysis. Only valid on main — a release/X.Y branch has its target fixed at cut time.'
         type: choice
         default: ''
         options:
@@ -12,10 +22,10 @@ on:
           - patch
           - minor
           - major
-      prerelease:
-        description: 'Create a pre-release (rc channel — skips PyPI, catalog, registry, linux packages). Uncheck to cut a real release.'
+      finalize:
+        description: 'On a release/X.Y branch: cut the final stable X.Y.Z instead of the next rc. No effect on main, which always releases stable.'
         type: boolean
-        default: true
+        default: false
 
 permissions:
   contents: read
@@ -23,8 +33,13 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    # Per-branch buckets: a patch release off release/X.Y must not serialise
+    # behind a minor off main.  Cross-branch resources stay safe without a
+    # global bucket: PyPI/GitHub-release/registry writes are per-version, the
+    # marketplace push rebase-retries, docs deploys serialise in docs.yml, and
+    # the rolling Docker tags are ordering-gated below.
     concurrency:
-      group: release
+      group: release-${{ github.ref_name }}
       cancel-in-progress: false
 
     permissions:
@@ -39,49 +54,86 @@ jobs:
           ref: ${{ github.ref_name }}
           token: ${{ secrets.RELEASE_TOKEN }}
 
-      - name: Detect active pre-release series
-        id: detect-rc
+      # The branch fixes the version target, so only two dispatch surfaces
+      # remain and each is guarded: `force` is a main-only override (on a
+      # release branch it would compound past the target fixed at cut time —
+      # the failure mode behind template#154), and any branch matching neither
+      # PSR branch group is rejected by PSR itself before anything publishes.
+      - name: Reject force bump on a release branch
+        if: startsWith(github.ref, 'refs/heads/release/') && inputs.force != ''
         run: |
-          latest_rc=$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$' | head -1 || true)
-          latest_stable=$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)
-          in_rc_series=false
-          if [ -n "$latest_rc" ]; then
-            rc_base="${latest_rc%-rc.*}"
-            # Active only when the rc's stable base is not yet tagged AND the
-            # series targets a version newer than the latest stable release. An
-            # rc whose base is <= the latest stable is an abandoned/superseded
-            # series (e.g. a v2.0.0-rc left behind when the project jumped to
-            # v3.x); it must not trigger the force=prerelease revision bump,
-            # which from a stable base produces <current>-rc.1 instead of a
-            # bumped version.
-            newest=$(printf '%s\n%s\n' "$rc_base" "${latest_stable:-v0.0.0}" | sort -V | tail -1)
-            if ! git tag --list | grep -qx "$rc_base" \
-               && [ "$newest" = "$rc_base" ] && [ "$rc_base" != "${latest_stable:-v0.0.0}" ]; then
-              in_rc_series=true
-              echo "rc_series_target=$rc_base" >> "$GITHUB_OUTPUT"
-            fi
-          fi
-          echo "in_rc_series=$in_rc_series" >> "$GITHUB_OUTPUT"
+          echo "::error::force=${{ inputs.force }} is not valid on ${{ github.ref_name }}: a release branch's version target is fixed at cut time."
+          echo "::error::Dispatch with force='' — commits on the branch advance the rc revision; check 'finalize' to cut the final stable."
+          exit 1
 
-      - name: Compute effective PSR force
-        id: compute-force
+      # Advisory only (never blocks — the cut may be intentional, or belong on
+      # a release/X.Y branch cut from an earlier commit).  Surfaces both
+      # queryable quiescence signals the epic conventions record:
+      #   * the preferred milestone — a release-named milestone (X.Y) with
+      #     open issues means that version is not yet safe to cut; and
+      #   * the ships-atomically label — for each open epic it also counts
+      #     open native sub-issues, which may live in another repo, so a
+      #     cross-repo epic whose children are elsewhere stays visible.
+      # Every gh call is guarded so a failure or an unsupported endpoint
+      # degrades to no warning rather than failing the step under pipefail.
+      - name: Warn about open ships-atomically epics and release milestones
+        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
         run: |
-          force="${{ inputs.force }}"
-          prerelease="${{ inputs.prerelease }}"
-          in_rc_series="${{ steps.detect-rc.outputs.in_rc_series }}"
-          if [[ "$prerelease" == "true" && "$force" == "" && "$in_rc_series" == "true" ]]; then
-            echo "effective_force=prerelease" >> "$GITHUB_OUTPUT"
-          else
-            echo "effective_force=$force" >> "$GITHUB_OUTPUT"
+          # (1) Open ships-atomically epics, each with a count of still-open
+          #     children (native sub-issues — cross-repo aware).
+          epics=$(gh issue list --repo "$REPO" --label ships-atomically \
+            --state open --json number,title \
+            --jq '.[] | "\(.number)\t\(.title)"' 2>/dev/null || true)
+          if [ -n "$epics" ]; then
+            printf '%s\n' "$epics" | while IFS="$(printf '\t')" read -r num title; do
+              [ -n "$num" ] || continue
+              kids=$(gh api "repos/$REPO/issues/$num/sub_issues" \
+                --jq '[.[] | select(.state == "open")] | length' 2>/dev/null || echo '?')
+              echo "::warning::Open ships-atomically epic #$num ($title) — $kids open child issue(s). Releasing $REPO@main ships HEAD mid-story; consider a release/X.Y branch cut from before the epic started."
+            done || true
+          fi
+          # (2) The preferred signal: a release-named milestone (X.Y) that
+          #     still has open issues — that version is not yet quiescent.
+          milestones=$(gh api "repos/$REPO/milestones?state=open&per_page=100" \
+            --jq '.[] | select(.open_issues > 0) | select(.title | test("^[0-9]+[.][0-9]+$")) | "\(.title): \(.open_issues) open issue(s)"' 2>/dev/null || true)
+          if [ -n "$milestones" ]; then
+            printf '%s\n' "$milestones" | while IFS= read -r ms; do
+              [ -n "$ms" ] || continue
+              echo "::warning::Release milestone $ms — not yet safe to cut that version from a quiescent trunk."
+            done || true
           fi
 
+<<<<<<< before updating
       - name: Reject force bump on active pre-release series
         if: steps.detect-rc.outputs.in_rc_series == 'true' && !inputs.prerelease && (inputs.force == 'patch' || inputs.force == 'minor' || inputs.force == 'major')
+=======
+      # PSR's CLI can force prerelease ON (--as-prerelease) but not OFF, so
+      # the final stable from a release branch needs a one-run config override:
+      # the same [tool.semantic_release] config with the release group's
+      # `prerelease` flipped to false.  Generated from pyproject.toml at run
+      # time (never committed — PSR stages only version files and assets), so
+      # it cannot drift from the real config.
+      - name: Prepare stable-finalize config override
+        id: psr-config
+        if: inputs.finalize && startsWith(github.ref, 'refs/heads/release/')
+>>>>>>> after updating
         run: |
-          echo "::error::An active pre-release series is in progress targeting ${{ steps.detect-rc.outputs.rc_series_target }}."
-          echo "::error::force=patch/minor/major with prerelease=false applies an additional bump on top of the series target and will skip ${{ steps.detect-rc.outputs.rc_series_target }}."
-          echo "::error::To finalize the series as a stable release, dispatch with force='' and prerelease=false."
-          exit 1
+          python3 - <<'EOF'
+          import json
+          import tomllib
+
+          with open("pyproject.toml", "rb") as fh:
+              cfg = tomllib.load(fh)["tool"]["semantic_release"]
+          # Fails loudly (KeyError) if the branch groups were removed/renamed;
+          # silently inventing a group here would mask a broken config.
+          cfg["branches"]["release"]["prerelease"] = False
+          with open(".psr-finalize.json", "w") as fh:
+              json.dump({"semantic_release": cfg}, fh)
+          EOF
+          echo "config_file=.psr-finalize.json" >> "$GITHUB_OUTPUT"
 
       - name: Install uv
         uses: astral-sh/setup-uv@v8.2.0
@@ -98,9 +150,116 @@ jobs:
           github_token: ${{ secrets.RELEASE_TOKEN }}
           git_committer_name: "github-actions"
           git_committer_email: "actions@users.noreply.github.com"
-          force: ${{ steps.compute-force.outputs.effective_force }}
-          prerelease: ${{ inputs.prerelease }}
-          prerelease_token: rc
+          force: ${{ inputs.force }}
+          # Empty unless finalizing a release branch; "" means pyproject.toml.
+          config_file: ${{ steps.psr-config.outputs.config_file }}
+
+      # A release from an old series must not repoint rolling channels at
+      # older content: Docker `latest`/`vX`/`vX.Y`, the GitHub "latest
+      # release" pointer, the marketplace entry, and the MCP registry all
+      # follow ONLY when this release is the highest in the relevant series.
+      # Tags are complete here: full-depth checkout plus the tag PSR just cut.
+      - name: Determine channel ordering
+        id: ordering
+        if: steps.release.outputs.released == 'true'
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+          IS_PRERELEASE: ${{ steps.release.outputs.is_prerelease }}
+        run: |
+          is_latest=false
+          is_latest_major=false
+          is_latest_minor=false
+          if [ "$IS_PRERELEASE" != "true" ]; then
+            ver="${TAG#v}"
+            major="${ver%%.*}"
+            minor="${ver%.*}"
+            stable=$(git tag --list | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$')
+            if [ "$(printf '%s\n' "$stable" | sort -V | tail -1)" = "$TAG" ]; then
+              is_latest=true
+            fi
+            if [ "$(printf '%s\n' "$stable" | grep -E "^v${major}\." | sort -V | tail -1)" = "$TAG" ]; then
+              is_latest_major=true
+            fi
+            if [ "$(printf '%s\n' "$stable" | grep -E "^v${minor//./\\.}\." | sort -V | tail -1)" = "$TAG" ]; then
+              is_latest_minor=true
+            fi
+          fi
+          {
+            echo "is_latest=$is_latest"
+            echo "is_latest_major=$is_latest_major"
+            echo "is_latest_minor=$is_latest_minor"
+          } >> "$GITHUB_OUTPUT"
+
+      # Release-body contract (template#350, settled jointly with
+      # template#347): the body is a user-facing summary plus pointers — the
+      # docs site is canonical, and commit-level detail stays behind the
+      # compare link and CHANGELOG.md.  Composing the body here (overwriting
+      # PSR's default commit-list notes) makes it independent of the
+      # tag-to-tag commit range, so a stable that finalises an rc series gets
+      # the same body as any other release instead of an empty-range one.
+      # The compare link spans the cycle since the previous STABLE tag — one
+      # definition of "what belongs in this release" for stables and rcs
+      # alike.  Tags are complete here (see the ordering step above).
+      # NOTES-GENERATOR SEAM (template#347): consumed. The body written here
+      # is the at-release interim state; after the Release Notes workflow's
+      # agent-drafted docs/releases page merges, release-notes-publish.yml
+      # replaces the interim summary with the page's marked summary block and
+      # a deep link into the versioned docs/releases page, keeping the
+      # compare and CHANGELOG pointers. The closing line below doubles as the
+      # upgrade-once marker that workflow keys on — reword them together.
+      - name: Set release body (summary + docs pointers)
+        if: steps.release.outputs.released == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.release.outputs.tag }}
+          IS_PRERELEASE: ${{ steps.release.outputs.is_prerelease }}
+          REPO: ${{ github.repository }}
+        run: |
+          ver="${TAG#v}"
+          minor="${ver%%-*}"
+          minor="${minor%.*}"
+          # Highest stable tag strictly below this release (series-aware via
+          # sort -V; empty on a project's very first release).
+          prev=$(
+            { git tag --list | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+                | grep -Fvx "$TAG"; echo "$TAG"; } \
+              | sort -V | awk -v t="$TAG" '$0 == t { print p; exit } { p = $0 }'
+          )
+          {
+            if [ "$IS_PRERELEASE" = "true" ]; then
+              echo "Release candidate ${ver}: a branch-scoped stabilisation build for the upcoming v${minor} stable. Install it only to help test that release."
+              echo
+              # The stable's versioned docs publish when the stable ships;
+              # rcs deploy no docs, so point at the site root instead of a
+              # not-yet-existing /X.Y/ page.
+              echo "- Documentation: https://pvliesdonk.github.io/scholar-mcp/ (the v${minor} pages publish when the stable ships)"
+            else
+              echo "scholar-mcp ${ver}."
+              echo
+              echo "- Documentation: https://pvliesdonk.github.io/scholar-mcp/${minor}/"
+            fi
+            if [ -n "$prev" ]; then
+              echo "- All changes since ${prev}: https://github.com/${REPO}/compare/${prev}...${TAG}"
+            fi
+            echo "- Commit-level detail: [CHANGELOG.md](https://github.com/${REPO}/blob/${TAG}/CHANGELOG.md)"
+            # Only a stable's body gets the notes-page promise: the Release
+            # Notes Publish workflow matches stable tags only, so an rc body
+            # would carry a pointer nothing ever fulfils.
+            if [ "$IS_PRERELEASE" != "true" ]; then
+              echo
+              echo "Release notes will move to a versioned notes page on the documentation site; until then, the links above carry the full change record."
+            fi
+          } > release-body.md
+          gh release edit "$TAG" --notes-file release-body.md
+
+      # GitHub auto-marks the newest non-prerelease as the repo's "latest
+      # release", which would repoint /releases/latest (and the versionless
+      # .deb/.rpm URLs) at a backport patch cut after a newer stable. Demote it.
+      - name: Keep the GitHub latest-release pointer ordered
+        if: steps.release.outputs.released == 'true' && steps.release.outputs.is_prerelease == 'false' && steps.ordering.outputs.is_latest == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit ${{ steps.release.outputs.tag }} --latest=false
 
       - name: Build package
         if: steps.release.outputs.released == 'true'
@@ -140,10 +299,19 @@ jobs:
       released: ${{ steps.release.outputs.released }}
       version: ${{ steps.release.outputs.version }}
       tag: ${{ steps.release.outputs.tag }}
+      # "true"/"false" from PSR itself — the single source the publish gates
+      # below derive from, so gate state can never desync from what PSR cut.
+      is_prerelease: ${{ steps.release.outputs.is_prerelease }}
+      is_latest: ${{ steps.ordering.outputs.is_latest }}
+      is_latest_major: ${{ steps.ordering.outputs.is_latest_major }}
+      is_latest_minor: ${{ steps.ordering.outputs.is_latest_minor }}
 
   publish-pypi:
     needs: release
-    if: needs.release.outputs.released == 'true' && !inputs.prerelease
+    # Every stable, including a backport patch from an old release/X.Y: PyPI
+    # versions are immutable and unordered, and installers pinned below a
+    # newer major are exactly who a backport serves.
+    if: needs.release.outputs.released == 'true' && needs.release.outputs.is_prerelease == 'false'
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -215,12 +383,18 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # Rolling tags are ordering-gated (see the release job): a backport
+          # patch cut after a newer stable updates only the series tags it is
+          # actually the newest member of, and never `latest`.  An rc pushes
+          # its immutable version tag alone — the rolling `unstable` tag is
+          # retired now that rcs are rare, branch-scoped stabilisation builds
+          # ("run the latest code" is the `edge` tag, pushed per merge to main
+          # by the Unstable channel workflow).
           tags: |
             type=raw,value=v${{ steps.version.outputs.version }}
-            type=raw,value=latest,enable=${{ !inputs.prerelease }}
-            type=raw,value=v${{ steps.version.outputs.minor }},enable=${{ !inputs.prerelease }}
-            type=raw,value=v${{ steps.version.outputs.major }},enable=${{ !inputs.prerelease }}
-            type=raw,value=unstable,enable=${{ inputs.prerelease }}
+            type=raw,value=latest,enable=${{ needs.release.outputs.is_latest == 'true' }}
+            type=raw,value=v${{ steps.version.outputs.minor }},enable=${{ needs.release.outputs.is_latest_minor == 'true' }}
+            type=raw,value=v${{ steps.version.outputs.major }},enable=${{ needs.release.outputs.is_latest_major == 'true' }}
           labels: |
             org.opencontainers.image.title=scholar-mcp
             org.opencontainers.image.description=FastMCP server for Semantic Scholar with OpenAlex enrichment and docling PDF conversion
@@ -265,7 +439,7 @@ jobs:
 
   publish-linux-packages:
     needs: release
-    if: needs.release.outputs.released == 'true' && !inputs.prerelease
+    if: needs.release.outputs.released == 'true' && needs.release.outputs.is_prerelease == 'false'
     runs-on: ubuntu-latest
 
     permissions:
@@ -324,55 +498,17 @@ jobs:
     needs: release
     if: needs.release.outputs.released == 'true'
     runs-on: ubuntu-latest
-    env:
-      MCPB_VERSION: "2.1.2"
     steps:
       - uses: actions/checkout@v7
         with:
           ref: ${{ needs.release.outputs.tag }}
-      - name: Install mcpb CLI
-        run: npm install -g @anthropic-ai/mcpb@$MCPB_VERSION
-      - name: Render templates
-        env:
-          VERSION: ${{ needs.release.outputs.version }}
-        run: |
-          mkdir -p build/mcpb/src
-          # Restrict substitution to ${VERSION} only — other ${...} tokens
-          # (e.g. ${DOCUMENTS}, ${user_config.*}) are runtime placeholders
-          # for the mcpb host and must survive intact.
-          envsubst '${VERSION}' < packaging/mcpb/manifest.json.in  > build/mcpb/manifest.json
-          envsubst '${VERSION}' < packaging/mcpb/pyproject.toml.in > build/mcpb/pyproject.toml
-          cp packaging/mcpb/src/server.py build/mcpb/src/server.py
-      - name: Validate and pack
-        env:
-          VERSION: ${{ needs.release.outputs.version }}
-        run: |
-          mcpb validate build/mcpb/manifest.json
-          mkdir -p dist
-          mcpb pack build/mcpb "dist/scholar-mcp-${VERSION}.mcpb"
-      - name: Smoke-test bundle artifact
-        env:
-          VERSION: ${{ needs.release.outputs.version }}
-        run: |
-          bundle="dist/scholar-mcp-${VERSION}.mcpb"
-          test -f "$bundle" || { echo "::error::bundle missing: $bundle"; exit 1; }
-
-          work=$(mktemp -d)
-          trap 'rm -rf "$work"' EXIT
-          unzip -q "$bundle" -d "$work"
-
-          test -f "$work/manifest.json"  || { echo "::error::manifest.json missing from bundle"; exit 1; }
-          test -f "$work/pyproject.toml" || { echo "::error::pyproject.toml missing from bundle"; exit 1; }
-          test -f "$work/src/server.py"  || { echo "::error::src/server.py missing from bundle"; exit 1; }
-
-          bundled_version=$(jq -r .version "$work/manifest.json")
-          test "$bundled_version" = "$VERSION" \
-            || { echo "::error::manifest version $bundled_version != release $VERSION"; exit 1; }
-
-          jq -e '.server.mcp_config.env' "$work/manifest.json" > /dev/null \
-            || { echo "::error::manifest missing server.mcp_config.env"; exit 1; }
-          jq -e '.user_config' "$work/manifest.json" > /dev/null \
-            || { echo "::error::manifest missing user_config"; exit 1; }
+      # Render/validate/pack/smoke live in the shared composite action so
+      # the pre-release-check workflow exercises the exact same steps a
+      # real release runs (#331).
+      - name: Build and smoke-test mcpb bundle
+        uses: ./.github/actions/build-mcpb
+        with:
+          version: ${{ needs.release.outputs.version }}
       - uses: actions/upload-artifact@v7
         with:
           name: mcpb-bundle
@@ -400,18 +536,43 @@ jobs:
             --clobber \
             --repo "${{ github.repository }}"
 
-  publish-claude-plugin-pr:
+  # Publishes the marketplace catalog entry by committing straight to the
+  # catalog's default branch — a release must not end at an open PR awaiting
+  # a human merge (fastmcp-server-template#333; 15 such PRs once went stale).
+  # The plugin-artifact check guards against publishing a git-subdir entry
+  # whose path does not exist at the tag, which is uninstallable; projects
+  # without a .claude-plugin/plugin directory skip with a warning rather
+  # than failing the release.
+  publish-claude-plugin:
     needs: release
-    if: needs.release.outputs.released == 'true' && !inputs.prerelease
+    # `is_latest` keeps the single marketplace entry ordered: a backport patch
+    # from an old series must not repoint the catalog at older content.
+    if: needs.release.outputs.released == 'true' && needs.release.outputs.is_prerelease == 'false' && needs.release.outputs.is_latest == 'true'
     runs-on: ubuntu-latest
     steps:
+      - name: Check plugin artifact exists at tag
+        id: plugin_check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.release.outputs.tag }}
+        run: |
+          if gh api --silent \
+            "repos/${{ github.repository }}/contents/.claude-plugin/plugin/.claude-plugin/plugin.json?ref=${TAG}"
+          then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::.claude-plugin/plugin missing at ${TAG} — skipping marketplace publish; a git-subdir entry pointing at a missing path would be uninstallable"
+          fi
       - name: Checkout catalog repo
+        if: steps.plugin_check.outputs.present == 'true'
         uses: actions/checkout@v7
         with:
           repository: pvliesdonk/claude-plugins
           token: ${{ secrets.RELEASE_TOKEN }}
           path: catalog
       - name: Bump marketplace.json entry
+        if: steps.plugin_check.outputs.present == 'true'
         env:
           VERSION: ${{ needs.release.outputs.version }}
         run: |
@@ -443,22 +604,52 @@ jobs:
             )
           ' marketplace.json > marketplace.json.tmp
           mv marketplace.json.tmp marketplace.json
-      - name: Create pull request
-        uses: peter-evans/create-pull-request@v8
-        with:
-          path: catalog
-          token: ${{ secrets.RELEASE_TOKEN }}
-          branch: bump/scholar-mcp-${{ needs.release.outputs.version }}
-          title: "chore: bump scholar-mcp to v${{ needs.release.outputs.version }}"
-          body: |
-            Auto-generated bump from [scholar-mcp ${{ needs.release.outputs.tag }}](https://github.com/pvliesdonk/scholar-mcp/releases/tag/${{ needs.release.outputs.tag }}).
-          commit-message: "chore: bump scholar-mcp to v${{ needs.release.outputs.version }}"
-          committer: "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
-          author: "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+          # The catalog must never be pushed malformed or with a mismatched
+          # entry: validate before anything is committed.
+          jq empty marketplace.json
+          jq -e --arg name "scholar-mcp" --arg v "$VERSION" '
+            .plugins[] | select(.name == $name)
+            | select(.version == $v and .source.ref == ("v" + $v))
+          ' marketplace.json > /dev/null
+      - name: Commit and push to catalog
+        if: steps.plugin_check.outputs.present == 'true'
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          cd catalog
+          if git diff --quiet -- marketplace.json; then
+            echo "marketplace.json already at v${VERSION}; nothing to publish"
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          BRANCH=$(git rev-parse --abbrev-ref HEAD)
+          git add marketplace.json
+          git commit -m "chore: bump scholar-mcp to v${VERSION}"
+          # Concurrent sibling releases race on the same file; rebase-retry
+          # instead of failing. Bumping existing entries touches distinct
+          # lines and rebases cleanly; only two simultaneous *first*
+          # releases (both appending at the array tail) can conflict, and
+          # that fails loudly below for a manual job re-run.
+          for attempt in 1 2 3 4 5; do
+            if git push origin "HEAD:${BRANCH}"; then
+              exit 0
+            fi
+            if ! git pull --rebase origin "${BRANCH}"; then
+              git rebase --abort || true
+              echo "::error::concurrent catalog change conflicts with this bump; re-run this job"
+              exit 1
+            fi
+          done
+          echo "::error::could not push marketplace bump after 5 attempts"
+          exit 1
 
   publish-registry:
     needs: [release, publish-pypi, publish-docker]
-    if: needs.release.outputs.released == 'true' && !inputs.prerelease
+    # `is_latest` for the same reason as the marketplace: the registry entry
+    # is a discovery surface for the newest release; a backport's audience
+    # already holds pins and installs from PyPI or GitHub releases.
+    if: needs.release.outputs.released == 'true' && needs.release.outputs.is_prerelease == 'false' && needs.release.outputs.is_latest == 'true'
     runs-on: ubuntu-latest
 
     permissions:
@@ -469,7 +660,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
         with:
-          ref: main
+          # The released ref, not a branch: the release commit — with the
+          # bumped server.json this job publishes — lives on whatever branch
+          # the release was cut from, and mid-cycle `main` may carry a
+          # different version entirely.
+          ref: ${{ needs.release.outputs.tag }}
           fetch-depth: 1
 
       - name: Install mcp-publisher
@@ -491,3 +686,54 @@ jobs:
 
       - name: Publish to MCP Registry
         run: ./mcp-publisher publish
+
+  # After ANY release cut from a release/* branch, the branch merges back into
+  # the default branch.  This is not housekeeping but a hard requirement:
+  # with the new tag unreachable from main, PSR on main recomputes the same
+  # version from main's own history, finds the tag taken repo-globally, and
+  # reports "already released" forever — no later commit unblocks it.  The
+  # merge is the only reverse flow (it carries PSR's release commits; feature
+  # cherry-picks never come back), and it also keeps main's version metadata
+  # current so edge builds self-report a real version.  scripts/merge_back.sh
+  # resolves version-coupled files (pyproject.toml, changelog, PSR assets) to
+  # main's side — main is authoritative for current metadata; the tag
+  # preserves the branch's own state — and fails loudly on any other
+  # conflict, leaving a clean tree for a manual merge:
+  #   git checkout main && git merge --no-ff release/X.Y  (resolve, push)
+  merge-back:
+    needs: release
+    if: needs.release.outputs.released == 'true' && startsWith(github.ref, 'refs/heads/release/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout default branch
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          # Same PAT that pushes the release commit; a plain GITHUB_TOKEN push
+          # would also suppress the CI/docs/edge workflows this merge should
+          # trigger on main.
+          token: ${{ secrets.RELEASE_TOKEN }}
+
+      - name: Merge release branch back into default branch
+        env:
+          BRANCH: ${{ github.ref_name }}
+          TAG: ${{ needs.release.outputs.tag }}
+          DEFAULT: ${{ github.event.repository.default_branch }}
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          # Concurrent pushes to main race with ours; redo the whole merge on
+          # a fresh tip rather than rebasing a merge commit.
+          for attempt in 1 2 3; do
+            git fetch origin "$BRANCH" "$DEFAULT"
+            git reset --hard "origin/$DEFAULT"
+            bash scripts/merge_back.sh "origin/$BRANCH" "$TAG"
+            if git push origin "HEAD:$DEFAULT"; then
+              exit 0
+            fi
+          done
+          echo "::error::could not push the merge-back of $BRANCH after 3 attempts; merge $BRANCH into $DEFAULT manually — until it lands, PSR cannot release from $DEFAULT"
+          exit 1

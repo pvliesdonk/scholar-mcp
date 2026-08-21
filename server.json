@@ -21,8 +21,16 @@
       "environmentVariables": [
         {
           "name": "SCHOLAR_MCP_KV_STORE_URL",
-          "description": "Persistent-state backend URL shared by every pvl-core subsystem that needs state. `memory://` is in-process and lost on restart; `file:///path` persists on one server; `redis://`, `dynamodb://` and `mongodb://` each need their matching extra. Defaults to `file:///data/state` when unset.",
+          "description": "Persistent-state backend URL shared by every pvl-core subsystem that needs state. `memory://` is in-process and lost on restart; `file:///path` persists on one server; `redis://`, `dynamodb://` and `mongodb://` each need their matching extra. When unset, defaults to `file:///data/state` (the volume family Docker images mount), or to `memory://` — with a warning — on a host where that directory is not usable.",
           "default": "file:///data/state"
+        },
+        {
+          "name": "SCHOLAR_MCP_TOOLS_ALLOW",
+          "description": "Comma-separated explicit tool names this instance exposes; every other tool is hidden from listings and cannot be invoked. Names matching no registered tool are inert. Mutually exclusive with `tools_deny`. Takes effect through `apply_tool_visibility`."
+        },
+        {
+          "name": "SCHOLAR_MCP_TOOLS_DENY",
+          "description": "Comma-separated explicit tool names hidden from this instance (absent from listings, cannot be invoked). Names matching no registered tool are inert. Mutually exclusive with `tools_allow`. Takes effect through `apply_tool_visibility`."
         },
         {
           "name": "SCHOLAR_MCP_SERVER_NAME",
@@ -172,12 +180,20 @@
         },
         {
           "name": "SCHOLAR_MCP_KV_STORE_URL",
-          "description": "Persistent-state backend URL shared by every pvl-core subsystem that needs state. `memory://` is in-process and lost on restart; `file:///path` persists on one server; `redis://`, `dynamodb://` and `mongodb://` each need their matching extra. Defaults to `file:///data/state` when unset.",
+          "description": "Persistent-state backend URL shared by every pvl-core subsystem that needs state. `memory://` is in-process and lost on restart; `file:///path` persists on one server; `redis://`, `dynamodb://` and `mongodb://` each need their matching extra. When unset, defaults to `file:///data/state` (the volume family Docker images mount), or to `memory://` — with a warning — on a host where that directory is not usable.",
           "default": "file:///data/state"
         },
         {
           "name": "SCHOLAR_MCP_APP_DOMAIN",
           "description": "MCP Apps iframe domain, used for CSP sandboxing. Overrides the host derived from `base_url`."
+        },
+        {
+          "name": "SCHOLAR_MCP_TOOLS_ALLOW",
+          "description": "Comma-separated explicit tool names this instance exposes; every other tool is hidden from listings and cannot be invoked. Names matching no registered tool are inert. Mutually exclusive with `tools_deny`. Takes effect through `apply_tool_visibility`."
+        },
+        {
+          "name": "SCHOLAR_MCP_TOOLS_DENY",
+          "description": "Comma-separated explicit tool names hidden from this instance (absent from listings, cannot be invoked). Names matching no registered tool are inert. Mutually exclusive with `tools_allow`. Takes effect through `apply_tool_visibility`."
         },
         {
           "name": "SCHOLAR_MCP_AUTH_MODE",

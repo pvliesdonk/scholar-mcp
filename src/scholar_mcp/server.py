@@ -14,10 +14,16 @@ from importlib.metadata import version as _pkg_version
 from fastmcp import FastMCP
 from fastmcp.server.event_store import EventStore
 from fastmcp_pvl_core import (
+<<<<<<< before updating
     ServerConfig,
+=======
+    ServerConfig,  # noqa: F401  — re-exported for downstream projects' convenience
+    apply_tool_visibility,
+>>>>>>> after updating
     build_auth,
     build_instructions,
     configure_logging_from_env,
+    configure_task_backend,
     env,
     register_server_info_tool,
     wire_middleware_stack,
@@ -134,6 +140,21 @@ def make_server(
     config = config or ProjectConfig.from_env()
     configure_logging_from_env()
 
+    # Background-task backend (SEP-1686 / Docket).  Unconditional and
+    # template-owned: pydocket ships in fastmcp-pvl-core's base dependencies,
+    # so the backend is always configurable, and whether this server actually
+    # uses tasks is decided by registering ``task=True`` tools — not by
+    # packaging or by an opt-in switch here.  It mutates fastmcp's
+    # process-global settings, which fastmcp reads lazily at root-lifespan
+    # entry, so doing it inside ``make_server`` covers both CLI paths (
+    # ``server.run(...)`` and the uvicorn ``http_app()`` one).
+    # ``SCHOLAR_MCP_TASKS_URL`` selects the backend; unset, a
+    # ``redis://`` ``SCHOLAR_MCP_KV_STORE_URL`` is reused so one URL
+    # configures every stateful subsystem, and otherwise fastmcp's
+    # ``memory://`` default applies.  The queue name is derived from the env
+    # prefix, so two servers sharing one Redis do not share a queue.
+    configure_task_backend(_ENV_PREFIX, config.server)
+
     # Operator overrides: SERVER_NAME renames this instance; INSTRUCTIONS
     # replaces the default instructions text (the latter is the override that
     # build_instructions' hint advertises). Both fall back when unset/empty.
@@ -242,6 +263,63 @@ def make_server(
     # transforms, mode toggles, alternative middleware, additional registrations);
     # kept across copier update. Leave empty for projects that don't customise
     # make_server() beyond the standard scaffold.
+    #
+    # -- Transfer subsystem (capability-link upload + download) ----------------
+    #
+    # Wiring the /transfer/{token} route needs HTTP transport (the route cannot
+    # be served under stdio) and, at build time, base_url — pvl-core raises
+    # ConfigurationError when it is unset, so gate only on the transport and let
+    # that error surface a misconfigured deployment rather than silently
+    # dropping the feature. Requires fastmcp-pvl-core >= 4.8.0.
+    #
+    # First compose a TransferConfig into ProjectConfig (config.py): add
+    # ``TransferConfig`` to its ``from fastmcp_pvl_core import (...)`` block, then
+    # a ``transfer: TransferConfig = field(default_factory=TransferConfig)`` field
+    # in CONFIG-FIELDS and ``transfer=TransferConfig.from_env(_ENV_PREFIX),`` in
+    # CONFIG-FROM-ENV. The second line is required — without it the
+    # SCHOLAR_MCP_TRANSFER_* env vars are ignored and the defaults always win.
+    #
+    # Path 1 — the generic tools, the common case. Registers create_download_link
+    # and create_upload_link with pvl-core's shared metadata (names, icons, tags):
+    #
+    # if transport != "stdio":
+    #     from fastmcp_pvl_core import register_transfer_routes
+    #
+    #     register_transfer_routes(
+    #         mcp,
+    #         config.server,
+    #         config.transfer,          # TransferConfig composed into ProjectConfig
+    #         sink=_my_transfer_sink,   # implements TransferSink (read/write)
+    #         validate=_my_validator,   # TransferValidator: (ref, kind) -> handle
+    #         # download_note/upload_note (optional) append a domain sentence to
+    #         # the generic tool descriptions — context only, no shape change.
+    #     )
+    #
+    # Path 2 — your own tool over the same capability-link machinery, when the
+    # generic pair cannot express it (a different name, a domain-accurate
+    # description, domain-specific parameters). build_transfer_links mounts the
+    # route and returns a minter, registering no tools; your tool validates the
+    # caller ref itself, then mints over the already-validated sink handle:
+    #
+    # if transport != "stdio":
+    #     from fastmcp_pvl_core import build_transfer_links
+    #
+    #     links = build_transfer_links(
+    #         mcp, config.server, config.transfer, sink=_my_transfer_sink
+    #     )
+    #
+    #     @mcp.tool
+    #     async def share_document(doc_id: str) -> dict[str, object]:
+    #         """Mint a one-shot download link for a document."""
+    #         handle = _resolve_and_check(doc_id)  # your validation -> sink handle
+    #         return await links.mint_download(handle)
     # DOMAIN-WIRING-END
+
+    # Operator tool visibility (SCHOLAR_MCP_TOOLS_ALLOW /
+    # SCHOLAR_MCP_TOOLS_DENY) applies last: fastmcp resolves visibility
+    # transforms in call order, so the operator's lists win over any
+    # visibility calls in the wiring above, and pvl-core's zero-tools-exposed
+    # diagnostic judges the full registered tool set.
+    apply_tool_visibility(mcp, config.server)
 
     return mcp

@@ -47,6 +47,7 @@ docker run -v scholar-mcp-data:/data/scholar-mcp \
            ghcr.io/pvliesdonk/scholar-mcp:unstable
 ```
 
+<<<<<<< before updating
 ## Linux packages
 
 Download `.deb` or `.rpm` from the [latest release](https://github.com/pvliesdonk/scholar-mcp/releases/latest):
@@ -73,6 +74,9 @@ The package installs:
 - A dedicated `scholar-mcp` system user
 
 See [systemd deployment](deployment/systemd.md) for configuration details.
+=======
+The `latest` tag is the newest stable release. The rolling `edge` tag tracks every merge to `main` and carries no version identity; see [Image tags](deployment/docker.md#image-tags) for the full list.
+>>>>>>> after updating
 
 ## From source
 

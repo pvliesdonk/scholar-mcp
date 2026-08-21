@@ -24,6 +24,7 @@ These settings are only needed if you want to use the PDF conversion tools. They
 | `SCHOLAR_MCP_VLM_API_KEY` | _(none)_ | API key for the VLM endpoint. |
 | `SCHOLAR_MCP_VLM_MODEL` | `gpt-4o` | Model name to use with the VLM endpoint. |
 
+<<<<<<< before updating
 !!! tip "VLM enrichment"
     When both `SCHOLAR_MCP_VLM_API_URL` and `SCHOLAR_MCP_VLM_API_KEY` are set, tools can request VLM-enriched conversion that extracts LaTeX formulas and generates figure descriptions. This produces higher-quality Markdown but is slower and costs API calls.
 
@@ -100,6 +101,46 @@ Authentication is optional. When no auth variables are set, the server accepts u
 ### Auth modes
 
 The server supports two OIDC modes, auto-detected from environment variables:
+=======
+## Tool visibility
+
+Operators can trim which tools this instance exposes. Each variable takes a
+comma-separated list of explicit tool names:
+
+- `SCHOLAR_MCP_TOOLS_ALLOW`: expose *only* the listed tools.
+- `SCHOLAR_MCP_TOOLS_DENY`: hide the listed tools.
+
+Hidden tools disappear from `tools/list` and are rejected on `tools/call`;
+resources and prompts are unaffected. Setting both variables, or setting one
+to a value with no names in it, is a startup error. A name matching no
+registered tool is ignored, but an allowlist that matches nothing logs a
+startup `WARNING` since the instance then exposes zero tools. See
+`fastmcp-pvl-core`'s README for the full semantics.
+
+## Background tasks
+
+Every Scholar MCP instance wires a background-task backend at startup, so
+a tool registered with `task=True` works with no extra setup. One variable
+picks the backend:
+
+- `SCHOLAR_MCP_TASKS_URL`: `memory://` runs tasks in-process and loses
+  them on restart; `redis://...` is durable and shared across processes.
+
+Unset, a `redis://` `SCHOLAR_MCP_KV_STORE_URL` is reused for tasks as
+well, so a single URL configures every stateful subsystem. With neither set,
+the backend falls back to `memory://`, which the server logs at startup when
+running over HTTP. The queue name comes from the `SCHOLAR_MCP` prefix, so
+two servers sharing one Redis do not share a queue.
+
+Worker tuning stays on the native `FASTMCP_DOCKET_*` variables
+(`FASTMCP_DOCKET_CONCURRENCY` and friends, listed in `.env.example`). Set the
+backend through `SCHOLAR_MCP_TASKS_URL` rather than
+`FASTMCP_DOCKET_URL`: the former wins when both are set, and the server warns
+about the disagreement.
+
+<!-- DOMAIN-CONFIG-VARS-START -->
+## Domain variables
+>>>>>>> after updating
 
 
 | Mode | When selected | How it works |

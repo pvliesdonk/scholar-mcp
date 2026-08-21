@@ -198,6 +198,23 @@
       }
     },
     {
+      "id": "oidc_advertised_scopes",
+      "label": "Oidc Advertised Scopes",
+      "type": "text",
+      "var": "SCHOLAR_MCP_OIDC_ADVERTISED_SCOPES",
+      "help": "Scopes advertised to MCP clients in protected-resource metadata, space- or comma-separated. Overrides the default `openid offline_access`; `oidc_required_scopes` is always added on top. Set this when the registered client is not permitted `offline_access`, or to have clients request extra claim scopes (e.g. `groups`) without also requiring them in every token.",
+      "advancedGroup": "Auth",
+      "showIf": {
+        "deployment": [
+          "server"
+        ],
+        "auth": [
+          "oidc",
+          "both"
+        ]
+      }
+    },
+    {
       "id": "oidc_jwt_signing_key",
       "label": "OIDC JWT signing key",
       "type": "text",
@@ -257,6 +274,19 @@
       }
     },
     {
+      "id": "tasks_url",
+      "label": "Tasks Url",
+      "type": "text",
+      "var": "SCHOLAR_MCP_TASKS_URL",
+      "help": "Background-task (Docket) backend URL: `memory://` is in-process and lost on restart; `redis://` is durable and multi-process. When unset, a `redis://` `kv_store_url` is reused for tasks too; otherwise fastmcp's `memory://` default applies. Only meaningful when task-enabled tools exist. Applied via `configure_task_backend`.",
+      "advancedGroup": "Persistence",
+      "showIf": {
+        "deployment": [
+          "server"
+        ]
+      }
+    },
+    {
       "id": "app_domain",
       "label": "MCP Apps domain",
       "type": "text",
@@ -268,6 +298,22 @@
           "server"
         ]
       }
+    },
+    {
+      "id": "tools_allow",
+      "label": "Tool allowlist (CSV)",
+      "type": "text",
+      "var": "SCHOLAR_MCP_TOOLS_ALLOW",
+      "help": "Comma-separated tool names this instance exposes; every other tool is hidden. Leave empty to expose all tools. Mutually exclusive with the denylist.",
+      "advancedGroup": "Tools"
+    },
+    {
+      "id": "tools_deny",
+      "label": "Tool denylist (CSV)",
+      "type": "text",
+      "var": "SCHOLAR_MCP_TOOLS_DENY",
+      "help": "Comma-separated tool names to hide from this instance. Mutually exclusive with the allowlist.",
+      "advancedGroup": "Tools"
     },
     {
       "id": "bearer_tokens_file",
