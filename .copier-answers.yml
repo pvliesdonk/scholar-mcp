@@ -1,13 +1,15 @@
 # Changes here will be overwritten by `copier update`.
-_commit: v3.0.2
+_commit: v3.6.0
 _src_path: https://github.com/pvliesdonk/fastmcp-server-template
 docker_registry: ghcr.io/pvliesdonk
-domain_description: FastMCP server for scholarly sources (papers, patents, books, and standards) with metadata enrichment and docling PDF conversion
+domain_description: FastMCP server for scholarly sources (papers, patents, books,
+    and standards) with metadata enrichment and docling PDF conversion
 enable_authorization: false
 enable_structural_gate: true
 env_prefix: SCHOLAR_MCP
 github_org: pvliesdonk
 human_name: Scholar MCP
+include_claude_plugin: true
 include_mcp_apps_scaffold: false
 project_name: scholar-mcp
 pypi_name: pvliesdonk-scholar-mcp

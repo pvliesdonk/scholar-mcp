@@ -16,5 +16,79 @@
     "standards",
     "citations",
     "mcp"
-  ]
+  ],
+  "userConfig": {
+    "s2_api_key": {
+      "type": "string",
+      "title": "Semantic Scholar API key",
+      "description": "Semantic Scholar API key. Optional but strongly recommended: unauthenticated requests are limited to ~1 req/s. Request one at https://www.semanticscholar.org/product/api#api-key-form.",
+      "required": false,
+      "sensitive": true
+    },
+    "read_only": {
+      "type": "boolean",
+      "title": "Read-only mode",
+      "description": "When true, write-tagged tools (PDF download and conversion cache writes) are hidden. Set false to enable them.",
+      "required": false,
+      "default": true
+    },
+    "cache_dir": {
+      "type": "directory",
+      "title": "Cache directory",
+      "description": "Directory for the SQLite cache database (cache.db) and downloaded PDFs (pdfs/, md/).",
+      "required": false
+    },
+    "contact_email": {
+      "type": "string",
+      "title": "Contact email",
+      "description": "Contact email for the OpenAlex polite pool (improves rate limits). Also enables Unpaywall lookups as a PDF fallback source.",
+      "required": false
+    },
+    "docling_url": {
+      "type": "string",
+      "title": "docling-serve URL",
+      "description": "Base URL of a running docling-serve instance for PDF conversion (e.g. http://localhost:5001). When unset, PDF conversion tools return an error.",
+      "required": false
+    },
+    "vlm_api_url": {
+      "type": "string",
+      "title": "VLM API URL",
+      "description": "OpenAI-compatible VLM endpoint for formula and figure enrichment during PDF conversion.",
+      "required": false
+    },
+    "vlm_api_key": {
+      "type": "string",
+      "title": "VLM API key",
+      "description": "API key for the VLM endpoint.",
+      "required": false,
+      "sensitive": true
+    },
+    "vlm_model": {
+      "type": "string",
+      "title": "VLM model",
+      "description": "Model name to use with the VLM endpoint.",
+      "required": false,
+      "default": "gpt-4o"
+    },
+    "epo_consumer_key": {
+      "type": "string",
+      "title": "EPO OPS consumer key",
+      "description": "EPO Open Patent Services consumer key. Optional; patent tools are hidden when unset. Register at https://developers.epo.org/user/register.",
+      "required": false
+    },
+    "epo_consumer_secret": {
+      "type": "string",
+      "title": "EPO OPS consumer secret",
+      "description": "EPO Open Patent Services consumer secret. Optional; patent tools are hidden when unset.",
+      "required": false,
+      "sensitive": true
+    },
+    "log_level": {
+      "type": "string",
+      "title": "Log level",
+      "description": "Log level for FastMCP internals and app loggers (DEBUG / INFO / WARNING / ERROR / CRITICAL). The -v CLI flag overrides to DEBUG.",
+      "required": false,
+      "default": "INFO"
+    }
+  }
 }

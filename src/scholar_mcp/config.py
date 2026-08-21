@@ -47,7 +47,8 @@ class ProjectConfig:
         metadata={
             "help": (
                 "Semantic Scholar API key. Optional but strongly recommended: "
-                "unauthenticated requests are limited to ~1 req/s."
+                "unauthenticated requests are limited to ~1 req/s. Request one "
+                "at https://www.semanticscholar.org/product/api#api-key-form."
             ),
             "tags": ("s2",),
         },
@@ -113,7 +114,8 @@ class ProjectConfig:
         metadata={
             "help": (
                 "EPO Open Patent Services consumer key. Optional; patent "
-                "tools are hidden when unset."
+                "tools are hidden when unset. Register at "
+                "https://developers.epo.org/user/register."
             ),
             "tags": ("patents",),
         },

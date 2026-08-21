@@ -23,6 +23,7 @@ Optional token-based authentication for HTTP deployments. OIDC activates automat
 |---|---|---|
 | `SCHOLAR_MCP_OIDC_AUDIENCE` | (none) | Expected `aud` claim; tokens issued for another audience are rejected. |
 | `SCHOLAR_MCP_OIDC_REQUIRED_SCOPES` | `openid` | Scopes a caller must present, space- or comma-separated. Defaults to `openid` in oidc-proxy mode. |
+| `SCHOLAR_MCP_OIDC_ADVERTISED_SCOPES` | (none) | Scopes advertised to MCP clients in protected-resource metadata, space- or comma-separated. Overrides the default `openid offline_access`; `oidc_required_scopes` is always added on top. Set this when the registered client is not permitted `offline_access`, or to have clients request extra claim scopes (such as `groups`) without also requiring them in every token. |
 | `SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY` | `derived` | Signing key for issued JSON Web Tokens; used in oidc-proxy mode only. When unset, the key is derived deterministically from `oidc_client_secret`, so tokens survive a restart. Rotating that secret invalidates every issued token. Set this explicitly to decouple token validity from secret rotation. Generate with `openssl rand -hex 32`. |
 | `SCHOLAR_MCP_OIDC_VERIFY_ACCESS_TOKEN` | `false` | Validate the access token instead of the id token. |
 <!-- GENERATED-ENV-TABLE-OIDC-OPTIONAL-END -->
