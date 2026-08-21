@@ -147,17 +147,6 @@ services:
         APP_GID: 1000
 ```
 
-## Image tags
-
-| Tag | Description |
-|---|---|
-| `latest` | Latest release |
-| `v1.0.1` | Specific version |
-| `v1.0` | Latest patch in 1.0.x |
-| `v1` | Latest minor in 1.x |
-
-Multi-arch: `linux/amd64` and `linux/arm64`.
-
 ## Remote debugging
 
 Production images ship without `debugpy` to keep the image lean. To attach a remote Python debugger from VS Code or PyCharm:
