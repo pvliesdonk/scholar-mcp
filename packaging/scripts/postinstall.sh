@@ -21,8 +21,26 @@ fi
 # Upgrade pip and install the package
 "${VENV_DIR}/bin/pip" install --quiet --upgrade pip
 
+# The `[all]` extra is a deliberate local edit to a template-owned file.
+# The template renders these three installs bare, but this project ships
+# `fastmcp[tasks]` under the `all` extra and the Dockerfile pulls it in both
+# layers via `--extra all` (DOCKERFILE-UV-EXTRAS). Dropping it here would
+# give the deb/rpm a different install profile than every other channel.
+# postinstall.sh has no extras sentinel; requested upstream.
 if [ -n "$PKG_VERSION" ]; then
-    "${VENV_DIR}/bin/pip" install --quiet "pvliesdonk-scholar-mcp[all]==${PKG_VERSION}"
+    case "$PKG_VERSION" in
+        *-rc.*)
+            # Pre-releases never reach PyPI; install the wheel attached to
+            # this version's own GitHub release. The wheel filename carries
+            # the PEP 440 canonical spelling (-rc.N -> rcN).
+            canonical="$(printf '%s' "$PKG_VERSION" | sed 's/-rc\./rc/')"
+            "${VENV_DIR}/bin/pip" install --quiet \
+                "pvliesdonk-scholar-mcp[all] @ https://github.com/pvliesdonk/scholar-mcp/releases/download/v${PKG_VERSION}/pvliesdonk_scholar_mcp-${canonical}-py3-none-any.whl"
+            ;;
+        *)
+            "${VENV_DIR}/bin/pip" install --quiet "pvliesdonk-scholar-mcp[all]==${PKG_VERSION}"
+            ;;
+    esac
 else
     "${VENV_DIR}/bin/pip" install --quiet "pvliesdonk-scholar-mcp[all]"
 fi

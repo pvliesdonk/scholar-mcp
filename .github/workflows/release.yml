@@ -1,162 +1,189 @@
-# Prerelease-ness is a property of the BRANCH, not of a dispatch flag (see
-# [tool.semantic_release.branches] in pyproject.toml): dispatching from `main`
-# cuts a stable release; dispatching from a short-lived `release/X.Y`
-# stabilisation branch cuts an rc by default, or the final stable X.Y.Z when
-# the `finalize` box is checked.  Every publish gate below derives from PSR's
-# own outputs (`is_prerelease`) and from tag ordering — never from a dispatch
-# input — so a mismatched dispatch cannot open a stable-only gate for an rc.
-# After any release cut from a `release/*` branch, the `merge-back` job merges
-# the branch back into `main`; without that, the tag is unreachable from
-# `main` and PSR deadlocks there ("already released" forever).
+# Release-PR flow, half two of two (knope; fastmcp-server-template#406).
+# Merge = release: when a release PR (head `knope/prepare/<base>`, opened by
+# release-prepare.yml) merges, run knope's tag-release workflow on the PR's
+# merge commit, then fan out the publishes.  Inside knope.toml the
+# same-source promotion guard (scripts/promotion_guard.sh) runs BEFORE the
+# Release step, so a guard refusal fails the release job with no tag created
+# (release-vision section 4.4 — tags are immutable; a refusal must leave
+# nothing behind).
+#
+# Prerelease-ness is a property of the reviewed diff, not of any dispatch
+# flag: the version knope computed sits in the merged pyproject.toml, an
+# `-rc.` suffix marks a pre-release, and every publish gate below derives
+# from that (plus tag ordering) — a mismatched dispatch cannot open a
+# stable-only gate for an rc, because there is no dispatch.
+#
+# Operator rules (load-bearing — see release-vision sections 4.2/4.4):
+#   * NEVER use GitHub's "Update branch" button on a release PR — the only
+#     refresh is re-dispatching Release Prepare.
+#   * A branch release (base != default branch) is followed by the
+#     port-bookkeeping job below, which opens an ordinary PR carrying the
+#     changelog section to the default branch — there is no merge-back.
 name: Release
 
 on:
-  workflow_dispatch:
-    inputs:
-      force:
-        description: 'Force version bump type (empty = auto from commits). patch/minor/major override commit analysis. Only valid on main — a release/X.Y branch has its target fixed at cut time.'
-        type: choice
-        default: ''
-        options:
-          - ''
-          - patch
-          - minor
-          - major
-      finalize:
-        description: 'On a release/X.Y branch: cut the final stable X.Y.Z instead of the next rc. No effect on main, which always releases stable.'
-        type: boolean
-        default: false
+  pull_request:
+    types: [closed]
 
 permissions:
   contents: read
 
 jobs:
   release:
+    # Only merged release PRs; the head-ref prefix is the prep-branch
+    # namespace release-prepare.yml creates (per base, so concurrent release
+    # PRs on main and release/X.Y stay distinguishable here).  Defense in
+    # depth on top of release-prepare.yml's own refusals: the head must
+    # live in THIS repository (a fork branch named knope/prepare/* must not
+    # trigger a release), and the base must look releasable — the default
+    # branch or a release/ prefix.  The prefix half is deliberately coarse
+    # (workflow expressions cannot regex-match): the exact release/X.Y form
+    # is enforced by the head-to-base step below, so a deeper ref starts
+    # the job only to be refused there before anything is tagged.
+    if: >-
+      github.event.pull_request.merged == true &&
+      startsWith(github.event.pull_request.head.ref, 'knope/prepare/') &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (github.event.pull_request.base.ref == github.event.repository.default_branch ||
+       startsWith(github.event.pull_request.base.ref, 'release/'))
     runs-on: ubuntu-latest
-    # Per-branch buckets: a patch release off release/X.Y must not serialise
-    # behind a minor off main.  Cross-branch resources stay safe without a
-    # global bucket: PyPI/GitHub-release/registry writes are per-version, the
-    # marketplace push rebase-retries, docs deploys serialise in docs.yml, and
-    # the rolling Docker tags are ordering-gated below.
+    # Per-base buckets: a patch release off release/X.Y must not serialise
+    # behind (or cancel) a release off main.  (release-prepare.yml's bucket
+    # is deliberately GLOBAL instead — its version reservation must be
+    # atomic across bases.)  Cross-branch resources stay safe without a
+    # global bucket here: the GitHub-release/PyPI writes are per-version,
+    # docs deploys serialise in docs.yml, the GitHub latest-release pointer
+    # self-orders (see the demote step below), and every mutable rolling
+    # channel — Docker latest/vX/vX.Y, the marketplace entry, the registry
+    # entry — rechecks tag ordering at publish time under its own global
+    # concurrency group (see those jobs).
     concurrency:
-      group: release-${{ github.ref_name }}
+      group: release-${{ github.event.pull_request.base.ref }}
       cancel-in-progress: false
+    timeout-minutes: 30
 
     permissions:
       contents: write
       id-token: write
 
     steps:
-      - name: Checkout repository
+      - name: Checkout the release PR's merge commit (full depth, with tags)
         uses: actions/checkout@v7
         with:
+          # The MERGE COMMIT, not the base branch head: a commit landing on
+          # the base between merge and checkout must neither get tagged as
+          # the release nor spuriously trip the promotion guard.  The merge
+          # commit is exactly what "merging the release PR is the release"
+          # promises to tag.
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          # Full history + tags: the promotion guard diffs HEAD against the
+          # highest reachable rc tag of the target version, and the ordering
+          # step below compares the new tag against every stable.
           fetch-depth: 0
-          ref: ${{ github.ref_name }}
-          token: ${{ secrets.RELEASE_TOKEN }}
+          fetch-tags: true
 
-      # The branch fixes the version target, so only two dispatch surfaces
-      # remain and each is guarded: `force` is a main-only override (on a
-      # release branch it would compound past the target fixed at cut time —
-      # the failure mode behind template#154), and any branch matching neither
-      # PSR branch group is rejected by PSR itself before anything publishes.
-      - name: Reject force bump on a release branch
-        if: startsWith(github.ref, 'refs/heads/release/') && inputs.force != ''
+      # Swap-completeness guard (migration P1.0/P2): during the additive
+      # phase this interlock kept the knope flow inert while
+      # python-semantic-release was still the release path; the PSR config
+      # block is gone now, so it always passes — and it stays here so the
+      # two release models can never both be live again.  If this fails, a
+      # `[tool.semantic_release]` block has reappeared in pyproject.toml.
+      - name: Refuse while python-semantic-release is still the release path
         run: |
-          echo "::error::force=${{ inputs.force }} is not valid on ${{ github.ref_name }}: a release branch's version target is fixed at cut time."
-          echo "::error::Dispatch with force='' — commits on the branch advance the rc revision; check 'finalize' to cut the final stable."
-          exit 1
+          if grep -q '^\[tool\.semantic_release\]' pyproject.toml; then
+            echo "::error::pyproject.toml carries a [tool.semantic_release] block — the PSR and knope release flows must never both be live. Remove the block (the knope release-PR flow is this project's release path), or remove the knope machinery before resurrecting PSR."
+            exit 1
+          fi
+          echo "interlock: no [tool.semantic_release] block — knope flow is armed"
 
-      # Advisory only (never blocks — the cut may be intentional, or belong on
-      # a release/X.Y branch cut from an earlier commit).  Surfaces both
-      # queryable quiescence signals the epic conventions record:
-      #   * the preferred milestone — a release-named milestone (X.Y) with
-      #     open issues means that version is not yet safe to cut; and
-      #   * the ships-atomically label — for each open epic it also counts
-      #     open native sub-issues, which may live in another repo, so a
-      #     cross-repo epic whose children are elsewhere stays visible.
-      # Every gh call is guarded so a failure or an unsupported endpoint
-      # degrades to no warning rather than failing the step under pipefail.
-      - name: Warn about open ships-atomically epics and release milestones
-        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+      # The job-level `if` can only prefix-match the head (workflow
+      # expressions cannot string-replace), so bind the head to the base
+      # here: release-prepare.yml names the prep branch for base B exactly
+      # `knope/prepare/<B with slashes as dashes>`, and a prep PR retargeted
+      # at a DIFFERENT base — merging main's prep branch into release/X.Y,
+      # say — must never be treated as that base's release decision: its
+      # stamps and changelog were computed against another ancestry.
+      - name: Refuse a prep head that does not match the PR's base
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
-          # (1) Open ships-atomically epics, each with a count of still-open
-          #     children (native sub-issues — cross-repo aware).
-          epics=$(gh issue list --repo "$REPO" --label ships-atomically \
-            --state open --json number,title \
-            --jq '.[] | "\(.number)\t\(.title)"' 2>/dev/null || true)
-          if [ -n "$epics" ]; then
-            printf '%s\n' "$epics" | while IFS="$(printf '\t')" read -r num title; do
-              [ -n "$num" ] || continue
-              kids=$(gh api "repos/$REPO/issues/$num/sub_issues" \
-                --jq '[.[] | select(.state == "open")] | length' 2>/dev/null || echo '?')
-              echo "::warning::Open ships-atomically epic #$num ($title) — $kids open child issue(s). Releasing $REPO@main ships HEAD mid-story; consider a release/X.Y branch cut from before the epic started."
-            done || true
+          # Mirror release-prepare.yml's releasable-ref form exactly: the
+          # default branch or release/X.Y (nothing deeper — the documented
+          # form, and the guarantee that keeps the slash-to-dash prep-branch
+          # encoding below injective).
+          if [ "$BASE_REF" != "$DEFAULT_BRANCH" ] && ! printf '%s' "$BASE_REF" | grep -Eq '^release/[0-9]+\.[0-9]+$'; then
+            echo "::error::base '${BASE_REF}' is not a releasable ref (the default branch or release/X.Y) — this merge is not a release decision. Nothing was tagged."
+            exit 1
           fi
-          # (2) The preferred signal: a release-named milestone (X.Y) that
-          #     still has open issues — that version is not yet quiescent.
-          milestones=$(gh api "repos/$REPO/milestones?state=open&per_page=100" \
-            --jq '.[] | select(.open_issues > 0) | select(.title | test("^[0-9]+[.][0-9]+$")) | "\(.title): \(.open_issues) open issue(s)"' 2>/dev/null || true)
-          if [ -n "$milestones" ]; then
-            printf '%s\n' "$milestones" | while IFS= read -r ms; do
-              [ -n "$ms" ] || continue
-              echo "::warning::Release milestone $ms — not yet safe to cut that version from a quiescent trunk."
-            done || true
+          expected="knope/prepare/${BASE_REF//\//-}"
+          if [ "$HEAD_REF" != "$expected" ]; then
+            echo "::error::merged head '${HEAD_REF}' is not the prep branch for base '${BASE_REF}' (expected '${expected}') — a retargeted release PR is not a release decision. Nothing was tagged; re-dispatch Release Prepare on '${BASE_REF}' for a reviewed release PR of its own."
+            exit 1
           fi
+          echo "prep head matches its base: ${HEAD_REF} <- ${BASE_REF}"
 
-      # PSR's CLI can force prerelease ON (--as-prerelease) but not OFF, so
-      # the final stable from a release branch needs a one-run config override:
-      # the same [tool.semantic_release] config with the release group's
-      # `prerelease` flipped to false.  Generated from pyproject.toml at run
-      # time (never committed — PSR stages only version files and assets), so
-      # it cannot drift from the real config.
-      - name: Prepare stable-finalize config override
-        id: psr-config
-        if: inputs.finalize && startsWith(github.ref, 'refs/heads/release/')
-        run: |
-          python3 - <<'EOF'
-          import json
-          import tomllib
-
-          with open("pyproject.toml", "rb") as fh:
-              cfg = tomllib.load(fh)["tool"]["semantic_release"]
-          # Fails loudly (KeyError) if the branch groups were removed/renamed;
-          # silently inventing a group here would mask a broken config.
-          cfg["branches"]["release"]["prerelease"] = False
-          with open(".psr-finalize.json", "w") as fh:
-              json.dump({"semantic_release": cfg}, fh)
-          EOF
-          echo "config_file=.psr-finalize.json" >> "$GITHUB_OUTPUT"
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v8.2.0
+      # knope-dev/action installs the pinned knope CLI.  Renovate: the
+      # action ref is covered by the template repo's jinja-workflow regex
+      # manager, and the `version:` input below by its knope-cli regex
+      # manager (github-releases, depName knope-dev/knope) — keep the
+      # `version:` key on its own line so that manager keeps matching.
+      - name: Install knope
+        uses: knope-dev/action@v2.1.2
         with:
-          version: "0.6"
+          version: 0.23.0
 
-      - name: Setup Python
-        run: uv python install 3.12
+      # RELEASE_TOKEN (release-vision section 4.3): a tag or release created
+      # with the workflow's own GITHUB_TOKEN triggers NO downstream
+      # workflows (verified 0-for-10 in the live spike), which would silence
+      # docs.yml's `release: published` deploy and the notes flow.  The PAT
+      # keeps every event consumer firing.  Guard-before-Release ordering
+      # lives in knope.toml's tag-release workflow.
+      - name: Guard, then tag and create the GitHub release
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: knope tag-release --verbose
 
-      - name: Semantic Version Release
+      # Everything downstream derives from the merged, reviewed diff: the
+      # version is what knope stamped into pyproject.toml (the tag is
+      # v<version>), and prerelease-ness is the `-rc.` marker in it.  The
+      # tag itself was created remotely by knope's Release step, so re-fetch
+      # tags to make it visible to the ordering computation below.
+      - name: Resolve the released version from the merged diff
         id: release
-        uses: python-semantic-release/python-semantic-release@v10.5.3
-        with:
-          github_token: ${{ secrets.RELEASE_TOKEN }}
-          git_committer_name: "github-actions"
-          git_committer_email: "actions@users.noreply.github.com"
-          force: ${{ inputs.force }}
-          # Empty unless finalizing a release branch; "" means pyproject.toml.
-          config_file: ${{ steps.psr-config.outputs.config_file }}
+        run: |
+          version="$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml | head -1)"
+          if [ -z "$version" ]; then
+            echo "::error::could not read a version from the merged pyproject.toml"
+            exit 1
+          fi
+          tag="v${version}"
+          case "$version" in
+            *-rc.*) is_prerelease=true ;;
+            *) is_prerelease=false ;;
+          esac
+          git fetch --tags --force origin
+          git rev-parse -q --verify "refs/tags/${tag}" > /dev/null \
+            || { echo "::error::knope tag-release reported success but tag ${tag} does not exist"; exit 1; }
+          {
+            echo "version=${version}"
+            echo "tag=${tag}"
+            echo "is_prerelease=${is_prerelease}"
+          } >> "$GITHUB_OUTPUT"
 
-      # A release from an old series must not repoint rolling channels at
-      # older content: Docker `latest`/`vX`/`vX.Y`, the GitHub "latest
-      # release" pointer, the marketplace entry, and the MCP registry all
-      # follow ONLY when this release is the highest in the relevant series.
-      # Tags are complete here: full-depth checkout plus the tag PSR just cut.
+      # First-pass ordering gates: a release from an old series must not
+      # repoint rolling channels at older content — Docker `latest`/`vX`/
+      # `vX.Y`, the GitHub "latest release" pointer, the marketplace entry,
+      # and the MCP registry all follow ONLY when this release is the
+      # highest in the relevant series.  These outputs see the tags visible
+      # NOW (full-depth checkout plus the re-fetch above), so a stable
+      # racing in from another base may be missing — staleness only ever
+      # OVER-claims (fewer tags make this release look newer, never older),
+      # which is safe for the job-level gates below because each mutable
+      # channel rechecks with a complete view at publish time.
       - name: Determine channel ordering
         id: ordering
-        if: steps.release.outputs.released == 'true'
         env:
           TAG: ${{ steps.release.outputs.tag }}
           IS_PRERELEASE: ${{ steps.release.outputs.is_prerelease }}
@@ -164,11 +191,12 @@ jobs:
           is_latest=false
           is_latest_major=false
           is_latest_minor=false
+          is_newest_rc=false
+          stable=$(git tag --list | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true)
           if [ "$IS_PRERELEASE" != "true" ]; then
             ver="${TAG#v}"
             major="${ver%%.*}"
             minor="${ver%.*}"
-            stable=$(git tag --list | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$')
             if [ "$(printf '%s\n' "$stable" | sort -V | tail -1)" = "$TAG" ]; then
               is_latest=true
             fi
@@ -178,32 +206,48 @@ jobs:
             if [ "$(printf '%s\n' "$stable" | grep -E "^v${minor//./\\.}\." | sort -V | tail -1)" = "$TAG" ]; then
               is_latest_minor=true
             fi
+          else
+            # Rolling `rc` follows the newest candidate, and only forwards:
+            # it moves when THIS tag is the highest rc in the repo AND its
+            # base version is still ahead of the newest stable.  Without the
+            # second half, a leftover rc of an already-released version, or
+            # an rc cut on an older release/X.Y branch, would repoint `rc`
+            # at content older than `latest`.
+            rcs=$(git tag --list | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$' || true)
+            if [ "$(printf '%s\n' "$rcs" | sort -V | tail -1)" = "$TAG" ]; then
+              # `sort -V` does NOT implement semver prerelease precedence —
+              # it orders v4.0.0 BEFORE v4.0.0-rc.1 — so it may rank rcs
+              # among themselves but must never compare an rc against a
+              # stable.  Compare the rc's BASE version instead; equal means
+              # that version already shipped and the rc is behind `latest`.
+              base="${TAG%-rc.*}"
+              newest_stable=$(printf '%s\n' "$stable" | sort -V | tail -1)
+              if [ -z "$newest_stable" ] || { [ "$base" != "$newest_stable" ] \
+                && [ "$(printf '%s\n%s\n' "$base" "$newest_stable" | sort -V | tail -1)" = "$base" ]; }; then
+                is_newest_rc=true
+              fi
+            fi
           fi
           {
             echo "is_latest=$is_latest"
             echo "is_latest_major=$is_latest_major"
             echo "is_latest_minor=$is_latest_minor"
+            echo "is_newest_rc=$is_newest_rc"
           } >> "$GITHUB_OUTPUT"
 
-      # Release-body contract (template#350, settled jointly with
-      # template#347): the body is a user-facing summary plus pointers — the
-      # docs site is canonical, and commit-level detail stays behind the
-      # compare link and CHANGELOG.md.  Composing the body here (overwriting
-      # PSR's default commit-list notes) makes it independent of the
-      # tag-to-tag commit range, so a stable that finalises an rc series gets
-      # the same body as any other release instead of an empty-range one.
-      # The compare link spans the cycle since the previous STABLE tag — one
-      # definition of "what belongs in this release" for stables and rcs
-      # alike.  Tags are complete here (see the ordering step above).
-      # NOTES-GENERATOR SEAM (template#347): consumed. The body written here
-      # is the at-release interim state; after the Release Notes workflow's
-      # agent-drafted docs/releases page merges, release-notes-publish.yml
-      # replaces the interim summary with the page's marked summary block and
-      # a deep link into the versioned docs/releases page, keeping the
-      # compare and CHANGELOG pointers. The closing line below doubles as the
-      # upgrade-once marker that workflow keys on — reword them together.
-      - name: Set release body (summary + docs pointers)
-        if: steps.release.outputs.released == 'true'
+      # Release-body contract (template#350 → #419): knope's Release step
+      # already set the body to the release's machine changelog section;
+      # this step prepends the notes summary and appends the pointers.  The
+      # notes page is part of the release PR's diff (drafted by
+      # release-prepare.yml's draft-notes job), so the TAGGED TREE — checked
+      # out right here — is the source of truth: the summary block for this
+      # tag is read from the local page, and the deep link is emitted
+      # whenever the page exists in the tree.  No default-branch API check,
+      # no pending-marker deferral — a release prepared with skip_notes just
+      # ships without the summary/link, and a backfill notes PR plus
+      # `gh release edit` is the manual remedy.  rc docs never deploy, so
+      # rc bodies link the page at the tag on GitHub instead of the site.
+      - name: Compose the release body (summary, docs, compare, changelog)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.release.outputs.tag }}
@@ -213,6 +257,7 @@ jobs:
           ver="${TAG#v}"
           minor="${ver%%-*}"
           minor="${minor%.*}"
+          page="docs/releases/${minor}.md"
           # Highest stable tag strictly below this release (series-aware via
           # sort -V; empty on a project's very first release).
           prev=$(
@@ -220,48 +265,77 @@ jobs:
                 | grep -Fvx "$TAG"; echo "$TAG"; } \
               | sort -V | awk -v t="$TAG" '$0 == t { print p; exit } { p = $0 }'
           )
+          body=$(gh release view "$TAG" --json body --jq .body)
+          # The page's marked summary block for this release, if the page in
+          # the tagged tree carries one.  The skill keys everything on the
+          # target's STABLE version — an rc drafts its stable's page and
+          # writes `RELEASE-SUMMARY vX.Y.Z START` — so the lookup normalises
+          # the tag the same way (v4.0.0-rc.2 reads the v4.0.0 block).
+          marker_tag="v${ver%%-*}"
+          summary=""
+          if [ -f "$page" ]; then
+            summary=$(awk -v tag="$marker_tag" '
+              index($0, "RELEASE-SUMMARY " tag " START") { f=1; next }
+              index($0, "RELEASE-SUMMARY " tag " END")   { f=0 }
+              f' "$page" | awk 'NF {p=1} p' | tac | awk 'NF {p=1} p' | tac)
+          fi
           {
             if [ "$IS_PRERELEASE" = "true" ]; then
-              echo "Release candidate ${ver}: a branch-scoped stabilisation build for the upcoming v${minor} stable. Install it only to help test that release."
+              echo "Release candidate ${ver}: a stabilisation build toward the upcoming v${minor} stable. Install it only to help test that release."
               echo
-              # The stable's versioned docs publish when the stable ships;
-              # rcs deploy no docs, so point at the site root instead of a
-              # not-yet-existing /X.Y/ page.
+            fi
+            if [ -n "$summary" ]; then
+              printf '%s\n' "$summary"
+              echo
+            fi
+            printf '%s\n' "$body"
+            echo
+            if [ "$IS_PRERELEASE" = "true" ]; then
+              # rcs deploy no versioned docs; the page travels in the tag.
+              if [ -f "$page" ]; then
+                echo "- Release notes (draft, in-tag): https://github.com/${REPO}/blob/${TAG}/${page}"
+              fi
               echo "- Documentation: https://pvliesdonk.github.io/scholar-mcp/ (the v${minor} pages publish when the stable ships)"
             else
-              echo "scholar-mcp ${ver}."
-              echo
+              if [ -f "$page" ]; then
+                echo "- Release notes: https://pvliesdonk.github.io/scholar-mcp/${minor}/releases/${minor}/"
+              fi
               echo "- Documentation: https://pvliesdonk.github.io/scholar-mcp/${minor}/"
             fi
             if [ -n "$prev" ]; then
               echo "- All changes since ${prev}: https://github.com/${REPO}/compare/${prev}...${TAG}"
             fi
             echo "- Commit-level detail: [CHANGELOG.md](https://github.com/${REPO}/blob/${TAG}/CHANGELOG.md)"
-            # Only a stable's body gets the notes-page promise: the Release
-            # Notes Publish workflow matches stable tags only, so an rc body
-            # would carry a pointer nothing ever fulfils.
-            if [ "$IS_PRERELEASE" != "true" ]; then
-              echo
-              echo "Release notes will move to a versioned notes page on the documentation site; until then, the links above carry the full change record."
-            fi
           } > release-body.md
           gh release edit "$TAG" --notes-file release-body.md
 
-      # GitHub auto-marks the newest non-prerelease as the repo's "latest
-      # release", which would repoint /releases/latest (and the versionless
-      # .deb/.rpm URLs) at a backport patch cut after a newer stable. Demote it.
+      # GitHub auto-marks the newest CREATED non-prerelease as the repo's
+      # "latest release", which would repoint /releases/latest (and the
+      # versionless .deb/.rpm URLs) at a backport patch cut after a newer
+      # stable.  Demote it.  This pointer needs no publish-time recheck:
+      # whichever release is created LAST either sees every earlier tag in
+      # the ordering step above (its re-fetch ran after this job's own
+      # release creation) and demotes itself here, or is genuinely the
+      # newest — and a stale pointer set by an earlier creation is
+      # auto-superseded by the next one.
       - name: Keep the GitHub latest-release pointer ordered
-        if: steps.release.outputs.released == 'true' && steps.release.outputs.is_prerelease == 'false' && steps.ordering.outputs.is_latest == 'false'
+        if: steps.release.outputs.is_prerelease == 'false' && steps.ordering.outputs.is_latest == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release edit ${{ steps.release.outputs.tag }} --latest=false
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.2.0
+        with:
+          version: "0.6"
+
+      - name: Setup Python
+        run: uv python install 3.12
+
       - name: Build package
-        if: steps.release.outputs.released == 'true'
         run: uv build
 
       - name: Generate SBOM
-        if: steps.release.outputs.released == 'true'
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610  # v0.24.0
         with:
           path: .
@@ -270,36 +344,29 @@ jobs:
           upload-artifact: false
           upload-release-assets: false
 
-      - name: Upload SBOM to GitHub Release
-        if: steps.release.outputs.released == 'true'
-        run: gh release upload ${{ steps.release.outputs.tag }} sbom.cdx.json
+      - name: Upload SBOM and build artifacts to GitHub Release
+        run: gh release upload ${{ steps.release.outputs.tag }} sbom.cdx.json dist/* --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload to GitHub Release Assets
-        uses: python-semantic-release/publish-action@v10.5.3
-        if: steps.release.outputs.released == 'true'
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ steps.release.outputs.tag }}
-
       - name: Upload build artifacts
-        if: steps.release.outputs.released == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/
 
     outputs:
-      released: ${{ steps.release.outputs.released }}
+      # "true" only when the release job ran to a successful tag — the
+      # single source every publish gate below derives from, so gate state
+      # can never desync from what knope actually cut.
+      released: ${{ steps.release.outputs.tag != '' }}
       version: ${{ steps.release.outputs.version }}
       tag: ${{ steps.release.outputs.tag }}
-      # "true"/"false" from PSR itself — the single source the publish gates
-      # below derive from, so gate state can never desync from what PSR cut.
       is_prerelease: ${{ steps.release.outputs.is_prerelease }}
       is_latest: ${{ steps.ordering.outputs.is_latest }}
       is_latest_major: ${{ steps.ordering.outputs.is_latest_major }}
       is_latest_minor: ${{ steps.ordering.outputs.is_latest_minor }}
+      is_newest_rc: ${{ steps.ordering.outputs.is_newest_rc }}
 
   publish-pypi:
     needs: release
@@ -333,6 +400,15 @@ jobs:
     needs: release
     if: needs.release.outputs.released == 'true'
     runs-on: ubuntu-latest
+    # One global bucket per mutable rolling channel: competing stable
+    # releases from different bases write the same rolling tags, and the
+    # publish-time recheck below is only convergent when the writers are
+    # serialized (see that step).  cancel-in-progress stays false; if a
+    # third simultaneous release ever queues here, GitHub cancels the
+    # second's pending job visibly — re-run it.
+    concurrency:
+      group: release-rolling-docker
+      cancel-in-progress: false
 
     permissions:
       contents: read
@@ -373,23 +449,115 @@ jobs:
           echo "major=$(echo "$VERSION" | cut -d. -f1)" >> $GITHUB_OUTPUT
           echo "minor=$(echo "$VERSION" | cut -d. -f1-2)" >> $GITHUB_OUTPUT
 
+      # Publish-time ordering recheck — the authoritative gate for the
+      # rolling tags.  The release job's ordering outputs were computed
+      # against the tags visible when THAT job ran, and a concurrent stable
+      # on another base may have tagged since (release buckets are per
+      # base).  Staleness only ever over-claims, so those outputs stay as
+      # cheap early gates and this recheck demotes with a complete view.
+      # The job's concurrency group makes this convergent: every release's
+      # tag exists before its publish jobs start, so the LAST writer here
+      # always sees every earlier one — the rolling tags end at the true
+      # newest whatever order racing publishes finish in.  If the remote
+      # tag listing fails, fall back to the release-time answer rather than
+      # blocking the immutable version tag this job also pushes.
+      - name: Recheck rolling-tag ordering at publish time
+        id: recheck
+        env:
+          TAG: ${{ needs.release.outputs.tag }}
+          IS_PRERELEASE: ${{ needs.release.outputs.is_prerelease }}
+          FALLBACK_LATEST: ${{ needs.release.outputs.is_latest }}
+          FALLBACK_MINOR: ${{ needs.release.outputs.is_latest_minor }}
+          FALLBACK_MAJOR: ${{ needs.release.outputs.is_latest_major }}
+          FALLBACK_NEWEST_RC: ${{ needs.release.outputs.is_newest_rc }}
+        run: |
+          is_latest=false
+          is_latest_major=false
+          is_latest_minor=false
+          is_newest_rc=false
+          remote=$(git ls-remote --tags --refs origin 2>/dev/null \
+            | awk -F'refs/tags/' '{print $2}' || true)
+          stable=$(printf '%s\n' "$remote" \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true)
+          if [ "$IS_PRERELEASE" != "true" ]; then
+            ver="${TAG#v}"
+            major="${ver%%.*}"
+            minor="${ver%.*}"
+            if [ -z "$stable" ]; then
+              # A stable release always sees at least its own tag, so an
+              # empty list means the query failed, not that no tags exist.
+              echo "::warning::could not list remote tags — falling back to the release-time ordering"
+              is_latest="$FALLBACK_LATEST"
+              is_latest_minor="$FALLBACK_MINOR"
+              is_latest_major="$FALLBACK_MAJOR"
+            else
+              if [ "$(printf '%s\n' "$stable" | sort -V | tail -1)" = "$TAG" ]; then
+                is_latest=true
+              fi
+              if [ "$(printf '%s\n' "$stable" | grep -E "^v${major}\." | sort -V | tail -1)" = "$TAG" ]; then
+                is_latest_major=true
+              fi
+              if [ "$(printf '%s\n' "$stable" | grep -E "^v${minor//./\\.}\." | sort -V | tail -1)" = "$TAG" ]; then
+                is_latest_minor=true
+              fi
+            fi
+          else
+            # Rolling `rc`, ordering-gated exactly like `latest`: it moves
+            # only when THIS tag is the highest rc in the repo AND its base
+            # version is still ahead of the newest stable, so a leftover rc
+            # of an already-released version — or an rc cut on an older
+            # release/X.Y branch — can never point `rc` behind `latest`.
+            rcs=$(printf '%s\n' "$remote" \
+              | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$' || true)
+            if [ -z "$rcs" ]; then
+              # The stable arm's witness read for this channel: an rc always
+              # sees at least its own rc tag, so an empty RC list means the
+              # query failed.  An empty STABLE list does not — that is the
+              # legitimate "nothing released yet" case, handled below.
+              echo "::warning::could not list remote tags — falling back to the release-time ordering"
+              is_newest_rc="$FALLBACK_NEWEST_RC"
+            elif [ "$(printf '%s\n' "$rcs" | sort -V | tail -1)" = "$TAG" ]; then
+              # `sort -V` does NOT implement semver prerelease precedence —
+              # it orders v4.0.0 BEFORE v4.0.0-rc.1 — so it may rank rcs
+              # among themselves but must never compare an rc against a
+              # stable.  Compare the rc's BASE version instead; equal means
+              # that version already shipped and the rc is behind `latest`.
+              base="${TAG%-rc.*}"
+              newest_stable=$(printf '%s\n' "$stable" | sort -V | tail -1)
+              if [ -z "$newest_stable" ] || { [ "$base" != "$newest_stable" ] \
+                && [ "$(printf '%s\n%s\n' "$base" "$newest_stable" | sort -V | tail -1)" = "$base" ]; }; then
+                is_newest_rc=true
+              fi
+            fi
+          fi
+          {
+            echo "is_latest=$is_latest"
+            echo "is_latest_minor=$is_latest_minor"
+            echo "is_latest_major=$is_latest_major"
+            echo "is_newest_rc=$is_newest_rc"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Extract metadata (tags, labels)
         id: meta
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          # Rolling tags are ordering-gated (see the release job): a backport
-          # patch cut after a newer stable updates only the series tags it is
-          # actually the newest member of, and never `latest`.  An rc pushes
-          # its immutable version tag alone — the rolling `unstable` tag is
-          # retired now that rcs are rare, branch-scoped stabilisation builds
-          # ("run the latest code" is the `edge` tag, pushed per merge to main
-          # by the Unstable channel workflow).
+          # Rolling tags are ordering-gated by the publish-time recheck
+          # above (NOT the release job's stale-able outputs): a backport
+          # patch cut after a newer stable updates only the series tags it
+          # is actually the newest member of, and never `latest`.  An rc
+          # takes the same treatment on its own channel: `rc` follows the
+          # newest candidate that is still ahead of `latest`, and the two
+          # families are disjoint — no stable ever writes `rc`, no rc ever
+          # writes `latest`/`vX`/`vX.Y`.  The three rolling tags each have
+          # exactly one producer: `latest` and `rc` here, `edge` in the
+          # Unstable channel workflow ("run the latest merged code").
           tags: |
             type=raw,value=v${{ steps.version.outputs.version }}
-            type=raw,value=latest,enable=${{ needs.release.outputs.is_latest == 'true' }}
-            type=raw,value=v${{ steps.version.outputs.minor }},enable=${{ needs.release.outputs.is_latest_minor == 'true' }}
-            type=raw,value=v${{ steps.version.outputs.major }},enable=${{ needs.release.outputs.is_latest_major == 'true' }}
+            type=raw,value=latest,enable=${{ steps.recheck.outputs.is_latest == 'true' }}
+            type=raw,value=rc,enable=${{ steps.recheck.outputs.is_newest_rc == 'true' }}
+            type=raw,value=v${{ steps.version.outputs.minor }},enable=${{ steps.recheck.outputs.is_latest_minor == 'true' }}
+            type=raw,value=v${{ steps.version.outputs.major }},enable=${{ steps.recheck.outputs.is_latest_major == 'true' }}
           labels: |
             org.opencontainers.image.title=scholar-mcp
             org.opencontainers.image.description=FastMCP server for scholarly sources (papers, patents, books, and standards) with metadata enrichment and docling PDF conversion
@@ -406,7 +574,10 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # ignore-error: this workflow runs on pull_request closed, whose
+          # Actions cache token has no writable scopes — without it the
+          # cache export hard-fails the whole (otherwise successful) build.
+          cache-to: type=gha,mode=max,ignore-error=true
 
       - name: Generate artifact attestation
         uses: actions/attest-build-provenance@v4
@@ -434,7 +605,10 @@ jobs:
 
   publish-linux-packages:
     needs: release
-    if: needs.release.outputs.released == 'true' && needs.release.outputs.is_prerelease == 'false'
+    # Runs for rcs too: this only attaches deb/rpm to the version's own
+    # GitHub release — a per-version immutable channel like the wheel and
+    # mcpb assets, not an external publish surface.
+    if: needs.release.outputs.released == 'true'
     runs-on: ubuntu-latest
 
     permissions:
@@ -534,6 +708,12 @@ jobs:
   # Publishes the marketplace catalog entry by committing straight to the
   # catalog's default branch — a release must not end at an open PR awaiting
   # a human merge (fastmcp-server-template#333; 15 such PRs once went stale).
+  # The manifest is `.claude-plugin/marketplace.json`, and only that path:
+  # Claude Code reads no other location, so a catalog carrying the file at
+  # its repo root is not a marketplace at all (template#383 — the bump had
+  # been writing a file nothing read).  The path is asserted below rather
+  # than discovered, so a future relocation fails with a sentence instead
+  # of a jq stack trace.
   # The plugin-artifact check guards against publishing a git-subdir entry
   # whose path does not exist at the tag, which is uninstallable; projects
   # without a .claude-plugin/plugin directory skip with a warning rather
@@ -541,11 +721,43 @@ jobs:
   publish-claude-plugin:
     needs: release
     # `is_latest` keeps the single marketplace entry ordered: a backport patch
-    # from an old series must not repoint the catalog at older content.
+    # from an old series must not repoint the catalog at older content.  The
+    # release-time output can only over-admit (a concurrent stable's tag may
+    # have been invisible to it), so it stays as the cheap job gate and the
+    # recheck step below re-derives the answer at publish time, serialized
+    # by this channel's global concurrency group.
     if: needs.release.outputs.released == 'true' && needs.release.outputs.is_prerelease == 'false' && needs.release.outputs.is_latest == 'true'
     runs-on: ubuntu-latest
+    concurrency:
+      group: release-rolling-marketplace
+      cancel-in-progress: false
     steps:
+      # Same convergence design as the Docker recheck: under the channel
+      # mutex the last writer always sees every earlier release's tag, so
+      # the catalog entry ends at the true newest whatever order racing
+      # publishes finish in.  Degrades open — on an API failure the publish
+      # proceeds on the release-time answer rather than failing a release
+      # the outage never made wrong.
+      - name: Recheck marketplace ordering at publish time
+        id: recheck
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.release.outputs.tag }}
+          REPO: ${{ github.repository }}
+        run: |
+          still_latest=true
+          stable=$(gh api --paginate "repos/${REPO}/tags" --jq '.[].name' 2>/dev/null \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true)
+          if [ -n "$stable" ]; then
+            newest=$(printf '%s\n' "$stable" | sort -V | tail -1)
+            if [ "$newest" != "$TAG" ]; then
+              still_latest=false
+              echo "::notice::${TAG} is no longer the newest stable (${newest} exists) — skipping the marketplace bump; the newer release's own publish owns the entry"
+            fi
+          fi
+          echo "still_latest=${still_latest}" >> "$GITHUB_OUTPUT"
       - name: Check plugin artifact exists at tag
+        if: steps.recheck.outputs.still_latest == 'true'
         id: plugin_check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -570,15 +782,29 @@ jobs:
         if: steps.plugin_check.outputs.present == 'true'
         env:
           VERSION: ${{ needs.release.outputs.version }}
+          MANIFEST: .claude-plugin/marketplace.json
+          # Through env, not interpolated into the script: the blurb is
+          # free-form prose and a quote in it would otherwise break the
+          # shell rather than the entry.
+          PLUGIN_DESC: "FastMCP server for scholarly sources (papers, patents, books, and standards) with metadata enrichment and docling PDF conversion"
+          PLUGIN_HOME: "https://pvliesdonk.github.io/scholar-mcp/"
         run: |
           cd catalog
+          if [ ! -f "$MANIFEST" ]; then
+            echo "::error::pvliesdonk/claude-plugins has no ${MANIFEST} — that is the only path Claude Code reads, so the catalog is not loadable as a marketplace and there is nothing to bump. Fix the catalog before releasing."
+            exit 1
+          fi
           NEW_ENTRY=$(jq -n \
             --arg name    "scholar-mcp" \
+            --arg desc    "$PLUGIN_DESC" \
+            --arg home    "$PLUGIN_HOME" \
             --arg url     "https://github.com/pvliesdonk/scholar-mcp.git" \
             --arg ref     "v$VERSION" \
             --arg version "$VERSION" \
             '{
               name: $name,
+              description: $desc,
+              homepage: $home,
               source: {
                 source: "git-subdir",
                 url: $url,
@@ -587,39 +813,77 @@ jobs:
               },
               version: $version
             }')
+          # The upsert refreshes the blurb as well as the pin: the catalog's
+          # README is generated from these descriptions, and this project —
+          # not the catalog — is where its own one-line description lives.
+          # A hand-edited blurb on this entry is therefore replaced on every
+          # release, deliberately; curate it here, in `domain_description`.
           jq --arg name "scholar-mcp" \
              --arg v    "$VERSION" \
              --arg ref  "v$VERSION" \
+             --arg desc "$PLUGIN_DESC" \
+             --arg home "$PLUGIN_HOME" \
              --argjson new "$NEW_ENTRY" '
             .plugins |= (
               if any(.[]; .name == $name)
-              then map(if .name == $name then .version = $v | .source.ref = $ref else . end)
+              then map(
+                if .name == $name
+                then .version = $v
+                     | .source.ref = $ref
+                     | .description = $desc
+                     | .homepage = $home
+                else . end
+              )
               else . + [$new]
               end
             )
-          ' marketplace.json > marketplace.json.tmp
-          mv marketplace.json.tmp marketplace.json
-          # The catalog must never be pushed malformed or with a mismatched
-          # entry: validate before anything is committed.
-          jq empty marketplace.json
-          jq -e --arg name "scholar-mcp" --arg v "$VERSION" '
+          ' "$MANIFEST" > "$MANIFEST.tmp"
+          mv "$MANIFEST.tmp" "$MANIFEST"
+          # The catalog must never be pushed malformed, with a mismatched
+          # entry, or missing the keys the marketplace validator requires:
+          # validate before anything is committed.
+          jq empty "$MANIFEST"
+          jq -e '.name and .owner and (.plugins | type == "array")' "$MANIFEST" > /dev/null \
+            || { echo "::error::${MANIFEST} lost a required top-level key (name / owner / plugins) — refusing to publish a manifest Claude Code would reject"; exit 1; }
+          jq -e --arg name "scholar-mcp" --arg v "$VERSION" \
+                --arg desc "$PLUGIN_DESC" '
             .plugins[] | select(.name == $name)
-            | select(.version == $v and .source.ref == ("v" + $v))
-          ' marketplace.json > /dev/null
+            | select(.version == $v and .source.ref == ("v" + $v)
+                     and .description == $desc)
+          ' "$MANIFEST" > /dev/null
+
+          # The catalog generates its README from the manifest.  Run its own
+          # generator so the bump and the prose it feeds land in one commit,
+          # rather than leaving the catalog's default branch stale (or red)
+          # until a human runs it.  Guarded on the file: a catalog without a
+          # generator, or one that has not adopted it yet, is unaffected.
+          if [ -f scripts/gen_readme.py ]; then
+            python3 scripts/gen_readme.py
+          fi
       - name: Commit and push to catalog
         if: steps.plugin_check.outputs.present == 'true'
         env:
           VERSION: ${{ needs.release.outputs.version }}
+          MANIFEST: .claude-plugin/marketplace.json
         run: |
           cd catalog
-          if git diff --quiet -- marketplace.json; then
-            echo "marketplace.json already at v${VERSION}; nothing to publish"
+          # No-op only when NEITHER generated file changed: a re-run whose
+          # manifest is already current can still be repairing a stale
+          # README, and exiting on the manifest alone would strand that.
+          if git diff --quiet -- "$MANIFEST" README.md; then
+            echo "${MANIFEST} and README.md already current for v${VERSION}; nothing to publish"
             exit 0
           fi
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           BRANCH=$(git rev-parse --abbrev-ref HEAD)
-          git add marketplace.json
+          git add "$MANIFEST"
+          # Only when the generator actually rewrote it — most bumps change
+          # no prose and leave the README untouched, which keeps concurrent
+          # sibling releases off the same lines in the rebase-retry below.
+          if ! git diff --quiet -- README.md; then
+            git add README.md
+          fi
           git commit -m "chore: bump scholar-mcp to v${VERSION}"
           # Concurrent sibling releases race on the same file; rebase-retry
           # instead of failing. Bumping existing entries touches distinct
@@ -643,9 +907,15 @@ jobs:
     needs: [release, publish-pypi, publish-docker]
     # `is_latest` for the same reason as the marketplace: the registry entry
     # is a discovery surface for the newest release; a backport's audience
-    # already holds pins and installs from PyPI or GitHub releases.
+    # already holds pins and installs from PyPI or GitHub releases.  As
+    # there, the release-time output can only over-admit, so the recheck
+    # step below re-derives the answer at publish time under this channel's
+    # global concurrency group.
     if: needs.release.outputs.released == 'true' && needs.release.outputs.is_prerelease == 'false' && needs.release.outputs.is_latest == 'true'
     runs-on: ubuntu-latest
+    concurrency:
+      group: release-rolling-registry
+      cancel-in-progress: false
 
     permissions:
       contents: read
@@ -656,13 +926,35 @@ jobs:
         uses: actions/checkout@v7
         with:
           # The released ref, not a branch: the release commit — with the
-          # bumped server.json this job publishes — lives on whatever branch
+          # stamped server.json this job publishes — lives on whatever branch
           # the release was cut from, and mid-cycle `main` may carry a
           # different version entirely.
           ref: ${{ needs.release.outputs.tag }}
           fetch-depth: 1
 
+      # Same convergence design as the Docker recheck (see that job); the
+      # empty-list fallback likewise degrades open to the release-time
+      # answer, since a stable release always sees at least its own tag.
+      - name: Recheck registry ordering at publish time
+        id: recheck
+        env:
+          TAG: ${{ needs.release.outputs.tag }}
+        run: |
+          still_latest=true
+          stable=$(git ls-remote --tags --refs origin 2>/dev/null \
+            | awk -F'refs/tags/' '{print $2}' \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true)
+          if [ -n "$stable" ]; then
+            newest=$(printf '%s\n' "$stable" | sort -V | tail -1)
+            if [ "$newest" != "$TAG" ]; then
+              still_latest=false
+              echo "::notice::${TAG} is no longer the newest stable (${newest} exists) — skipping the registry publish; the newer release's own publish owns the entry"
+            fi
+          fi
+          echo "still_latest=${still_latest}" >> "$GITHUB_OUTPUT"
+
       - name: Install mcp-publisher
+        if: steps.recheck.outputs.still_latest == 'true'
         env:
           # v1.7.x is the first that requests the per-deployment OIDC audience
           # the registry now requires (PR modelcontextprotocol/registry#1229,
@@ -677,58 +969,158 @@ jobs:
           tar xz -f mcp-publisher.tar.gz mcp-publisher
 
       - name: Authenticate to MCP Registry
+        if: steps.recheck.outputs.still_latest == 'true'
         run: ./mcp-publisher login github-oidc
 
       - name: Publish to MCP Registry
+        if: steps.recheck.outputs.still_latest == 'true'
         run: ./mcp-publisher publish
 
-  # After ANY release cut from a release/* branch, the branch merges back into
-  # the default branch.  This is not housekeeping but a hard requirement:
-  # with the new tag unreachable from main, PSR on main recomputes the same
-  # version from main's own history, finds the tag taken repo-globally, and
-  # reports "already released" forever — no later commit unblocks it.  The
-  # merge is the only reverse flow (it carries PSR's release commits; feature
-  # cherry-picks never come back), and it also keeps main's version metadata
-  # current so edge builds self-report a real version.  scripts/merge_back.sh
-  # resolves version-coupled files (pyproject.toml, changelog, PSR assets) to
-  # main's side — main is authoritative for current metadata; the tag
-  # preserves the branch's own state — and fails loudly on any other
-  # conflict, leaving a clean tree for a manual merge:
-  #   git checkout main && git merge --no-ff release/X.Y  (resolve, push)
-  merge-back:
+  # Branch-release bookkeeping (release-vision section 4.5): after a STABLE
+  # release cut from a branch other than the default one, the default branch
+  # still wants the changelog section and the release-notes page — both
+  # landed on the release branch inside the merged release PR (template#419)
+  # and both accumulate on the default branch, where the docs site reads
+  # them.  That ports over as an ORDINARY pull request, opened with
+  # RELEASE_TOKEN so its CI runs — no admin-bypass push, no merge-back, and
+  # nothing deadlocks if it merges late.  Stables only: knope's stable
+  # section is cumulative over the whole rc cycle, so porting per rc would
+  # only manufacture pairwise conflicts and duplicate entries for content
+  # the stable's port carries anyway.  The version stamps are deliberately
+  # NOT ported (the default branch's pyproject.toml and manifests describe
+  # its own series) — which is why release-prepare.yml refuses a computed
+  # version whose tag already exists repo-globally.  A CHANGELOG.md whose
+  # flag line or section boundaries have drifted fails this job loudly; the
+  # remedy is a hand-opened PR carrying the section.
+  port-bookkeeping:
     needs: release
-    if: needs.release.outputs.released == 'true' && startsWith(github.ref, 'refs/heads/release/')
+    if: >-
+      needs.release.outputs.released == 'true' &&
+      needs.release.outputs.is_prerelease == 'false' &&
+      github.event.pull_request.base.ref != github.event.repository.default_branch
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
     steps:
       - name: Checkout default branch
         uses: actions/checkout@v7
         with:
           ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 0
-          # Same PAT that pushes the release commit; a plain GITHUB_TOKEN push
-          # would also suppress the CI/docs/edge workflows this merge should
-          # trigger on main.
+          # PAT, so the branch push and PR below trigger CI on the port PR
+          # (GITHUB_TOKEN-created PRs run no workflows and could never pass
+          # the required CI Success check).
           token: ${{ secrets.RELEASE_TOKEN }}
 
-      - name: Merge release branch back into default branch
+      - name: Open the bookkeeping port PR
         env:
-          BRANCH: ${{ github.ref_name }}
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
           TAG: ${{ needs.release.outputs.tag }}
+          VERSION: ${{ needs.release.outputs.version }}
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+          BASE: ${{ github.event.pull_request.base.ref }}
           DEFAULT: ${{ github.event.repository.default_branch }}
+          REPO: ${{ github.repository }}
         run: |
+          set -euo pipefail
+          git fetch -q origin "$MERGE_SHA"
+          # Extract this release's changelog section from the released
+          # commit: its `## <version>` heading up to (not including) the
+          # next `## ` heading.
+          git show "${MERGE_SHA}:CHANGELOG.md" > /tmp/released-changelog.md
+          # Escape the version's dots INSIDE awk (an escaped `-v` value
+          # would be mangled by awk's own escape processing), so the
+          # heading regex here and the dedup grep below match identically —
+          # neither treats `4.1.0` as also matching `4x1y0`.
+          awk -v ver="$VERSION" '
+            BEGIN { gsub(/\./, "\\.", ver); re = "^## v?" ver "([ (]|$)" }
+            $0 ~ re { found=1; print; next }
+            found && /^## / { exit }
+            found { print }
+          ' /tmp/released-changelog.md > /tmp/section.md
+          if ! [ -s /tmp/section.md ]; then
+            echo "::error::could not find the ## ${VERSION} section in the released CHANGELOG.md — port the changelog section to ${DEFAULT} by hand (ordinary PR)"
+            exit 1
+          fi
+          if grep -qE "^## v?${VERSION//./\\.}([ (]|\$)" CHANGELOG.md; then
+            echo "${DEFAULT}'s CHANGELOG.md already carries the ${VERSION} section — skipping the changelog half"
+          else
+            # Insert directly below the insertion flag: newest-inserted-first
+            # matches release chronology (a backport releases after the newer
+            # stables above it were inserted).
+            if ! grep -qF '<!-- version list -->' CHANGELOG.md; then
+              echo "::error::${DEFAULT}'s CHANGELOG.md has no '<!-- version list -->' flag line — port the ${VERSION} section by hand (ordinary PR)"
+              exit 1
+            fi
+            awk 'BEGIN { while ((getline line < "/tmp/section.md") > 0) sec = sec line "\n" }
+                 { print }
+                 $0 == "<!-- version list -->" { printf "\n%s", sec }' \
+              CHANGELOG.md > CHANGELOG.md.new
+            mv CHANGELOG.md.new CHANGELOG.md
+          fi
+          # The notes page follows the changelog's port path (template#419):
+          # a branch-cut stable's page section landed on the release branch
+          # inside its release PR, and the default branch — where the pages
+          # for all releases accumulate — needs it too.  The released page
+          # is copied wholesale; if the default branch's copy moved since
+          # the cut, that divergence surfaces as this PR's reviewable diff
+          # and is resolved by hand there, same contract as the changelog.
+          minor="${VERSION%.*}"
+          page="docs/releases/${minor}.md"
+          if git show "${MERGE_SHA}:${page}" > /tmp/released-page.md 2>/dev/null; then
+            if [ -f "$page" ] && cmp -s /tmp/released-page.md "$page"; then
+              echo "${DEFAULT}'s ${page} already matches the released page — skipping the notes half"
+            else
+              mkdir -p docs/releases
+              cp /tmp/released-page.md "$page"
+            fi
+          fi
+          # The index entry ports by INSERTION, never wholesale copy: a
+          # backport branch's index predates newer minors listed on the
+          # default branch, so copying it would delete their entries.  When
+          # the default branch's index lacks this minor's entry (the
+          # first-stable-of-a-minor branch cut), the released index's entry
+          # lines — the `(minor.md)` line through the entry's continuation
+          # lines — are inserted right after the RELEASE-PAGES-START
+          # sentinel, newest-first like the changelog insertion.
+          index="docs/releases/index.md"
+          if [ -f "$index" ] && ! grep -qF "(${minor}.md)" "$index" \
+            && git show "${MERGE_SHA}:${index}" > /tmp/released-index.md 2>/dev/null \
+            && grep -qF "(${minor}.md)" /tmp/released-index.md; then
+            awk -v ref="(${minor}.md)" '
+              index($0, ref) { f=1; print; next }
+              f && (/^- / || /RELEASE-PAGES-END/) { exit }
+              f { print }
+            ' /tmp/released-index.md > /tmp/index-entry.md
+            awk 'BEGIN { while ((getline l < "/tmp/index-entry.md") > 0) e = e l "\n" }
+                 { print }
+                 /RELEASE-PAGES-START/ { start=1 }
+                 start && !done && /-->[[:space:]]*$/ { printf "%s", e; done=1 }' \
+              "$index" > "${index}.new"
+            mv "${index}.new" "$index"
+          fi
+          # status --porcelain, not diff: a newly created page is untracked
+          # and would be invisible to git diff.
+          if ! git status --porcelain -- CHANGELOG.md docs/releases | grep -q .; then
+            echo "${DEFAULT} already carries the changelog section and the notes pages — nothing to port"
+            exit 0
+          fi
           git config user.name "github-actions"
           git config user.email "actions@users.noreply.github.com"
-          # Concurrent pushes to main race with ours; redo the whole merge on
-          # a fresh tip rather than rebasing a merge commit.
-          for attempt in 1 2 3; do
-            git fetch origin "$BRANCH" "$DEFAULT"
-            git reset --hard "origin/$DEFAULT"
-            bash scripts/merge_back.sh "origin/$BRANCH" "$TAG"
-            if git push origin "HEAD:$DEFAULT"; then
-              exit 0
-            fi
-          done
-          echo "::error::could not push the merge-back of $BRANCH after 3 attempts; merge $BRANCH into $DEFAULT manually — until it lands, PSR cannot release from $DEFAULT"
-          exit 1
+          BRANCH="knope/port/${TAG}"
+          git switch --force-create "$BRANCH"
+          git add CHANGELOG.md
+          [ ! -d docs/releases ] || git add docs/releases
+          git commit -m "chore: port ${TAG} release bookkeeping to ${DEFAULT}"
+          git push --force origin "HEAD:${BRANCH}"
+          # Skip cleanly when a port PR is already open (the force-push just
+          # refreshed it); otherwise create WITHOUT masking failures — a
+          # 403 or API error must fail this job loudly, per its contract.
+          existing="$(gh pr list --head "$BRANCH" --base "$DEFAULT" --state open --json number --jq 'length')"
+          if [ "$existing" != "0" ]; then
+            echo "port PR for ${BRANCH} already open — the force-push refreshed it"
+            exit 0
+          fi
+          gh pr create --base "$DEFAULT" --head "$BRANCH" \
+            --title "chore: port ${TAG} release bookkeeping to ${DEFAULT}" \
+            --body "Ports the ${TAG} changelog section and release-notes page from \`${BASE}\` to \`${DEFAULT}\` after the branch release ([release](https://github.com/${REPO}/releases/tag/${TAG})). Version stamps are deliberately not ported — ${DEFAULT}'s manifests describe its own series. Ordinary PR: review and merge on its own clock; divergence (if ${DEFAULT}'s copy moved since the cut) shows as this PR's diff and is resolved by hand."
