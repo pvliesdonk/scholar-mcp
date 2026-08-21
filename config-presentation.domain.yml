@@ -24,6 +24,116 @@ vars:
       from GitHub. Optional; unauthenticated requests work at reduced limits.
     tags: [standards]
 
+# Install-channel screens.  The generator owns two objects in each artifact
+# below and strips anything not declared here, so every field the screen
+# should show must appear in this block.
+#
+# `packaging/mcpb/manifest.json.in` is declared by the template, so this
+# entry may only contribute `fields:` -- `kind:` and layout stay
+# template-owned, and the template's own `server_name` / `log_level` fields
+# are merged in ahead of these.  The two `.claude-plugin/` entries are not
+# declared by the template at all, so they are taken wholesale and carry
+# their own `kind:`.
+#
+# Each field falls back to its config-surface var for type, title,
+# description and default; a key here is an override, not a second copy.
+files:
+  packaging/mcpb/manifest.json.in:
+    fields:
+      "{PREFIX}_S2_API_KEY":
+        id: s2_api_key
+        title: "Semantic Scholar API key"
+        sensitive: true
+      "{PREFIX}_READ_ONLY":
+        id: read_only
+        title: "Read-only mode"
+      "{PREFIX}_CACHE_DIR":
+        id: cache_dir
+        title: "Cache directory"
+        type: directory
+        # The config default (/data/scholar-mcp) is the container path; a
+        # desktop install needs the mcpb ${DOCUMENTS} variable instead.
+        default: "${DOCUMENTS}/scholar-mcp"
+      "{PREFIX}_CONTACT_EMAIL":
+        id: contact_email
+        title: "Contact email"
+      "{PREFIX}_DOCLING_URL":
+        id: docling_url
+        title: "docling-serve URL"
+      "{PREFIX}_VLM_API_URL":
+        id: vlm_api_url
+        title: "VLM API URL"
+      "{PREFIX}_VLM_API_KEY":
+        id: vlm_api_key
+        title: "VLM API key"
+        sensitive: true
+      "{PREFIX}_VLM_MODEL":
+        id: vlm_model
+        title: "VLM model"
+      "{PREFIX}_EPO_CONSUMER_KEY":
+        id: epo_consumer_key
+        title: "EPO OPS consumer key"
+      "{PREFIX}_EPO_CONSUMER_SECRET":
+        id: epo_consumer_secret
+        title: "EPO OPS consumer secret"
+        sensitive: true
+
+  # Claude Code plugin channel.  The pair must stay coupled: the env entry
+  # derives its mapping from this entry's fields via `fields_from`, so a
+  # screen field and its env wiring cannot drift apart.  Keep .mcp.json's
+  # command in exec form -- shell form cannot interpolate ${user_config.*}.
+  .claude-plugin/plugin/.claude-plugin/plugin.json:
+    kind: claude-plugin-user-config
+    fields:
+      "{PREFIX}_S2_API_KEY":
+        id: s2_api_key
+        title: "Semantic Scholar API key"
+        sensitive: true
+      "{PREFIX}_READ_ONLY":
+        id: read_only
+        title: "Read-only mode"
+      "{PREFIX}_CACHE_DIR":
+        id: cache_dir
+        title: "Cache directory"
+        type: directory
+        # No default on purpose.  The config default (/data/scholar-mcp) is a
+        # container path, wrong for a local plugin install, and the mcpb
+        # screen's ${DOCUMENTS} is an mcpb variable this surface is not known
+        # to expand.  `null` omits the key, leaving the user to pick a
+        # directory -- which is what the plugin channel did before it had a
+        # userConfig at all.
+        default: null
+      "{PREFIX}_CONTACT_EMAIL":
+        id: contact_email
+        title: "Contact email"
+      "{PREFIX}_DOCLING_URL":
+        id: docling_url
+        title: "docling-serve URL"
+      "{PREFIX}_VLM_API_URL":
+        id: vlm_api_url
+        title: "VLM API URL"
+      "{PREFIX}_VLM_API_KEY":
+        id: vlm_api_key
+        title: "VLM API key"
+        sensitive: true
+      "{PREFIX}_VLM_MODEL":
+        id: vlm_model
+        title: "VLM model"
+      "{PREFIX}_EPO_CONSUMER_KEY":
+        id: epo_consumer_key
+        title: "EPO OPS consumer key"
+      "{PREFIX}_EPO_CONSUMER_SECRET":
+        id: epo_consumer_secret
+        title: "EPO OPS consumer secret"
+        sensitive: true
+      FASTMCP_LOG_LEVEL:
+        id: log_level
+        title: "Log level"
+
+  .claude-plugin/plugin/.mcp.json:
+    kind: claude-plugin-env
+    fields_from: .claude-plugin/plugin/.claude-plugin/plugin.json
+
 # Extra wizard questions specific to this project.
 wizard_routing: []
 

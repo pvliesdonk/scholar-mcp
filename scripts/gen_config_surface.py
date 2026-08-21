@@ -31,6 +31,7 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import ast
 import dataclasses
 import importlib
 import json
@@ -43,7 +44,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Collection, Mapping, Sequence
+    from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
     from typing import Any
 
 # ---------------------------------------------------------------------------
@@ -86,9 +87,12 @@ _NO_DEFAULT = object()
 # then by declaration order within each provenance.
 _PROVENANCE_ORDER = ("core", "template", "external", "domain")
 
-_CORE_FLOOR_RE = re.compile(
-    r"fastmcp-pvl-core(?:\[[^\]]*\])?\s*>=\s*([0-9]+(?:\.[0-9]+)*)"
-)
+# Captures the full version constraint (e.g. ">=4.11.0,<5"), not just the
+# floor: the bootstrap re-exec must resolve the SAME version `uv sync` will
+# resolve for the project venv, or copy-time generation and a later venv
+# regeneration disagree the moment a core release changes any help text
+# (#335). A bare `==floor` pin did exactly that.
+_CORE_CONSTRAINT_RE = re.compile(r"fastmcp-pvl-core(?:\[[^\]]*\])?\s*([><=!~][^\"']*)")
 
 
 def _clean_help(help_text: str) -> str:
@@ -181,8 +185,10 @@ def _load_domain_presentation(
     """Load `config-presentation.domain.yml`, tolerating its absence.
 
     Unlike `load_presentation`'s template-owned file (mandatory in every
-    render), this one is *seeded* — a downstream project owns and edits it,
-    and it is not wired into every render yet. A missing file means
+    render), this one is *seeded* — a downstream project owns and edits it.
+    Its ``vars`` feed `collect_vars`, its ``wizard_routing``/
+    ``wizard_guards`` feed `render_wizard_spec`, and its ``files`` overlay
+    the template's artifact map (see `_merged_files`). A missing file means
     "nothing manually declared" rather than a configuration error.
     """
     import yaml
@@ -218,7 +224,7 @@ def _import_project_config(project_root: Path, python_module: str) -> type | Non
 
     Only ``sys.path`` is restored before returning. ``sys.modules`` is
     deliberately left alone here: `typing.get_type_hints` (used inside
-    `fastmcp_pvl_core.domain_env_suffixes`, which the caller runs against the
+    `fastmcp_pvl_core.domain_env_surface`, which the caller runs against the
     returned class right after this) resolves a class's annotations via
     ``sys.modules[cls.__module__]``, so popping the module before that scan
     runs would turn every annotation lookup into a `NameError`. The caller
@@ -270,40 +276,47 @@ def _discover_domain_vars(
 ) -> tuple[Var, ...]:
     """Auto-discover domain vars from the project's own ``ProjectConfig``.
 
-    AST-scans ``ProjectConfig.from_env`` via
-    ``fastmcp_pvl_core.domain_env_suffixes`` and pulls each field's
-    ``help``/``tags`` from its dataclass ``metadata``. This is best-effort
-    enrichment, not a required provenance source: a fresh render has no
-    domain fields (and often no venv yet to even import its own package), so
-    `_import_project_config` treats the module genuinely not existing as
-    silent "nothing to discover" — but any other import-time failure (a
-    broken third-party import, a mid-edit `SyntaxError`) prints a warning
-    there instead of vanishing. A failure *during the scan itself* (the
-    module imported fine but `domain_env_suffixes` couldn't resolve it — e.g.
-    a type hint referencing something not importable at module scope) is not
-    swallowed silently either: `domain_env_suffixes`'s own contract is that
-    such a failure must propagate rather than yield a silently-incomplete
-    set, so this prints a warning naming the exception and returns no domain
-    vars, rather than letting `--check` report "up to date" while every
-    domain var is actually missing.
+    Scans the config tree via ``fastmcp_pvl_core.domain_env_surface`` (core
+    ≥ 4.6.1), which AST-walks ``from_env`` in ``ProjectConfig`` *and every
+    composed sub-config* and returns one metadata-carrying record per read —
+    so a var contributed by a composed section documents with the same
+    help/tags/wizard hints and required-ness as a top-level field, without
+    flattening the config. Core 4.6.1 also resolves a top-level field read
+    into a local before construction (``x = parse(env(...)); cls(x=x)``) to
+    that field by name, so its metadata survives whether or not the read is
+    inline; a *section* field must still be read inline in its constructor
+    keyword to carry metadata (core cannot unambiguously strip the section
+    prefix). This is best-effort enrichment, not a required
+    provenance source: a fresh render has no domain fields (and often no
+    venv yet to even import its own package), so `_import_project_config`
+    treats the module genuinely not existing as silent "nothing to
+    discover" — but any other import-time failure (a broken third-party
+    import, a mid-edit `SyntaxError`) prints a warning there instead of
+    vanishing. A failure *during the scan itself* (the module imported fine
+    but `domain_env_surface` couldn't resolve it — e.g. a type hint
+    referencing something not importable at module scope) is not swallowed
+    silently either: the scan's own contract is that such a failure must
+    propagate rather than yield a silently-incomplete set, so this prints a
+    warning naming the exception and returns no domain vars, rather than
+    letting `--check` report "up to date" while every domain var is
+    actually missing.
 
     Every discovered var is tagged ``domain`` (in addition to whatever tags
     its field metadata declares) so it always lands in a file spec's
     ``tags: [domain]`` section regardless of the field author's own tag
-    choices. Declaration order is contractual for every other provenance;
-    suffixes with a matching dataclass field are ordered the same way the
-    field is declared, and any suffix `domain_env_suffixes` found with no
-    matching field (e.g. read directly rather than through a field) is
-    appended afterwards, sorted, so the whole result stays deterministic.
+    choices. Ordering follows the scan's own deterministic contract:
+    depth-first over the config tree, a class's own reads (in source
+    position) before its sub-configs'. A suffix read by more than one class
+    yields one Var — the first record wins, matching how the pre-4.6.0
+    frozenset de-duplicated it.
 
     Every ``sys.modules`` entry gained while importing and introspecting the
     project's config module — including any side-effect submodules it pulls
     in along the way — is removed before returning, once every use of the
-    class (the `domain_env_suffixes` scan and the `dataclasses.fields` walk)
-    is finished. That cleanup runs on every exit path, including the early
-    returns above, so a later call against a different project that happens
-    to share the same module name never resolves against a stale cached
-    package from an earlier call in the same process.
+    class is finished. That cleanup runs on every exit path, including the
+    early returns above, so a later call against a different project that
+    happens to share the same module name never resolves against a stale
+    cached package from an earlier call in the same process.
     """
     python_module = answers.get("python_module")
     if not python_module:
@@ -316,10 +329,10 @@ def _discover_domain_vars(
         if project_config_cls is None:
             return ()
 
-        from fastmcp_pvl_core import domain_env_suffixes
+        from fastmcp_pvl_core import domain_env_surface
 
         try:
-            suffixes = domain_env_suffixes(project_config_cls)
+            records = domain_env_surface(project_config_cls)
         except Exception as exc:
             print(
                 f"WARNING: domain env-var discovery failed for "
@@ -328,54 +341,179 @@ def _discover_domain_vars(
             )
             return ()
 
-        fields = dataclasses.fields(project_config_cls)
-        fields_by_suffix = {f.name.upper(): f for f in fields}
-        ordered_suffixes = [
-            f.name.upper() for f in fields if f.name.upper() in suffixes
-        ]
-        ordered_suffixes.extend(sorted(suffixes.difference(ordered_suffixes)))
-
         discovered: list[Var] = []
-        for suffix in ordered_suffixes:
-            field_info = fields_by_suffix.get(suffix)
-            metadata = field_info.metadata if field_info is not None else {}
-            if field_info is None:
-                # No matching dataclass field at all (read directly rather
-                # than through a field) — no default is knowable either, so
-                # this is "no default declared" just like the ladder's final
-                # rung below, not a real value of `None`.
-                default = _NO_DEFAULT
-            elif field_info.default is not dataclasses.MISSING:
-                default = field_info.default
-            elif field_info.default_factory is not dataclasses.MISSING:
-                default = field_info.default_factory()
-            else:
-                # Neither `default` nor `default_factory` declared: a
-                # genuinely required field. Must NOT collapse to
-                # `None` — that would be indistinguishable from a real
+        seen_suffixes: set[str] = set()
+        for record in records:
+            if record.suffix in seen_suffixes:
+                continue
+            seen_suffixes.add(record.suffix)
+            if record.name is None or record.required:
+                # Tied to no constructor field (no default knowable) or a
+                # field with neither `default` nor `default_factory`: both
+                # mean "no default declared". Must NOT collapse to `None` —
+                # that would be indistinguishable from a real
                 # `x: str | None = None` optional field once both reach
                 # `_is_required`'s domain fallback.
                 default = _NO_DEFAULT
-            tags = tuple(dict.fromkeys((*metadata.get("tags", ()), "domain")))
+            else:
+                default = record.default
+            tags = tuple(dict.fromkeys((*record.tags, "domain")))
             discovered.append(
                 Var(
-                    name=f"{env_prefix}_{suffix}",
-                    suffix=suffix,
+                    name=f"{env_prefix}_{record.suffix}",
+                    suffix=record.suffix,
                     provenance="domain",
-                    type_name=(
-                        str(field_info.type) if field_info is not None else "str"
-                    ),
+                    type_name=record.type_name or "str",
                     default=default,
-                    help=_clean_help(str(metadata.get("help", ""))),
+                    help=_clean_help(record.help),
                     tags=tags,
-                    inferred=False,
-                    wizard=dict(metadata.get("wizard", {})),
+                    inferred=record.inferred,
+                    wizard=dict(record.wizard),
                 )
             )
         return tuple(discovered)
     finally:
         for name in set(sys.modules) - modules_before:
             del sys.modules[name]
+
+
+# Helpers whose literal suffix argument the core AST scan
+# (`fastmcp_pvl_core.domain_env_surface`) recognizes inside `from_env`.
+_SCANNED_READ_HELPERS = frozenset({"env", "env_int", "env_float"})
+
+# A string literal shaped like an env-var suffix or full name: all-caps with
+# at least one underscore. Single all-caps words ("DEBUG", "INFO") stay out —
+# they are far more often log levels or modes than env suffixes.
+_SUFFIX_LITERAL_RE = re.compile(r"^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$")
+
+
+def _unscanned_from_env_reads(
+    project_root: Path, python_module: str
+) -> tuple[tuple[str, str, int], ...]:
+    """Suffix-shaped string literals `from_env` passes to unscanned calls.
+
+    The core scan only recognizes literal ``env``/``env_int``/``env_float``
+    calls; a read through any other helper (``opt_int(prefix,
+    "MAX_CHUNK_CHARS")``, ``os.environ.get(...)``) is invisible to it, and
+    the var silently vanishes from every generated artifact while
+    ``--check`` still passes — the generator's output is self-consistent
+    with what the scan saw. This is the guard for that gap: parse the
+    project's ``config.py`` *source* (no import — it works even when the
+    module can't be imported), find ``from_env``, and return every
+    ``(literal, callee_name, lineno)`` where a suffix-shaped string literal
+    is an argument to a call whose callee is not one of the scanned
+    helpers. `collect_vars` filters the candidates against everything that
+    IS documented before failing, so a helper read of a var that some
+    provenance already declares never fires.
+
+    Purely syntactic best-effort: a missing or unparsable ``config.py``
+    returns nothing (the import path already warns about a broken module),
+    and only ``from_env`` methods are inspected — every class-level one in
+    the file, since a composed sub-config section's ``from_env`` is scanned
+    (and so silently droppable) exactly like ``ProjectConfig``'s; reads
+    elsewhere are the domain YAML's documented territory.
+    """
+    config_path = project_root / "src" / python_module / "config.py"
+    if not config_path.exists():
+        return ()
+    try:
+        tree = ast.parse(config_path.read_text(encoding="utf-8"))
+    except SyntaxError:
+        return ()
+
+    from_envs = [
+        item
+        for class_node in ast.walk(tree)
+        if isinstance(class_node, ast.ClassDef)
+        for item in class_node.body
+        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and item.name == "from_env"
+    ]
+    return tuple(
+        candidate
+        for from_env in from_envs
+        for candidate in _suffix_reads_in_function(from_env)
+    )
+
+
+def _call_callee_name(node: ast.Call) -> str:
+    """Best-effort callee name for a ``Call``: a bare name, an attribute's
+    tail (``mod.env`` -> ``env``), or ``"<call>"`` for anything else."""
+    func = node.func
+    if isinstance(func, ast.Name):
+        return func.id
+    if isinstance(func, ast.Attribute):
+        return func.attr
+    return "<call>"
+
+
+def _suffix_reads_in_function(
+    from_env: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> Iterator[tuple[str, str, int]]:
+    """Yield ``(literal, callee, lineno)`` for every suffix-shaped string
+    literal passed to a non-scanned call anywhere inside *from_env*."""
+    for node in ast.walk(from_env):
+        if not isinstance(node, ast.Call):
+            continue
+        callee = _call_callee_name(node)
+        if callee in _SCANNED_READ_HELPERS:
+            continue
+        args = [*node.args, *(kw.value for kw in node.keywords)]
+        for arg in args:
+            if (
+                isinstance(arg, ast.Constant)
+                and isinstance(arg.value, str)
+                and _SUFFIX_LITERAL_RE.match(arg.value)
+            ):
+                yield arg.value, callee, node.lineno
+
+
+def _assert_no_unscanned_from_env_reads(
+    project_root: Path,
+    python_module: str,
+    env_prefix: str,
+    collected: Sequence[Var],
+    scan_ignore: Collection[str],
+) -> None:
+    """`SystemExit` when `from_env` reads a var no provenance documents.
+
+    A candidate survives only when its literal matches no collected var's
+    suffix or full name, is not the project's own ``env_prefix`` (a helper
+    taking the prefix as a literal first argument would otherwise flag the
+    prefix itself), and is not listed under the domain YAML's
+    ``scan_ignore`` — so the failure names exactly the reads that would
+    otherwise drop out of every artifact with no red gate anywhere.
+    """
+    candidates = _unscanned_from_env_reads(project_root, python_module)
+    if not candidates:
+        return
+    known_suffixes = {var.suffix for var in collected if var.suffix}
+    known_names = {var.name for var in collected}
+    ignored = set(scan_ignore)
+    offenders = [
+        (literal, callee, lineno)
+        for literal, callee, lineno in candidates
+        if literal != env_prefix
+        and literal not in known_suffixes
+        and literal not in known_names
+        and literal not in ignored
+    ]
+    if not offenders:
+        return
+    lines = "\n".join(
+        f"  - {literal!r} passed to {callee}() (config.py line {lineno})"
+        for literal, callee, lineno in offenders
+    )
+    raise SystemExit(
+        f"ERROR: {python_module}.config from_env contains env-var reads the "
+        f"AST scan cannot see:\n{lines}\n"
+        "The scan only recognizes literal env()/env_int()/env_float() calls, "
+        "so these vars would silently vanish from every generated artifact. "
+        "Either read the var via env()/env_int()/env_float() inside "
+        "from_env, declare it in config-presentation.domain.yml under "
+        "vars:, or — if the literal is not an env var at all — list it "
+        "under scan_ignore: in that same file."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -397,6 +535,40 @@ def _presentation_root(project_root: Path) -> Path:
     if (project_root / "config-presentation.yml").exists():
         return project_root
     return _project_root()
+
+
+def _apply_wizard_hint_overrides(
+    collected: list[Var], presentation: Mapping[str, Any]
+) -> list[Var]:
+    """Apply the presentation's `wizard_hints` override map to *collected*.
+
+    Keyed by full var name like `examples` — the correction lever for a var
+    whose provenance owns its hint but got it wrong (core 4.10.1 ships
+    TOOLS_ALLOW/TOOLS_DENY as ``"wizard": "inferred"``, though nothing
+    derives their values — see #321/#322). An entry replaces the var's wizard
+    mapping wholesale and clears the `inferred` shorthand; content is
+    validated later by `_validate_wizard_hint`, exactly like a hint from any
+    other source. An entry naming a var no provenance collected fails loudly
+    rather than silently doing nothing: the map exists to paper over upstream
+    metadata until it is fixed there, and a stale entry outliving that fix
+    (or a typo never matching anything) is a bug in config-presentation.yml.
+    """
+    hints_map: dict[str, Any] = presentation.get("wizard_hints", {}) or {}
+    if not hints_map:
+        return collected
+    unknown_hints = sorted(set(hints_map) - {v.name for v in collected})
+    if unknown_hints:
+        raise SystemExit(
+            "ERROR: config-presentation.yml wizard_hints names var(s) no "
+            f"provenance collected: {', '.join(unknown_hints)}. Remove "
+            "the stale entry, or fix the name."
+        )
+    return [
+        dataclasses.replace(v, wizard=dict(hints_map[v.name]), inferred=False)
+        if v.name in hints_map
+        else v
+        for v in collected
+    ]
 
 
 def collect_vars(
@@ -503,6 +675,8 @@ def collect_vars(
             for v in collected
         ]
 
+    collected = _apply_wizard_hint_overrides(collected, presentation)
+
     seen_names: dict[str, str] = {}
     for var in collected:
         prior_provenance = seen_names.get(var.name)
@@ -514,6 +688,19 @@ def collect_vars(
                 "core, template, external, and domain."
             )
         seen_names[var.name] = var.provenance
+
+    # Runs after every provenance is merged so a helper read of a var that
+    # any source already documents (a dataclass field, a template var, a
+    # domain-YAML declaration) never fires.
+    python_module = answers.get("python_module")
+    if python_module:
+        _assert_no_unscanned_from_env_reads(
+            project_root,
+            str(python_module),
+            env_prefix,
+            collected,
+            scan_ignore=domain_presentation.get("scan_ignore") or (),
+        )
 
     return tuple(sorted(collected, key=lambda v: _PROVENANCE_ORDER.index(v.provenance)))
 
@@ -923,7 +1110,25 @@ def _register_question_id(question_id: str, seen: dict[str, str], source: str) -
     seen[question_id] = source
 
 
-def _wizard_guard(raw: Mapping[str, Any], index: int) -> dict[str, Any]:
+def _require_keys(raw: Mapping[str, Any], keys: Sequence[str], source: str) -> None:
+    """Fail loudly when *raw* is missing any of *keys*, naming *source*.
+
+    The template-owned presentation file gets these keys right by
+    construction, but the domain seed is downstream-edited — a missing key
+    there must name the file and entry rather than surface as a bare
+    `KeyError` from deep inside a render helper.
+    """
+    missing = [key for key in keys if key not in raw]
+    if missing:
+        raise SystemExit(
+            f"ERROR: {source} is missing required key(s) "
+            f"{', '.join(repr(k) for k in missing)}."
+        )
+
+
+def _wizard_guard(
+    raw: Mapping[str, Any], index: int, source: str = "wizard_guards"
+) -> dict[str, Any]:
     """Render one `wizard_guards` entry, rejecting a non-list `when` value.
 
     ``list(scalar_string)`` silently explodes a scalar into one list entry
@@ -931,12 +1136,13 @@ def _wizard_guard(raw: Mapping[str, Any], index: int) -> dict[str, Any]:
     of raising — a guard's `when` must already be a list in YAML (e.g.
     `[server]`), so this checks that rather than coercing.
     """
+    _require_keys(raw, ("level", "message", "when"), f"{source}[{index}]")
     when_raw = raw["when"]
     when: dict[str, list[str]] = {}
     for key, value in when_raw.items():
         if not isinstance(value, list):
             raise SystemExit(
-                f"ERROR: wizard_guards[{index}] has a non-list 'when[{key!r}]' "
+                f"ERROR: {source}[{index}] has a non-list 'when[{key!r}]' "
                 f"value {value!r} — expected a list of strings, e.g. [server]."
             )
         when[key] = list(value)
@@ -944,7 +1150,10 @@ def _wizard_guard(raw: Mapping[str, Any], index: int) -> dict[str, Any]:
 
 
 def render_wizard_spec(
-    pres: Mapping[str, Any], vars_: Sequence[Var], answers: Mapping[str, object]
+    pres: Mapping[str, Any],
+    vars_: Sequence[Var],
+    answers: Mapping[str, object],
+    domain_pres: Mapping[str, Any] | None = None,
 ) -> str:
     """Render the config-wizard spec (`docs/javascripts/config-wizard/wizard-spec.json`).
 
@@ -954,6 +1163,16 @@ def render_wizard_spec(
     ``wizard_labels``, and ``wizard_help`` keys drive the questions, guards,
     and label/help overrides; ``examples`` is not used here (it feeds
     env-file value rendering only, via `_format_value`).
+
+    ``domain_pres`` is the loaded `config-presentation.domain.yml`, whose
+    ``wizard_routing``/``wizard_guards`` sections merge in after the
+    template-owned ones: domain routing questions render after the
+    template's routing questions (still ahead of the per-var questions),
+    domain guards after the template's guards, each in declaration order.
+    A question id colliding across the two files is a `SystemExit` like any
+    other id collision. The file is downstream-edited, so its entries get
+    named-key validation (`config-presentation.domain.yml wizard_routing[…]`
+    in the message) rather than a bare `KeyError`.
 
     ``secretKeys`` is derived from the *emitted questions*, not from
     `vars_` independently — a secret var that later gains `inferred`,
@@ -976,12 +1195,23 @@ def render_wizard_spec(
     labels: Mapping[str, str] = pres.get("wizard_labels") or {}
     help_overrides: Mapping[str, str] = pres.get("wizard_help") or {}
 
+    domain_pres = domain_pres or {}
+    domain_routing_source = "config-presentation.domain.yml wizard_routing"
+    domain_guards_source = "config-presentation.domain.yml wizard_guards"
+
     seen_ids: dict[str, str] = {}
     questions: list[dict[str, Any]] = []
     for raw in pres.get("wizard_routing", ()):
         question = _routing_question(raw)
         _register_question_id(
             question["id"], seen_ids, f"wizard_routing[{raw['id']!r}]"
+        )
+        questions.append(question)
+    for index, raw in enumerate(domain_pres.get("wizard_routing") or ()):
+        _require_keys(raw, ("id", "label", "type"), f"{domain_routing_source}[{index}]")
+        question = _routing_question(raw)
+        _register_question_id(
+            question["id"], seen_ids, f"{domain_routing_source}[{raw['id']!r}]"
         )
         questions.append(question)
     for var in vars_:
@@ -1001,6 +1231,10 @@ def render_wizard_spec(
         _wizard_guard(raw, index)
         for index, raw in enumerate(pres.get("wizard_guards", ()))
     ]
+    guards.extend(
+        _wizard_guard(raw, index, source=domain_guards_source)
+        for index, raw in enumerate(domain_pres.get("wizard_guards") or ())
+    )
 
     spec = {
         "version": 1,
@@ -1499,6 +1733,13 @@ class PresentationContext:
 
     presentation: Mapping[str, Any]
     answers: Mapping[str, object]
+    # The project's config-presentation.domain.yml content; only the wizard
+    # renderer reads it today, but it is per-run input like the other two.
+    domain_presentation: Mapping[str, Any] = dataclasses.field(default_factory=dict)
+    # The merged `files:` map (template + domain overlay) — lets a renderer
+    # resolve a cross-entry reference such as claude-plugin-env's
+    # `fields_from:` without re-merging.
+    files: Mapping[str, Any] = dataclasses.field(default_factory=dict)
 
     @property
     def required_names(self) -> Collection[str]:
@@ -1589,6 +1830,309 @@ def render_json_splice_file(
             if packaging_id in _packaging_ids(var, packaging)
         ]
 
+    text = json.dumps(data, indent=2, ensure_ascii=False)
+    return f"{text}\n"
+
+
+# mcpb `user_config` field types this generator can emit. `directory` and
+# `file` are host-picker types no Python annotation maps to — they are only
+# reachable via an explicit `type:` override in a field spec.
+_MCPB_TYPES = frozenset({"string", "boolean", "number", "directory", "file"})
+_MCPB_TYPE_BY_PYTHON = {
+    "str": "string",
+    "bool": "boolean",
+    "int": "number",
+    "float": "number",
+}
+_MCPB_FIELD_SPEC_KEYS = frozenset(
+    {"id", "title", "description", "type", "required", "default", "sensitive"}
+)
+# mcpb config ids become `${user_config.<id>}` references; keep them to the
+# conservative snake_case shape every existing manifest uses.
+_MCPB_ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+
+
+def _mcpb_field_type(var: Var, spec: Mapping[str, Any], rel_path: str) -> str:
+    """The mcpb `type` for one field: explicit override, else from the annotation."""
+    explicit = spec.get("type")
+    if explicit is not None:
+        if explicit not in _MCPB_TYPES:
+            raise SystemExit(
+                f"ERROR: files[{rel_path!r}] field for {var.name!r} declares "
+                f"unknown mcpb type {explicit!r} — expected one of "
+                f"{sorted(_MCPB_TYPES)!r}."
+            )
+        return str(explicit)
+    return _MCPB_TYPE_BY_PYTHON.get(_normalize_type_name(var.type_name), "string")
+
+
+def _mcpb_user_config_entry(
+    var: Var, spec: Mapping[str, Any], rel_path: str
+) -> dict[str, Any]:
+    """One `user_config` object value, derived from the var + its field spec.
+
+    Everything falls back to the var's own metadata (wizard-style label,
+    `_clean_help`-cleaned help text, declared default) so a field spec only
+    states what the install screen should present *differently* — an
+    override, not a second copy of the surface.
+    """
+    entry: dict[str, Any] = {
+        "type": _mcpb_field_type(var, spec, rel_path),
+        "title": str(spec.get("title") or _wizard_label(var)),
+        "description": str(spec.get("description") or var.help),
+        "required": bool(spec.get("required", False)),
+    }
+    default = spec.get("default", var.default)
+    if default is _NO_DEFAULT:
+        default = None
+    if default is not None:
+        entry["default"] = default
+    if spec.get("sensitive"):
+        entry["sensitive"] = True
+    return entry
+
+
+def _mcpb_field_id(name: str, spec: Mapping[str, Any], rel_path: str) -> str:
+    """Validate one field spec's shape and return its snake_case id."""
+    unknown_keys = sorted(set(spec) - _MCPB_FIELD_SPEC_KEYS)
+    if unknown_keys:
+        raise SystemExit(
+            f"ERROR: files[{rel_path!r}] field for {name!r} has unknown "
+            f"keys {unknown_keys!r} — expected a subset of "
+            f"{sorted(_MCPB_FIELD_SPEC_KEYS)!r}."
+        )
+    field_id = spec.get("id")
+    if not isinstance(field_id, str) or not _MCPB_ID_RE.match(field_id):
+        raise SystemExit(
+            f"ERROR: files[{rel_path!r}] field for {name!r} needs a "
+            "snake_case `id:` — it becomes the ${user_config.<id>} "
+            "reference in mcp_config.env."
+        )
+    return field_id
+
+
+def _mcpb_screen_from_fields(
+    fields: Mapping[str, Any],
+    var_by_name: Mapping[str, Var],
+    rel_path: str,
+) -> tuple[dict[str, Any], dict[str, str]]:
+    """Build the (`user_config`, `mcp_config.env`) pair from a fields map.
+
+    One pass produces both objects, which is the drift-proofing itself: a
+    screen field and its env wiring cannot disagree because neither exists
+    without the other. A `None` spec is a field a domain overlay removed.
+    """
+    user_config: dict[str, Any] = {}
+    env: dict[str, str] = {}
+    id_owner: dict[str, str] = {}
+    for name, spec in fields.items():
+        if spec is None:
+            continue
+        field_id = _mcpb_field_id(name, spec, rel_path)
+        if field_id in id_owner:
+            raise SystemExit(
+                f"ERROR: files[{rel_path!r}] declares id {field_id!r} for "
+                f"both {id_owner[field_id]!r} and {name!r}."
+            )
+        id_owner[field_id] = name
+        user_config[field_id] = _mcpb_user_config_entry(
+            var_by_name[name], spec, rel_path
+        )
+        env[name] = "${user_config." + field_id + "}"
+    return user_config, env
+
+
+def render_mcpb_user_config_file(
+    project_root: Path,
+    rel_path: str,
+    file_spec: Mapping[str, Any],
+    vars_: Sequence[Var],
+    ctx: PresentationContext,
+) -> str:
+    """Render one `kind: mcpb-user-config` artifact's full on-disk text.
+
+    Structurally splices a Claude Desktop mcpb manifest the same way
+    `kind: json-splice` splices ``server.json``: exactly two objects are
+    replaced wholesale — top-level ``user_config`` and
+    ``server.mcp_config.env`` — and every other key survives untouched,
+    including the ``${VERSION}`` placeholders the release flow substitutes
+    with ``envsubst``. Both objects derive from the same ``fields:`` map, so
+    a config field and its env wiring cannot drift apart, and a field that
+    exists nowhere else in the config surface cannot be invented here
+    (every key must name a collected var). Membership is explicit
+    curation — the install screen shows what `fields:` declares, nothing
+    more — with the project's ``config-presentation.domain.yml`` able to
+    add, override or remove fields via the domain files overlay (see
+    `_merged_files`).
+
+    The unused *ctx* keeps this renderer call-compatible with the other
+    file kinds dispatched from `write_artifacts`.
+    """
+    del ctx
+    target = project_root / rel_path
+    if not target.exists():
+        raise SystemExit(
+            f"ERROR: {target} does not exist — a `kind: mcpb-user-config` "
+            "artifact must already exist; this generator only replaces its "
+            "`user_config` and `server.mcp_config.env` objects, never the "
+            "surrounding manifest."
+        )
+    raw = target.read_text(encoding="utf-8")
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"ERROR: {rel_path} is not valid JSON: {exc}.") from exc
+
+    fields: Mapping[str, Any] = file_spec.get("fields") or {}
+    if not fields:
+        raise SystemExit(
+            f"ERROR: files[{rel_path!r}] (kind: mcpb-user-config) declares no "
+            "`fields:` — an mcpb bundle with an empty install screen would "
+            "silently drop its existing user_config; remove the files entry "
+            "instead if that is really intended."
+        )
+    var_by_name = {v.name: v for v in vars_}
+    unknown = sorted(name for name in fields if name not in var_by_name)
+    if unknown:
+        raise SystemExit(
+            f"ERROR: files[{rel_path!r}] names config vars that do not exist "
+            f"(check for a typo, or a var whose gate is off): {unknown!r}."
+        )
+
+    user_config, env = _mcpb_screen_from_fields(fields, var_by_name, rel_path)
+
+    server = data.get("server")
+    mcp_config = server.get("mcp_config") if isinstance(server, dict) else None
+    if not isinstance(mcp_config, dict):
+        raise SystemExit(
+            f"ERROR: {rel_path} has no `server.mcp_config` object to hold the "
+            "generated env mapping — is this really an mcpb manifest?"
+        )
+    data["user_config"] = user_config
+    mcp_config["env"] = env
+
+    text = json.dumps(data, indent=2, ensure_ascii=False)
+    return f"{text}\n"
+
+
+def _resolve_fields_from(
+    file_spec: Mapping[str, Any], rel_path: str, ctx: PresentationContext
+) -> Mapping[str, Any]:
+    """Resolve a `fields_from:` reference to another entry's merged fields.
+
+    `kind: claude-plugin-env` derives its env mapping from the SAME fields
+    map its `kind: claude-plugin-user-config` sibling renders — declared
+    once, referenced here — so the plugin screen and its env wiring cannot
+    drift apart even though they live in two files.
+    """
+    source_path = file_spec.get("fields_from")
+    if not isinstance(source_path, str):
+        raise SystemExit(
+            f"ERROR: files[{rel_path!r}] (kind: claude-plugin-env) needs a "
+            "`fields_from:` naming the claude-plugin-user-config entry whose "
+            "fields drive this env mapping."
+        )
+    source = ctx.files.get(source_path)
+    if source is None or source.get("kind") != _CLAUDE_PLUGIN_UC_KIND:
+        raise SystemExit(
+            f"ERROR: files[{rel_path!r}] fields_from={source_path!r} does not "
+            "name a declared `kind: claude-plugin-user-config` entry."
+        )
+    return source.get("fields") or {}
+
+
+def _screen_fields_or_die(
+    fields: Mapping[str, Any],
+    vars_: Sequence[Var],
+    rel_path: str,
+) -> tuple[dict[str, Any], dict[str, str]]:
+    """Validate a fields map against the collected vars and build the pair."""
+    if not fields:
+        raise SystemExit(
+            f"ERROR: files[{rel_path!r}] declares no `fields:` — remove the "
+            "files entry instead if an empty screen is really intended."
+        )
+    var_by_name = {v.name: v for v in vars_}
+    unknown = sorted(name for name in fields if name not in var_by_name)
+    if unknown:
+        raise SystemExit(
+            f"ERROR: files[{rel_path!r}] names config vars that do not exist "
+            f"(check for a typo, or a var whose gate is off): {unknown!r}."
+        )
+    return _mcpb_screen_from_fields(fields, var_by_name, rel_path)
+
+
+def _load_json_target(project_root: Path, rel_path: str, kind: str) -> Any:
+    """Load a structurally-spliced JSON target that must already exist."""
+    target = project_root / rel_path
+    if not target.exists():
+        raise SystemExit(
+            f"ERROR: {target} does not exist — a `kind: {kind}` artifact "
+            "must already exist; this generator only replaces its declared "
+            "objects, never the surrounding file."
+        )
+    try:
+        return json.loads(target.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"ERROR: {rel_path} is not valid JSON: {exc}.") from exc
+
+
+def render_claude_plugin_user_config_file(
+    project_root: Path,
+    rel_path: str,
+    file_spec: Mapping[str, Any],
+    vars_: Sequence[Var],
+    ctx: PresentationContext,
+) -> str:
+    """Render one `kind: claude-plugin-user-config` artifact (plugin.json).
+
+    Replaces exactly the top-level ``userConfig`` object of a Claude Code
+    plugin manifest; everything else — identity, the release-flow-owned
+    ``version`` — survives untouched. Claude Code's `userConfig` schema uses
+    the same field vocabulary as mcpb's `user_config` (string / number /
+    boolean / directory / file, plus title / description / required /
+    default / sensitive), so the field specs and their fallbacks are shared
+    with `kind: mcpb-user-config`. The env side of the pairing lives in the
+    sibling `kind: claude-plugin-env` entry, which references this entry's
+    fields via `fields_from:`.
+    """
+    del ctx
+    data = _load_json_target(project_root, rel_path, _CLAUDE_PLUGIN_UC_KIND)
+    fields: Mapping[str, Any] = file_spec.get("fields") or {}
+    user_config, _env = _screen_fields_or_die(fields, vars_, rel_path)
+    data["userConfig"] = user_config
+    text = json.dumps(data, indent=2, ensure_ascii=False)
+    return f"{text}\n"
+
+
+def render_claude_plugin_env_file(
+    project_root: Path,
+    rel_path: str,
+    file_spec: Mapping[str, Any],
+    vars_: Sequence[Var],
+    ctx: PresentationContext,
+) -> str:
+    """Render one `kind: claude-plugin-env` artifact (the plugin .mcp.json).
+
+    Replaces the ``env`` object of every server entry in the plugin's
+    `.mcp.json` with ``{ENV_VAR: "${user_config.<id>}"}`` derived from the
+    `fields_from:` sibling's fields. Exec-form substitution is the only
+    context Claude Code allows `${user_config.*}` in, which is why the
+    scaffold's `.mcp.json` is exec-form to begin with. `command`, `args`
+    (including the release-flow-owned version pin) and any other keys
+    survive untouched.
+    """
+    fields = _resolve_fields_from(file_spec, rel_path, ctx)
+    _user_config, env = _screen_fields_or_die(fields, vars_, rel_path)
+    data = _load_json_target(project_root, rel_path, _CLAUDE_PLUGIN_ENV_KIND)
+    servers = [v for v in data.values() if isinstance(v, dict)]
+    if not servers:
+        raise SystemExit(
+            f"ERROR: {rel_path} has no server entries to hold the generated "
+            "env mapping — is this really a plugin .mcp.json?"
+        )
+    for server in servers:
+        server["env"] = dict(env)
     text = json.dumps(data, indent=2, ensure_ascii=False)
     return f"{text}\n"
 
@@ -1992,8 +2536,19 @@ _ENV_KIND = "env"
 _WIZARD_KIND = "wizard"
 _SPLICE_KIND = "splice"
 _JSON_SPLICE_KIND = "json-splice"
+_MCPB_KIND = "mcpb-user-config"
+_CLAUDE_PLUGIN_UC_KIND = "claude-plugin-user-config"
+_CLAUDE_PLUGIN_ENV_KIND = "claude-plugin-env"
 _KNOWN_FILE_KINDS = frozenset(
-    {_ENV_KIND, _WIZARD_KIND, _SPLICE_KIND, _JSON_SPLICE_KIND}
+    {
+        _ENV_KIND,
+        _WIZARD_KIND,
+        _SPLICE_KIND,
+        _JSON_SPLICE_KIND,
+        _MCPB_KIND,
+        _CLAUDE_PLUGIN_UC_KIND,
+        _CLAUDE_PLUGIN_ENV_KIND,
+    }
 )
 
 
@@ -2064,6 +2619,94 @@ def _assert_every_var_has_an_env_destination(
     )
 
 
+# One renderer per file kind, all normalised to the same five-argument
+# call shape `_render_one_artifact` dispatches with; the two lambdas adapt
+# the env/wizard renderers, which predate `PresentationContext` and take
+# their inputs directly.
+_ARTIFACT_RENDERERS: dict[str, Callable[..., str]] = {
+    _ENV_KIND: lambda _root, _rel, spec, vars_, ctx: render_env_file(
+        spec, vars_, ctx.answers
+    ),
+    _WIZARD_KIND: lambda _root, _rel, _spec, vars_, ctx: render_wizard_spec(
+        ctx.presentation, vars_, ctx.answers, domain_pres=ctx.domain_presentation
+    ),
+    _SPLICE_KIND: render_splice_file,
+    _JSON_SPLICE_KIND: render_json_splice_file,
+    _MCPB_KIND: render_mcpb_user_config_file,
+    _CLAUDE_PLUGIN_UC_KIND: render_claude_plugin_user_config_file,
+    _CLAUDE_PLUGIN_ENV_KIND: render_claude_plugin_env_file,
+}
+
+
+def _render_one_artifact(
+    project_root: Path,
+    rel_path: str,
+    file_spec: Mapping[str, Any],
+    vars_: Sequence[Var],
+    ctx: PresentationContext,
+) -> str:
+    """Dispatch one `files:` entry to its kind's renderer.
+
+    An unrecognised ``kind`` fails loudly instead of either silently
+    producing nothing or raising a bare `KeyError`.
+    """
+    kind = file_spec.get("kind")
+    renderer = _ARTIFACT_RENDERERS.get(kind) if isinstance(kind, str) else None
+    if renderer is None:
+        raise SystemExit(
+            f"ERROR: config-presentation.yml files[{rel_path!r}] has "
+            f"unknown kind {kind!r} — expected one of "
+            f"{sorted(_KNOWN_FILE_KINDS)!r}."
+        )
+    return renderer(project_root, rel_path, file_spec, vars_, ctx)
+
+
+def _merged_files(
+    presentation: Mapping[str, Any], domain_presentation: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Overlay the domain presentation's `files:` onto the template's.
+
+    Two distinct powers, matching what a downstream may legitimately own:
+
+    - A rel_path only the domain file declares is taken wholesale — this is
+      how a project declares an install channel the template does not ship
+      (a Claude Code plugin manifest, say) while reusing the generator's
+      kinds and the `--check` gate.
+    - A rel_path both declare merges at the `fields:` level only: a domain
+      entry adds fields, overrides a template field's spec, or removes one
+      by mapping its var name to `null`. Every other key (`kind:` above
+      all) stays template-owned — a domain overlay must curate a template
+      channel's fields, not repoint or re-kind the artifact.
+
+    Declaration order is preserved: template fields first, domain additions
+    after, so a curated screen leads with the template's baseline unless the
+    domain entry overrides those fields too.
+    """
+    merged: dict[str, Any] = dict(presentation.get("files") or {})
+    for rel_path, domain_spec in (domain_presentation.get("files") or {}).items():
+        base = merged.get(rel_path)
+        if base is None:
+            merged[rel_path] = domain_spec
+            continue
+        extra = sorted(set(domain_spec) - {"fields"})
+        if extra:
+            raise SystemExit(
+                f"ERROR: config-presentation.domain.yml files[{rel_path!r}] "
+                f"may only contribute `fields:` to a template-declared file — "
+                f"remove {extra!r}; kind and layout are template-owned."
+            )
+        fields = dict(base.get("fields") or {})
+        for name, field_spec in (domain_spec.get("fields") or {}).items():
+            if field_spec is None:
+                fields.pop(name, None)
+            else:
+                fields[name] = field_spec
+        combined = dict(base)
+        combined["fields"] = fields
+        merged[rel_path] = combined
+    return merged
+
+
 def write_artifacts(
     project_root: Path,
     *,
@@ -2076,9 +2719,12 @@ def write_artifacts(
     presentation.yml`'s ``files`` mapping — adding or removing a `files:`
     entry there changes what gets generated, with no second list to keep in
     sync (YAML mapping order is insertion order, so iterating ``files``
-    directly is as deterministic as the fixed tuple it replaces). An
-    unrecognised ``kind`` fails loudly instead of either silently producing
-    nothing or raising a bare `KeyError`.
+    directly is as deterministic as the fixed tuple it replaces). The
+    project's ``config-presentation.domain.yml`` may overlay that mapping —
+    contribute whole entries for its own artifacts, or curate a template
+    entry's ``fields:`` — see `_merged_files`. An unrecognised ``kind``
+    fails loudly instead of either silently producing nothing or raising a
+    bare `KeyError`.
 
     *vars_*, when given, is used as-is instead of calling `collect_vars`
     internally — `collect_vars` re-imports `fastmcp_pvl_core`, reloads and
@@ -2100,33 +2746,28 @@ def write_artifacts(
     project_root = Path(project_root)
     answers = load_answers(project_root)
     env_prefix = _require_env_prefix(answers)
-    presentation = load_presentation(_presentation_root(project_root), env_prefix)
+    presentation_root = _presentation_root(project_root)
+    presentation = load_presentation(presentation_root, env_prefix)
+    # Loaded here for its wizard_routing/wizard_guards sections; collect_vars
+    # loads it independently for its vars — the file is a few hundred bytes,
+    # and neither load prints anything, so the double read costs nothing.
+    domain_presentation = _load_domain_presentation(presentation_root, env_prefix)
     if vars_ is None:
         vars_ = collect_vars(project_root, answers)
 
     validate_presentation_keys(presentation, vars_)
-    ctx = PresentationContext(presentation=presentation, answers=answers)
+    merged_files = _merged_files(presentation, domain_presentation)
+    ctx = PresentationContext(
+        presentation=presentation,
+        answers=answers,
+        domain_presentation=domain_presentation,
+        files=merged_files,
+    )
 
-    artifacts: list[tuple[str, str]] = []
-    for rel_path, file_spec in presentation.get("files", {}).items():
-        kind = file_spec.get("kind")
-        if kind == _ENV_KIND:
-            text = render_env_file(file_spec, vars_, answers)
-        elif kind == _WIZARD_KIND:
-            text = render_wizard_spec(presentation, vars_, answers)
-        elif kind == _SPLICE_KIND:
-            text = render_splice_file(project_root, rel_path, file_spec, vars_, ctx)
-        elif kind == _JSON_SPLICE_KIND:
-            text = render_json_splice_file(
-                project_root, rel_path, file_spec, vars_, ctx
-            )
-        else:
-            raise SystemExit(
-                f"ERROR: config-presentation.yml files[{rel_path!r}] has "
-                f"unknown kind {kind!r} — expected one of "
-                f"{sorted(_KNOWN_FILE_KINDS)!r}."
-            )
-        artifacts.append((rel_path, text))
+    artifacts: list[tuple[str, str]] = [
+        (rel_path, _render_one_artifact(project_root, rel_path, file_spec, vars_, ctx))
+        for rel_path, file_spec in merged_files.items()
+    ]
 
     # Checked after every file kind is known-good (so a genuinely malformed
     # `files:` entry above still gets its own, more specific error) but
@@ -2152,30 +2793,50 @@ def write_artifacts(
 # ---------------------------------------------------------------------------
 
 
-def _core_floor(project_root: Path) -> str:
-    """Parse the `fastmcp-pvl-core>=X.Y.Z` floor from the project's pyproject.toml.
+def _core_constraint(project_root: Path) -> str:
+    """Parse the full `fastmcp-pvl-core` version constraint from pyproject.toml.
 
-    Tolerates an extras marker (`fastmcp-pvl-core[redis]>=4.5.0,<5`) and a
-    floor with fewer than three components (`>=4.5`) — both appear in real
-    rendered `pyproject.toml`s, so a strict `X.Y.Z`-only, no-extras regex
-    would raise here and kill the `_tasks` bootstrap re-exec entirely.
+    Returns the constraint exactly as the project declares it (e.g.
+    `>=4.11.0,<5`), so the bootstrap re-exec resolves the same core version
+    `uv sync` resolves for the project venv — pinning only the floor made
+    copy-time generation and check-time regeneration disagree whenever a
+    newer core changed any surface text (#335). Tolerates an extras marker
+    (`fastmcp-pvl-core[redis]>=4.5.0,<5`) and a floor with fewer than three
+    components (`>=4.5`) — both appear in real rendered `pyproject.toml`s.
     """
     pyproject_path = project_root / "pyproject.toml"
     if not pyproject_path.exists():
         raise SystemExit(f"ERROR: {pyproject_path} not found.")
     text = pyproject_path.read_text(encoding="utf-8")
-    match = _CORE_FLOOR_RE.search(text)
+    match = _CORE_CONSTRAINT_RE.search(text)
     if match is None:
         raise SystemExit(
             f"ERROR: no 'fastmcp-pvl-core>=X.Y.Z' dependency found in {pyproject_path}"
         )
-    return match.group(1)
+    return match.group(1).strip()
 
 
 def _core_importable() -> bool:
-    """Whether `fastmcp_pvl_core` can be imported in the current interpreter."""
+    """Whether `fastmcp_pvl_core` is importable AND new enough for this generator.
+
+    Checks for the specific symbols this generator imports at runtime, not
+    merely that the package imports. On `copier update`, the project's
+    existing virtualenv may still hold the pre-update `fastmcp-pvl-core`,
+    which imports fine but lacks a symbol a newer generator needs
+    (``domain_env_surface`` landed in core 4.6.0). A bare
+    ``import fastmcp_pvl_core`` would succeed there, so `ensure_core_available`
+    would skip the re-exec and the generator would then hit a hard
+    ``ImportError`` mid-update (#306). Probing the symbols instead makes a
+    too-old core count as "not available", so the bootstrap re-execs under
+    ``uv run`` with the pyproject floor pinned and the generation succeeds.
+    Keep this list in step with the ``from fastmcp_pvl_core import ...`` names
+    the generator relies on at their newest floor.
+    """
     try:
-        import fastmcp_pvl_core  # noqa: F401
+        from fastmcp_pvl_core import (  # noqa: F401
+            domain_env_surface,
+            server_config_surface,
+        )
     except ImportError:
         return False
     return True
@@ -2198,9 +2859,12 @@ def ensure_core_available(
     copier's ``_tasks`` run before any virtualenv exists for the freshly
     rendered project, so this script cannot assume its dependencies are
     installed. When either import fails, re-exec the whole process under
-    ``uv run --no-project`` with the core library and PyYAML pinned ad hoc —
-    this must NOT create a persistent virtualenv, since template-ci renders
-    the template twice and diffs the results.
+    ``uv run --no-project`` with the core library constrained exactly as the
+    project's pyproject.toml declares it — the same resolution ``uv sync``
+    performs later, so copy-time generation and a venv regeneration cannot
+    disagree (#335) — and PyYAML added ad hoc. This must NOT create a
+    persistent virtualenv, since template-ci renders the template twice and
+    diffs the results.
 
     ``_GEN_CONFIG_BOOTSTRAPPED`` guards against re-exec'ing more than once:
     if the dependencies are still missing right after a re-exec, that is a
@@ -2232,7 +2896,7 @@ def ensure_core_available(
             "installed."
         )
 
-    floor = _core_floor(project_root)
+    constraint = _core_constraint(project_root)
     script = str(Path(__file__).resolve())
     extra_argv = list(sys.argv[1:] if argv is None else argv)
     args = [
@@ -2240,7 +2904,7 @@ def ensure_core_available(
         "run",
         "--no-project",
         "--with",
-        f"fastmcp-pvl-core=={floor}",
+        f"fastmcp-pvl-core{constraint}",
         "--with",
         "pyyaml",
         "python",
