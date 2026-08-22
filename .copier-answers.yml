@@ -2,8 +2,7 @@
 _commit: v5.6.2
 _src_path: https://github.com/pvliesdonk/fastmcp-server-template
 docker_registry: ghcr.io/pvliesdonk
-domain_description: FastMCP server for scholarly sources (papers, patents, books,
-    and standards) with metadata enrichment and docling PDF conversion
+domain_description: FastMCP server for scholarly papers, patents, books and standards with docling PDF conversion
 enable_authorization: false
 enable_structural_gate: true
 env_prefix: SCHOLAR_MCP
