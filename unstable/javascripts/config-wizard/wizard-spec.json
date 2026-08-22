@@ -199,7 +199,7 @@
     },
     {
       "id": "oidc_advertised_scopes",
-      "label": "Oidc Advertised Scopes",
+      "label": "OIDC advertised scopes (CSV)",
       "type": "text",
       "var": "SCHOLAR_MCP_OIDC_ADVERTISED_SCOPES",
       "help": "Scopes advertised to MCP clients in protected-resource metadata, space- or comma-separated. Overrides the default `openid offline_access`; `oidc_required_scopes` is always added on top. Set this when the registered client is not permitted `offline_access`, or to have clients request extra claim scopes (e.g. `groups`) without also requiring them in every token.",

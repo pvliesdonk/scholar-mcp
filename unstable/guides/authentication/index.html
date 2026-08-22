@@ -2151,7 +2151,7 @@
 </tr>
 <tr>
 <td><code>SCHOLAR_MCP_OIDC_ADVERTISED_SCOPES</code></td>
-<td>(none)</td>
+<td><code>openid offline_access</code></td>
 <td>Scopes advertised to MCP clients in protected-resource metadata, space- or comma-separated. Overrides the default <code>openid offline_access</code>; <code>oidc_required_scopes</code> is always added on top. Set this when the registered client is not permitted <code>offline_access</code>, or to have clients request extra claim scopes (such as <code>groups</code>) without also requiring them in every token.</td>
 </tr>
 <tr>
@@ -2263,8 +2263,8 @@
 </tr>
 <tr>
 <td><strong>Claude Code</strong></td>
-<td>Never requests <code>offline_access</code> scope (<a href="https://github.com/anthropics/claude-code/issues/7744">claude-code#7744</a>)</td>
-<td>Most OIDC providers won't issue a refresh token without this scope</td>
+<td>Does not ask for <code>offline_access</code> on its own (<a href="https://github.com/anthropics/claude-code/issues/7744">claude-code#7744</a>)</td>
+<td>Most OIDC providers issue no refresh token without this scope. The server advertises <code>openid offline_access</code> in its protected-resource metadata, so a client that requests the advertised set gets a refresh-capable grant; one that ignores the metadata still does not.</td>
 </tr>
 <tr>
 <td><strong>MCP Python SDK</strong></td>
@@ -2281,7 +2281,7 @@
 <li><code>access_token: '8h'</code>: covers a workday</li>
 <li><code>id_token: '8h'</code>: <strong>must match access_token</strong> when using <code>verify_id_token</code> mode (critical for Authelia)</li>
 <li><code>refresh_token: '30d'</code>: ready for when clients support refresh</li>
-<li>Include <code>offline_access</code> in provider-side scopes; no effect today, but enables refresh when clients are fixed</li>
+<li>Permit <code>offline_access</code> for the registered client; the server advertises it by default, so a client that honours the advertised scopes requests it. Where the client may not hold that scope, narrow what the server advertises with <code>SCHOLAR_MCP_OIDC_ADVERTISED_SCOPES</code> rather than letting the authorization request fail</li>
 </ul>
 <h3 id="tracking">Tracking<a class="headerlink" href="#tracking" title="Permanent link">&para;</a></h3>
 <p>These upstream issues are actively tracked:</p>
