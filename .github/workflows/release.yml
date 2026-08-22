@@ -603,7 +603,7 @@ jobs:
             type=raw,value=v${{ steps.version.outputs.major }},enable=${{ steps.recheck.outputs.is_latest_major == 'true' }}
           labels: |
             org.opencontainers.image.title=scholar-mcp
-            org.opencontainers.image.description=FastMCP server for scholarly sources (papers, patents, books, and standards) with metadata enrichment and docling PDF conversion
+            org.opencontainers.image.description=FastMCP server for scholarly papers, patents, books and standards with docling PDF conversion
             org.opencontainers.image.vendor=pvliesdonk
             io.modelcontextprotocol.server.name=io.github.pvliesdonk/scholar-mcp
 
@@ -884,7 +884,7 @@ jobs:
           # Through env, not interpolated into the script: the blurb is
           # free-form prose and a quote in it would otherwise break the
           # shell rather than the entry.
-          PLUGIN_DESC: "FastMCP server for scholarly sources (papers, patents, books, and standards) with metadata enrichment and docling PDF conversion"
+          PLUGIN_DESC: "FastMCP server for scholarly papers, patents, books and standards with docling PDF conversion"
           PLUGIN_HOME: "https://pvliesdonk.github.io/scholar-mcp/"
         run: |
           cd catalog
