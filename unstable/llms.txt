@@ -30,4 +30,5 @@
 ## Release Notes
 
 - [Release Notes](https://pvliesdonk.github.io/scholar-mcp/unstable/releases/index.md)
+- [1.9](https://pvliesdonk.github.io/scholar-mcp/unstable/releases/1.9/index.md)
 
