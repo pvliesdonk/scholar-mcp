@@ -7,11 +7,8 @@
   },
   "secretKeys": [
     "SCHOLAR_MCP_BEARER_TOKEN",
-    "SCHOLAR_MCP_S2_API_KEY",
-    "SCHOLAR_MCP_EPO_CONSUMER_KEY",
-    "SCHOLAR_MCP_EPO_CONSUMER_SECRET",
-    "SCHOLAR_MCP_GOOGLE_BOOKS_API_KEY",
-    "SCHOLAR_MCP_VLM_API_KEY"
+    "SCHOLAR_MCP_OIDC_CLIENT_SECRET",
+    "SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY"
   ],
   "questions": [
     {
@@ -20,119 +17,491 @@
       "help": "Local stdio for Claude Desktop/Code, or an HTTP server for Docker/systemd.",
       "type": "select",
       "options": [
-        { "value": "local", "label": "Local (Claude Desktop / Claude Code, stdio)" },
-        { "value": "server", "label": "Server (HTTP — Docker / Compose / systemd)" }
+        {
+          "value": "local",
+          "label": "Local (Claude Desktop / Claude Code, stdio)",
+          "emit": {
+            "SCHOLAR_MCP_TRANSPORT": "stdio"
+          }
+        },
+        {
+          "value": "server",
+          "label": "Server (HTTP — Docker / Compose / systemd)",
+          "emit": {
+            "SCHOLAR_MCP_TRANSPORT": "http"
+          }
+        }
       ]
     },
     {
-      "id": "s2_api_key",
-      "label": "Semantic Scholar API key",
-      "help": "Strongly recommended. Unauthenticated requests are rate-limited to ~1 req/s; authenticated requests get ~10 req/s. Get one at semanticscholar.org/product/api.",
-      "type": "text",
-      "var": "SCHOLAR_MCP_S2_API_KEY"
+      "id": "auth",
+      "label": "Authentication",
+      "type": "select",
+      "showIf": {
+        "deployment": [
+          "server"
+        ]
+      },
+      "options": [
+        {
+          "value": "none",
+          "label": "None"
+        },
+        {
+          "value": "bearer",
+          "label": "Bearer token"
+        },
+        {
+          "value": "oidc",
+          "label": "OIDC"
+        },
+        {
+          "value": "both",
+          "label": "Bearer + OIDC"
+        }
+      ]
     },
     {
-      "id": "contact_email",
-      "label": "Contact email",
-      "help": "Sent in the OpenAlex User-Agent header for polite-pool access. Also enables Unpaywall PDF lookups.",
+      "id": "host",
+      "label": "Bind host",
       "type": "text",
-      "var": "SCHOLAR_MCP_CONTACT_EMAIL"
+      "var": "SCHOLAR_MCP_HOST",
+      "help": "Interface the HTTP server binds to.",
+      "advancedGroup": "Server",
+      "showIf": {
+        "deployment": [
+          "server"
+        ]
+      }
     },
     {
-      "id": "read_only",
-      "label": "Read-only mode",
-      "help": "When enabled, PDF download and conversion tools are hidden. Recommended for shared or untrusted deployments.",
-      "type": "bool",
-      "var": "SCHOLAR_MCP_READ_ONLY"
+      "id": "port",
+      "label": "Port",
+      "type": "number",
+      "var": "SCHOLAR_MCP_PORT",
+      "help": "TCP port for the HTTP server.",
+      "advancedGroup": "Server",
+      "showIf": {
+        "deployment": [
+          "server"
+        ]
+      }
+    },
+    {
+      "id": "base_url",
+      "label": "Public base URL",
+      "type": "text",
+      "var": "SCHOLAR_MCP_BASE_URL",
+      "help": "Public base URL of the deployed server, e.g. `https://mcp.example.com`. Required for OIDC. Also the fallback source of the MCP Apps domain when `app_domain` is unset.",
+      "showIf": {
+        "deployment": [
+          "server"
+        ]
+      }
     },
     {
       "id": "bearer_token",
       "label": "Bearer token",
-      "help": "Static token for HTTP auth. Any non-empty string enables bearer auth. Browser-only — never included in shareable links.",
       "type": "text",
       "var": "SCHOLAR_MCP_BEARER_TOKEN",
-      "showIf": { "deployment": ["server"] }
+      "help": "Single shared bearer token; enables bearer auth unless `bearer_tokens_file` is set, which takes precedence.",
+      "showIf": {
+        "deployment": [
+          "server"
+        ],
+        "auth": [
+          "bearer",
+          "both"
+        ]
+      }
     },
     {
-      "id": "epo_consumer_key",
-      "label": "EPO OPS consumer key",
-      "help": "Required for patent search tools. Register at developers.epo.org.",
+      "id": "oidc_config_url",
+      "label": "OIDC discovery URL",
       "type": "text",
-      "var": "SCHOLAR_MCP_EPO_CONSUMER_KEY",
-      "advancedGroup": "Patents"
+      "var": "SCHOLAR_MCP_OIDC_CONFIG_URL",
+      "help": "OIDC discovery document URL, e.g. `https://auth.example.com/.well-known/openid-configuration`.",
+      "showIf": {
+        "deployment": [
+          "server"
+        ],
+        "auth": [
+          "oidc",
+          "both"
+        ]
+      }
     },
     {
-      "id": "epo_consumer_secret",
-      "label": "EPO OPS consumer secret",
-      "help": "Required alongside the consumer key for EPO OPS access.",
+      "id": "oidc_client_id",
+      "label": "OIDC client ID",
       "type": "text",
-      "var": "SCHOLAR_MCP_EPO_CONSUMER_SECRET",
-      "advancedGroup": "Patents"
+      "var": "SCHOLAR_MCP_OIDC_CLIENT_ID",
+      "help": "OIDC client identifier registered with the provider.",
+      "showIf": {
+        "deployment": [
+          "server"
+        ],
+        "auth": [
+          "oidc",
+          "both"
+        ]
+      }
+    },
+    {
+      "id": "oidc_client_secret",
+      "label": "OIDC client secret",
+      "type": "text",
+      "var": "SCHOLAR_MCP_OIDC_CLIENT_SECRET",
+      "help": "OIDC client secret registered with the provider.",
+      "showIf": {
+        "deployment": [
+          "server"
+        ],
+        "auth": [
+          "oidc",
+          "both"
+        ]
+      }
+    },
+    {
+      "id": "oidc_audience",
+      "label": "OIDC audience",
+      "type": "text",
+      "var": "SCHOLAR_MCP_OIDC_AUDIENCE",
+      "help": "Expected `aud` claim; tokens issued for another audience are rejected.",
+      "advancedGroup": "Auth",
+      "showIf": {
+        "deployment": [
+          "server"
+        ],
+        "auth": [
+          "oidc",
+          "both"
+        ]
+      }
+    },
+    {
+      "id": "oidc_required_scopes",
+      "label": "OIDC required scopes (CSV)",
+      "type": "text",
+      "var": "SCHOLAR_MCP_OIDC_REQUIRED_SCOPES",
+      "help": "Scopes a caller must present, space- or comma-separated. Defaults to `openid` in oidc-proxy mode.",
+      "advancedGroup": "Auth",
+      "showIf": {
+        "deployment": [
+          "server"
+        ],
+        "auth": [
+          "oidc",
+          "both"
+        ]
+      }
+    },
+    {
+      "id": "oidc_advertised_scopes",
+      "label": "OIDC advertised scopes (CSV)",
+      "type": "text",
+      "var": "SCHOLAR_MCP_OIDC_ADVERTISED_SCOPES",
+      "help": "Scopes advertised to MCP clients in protected-resource metadata, space- or comma-separated. Overrides the default `openid offline_access`; `oidc_required_scopes` is always added on top. Set this when the registered client is not permitted `offline_access`, or to have clients request extra claim scopes (e.g. `groups`) without also requiring them in every token.",
+      "advancedGroup": "Auth",
+      "showIf": {
+        "deployment": [
+          "server"
+        ],
+        "auth": [
+          "oidc",
+          "both"
+        ]
+      }
+    },
+    {
+      "id": "oidc_jwt_signing_key",
+      "label": "OIDC JWT signing key",
+      "type": "text",
+      "var": "SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY",
+      "help": "Optional signing key for issued JWTs. When unset it is derived from the client secret; set explicitly to keep tokens valid across a secret rotation. Generate: openssl rand -hex 32.",
+      "showIf": {
+        "deployment": [
+          "server"
+        ],
+        "auth": [
+          "oidc",
+          "both"
+        ]
+      }
+    },
+    {
+      "id": "oidc_verify_access_token",
+      "label": "Verify access token (not id token)",
+      "type": "bool",
+      "var": "SCHOLAR_MCP_OIDC_VERIFY_ACCESS_TOKEN",
+      "help": "Validate the access token instead of the id token.",
+      "advancedGroup": "Auth",
+      "showIf": {
+        "deployment": [
+          "server"
+        ],
+        "auth": [
+          "oidc",
+          "both"
+        ]
+      }
+    },
+    {
+      "id": "kv_store_url",
+      "label": "KV store URL (HTTP session persistence)",
+      "type": "text",
+      "var": "SCHOLAR_MCP_KV_STORE_URL",
+      "help": "Persistent-state backend URL: memory://, file:///path, redis://, dynamodb://, or mongodb://. Defaults to file:///data/state when unset.",
+      "advancedGroup": "Persistence",
+      "showIf": {
+        "deployment": [
+          "server"
+        ]
+      }
+    },
+    {
+      "id": "event_store_url",
+      "label": "Event store URL (HTTP resumability)",
+      "type": "text",
+      "var": "SCHOLAR_MCP_EVENT_STORE_URL",
+      "help": "Legacy state-backend override, honoured by `build_event_store` and `build_kv_store` only when `kv_store_url` is unset — it then backs every namespace, not just HTTP resumability. Prefer `kv_store_url` for new deployments.",
+      "advancedGroup": "Persistence",
+      "showIf": {
+        "deployment": [
+          "server"
+        ]
+      }
+    },
+    {
+      "id": "tasks_url",
+      "label": "Tasks Url",
+      "type": "text",
+      "var": "SCHOLAR_MCP_TASKS_URL",
+      "help": "Background-task (Docket) backend URL: `memory://` is in-process and lost on restart; `redis://` is durable and multi-process. When unset, a `redis://` `kv_store_url` is reused for tasks too; otherwise fastmcp's `memory://` default applies. Only meaningful when task-enabled tools exist. Applied via `configure_task_backend`.",
+      "advancedGroup": "Persistence",
+      "showIf": {
+        "deployment": [
+          "server"
+        ]
+      }
+    },
+    {
+      "id": "app_domain",
+      "label": "MCP Apps domain",
+      "type": "text",
+      "var": "SCHOLAR_MCP_APP_DOMAIN",
+      "help": "MCP Apps iframe domain, used for CSP sandboxing. Overrides the host derived from `base_url`.",
+      "advancedGroup": "MCP Apps",
+      "showIf": {
+        "deployment": [
+          "server"
+        ]
+      }
+    },
+    {
+      "id": "tools_allow",
+      "label": "Tool allowlist (CSV)",
+      "type": "text",
+      "var": "SCHOLAR_MCP_TOOLS_ALLOW",
+      "help": "Comma-separated tool names this instance exposes; every other tool is hidden. Leave empty to expose all tools. Mutually exclusive with the denylist.",
+      "advancedGroup": "Tools"
+    },
+    {
+      "id": "tools_deny",
+      "label": "Tool denylist (CSV)",
+      "type": "text",
+      "var": "SCHOLAR_MCP_TOOLS_DENY",
+      "help": "Comma-separated tool names to hide from this instance. Mutually exclusive with the allowlist.",
+      "advancedGroup": "Tools"
+    },
+    {
+      "id": "bearer_tokens_file",
+      "label": "Bearer tokens file (TOML)",
+      "type": "text",
+      "var": "SCHOLAR_MCP_BEARER_TOKENS_FILE",
+      "help": "Path to a TOML file mapping bearer tokens to subjects; overrides the single-token `bearer_token` mode.",
+      "advancedGroup": "Auth",
+      "showIf": {
+        "deployment": [
+          "server"
+        ],
+        "auth": [
+          "bearer",
+          "both"
+        ]
+      }
+    },
+    {
+      "id": "bearer_default_subject",
+      "label": "Bearer default subject",
+      "type": "text",
+      "var": "SCHOLAR_MCP_BEARER_DEFAULT_SUBJECT",
+      "help": "Subject assigned to the single-token bearer mode; ignored when `bearer_tokens_file` is set, since mapped mode carries per-token subjects.",
+      "advancedGroup": "Auth",
+      "showIf": {
+        "deployment": [
+          "server"
+        ],
+        "auth": [
+          "bearer",
+          "both"
+        ]
+      }
+    },
+    {
+      "id": "server_name",
+      "label": "Server Name",
+      "type": "text",
+      "var": "SCHOLAR_MCP_SERVER_NAME",
+      "help": "Rename this server instance; defaults to the project name.",
+      "advancedGroup": "Server",
+      "showIf": {
+        "deployment": [
+          "server"
+        ]
+      }
+    },
+    {
+      "id": "instructions",
+      "label": "Instructions",
+      "type": "text",
+      "var": "SCHOLAR_MCP_INSTRUCTIONS",
+      "help": "Replaces the default MCP instructions text sent to clients.",
+      "advancedGroup": "Server",
+      "showIf": {
+        "deployment": [
+          "server"
+        ]
+      }
+    },
+    {
+      "id": "http_path",
+      "label": "HTTP endpoint path",
+      "type": "text",
+      "var": "SCHOLAR_MCP_HTTP_PATH",
+      "help": "Mount path for the MCP endpoint.",
+      "advancedGroup": "Server",
+      "showIf": {
+        "deployment": [
+          "server"
+        ]
+      }
+    },
+    {
+      "id": "fastmcp_log_level",
+      "label": "Log level",
+      "type": "text",
+      "var": "FASTMCP_LOG_LEVEL",
+      "help": "Log level for FastMCP internals and app loggers (DEBUG / INFO / WARNING / ERROR / CRITICAL). The -v CLI flag overrides to DEBUG.",
+      "advancedGroup": "Logging"
+    },
+    {
+      "id": "fastmcp_enable_rich_logging",
+      "label": "Rich logging",
+      "type": "bool",
+      "var": "FASTMCP_ENABLE_RICH_LOGGING",
+      "help": "Set false for plain or structured JSON log output.",
+      "advancedGroup": "Logging"
+    },
+    {
+      "id": "scholar_github_token",
+      "label": "Scholar Github Token",
+      "type": "text",
+      "var": "SCHOLAR_GITHUB_TOKEN",
+      "help": "GitHub token used to raise rate limits when fetching standards documents from GitHub. Optional; unauthenticated requests work at reduced limits."
+    },
+    {
+      "id": "read_only",
+      "label": "Read Only",
+      "type": "bool",
+      "var": "SCHOLAR_MCP_READ_ONLY",
+      "help": "When true, write-tagged tools (PDF download and conversion cache writes) are hidden. Set false to enable them."
+    },
+    {
+      "id": "s2_api_key",
+      "label": "S2 Api Key",
+      "type": "text",
+      "var": "SCHOLAR_MCP_S2_API_KEY",
+      "help": "Semantic Scholar API key. Optional but strongly recommended: unauthenticated requests are limited to ~1 req/s. Request one at https://www.semanticscholar.org/product/api#api-key-form."
     },
     {
       "id": "docling_url",
-      "label": "Docling URL",
-      "help": "Base URL of a running docling-serve instance (e.g. http://localhost:5001). Required for PDF conversion.",
+      "label": "Docling Url",
       "type": "text",
       "var": "SCHOLAR_MCP_DOCLING_URL",
-      "advancedGroup": "PDF Conversion"
+      "help": "Base URL of a running docling-serve instance for PDF conversion (e.g. http://localhost:5001). When unset, PDF conversion tools return an error."
     },
     {
       "id": "vlm_api_url",
-      "label": "VLM API URL",
-      "help": "OpenAI-compatible endpoint for formula/figure enrichment during PDF conversion.",
+      "label": "Vlm Api Url",
       "type": "text",
       "var": "SCHOLAR_MCP_VLM_API_URL",
-      "advancedGroup": "PDF Conversion"
+      "help": "OpenAI-compatible VLM endpoint for formula and figure enrichment during PDF conversion."
     },
     {
       "id": "vlm_api_key",
-      "label": "VLM API key",
-      "help": "API key for the VLM endpoint.",
+      "label": "Vlm Api Key",
       "type": "text",
       "var": "SCHOLAR_MCP_VLM_API_KEY",
-      "advancedGroup": "PDF Conversion"
+      "help": "API key for the VLM endpoint."
     },
     {
       "id": "vlm_model",
-      "label": "VLM model",
-      "help": "Model name used with the VLM endpoint.",
+      "label": "Vlm Model",
       "type": "text",
       "var": "SCHOLAR_MCP_VLM_MODEL",
-      "advancedGroup": "PDF Conversion"
-    },
-    {
-      "id": "google_books_api_key",
-      "label": "Google Books API key",
-      "help": "Optional. Unlocks higher rate limits for the Google Books enricher. Without it, the enricher works at 1000 requests/day.",
-      "type": "text",
-      "var": "SCHOLAR_MCP_GOOGLE_BOOKS_API_KEY",
-      "advancedGroup": "Books"
+      "help": "Model name to use with the VLM endpoint."
     },
     {
       "id": "cache_dir",
-      "label": "Cache directory",
-      "help": "Path for the SQLite database and downloaded PDFs.",
+      "label": "Cache Dir",
       "type": "text",
       "var": "SCHOLAR_MCP_CACHE_DIR",
-      "advancedGroup": "Advanced"
+      "help": "Directory for the SQLite cache database (cache.db) and downloaded PDFs (pdfs/, md/)."
     },
     {
-      "id": "log_level",
-      "label": "Log level",
-      "help": "Verbosity level: DEBUG, INFO, WARNING (default), or ERROR.",
+      "id": "contact_email",
+      "label": "Contact Email",
       "type": "text",
-      "var": "FASTMCP_LOG_LEVEL",
-      "advancedGroup": "Logging"
+      "var": "SCHOLAR_MCP_CONTACT_EMAIL",
+      "help": "Contact email for the OpenAlex polite pool (improves rate limits). Also enables Unpaywall lookups as a PDF fallback source."
     },
     {
-      "id": "rich_logging",
-      "label": "Rich logging",
-      "help": "Disable for plain/JSON output suitable for log aggregators (Loki, Datadog, Splunk).",
-      "type": "bool",
-      "var": "FASTMCP_ENABLE_RICH_LOGGING",
-      "advancedGroup": "Logging"
+      "id": "epo_consumer_key",
+      "label": "Epo Consumer Key",
+      "type": "text",
+      "var": "SCHOLAR_MCP_EPO_CONSUMER_KEY",
+      "help": "EPO Open Patent Services consumer key. Optional; patent tools are hidden when unset. Register at https://developers.epo.org/user/register."
+    },
+    {
+      "id": "epo_consumer_secret",
+      "label": "Epo Consumer Secret",
+      "type": "text",
+      "var": "SCHOLAR_MCP_EPO_CONSUMER_SECRET",
+      "help": "EPO Open Patent Services consumer secret. Optional; patent tools are hidden when unset."
+    },
+    {
+      "id": "google_books_api_key",
+      "label": "Google Books Api Key",
+      "type": "text",
+      "var": "SCHOLAR_MCP_GOOGLE_BOOKS_API_KEY",
+      "help": "Google Books API key. Optional; book tools work unauthenticated at reduced rate limits."
     }
   ],
-  "guards": []
+  "guards": [
+    {
+      "level": "warning",
+      "message": "OIDC needs BASE_URL set. Leaving OIDC_JWT_SIGNING_KEY unset derives the key from the client secret, so rotating that secret invalidates every issued token.",
+      "when": {
+        "deployment": [
+          "server"
+        ],
+        "auth": [
+          "oidc",
+          "both"
+        ]
+      }
+    }
+  ]
 }

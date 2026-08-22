@@ -1,9 +1,6 @@
 # Scholar MCP Server
 
-> FastMCP server for Semantic Scholar with OpenAlex enrichment and docling PDF conversion
-
-scholar-mcp is a FastMCP server for Semantic Scholar with OpenAlex enrichment and docling PDF conversion. It exposes 13 tools for paper search, citation graph traversal, recommendations, and PDF-to-Markdown conversion over the Model Context Protocol.
-
+> FastMCP server for scholarly sources (papers, patents, books, and standards) with metadata enrichment and docling PDF conversion
 
 ## Getting Started
 
@@ -22,11 +19,16 @@ scholar-mcp is a FastMCP server for Semantic Scholar with OpenAlex enrichment an
 
 ## Tools
 
-- [Tools](https://pvliesdonk.github.io/scholar-mcp/1.9/tools/index.md): All 13 MCP tools with parameters, return values, and usage tips
+- [Tools](https://pvliesdonk.github.io/scholar-mcp/1.9/tools/index.md): All MCP tools with parameters, return values, and usage tips
 
 ## Deployment
 
 - [Docker](https://pvliesdonk.github.io/scholar-mcp/1.9/deployment/docker/index.md): Docker Compose with docling-serve, Traefik, volumes, UID/GID
 - [systemd](https://pvliesdonk.github.io/scholar-mcp/1.9/deployment/systemd/index.md): systemd service — package install, security hardening
 - [OIDC Authentication](https://pvliesdonk.github.io/scholar-mcp/1.9/deployment/oidc/index.md): OIDC authentication setup with Authelia
+
+## Release Notes
+
+- [Release Notes](https://pvliesdonk.github.io/scholar-mcp/1.9/releases/index.md)
+- [1.9](https://pvliesdonk.github.io/scholar-mcp/1.9/releases/1.9/index.md)
 

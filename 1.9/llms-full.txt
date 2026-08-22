@@ -1,9 +1,6 @@
 # Scholar MCP Server
 
-> FastMCP server for Semantic Scholar with OpenAlex enrichment and docling PDF conversion
-
-scholar-mcp is a FastMCP server for Semantic Scholar with OpenAlex enrichment and docling PDF conversion. It exposes 13 tools for paper search, citation graph traversal, recommendations, and PDF-to-Markdown conversion over the Model Context Protocol.
-
+> FastMCP server for scholarly sources (papers, patents, books, and standards) with metadata enrichment and docling PDF conversion
 
 # Getting Started
 
@@ -137,11 +134,11 @@ docker run -v scholar-mcp-data:/data/scholar-mcp \
 
 The image is available for `linux/amd64` and `linux/arm64`. See [Docker deployment](https://pvliesdonk.github.io/scholar-mcp/1.9/deployment/docker/index.md) for Docker Compose with docling-serve.
 
-For early adopters who want to try the latest release candidate, an `:unstable` tag is published by the release workflow's pre-release mode. It tracks the latest `rc` build and may include in-progress features. Pre-releases are Docker-only, they are not published to PyPI or as Linux packages. The floating `:latest`, `:vN`, and `:vN.M` tags only move on stable releases.
+The `latest` tag is the newest stable release. The rolling `edge` tag tracks every merge to `main` and carries no version identity; see [Image tags](https://pvliesdonk.github.io/scholar-mcp/1.9/deployment/docker/#image-tags) for the full list.
 
 ```
 docker run -v scholar-mcp-data:/data/scholar-mcp \
-           ghcr.io/pvliesdonk/scholar-mcp:unstable
+           ghcr.io/pvliesdonk/scholar-mcp:edge
 ```
 
 ## Linux packages
@@ -352,6 +349,31 @@ Optional development-only listener. Requires the `[debug]` extra (Docker images:
 | `SCHOLAR_MCP_DEBUG_WAIT` | `false`  | Block startup until the IDE attaches. Useful for debugging early startup code paths. |
 
 See [Docker deployment → Remote debugging](https://pvliesdonk.github.io/scholar-mcp/1.9/deployment/docker/#remote-debugging) for the IDE-attach walkthrough.
+
+## Tool visibility
+
+Operators can trim which tools this instance exposes. Each variable takes a comma-separated list of explicit tool names:
+
+- `SCHOLAR_MCP_TOOLS_ALLOW`: expose *only* the listed tools.
+- `SCHOLAR_MCP_TOOLS_DENY`: hide the listed tools.
+
+Hidden tools disappear from `tools/list` and are rejected on `tools/call`; resources and prompts are unaffected. Setting both variables, or setting one to a value with no names in it, is a startup error. A name matching no registered tool is ignored, but an allowlist that matches nothing logs a startup `WARNING` since the instance then exposes zero tools. See `fastmcp-pvl-core`'s README for the full semantics.
+
+## Background tasks
+
+Every Scholar MCP instance wires a background-task backend at startup, so a tool registered with `task=True` works with no extra setup. One variable picks the backend:
+
+- `SCHOLAR_MCP_TASKS_URL`: `memory://` runs tasks in-process and loses them on restart; `redis://...` is durable and shared across processes.
+
+Unset, a `redis://` `SCHOLAR_MCP_KV_STORE_URL` is reused for tasks as well, so a single URL configures every stateful subsystem. With neither set, the backend falls back to `memory://`, which the server logs at startup when running over HTTP. The queue name comes from the `SCHOLAR_MCP` prefix, so two servers sharing one Redis do not share a queue.
+
+Worker tuning stays on the native `FASTMCP_DOCKET_*` variables (`FASTMCP_DOCKET_CONCURRENCY` and friends, listed in `.env.example`). Set the backend through `SCHOLAR_MCP_TASKS_URL` rather than `FASTMCP_DOCKET_URL`: the former wins when both are set, and the server warns about the disagreement.
+
+### Two task queues, one of them not configured by `SCHOLAR_MCP_TASKS_URL`
+
+`SCHOLAR_MCP_TASKS_URL`, described under [Background tasks](#background-tasks) above, configures the `fastmcp-pvl-core` task backend. Scholar MCP also has its own, separate in-process queue (`src/scholar_mcp/_task_queue.py`), and that is the one behind the `list_tasks` and `get_task_result` tools and the automatic queueing of rate-limited Semantic Scholar and PDF calls. It is always in-process and always lost on restart, whatever `SCHOLAR_MCP_TASKS_URL` says.
+
+The practical consequence is for deployments with a Redis `SCHOLAR_MCP_KV_STORE_URL`: the core backend silently reuses that URL, so the server gains a Redis-backed task queue it does not currently put anything into. Set `SCHOLAR_MCP_TASKS_URL=memory://` to keep the two subsystems apart. Consolidating the two queues is tracked in [#264](https://github.com/pvliesdonk/scholar-mcp/issues/264).
 
 # Configuration Generator
 
@@ -625,7 +647,7 @@ Full OAuth 2.1 authentication using an external identity provider. The MCP serve
 
 ### How it works
 
-The server uses FastMCP's built-in `OIDCProxy`. No external auth sidecar needed:
+The server proxies OIDC itself, with no external auth sidecar to deploy:
 
 ```
 Client → scholar-mcp (OIDCProxy) → OIDC Provider
@@ -639,25 +661,26 @@ Client → scholar-mcp (OIDCProxy) → OIDC Provider
 
 ### Required variables
 
-| Variable                         | Description                                         |
-| -------------------------------- | --------------------------------------------------- |
-| `SCHOLAR_MCP_BASE_URL`           | Public base URL (such as `https://mcp.example.com`) |
-| `SCHOLAR_MCP_OIDC_CONFIG_URL`    | OIDC discovery endpoint                             |
-| `SCHOLAR_MCP_OIDC_CLIENT_ID`     | Client ID registered with your provider             |
-| `SCHOLAR_MCP_OIDC_CLIENT_SECRET` | Client secret                                       |
+| Variable                         | Description                                                                                                                                                        |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `SCHOLAR_MCP_BASE_URL`           | Public base URL of the deployed server (`https://mcp.example.com`). Required for OIDC. Also the fallback source of the MCP Apps domain when `app_domain` is unset. |
+| `SCHOLAR_MCP_OIDC_CONFIG_URL`    | OIDC discovery document URL (`https://auth.example.com/.well-known/openid-configuration`).                                                                         |
+| `SCHOLAR_MCP_OIDC_CLIENT_ID`     | OIDC client identifier registered with the provider.                                                                                                               |
+| `SCHOLAR_MCP_OIDC_CLIENT_SECRET` | OIDC client secret registered with the provider.                                                                                                                   |
 
 ### Optional variables
 
-| Variable                               | Default   | Description                                                                                                                       |
-| -------------------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY`     | ephemeral | JWT signing key (**required on Linux/Docker**)                                                                                    |
-| `SCHOLAR_MCP_OIDC_AUDIENCE`            | n/a       | Expected JWT audience claim; leave unset if your provider does not set one                                                        |
-| `SCHOLAR_MCP_OIDC_REQUIRED_SCOPES`     | `openid`  | Comma-separated required scopes                                                                                                   |
-| `SCHOLAR_MCP_OIDC_VERIFY_ACCESS_TOKEN` | `false`   | Set `true` to verify the access token as a JWT instead of the id token; useful for audience-claim validation on JWT access tokens |
+| Variable                               | Default                 | Description                                                                                                                                                                                                                                                                                                                                                                   |
+| -------------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SCHOLAR_MCP_OIDC_AUDIENCE`            | (none)                  | Expected `aud` claim; tokens issued for another audience are rejected.                                                                                                                                                                                                                                                                                                        |
+| `SCHOLAR_MCP_OIDC_REQUIRED_SCOPES`     | `openid`                | Scopes a caller must present, space- or comma-separated. Defaults to `openid` in oidc-proxy mode.                                                                                                                                                                                                                                                                             |
+| `SCHOLAR_MCP_OIDC_ADVERTISED_SCOPES`   | `openid offline_access` | Scopes advertised to MCP clients in protected-resource metadata, space- or comma-separated. Overrides the default `openid offline_access`; `oidc_required_scopes` is always added on top. Set this when the registered client is not permitted `offline_access`, or to have clients request extra claim scopes (such as `groups`) without also requiring them in every token. |
+| `SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY`     | `derived`               | Signing key for issued JSON Web Tokens; used in oidc-proxy mode only. When unset, the key is derived deterministically from `oidc_client_secret`, so tokens survive a restart. Rotating that secret invalidates every issued token. Set this explicitly to decouple token validity from secret rotation. Generate with `openssl rand -hex 32`.                                |
+| `SCHOLAR_MCP_OIDC_VERIFY_ACCESS_TOKEN` | `false`                 | Validate the access token instead of the id token.                                                                                                                                                                                                                                                                                                                            |
 
-JWT signing key on Linux/Docker
+JWT signing key and secret rotation
 
-Without `OIDC_JWT_SIGNING_KEY`, FastMCP generates an ephemeral key that invalidates all tokens on restart. Always set a stable key in production:
+When `SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY` is unset, FastMCP derives the signing key from the OIDC client secret, so the key stays the same across restarts. Rotating the client secret changes the derived key and invalidates every token issued under the old one. Set an explicit key to decouple token validity from client-secret rotation:
 
 ```
 openssl rand -hex 32
@@ -679,9 +702,9 @@ ______________________________________________________________________
 
 The `client_id` and/or `redirect_uris` in your OIDC provider config don't match the values in your `.env` file. Verify both sides match exactly.
 
-### Tokens invalidated after restart
+### Tokens invalidated after a client-secret rotation
 
-You're missing `SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY`. Without it, FastMCP generates an ephemeral key on each startup. Generate and set a stable key:
+You're missing `SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY`. Without it, FastMCP derives the signing key from the OIDC client secret, so rotating that secret changes the derived key and invalidates every token issued under the old one. Generate and set a stable key to decouple token validity from secret rotation:
 
 ```
 openssl rand -hex 32
@@ -754,11 +777,11 @@ MCP clients cannot maintain sessions beyond the token lifetime because token ref
 
 Three independent issues prevent token refresh:
 
-| Layer              | Issue                                                                                                                          | Impact                                                                                         |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| **Claude Code**    | Stores refresh tokens but never uses them ([claude-code#21333](https://github.com/anthropics/claude-code/issues/21333))        | Refresh tokens are obtained and saved but never sent back to refresh expired access tokens     |
-| **Claude Code**    | Never requests `offline_access` scope ([claude-code#7744](https://github.com/anthropics/claude-code/issues/7744))              | Most OIDC providers won't issue a refresh token without this scope                             |
-| **MCP Python SDK** | Token refresh deadlocks inside SSE streams ([python-sdk#1326](https://github.com/modelcontextprotocol/python-sdk/issues/1326)) | Even with a valid refresh token, the SDK hangs when attempting refresh during an active stream |
+| Layer              | Issue                                                                                                                          | Impact                                                                                                                                                                                                                                                                    |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Claude Code**    | Stores refresh tokens but never uses them ([claude-code#21333](https://github.com/anthropics/claude-code/issues/21333))        | Refresh tokens are obtained and saved but never sent back to refresh expired access tokens                                                                                                                                                                                |
+| **Claude Code**    | Does not ask for `offline_access` on its own ([claude-code#7744](https://github.com/anthropics/claude-code/issues/7744))       | Most OIDC providers issue no refresh token without this scope. The server advertises `openid offline_access` in its protected-resource metadata, so a client that requests the advertised set gets a refresh-capable grant; one that ignores the metadata still does not. |
+| **MCP Python SDK** | Token refresh deadlocks inside SSE streams ([python-sdk#1326](https://github.com/modelcontextprotocol/python-sdk/issues/1326)) | Even with a valid refresh token, the SDK hangs when attempting refresh during an active stream                                                                                                                                                                            |
 
 The server-side refresh architecture (FastMCP's `OAuthProxy.exchange_refresh_token()`) is correctly implemented and would work, but it requires the client to initiate the refresh, which none of the current clients do reliably.
 
@@ -771,7 +794,7 @@ The server-side refresh architecture (FastMCP's `OAuthProxy.exchange_refresh_tok
 - `access_token: '8h'`: covers a workday
 - `id_token: '8h'`: **must match access_token** when using `verify_id_token` mode (critical for Authelia)
 - `refresh_token: '30d'`: ready for when clients support refresh
-- Include `offline_access` in provider-side scopes; no effect today, but enables refresh when clients are fixed
+- Permit `offline_access` for the registered client; the server advertises it by default, so a client that honours the advertised scopes requests it. Where the client may not hold that scope, narrow what the server advertises with `SCHOLAR_MCP_OIDC_ADVERTISED_SCOPES` rather than letting the authorization request fail
 
 ### Tracking
 
@@ -1941,6 +1964,25 @@ networks:
     external: true
 ```
 
+## Image tags
+
+| Tag          | Contents                                                     | Updated by                                           |
+| ------------ | ------------------------------------------------------------ | ---------------------------------------------------- |
+| `latest`     | Newest stable release                                        | Each stable release that is newest across all series |
+| `vX.Y.Z`     | That exact release (pre-releases included, as `vX.Y.Z-rc.N`) | Never (immutable)                                    |
+| `vX.Y`, `vX` | Newest stable release in that series                         | Each stable release that is newest in its series     |
+| `rc`         | Newest release candidate                                     | Each pre-release still ahead of `latest`             |
+| `edge`       | Newest commit on `main`                                      | Every merge to `main`                                |
+
+Rolling tags are ordering-aware: a patch release cut from an old `release/X.Y` branch after a newer stable has shipped updates its own series tags but never `latest`. The same rule governs `rc`: a candidate only moves the tag while its version is still ahead of the newest stable, so a candidate for an already-released version never pulls `rc` behind `latest`.
+
+The three rolling tags answer different questions. Use `latest` to run released code, `rc` to test the candidate for the next release, and `edge` to run the newest merged commit. Note that `rc` is not cleared when its release ships: it keeps pointing at the last candidate until the next one is cut, so `latest` is the tag to follow in production. To find the commit behind an `edge` image, read its `org.opencontainers.image.revision` label:
+
+```
+docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' \
+  ghcr.io/pvliesdonk/scholar-mcp:edge
+```
+
 ## Environment variables
 
 See [Configuration](https://pvliesdonk.github.io/scholar-mcp/1.9/configuration/index.md) for the full reference. Key variables for Docker:
@@ -1959,6 +2001,8 @@ See [Configuration](https://pvliesdonk.github.io/scholar-mcp/1.9/configuration/i
 | `SCHOLAR_MCP_DEBUG_WAIT`      | `false`               | Block startup until IDE attaches (see [Remote debugging](#remote-debugging))                                  |
 
 For OIDC authentication, see [OIDC deployment](https://pvliesdonk.github.io/scholar-mcp/1.9/deployment/oidc/index.md).
+
+Running behind a reverse proxy on a path prefix (`https://mcp.example.com/myservice/mcp`) rather than its own hostname needs two routing rules, one of which sits outside the prefix: see [Subpath Deployments](https://pvliesdonk.github.io/scholar-mcp/1.9/deployment/oidc/#subpath-deployments).
 
 ## Volumes
 
@@ -1987,17 +2031,6 @@ services:
         APP_UID: 1000
         APP_GID: 1000
 ```
-
-## Image tags
-
-| Tag      | Description           |
-| -------- | --------------------- |
-| `latest` | Latest release        |
-| `v1.0.1` | Specific version      |
-| `v1.0`   | Latest patch in 1.0.x |
-| `v1`     | Latest minor in 1.x   |
-
-Multi-arch: `linux/amd64` and `linux/arm64`.
 
 ## Remote debugging
 
@@ -2111,6 +2144,8 @@ sudo journalctl -u scholar-mcp -f
 
 The service runs in HTTP mode on port 8000 by default.
 
+The unit binds `0.0.0.0` (all interfaces) via `Environment=SCHOLAR_MCP_HOST=0.0.0.0` so the packaged server is reachable from other hosts. The bare CLI falls back to `127.0.0.1` (loopback only). To restrict the packaged service to loopback (typical behind a same-host reverse proxy), set `SCHOLAR_MCP_HOST=127.0.0.1` in `/etc/scholar-mcp/env`; that file overrides the unit default.
+
 ## Security hardening
 
 The systemd unit includes detailed security directives:
@@ -2200,34 +2235,33 @@ OIDC requires `--transport http` (or `sse`). It has no effect with `--transport 
 
 ## Required Variables
 
-| Variable                         | Description                                                                                                                                               |
-| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SCHOLAR_MCP_BASE_URL`           | Public base URL of the server (such as `https://mcp.example.com`; include prefix when mounted under subpath, such as `https://mcp.example.com/myservice`) |
-| `SCHOLAR_MCP_OIDC_CONFIG_URL`    | OIDC discovery endpoint (such as `https://auth.example.com/.well-known/openid-configuration`)                                                             |
-| `SCHOLAR_MCP_OIDC_CLIENT_ID`     | OIDC client ID registered with your provider                                                                                                              |
-| `SCHOLAR_MCP_OIDC_CLIENT_SECRET` | OIDC client secret                                                                                                                                        |
+| Variable                         | Description                                                                                                                                                        |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `SCHOLAR_MCP_BASE_URL`           | Public base URL of the deployed server (`https://mcp.example.com`). Required for OIDC. Also the fallback source of the MCP Apps domain when `app_domain` is unset. |
+| `SCHOLAR_MCP_OIDC_CONFIG_URL`    | OIDC discovery document URL (`https://auth.example.com/.well-known/openid-configuration`).                                                                         |
+| `SCHOLAR_MCP_OIDC_CLIENT_ID`     | OIDC client identifier registered with the provider.                                                                                                               |
+| `SCHOLAR_MCP_OIDC_CLIENT_SECRET` | OIDC client secret registered with the provider.                                                                                                                   |
 
 ## Optional Variables
 
-| Variable                               | Default   | Description                                                                                                                                                                                    |
-| -------------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY`     | ephemeral | JWT signing key. **Required on Linux/Docker**: the default is ephemeral and invalidates tokens on restart                                                                                      |
-| `SCHOLAR_MCP_OIDC_AUDIENCE`            | n/a       | Expected JWT audience claim; leave unset if your provider does not set one                                                                                                                     |
-| `SCHOLAR_MCP_OIDC_REQUIRED_SCOPES`     | `openid`  | Comma-separated required scopes                                                                                                                                                                |
-| `SCHOLAR_MCP_OIDC_VERIFY_ACCESS_TOKEN` | `false`   | Set `true` to verify the upstream access token as JWT instead of the id token. Only needed when your provider issues JWT access tokens and you require audience-claim validation on that token |
+| Variable                               | Default                 | Description                                                                                                                                                                                                                                                                                                                                                                   |
+| -------------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SCHOLAR_MCP_OIDC_AUDIENCE`            | (none)                  | Expected `aud` claim; tokens issued for another audience are rejected.                                                                                                                                                                                                                                                                                                        |
+| `SCHOLAR_MCP_OIDC_REQUIRED_SCOPES`     | `openid`                | Scopes a caller must present, space- or comma-separated. Defaults to `openid` in oidc-proxy mode.                                                                                                                                                                                                                                                                             |
+| `SCHOLAR_MCP_OIDC_ADVERTISED_SCOPES`   | `openid offline_access` | Scopes advertised to MCP clients in protected-resource metadata, space- or comma-separated. Overrides the default `openid offline_access`; `oidc_required_scopes` is always added on top. Set this when the registered client is not permitted `offline_access`, or to have clients request extra claim scopes (such as `groups`) without also requiring them in every token. |
+| `SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY`     | `derived`               | Signing key for issued JSON Web Tokens; used in oidc-proxy mode only. When unset, the key is derived deterministically from `oidc_client_secret`, so tokens survive a restart. Rotating that secret invalidates every issued token. Set this explicitly to decouple token validity from secret rotation. Generate with `openssl rand -hex 32`.                                |
+| `SCHOLAR_MCP_OIDC_VERIFY_ACCESS_TOKEN` | `false`                 | Validate the access token instead of the id token.                                                                                                                                                                                                                                                                                                                            |
 
 ## JWT Signing Key
 
-The FastMCP default signing key is ephemeral (regenerated on startup), which forces clients to re-authenticate after every restart. Set a stable random secret to avoid this:
+When `SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY` is unset, FastMCP derives the signing key from the OIDC client secret using deterministic key derivation, so the key stays the same across restarts and tokens keep validating.
+
+The real reason to set an explicit key is secret rotation: because the default key is derived from the client secret, rotating that secret changes the derived key and invalidates every token issued under the old one. Setting an explicit signing key decouples token validity from client-secret rotation:
 
 ```
 # Generate once, store in your .env file
 openssl rand -hex 32
 ```
-
-Linux / Docker
-
-On Linux (including Docker), the ephemeral key is especially problematic because it does not persist across process restarts. Always set `SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY` in production.
 
 ## Setup with Authelia
 
@@ -2316,7 +2350,6 @@ networks:
 With the corresponding `.env`:
 
 ```
-SCHOLAR_MCP_READ_ONLY=true
 SCHOLAR_MCP_BASE_URL=https://mcp.example.com
 SCHOLAR_MCP_OIDC_CONFIG_URL=https://auth.example.com/.well-known/openid-configuration
 SCHOLAR_MCP_OIDC_CLIENT_ID=my-scholar-mcp
@@ -2356,46 +2389,131 @@ Register this callback URI in your OIDC provider:
 https://mcp.example.com/myservice/auth/callback
 ```
 
+### What the server serves, and where
+
+The MCP endpoint and the OAuth discovery documents sit on opposite sides of the prefix, which is what makes subpath routing more than one strip rule. With `BASE_URL=https://mcp.example.com/myservice` and `HTTP_PATH=/mcp`:
+
+| Public URL                                                                  | Path the container listens on        | Served when                                         |
+| --------------------------------------------------------------------------- | ------------------------------------ | --------------------------------------------------- |
+| `/myservice/mcp`                                                            | `/mcp`                               | always                                              |
+| `/myservice/authorize`, `/token`, `/register`, `/auth/callback`, `/consent` | the same path without the prefix     | the server proxies OAuth (client ID and secret set) |
+| `/.well-known/oauth-protected-resource/myservice/mcp`                       | the identical path, prefix included  | OIDC is enabled, in every mode                      |
+| `/.well-known/oauth-authorization-server`                                   | the identical path, at the host root | the server proxies OAuth (client ID and secret set) |
+
+Two properties of that table drive every routing rule below:
+
+1. The MCP endpoint and the OAuth endpoints listen **without** the prefix, so the proxy has to strip it.
+1. The protected-resource document's path **contains** the prefix, because RFC 9728 §3.1 appends the resource path after the well-known segment. The server registers that full path verbatim, so stripping the prefix from this request returns 404.
+
+A server holding no client ID and secret verifies tokens the provider issued directly. It serves protected-resource metadata only and answers `/.well-known/oauth-authorization-server` with 404. That is the correct answer, because the provider is the authorization server, so do not route that path to a server configured this way.
+
 ### Reverse proxy routing
 
-The reverse proxy must:
+The reverse proxy needs two routers pointing at the same service, because a prefix rule cannot express both halves:
 
-1. **Strip the prefix** (`/myservice`) from operational routes before forwarding to the app
-1. **Forward OAuth discovery routes** to this service (without stripping prefixes):
-   - `/.well-known/oauth-authorization-server`: authorization server metadata
-   - `/.well-known/oauth-protected-resource/myservice/mcp`: protected resource metadata
-
-Example Traefik configuration:
+1. **Operational routes** match the prefix and strip it: `/myservice/mcp` and, in proxy mode, the OAuth endpoints.
+1. **Discovery routes** match their own well-known paths and pass through untouched. Their URLs do not begin with `/myservice`, so a `PathPrefix(/myservice)` rule never sees them.
 
 ```
 labels:
-  # Operational routes: strip /myservice prefix before forwarding
+  # Operational routes: strip the /myservice prefix before forwarding
   - "traefik.http.routers.mcp-app.rule=Host(`mcp.example.com`) && PathPrefix(`/myservice`)"
   - "traefik.http.middlewares.strip-myservice.stripprefix.prefixes=/myservice"
   - "traefik.http.routers.mcp-app.middlewares=strip-myservice"
   - "traefik.http.services.mcp-app.loadbalancer.server.port=8000"
-  # OAuth discovery routes: forward without stripping
-  - "traefik.http.routers.mcp-wellknown.rule=Host(`mcp.example.com`) && (PathPrefix(`/.well-known/oauth-authorization-server`) || PathPrefix(`/.well-known/oauth-protected-resource/myservice/mcp`))"
+  # Discovery routes: same service, no strip middleware
+  - "traefik.http.routers.mcp-wellknown.rule=Host(`mcp.example.com`) && (PathPrefix(`/.well-known/oauth-protected-resource/myservice/mcp`) || PathPrefix(`/.well-known/oauth-authorization-server`))"
   - "traefik.http.routers.mcp-wellknown.service=mcp-app"
 ```
 
-Note
+Drop the `oauth-authorization-server` clause when the server holds no client ID and secret. That path returns 404 in such a configuration, and claiming it on a shared hostname takes the document away from whichever service does answer.
 
-This configuration requires that no other OAuth service claims `/.well-known/oauth-authorization-server` on this hostname. See [Shared-hostname limitation](#shared-hostname-limitation) below.
+Two routers rather than one is deliberate. A single router carrying the strip rule would apply it to the discovery request as well. Nothing here relies on how a given proxy treats a strip prefix that fails to match: separate routers state the untouched route outright, in any proxy that has the concept.
 
-### Shared-hostname limitation
+### Sharing a hostname
 
-Shared-hostname subpath with native OIDC is not supported
+The failure that follows from point 2 above is worth spelling out, because its symptom points somewhere else entirely.
 
-When multiple OAuth-capable services share a hostname, native OIDC on a subpath does not work.
+The discovery URL sits outside the prefix, so on a hostname shared with other services, prefix-based routing cannot claim it. Without a router that matches it explicitly, the request falls through to whatever else holds the host: an OAuth gateway, an SSO portal, or another MCP server at the root. That service answers with **its** metadata, the client builds an authorization URL from another service's endpoints, and the visible symptom is an authorization URL 404ing at a path nobody configured. It reads as a client bug or an auth bug; it is a routing rule one path too narrow.
 
-**Why:** FastMCP serves the OAuth authorization-server metadata at `/.well-known/oauth-authorization-server` (host root), regardless of the subpath in `BASE_URL`. The FastMCP codebase contains an RFC 8414 path-aware override (`OIDCProxy.get_well_known_routes()`) that would serve it at `/.well-known/oauth-authorization-server/myservice`. However, this method is not wired into the route mounting flow and is effectively dead code.
+The `mcp-wellknown` router above is the fix. In Traefik it also wins by default: routers sort by rule length, so a rule naming the full well-known path outranks a bare `Host(...)` catch-all. Where the competing service sets an explicit `priority`, set a higher one here, because Traefik ignores its rule-length default for any router that carries one.
 
-The protected-resource metadata (`/.well-known/oauth-protected-resource/myservice/mcp`) is correctly path-namespaced and does not collide. Only the authorization-server discovery route is the problem.
+One document still collides: `oauth-authorization-server`
 
-This works when the MCP server is the **only** OAuth service on the hostname. It breaks when another service already owns `/.well-known/oauth-authorization-server`.
+In proxy mode the server serves authorization-server metadata at `/.well-known/oauth-authorization-server`, at the **host root**, whatever prefix `BASE_URL` carries. FastMCP does contain an RFC 8414 path-aware override, `OAuthProvider.get_well_known_routes()`, which would serve it at `/.well-known/oauth-authorization-server/myservice`. Nothing reaches it: the HTTP app mounts `get_routes()` instead, leaving the path-aware form unreachable. (Verified against FastMCP 3.4.7.)
 
-**Recommendations for shared-hostname scenarios:**
+Only this one document collides. Protected-resource metadata is path-namespaced, so several servers can share a hostname without contending for it.
 
-- **Dedicated hostname** (preferred): give the MCP server its own hostname (such as `myservice.example.com`) so discovery routes do not collide.
-- **External auth gateway**: use `mcp-auth-proxy` as a sidecar instead of native OIDC. The MCP server runs unauthenticated behind the proxy, and the proxy handles OAuth discovery at its own routes.
+Where another OAuth service already owns the root path, either give this server its own hostname, or run it without client ID and secret so it never serves the document. An authorization-server metadata request then belongs to the provider, where the `authorization_servers` entry in this server's protected-resource metadata sends the client anyway.
+
+### Verifying the routing
+
+Probe the container first, to separate what the server serves from what the proxy does with it. The image ships no HTTP client, so borrow one. Passing `--network container:` puts the throwaway container inside the server's network namespace, which makes `localhost:8000` the server itself:
+
+```
+NS="container:$(docker compose ps -q scholar-mcp)"
+docker run --rm --network "$NS" curlimages/curl -s -o /dev/null \
+  -w '%{http_code}\n' localhost:8000/mcp
+docker run --rm --network "$NS" curlimages/curl -s \
+  localhost:8000/.well-known/oauth-protected-resource/myservice/mcp
+```
+
+Expect `401` for the first, meaning the endpoint is there and authentication is on, and the metadata JSON for the second. A `404` instead of the `401` means `HTTP_PATH` carries the prefix it should not. Then repeat from outside, through the proxy:
+
+```
+curl -s -o /dev/null -w '%{http_code}\n' https://mcp.example.com/myservice/mcp
+curl -s https://mcp.example.com/.well-known/oauth-protected-resource/myservice/mcp
+```
+
+Both must reach this server, and the `resource` field in the JSON must read `https://mcp.example.com/myservice/mcp`. A `resource` naming a different service is the shared-hostname problem above, not an incorrect `BASE_URL`.
+# Release Notes
+
+# Release Notes
+
+Each minor release series gets one page here telling its story: what changed, why it matters, and how to adopt it. Patch releases add a dated section to their series page, so a series stays one linkable document. The commit-level record lives in the repository's `CHANGELOG.md`; each GitHub release links back to its page here.
+
+- [1.9](https://pvliesdonk.github.io/scholar-mcp/1.9/releases/1.9/index.md): S2 API key liveness; v1.9.0 released 2026-07-19
+
+# 1.9
+
+Scholar MCP keeps working through the Semantic Scholar API key's 60-day inactivity window instead of silently going dark, and the server now tells you clearly when an API key has actually been rejected rather than mixing that in with ordinary rate-limit retries.
+
+## Papers, S2 API key liveness
+
+Deployments configured with `SCHOLAR_MCP_S2_API_KEY` stopped working after Semantic Scholar rejected the key with `403 Forbidden` on every call. The [motivating issue](https://github.com/pvliesdonk/scholar-mcp/issues/228) narrows the cause precisely:
+
+> Root cause: Semantic Scholar removes API keys that are inactive for 60 days.
+
+The issue confirms this directly against the S2 API: the deployed key returns `403`, while omitting the key entirely returns the normal `429` rate-limit response, ruling out a scholar-mcp bug or an S2 outage.
+
+[#231](https://github.com/pvliesdonk/scholar-mcp/pull/231) closes that gap two ways:
+
+- **A background keepalive task.** When `SCHOLAR_MCP_S2_API_KEY` is set, the server pings Semantic Scholar once at startup and every 7 days after that (comfortably inside the 60-day removal window), so a configured key that would otherwise sit idle stays active. Nothing to configure: it starts and stops with the server lifespan whenever the key is present.
+- **Distinguishable 403 logging.** Every Semantic Scholar call site (paper and citation-graph lookups, recommendations, citation generation, enrichment, and the keepalive ping itself) now routes through shared `format_s2_error` / `log_s2_error` helpers. A `403` (a dead or revoked key) logs a dedicated `WARNING`-level event (`s2_key_forbidden` for tool calls, `s2_keepalive_key_forbidden` for the keepalive task), separate from ordinary `429` rate-limit retry logging, so an operator grepping logs can tell "the key is gone" from "we're being rate-limited" at a glance. The error returned to the calling LLM stays a generic, non-leaking message; full upstream response detail goes to the server-side log only.
+
+See the [Semantic Scholar configuration guide](https://pvliesdonk.github.io/scholar-mcp/1.9/configuration/index.md) for the `SCHOLAR_MCP_S2_API_KEY` setting itself; the keepalive and logging behavior are documented in `README.md`.
+
+Two related issues were opened during this work and are intentionally not part of this release: surfacing S2 key health through `get_server_info` ([#229](https://github.com/pvliesdonk/scholar-mcp/issues/229), deferred because no external monitoring currently polls scholar-mcp), and a pre-existing lifespan-startup-exception resource leak ([#230](https://github.com/pvliesdonk/scholar-mcp/issues/230)) found while reviewing this change but predating it.
+
+## Upgrading
+
+No breaking changes to the operator surface or the public library interface between v1.8.2 and v1.9.0: no new env vars, no tool surface changes, and the S2 keepalive task above activates automatically off the existing `SCHOLAR_MCP_S2_API_KEY` setting.
+
+## v1.9.1
+
+A maintenance release with no user-facing features or fixes: it carries the project's `fastmcp-server-template` baseline forward from v2.3.0 to v5.6.2. Nothing to act on beyond the OIDC and bare-CLI notes below.
+
+Every commit in this release is conventionally typed `chore(copier)` or `chore`; there are no `feat`/`fix`/`!` commits ([#257](https://github.com/pvliesdonk/scholar-mcp/pull/257), [#267](https://github.com/pvliesdonk/scholar-mcp/pull/267), [#269](https://github.com/pvliesdonk/scholar-mcp/pull/269), [#272](https://github.com/pvliesdonk/scholar-mcp/pull/272), [#273](https://github.com/pvliesdonk/scholar-mcp/pull/273), [#275](https://github.com/pvliesdonk/scholar-mcp/pull/275), [#278](https://github.com/pvliesdonk/scholar-mcp/pull/278), tracked under [epic #259](https://github.com/pvliesdonk/scholar-mcp/issues/259)), so `CHANGELOG.md`'s v1.9.1 section is intentionally empty. This page is where that work is narrated.
+
+The template chain is project build, release, and packaging tooling, not the MCP tool surface. Most of it is invisible day to day, but a few changes reach an operator directly:
+
+- **Config surface generation.** `.env.example`, the config-wizard spec, the README environment-variable tables, and `server.json`'s env arrays are now generated from `ProjectConfig` field metadata ([#257](https://github.com/pvliesdonk/scholar-mcp/pull/257)) rather than hand-maintained, so these artifacts can no longer drift from what the server actually reads.
+- **`SCHOLAR_MCP_OIDC_ADVERTISED_SCOPES`** joined the environment variable set ([#273](https://github.com/pvliesdonk/scholar-mcp/pull/273)) for OIDC deployments that need to advertise scopes to MCP clients independently of the scopes required at the token check (`SCHOLAR_MCP_OIDC_REQUIRED_SCOPES`). It only matters if you run OIDC auth; every other deployment is unaffected.
+- **Repository- and release-process changes**: GitHub rulesets protecting `main` and release branches, a PR-title gate, and a public-import-surface snapshot were adopted ([#272](https://github.com/pvliesdonk/scholar-mcp/pull/272)); the release pipeline moved from python-semantic-release to knope-driven release PRs, with release notes now written as part of the release PR ([#273](https://github.com/pvliesdonk/scholar-mcp/pull/273)). These are contributor- and maintainer-facing, not something a deployed server's operator needs to act on.
+- **This page** (the `docs/releases/` release-notes mechanism) was wired up in [#272](https://github.com/pvliesdonk/scholar-mcp/pull/272). v1.9.0 above is narrated here retroactively, since it shipped before the page existed.
+
+Three deployment regressions were introduced and fixed within this same maintenance window, before ever reaching a release: [#257](https://github.com/pvliesdonk/scholar-mcp/pull/257) discovered that adopting the template's newer CLI defaults would flip the HTTP bind default from `0.0.0.0` to `127.0.0.1` ([#250](https://github.com/pvliesdonk/scholar-mcp/issues/250)), and fixed it in the same change by pinning `SCHOLAR_MCP_HOST=0.0.0.0` in the shipped systemd unit (the Docker image was already unaffected, since its `CMD` already passes `--host 0.0.0.0` explicitly); it also fixed a config-loading path that would have printed a raw traceback instead of a clean error message for an invalid `SCHOLAR_MCP_PORT` ([#251](https://github.com/pvliesdonk/scholar-mcp/issues/251)), and stopped the generated config surface from overwriting the packaged `packaging/env.example`'s deliberate `SCHOLAR_MCP_CACHE_DIR` override ([#252](https://github.com/pvliesdonk/scholar-mcp/issues/252)). Because all three landed inside the same range this page covers, no released version ever carried the regressions; they are recorded here only because the fixes are otherwise invisible to `CHANGELOG.md`.
+
+A fourth issue surfaced from an actual release attempt rather than from review: publishing `v1.9.1-rc.0` to PyPI failed at the `Publish to PyPI` step with `InvalidDistribution: Invalid distribution metadata: '2.5' is not a valid metadata version`. Root-caused upstream as [fastmcp-server-template#479](https://github.com/pvliesdonk/fastmcp-server-template/issues/479): two template-owned pins encoded one invariant that nothing asserted: `pyproject.toml` left `hatchling` unbounded while `release.yml` pinned `gh-action-pypi-publish` at v1.14.0, so once hatchling 1.32 began emitting `Metadata-Version: 2.5`, that action's bundled twine 6.1.0 refused it. Template v5.6.2 fixes both halves ([#277](https://github.com/pvliesdonk/scholar-mcp/issues/277), [#278](https://github.com/pvliesdonk/scholar-mcp/pull/278)): `gh-action-pypi-publish` moves to v1.14.2 (the first release bundling twine 7.0.0, which accepts metadata 2.5), and `pyproject.toml` bounds `hatchling>=1.32,<1.33` (the same bound was applied by hand to `packaging/mcpb/pyproject.toml.in`, which `copier update` never touches). No PyPI version was consumed by the failure, since `twine check` runs before the upload begins. This is release-pipeline reliability, not something a deployed server's operator or a library consumer needs to act on.
+
+No breaking changes to the operator surface or the public library interface against v1.9.0: the public import surface (`tests/public_import_surface.txt`) was introduced in this range and starts empty, and the only new environment variable is the additive `SCHOLAR_MCP_OIDC_ADVERTISED_SCOPES` above. One nuance for anyone running the server via a bare CLI invocation (not the Docker image or the packaged systemd service, both of which pin their bind address explicitly): the underlying `serve --transport http` default bind host changed from `0.0.0.0` to `127.0.0.1` partway through this range. If you invoke `scholar-mcp serve --transport http` directly and rely on the implicit default for external reachability, set `SCHOLAR_MCP_HOST=0.0.0.0` (or `--host 0.0.0.0`) explicitly going forward.

@@ -123,7 +123,7 @@ Full OAuth 2.1 authentication using an external identity provider. The MCP serve
 
 ### How it works
 
-The server uses FastMCP's built-in `OIDCProxy`. No external auth sidecar needed:
+The server proxies OIDC itself, with no external auth sidecar to deploy:
 
 ```
 Client → scholar-mcp (OIDCProxy) → OIDC Provider
@@ -137,25 +137,26 @@ Client → scholar-mcp (OIDCProxy) → OIDC Provider
 
 ### Required variables
 
-| Variable                         | Description                                         |
-| -------------------------------- | --------------------------------------------------- |
-| `SCHOLAR_MCP_BASE_URL`           | Public base URL (such as `https://mcp.example.com`) |
-| `SCHOLAR_MCP_OIDC_CONFIG_URL`    | OIDC discovery endpoint                             |
-| `SCHOLAR_MCP_OIDC_CLIENT_ID`     | Client ID registered with your provider             |
-| `SCHOLAR_MCP_OIDC_CLIENT_SECRET` | Client secret                                       |
+| Variable                         | Description                                                                                                                                                        |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `SCHOLAR_MCP_BASE_URL`           | Public base URL of the deployed server (`https://mcp.example.com`). Required for OIDC. Also the fallback source of the MCP Apps domain when `app_domain` is unset. |
+| `SCHOLAR_MCP_OIDC_CONFIG_URL`    | OIDC discovery document URL (`https://auth.example.com/.well-known/openid-configuration`).                                                                         |
+| `SCHOLAR_MCP_OIDC_CLIENT_ID`     | OIDC client identifier registered with the provider.                                                                                                               |
+| `SCHOLAR_MCP_OIDC_CLIENT_SECRET` | OIDC client secret registered with the provider.                                                                                                                   |
 
 ### Optional variables
 
-| Variable                               | Default   | Description                                                                                                                       |
-| -------------------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY`     | ephemeral | JWT signing key (**required on Linux/Docker**)                                                                                    |
-| `SCHOLAR_MCP_OIDC_AUDIENCE`            | n/a       | Expected JWT audience claim; leave unset if your provider does not set one                                                        |
-| `SCHOLAR_MCP_OIDC_REQUIRED_SCOPES`     | `openid`  | Comma-separated required scopes                                                                                                   |
-| `SCHOLAR_MCP_OIDC_VERIFY_ACCESS_TOKEN` | `false`   | Set `true` to verify the access token as a JWT instead of the id token; useful for audience-claim validation on JWT access tokens |
+| Variable                               | Default                 | Description                                                                                                                                                                                                                                                                                                                                                                   |
+| -------------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SCHOLAR_MCP_OIDC_AUDIENCE`            | (none)                  | Expected `aud` claim; tokens issued for another audience are rejected.                                                                                                                                                                                                                                                                                                        |
+| `SCHOLAR_MCP_OIDC_REQUIRED_SCOPES`     | `openid`                | Scopes a caller must present, space- or comma-separated. Defaults to `openid` in oidc-proxy mode.                                                                                                                                                                                                                                                                             |
+| `SCHOLAR_MCP_OIDC_ADVERTISED_SCOPES`   | `openid offline_access` | Scopes advertised to MCP clients in protected-resource metadata, space- or comma-separated. Overrides the default `openid offline_access`; `oidc_required_scopes` is always added on top. Set this when the registered client is not permitted `offline_access`, or to have clients request extra claim scopes (such as `groups`) without also requiring them in every token. |
+| `SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY`     | `derived`               | Signing key for issued JSON Web Tokens; used in oidc-proxy mode only. When unset, the key is derived deterministically from `oidc_client_secret`, so tokens survive a restart. Rotating that secret invalidates every issued token. Set this explicitly to decouple token validity from secret rotation. Generate with `openssl rand -hex 32`.                                |
+| `SCHOLAR_MCP_OIDC_VERIFY_ACCESS_TOKEN` | `false`                 | Validate the access token instead of the id token.                                                                                                                                                                                                                                                                                                                            |
 
-JWT signing key on Linux/Docker
+JWT signing key and secret rotation
 
-Without `OIDC_JWT_SIGNING_KEY`, FastMCP generates an ephemeral key that invalidates all tokens on restart. Always set a stable key in production:
+When `SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY` is unset, FastMCP derives the signing key from the OIDC client secret, so the key stays the same across restarts. Rotating the client secret changes the derived key and invalidates every token issued under the old one. Set an explicit key to decouple token validity from client-secret rotation:
 
 ```
 openssl rand -hex 32
@@ -177,9 +178,9 @@ ______________________________________________________________________
 
 The `client_id` and/or `redirect_uris` in your OIDC provider config don't match the values in your `.env` file. Verify both sides match exactly.
 
-### Tokens invalidated after restart
+### Tokens invalidated after a client-secret rotation
 
-You're missing `SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY`. Without it, FastMCP generates an ephemeral key on each startup. Generate and set a stable key:
+You're missing `SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY`. Without it, FastMCP derives the signing key from the OIDC client secret, so rotating that secret changes the derived key and invalidates every token issued under the old one. Generate and set a stable key to decouple token validity from secret rotation:
 
 ```
 openssl rand -hex 32
@@ -252,11 +253,11 @@ MCP clients cannot maintain sessions beyond the token lifetime because token ref
 
 Three independent issues prevent token refresh:
 
-| Layer              | Issue                                                                                                                          | Impact                                                                                         |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| **Claude Code**    | Stores refresh tokens but never uses them ([claude-code#21333](https://github.com/anthropics/claude-code/issues/21333))        | Refresh tokens are obtained and saved but never sent back to refresh expired access tokens     |
-| **Claude Code**    | Never requests `offline_access` scope ([claude-code#7744](https://github.com/anthropics/claude-code/issues/7744))              | Most OIDC providers won't issue a refresh token without this scope                             |
-| **MCP Python SDK** | Token refresh deadlocks inside SSE streams ([python-sdk#1326](https://github.com/modelcontextprotocol/python-sdk/issues/1326)) | Even with a valid refresh token, the SDK hangs when attempting refresh during an active stream |
+| Layer              | Issue                                                                                                                          | Impact                                                                                                                                                                                                                                                                    |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Claude Code**    | Stores refresh tokens but never uses them ([claude-code#21333](https://github.com/anthropics/claude-code/issues/21333))        | Refresh tokens are obtained and saved but never sent back to refresh expired access tokens                                                                                                                                                                                |
+| **Claude Code**    | Does not ask for `offline_access` on its own ([claude-code#7744](https://github.com/anthropics/claude-code/issues/7744))       | Most OIDC providers issue no refresh token without this scope. The server advertises `openid offline_access` in its protected-resource metadata, so a client that requests the advertised set gets a refresh-capable grant; one that ignores the metadata still does not. |
+| **MCP Python SDK** | Token refresh deadlocks inside SSE streams ([python-sdk#1326](https://github.com/modelcontextprotocol/python-sdk/issues/1326)) | Even with a valid refresh token, the SDK hangs when attempting refresh during an active stream                                                                                                                                                                            |
 
 The server-side refresh architecture (FastMCP's `OAuthProxy.exchange_refresh_token()`) is correctly implemented and would work, but it requires the client to initiate the refresh, which none of the current clients do reliably.
 
@@ -269,7 +270,7 @@ The server-side refresh architecture (FastMCP's `OAuthProxy.exchange_refresh_tok
 - `access_token: '8h'`: covers a workday
 - `id_token: '8h'`: **must match access_token** when using `verify_id_token` mode (critical for Authelia)
 - `refresh_token: '30d'`: ready for when clients support refresh
-- Include `offline_access` in provider-side scopes; no effect today, but enables refresh when clients are fixed
+- Permit `offline_access` for the registered client; the server advertises it by default, so a client that honours the advertised scopes requests it. Where the client may not hold that scope, narrow what the server advertises with `SCHOLAR_MCP_OIDC_ADVERTISED_SCOPES` rather than letting the authorization request fail
 
 ### Tracking
 

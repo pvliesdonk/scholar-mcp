@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="FastMCP server for Semantic Scholar with OpenAlex enrichment and docling PDF conversion">
+        <meta name="description" content="FastMCP server for scholarly sources (papers, patents, books, and standards) with metadata enrichment and docling PDF conversion">
       
       
       
@@ -325,6 +325,25 @@
         </a>
       </li>
     
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../releases/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Release Notes
+
+      </a>
+    </li>
   
 
       
@@ -1212,9 +1231,92 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release-process/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Process
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../repository-protection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Repository Protection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -1440,6 +1542,7 @@
 <a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>sudo<span class="w"> </span>journalctl<span class="w"> </span>-u<span class="w"> </span>scholar-mcp<span class="w"> </span>-f
 </code></pre></div>
 <p>The service runs in HTTP mode on port 8000 by default.</p>
+<p>The unit binds <code>0.0.0.0</code> (all interfaces) via <code>Environment=SCHOLAR_MCP_HOST=0.0.0.0</code> so the packaged server is reachable from other hosts. The bare CLI falls back to <code>127.0.0.1</code> (loopback only). To restrict the packaged service to loopback (typical behind a same-host reverse proxy), set <code>SCHOLAR_MCP_HOST=127.0.0.1</code> in <code>/etc/scholar-mcp/env</code>; that file overrides the unit default.</p>
 <h2 id="security-hardening">Security hardening<a class="headerlink" href="#security-hardening" title="Permanent link">&para;</a></h2>
 <p>The systemd unit includes detailed security directives:</p>
 <table>

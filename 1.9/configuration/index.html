@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="FastMCP server for Semantic Scholar with OpenAlex enrichment and docling PDF conversion">
+        <meta name="description" content="FastMCP server for scholarly sources (papers, patents, books, and standards) with metadata enrichment and docling PDF conversion">
       
       
       
@@ -325,6 +325,25 @@
         </a>
       </li>
     
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../releases/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Release Notes
+
+      </a>
+    </li>
   
 
       
@@ -692,6 +711,45 @@
       
     </span>
   </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tool-visibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tool visibility
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#background-tasks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Background tasks
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Background tasks">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#two-task-queues-one-of-them-not-configured-by-scholar_mcp_tasks_url" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Two task queues, one of them not configured by SCHOLAR_MCP_TASKS_URL
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1251,9 +1309,92 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../deployment/release-process/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Process
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../deployment/repository-protection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Repository Protection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../releases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -1425,6 +1566,45 @@
       
     </span>
   </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tool-visibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tool visibility
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#background-tasks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Background tasks
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Background tasks">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#two-task-queues-one-of-them-not-configured-by-scholar_mcp_tasks_url" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Two task queues, one of them not configured by SCHOLAR_MCP_TASKS_URL
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1828,11 +2008,56 @@
 </tbody>
 </table>
 <p>See <a href="../deployment/docker/#remote-debugging">Docker deployment → Remote debugging</a> for the IDE-attach walkthrough.</p>
+<h2 id="tool-visibility">Tool visibility<a class="headerlink" href="#tool-visibility" title="Permanent link">&para;</a></h2>
+<p>Operators can trim which tools this instance exposes. Each variable takes a
+comma-separated list of explicit tool names:</p>
+<ul>
+<li><code>SCHOLAR_MCP_TOOLS_ALLOW</code>: expose <em>only</em> the listed tools.</li>
+<li><code>SCHOLAR_MCP_TOOLS_DENY</code>: hide the listed tools.</li>
+</ul>
+<p>Hidden tools disappear from <code>tools/list</code> and are rejected on <code>tools/call</code>;
+resources and prompts are unaffected. Setting both variables, or setting one
+to a value with no names in it, is a startup error. A name matching no
+registered tool is ignored, but an allowlist that matches nothing logs a
+startup <code>WARNING</code> since the instance then exposes zero tools. See
+<code>fastmcp-pvl-core</code>'s README for the full semantics.</p>
+<h2 id="background-tasks">Background tasks<a class="headerlink" href="#background-tasks" title="Permanent link">&para;</a></h2>
+<p>Every Scholar MCP instance wires a background-task backend at startup, so
+a tool registered with <code>task=True</code> works with no extra setup. One variable
+picks the backend:</p>
+<ul>
+<li><code>SCHOLAR_MCP_TASKS_URL</code>: <code>memory://</code> runs tasks in-process and loses
+  them on restart; <code>redis://...</code> is durable and shared across processes.</li>
+</ul>
+<p>Unset, a <code>redis://</code> <code>SCHOLAR_MCP_KV_STORE_URL</code> is reused for tasks as
+well, so a single URL configures every stateful subsystem. With neither set,
+the backend falls back to <code>memory://</code>, which the server logs at startup when
+running over HTTP. The queue name comes from the <code>SCHOLAR_MCP</code> prefix, so
+two servers sharing one Redis do not share a queue.</p>
+<p>Worker tuning stays on the native <code>FASTMCP_DOCKET_*</code> variables
+(<code>FASTMCP_DOCKET_CONCURRENCY</code> and friends, listed in <code>.env.example</code>). Set the
+backend through <code>SCHOLAR_MCP_TASKS_URL</code> rather than
+<code>FASTMCP_DOCKET_URL</code>: the former wins when both are set, and the server warns
+about the disagreement.</p>
 <!-- DOMAIN-CONFIG-VARS-START -->
-<!-- Future project-specific config notes go here; kept across copier
-     update. Scholar's domain config is already documented in the
-     per-domain sections above (Core, PDF Conversion, EPO, Google Books,
-     Server, Authentication, Cache TTLs, Rate Limiting). -->
+<!-- Project-specific config notes; kept across copier update. Scholar's
+     domain config is documented in the per-domain sections above (Core, PDF
+     Conversion, EPO, Google Books, Server, Authentication, Cache TTLs, Rate
+     Limiting). -->
+
+<h3 id="two-task-queues-one-of-them-not-configured-by-scholar_mcp_tasks_url">Two task queues, one of them not configured by <code>SCHOLAR_MCP_TASKS_URL</code><a class="headerlink" href="#two-task-queues-one-of-them-not-configured-by-scholar_mcp_tasks_url" title="Permanent link">&para;</a></h3>
+<p><code>SCHOLAR_MCP_TASKS_URL</code>, described under <a href="#background-tasks">Background tasks</a>
+above, configures the <code>fastmcp-pvl-core</code> task backend. Scholar MCP also has its
+own, separate in-process queue (<code>src/scholar_mcp/_task_queue.py</code>), and that is
+the one behind the <code>list_tasks</code> and <code>get_task_result</code> tools and the automatic
+queueing of rate-limited Semantic Scholar and PDF calls. It is always
+in-process and always lost on restart, whatever <code>SCHOLAR_MCP_TASKS_URL</code> says.</p>
+<p>The practical consequence is for deployments with a Redis
+<code>SCHOLAR_MCP_KV_STORE_URL</code>: the core backend silently reuses that URL, so the
+server gains a Redis-backed task queue it does not currently put anything into.
+Set <code>SCHOLAR_MCP_TASKS_URL=memory://</code> to keep the two subsystems apart.
+Consolidating the two queues is tracked in
+<a href="https://github.com/pvliesdonk/scholar-mcp/issues/264">#264</a>.</p>
 <!-- DOMAIN-CONFIG-VARS-END -->
 
 

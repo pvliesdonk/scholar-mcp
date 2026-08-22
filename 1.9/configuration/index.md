@@ -174,3 +174,28 @@ Optional development-only listener. Requires the `[debug]` extra (Docker images:
 | `SCHOLAR_MCP_DEBUG_WAIT` | `false`  | Block startup until the IDE attaches. Useful for debugging early startup code paths. |
 
 See [Docker deployment → Remote debugging](https://pvliesdonk.github.io/scholar-mcp/1.9/deployment/docker/#remote-debugging) for the IDE-attach walkthrough.
+
+## Tool visibility
+
+Operators can trim which tools this instance exposes. Each variable takes a comma-separated list of explicit tool names:
+
+- `SCHOLAR_MCP_TOOLS_ALLOW`: expose *only* the listed tools.
+- `SCHOLAR_MCP_TOOLS_DENY`: hide the listed tools.
+
+Hidden tools disappear from `tools/list` and are rejected on `tools/call`; resources and prompts are unaffected. Setting both variables, or setting one to a value with no names in it, is a startup error. A name matching no registered tool is ignored, but an allowlist that matches nothing logs a startup `WARNING` since the instance then exposes zero tools. See `fastmcp-pvl-core`'s README for the full semantics.
+
+## Background tasks
+
+Every Scholar MCP instance wires a background-task backend at startup, so a tool registered with `task=True` works with no extra setup. One variable picks the backend:
+
+- `SCHOLAR_MCP_TASKS_URL`: `memory://` runs tasks in-process and loses them on restart; `redis://...` is durable and shared across processes.
+
+Unset, a `redis://` `SCHOLAR_MCP_KV_STORE_URL` is reused for tasks as well, so a single URL configures every stateful subsystem. With neither set, the backend falls back to `memory://`, which the server logs at startup when running over HTTP. The queue name comes from the `SCHOLAR_MCP` prefix, so two servers sharing one Redis do not share a queue.
+
+Worker tuning stays on the native `FASTMCP_DOCKET_*` variables (`FASTMCP_DOCKET_CONCURRENCY` and friends, listed in `.env.example`). Set the backend through `SCHOLAR_MCP_TASKS_URL` rather than `FASTMCP_DOCKET_URL`: the former wins when both are set, and the server warns about the disagreement.
+
+### Two task queues, one of them not configured by `SCHOLAR_MCP_TASKS_URL`
+
+`SCHOLAR_MCP_TASKS_URL`, described under [Background tasks](#background-tasks) above, configures the `fastmcp-pvl-core` task backend. Scholar MCP also has its own, separate in-process queue (`src/scholar_mcp/_task_queue.py`), and that is the one behind the `list_tasks` and `get_task_result` tools and the automatic queueing of rate-limited Semantic Scholar and PDF calls. It is always in-process and always lost on restart, whatever `SCHOLAR_MCP_TASKS_URL` says.
+
+The practical consequence is for deployments with a Redis `SCHOLAR_MCP_KV_STORE_URL`: the core backend silently reuses that URL, so the server gains a Redis-backed task queue it does not currently put anything into. Set `SCHOLAR_MCP_TASKS_URL=memory://` to keep the two subsystems apart. Consolidating the two queues is tracked in [#264](https://github.com/pvliesdonk/scholar-mcp/issues/264).

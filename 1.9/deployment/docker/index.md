@@ -84,6 +84,25 @@ networks:
     external: true
 ```
 
+## Image tags
+
+| Tag          | Contents                                                     | Updated by                                           |
+| ------------ | ------------------------------------------------------------ | ---------------------------------------------------- |
+| `latest`     | Newest stable release                                        | Each stable release that is newest across all series |
+| `vX.Y.Z`     | That exact release (pre-releases included, as `vX.Y.Z-rc.N`) | Never (immutable)                                    |
+| `vX.Y`, `vX` | Newest stable release in that series                         | Each stable release that is newest in its series     |
+| `rc`         | Newest release candidate                                     | Each pre-release still ahead of `latest`             |
+| `edge`       | Newest commit on `main`                                      | Every merge to `main`                                |
+
+Rolling tags are ordering-aware: a patch release cut from an old `release/X.Y` branch after a newer stable has shipped updates its own series tags but never `latest`. The same rule governs `rc`: a candidate only moves the tag while its version is still ahead of the newest stable, so a candidate for an already-released version never pulls `rc` behind `latest`.
+
+The three rolling tags answer different questions. Use `latest` to run released code, `rc` to test the candidate for the next release, and `edge` to run the newest merged commit. Note that `rc` is not cleared when its release ships: it keeps pointing at the last candidate until the next one is cut, so `latest` is the tag to follow in production. To find the commit behind an `edge` image, read its `org.opencontainers.image.revision` label:
+
+```
+docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' \
+  ghcr.io/pvliesdonk/scholar-mcp:edge
+```
+
 ## Environment variables
 
 See [Configuration](https://pvliesdonk.github.io/scholar-mcp/1.9/configuration/index.md) for the full reference. Key variables for Docker:
@@ -102,6 +121,8 @@ See [Configuration](https://pvliesdonk.github.io/scholar-mcp/1.9/configuration/i
 | `SCHOLAR_MCP_DEBUG_WAIT`      | `false`               | Block startup until IDE attaches (see [Remote debugging](#remote-debugging))                                  |
 
 For OIDC authentication, see [OIDC deployment](https://pvliesdonk.github.io/scholar-mcp/1.9/deployment/oidc/index.md).
+
+Running behind a reverse proxy on a path prefix (`https://mcp.example.com/myservice/mcp`) rather than its own hostname needs two routing rules, one of which sits outside the prefix: see [Subpath Deployments](https://pvliesdonk.github.io/scholar-mcp/1.9/deployment/oidc/#subpath-deployments).
 
 ## Volumes
 
@@ -130,17 +151,6 @@ services:
         APP_UID: 1000
         APP_GID: 1000
 ```
-
-## Image tags
-
-| Tag      | Description           |
-| -------- | --------------------- |
-| `latest` | Latest release        |
-| `v1.0.1` | Specific version      |
-| `v1.0`   | Latest patch in 1.0.x |
-| `v1`     | Latest minor in 1.x   |
-
-Multi-arch: `linux/amd64` and `linux/arm64`.
 
 ## Remote debugging
 
