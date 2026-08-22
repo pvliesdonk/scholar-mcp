@@ -3,7 +3,7 @@
   "name": "io.github.pvliesdonk/scholar-mcp",
   "title": "Scholar MCP",
   "description": "FastMCP server for scholarly sources (papers, patents, books, and standards) with metadata enrichment and docling PDF conversion",
-  "version": "1.9.0",
+  "version": "1.9.1",
   "websiteUrl": "https://pvliesdonk.github.io/scholar-mcp/",
   "repository": {
     "url": "https://github.com/pvliesdonk/scholar-mcp",
@@ -13,7 +13,7 @@
     {
       "registryType": "pypi",
       "identifier": "pvliesdonk-scholar-mcp",
-      "version": "1.9.0",
+      "version": "1.9.1",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"
@@ -115,7 +115,7 @@
     },
     {
       "registryType": "oci",
-      "identifier": "ghcr.io/pvliesdonk/scholar-mcp:v1.9.0",
+      "identifier": "ghcr.io/pvliesdonk/scholar-mcp:v1.9.1",
       "transport": {
         "type": "streamable-http",
         "url": "http://localhost:{--port}/mcp"

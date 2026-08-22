@@ -1,7 +1,7 @@
 {
   "name": "scholar-mcp",
   "description": "Scholarly-sources MCP server for papers, patents, books, and standards.",
-  "version": "1.9.0",
+  "version": "1.9.1",
   "author": {
     "name": "Peter van Liesdonk"
   },
