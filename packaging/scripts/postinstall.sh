@@ -18,31 +18,42 @@ if [ ! -d "$VENV_DIR" ]; then
     python3 -m venv "$VENV_DIR"
 fi
 
+# DOMAIN-POSTINSTALL-EXTRAS-START — set EXTRAS to this project's extras
+# specifier (e.g. `[all]`) so the Linux packages install the same dependency
+# set as the container; keep it in step with the `--extra` flags inside the
+# Dockerfile's DOCKERFILE-UV-EXTRAS block. Kept across copier update.
+#
+# One variable rather than three edits, for the reason the Dockerfile block
+# gives about its two layers: the three installs below are the rc, stable and
+# unversioned paths of the same package, and a project that added an extra to
+# only some of them would ship a different dependency set depending on which
+# branch its install took.
+EXTRAS="[all]"
+# DOMAIN-POSTINSTALL-EXTRAS-END
+
 # Upgrade pip and install the package
 "${VENV_DIR}/bin/pip" install --quiet --upgrade pip
 
-# The `[all]` extra is a deliberate local edit to a template-owned file.
-# The template renders these three installs bare, but this project ships
-# `fastmcp[tasks]` under the `all` extra and the Dockerfile pulls it in both
-# layers via `--extra all` (DOCKERFILE-UV-EXTRAS). Dropping it here would
-# give the deb/rpm a different install profile than every other channel.
-# postinstall.sh has no extras sentinel; requested upstream.
 if [ -n "$PKG_VERSION" ]; then
     case "$PKG_VERSION" in
         *-rc.*)
-            # Pre-releases never reach PyPI; install the wheel attached to
-            # this version's own GitHub release. The wheel filename carries
-            # the PEP 440 canonical spelling (-rc.N -> rcN).
+            # Install the wheel attached to this version's own GitHub
+            # release. rc wheels do reach PyPI, but the .deb/.rpm shipped
+            # in that release then installs from the same immutable
+            # per-version channel it came from, so a candidate package
+            # stays installable independently of its PyPI publish. The
+            # wheel filename carries the PEP 440 canonical spelling
+            # (-rc.N -> rcN).
             canonical="$(printf '%s' "$PKG_VERSION" | sed 's/-rc\./rc/')"
             "${VENV_DIR}/bin/pip" install --quiet \
-                "pvliesdonk-scholar-mcp[all] @ https://github.com/pvliesdonk/scholar-mcp/releases/download/v${PKG_VERSION}/pvliesdonk_scholar_mcp-${canonical}-py3-none-any.whl"
+                "pvliesdonk-scholar-mcp${EXTRAS} @ https://github.com/pvliesdonk/scholar-mcp/releases/download/v${PKG_VERSION}/pvliesdonk_scholar_mcp-${canonical}-py3-none-any.whl"
             ;;
         *)
-            "${VENV_DIR}/bin/pip" install --quiet "pvliesdonk-scholar-mcp[all]==${PKG_VERSION}"
+            "${VENV_DIR}/bin/pip" install --quiet "pvliesdonk-scholar-mcp${EXTRAS}==${PKG_VERSION}"
             ;;
     esac
 else
-    "${VENV_DIR}/bin/pip" install --quiet "pvliesdonk-scholar-mcp[all]"
+    "${VENV_DIR}/bin/pip" install --quiet "pvliesdonk-scholar-mcp${EXTRAS}"
 fi
 
 # Ensure config directory exists

@@ -8,12 +8,17 @@ emits the expected env var, or that a guard message appears. The generic
 framework tests live in ``test_config_wizard_smoke.py`` (template-owned) and
 must not be edited here.
 
-See ``test_config_wizard_smoke.py`` for the page/browser fixtures to import.
+Import the page/browser fixtures from ``test_config_wizard_smoke.py`` (e.g.
+``from tests.test_config_wizard_smoke import page, site_url, browser``). This
+module is marked ``browser`` so the tests you add run in the docs CI lane, which
+invokes ``pytest ... -m browser``.
 """
 
 from __future__ import annotations
 
 import pytest
+
+pytestmark = pytest.mark.browser
 
 
 def test_domain_placeholder() -> None:
