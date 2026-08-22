@@ -1,6 +1,6 @@
 # Scholar MCP Server
 
-> FastMCP server for scholarly sources (papers, patents, books, and standards) with metadata enrichment and docling PDF conversion
+> FastMCP server for scholarly papers, patents, books and standards with docling PDF conversion
 
 # Getting Started
 
