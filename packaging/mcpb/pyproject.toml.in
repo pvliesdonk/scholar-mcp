@@ -1,6 +1,16 @@
 # Rendered at build time by envsubst. ${VERSION} matches the package release.
 [build-system]
-requires = ["hatchling"]
+# Bounded to match the project's own pyproject.toml. This backend runs only
+# on the fallback launch path -- `server.type: "uv"` with `entry_point`,
+# where the host does `uv run src/server.py` and uv builds this project on
+# the user's machine. The primary path (`mcp_config.command: "uvx"`) fetches
+# the published wheel and never touches it.
+#
+# Nothing publishes or `twine check`s this project, so the release failure in
+# template#479 cannot happen here. The bound is for reproducibility: an
+# unpinned backend on an end user's machine resolves to whatever is newest
+# that day.
+requires = ["hatchling>=1.32,<1.33"]
 build-backend = "hatchling.build"
 
 [project]
