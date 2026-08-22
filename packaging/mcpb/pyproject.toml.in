@@ -1,4 +1,8 @@
 # Rendered at build time by envsubst. ${VERSION} matches the package release.
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "scholar-mcp-mcpb"
 version = "${VERSION}"

@@ -46,14 +46,24 @@ site/
 docs/superpowers/
 .repowise/
 
-# Vale downloaded styles (fetched by `vale sync`; not checked in)
-.vale/styles/Google/
-.vale/styles/ai-tells/
-.vale/styles/proselint/
-.vale/styles/write-good/
+# Vale-synced style packages (downloaded by `vale sync`). Custom config
+# (vocabularies, ini overrides) under .vale/styles/config/ stays
+# versioned — sync never touches that subtree. A glob rather than a list of
+# pack names, so adding a pack to .vale.ini's `Packages` cannot leak it
+# into git.
+.vale/styles/*
+!.vale/styles/config/
+
+# Editor-local config. Deliberately just this one — several tools (repowise
+# among them) write into it unprompted, so it reappears in `git status` for
+# contributors who never opted in. A team that does want to share workspace
+# settings can track a specific file with `git add -f .vscode/settings.json`.
+.vscode/
 
 # --- Scholar-specific local artifacts
 *.npy
 *.npz
 .playwright-mcp/
+# No trailing slash: `.mcp.json/` would match a *directory* of that name and
+# leave the actual file tracked.
 .mcp.json
