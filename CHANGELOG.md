@@ -2,7 +2,7 @@
 
 <!-- version list -->
 
-## v1.9.0 (2026-07-19)
+## 1.9.0 (2026-07-19)
 
 ### Chores
 
@@ -17,7 +17,7 @@
   [`f04a19d`](https://github.com/pvliesdonk/scholar-mcp/commit/f04a19dc672e637b5e45fd5b8086bfd2c6833c95))
 
 
-## v1.8.2 (2026-06-19)
+## 1.8.2 (2026-06-19)
 
 ### Bug Fixes
 
@@ -87,7 +87,7 @@
   ([`cf594e6`](https://github.com/pvliesdonk/scholar-mcp/commit/cf594e6b3aec13ea1c583d0e76f09e401b503ef4))
 
 
-## v1.8.1 (2026-04-23)
+## 1.8.1 (2026-04-23)
 
 ### Chores
 
@@ -95,7 +95,7 @@
   ([`8cf1fda`](https://github.com/pvliesdonk/scholar-mcp/commit/8cf1fdad49dc26940c5e5fa122d378c3d1658609))
 
 
-## v1.7.1 (2026-04-23)
+## 1.7.1 (2026-04-23)
 
 ### Bug Fixes
 
@@ -137,7 +137,7 @@
   ([`0fb1ba6`](https://github.com/pvliesdonk/scholar-mcp/commit/0fb1ba6099fb09e72aedc50b23c8c7f0aa280dfc))
 
 
-## v1.7.0 (2026-04-21)
+## 1.7.0 (2026-04-21)
 
 ### Chores
 
@@ -146,7 +146,7 @@
   [`80d0274`](https://github.com/pvliesdonk/scholar-mcp/commit/80d0274aec296d0d54f5bbfa0a774d0062224e39))
 
 
-## v1.8.0-rc.1 (2026-04-21)
+## 1.8.0-rc.1 (2026-04-21)
 
 ### Chores
 
@@ -155,7 +155,7 @@
   [`1a90fe1`](https://github.com/pvliesdonk/scholar-mcp/commit/1a90fe137295899780157273423d3f3f7501a703))
 
 
-## v1.7.0-rc.2 (2026-04-21)
+## 1.7.0-rc.2 (2026-04-21)
 
 ### Bug Fixes
 
@@ -257,7 +257,7 @@
   [`d404bf7`](https://github.com/pvliesdonk/scholar-mcp/commit/d404bf751c88c54830ad88f374da67cd52433cb2))
 
 
-## v1.7.0-rc.1 (2026-04-12)
+## 1.7.0-rc.1 (2026-04-12)
 
 ### Bug Fixes
 
@@ -516,7 +516,7 @@
   ([`347d8c2`](https://github.com/pvliesdonk/scholar-mcp/commit/347d8c22764b641560c782aa4692f660f503bcf8))
 
 
-## v1.6.0 (2026-04-07)
+## 1.6.0 (2026-04-07)
 
 ### Bug Fixes
 
@@ -627,7 +627,7 @@
   ([`9c4736b`](https://github.com/pvliesdonk/scholar-mcp/commit/9c4736b2fbd7cffa382311e8d187b1b1fb3d3142))
 
 
-## v1.5.0 (2026-04-06)
+## 1.5.0 (2026-04-06)
 
 ### Bug Fixes
 
@@ -803,7 +803,7 @@
   ([`61b159b`](https://github.com/pvliesdonk/scholar-mcp/commit/61b159baa5fbf0661929d9a6d975c2c6473d9b0a))
 
 
-## v1.4.0 (2026-04-05)
+## 1.4.0 (2026-04-05)
 
 ### Bug Fixes
 
@@ -883,7 +883,7 @@
   ([`55f5c0b`](https://github.com/pvliesdonk/scholar-mcp/commit/55f5c0bdc282d23ee99863ed8866020c33a19f2d))
 
 
-## v1.3.0 (2026-04-05)
+## 1.3.0 (2026-04-05)
 
 ### Bug Fixes
 
@@ -935,7 +935,7 @@
   ([`4e56e0d`](https://github.com/pvliesdonk/scholar-mcp/commit/4e56e0daadb1aaaae29a3dffa969958b90aec0c6))
 
 
-## v1.2.2 (2026-04-04)
+## 1.2.2 (2026-04-04)
 
 ### Bug Fixes
 
@@ -948,7 +948,7 @@
   ([`23e28f2`](https://github.com/pvliesdonk/scholar-mcp/commit/23e28f22de10ee17af42a1414054f19230866615))
 
 
-## v1.2.1 (2026-04-04)
+## 1.2.1 (2026-04-04)
 
 ### Bug Fixes
 
@@ -970,7 +970,7 @@
   ([`f0a0a5f`](https://github.com/pvliesdonk/scholar-mcp/commit/f0a0a5f49bce3254d1691ceacb075d376d2e0810))
 
 
-## v1.2.0 (2026-04-04)
+## 1.2.0 (2026-04-04)
 
 ### Bug Fixes
 
@@ -999,7 +999,7 @@
   ([`02b55f3`](https://github.com/pvliesdonk/scholar-mcp/commit/02b55f3afa41b282e6a60e6cae48fd8eaa33c5c8))
 
 
-## v1.1.0 (2026-04-04)
+## 1.1.0 (2026-04-04)
 
 ### Bug Fixes
 
@@ -1048,7 +1048,7 @@
   ([`c73c177`](https://github.com/pvliesdonk/scholar-mcp/commit/c73c1776433c669df741c8018f18322ad0682532))
 
 
-## v1.0.1 (2026-04-04)
+## 1.0.1 (2026-04-04)
 
 ### Bug Fixes
 
@@ -1064,6 +1064,6 @@
   ([`fadce9d`](https://github.com/pvliesdonk/scholar-mcp/commit/fadce9de53a3f47acbac78e1c30c5b7e4d8bea31))
 
 
-## v1.0.0 (2026-04-04)
+## 1.0.0 (2026-04-04)
 
 - Initial Release

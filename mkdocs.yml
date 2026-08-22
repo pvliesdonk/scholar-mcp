@@ -9,10 +9,16 @@ edit_uri: edit/main/docs/
 # Keep this set in lockstep with the Vale exclusion (ci.yml vale_flags glob +
 # the pre-commit `- id: vale` exclude); see the Documentation Conventions
 # section in CLAUDE.md. superpowers/ is also gitignored.
+# The first three entries are the template's internal-doc subtrees; plans/,
+# specs/ and design.md are this project's pre-template equivalents, kept here
+# until they are migrated onto the template's convention.
 exclude_docs: |
   design/**
   decisions/**
   superpowers/**
+  plans/**
+  specs/**
+  design.md
 
 theme:
   name: material
@@ -118,11 +124,6 @@ markdown_extensions:
   - attr_list
   - md_in_html
 
-exclude_docs: |
-  superpowers/
-  plans/
-  specs/
-  design.md
 
 nav:
   # PROJECT-NAV-START — replace with your real navigation; kept across copier

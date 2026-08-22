@@ -1,5 +1,5 @@
 # Changes here will be overwritten by `copier update`.
-_commit: v4.1.0
+_commit: v5.5.0
 _src_path: https://github.com/pvliesdonk/fastmcp-server-template
 docker_registry: ghcr.io/pvliesdonk
 domain_description: FastMCP server for scholarly sources (papers, patents, books,
@@ -7,6 +7,8 @@ domain_description: FastMCP server for scholarly sources (papers, patents, books
 enable_authorization: false
 enable_structural_gate: true
 env_prefix: SCHOLAR_MCP
+extra_required_checks:
+- codecov/patch
 github_org: pvliesdonk
 human_name: Scholar MCP
 include_claude_plugin: true

@@ -2,11 +2,13 @@
 name: writing-release-notes
 description: >-
   Use when drafting or revising a release-notes page under docs/releases/ —
-  the Release Notes workflow invokes it after every stable release, and a
-  human may invoke it for a re-draft or backfill. Walks the API-driven
-  research fan-out (commits to PRs to linked issues, never commit subjects),
-  the evidence contract, the per-minor page format, and the Vale loop, and
-  ends with pages written for a pull request — never a direct push.
+  the Release Prepare workflow's notes job invokes it for every release PR
+  (rc and stable alike), and a human may invoke the Release Notes dispatch
+  for a re-draft or backfill. Walks the API-driven research fan-out (commits
+  to PRs to linked issues, never commit subjects), the evidence contract,
+  the per-minor page format, and the Vale loop, and ends with pages written
+  into the working tree for the calling workflow to land — never a direct
+  push.
 ---
 
 <!-- ===== TEMPLATE-OWNED — re-rendered on template updates. ===== -->
@@ -26,14 +28,81 @@ produced the failure the rule prevents.
 
 You are given, or must derive first:
 
-- `TAG` / `VERSION` — the stable release (e.g. `v3.2.0` / `3.2.0`).
+- `TAG` / `VERSION` — the stable release (e.g. `v3.2.0` / `3.2.0`). At
+  prepare time (an open release PR, tag not yet created) these name the
+  release being prepared; an rc target still drafts its stable minor's page.
 - `MINOR` — the series (e.g. `3.2`); the page is `docs/releases/MINOR.md`.
-- `PREV` — the highest stable tag strictly below `TAG` (series-aware,
-  `sort -V`); empty on a first release.
-- Mode — **new page** (first stable of the minor: write the whole page) or
-  **patch append** (the page exists: add one dated section for this patch,
-  inside the patch sentinels; leave the rest of the page alone unless it is
-  factually wrong).
+- `PREV` — the highest stable tag strictly below the target version
+  (series-aware, `sort -V`); empty on a first release.
+- `RANGE_END` — where the research range ends, always a commit SHA. After
+  a release this is the tagged commit; at prepare time it is the release
+  PR's source commit, because the tag does not exist yet. The evidence rules below are identical either
+  way — only the range endpoints move. A prepare-time draft is refreshed
+  (branch force-pushed) alongside any re-dispatch of the release PR.
+- Mode — **new page** (the minor's page does not exist: write the whole
+  page), **patch append** (the page exists but does not yet cover the
+  target patch release, `Z > 0`: add one section inside the patch
+  sentinels; leave the rest of the page alone unless it is factually
+  wrong), or **redraft** (the page already covers the target — an `X.Y.0`
+  page drafted at prepare time, or any target whose `RELEASE-SUMMARY`
+  marker an earlier candidate already wrote: update the covering section
+  and its summary block in place, and never append a duplicate section
+  for a release the page already covers).
+- Watermark — an existing page carries an invisible
+  `<!-- notes-range-end: SHA -->` comment recording where its last
+  accepted draft's research ended. This is the incremental-research
+  anchor for the modes below.
+- Full-redraft flag — the operator may set it on either dispatch
+  (Release Prepare threads it through to the notes job); it suspends
+  the watermark's cache role for that one run (see the override below).
+
+## Incremental research (patch and redraft modes)
+
+The accepted page is the cache; do not re-research a range the page
+already covers. When the page carries the watermark:
+
+- If the watermark SHA equals `RANGE_END`, the page's researched content
+  is already current: do no re-research and leave the prose alone, but
+  still apply the date backfill from the page-format section — it derives
+  from tag existence, not from the research range. Say what you did in
+  your final report either way; the calling workflow treats an unchanged
+  existing page as success, and a backfill-only change lands like any
+  other draft.
+- Otherwise research only `WATERMARK..RANGE_END` (the same fan-out and
+  evidence rules, over the delta), fold the findings into the existing
+  narrative — extend a theme, add one, or leave prose untouched when the
+  delta is stamps and mechanics — and verify claims the delta might have
+  invalidated rather than re-deriving the whole page.
+- Always move the watermark to `RANGE_END` when you touch the page, and
+  write it (once, at the top of the page after the front matter or title)
+  when you create a page.
+
+A page without a watermark predates this contract: research the full
+`PREV..RANGE_END` range once, and add the watermark with the result.
+
+**Full-redraft override.** When the run's inputs say full redraft, the
+watermark loses its cache role for that run only, and the calling
+workflow has already **emptied the page** (after snapshotting it):
+write the complete page from scratch, exactly as in new-page mode.
+Research the full range the page covers — from the highest stable tag
+strictly below the minor's first release (`X.Y.0`, series-aware via
+the tags API; the whole history on a first series) through
+`RANGE_END` — and re-derive every part of the page under the current
+contract: the summary block for each release the page covered (the
+minor's tags, read via the API, tell you which), the theme sections,
+the upgrade section, the patch sentinels and their sections, and the
+watermark at `RANGE_END`. The previous page remains readable through
+the API at the branch ref for reference, but write from the
+re-research, never by restoring it — a full redraft that reproduces
+the old prose with word-level touch-ups is the override not honoured.
+The index entry lives in a separate file and stays. This is the
+operator's remedy when this skill's own rules changed after a page was
+accepted: the incremental path above deliberately preserves accepted
+prose, so contract improvements never reach an already-covered range
+without this override. The flag is off by default on every entry
+point — a refresh is incremental unless the operator sets it, either
+on the Release Prepare dispatch (threaded through to the notes job) or
+on the Release Notes dispatch directly.
 
 ## Non-negotiables
 
@@ -43,10 +112,12 @@ You are given, or must derive first:
    dropped, not hedged. Concrete numbers appear only verbatim from a source.
    Attribute quoted judgements (for example "[per the maintainer]" with the
    link) rather than presenting them as your own analysis.
-2. **Output is a pull request, never a push.** The dominant failure mode is
-   plausible-but-wrong rationale, and a confabulated "why" on a published
-   docs site is worse than no narrative. A human merges the page; write the
-   PR body to make that evidence check easy.
+2. **Output is reviewed before it publishes, never pushed live.** The
+   dominant failure mode is plausible-but-wrong rationale, and a
+   confabulated "why" on a published docs site is worse than no narrative.
+   The page reaches a human either inside the release PR's diff (the
+   primary flow — the release review includes the notes evidence check) or
+   as a standalone notes PR (backfill); write for that review either way.
 3. **Never touch `CHANGELOG.md`.** It is machine-generated and stays that
    way. The two artifacts answer different questions: "what landed" versus
    "should I upgrade".
@@ -55,14 +126,30 @@ You are given, or must derive first:
    list is the recognised failure ("a haiku summary of the git log") — if you
    notice the page reading like grouped commit subjects, the research phase
    was skipped; go back.
+5. **Write the net delta, not the development journey.** The page answers
+   "what changes when I upgrade from `PREV`", so a state that existed only
+   *between* two commits of the range is invisible to every reader: a
+   feature new in this release is described as it ships, never through the
+   fixes that hardened it inside the same range; a regression introduced
+   and fixed within the range is not a fix worth reporting; work superseded
+   or reverted before `RANGE_END` does not appear at all. Evidence-linked
+   is necessary, not sufficient — development progress is mildly
+   interesting and still not release information. An intermediate PR may
+   still be *cited* where it is the best evidence for how the shipped
+   behaviour works; what must not appear is the sequence of intermediate
+   states as narrative. The summary block is the strictest surface: it
+   positions the release against `PREV` only, never against an rc or an
+   unshipped intermediate ("rebuilt", "now fixed") no reader ever ran.
 
 ## Research procedure
 
 ### 1. Enumerate the range through the API, not local git
 
-- Commit list: `gh api "repos/OWNER/REPO/compare/PREV...TAG"` (paginate past
-  250 commits; if PREV is empty this is the whole history — fall back to the
-  release's own compare link or the full commit list). The compare API is
+- Commit list: `gh api "repos/OWNER/REPO/compare/PREV...RANGE_END"`
+  (paginate past 250 commits; if PREV is empty this is the whole history —
+  fall back to the release's own compare link or the full commit list). The
+  compare API accepts a tag or a commit SHA as either endpoint, so the same
+  call covers post-release and prepare-time drafting. The compare API is
   authoritative; a shallow local clone silently truncates ranges.
 - Commit to PR: `gh api "repos/OWNER/REPO/commits/SHA/pulls"` — never regex
   `(#N)` out of subjects (breaks on squash subjects without the suffix and
@@ -83,6 +170,10 @@ Build the theme map from structure first:
   paragraph against what actually landed; edit it, do not just copy it.
 - The release **milestone** (or the `ships-atomically` label) marks work
   that was planned to ship together — treat it as one story.
+- A bump of a **first-party upstream** (the `fastmcp-pvl-core` library, or
+  the copier template behind a `chore(copier): update` commit) is a theme
+  lead of its own, researched through the upstream repository — see the
+  dedicated rule below.
 - Everything else falls into themes by subject (each significant feature,
   contributor-driven changes, platform/infrastructure work, fixes). Where a
   repository has no epics or milestones, this thematic grouping is the whole
@@ -101,7 +192,11 @@ issue bodies **and comments**, and returns a compact structured brief:
   `author_association`, not just commit authors;
 - exact enablement: env vars, defaults, config keys, tool names;
 - any concrete numbers (timings, sizes, counts) with their source;
-- the feature's docs page(s), and whether they changed in this range.
+- the feature's docs page(s), and whether they changed in this range;
+- the **shipped end state only**: where later commits in the range
+  superseded earlier ones, brief the final behaviour and mark the
+  earlier intra-range states as superseded — they are evidence trail,
+  not findings (the net-delta non-negotiable).
 
 The synthesiser writes **from the briefs only**.
 
@@ -113,13 +208,51 @@ Corollary: do not infer outside demand from an issue the maintainer filed —
 if an outside PR preceded the maintainer's tracking issue, the honest
 attribution is the PR.
 
+A quote's citation names the artifact where the quoted words verbatim
+appear, written by the person you attribute them to — fetch that artifact
+and check both before writing the citation. A maintainer-filed tracking
+issue often restates a contributor's words; citing it turns the
+contributor's report into the maintainer's, which is exactly the
+misattribution above wearing a link.
+
 ### 5. Synthesis pass, with licence to regroup
 
 After the briefs return, look across them before writing: separate
 deliverables may be one recipe with several delivery channels (write the
 "which do I want" paragraph, not three bullets), and a fix filed under one
 scope may really belong to another theme's story. Conventional-commit scopes
-are not the outline; the reader's questions are.
+are not the outline; the reader's questions are. This is also where the
+net-delta non-negotiable gets applied across briefs: collapse any surviving
+journey narration into the shipped end state before a section is written.
+
+### 6. First-party dependency bumps are research leads, not dead ends
+
+A commit that raises the `fastmcp-pvl-core` floor or applies a template
+update (`chore(copier): update to vX.Y.Z`) changes this server's behaviour
+while carrying no content of its own — the change lives in the upstream
+repository, and a downstream issue restating it may not exist. Do not let
+the fan-out dead-end there:
+
+- Read the old and new versions from the range's endpoints (the
+  `pyproject.toml` constraint, `uv.lock`'s pinned entry, or the copier
+  answers file's `_commit`), through the API like every other
+  file-at-ref read. The upstream repository comes from the dependency's
+  project URLs or the answers file's `_src_path`.
+- Research the upstream range between those two versions through the
+  upstream repo's own release artifacts: its `docs/releases/` pages and
+  GitHub release bodies are themselves evidence-linked — read them
+  rather than re-deriving upstream history, and follow into upstream
+  PRs/issues only where they are thin or missing.
+- Surface only what an operator or user of **this** server experiences
+  on upgrade — a security-posture change, a flipped default, new
+  behaviour of a shared helper (redirect handling, error shapes) — in
+  the theme where a reader would look for it, never as a bare
+  "dependencies were bumped" list. Link the upstream evidence directly;
+  the evidence rules do not weaken across a repository boundary.
+- Third-party bumps stay out unless a linked local issue makes one a
+  story (a CVE fix, an outage remedy).
+- The net-delta rule crosses repos too: an upstream change absorbed
+  and already compensated for within this same range is invisible.
 
 ## Writing the page
 
@@ -138,14 +271,17 @@ A list of tools shipped is the failure mode, not the deliverable.
 
 Do **not** trust `!` markers or `BREAKING CHANGE:` footers — trials found
 them wrong in both directions. Derive the section from the actual surfaces
-between `PREV` and `TAG`, classified against the breaking-change policy in
-`CLAUDE.md` (operator surface and public library interface, assessed against
-the last stable):
+between `PREV` and `RANGE_END`, read through the API — you have no local
+git (`gh api "repos/OWNER/REPO/contents/PATH?ref=REF" -H "Accept:
+application/vnd.github.raw"` returns the file body directly, no decoding
+pipeline needed; the ref accepts a tag or a commit SHA, so the same call
+covers prepare-time drafting where the tag does not exist yet) —
+classified against the breaking-change policy in `CLAUDE.md` (operator
+surface and public library interface, assessed against the last stable):
 
-- import surface: diff `tests/public_import_surface.txt` at the two tags
-  (`git show PREV:tests/public_import_surface.txt`);
-- operator surface: diff `.env.example` / the config surface at the two tags;
-- tool surface: compare the registered-tools docs at the two tags (not
+- import surface: diff `tests/public_import_surface.txt` at the two refs;
+- operator surface: diff `.env.example` / the config surface at the two refs;
+- tool surface: compare the registered-tools docs at the two refs (not
   breaking on its own, but worth a migration note when behaviour moved).
 
 Where your classification disagrees with a commit's marker, follow the
@@ -163,8 +299,9 @@ or fix — do not file issues yourself from an automated run.
 
 ## Page format
 
-One page per minor: `docs/releases/MINOR.md`. Patch releases append a dated
-section to the same page, so a minor's story stays in one linkable document.
+One page per minor: `docs/releases/MINOR.md`. Patch releases append a
+section to the same page (dated per the tag-existence gate below), so a
+minor's story stays in one linkable document.
 Skeleton for a new page (the comment markers are load-bearing — the publish
 workflow extracts summary blocks by tag, and later patch drafts insert only
 inside the patch sentinels):
@@ -188,7 +325,7 @@ inside the patch sentinels):
 
 A patch section goes inside the patch sentinels, oldest first, as:
 
-    ## v3.2.1 — 2026-08-20
+    ## v3.2.1 (2026-08-20)
 
     <!-- RELEASE-SUMMARY v3.2.1 START -->
     One paragraph: what this patch fixes and who should care.
@@ -196,11 +333,38 @@ A patch section goes inside the patch sentinels, oldest first, as:
 
     <evidence-linked detail, same rules as above>
 
+The `(2026-08-20)` date suffix follows the same tag-existence gate as the
+shipped-claim rule below: a prepare-time patch draft, whose tag does not
+exist yet, writes the bare `## v3.2.1` heading, and the post-release draft
+appends the real date. The parenthesised form is deliberate: the shipped
+Vale packs reject em dashes (`Google.EmDash`, `ai-tells.EmDashUsage`), so
+an em-dash separator here would fail the skill's own prose gate — write
+page prose without em dashes generally rather than spending vocabulary
+or rewrites on them.
+
 For a **new** page, also add the minor to the list in
 `docs/releases/index.md` (newest first, between its markers; the first real
 entry replaces the seeded placeholder line). Do not edit
 `mkdocs.yml`: the navigation is project-owned. If the nav has no
 Release Notes entry yet, note that in the PR body instead of adding one.
+
+Never claim the target version has shipped before it has. The gate is
+whether the target's stable tag exists at drafting time (read it through
+the API when unsure). At prepare time it does not — an rc target's stable
+may still be weeks out — so a prepare-time draft gives the target's index
+entry and page no "(released <date>)" qualifier and no past-tense shipping
+claim. A post-release backfill or re-draft, whose target tag does exist,
+states the real date — that is the later draft the target earns its date
+from. That later draft need not target the shipped version: every draft,
+whatever its target, also backfills the date onto any index entry or patch
+heading whose tag now exists but which an earlier pre-tag draft left
+undated, using the tag's own timestamp as the source. The backfill covers
+what the draft's checked-out tree carries: on the default branch that is
+every series, so dates lag by at most one default-branch drafting run; a
+draft on a `release/X.Y` branch may have been cut from an old tag that
+lacks newer pages, and the entries missing there wait for the next
+default-branch draft. An operator who wants a date sooner dispatches a
+re-draft or hand-edits the page.
 
 ## Quality gates — run them, do not assume them
 
@@ -215,11 +379,14 @@ Release Notes entry yet, note that in the PR body instead of adding one.
 
 ## Output
 
-Leave the working tree holding only: the release page, `docs/releases/index.md`
-(new-page mode), any `accept.txt` additions, and your proposed PR body in
+Leave the working tree holding only: the target release page, any other
+release page or `docs/releases/index.md` that the date backfill touched
+(the index also in new-page mode), any `accept.txt` additions, and your
+proposed PR body in
 `.release-notes-pr-body.md` at the repository root (the workflow's mechanical
-step commits the docs paths, opens the PR from the body file, and discards
-the body file). The PR body must carry:
+step commits the docs paths — onto the release PR's prep branch in the
+primary flow, or as a standalone notes PR from the body file in backfill
+mode — and discards the body file). The PR body must carry:
 
 - the release tag and compare link;
 - a claim-by-claim evidence summary (or a statement that every inline link
@@ -231,5 +398,6 @@ the body file). The PR body must carry:
 **Honest failure beats confident junk.** If the range has too few linked
 issues to support a narrative, write the modest factual page the evidence
 supports. If you cannot produce even that, change nothing and say why in
-your final report — the release stands with its interim body, and nothing
-downstream breaks.
+your final report — in the primary flow the workflow then fails loudly and
+the operator re-runs or consciously releases with skip_notes; a backfill
+run simply opens no PR.

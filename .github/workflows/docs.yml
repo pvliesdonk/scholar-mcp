@@ -23,14 +23,15 @@ jobs:
     # Validation only: strict docs build. Never deploys; publishing happens
     # in `deploy` on release:published.
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
         with:
           # On release events, build the released tag: the release may have
           # been cut from a release/X.Y branch, where `main` describes code
           # that is not in the release.  The tag is safe to build since the
-          # version-bump commit lands inside the release commit the tag points
-          # at (see scripts/bump_manifests.py) — tags no longer move.
+          # version stamps land inside the merged release PR the tag points
+          # at (knope + scripts/stamp_manifests.py) — tags never move.
           ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref }}
 
       - name: Install uv
@@ -50,8 +51,37 @@ jobs:
       - name: Install browser test deps
         run: uv sync --no-default-groups --all-extras --group docs --group browser --frozen
 
+      # Playwright's browser archives only change when the pinned version
+      # does, so cache them rather than pulling ~300 MB from the CDN each run.
+      # `playwright install` checks this directory itself and skips the
+      # download when it is populated, so no cache-hit conditional is needed.
+      - name: Cache Playwright browsers
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: playwright-${{ runner.os }}-
+
+      # Split from the dependency install below, which is the unreliable half.
+      # This half only talks to Playwright's CDN, so the browser the tests need
+      # no longer depends on apt being reachable.
       - name: Install Chromium
-        run: uv run playwright install --with-deps chromium
+        timeout-minutes: 8
+        run: uv run playwright install chromium
+
+      # apt on the hosted runners intermittently stalls (template#430, and
+      # upstream actions/runner-images#11347 / microsoft/playwright#34297, both
+      # unresolved).  On ubuntu-latest this step installs font packages only —
+      # the Chromium shared libraries already ship on the image — so a mirror
+      # outage should cost glyph coverage for CJK/Cyrillic/Thai text, not the
+      # whole job.  The failure stays visible in the log rather than silent.
+      #
+      # Projects doing visual or screenshot comparison, where fallback glyphs
+      # would be a real regression, should drop `continue-on-error` here.
+      - name: Install Chromium system dependencies (fonts)
+        timeout-minutes: 5
+        continue-on-error: true
+        run: uv run playwright install-deps chromium
 
       - name: Run config-wizard browser tests
         # Both the template-owned smoke suite and the project-owned domain suite
@@ -88,6 +118,7 @@ jobs:
       group: ${{ github.workflow }}-deploy-${{ github.event_name }}
       cancel-in-progress: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write
     steps:
@@ -117,6 +148,11 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+      # No notes overlay here (template#419): the release-notes page travels
+      # inside the release PR, so the tagged tree this deploy builds already
+      # carries its own page — the tag is the source of truth.  A page
+      # edited on the default branch AFTER a release's docs deployed is
+      # refreshed by release-notes-publish.yml's redeploy instead.
       - name: Publish versioned docs
         env:
           TAG: ${{ github.event.release.tag_name }}

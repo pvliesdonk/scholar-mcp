@@ -30,8 +30,7 @@ rm -f .github/workflows/copier-update.yml \
       .github/workflows/claude.yml \
       .github/workflows/claude-code-review.yml \
       .github/workflows/release-notes.yml
-rm -f scripts/copier_update_aggregator.py
-rm -rf scripts/copier_update_prompts
+rm -f scripts/copier_update_notes.py
 ```
 
 What this removes and why:
@@ -41,13 +40,12 @@ What this removes and why:
 - `release-notes.yml` — the Claude-agent release-notes drafter (same
   `CLAUDE_CODE_OAUTH_TOKEN` dependency as the review wiring). Keep it
   instead if your fork keeps that secret and wants agent-drafted notes.
-- `scripts/copier_update_aggregator.py`, `scripts/copier_update_prompts/` —
-  the orchestration that only `copier-update.yml` invoked; dead weight once
-  that workflow is gone.
+- `scripts/copier_update_notes.py` — the UPGRADING.md section picker that
+  only `copier-update.yml` invoked; dead weight once that workflow is gone.
 
 **Keep** your own CI and release workflows: `ci.yml`, `codeql.yml`,
-`coverage-status.yml`, `docs.yml`, `release.yml`, and
-`release-notes-publish.yml`. (`release.yml` still needs the `RELEASE_TOKEN`
+`coverage-status.yml`, `docs.yml`, `release-prepare.yml`, `release.yml`, and
+`release-notes-publish.yml`. (The release pair still needs the `RELEASE_TOKEN`
 secret; only its `copier-update` justification is gone.
 `release-notes-publish.yml` is deterministic — no Claude dependency — and
 still publishes any `docs/releases/` page you write by hand: it upgrades the
@@ -77,7 +75,7 @@ strips the copier-update wording that no longer describes a detached fork: the
 template/domain split is moot), the "Kept across copier update" notes on the
 DOMAIN blocks, the remaining "preserved/survive across copier update" notes
 (the pre-commit defaults, the `Dockerfile` sentinels, the
-`scripts/bump_manifests.py` release-manifest sentinels, and the upstream
+`scripts/stamp_manifests.py` release-manifest sentinels, and the upstream
 sentinel),
 and the copier-specific trigger on the config-wizard spec generation note (the
 generator still runs in a fork, just not on a copier lifecycle event).

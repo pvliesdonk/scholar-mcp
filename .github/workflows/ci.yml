@@ -18,30 +18,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v8.2.0
-        with:
-          version: "latest"
-
-      - name: Cache Python interpreter
-        uses: actions/cache@v6
-        with:
-          path: ~/.local/share/uv/python
-          key: uv-python-3.12-${{ runner.os }}
-
-      - name: Set up Python
-        run: uv python install 3.12
-
-      - name: Install dependencies
-        # `--locked` rather than a bare sync: an unfrozen `uv sync` re-locks
-        # when `uv.lock` is stale relative to `pyproject.toml`, which both
-        # hides the drift (the workspace silently self-heals while the branch
-        # stays broken) and mutates a tracked file mid-job. Fail loudly
-        # instead — this is the check that would have caught the release-commit
-        # lockfile drift in #325 on the release that introduced it, rather
-        # than in an unrelated workflow weeks later (#326). Fix a red install
-        # step with `uv lock`, and commit the result.
-        run: uv sync --all-extras --all-groups --locked
+      - name: Set up project environment
+        uses: ./.github/actions/setup-project-env
 
 
       - name: Verify generated config artifacts are up-to-date
@@ -60,23 +38,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v8.2.0
-        with:
-          version: "latest"
-
-      - name: Cache Python interpreter
-        uses: actions/cache@v6
-        with:
-          path: ~/.local/share/uv/python
-          key: uv-python-3.12-${{ runner.os }}
-
-      - name: Set up Python
-        run: uv python install 3.12
-
-      - name: Install dependencies
-        # `--locked` — see the lint job's install step for why.
-        run: uv sync --all-extras --all-groups --locked
+      - name: Set up project environment
+        uses: ./.github/actions/setup-project-env
 
       - name: Run mypy
         run: uv run mypy src/ tests/
@@ -106,28 +69,21 @@ jobs:
             experimental: true
     steps:
       - uses: actions/checkout@v7
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v8.2.0
         with:
-          version: "latest"
+          # Tags inform the release-contract tests (template#387): without
+          # them a checkout of a repo that HAS releases looks like a fresh
+          # project, and the tag-coupled asserts mis-skip instead of running.
+          # Full depth because the pins invariant is REACHABILITY-scoped
+          # (`git tag --merged HEAD`, series-aware on release/* branches) —
+          # on a shallow clone no tag is reachable and the test would
+          # silently skip.
+          fetch-depth: 0
+          fetch-tags: true
 
-      - name: Cache Python interpreter
-        uses: actions/cache@v6
+      - name: Set up project environment
+        uses: ./.github/actions/setup-project-env
         with:
-          # `uv python install` writes to UV_PYTHON_INSTALL_DIR, which is
-          # separate from the uv package cache and not covered by setup-uv's
-          # enable-cache. Caching by version + OS avoids re-downloading the
-          # python-build-standalone tarball on every run.
-          path: ~/.local/share/uv/python
-          key: uv-python-${{ matrix.python-version }}-${{ runner.os }}
-
-      - name: Set up Python ${{ matrix.python-version }}
-        run: uv python install ${{ matrix.python-version }}
-
-      - name: Install dependencies
-        # `--locked` — see the lint job's install step for why.
-        run: uv sync --all-extras --all-groups --locked
+          python-version: ${{ matrix.python-version }}
 
       - name: Run tests with coverage
         run: uv run pytest --cov --cov-report=xml
@@ -230,19 +186,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v8.2.0
+      - name: Set up project environment
+        # No sync: this job resolves the dependency list with `uv export` and
+        # runs pip-audit through `uvx`, so it never imports the project and
+        # does not need a venv built for it.
+        uses: ./.github/actions/setup-project-env
         with:
-          version: "latest"
-
-      - name: Cache Python interpreter
-        uses: actions/cache@v6
-        with:
-          path: ~/.local/share/uv/python
-          key: uv-python-3.12-${{ runner.os }}
-
-      - name: Set up Python
-        run: uv python install 3.12
+          sync: "false"
 
       - name: Export dependency list (excluding local project)
         # `dev` is uv's only auto-activated default group, so --no-default-groups
@@ -390,23 +340,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v8.2.0
-        with:
-          version: "latest"
-
-      - name: Cache Python interpreter
-        uses: actions/cache@v6
-        with:
-          path: ~/.local/share/uv/python
-          key: uv-python-3.12-${{ runner.os }}
-
-      - name: Set up Python
-        run: uv python install 3.12
-
-      - name: Install dependencies
-        # `--locked` — see the lint job's install step for why.
-        run: uv sync --all-extras --all-groups --locked
+      - name: Set up project environment
+        uses: ./.github/actions/setup-project-env
 
       - name: Fetch base branch
         run: git fetch origin ${{ github.base_ref }} --depth=50
@@ -424,14 +359,15 @@ jobs:
   pr-title:
     name: PR Title
     # A squash merge takes the pull-request title as the commit subject, and
-    # python-semantic-release drops a subject it cannot parse from
-    # CHANGELOG.md silently — not under a fallback heading, absent. This is
-    # the last point at which that subject can still be corrected.
+    # knope silently ignores a subject it does not count (only feat / fix /
+    # `!` reach the version computation and CHANGELOG.md — no fallback
+    # heading, no warning). This is the last point at which that subject can
+    # still be corrected.
     #
-    # PR-only by design: the writers to `main` outside a merge are PSR's own
-    # release commit and the automated merge-back, both machine-generated and
-    # already conformant. On push/dispatch the job is skipped, which the
-    # `ci-success` aggregate below treats as a pass.
+    # PR-only by design: under the release-PR flow every commit reaches
+    # `main` through a pull request whose title this gate already checked.
+    # On push/dispatch the job is skipped, which the `ci-success` aggregate
+    # below treats as a pass.
     runs-on: ubuntu-latest
     timeout-minutes: 5
     if: github.event_name == 'pull_request'

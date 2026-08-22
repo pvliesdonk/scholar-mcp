@@ -1,0 +1,145 @@
+# knope configuration for the release-PR flow (fastmcp-server-template#406).
+#
+# The two GitHub workflows that run these knope workflows
+# (release-prepare.yml, release.yml) carry a swap-completeness guard: they
+# refuse if a `[tool.semantic_release]` block ever reappears in
+# `pyproject.toml`, so this flow and the retired python-semantic-release
+# flow can never both be live.
+#
+# Two knope workflows:
+#   prepare-release — run by release-prepare.yml on a per-base prep branch
+#     (`knope/prepare/<base>`, force-created from the dispatching ref).
+#     Computes the version from conventional commits, stamps version-coupled
+#     files, commits, pushes the prep branch, and opens/refreshes the release
+#     PR.  Merging that PR is the release decision.
+#   tag-release — run by release.yml after the release PR merges.  Runs
+#     the same-source promotion guard FIRST, then tags and creates the GitHub
+#     release.  Guard-before-Release ordering is load-bearing (release-vision
+#     section 4.4): a guard refusal must leave no tag behind.
+#
+# The promotion guard runs in BOTH workflows (release-vision D10's two
+# layers): at prepare time — the early gate, so a drifted promotion never
+# becomes a mergeable PR — and pre-tag — the immutable-tag backstop, for
+# drift that lands between prepare and merge.
+#
+# NOTE on `base`: knope 0.23.0's CreatePullRequest `base` is a plain string —
+# it is not templatable (spike-verified).  release-prepare.yml patches it to
+# the dispatching ref with sed at run time; the placeholder below only
+# matters for local dry runs.  The patched knope.toml is never committed
+# (knope's prepare commit stages only the release files).
+
+[package]
+# pyproject.toml is knope's ONLY versioned file.  uv.lock's self-version
+# entry is deliberately NOT here: uv rewrites that entry to the PEP 440
+# canonical spelling (`4.0.0rc1`) on any re-lock, while knope requires its
+# versioned_files to agree with pyproject.toml's SemVer spelling
+# (`4.0.0-rc.1`) — so a re-lock during an rc window would break every later
+# PrepareRelease.  scripts/stamp_manifests.py rewrites the lockfile entry
+# instead, in canonical spelling, on every release (rc included).
+versioned_files = [
+  "pyproject.toml",
+]
+changelog = "CHANGELOG.md"
+# knope counts only feat / fix / breaking changes; these three sections are
+# renamed to today's CHANGELOG.md titles.  Other commit types are invisible
+# to knope by design — richness lives in docs/releases/ (migration M4).
+# Declaration order controls render order: breaking changes lead the
+# changelog section and the release body.
+extra_changelog_sections = [
+  { name = "Breaking Changes", types = ["major"] },
+  { name = "Features", types = ["minor"] },
+  { name = "Bug Fixes", types = ["patch"] },
+]
+
+[[workflows]]
+name = "prepare-release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+
+# The stamp script runs on EVERY release: it rewrites uv.lock's self-version
+# entry (PEP 440 canonical spelling — see the versioned_files note above)
+# unconditionally, and the install-channel manifests (server.json and the
+# Claude plugin pair, when present) on stable versions only.  pyproject.toml
+# is knope's own `versioned_files` entry and the script never touches it.
+[[workflows.steps]]
+type = "Command"
+command = "python3 scripts/stamp_manifests.py $version"
+shell = true
+
+[[workflows.steps]]
+type = "Command"
+command = "git commit -m \"chore: prepare release $version\""
+
+# PREPARE-TIME half of the two-layer same-source guard (release-vision D10:
+# the guard gates the promotion PR at prepare time AND hard pre-tag).  It
+# runs here — after the prep commit exists, so it can read the stamped
+# pyproject version and diff the last reachable rc against HEAD — and
+# BEFORE the push/CreatePullRequest steps, so a drifted promotion refuses
+# with no branch pushed and no PR opened: it never becomes a mergeable PR,
+# and no stamped-but-untagged state is left behind to double-bump a later
+# prepare.  The guard self-skips for prereleases and rc-less trunk
+# releases.  The tag-release run below keeps the same guard as the hard
+# backstop: tags are immutable, so the pre-tag check must hold even if a
+# commit lands on the base between this prepare and the merge.
+[[workflows.steps]]
+type = "Command"
+command = "bash scripts/promotion_guard.sh"
+shell = true
+
+# Push BEFORE CreatePullRequest: the PR API call 422s if the head branch does
+# not exist on the remote yet (knope's own documented recipe ordering).  The
+# prep-branch name is per-base (knope/prepare/<base>), so it arrives via the
+# KNOPE_PREP_BRANCH environment variable release-prepare.yml exports.
+[[workflows.steps]]
+type = "Command"
+command = "git push --force --set-upstream origin \"$KNOPE_PREP_BRANCH\""
+shell = true
+
+[[workflows.steps]]
+type = "CreatePullRequest"
+base = "KNOPE-BASE-PLACEHOLDER"  # patched to the dispatching ref by release-prepare.yml — see header note
+
+# The title is pinned to a `chore:`-typed subject so the release PR itself
+# passes the PR-title gate (scripts/check_pr_title.py).
+[workflows.steps.title]
+template = "chore: prepare release $version"
+
+[workflows.steps.body]
+template = """
+Merging this pull request releases **$version** — the merge is the release
+decision.  On merge, the Release workflow tags the merge commit, creates
+the GitHub release, and runs the publish fan-out; for a stable promotion the same-source guard
+(`scripts/promotion_guard.sh`) runs first, so drifted source refuses with no
+tag created.
+
+This PR also carries the release-notes page under `docs/releases/`,
+drafted by the prepare run's notes job — review it as part of the release
+(an evidence check: every causal claim must trace to its linked issue or
+PR).  The PR is held as a DRAFT until the notes land; the notes job marks
+it ready.  Still draft means the notes job is running or failed — check
+the prepare run.
+
+Do NOT use GitHub's "Update branch" button on this PR — the only valid
+refresh is re-dispatching the Release Prepare workflow, which recreates this
+branch from its base.
+
+## Changelog
+
+$changelog
+"""
+
+[[workflows]]
+name = "tag-release"
+
+[[workflows.steps]]
+type = "Command"
+command = "bash scripts/promotion_guard.sh"
+shell = true
+
+[[workflows.steps]]
+type = "Release"
+
+[github]
+owner = "pvliesdonk"
+repo = "scholar-mcp"
