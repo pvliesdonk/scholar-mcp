@@ -8,6 +8,5 @@ GitHub release links back to its page here.
 
 <!-- RELEASE-PAGES-START: newest series first; one list entry per page.
      The first real entry replaces the placeholder line below. -->
-No release pages yet. The first entry appears with the first stable
-release cut after this project adopted release-notes pages.
+- [1.9](1.9.md): S2 API key liveness; v1.9.0 released 2026-07-19
 <!-- RELEASE-PAGES-END -->
