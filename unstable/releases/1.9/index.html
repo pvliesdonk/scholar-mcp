@@ -1240,7 +1240,7 @@
 
 
 <h1 id="19">1.9<a class="headerlink" href="#19" title="Permanent link">&para;</a></h1>
-<!-- notes-range-end: 14fb7ac85d3547b2d89aaf0ad0468431b519a75f -->
+<!-- notes-range-end: 57f929447230d4b0a55a4f6734ba18770c6308fa -->
 
 <!-- RELEASE-SUMMARY v1.9.0 START -->
 <p>Scholar MCP keeps working through the Semantic Scholar API key's 60-day
@@ -1299,7 +1299,7 @@ S2 keepalive task above activates automatically off the existing
 <h2 id="v191">v1.9.1<a class="headerlink" href="#v191" title="Permanent link">&para;</a></h2>
 <!-- RELEASE-SUMMARY v1.9.1 START -->
 <p>A maintenance release with no user-facing features or fixes: it carries the
-project's <code>fastmcp-server-template</code> baseline forward from v2.3.0 to v5.6.1.
+project's <code>fastmcp-server-template</code> baseline forward from v2.3.0 to v5.6.2.
 Nothing to act on beyond the OIDC and bare-CLI notes below.</p>
 <!-- RELEASE-SUMMARY v1.9.1 END -->
 
@@ -1310,7 +1310,8 @@ Nothing to act on beyond the OIDC and bare-CLI notes below.</p>
 <a href="https://github.com/pvliesdonk/scholar-mcp/pull/269">#269</a>,
 <a href="https://github.com/pvliesdonk/scholar-mcp/pull/272">#272</a>,
 <a href="https://github.com/pvliesdonk/scholar-mcp/pull/273">#273</a>,
-<a href="https://github.com/pvliesdonk/scholar-mcp/pull/275">#275</a>, tracked under
+<a href="https://github.com/pvliesdonk/scholar-mcp/pull/275">#275</a>,
+<a href="https://github.com/pvliesdonk/scholar-mcp/pull/278">#278</a>, tracked under
 <a href="https://github.com/pvliesdonk/scholar-mcp/issues/259">epic #259</a>), so
 <code>CHANGELOG.md</code>'s v1.9.1 section is intentionally empty. This page is where
 that work is narrated.</p>
@@ -1361,6 +1362,26 @@ the generated config surface from overwriting the packaged
 three landed inside the same range this page covers, no released version
 ever carried the regressions; they are recorded here only because the
 fixes are otherwise invisible to <code>CHANGELOG.md</code>.</p>
+<p>A fourth issue surfaced from an actual release attempt rather than from
+review: publishing <code>v1.9.1-rc.0</code> to PyPI failed at the <code>Publish to PyPI</code>
+step with <code>InvalidDistribution: Invalid distribution metadata: '2.5' is
+not a valid metadata version</code>. Root-caused upstream as
+<a href="https://github.com/pvliesdonk/fastmcp-server-template/issues/479">fastmcp-server-template#479</a>:
+two template-owned pins encoded one invariant that nothing asserted:
+<code>pyproject.toml</code> left <code>hatchling</code> unbounded while <code>release.yml</code> pinned
+<code>gh-action-pypi-publish</code> at v1.14.0, so once hatchling 1.32 began emitting
+<code>Metadata-Version: 2.5</code>, that action's bundled twine 6.1.0 refused it.
+Template v5.6.2 fixes both halves
+(<a href="https://github.com/pvliesdonk/scholar-mcp/issues/277">#277</a>,
+<a href="https://github.com/pvliesdonk/scholar-mcp/pull/278">#278</a>):
+<code>gh-action-pypi-publish</code> moves to v1.14.2 (the first release bundling
+twine 7.0.0, which accepts metadata 2.5), and <code>pyproject.toml</code> bounds
+<code>hatchling&gt;=1.32,&lt;1.33</code> (the same bound was applied by hand to
+<code>packaging/mcpb/pyproject.toml.in</code>, which <code>copier update</code> never touches).
+No PyPI version was consumed by the failure, since <code>twine check</code> runs
+before the upload begins. This is release-pipeline reliability, not
+something a deployed server's operator or a library consumer needs to
+act on.</p>
 <p>No breaking changes to the operator surface or the public library interface
 against v1.9.0: the public import surface (<code>tests/public_import_surface.txt</code>)
 was introduced in this range and starts empty, and the only new environment
