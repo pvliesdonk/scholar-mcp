@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/pvliesdonk/scholar-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/pvliesdonk/scholar-mcp/actions/workflows/ci.yml) [![codecov](https://codecov.io/gh/pvliesdonk/scholar-mcp/graph/badge.svg)](https://codecov.io/gh/pvliesdonk/scholar-mcp) [![PyPI](https://img.shields.io/pypi/v/pvliesdonk-scholar-mcp)](https://pypi.org/project/pvliesdonk-scholar-mcp/) [![Python](https://img.shields.io/pypi/pyversions/pvliesdonk-scholar-mcp)](https://pypi.org/project/pvliesdonk-scholar-mcp/) [![License](https://img.shields.io/github/license/pvliesdonk/scholar-mcp)](LICENSE) [![Docker](https://img.shields.io/github/v/release/pvliesdonk/scholar-mcp?label=ghcr.io&logo=docker)](https://github.com/pvliesdonk/scholar-mcp/pkgs/container/scholar-mcp) [![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://pvliesdonk.github.io/scholar-mcp/) [![llms.txt](https://img.shields.io/badge/llms.txt-available-brightgreen)](https://pvliesdonk.github.io/scholar-mcp/latest/llms.txt) [![Template](https://img.shields.io/badge/dynamic/yaml?url=https://raw.githubusercontent.com/pvliesdonk/scholar-mcp/main/.copier-answers.yml&query=%24._commit&label=template)](https://github.com/pvliesdonk/fastmcp-server-template)
 
-A [FastMCP](https://github.com/jlowin/fastmcp) server for the scholarly citation landscape — **papers**, **patents**, **books**, and **standards** — giving LLMs a unified way to search, cross-reference, and retrieve prior art across all four source types via [Semantic Scholar](https://www.semanticscholar.org/), [EPO Open Patent Services](https://www.epo.org/en/searching-for-patents/data/web-services/ops), [Open Library](https://openlibrary.org/), and standards bodies (NIST, IETF, W3C, ETSI), with [OpenAlex](https://openalex.org/) enrichment and optional [docling-serve](https://github.com/DS4SD/docling-serve) PDF/full-text conversion.
+A [FastMCP](https://github.com/jlowin/fastmcp) server for the scholarly citation landscape (**papers**, **patents**, **books**, and **standards**), giving LLMs a unified way to search, cross-reference, and retrieve prior art across all four source types via [Semantic Scholar](https://www.semanticscholar.org/), [EPO Open Patent Services](https://www.epo.org/en/searching-for-patents/data/web-services/ops), [Open Library](https://openlibrary.org/), and standards bodies (NIST, IETF, W3C, ETSI), with [OpenAlex](https://openalex.org/) enrichment and optional [docling-serve](https://github.com/DS4SD/docling-serve) PDF/full-text conversion.
 
 **[Documentation](https://pvliesdonk.github.io/scholar-mcp/)** | **[Config wizard](https://pvliesdonk.github.io/scholar-mcp/latest/configuration-generator/)** | **[PyPI](https://pypi.org/project/pvliesdonk-scholar-mcp/)** | **[Docker](https://github.com/pvliesdonk/scholar-mcp/pkgs/container/scholar-mcp)**
 
@@ -14,23 +14,23 @@ A [FastMCP](https://github.com/jlowin/fastmcp) server for the scholarly citation
 
 ### Source domains
 
-- **Papers** — full-text search with year/venue/field/citation filters; single-paper lookup by DOI, S2 ID, arXiv ID, ACM ID, or PubMed ID; author profile and name search; forward citations, backward references, BFS graph traversal, shortest-path bridge discovery; recommendations from positive/negative examples; BibTeX/CSL-JSON/RIS citation generation with OpenAlex venue enrichment.
-- **Patents** — search across 100+ patent offices via EPO OPS with CPC/applicant/inventor/jurisdiction filters; bibliographic, claims, description, family, legal, and citations sections; NPL-to-paper resolution via Semantic Scholar and paper-to-patent citation discovery. EPO credentials are optional — other domains work without them.
-- **Books** — search by title/author/keywords via Open Library (no API key required); lookup by ISBN-10/13, Open Library work ID, or edition ID; subject-based recommendations sorted by popularity; Google Books excerpts and preview links; WorldCat permalinks for library discovery; cover image caching. Papers with an ISBN in `externalIds` are automatically enriched with publisher, edition, cover URL, and subject data from Open Library.
-- **Standards** — identifier resolution, search, and metadata retrieval for NIST, IETF, W3C, and ETSI standards, with optional full-text fetch and Markdown conversion via docling. Tier 2 ISO, IEC, IEEE, Common Criteria (CC), and CEN/CENELEC metadata (including ISO/IEC/IEEE joint standards and the CC ↔ ISO/IEC 15408 cross-link) is synced locally via `sync-standards`. ISO, IEC, IEEE have a live-fetch fallback for unsynced identifiers; CC and CEN have no live API and require a sync first. Citations matching standards patterns (RFC, ISO, NIST SP, IEEE, EN, CC) are automatically enriched with structured `standard_metadata` including identifier, title, body, status, and full-text URL when available (see [docs/guides/standards.md](docs/guides/standards.md)).
+- **Papers**: full-text search with year/venue/field/citation filters; single-paper lookup by DOI, S2 ID, arXiv ID, ACM ID, or PubMed ID; author profile and name search; forward citations, backward references, BFS graph traversal, shortest-path bridge discovery; recommendations from positive/negative examples; BibTeX/CSL-JSON/RIS citation generation with OpenAlex venue enrichment.
+- **Patents**: search across 100+ patent offices via EPO OPS with CPC/applicant/inventor/jurisdiction filters; bibliographic, claims, description, family, legal, and citations sections; NPL-to-paper resolution via Semantic Scholar and paper-to-patent citation discovery. EPO credentials are optional, and the other domains work without them.
+- **Books**: search by title, author, or keywords via Open Library (no API key required), and look one up by ISBN-10/13, Open Library work ID, or edition ID. Subject-based recommendations come back sorted by popularity, alongside Google Books excerpts, preview links, WorldCat permalinks, and cached cover images. Papers with an ISBN in `externalIds` are automatically enriched with publisher, edition, cover URL, and subject data from Open Library.
+- **Standards**: identifier resolution, search, and metadata retrieval for NIST, IETF, W3C, and ETSI standards, with optional full-text fetch and Markdown conversion via docling. Tier 2 ISO, IEC, IEEE, Common Criteria (CC), and CEN/CENELEC metadata (including ISO/IEC/IEEE joint standards and the CC ↔ ISO/IEC 15408 cross-link) is synced locally via `sync-standards`. ISO, IEC, IEEE have a live-fetch fallback for unsynced identifiers; CC and CEN have no live API and require a sync first. Citations matching standards patterns (RFC, ISO, NIST SP, IEEE, EN, CC) are automatically enriched with structured `standard_metadata` including identifier, title, body, status, and full-text URL when available (see [docs/guides/standards.md](docs/guides/standards.md)).
 
 ### Cross-cutting
 
-- **Enrichment pipeline** — phased enrichment from multiple sources: OpenAlex (OA status, affiliations, funders, concepts), CrossRef (publisher, page ranges, container titles), Google Books (preview links, excerpts), and Open Library (book metadata). Runs automatically on paper and book results.
-- **PDF conversion** — download open-access PDFs and convert to Markdown via [docling-serve](https://github.com/DS4SD/docling-serve), with optional VLM enrichment for formulas and figures; automatic fallback to ArXiv, PubMed Central, and Unpaywall when Semantic Scholar has no OA link; direct URL download for PDFs found elsewhere.
-- **Intelligent caching** — SQLite-backed cache with per-table TTLs (30 days for papers/authors, 7 days for citations/references) and identifier aliasing.
-- **Authentication** — bearer token, OIDC (OAuth 2.1), or both simultaneously (multi-auth).
-- **Multi-transport** — stdio (Claude Desktop), HTTP (streamable-http), and SSE transports.
-- **Linux packages** — `.deb` and `.rpm` packages with systemd service and security hardening.
+- **Enrichment pipeline**: phased enrichment from multiple sources: OpenAlex (OA status, affiliations, funders, concepts), CrossRef (publisher, page ranges, container titles), Google Books (preview links, excerpts), and Open Library (book metadata). Runs automatically on paper and book results.
+- **PDF conversion**: download open-access PDFs and convert to Markdown via [docling-serve](https://github.com/DS4SD/docling-serve), with optional VLM enrichment for formulas and figures; automatic fallback to ArXiv, PubMed Central, and Unpaywall when Semantic Scholar has no OA link; direct URL download for PDFs found elsewhere.
+- **Intelligent caching**: SQLite-backed cache with per-table TTLs (30 days for papers/authors, 7 days for citations/references) and identifier aliasing.
+- **Authentication**: bearer token, OIDC (OAuth 2.1), or both simultaneously (multi-auth).
+- **Multi-transport**: stdio (Claude Desktop), HTTP (streamable-http), and SSE transports.
+- **Linux packages**: `.deb` and `.rpm` packages with systemd service and security hardening.
 
 ### Coverage by domain
 
-Per-domain depth is uneven. Papers currently have the richest tool surface (citation graph, recommendations, cross-referencing to all three other domains); standards are the leanest. That reflects public data availability, not a value hierarchy — writing a paper typically needs all four source types for citations and prior art. Parity work is tracked in [GitHub issues](https://github.com/pvliesdonk/scholar-mcp/issues) and [milestones](https://github.com/pvliesdonk/scholar-mcp/milestones); the roadmap shows intent, not a completeness commitment.
+Per-domain depth is uneven. Papers currently have the richest tool surface (citation graph, recommendations, cross-referencing to all three other domains); standards are the leanest. That reflects public data availability rather than a value hierarchy: writing a paper typically needs all four source types for citations and prior art. Parity work is tracked in [GitHub issues](https://github.com/pvliesdonk/scholar-mcp/issues) and [milestones](https://github.com/pvliesdonk/scholar-mcp/milestones); the roadmap shows intent, not a completeness commitment.
 <!-- DOMAIN-END -->
 
 ## What you can do with it
@@ -39,14 +39,14 @@ Per-domain depth is uneven. Papers currently have the richest tool surface (cita
 
 With this server mounted in an MCP client (Claude, etc.), you can:
 
-- **Survey a field** — "Find the 20 most-cited papers on graph neural networks from 2020–2024 and draft a literature review outline." Composes `search_papers` + `get_citations` + `enrich_paper`.
-- **Trace a citation path** — "What's the shortest citation path from 'Attention is All You Need' to 'RLHF for dialogue agents'?" Uses `find_bridge_papers` + `get_citation_graph`.
-- **Cross-reference prior art** — "For this patent family, list academic papers it cites and any books or standards that show up in the description." Composes `get_patent` + `batch_resolve` + standards/book enrichment.
-- **Generate a bibliography** — "Emit BibTeX for these 30 DOIs with OpenAlex venue data." Uses `generate_citations`.
-- **Look up a standard** — "What's the latest status of RFC 9000, and fetch the Markdown full text." Uses `resolve_standard_identifier` + `get_standard`.
+- **Survey a field**: "Find the 20 most-cited papers on graph neural networks from 2020 to 2024 and draft a literature review outline." Composes `search_papers` + `get_citations` + `enrich_paper`.
+- **Trace a citation path**: "What's the shortest citation path from 'Attention is All You Need' to 'RLHF for dialogue agents'?" Uses `find_bridge_papers` + `get_citation_graph`.
+- **Cross-reference prior art**: "For this patent family, list academic papers it cites and any books or standards that show up in the description." Composes `get_patent` + `batch_resolve` + standards/book enrichment.
+- **Generate a bibliography**: "Emit BibTeX for these 30 DOIs with OpenAlex venue data." Uses `generate_citations`.
+- **Look up a standard**: "What's the latest status of RFC 9000, and fetch the Markdown full text." Uses `resolve_standard_identifier` + `get_standard`.
 <!-- DOMAIN-END -->
 
-<!-- ===== TEMPLATE-OWNED SECTIONS BELOW — DO NOT EDIT; CHANGES WILL BE OVERWRITTEN ON COPIER UPDATE ===== -->
+<!-- ===== TEMPLATE-OWNED SECTIONS BELOW. DO NOT EDIT; CHANGES WILL BE OVERWRITTEN ON COPIER UPDATE ===== -->
 
 ## Installation
 
@@ -62,8 +62,8 @@ If you add optional extras via the `PROJECT-EXTRAS-START` / `PROJECT-EXTRAS-END`
 
 Scholar-mcp ships two optional-dependency groups:
 
-- **`[mcp]`** — installs FastMCP; required to run `scholar-mcp serve` and expose tools over stdio/HTTP.
-- **`[all]`** — currently identical to `[mcp]`; reserved for future optional backends.
+- **`[mcp]`**: installs FastMCP; required to run `scholar-mcp serve` and expose tools over stdio/HTTP.
+- **`[all]`**: currently identical to `[mcp]`; reserved for future optional backends.
 
 For MCP-server usage:
 
@@ -135,7 +135,7 @@ scholar-mcp serve                                # stdio transport
 scholar-mcp serve --transport http --port 8000   # streamable HTTP
 ```
 
-For library usage (embedding the domain logic without the MCP transport), import from the `scholar_mcp` package directly — backend clients live under `src/scholar_mcp/_s2_client.py`, `_epo_client.py`, `_openlibrary_client.py`, and `_standards_client.py`.
+For library usage (embedding the domain logic without the MCP transport), import from the `scholar_mcp` package directly. Backend clients live under `src/scholar_mcp/_s2_client.py`, `_epo_client.py`, `_openlibrary_client.py`, and `_standards_client.py`.
 
 ### Server info
 
@@ -157,9 +157,9 @@ Domain-specific variables go below under [Domain configuration](#domain-configur
 
 ## Authorization (opt-in)
 
-This server inherits opt-in per-subject authorization from `fastmcp-pvl-core`.  The default posture is **off** — every authenticated caller can use every tool, resource, and prompt.  Turn it on by pointing `SCHOLAR_MCP_ACL_PATH` at a TOML ACL file; the middleware is installed only when the path is set, and individual tools opt in by declaring `meta={"required_scope": "<scope>"}` at registration.  A tool without `required_scope` is unrestricted regardless of caller.
+This server inherits opt-in per-subject authorization from `fastmcp-pvl-core`. The default posture is **off**, so every authenticated caller can use every tool, resource, and prompt. Turn it on by pointing `SCHOLAR_MCP_ACL_PATH` at a TOML ACL file; the middleware is installed only when the path is set, and individual tools opt in by declaring `meta={"required_scope": "<scope>"}` at registration. A tool without `required_scope` is unrestricted regardless of caller.
 
-Wire it in by uncommenting the `acl_path` field in `src/scholar_mcp/config.py` and the `AuthorizationMiddleware` stanza in `src/scholar_mcp/server.py` — both ship as commented stubs in the scaffold.
+Wire it in by uncommenting the `acl_path` field in `src/scholar_mcp/config.py` and the `AuthorizationMiddleware` stanza in `src/scholar_mcp/server.py`; both ship as commented stubs in the scaffold.
 
 ### ACL TOML schema
 
@@ -172,14 +172,14 @@ Wire it in by uncommenting the `acl_path` field in `src/scholar_mcp/config.py` a
 ```
 
 - **Subject strings are opaque.** The `<kind>:<id>` convention is documentation only; the library treats each subject as a literal string.
-- **`*` is the only library-treated special scope** — it grants every required scope.  Subject-side wildcards (`*` as an ACL key) are rejected at load time.
-- **Scope vocabulary is domain-defined.** Per-project or per-folder gating is encoded into the scope string itself (e.g. `read:project-foo`, `write:vault/personal`); `fastmcp-pvl-core` treats every scope except `*` as opaque.
+- **`*` is the only library-treated special scope**, and it grants every required scope. Subject-side wildcards (`*` as an ACL key) are rejected at load time.
+- **Scope vocabulary is domain-defined.** Per-project or per-folder gating is encoded into the scope string itself (such as `read:project-foo`, `write:vault/personal`); `fastmcp-pvl-core` treats every scope except `*` as opaque.
 
 ### Subject ↔ bearer-token alignment
 
-The subject string used as a *value* in the bearer-tokens TOML (`SCHOLAR_MCP_BEARER_TOKENS_FILE`) is the same string used as a *key* in the ACL TOML.  Same string, opposite roles — keep the two files consistent when adding or removing a principal.  See [Mapped bearer tokens](docs/guides/authentication.md#mapped-bearer-tokens-multi-subject) in the authentication guide for the bearer-tokens TOML schema.
+The subject string used as a *value* in the bearer-tokens TOML (`SCHOLAR_MCP_BEARER_TOKENS_FILE`) is the same string used as a *key* in the ACL TOML.  Same string, opposite roles, so keep the two files consistent when adding or removing a principal. See [Mapped bearer tokens](docs/guides/authentication.md#mapped-bearer-tokens-multi-subject) in the authentication guide for the bearer-tokens TOML schema.
 
-In single-token mode (`SCHOLAR_MCP_BEARER_TOKEN`) every authenticated caller shares one subject — the library's default (currently `"bearer-anon"`), override with `SCHOLAR_MCP_BEARER_DEFAULT_SUBJECT`; reference *that* string as the ACL key.  When no auth is configured (no `SCHOLAR_MCP_BEARER_TOKEN`, `SCHOLAR_MCP_BEARER_TOKENS_FILE`, or OIDC env vars set — common in stdio dev rigs but also possible on HTTP), every request resolves to the literal subject `"local"` — reference that string as the ACL key for un-authenticated local sessions.
+In single-token mode (`SCHOLAR_MCP_BEARER_TOKEN`) every authenticated caller shares one subject: the library's default (currently `"bearer-anon"`), override with `SCHOLAR_MCP_BEARER_DEFAULT_SUBJECT`; reference *that* string as the ACL key. When no auth is configured (no `SCHOLAR_MCP_BEARER_TOKEN`, `SCHOLAR_MCP_BEARER_TOKENS_FILE`, or OIDC env vars set, which is common in stdio dev rigs but also possible on HTTP), every request resolves to the literal subject `"local"`. Reference that string as the ACL key for un-authenticated local sessions.
 
 ## Authentication
 
@@ -236,7 +236,7 @@ Pre-commit runs a subset of the gate on each commit; see `.pre-commit-config.yam
 
 ## Troubleshooting
 
-### Moving a scaffolded project
+### Moving a generated project
 
 `uv sync` creates `.venv/bin/*` scripts with absolute shebangs pointing at the venv Python. If you move the repo after scaffolding (`mv /old/path /new/path`), `uv run pytest` fails with `ModuleNotFoundError: No module named 'fastmcp'` because the stale shebang resolves to a different interpreter than the venv's site-packages.
 
@@ -292,7 +292,7 @@ thereafter to keep the configured key from being removed for inactivity
 (Semantic Scholar may remove keys unused for 60+ days). If S2 starts
 rejecting the key with `403 Forbidden`, this shows up in the server logs
 as `s2_key_forbidden` (on real tool calls) or `s2_keepalive_key_forbidden`
-(from the background keepalive) — grep for either to confirm a dead key
+(from the background keepalive). Grep for either to confirm a dead key
 versus a transient upstream issue.
 
 ## Key design decisions
@@ -304,7 +304,7 @@ versus a transient upstream issue.
 - **SQLite cache with per-table TTLs and identifier aliases.** Papers / authors last 30 days, citations / references 7 days. DOI ↔ S2 ID ↔ arXiv ID aliasing survives across cache clears so repeated enrichment hits the same row.
 - **Read-only by default.** Write-tagged tools (PDF download/convert, patent PDF) are hidden unless `SCHOLAR_MCP_READ_ONLY=false`. Safer default for first-run.
 - **Rate-limited try-once with background queueing.** S2/OpenAlex calls try once; on 429 they queue a retry-enabled background task and return `{"queued": true, "task_id": ...}`. PDF tools always queue unless the cache already has the conversion.
-- **Tier 2 standards sync out-of-band.** ISO/IEC/IEEE/CC/CEN catalogues come from community Relaton dumps via `scholar-mcp sync-standards`, not live at runtime — avoids paywalled-HTML scraping and keeps tool calls fast.
+- **Tier 2 standards sync out-of-band.** ISO/IEC/IEEE/CC/CEN catalogues come from community Relaton dumps via `scholar-mcp sync-standards`, not live at runtime. That avoids paywalled-HTML scraping and keeps tool calls fast.
 <!-- DOMAIN-END -->
 
 ## Quick Start details
@@ -359,7 +359,7 @@ scholar-mcp sync-standards --body CEN # only CEN/CENELEC
 scholar-mcp sync-standards --force    # re-sync even if upstream SHA is unchanged
 ```
 
-Schedule via cron / launchd / systemd timer — weekly is sufficient; standards change slowly. First sync can take several minutes; subsequent runs that find no upstream changes exit within seconds.
+Schedule via cron, launchd, or a systemd timer. Weekly is sufficient, because standards change slowly. First sync can take several minutes; subsequent runs that find no upstream changes exit within seconds.
 
 ## MCP Tools
 
@@ -388,7 +388,7 @@ Schedule via cron / launchd / systemd timer — weekly is sufficient; standards 
 
 | Tool | Description |
 |---|---|
-| `recommend_papers` | Paper recommendations from 1–5 positive examples and optional negative examples. |
+| `recommend_papers` | Paper recommendations from one to five positive examples and optional negative examples. |
 | `generate_citations` | Generate BibTeX, CSL-JSON, or RIS citations for up to 100 papers, with automatic entry type inference and optional OpenAlex venue enrichment. |
 | `enrich_paper` | Augment Semantic Scholar metadata with OpenAlex fields (affiliations, funders, OA status, concepts). |
 
@@ -418,7 +418,7 @@ Schedule via cron / launchd / systemd timer — weekly is sufficient; standards 
 
 | Tool | Description |
 |---|---|
-| `resolve_standard_identifier` | Normalise a messy citation string (e.g. `"rfc9000"`, `"nist 800-53"`) to canonical form and body. |
+| `resolve_standard_identifier` | Normalise a messy citation string (such as `"rfc9000"`, `"nist 800-53"`) to canonical form and body. |
 | `search_standards` | Search standards by identifier, title, or free text, optionally filtered to one body (`NIST`, `IETF`, `W3C`, `ETSI`). |
 | `get_standard` | Retrieve a standard by canonical or fuzzy identifier, optionally fetching and converting the full text via docling. |
 
@@ -436,7 +436,7 @@ Schedule via cron / launchd / systemd timer — weekly is sufficient; standards 
 |---|---|
 | `fetch_paper_pdf` | Download PDF for a paper (S2 open-access, then ArXiv/PMC/Unpaywall fallback). |
 | `convert_pdf_to_markdown` | Convert a local PDF to Markdown via docling-serve. |
-| `fetch_and_convert` | Full pipeline: fetch PDF (with fallback), convert to Markdown, return both. |
+| `fetch_and_convert` | Full pipeline: fetches the PDF (with fallback) and returns it alongside the converted Markdown. |
 | `fetch_pdf_by_url` | Download a PDF from any URL and optionally convert to Markdown. |
 
 > PDF tools are write-tagged and hidden when `SCHOLAR_MCP_READ_ONLY=true` (the default). `fetch_patent_pdf` (above) and the `get_standard` full-text mode cover the patent and standards equivalents.
