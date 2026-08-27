@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 from contextlib import asynccontextmanager
 
@@ -11,22 +10,22 @@ import pytest
 import respx
 from fastmcp import FastMCP
 from fastmcp.client import Client
+from fastmcp_pvl_core import Jobs
 
 from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._tools_graph import register_graph_tools
-from scholar_mcp._tools_tasks import register_task_tools
 
 S2_BASE = "https://api.semanticscholar.org/graph/v1"
 
 
 @pytest.fixture
-def mcp(bundle: ServiceBundle) -> FastMCP:
+def mcp(bundle: ServiceBundle, jobs: Jobs) -> FastMCP:
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_graph_tools(app)
+    register_graph_tools(app, jobs)
     return app
 
 
@@ -261,25 +260,14 @@ async def test_find_bridge_papers_not_found(
 
 
 @pytest.fixture
-def mcp_with_tasks(bundle: ServiceBundle) -> FastMCP:
+def mcp_with_tasks(bundle: ServiceBundle, jobs: Jobs) -> FastMCP:
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_graph_tools(app)
-    register_task_tools(app)
+    register_graph_tools(app, jobs)
     return app
-
-
-async def _poll_task(client: Client, task_id: str, max_attempts: int = 40) -> dict:
-    for _ in range(max_attempts):
-        result = await client.call_tool("get_task_result", {"task_id": task_id})
-        data = json.loads(result.content[0].text)
-        if data["status"] in ("completed", "failed"):
-            return data
-        await asyncio.sleep(0.05)
-    raise TimeoutError(f"task {task_id} did not complete")
 
 
 # --- get_citations: upstream_error (non-404 HTTP error, lines 86, 93-95) ---
@@ -330,13 +318,7 @@ async def test_get_citations_queued_on_429(
 
     async with Client(mcp_with_tasks) as client:
         result = await client.call_tool("get_citations", {"identifier": "p1"})
-        data = json.loads(result.content[0].text)
-        assert data["queued"] is True
-        assert data["tool"] == "get_citations"
-
-        task_data = await _poll_task(client, data["task_id"])
-    assert task_data["status"] == "completed"
-    inner = json.loads(task_data["result"])
+        inner = json.loads(result.content[0].text)
     assert inner["data"][0]["citingPaper"]["paperId"] == "c1"
 
 
@@ -401,13 +383,7 @@ async def test_get_references_queued_on_429(
 
     async with Client(mcp_with_tasks) as client:
         result = await client.call_tool("get_references", {"identifier": "p1"})
-        data = json.loads(result.content[0].text)
-        assert data["queued"] is True
-        assert data["tool"] == "get_references"
-
-        task_data = await _poll_task(client, data["task_id"])
-    assert task_data["status"] == "completed"
-    inner = json.loads(task_data["result"])
+        inner = json.loads(result.content[0].text)
     assert inner["data"][0]["citedPaper"]["paperId"] == "r1"
 
 
@@ -589,13 +565,7 @@ async def test_get_citation_graph_queued_on_429(
                 "max_nodes": 50,
             },
         )
-        data = json.loads(result.content[0].text)
-        assert data["queued"] is True
-        assert data["tool"] == "get_citation_graph"
-
-        task_data = await _poll_task(client, data["task_id"])
-    assert task_data["status"] == "completed"
-    inner = json.loads(task_data["result"])
+        inner = json.loads(result.content[0].text)
     assert "c1" in {n["id"] for n in inner["nodes"]}
 
 
@@ -704,13 +674,7 @@ async def test_find_bridge_papers_queued_on_429(
                 "direction": "references",
             },
         )
-        data = json.loads(result.content[0].text)
-        assert data["queued"] is True
-        assert data["tool"] == "find_bridge_papers"
-
-        task_data = await _poll_task(client, data["task_id"])
-    assert task_data["status"] == "completed"
-    inner = json.loads(task_data["result"])
+        inner = json.loads(result.content[0].text)
     assert inner["found"] is True
 
 

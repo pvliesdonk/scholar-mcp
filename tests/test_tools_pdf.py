@@ -116,8 +116,7 @@ async def test_fetch_paper_pdf_no_oa(
 
 @pytest.mark.respx(base_url=S2_BASE)
 async def test_fetch_paper_pdf_promotes_past_soft_deadline(
-    respx_mock: respx.MockRouter,
-    bundle: ServiceBundle,
+    respx_mock: respx.MockRouter, bundle: ServiceBundle, jobs: Jobs
 ) -> None:
     """A download outrunning the soft deadline returns a pollable job handle."""
     respx_mock.get("/paper/p1").mock(

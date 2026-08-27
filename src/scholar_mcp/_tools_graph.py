@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from collections import deque
 from typing import Any, Literal
@@ -10,9 +9,9 @@ from typing import Any, Literal
 import httpx
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
+from fastmcp_pvl_core import Jobs, register_long_running_tool
 
-from ._rate_limiter import RateLimitedError
-from ._s2_client import FIELD_SETS, format_s2_error, log_s2_error
+from ._s2_client import FIELD_SETS, log_s2_error, s2_error_payload
 from ._server_deps import ServiceBundle, get_bundle
 
 logger = logging.getLogger(__name__)
@@ -25,14 +24,27 @@ _MAX_UPSTREAM_SCAN = 10_000  # get_citations tool
 _MAX_PER_NODE_SCAN = 5_000  # get_citation_graph BFS per node
 
 
-def register_graph_tools(mcp: FastMCP) -> None:
+def register_graph_tools(mcp: FastMCP, jobs: Jobs) -> None:
     """Register citation graph tools on *mcp*.
 
     Args:
         mcp: FastMCP application instance.
+        jobs: Shared Jobs service. A tool that can outrun a request is
+            registered against it, so a call past the soft deadline is
+            promoted to a background job instead of holding the request.
     """
+    _register_get_citations(mcp, jobs)
+    _register_get_references(mcp, jobs)
+    _register_get_citation_graph(mcp, jobs)
+    _register_find_bridge_papers(mcp, jobs)
 
-    @mcp.tool(
+
+def _register_get_citations(mcp: FastMCP, jobs: Jobs) -> None:
+    """Register the ``get_citations`` tool."""
+
+    @register_long_running_tool(
+        mcp,
+        jobs,
         annotations={
             "readOnlyHint": True,
             "destructiveHint": False,
@@ -49,7 +61,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
         fields_of_study: list[str] | None = None,
         min_citations: int | None = None,
         bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
+    ) -> dict[str, Any]:
         """Fetch papers that cite the given paper (forward citations).
 
         Args:
@@ -77,7 +89,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
             to a single discipline.
 
         Returns:
-            JSON with ``data`` list of ``{"citingPaper": {...}}`` dicts.
+            ``data``, a list of ``{"citingPaper": {...}}`` mappings.
         """
         year: str | None = None
         if year_start is not None and year_end is not None:
@@ -91,7 +103,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
 
         filtering = min_citations is not None
 
-        async def _execute(*, retry: bool = True) -> str:
+        async def _execute() -> dict[str, Any]:
             if filtering:
                 # S2 citations endpoint does not support
                 # minCitationCount — paginate through upstream results
@@ -112,17 +124,14 @@ def register_graph_tools(mcp: FastMCP) -> None:
                             offset=s2_offset,
                             year=year,
                             fieldsOfStudy=fos,
-                            retry=retry,
                         )
                     except httpx.HTTPStatusError as exc:
                         if exc.response.status_code == 404:
-                            return json.dumps(
-                                {
-                                    "error": "not_found",
-                                    "identifier": identifier,
-                                }
-                            )
-                        return format_s2_error(exc)
+                            return {
+                                "error": "not_found",
+                                "identifier": identifier,
+                            }
+                        return s2_error_payload(exc)
                     data = page.get("data") or []
                     for item in data:
                         cc = item.get("citingPaper", {}).get("citationCount")
@@ -155,7 +164,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
                 await bundle.enrichment.enrich(
                     papers, bundle, tags=frozenset({"papers"})
                 )
-                return json.dumps(result)
+                return result
 
             try:
                 result = await bundle.s2.get_citations(
@@ -165,12 +174,11 @@ def register_graph_tools(mcp: FastMCP) -> None:
                     offset=offset,
                     year=year,
                     fieldsOfStudy=fos,
-                    retry=retry,
                 )
             except httpx.HTTPStatusError as exc:
                 if exc.response.status_code == 404:
-                    return json.dumps({"error": "not_found", "identifier": identifier})
-                return format_s2_error(exc)
+                    return {"error": "not_found", "identifier": identifier}
+                return s2_error_payload(exc)
             data_list: list[dict[str, Any]] = result.get("data") or []  # type: ignore[assignment]
             citing_papers = [
                 item.get("citingPaper", {})
@@ -180,18 +188,17 @@ def register_graph_tools(mcp: FastMCP) -> None:
             await bundle.enrichment.enrich(
                 citing_papers, bundle, tags=frozenset({"papers"})
             )
-            return json.dumps(result)
+            return result
 
-        try:
-            return await _execute(retry=False)
-        except RateLimitedError:
-            logger.debug("rate_limited_queued tool=%s", "get_citations")
-            task_id = bundle.tasks.submit(_execute(retry=True), tool="get_citations")
-            return json.dumps(
-                {"queued": True, "task_id": task_id, "tool": "get_citations"}
-            )
+        return await _execute()
 
-    @mcp.tool(
+
+def _register_get_references(mcp: FastMCP, jobs: Jobs) -> None:
+    """Register the ``get_references`` tool."""
+
+    @register_long_running_tool(
+        mcp,
+        jobs,
         annotations={
             "readOnlyHint": True,
             "destructiveHint": False,
@@ -204,7 +211,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
         limit: int = 50,
         offset: int = 0,
         bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
+    ) -> dict[str, Any]:
         """Fetch papers referenced by the given paper (backward references).
 
         Args:
@@ -214,40 +221,38 @@ def register_graph_tools(mcp: FastMCP) -> None:
             offset: Pagination offset.
 
         Returns:
-            JSON with ``data`` list of ``{"citedPaper": {...}}`` dicts.
+            ``data``, a list of ``{"citedPaper": {...}}`` mappings.
         """
 
-        async def _execute(*, retry: bool = True) -> str:
+        async def _execute() -> dict[str, Any]:
             try:
                 result = await bundle.s2.get_references(
                     identifier,
                     fields=FIELD_SETS[fields],
                     limit=limit,
                     offset=offset,
-                    retry=retry,
                 )
             except httpx.HTTPStatusError as exc:
                 if exc.response.status_code == 404:
-                    return json.dumps({"error": "not_found", "identifier": identifier})
-                return format_s2_error(exc)
+                    return {"error": "not_found", "identifier": identifier}
+                return s2_error_payload(exc)
             papers = [
                 item.get("citedPaper", {})
                 for item in result.get("data") or []
                 if item.get("citedPaper")
             ]
             await bundle.enrichment.enrich(papers, bundle, tags=frozenset({"papers"}))
-            return json.dumps(result)
+            return result
 
-        try:
-            return await _execute(retry=False)
-        except RateLimitedError:
-            logger.debug("rate_limited_queued tool=%s", "get_references")
-            task_id = bundle.tasks.submit(_execute(retry=True), tool="get_references")
-            return json.dumps(
-                {"queued": True, "task_id": task_id, "tool": "get_references"}
-            )
+        return await _execute()
 
-    @mcp.tool(
+
+def _register_get_citation_graph(mcp: FastMCP, jobs: Jobs) -> None:
+    """Register the ``get_citation_graph`` tool."""
+
+    @register_long_running_tool(
+        mcp,
+        jobs,
         annotations={
             "readOnlyHint": True,
             "destructiveHint": False,
@@ -264,7 +269,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
         fields_of_study: list[str] | None = None,
         min_citations: int | None = None,
         bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
+    ) -> dict[str, Any]:
         """Traverse the citation graph from one or more seed papers.
 
         Performs BFS up to *depth* hops. Returns nodes (paper records) and
@@ -289,7 +294,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
             to a single discipline.
 
         Returns:
-            JSON ``{"nodes": [...], "edges": [...], "stats": {...}}``.
+            ``{"nodes": [...], "edges": [...], "stats": {...}}``.
         """
         clamped_depth = max(1, min(depth, 3))
 
@@ -302,7 +307,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
             year = f"-{year_end}"
         fos = ",".join(fields_of_study) if fields_of_study else None
 
-        async def _execute(*, retry: bool = True) -> str:
+        async def _execute() -> dict[str, Any]:
             nodes: dict[str, dict[str, object]] = {}
             edges: list[dict[str, object]] = []
             bfs_queue: deque[tuple[str, int]] = deque()
@@ -313,7 +318,6 @@ def register_graph_tools(mcp: FastMCP) -> None:
                 seed_results = await bundle.s2.batch_resolve(
                     seed_batch,
                     fields=FIELD_SETS["compact"],
-                    retry=retry,
                 )
             except (httpx.HTTPError, ValueError) as exc:
                 if isinstance(exc, httpx.HTTPStatusError):
@@ -382,7 +386,6 @@ def register_graph_tools(mcp: FastMCP) -> None:
                                 offset=s2_off,
                                 year=year,
                                 fieldsOfStudy=fos,
-                                retry=retry,
                             )
                             data = result.get("data") or []
                             for item in data:
@@ -424,7 +427,6 @@ def register_graph_tools(mcp: FastMCP) -> None:
                             fields=FIELD_SETS["compact"],
                             limit=fetch_limit,
                             offset=0,
-                            retry=retry,
                         )
                         for item in result.get("data") or []:
                             p = item.get("citedPaper", {})
@@ -487,35 +489,26 @@ def register_graph_tools(mcp: FastMCP) -> None:
             await bundle.enrichment.enrich(
                 node_list, bundle, tags=frozenset({"papers"})
             )
-            return json.dumps(
-                {
-                    "nodes": node_list,
-                    "edges": edge_list,
-                    "stats": {
-                        "total_nodes": len(node_list),
-                        "total_edges": len(edge_list),
-                        "depth_reached": actual_depth_reached,
-                        "truncated": truncated,
-                    },
-                }
-            )
+            return {
+                "nodes": node_list,
+                "edges": edge_list,
+                "stats": {
+                    "total_nodes": len(node_list),
+                    "total_edges": len(edge_list),
+                    "depth_reached": actual_depth_reached,
+                    "truncated": truncated,
+                },
+            }
 
-        try:
-            return await _execute(retry=False)
-        except RateLimitedError:
-            logger.debug("rate_limited_queued tool=%s", "get_citation_graph")
-            task_id = bundle.tasks.submit(
-                _execute(retry=True), tool="get_citation_graph"
-            )
-            return json.dumps(
-                {
-                    "queued": True,
-                    "task_id": task_id,
-                    "tool": "get_citation_graph",
-                }
-            )
+        return await _execute()
 
-    @mcp.tool(
+
+def _register_find_bridge_papers(mcp: FastMCP, jobs: Jobs) -> None:
+    """Register the ``find_bridge_papers`` tool."""
+
+    @register_long_running_tool(
+        mcp,
+        jobs,
         annotations={
             "readOnlyHint": True,
             "destructiveHint": False,
@@ -528,7 +521,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
         max_depth: int = 4,
         direction: Literal["citations", "references", "both"] = "both",
         bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
+    ) -> dict[str, Any]:
         """Find the shortest citation path between two papers.
 
         Uses BFS over the citation/reference graph. Leverages cached
@@ -541,10 +534,10 @@ def register_graph_tools(mcp: FastMCP) -> None:
             direction: Expand via citations, references, or both.
 
         Returns:
-            JSON ``{"found": true, "path": [...]}`` or ``{"found": false}``.
+            ``{"found": true, "path": [...]}`` or ``{"found": false}``.
         """
 
-        async def _execute(*, retry: bool = True) -> str:
+        async def _execute() -> dict[str, Any]:
             bfs_queue: deque[tuple[str, list[str]]] = deque([(source_id, [source_id])])
             visited: set[str] = {source_id}
 
@@ -559,7 +552,6 @@ def register_graph_tools(mcp: FastMCP) -> None:
                                 fields="paperId",
                                 limit=100,
                                 offset=0,
-                                retry=retry,
                             )
                             cached = [
                                 item["citedPaper"]["paperId"]
@@ -580,7 +572,6 @@ def register_graph_tools(mcp: FastMCP) -> None:
                                 fields="paperId",
                                 limit=100,
                                 offset=0,
-                                retry=retry,
                             )
                             cached_cit = [
                                 item["citingPaper"]["paperId"]
@@ -610,24 +601,11 @@ def register_graph_tools(mcp: FastMCP) -> None:
                                 path_records.append(cached_paper)
                             else:
                                 path_records.append({"paperId": pid})
-                        return json.dumps({"found": True, "path": path_records})
+                        return {"found": True, "path": path_records}
                     if neighbour_id not in visited:
                         visited.add(neighbour_id)
                         bfs_queue.append((neighbour_id, [*path, neighbour_id]))
 
-            return json.dumps({"found": False})
+            return {"found": False}
 
-        try:
-            return await _execute(retry=False)
-        except RateLimitedError:
-            logger.debug("rate_limited_queued tool=%s", "find_bridge_papers")
-            task_id = bundle.tasks.submit(
-                _execute(retry=True), tool="find_bridge_papers"
-            )
-            return json.dumps(
-                {
-                    "queued": True,
-                    "task_id": task_id,
-                    "tool": "find_bridge_papers",
-                }
-            )
+        return await _execute()

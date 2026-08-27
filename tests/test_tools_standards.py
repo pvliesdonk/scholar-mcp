@@ -12,6 +12,7 @@ import pytest
 import respx
 from fastmcp import FastMCP
 from fastmcp.client import Client
+from fastmcp_pvl_core import Jobs
 
 from scholar_mcp._docling_client import DoclingClient
 from scholar_mcp._server_deps import ServiceBundle
@@ -34,13 +35,13 @@ SAMPLE_RFC_DOC = {
 
 
 @pytest.fixture
-def mcp(bundle: ServiceBundle) -> FastMCP:
+def mcp(bundle: ServiceBundle, jobs: Jobs) -> FastMCP:
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_standards_tools(app)
+    register_standards_tools(app, jobs)
     return app
 
 
@@ -501,10 +502,15 @@ async def test_get_standard_alias_cache_hit_record_not_cached(
     assert data["identifier"] == "RFC 9000"
 
 
-async def test_handle_full_text_rate_limited_queues_task(
+async def test_handle_full_text_degrades_when_rate_limited(
     mcp: FastMCP, bundle: ServiceBundle
 ) -> None:
-    """_handle_full_text queues a background task when docling is rate-limited."""
+    """A throttled conversion leaves the record usable rather than failing.
+
+    The caller still gets ``full_text_url`` and can fetch it manually — the
+    same degradation the other conversion failures take, now that there is no
+    queue to retry behind the caller's back.
+    """
     from scholar_mcp._rate_limiter import RateLimitedError
 
     record = {
@@ -529,8 +535,8 @@ async def test_handle_full_text_rate_limited_queues_task(
                 "get_standard", {"identifier": "RFC 9000", "fetch_full_text": True}
             )
     data = json.loads(result.content[0].text)
-    assert data.get("queued") is True
-    assert "task_id" in data
+    assert "full_text" not in data
+    assert data["full_text_url"] == "https://www.rfc-editor.org/rfc/rfc9000.html"
 
 
 # ---------------------------------------------------------------------------

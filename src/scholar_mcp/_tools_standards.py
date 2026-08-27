@@ -5,11 +5,12 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+from typing import Any
 
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
+from fastmcp_pvl_core import Jobs, register_long_running_tool
 
-from ._rate_limiter import RateLimitedError
 from ._record_types import StandardRecord
 from ._server_deps import ServiceBundle, get_bundle
 from ._standards_client import resolve_identifier_local
@@ -17,12 +18,23 @@ from ._standards_client import resolve_identifier_local
 logger = logging.getLogger(__name__)
 
 
-def register_standards_tools(mcp: FastMCP) -> None:
+def register_standards_tools(mcp: FastMCP, jobs: Jobs) -> None:
     """Register standards tools on *mcp*.
 
     Args:
         mcp: FastMCP application instance.
+        jobs: Shared Jobs service. A tool that can outrun a request is
+            registered against it, so a call past the soft deadline is
+            promoted to a background job instead of holding the request.
     """
+    _register_resolve_standard_identifier(mcp)
+    _register_search_standards(mcp)
+    _register_get_standard(mcp, jobs)
+    _register_get_sync_status(mcp)
+
+
+def _register_resolve_standard_identifier(mcp: FastMCP) -> None:
+    """Register the ``resolve_standard_identifier`` tool."""
 
     @mcp.tool(
         annotations={
@@ -96,6 +108,10 @@ def register_standards_tools(mcp: FastMCP) -> None:
 
         return json.dumps({"ambiguous": True, "candidates": candidates})
 
+
+def _register_search_standards(mcp: FastMCP) -> None:
+    """Register the ``search_standards`` tool."""
+
     @mcp.tool(
         annotations={
             "readOnlyHint": True,
@@ -140,7 +156,13 @@ def register_standards_tools(mcp: FastMCP) -> None:
         await bundle.cache.set_standards_search(cache_key, results)
         return json.dumps(results)
 
-    @mcp.tool(
+
+def _register_get_standard(mcp: FastMCP, jobs: Jobs) -> None:
+    """Register the ``get_standard`` tool."""
+
+    @register_long_running_tool(
+        mcp,
+        jobs,
         annotations={
             "readOnlyHint": True,
             "destructiveHint": False,
@@ -151,7 +173,7 @@ def register_standards_tools(mcp: FastMCP) -> None:
         identifier: str,
         fetch_full_text: bool = False,
         bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
+    ) -> dict[str, Any]:
         """Retrieve a standard by identifier (canonical or fuzzy).
 
         Resolves fuzzy inputs (e.g. "rfc9000", "nist 800-53") to their
@@ -170,7 +192,7 @@ def register_standards_tools(mcp: FastMCP) -> None:
                 convert the full text PDF/HTML via docling.
 
         Returns:
-            JSON StandardRecord, or ``{"error": "not_found"}`` if unresolvable.
+            The StandardRecord, or ``{"error": "not_found"}`` if unresolvable.
         """
         identifier = identifier.strip()
 
@@ -188,12 +210,12 @@ def register_standards_tools(mcp: FastMCP) -> None:
             logger.debug("standard_cache_hit identifier=%s", canonical)
             if fetch_full_text:
                 return await _handle_full_text(cached, bundle)
-            return json.dumps(cached)
+            return dict(cached)
 
         # 3. Fetch from source
         record = await bundle.standards.get(canonical)
         if record is None:
-            return json.dumps({"error": "not_found", "identifier": identifier})
+            return {"error": "not_found", "identifier": identifier}
 
         # 4. Cache result
         await bundle.cache.set_standard(canonical, record)
@@ -202,7 +224,11 @@ def register_standards_tools(mcp: FastMCP) -> None:
 
         if fetch_full_text:
             return await _handle_full_text(record, bundle)
-        return json.dumps(record)
+        return dict(record)
+
+
+def _register_get_sync_status(mcp: FastMCP) -> None:
+    """Register the ``get_sync_status`` tool."""
 
     @mcp.tool(
         annotations={
@@ -232,7 +258,7 @@ def register_standards_tools(mcp: FastMCP) -> None:
 async def _handle_full_text(
     record: StandardRecord,
     bundle: ServiceBundle,
-) -> str:
+) -> dict[str, Any]:
     """Download and convert full text via docling if available.
 
     If docling is not configured, no full_text_url is present, full_text is
@@ -241,46 +267,39 @@ async def _handle_full_text(
 
     Args:
         record: StandardRecord dict.
-        bundle: Service bundle with optional docling client and task queue.
+        bundle: Service bundle with an optional docling client.
 
     Returns:
-        JSON StandardRecord, possibly with ``full_text`` field populated,
-        or ``{"queued": true, "task_id": "..."}`` if conversion was queued.
+        The record, with ``full_text`` populated when the conversion ran.
     """
     if (
         not record.get("full_text_available")
         or not record.get("full_text_url")
         or record.get("full_text")
     ):
-        return json.dumps(record)
+        return dict(record)
 
     if bundle.docling is None:
         logger.debug(
             "full_text_requested_but_docling_not_configured id=%s",
             record.get("identifier"),
         )
-        return json.dumps(record)
+        return dict(record)
 
     url: str = record["full_text_url"] or ""
     filename = url.rsplit("/", 1)[-1] or "standard.pdf"
 
-    async def _convert() -> str:
-        content = await bundle.standards.download(url)
-        markdown = await bundle.docling.convert(content, filename)  # type: ignore[union-attr]
-        enriched = {**record, "full_text": markdown}
-        identifier = enriched.get("identifier")
-        if identifier:
-            await bundle.cache.set_standard(identifier, enriched)  # type: ignore[arg-type]
-        return json.dumps(enriched)
-
     try:
-        return await _convert()
-    except RateLimitedError:
-        logger.debug("rate_limited_queued tool=%s", "get_standard")
-        task_id = bundle.tasks.submit(_convert(), tool="get_standard")
-        return json.dumps({"queued": True, "task_id": task_id, "tool": "get_standard"})
+        content = await bundle.standards.download(url)
+        markdown = await bundle.docling.convert(content, filename)
     except Exception as exc:
         logger.warning(
             "full_text_conversion_failed id=%s err=%s", record.get("identifier"), exc
         )
-        return json.dumps(record)
+        return dict(record)
+
+    enriched = {**record, "full_text": markdown}
+    identifier = enriched.get("identifier")
+    if identifier:
+        await bundle.cache.set_standard(identifier, enriched)  # type: ignore[arg-type]
+    return enriched

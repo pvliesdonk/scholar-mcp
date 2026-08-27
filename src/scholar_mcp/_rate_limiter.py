@@ -110,3 +110,56 @@ async def with_s2_try_once(
         if exc.response.status_code == 429:
             raise RateLimitedError() from exc
         raise
+
+
+def rate_limited_payload(detail: str, *, retryable: bool = True) -> dict[str, Any]:
+    """Describe an upstream throttle to the caller.
+
+    While the bespoke task queue existed, a throttled call was queued and this
+    wording was added when the client polled for the failure. The queue is
+    gone, so the tool says it directly, at the point the caller can act on it.
+
+    Args:
+        detail: What the caller should do, in plain language.
+        retryable: Whether calling again later is expected to work. A daily
+            quota is not retryable today; a short throttle is.
+
+    Returns:
+        ``{"error": "rate_limited", "detail": ..., "retryable": ...}``.
+    """
+    return {"error": "rate_limited", "detail": detail, "retryable": retryable}
+
+
+RATE_LIMIT_RETRY_SOON = (
+    "The service was busy and could not complete the request. "
+    "Try calling the tool again in about 60 seconds."
+)
+RATE_LIMIT_DAILY_QUOTA = "The service has reached its daily quota. Try again tomorrow."
+
+
+async def guard_rate_limit(
+    coro: Awaitable[dict[str, Any]], *, tool: str, upstream: str
+) -> dict[str, Any]:
+    """Run *coro*, converting an upstream throttle into a result.
+
+    For upstreams with no retry path of their own. Written as a wrapper rather
+    than a ``try`` in each tool so guarding a tool costs a call rather than a
+    branch in an already-long body.
+
+    Args:
+        coro: The tool's work.
+        tool: Registered tool name, for the log line.
+        upstream: Which service throttled, for the log line.
+
+    Returns:
+        The coroutine's result, or the shared rate-limit payload.
+    """
+    try:
+        return await coro
+    except RateLimitedError as exc:
+        # Fixed event name with the service as a field: an interpolated event
+        # name is not greppable, which is the whole point of the convention.
+        logger.warning(
+            "upstream_rate_limited upstream=%s tool=%s err=%s", upstream, tool, exc
+        )
+        return rate_limited_payload(RATE_LIMIT_RETRY_SOON)

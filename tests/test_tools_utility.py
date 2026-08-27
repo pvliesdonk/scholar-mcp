@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock
@@ -12,6 +11,7 @@ import pytest
 import respx
 from fastmcp import FastMCP
 from fastmcp.client import Client
+from fastmcp_pvl_core import Jobs
 
 from scholar_mcp._epo_client import EpoClient
 from scholar_mcp._server_deps import ServiceBundle
@@ -51,18 +51,18 @@ def _make_epo_client(
 
 
 @pytest.fixture
-def mcp(bundle: ServiceBundle) -> FastMCP:
+def mcp(bundle: ServiceBundle, jobs: Jobs) -> FastMCP:
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_utility_tools(app)
+    register_utility_tools(app, jobs)
     return app
 
 
 @pytest.fixture
-def mcp_with_epo(bundle: ServiceBundle) -> FastMCP:
+def mcp_with_epo(bundle: ServiceBundle, jobs: Jobs) -> FastMCP:
     """FastMCP instance with utility tools and a mock EpoClient wired in."""
     bundle.epo = _make_epo_client()
 
@@ -71,7 +71,7 @@ def mcp_with_epo(bundle: ServiceBundle) -> FastMCP:
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_utility_tools(app)
+    register_utility_tools(app, jobs)
     return app
 
 
@@ -90,7 +90,7 @@ async def test_batch_resolve_all_found(mcp: FastMCP) -> None:
             result = await client.call_tool(
                 "batch_resolve", {"identifiers": ["p1", "p2"]}
             )
-    data = json.loads(result.content[0].text)
+    data = json.loads(result.content[0].text)["results"]
     assert len(data) == 2
     assert data[0]["paper"]["paperId"] == "p1"
 
@@ -114,7 +114,7 @@ async def test_batch_resolve_openalex_fallback(mcp: FastMCP) -> None:
             result = await client.call_tool(
                 "batch_resolve", {"identifiers": ["DOI:10.1/test"]}
             )
-    data = json.loads(result.content[0].text)
+    data = json.loads(result.content[0].text)["results"]
     assert data[0].get("source") == "openalex"
 
 
@@ -170,15 +170,15 @@ async def test_batch_resolve_not_found_no_doi(mcp: FastMCP) -> None:
             result = await client.call_tool(
                 "batch_resolve", {"identifiers": ["some_id"]}
             )
-    data = json.loads(result.content[0].text)
+    data = json.loads(result.content[0].text)["results"]
     assert data[0]["error"] == "not_found"
     assert data[0]["identifier"] == "some_id"
 
 
-async def test_batch_resolve_queued_on_429(
-    bundle: ServiceBundle,
+async def test_batch_resolve_retries_through_a_429(
+    bundle: ServiceBundle, jobs: Jobs
 ) -> None:
-    """batch_resolve returns queued on 429, background completes."""
+    """A 429 is retried inline, so the caller gets the result, not a handle."""
     call_count = 0
 
     def _side_effect(request: httpx.Request) -> httpx.Response:
@@ -196,26 +196,15 @@ async def test_batch_resolve_queued_on_429(
             yield {"bundle": bundle}
 
         app = FastMCP("test", lifespan=lifespan)
-        register_utility_tools(app)
-        from scholar_mcp._tools_tasks import register_task_tools
-
-        register_task_tools(app)
+        register_utility_tools(app, jobs)
 
         async with Client(app) as client:
             result = await client.call_tool("batch_resolve", {"identifiers": ["p1"]})
-            data = json.loads(result.content[0].text)
-            assert data["queued"] is True
-            assert data["tool"] == "batch_resolve"
 
-            for _ in range(40):
-                poll = await client.call_tool(
-                    "get_task_result", {"task_id": data["task_id"]}
-                )
-                poll_data = json.loads(poll.content[0].text)
-                if poll_data["status"] in ("completed", "failed"):
-                    break
-                await asyncio.sleep(0.05)
-            assert poll_data["status"] == "completed"
+    data = json.loads(result.content[0].text)
+    assert "queued" not in data
+    assert data["results"][0]["identifier"] == "p1"
+    assert call_count == 2  # first attempt 429, retry succeeded
 
 
 async def test_enrich_paper_doi_prefix(mcp: FastMCP) -> None:
@@ -342,10 +331,10 @@ async def test_enrich_paper_affiliations_and_concepts(mcp: FastMCP) -> None:
     assert data["concepts"][1]["name"] == "NLP"
 
 
-async def test_enrich_paper_queued_on_429(
-    bundle: ServiceBundle,
+async def test_enrich_paper_retries_through_a_429(
+    bundle: ServiceBundle, jobs: Jobs
 ) -> None:
-    """enrich_paper returns queued on 429, background completes."""
+    """A 429 is retried inline, so the caller gets the enriched paper."""
     call_count = 0
 
     def _side_effect(request: httpx.Request) -> httpx.Response:
@@ -377,10 +366,7 @@ async def test_enrich_paper_queued_on_429(
             yield {"bundle": bundle}
 
         app = FastMCP("test", lifespan=lifespan)
-        register_utility_tools(app)
-        from scholar_mcp._tools_tasks import register_task_tools
-
-        register_task_tools(app)
+        register_utility_tools(app, jobs)
 
         async with Client(app) as client:
             result = await client.call_tool(
@@ -388,18 +374,9 @@ async def test_enrich_paper_queued_on_429(
                 {"identifier": "p1", "fields": ["oa_status"]},
             )
             data = json.loads(result.content[0].text)
-            assert data["queued"] is True
-            assert data["tool"] == "enrich_paper"
 
-            for _ in range(40):
-                poll = await client.call_tool(
-                    "get_task_result", {"task_id": data["task_id"]}
-                )
-                poll_data = json.loads(poll.content[0].text)
-                if poll_data["status"] in ("completed", "failed"):
-                    break
-                await asyncio.sleep(0.05)
-            assert poll_data["status"] == "completed"
+    assert "queued" not in data
+    assert call_count == 2  # first attempt 429, retry succeeded
 
 
 # ---------------------------------------------------------------------------
@@ -416,7 +393,7 @@ async def test_batch_resolve_detects_patent(
             "batch_resolve",
             {"identifiers": ["EP1234567A1"]},
         )
-    data = json.loads(result.content[0].text)
+    data = json.loads(result.content[0].text)["results"]
     assert isinstance(data, list)
     assert len(data) == 1
     assert data[0]["source_type"] == "patent"
@@ -440,7 +417,7 @@ async def test_batch_resolve_mixed_papers_and_patents(
                 "batch_resolve",
                 {"identifiers": ["DOI:10.1234/test", "EP1234567A1"]},
             )
-    data = json.loads(result.content[0].text)
+    data = json.loads(result.content[0].text)["results"]
     assert len(data) == 2
     # First is a paper (DOI)
     assert "paper" in data[0]
@@ -460,14 +437,14 @@ async def test_batch_resolve_patent_epo_not_configured(
             "batch_resolve",
             {"identifiers": ["EP1234567A1"]},
         )
-    data = json.loads(result.content[0].text)
+    data = json.loads(result.content[0].text)["results"]
     assert len(data) == 1
     assert data[0]["error"] == "epo_not_configured"
     assert data[0]["source_type"] == "patent"
 
 
 async def test_batch_resolve_patent_resolve_failed(
-    bundle: ServiceBundle,
+    bundle: ServiceBundle, jobs: Jobs
 ) -> None:
     """batch_resolve returns resolve_failed when EPO raises an exception."""
     bundle.epo = _make_epo_client(raise_on_biblio=RuntimeError("EPO down"))
@@ -477,21 +454,21 @@ async def test_batch_resolve_patent_resolve_failed(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_utility_tools(app)
+    register_utility_tools(app, jobs)
 
     async with Client(app) as client:
         result = await client.call_tool(
             "batch_resolve",
             {"identifiers": ["EP1234567A1"]},
         )
-    data = json.loads(result.content[0].text)
+    data = json.loads(result.content[0].text)["results"]
     assert len(data) == 1
     assert data[0]["error"] == "resolve_failed"
     assert data[0]["source_type"] == "patent"
 
 
 async def test_batch_resolve_patent_not_found_empty_biblio(
-    bundle: ServiceBundle,
+    bundle: ServiceBundle, jobs: Jobs
 ) -> None:
     """batch_resolve returns not_found when biblio has no title or applicants."""
     bundle.epo = _make_epo_client(biblio_result={"title": "", "applicants": []})
@@ -501,14 +478,14 @@ async def test_batch_resolve_patent_not_found_empty_biblio(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_utility_tools(app)
+    register_utility_tools(app, jobs)
 
     async with Client(app) as client:
         result = await client.call_tool(
             "batch_resolve",
             {"identifiers": ["EP1234567A1"]},
         )
-    data = json.loads(result.content[0].text)
+    data = json.loads(result.content[0].text)["results"]
     assert len(data) == 1
     assert data[0]["error"] == "not_found"
     assert data[0]["source_type"] == "patent"
@@ -539,7 +516,7 @@ async def test_batch_resolve_preserves_order_with_patents(
                     ]
                 },
             )
-    data = json.loads(result.content[0].text)
+    data = json.loads(result.content[0].text)["results"]
     assert len(data) == 3
     assert data[0]["identifier"] == "p1"
     assert "paper" in data[0]
@@ -549,10 +526,10 @@ async def test_batch_resolve_preserves_order_with_patents(
     assert "paper" in data[2]
 
 
-async def test_batch_resolve_patent_rate_limited_queues(
-    bundle: ServiceBundle,
+async def test_batch_resolve_patent_rate_limited_reports_per_identifier(
+    bundle: ServiceBundle, jobs: Jobs
 ) -> None:
-    """batch_resolve queues when EPO rate-limits during patent resolution."""
+    """An EPO throttle is that identifier's result, not the batch's failure."""
     from scholar_mcp._epo_client import EpoRateLimitedError
 
     bundle.epo = _make_epo_client(raise_on_biblio=EpoRateLimitedError("red"))
@@ -562,19 +539,16 @@ async def test_batch_resolve_patent_rate_limited_queues(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_utility_tools(app)
-    from scholar_mcp._tools_tasks import register_task_tools
-
-    register_task_tools(app)
+    register_utility_tools(app, jobs)
 
     async with Client(app) as client:
         result = await client.call_tool(
             "batch_resolve",
             {"identifiers": ["EP1234567A1"]},
         )
-    data = json.loads(result.content[0].text)
-    assert data["queued"] is True
-    assert data["tool"] == "batch_resolve"
+    data = json.loads(result.content[0].text)["results"]
+    assert data[0]["error"] == "rate_limited"
+    assert data[0]["source_type"] == "patent"
 
 
 OL_BASE = "https://openlibrary.org"
@@ -603,7 +577,7 @@ async def test_batch_resolve_isbn(mcp: FastMCP) -> None:
                 "batch_resolve",
                 {"identifiers": ["ISBN:9780201633610"]},
             )
-    data = json.loads(result.content[0].text)
+    data = json.loads(result.content[0].text)["results"]
     assert len(data) == 1
     assert data[0]["source_type"] == "book"
     assert data[0]["book"]["title"] == "Design Patterns"
@@ -621,7 +595,7 @@ async def test_batch_resolve_isbn_not_found(mcp: FastMCP) -> None:
                 "batch_resolve",
                 {"identifiers": ["ISBN:9780000000000"]},
             )
-    data = json.loads(result.content[0].text)
+    data = json.loads(result.content[0].text)["results"]
     assert len(data) == 1
     assert data[0]["error"] == "not_found"
     assert data[0]["source_type"] == "book"
@@ -643,7 +617,7 @@ async def test_batch_resolve_mixed_papers_and_isbn(mcp: FastMCP) -> None:
                 "batch_resolve",
                 {"identifiers": ["abc", "ISBN:9780201633610"]},
             )
-    data = json.loads(result.content[0].text)
+    data = json.loads(result.content[0].text)["results"]
     assert len(data) == 2
     assert data[0]["identifier"] == "abc"
     assert "paper" in data[0]
@@ -670,7 +644,7 @@ async def test_batch_resolve_chapter_hint_parsed(mcp: FastMCP) -> None:
                 "batch_resolve",
                 {"identifiers": ["DOI:10.1/ch3 Ch. 3, pp. 45-67"]},
             )
-    data = json.loads(result.content[0].text)
+    data = json.loads(result.content[0].text)["results"]
     assert len(data) == 1
     assert "paper" in data[0]
     assert "chapter_info" in data[0]
@@ -700,7 +674,7 @@ async def test_batch_resolve_chapter_parent_title_and_isbn(mcp: FastMCP) -> None
                     ]
                 },
             )
-    data = json.loads(result.content[0].text)
+    data = json.loads(result.content[0].text)["results"]
     assert len(data) == 1
     ci = data[0]["chapter_info"]
     assert ci["citation_source"] == "parsed"
@@ -725,7 +699,7 @@ async def test_batch_resolve_no_chapter_info(mcp: FastMCP) -> None:
                 "batch_resolve",
                 {"identifiers": ["p1"]},
             )
-    data = json.loads(result.content[0].text)
+    data = json.loads(result.content[0].text)["results"]
     assert len(data) == 1
     assert "paper" in data[0]
     assert "chapter_info" not in data[0]

@@ -1,6 +1,6 @@
 # Tools
 
-Scholar MCP provides 28 tools organised by scholarly source type: **Papers**, **Patents**, **Books**, and **Standards** are peer source domains; the remaining sections (Cross-source Utility, PDF Conversion, Task Polling) are cross-cutting. All tools return JSON.
+Scholar MCP provides 28 tools organised by scholarly source type: **Papers**, **Patents**, **Books**, and **Standards** are peer source domains; the remaining sections (Cross-source Utility, PDF Conversion, Job Polling) are cross-cutting. All tools return JSON.
 
 <!-- DOMAIN-TOOLS-LIST-START -->
 
@@ -12,9 +12,9 @@ All tools include [MCP tool annotations](https://spec.modelcontextprotocol.io/sp
 
 - Read-only tools: `readOnlyHint=true`, `destructiveHint=false`, `openWorldHint=true`
 - Write tools (PDF): `readOnlyHint=false`, `destructiveHint=false`, `openWorldHint=true`
-- Task polling tools: `readOnlyHint=true`, `destructiveHint=false`, `openWorldHint=false`
+- Job polling: `readOnlyHint=true`, `destructiveHint=false`, `openWorldHint=false`
 
-## Async Task Queue
+## Long-running calls
 
 Operations that can outlast a request do not block on it.
 
@@ -37,9 +37,29 @@ Call the tool named in `poll_with` with that `job_id` until `status` is
 `completed` or `failed`. Records are kept for `SCHOLAR_MCP_JOBS_RESULT_TTL_S`
 (1 hour by default) and are scoped to the caller.
 
-**S2 tools** still use the older queueing path: when Semantic Scholar responds
-with HTTP 429 they return `{"queued": true, "task_id": "..."}`, polled with
-`get_task_result`, and those results expire after 10 minutes.
+**Every other tool** behaves the same way. A Semantic Scholar rate limit is
+retried with backoff inside the call, so the caller usually gets the real
+answer rather than a handle. Only a call that is still going at the soft
+deadline is promoted.
+
+EPO and Open Library have no retry path of their own, so a throttle from either
+comes back as an ordinary result rather than being retried for you. The patent
+tools (`search_patents`, `get_patent`, `get_citing_patents`, `fetch_patent_pdf`)
+and the book tools `search_books` and `get_book` report it this way, and
+`batch_resolve` reports it per identifier:
+
+```json
+{
+  "error": "rate_limited",
+  "detail": "The service was busy and could not complete the request. Try calling the tool again in about 60 seconds.",
+  "retryable": true
+}
+```
+
+An exhausted EPO daily quota carries `"retryable": false` and says to try again
+tomorrow, because retrying will not clear it today.
+
+`get_book_excerpt` and `recommend_books` do not carry this handling yet.
 
 ## Papers, Search & Retrieval
 
@@ -215,7 +235,7 @@ Paper recommendations based on positive (and optional negative) examples.
 | `limit` | int | `10` | Number of recommendations |
 | `fields` | string | `"standard"` | Field set for returned papers |
 
-**Returns:** JSON list of recommended papers.
+**Returns:** `{"recommendations": [...]}`, holding the recommended papers.
 
 !!! tip
     Recommendations work best with 3 to 5 positive examples that represent the topic you're interested in. Adding 1 to 2 negative examples that are close but off-topic helps narrow results.
@@ -260,7 +280,9 @@ Generate formatted citations for one or more papers. Output formats: BibTeX, CSL
 
 **BibTeX output** includes entry type inference (`@article`, `@inproceedings`, `@misc`, `@book`), proper author formatting (`{Last}, First`), title casing preservation, DOI, arXiv eprint fields, and special character escaping. Papers with `book_metadata` (ISBN or publisher) are emitted as `@book` entries with `publisher`, `edition`, and `isbn` fields.
 
-**CSL-JSON output** returns `{"citations": [...], "errors": [...]}`; the citations array contains standard CSL-JSON objects compatible with Zotero, Mendeley, Pandoc, and other CSL processors. Book entries use `type: "book"` with `publisher` and `ISBN` fields.
+**CSL-JSON output** returns `{"format": "csl-json", "citations": [...], "errors": [...]}`; the citations array contains standard CSL-JSON objects compatible with Zotero, Mendeley, Pandoc, and other CSL processors. Book entries use `type: "book"` with `publisher` and `ISBN` fields.
+
+**BibTeX and RIS output** come back as `{"format": "bibtex"|"ris", "citations": "<text>", "errors": [...]}`, with the rendered entries in `citations`.
 
 **RIS output** uses standard RIS tags (`TY`, `AU`, `TI`, `PY`, `JO`/`BT`, `DO`, `UR`, `AB`, `ER`). Book entries use `TY - BOOK` with `PB` (publisher) and `SN` (ISBN) tags.
 
@@ -273,7 +295,7 @@ Papers that fail to resolve are reported inline (BibTeX/RIS: as comments, CSL-JS
 
 ## Books
 
-Book tools use [Open Library](https://openlibrary.org/) and [Google Books](https://developers.google.com/books) as data sources. No API key is required (a Google Books API key is optional for higher rate limits). Rate limits are handled automatically; if an API is temporarily unavailable, calls queue and return a task ID (see [Async Task Queue](#async-task-queue)).
+Book tools use [Open Library](https://openlibrary.org/) and [Google Books](https://developers.google.com/books) as data sources. No API key is required (a Google Books API key is optional for higher rate limits). Open Library has no retry path of its own. For `search_books` and `get_book`, a throttle comes back as `{"error": "rate_limited", "detail": ..., "retryable": true}` rather than being retried for you; call the tool again after about a minute (see [Long-running calls](#long-running-calls)). `get_book_excerpt` and `recommend_books` do not yet carry that handling.
 
 ### `search_books`
 
@@ -290,30 +312,32 @@ At least one of `query`, `title`, or `author` must be provided.
 
 When only `query` is given, it is first tried as a title search (better relevance) and falls back to free-text if no results are found. When `author` is given with multiple tokens (such as "Frank Duffy") and initial results are thin, a broadened search is automatically attempted to catch name variants (such as Frank → Francis).
 
-**Returns:** JSON list of book records. Each record contains:
+**Returns:** `{"books": [...]}`. Each record contains:
 
 ```json
-[
-  {
-    "title": "Deep Learning",
-    "authors": ["Ian Goodfellow", "Yoshua Bengio", "Aaron Courville"],
-    "publisher": "MIT Press",
-    "year": 2016,
-    "edition": null,
-    "isbn_10": "0262035618",
-    "isbn_13": "9780262035613",
-    "openlibrary_work_id": "OL17953442W",
-    "openlibrary_edition_id": "OL26423929M",
-    "cover_url": "https://covers.openlibrary.org/b/isbn/9780262035613-M.jpg",
-    "google_books_url": "https://books.google.com/books?id=Np9SDQAAQBAJ",
-    "worldcat_url": "https://www.worldcat.org/isbn/9780262035613",
-    "snippet": "An introduction to a broad range of topics in deep learning...",
-    "cover_path": null,
-    "subjects": ["Machine learning", "Artificial intelligence"],
-    "page_count": 800,
-    "description": null
-  }
-]
+{
+  "books": [
+    {
+      "title": "Deep Learning",
+      "authors": ["Ian Goodfellow", "Yoshua Bengio", "Aaron Courville"],
+      "publisher": "MIT Press",
+      "year": 2016,
+      "edition": null,
+      "isbn_10": "0262035618",
+      "isbn_13": "9780262035613",
+      "openlibrary_work_id": "OL17953442W",
+      "openlibrary_edition_id": "OL26423929M",
+      "cover_url": "https://covers.openlibrary.org/b/isbn/9780262035613-M.jpg",
+      "google_books_url": "https://books.google.com/books?id=Np9SDQAAQBAJ",
+      "worldcat_url": "https://www.worldcat.org/isbn/9780262035613",
+      "snippet": "An introduction to a broad range of topics in deep learning...",
+      "cover_path": null,
+      "subjects": ["Machine learning", "Artificial intelligence"],
+      "page_count": 800,
+      "description": null
+    }
+  ]
+}
 ```
 
 ---
@@ -430,7 +454,7 @@ Resolve up to 100 paper, patent, or book identifiers to full metadata in a singl
 | `identifiers` | list[string] | *(required)* | Up to 100 IDs: S2 paper IDs, `DOI:xxx`, plain DOIs, patent numbers (such as `EP1234567A1`), or ISBNs (prefixed `ISBN:`, such as `ISBN:9780262035613`) |
 | `fields` | string | `"standard"` | Field set (applies to paper results only) |
 
-**Returns:** JSON list of resolved items:
+**Returns:** `{"results": [...]}`, one entry per identifier in the order given:
 
 - **Paper results** have a `"paper"` key. Papers not found in Semantic Scholar are automatically tried via OpenAlex (by DOI); results from OpenAlex include `"source": "openalex"`. When the citation string contains chapter patterns (such as "Chapter 3" or "pp. 45-67"), a `chapter_info` dict is attached with parsed chapter/page information.
 - **Patent results** have a `"patent"` key and `"source_type": "patent"`. Patent numbers are auto-detected by their two-letter country prefix (such as `EP`, `US`, `WO`) and routed to the EPO OPS API.
@@ -770,50 +794,5 @@ running and how long to wait before asking again:
 Jobs are scoped to the caller, so an unknown ID, an expired one, and another
 caller's are all reported the same way. Records are kept for
 `SCHOLAR_MCP_JOBS_RESULT_TTL_S`; fetch results promptly.
-
----
-
-## Task Polling
-
-The PDF tools no longer use this. It still backs every other tool's queued
-response, and goes away when they move too.
-
-### `get_task_result`
-
-Poll for the result of a background task.
-
-| Parameter | Type | Default | Description |
-|---|---|---|---|
-| `task_id` | string | *(required)* | Task ID returned by a queued operation |
-
-**Returns:**
-
-```json
-{"task_id": "a1b2c3d4e5f6", "status": "completed", "result": "{...}"}
-```
-
-Status values: `pending`, `running`, `completed`, `failed`. The `result` field contains the original tool output as a JSON string (only present when `completed`). On `failed`, an `error` field describes the failure.
-
-The response includes extra fields while the task is in progress (`pending` or `running`):
-
-```json
-{
-  "task_id": "a1b2c3d4e5f6",
-  "status": "running",
-  "elapsed_seconds": 45,
-  "tool": "convert_pdf_to_markdown",
-  "hint": "PDF conversion typically takes 1-5 minutes depending on page count."
-}
-```
-
-The `hint` field gives expected duration, keep polling until the task completes.
-
----
-
-### `list_tasks`
-
-List all active (non-expired) background tasks.
-
-**Returns:** JSON list of `{"task_id": "...", "status": "..."}` dicts.
 
 <!-- DOMAIN-TOOLS-LIST-END -->

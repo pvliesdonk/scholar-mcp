@@ -11,6 +11,7 @@ import pytest
 import respx
 from fastmcp import FastMCP
 from fastmcp.client import Client
+from fastmcp_pvl_core import Jobs
 
 from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._tools_books import register_book_tools
@@ -84,13 +85,13 @@ SAMPLE_SUBJECT_RESPONSE = {
 
 
 @pytest.fixture
-def mcp(bundle: ServiceBundle) -> FastMCP:
+def mcp(bundle: ServiceBundle, jobs: Jobs) -> FastMCP:
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_book_tools(app)
+    register_book_tools(app, jobs)
     return app
 
 
@@ -103,7 +104,7 @@ async def test_search_books_returns_results(
     )
     async with Client(mcp) as client:
         result = await client.call_tool("search_books", {"query": "design patterns"})
-    data = json.loads(result.content[0].text)
+    data = json.loads(result.content[0].text)["books"]
     assert len(data) == 1
     assert data[0]["title"] == "Design Patterns"
     assert data[0]["isbn_13"] == "9780201633610"
@@ -138,7 +139,7 @@ async def test_search_books_uses_cache(
         await client.call_tool("search_books", {"query": "cached query"})
         # Second call — should come from cache
         result = await client.call_tool("search_books", {"query": "cached query"})
-    data = json.loads(result.content[0].text)
+    data = json.loads(result.content[0].text)["books"]
     assert len(data) == 1
     assert data[0]["title"] == "Design Patterns"
 
@@ -401,7 +402,7 @@ async def test_search_books_structured_params(
         result = await client.call_tool(
             "search_books", {"title": "Design Patterns", "author": "Gamma"}
         )
-    data = json.loads(result.content[0].text)
+    data = json.loads(result.content[0].text)["books"]
     assert len(data) == 1
     assert data[0]["title"] == "Design Patterns"
 
@@ -451,7 +452,7 @@ async def test_search_books_author_broadening(
             "search_books",
             {"title": "Planning Office Space", "author": "Frank Duffy"},
         )
-    data = json.loads(result.content[0].text)
+    data = json.loads(result.content[0].text)["books"]
     assert len(data) == 1
     assert data[0]["title"] == "Planning Office Space"
 
@@ -473,7 +474,7 @@ async def test_search_books_query_falls_back_to_q(
         result = await client.call_tool(
             "search_books", {"query": "obscure keyword search"}
         )
-    data = json.loads(result.content[0].text)
+    data = json.loads(result.content[0].text)["books"]
     assert len(data) == 1
     assert data[0]["title"] == "Design Patterns"
 
@@ -525,8 +526,8 @@ async def test_recommend_books_empty_subject(
     assert data == []
 
 
-async def test_search_books_queued_on_rate_limit(
-    bundle: ServiceBundle,
+async def test_search_books_reports_a_rate_limit(
+    bundle: ServiceBundle, jobs: Jobs
 ) -> None:
     """search_books returns queued response when rate-limited."""
     from unittest.mock import AsyncMock
@@ -540,18 +541,16 @@ async def test_search_books_queued_on_rate_limit(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_book_tools(app)
+    register_book_tools(app, jobs)
 
     async with Client(app) as client:
         result = await client.call_tool("search_books", {"query": "test"})
     data = json.loads(result.content[0].text)
-    assert data["queued"] is True
-    assert data["tool"] == "search_books"
+    assert data["error"] == "rate_limited"
+    assert data["retryable"] is True
 
 
-async def test_get_book_queued_on_rate_limit(
-    bundle: ServiceBundle,
-) -> None:
+async def test_get_book_reports_a_rate_limit(bundle: ServiceBundle, jobs: Jobs) -> None:
     """get_book returns queued response when rate-limited."""
     from unittest.mock import AsyncMock
 
@@ -564,13 +563,13 @@ async def test_get_book_queued_on_rate_limit(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_book_tools(app)
+    register_book_tools(app, jobs)
 
     async with Client(app) as client:
         result = await client.call_tool("get_book", {"identifier": "9780201633610"})
     data = json.loads(result.content[0].text)
-    assert data["queued"] is True
-    assert data["tool"] == "get_book"
+    assert data["error"] == "rate_limited"
+    assert data["retryable"] is True
 
 
 COVERS_BASE = "https://covers.openlibrary.org"

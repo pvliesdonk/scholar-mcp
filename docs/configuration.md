@@ -249,18 +249,14 @@ inventing a result.
 Durable execution across a restart is the native task path's job, which means a
 `redis://` backend.
 
-### Two task queues, one of them not configured by `SCHOLAR_MCP_TASKS_URL`
+### Migrating from `list_tasks` / `get_task_result`
 
-The PDF tools above are the first to use the jobs subsystem. The remaining
-tools still queue a rate-limited call on a second, private in-process queue
-behind `list_tasks` and `get_task_result`, which is the one
-`SCHOLAR_MCP_TASKS_URL` does not configure. That queue keeps nothing across a
-restart, whatever that variable says.
+Earlier versions carried a second, private queue behind `list_tasks` and
+`get_task_result` that `SCHOLAR_MCP_TASKS_URL` did not configure, and that kept
+nothing across a restart. It is gone, and with it the
+`{"queued": true, "task_id": "..."}` payload.
 
-The consequence is for deployments with a Redis `SCHOLAR_MCP_KV_STORE_URL`:
-the core backend reuses that URL, so the server gains a Redis-backed task queue
-those remaining tools do not put anything into. Set
-`SCHOLAR_MCP_TASKS_URL=memory://` to keep the two subsystems apart until they
-are consolidated, tracked in
-[#264](https://github.com/pvliesdonk/scholar-mcp/issues/264).
+Poll `get_job_result` with the `job_id` from a job handle instead. The handle's
+`poll_with` field names the tool, so a client that follows it needs no change.
+`list_tasks` has no replacement, because job lookup is by id.
 <!-- DOMAIN-CONFIG-VARS-END -->

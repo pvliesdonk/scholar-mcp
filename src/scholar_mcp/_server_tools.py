@@ -11,9 +11,9 @@ def register_tools(mcp: FastMCP, jobs: Jobs, *, transport: str = "stdio") -> Non
 
     Args:
         mcp: The FastMCP instance.
-        jobs: The shared Jobs service. Category modules whose tools can
-            outrun a request take it and register them dual-mode; the
-            rest are plain registrations and do not.
+        jobs: The shared Jobs service every category module registers its
+            tools against. Handles it hands out are redeemed through the
+            ``get_job_result`` tool that ``make_server`` registers.
         transport: Active transport (unused currently, kept for compatibility).
     """
     # Category modules are imported here to avoid circular imports.
@@ -21,31 +21,27 @@ def register_tools(mcp: FastMCP, jobs: Jobs, *, transport: str = "stdio") -> Non
     # ServiceBundle via Depends(get_bundle).
     from ._tools_search import register_search_tools
 
-    register_search_tools(mcp)
+    register_search_tools(mcp, jobs)
 
     from ._tools_graph import register_graph_tools
 
-    register_graph_tools(mcp)
+    register_graph_tools(mcp, jobs)
 
     from ._tools_recommendations import register_recommendation_tools
 
-    register_recommendation_tools(mcp)
+    register_recommendation_tools(mcp, jobs)
 
     from ._tools_utility import register_utility_tools
 
-    register_utility_tools(mcp)
+    register_utility_tools(mcp, jobs)
 
     from ._tools_pdf import register_pdf_tools
 
     register_pdf_tools(mcp, jobs)
 
-    from ._tools_tasks import register_task_tools
-
-    register_task_tools(mcp)
-
     from ._tools_citation import register_citation_tools
 
-    register_citation_tools(mcp)
+    register_citation_tools(mcp, jobs)
 
     from ._tools_patent import register_patent_tools
 
@@ -53,8 +49,8 @@ def register_tools(mcp: FastMCP, jobs: Jobs, *, transport: str = "stdio") -> Non
 
     from ._tools_books import register_book_tools
 
-    register_book_tools(mcp)
+    register_book_tools(mcp, jobs)
 
     from ._tools_standards import register_standards_tools
 
-    register_standards_tools(mcp)
+    register_standards_tools(mcp, jobs)

@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 from typing import TYPE_CHECKING, Any, Literal
 
 import httpx
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
+from fastmcp_pvl_core import Jobs, register_long_running_tool
 
 from ._cache import normalize_isbn
 from ._chapter_parser import hint_to_dict, parse_chapter_hint
@@ -17,7 +17,7 @@ from ._epo_client import EpoRateLimitedError
 from ._openlibrary_client import normalize_book
 from ._patent_numbers import is_patent_number, normalize
 from ._rate_limiter import RateLimitedError
-from ._s2_client import FIELD_SETS, format_s2_error, log_s2_error
+from ._s2_client import FIELD_SETS, log_s2_error, s2_error_payload
 from ._server_deps import ServiceBundle, get_bundle
 
 if TYPE_CHECKING:
@@ -43,14 +43,25 @@ def _attach_chapter_info(result: dict[str, Any], raw: str) -> None:
     result["chapter_info"] = hint_to_dict(hint)
 
 
-def register_utility_tools(mcp: FastMCP) -> None:
+def register_utility_tools(mcp: FastMCP, jobs: Jobs) -> None:
     """Register utility tools on *mcp*.
 
     Args:
         mcp: FastMCP application instance.
+        jobs: Shared Jobs service. A tool that can outrun a request is
+            registered against it, so a call past the soft deadline is
+            promoted to a background job instead of holding the request.
     """
+    _register_batch_resolve(mcp, jobs)
+    _register_enrich_paper(mcp, jobs)
 
-    @mcp.tool(
+
+def _register_batch_resolve(mcp: FastMCP, jobs: Jobs) -> None:
+    """Register the ``batch_resolve`` tool."""
+
+    @register_long_running_tool(
+        mcp,
+        jobs,
         annotations={
             "readOnlyHint": True,
             "destructiveHint": False,
@@ -61,7 +72,7 @@ def register_utility_tools(mcp: FastMCP) -> None:
         identifiers: list[str],
         fields: Literal["compact", "standard", "full"] = "standard",
         bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
+    ) -> dict[str, Any]:
         """Resolve a list of paper, patent, or book identifiers to full records.
 
         Uses the S2 batch endpoint for paper IDs/DOIs, with OpenAlex fallback.
@@ -76,7 +87,8 @@ def register_utility_tools(mcp: FastMCP) -> None:
             fields: Field set preset (applies to paper results only).
 
         Returns:
-            JSON list of resolved items. Paper results have a ``paper`` key,
+            ``{"results": [...]}``, one entry per identifier in the order given.
+            Paper results have a ``paper`` key,
             patent results have a ``patent`` key and ``source_type: "patent"``,
             book results have a ``book`` key and ``source_type: "book"``.
             Unresolved items have an ``error`` key.
@@ -103,16 +115,16 @@ def register_utility_tools(mcp: FastMCP) -> None:
                 if raw.startswith("DOI:"):
                     doi_map[i] = raw[4:]
 
-        async def _execute(*, retry: bool = True) -> str:
+        async def _execute() -> dict[str, Any]:
             # Resolve papers via S2 (existing logic)
             s2_results: list[PaperRecord | None] = []
             if paper_ids:
                 try:
                     s2_results = await bundle.s2.batch_resolve(
-                        paper_ids, fields=FIELD_SETS[fields], retry=retry
+                        paper_ids, fields=FIELD_SETS[fields]
                     )
                 except httpx.HTTPStatusError as exc:
-                    return format_s2_error(exc)
+                    return s2_error_payload(exc)
 
             async def _resolve_paper(
                 idx: int, raw: str, s2_data: PaperRecord | None
@@ -164,7 +176,20 @@ def register_utility_tools(mcp: FastMCP) -> None:
                         "source_type": "patent",
                     }
                 except (RateLimitedError, EpoRateLimitedError):
-                    raise
+                    # Re-raised to the outer handler while a bespoke queue
+                    # existed to retry it. There is none now, and EPO has no
+                    # retry-aware path, so the throttle is this identifier's
+                    # result rather than the whole batch's failure.
+                    logger.warning("batch_patent_rate_limited id=%s", raw)
+                    return idx, {
+                        "identifier": raw,
+                        "error": "rate_limited",
+                        "detail": (
+                            "EPO throttled this request; try this identifier "
+                            "again in about a minute."
+                        ),
+                        "source_type": "patent",
+                    }
                 except Exception:
                     logger.warning("batch_patent_resolve_failed id=%s", raw)
                     return idx, {
@@ -220,18 +245,17 @@ def register_utility_tools(mcp: FastMCP) -> None:
             # Merge back in original order
             result_map: dict[int, dict[str, Any]] = dict(all_resolved)
             ordered = [result_map[i] for i in range(len(identifiers))]
-            return json.dumps(ordered)
+            return {"results": ordered}
 
-        try:
-            return await _execute(retry=False)
-        except (RateLimitedError, EpoRateLimitedError):
-            logger.debug("rate_limited_queued tool=%s", "batch_resolve")
-            task_id = bundle.tasks.submit(_execute(retry=True), tool="batch_resolve")
-            return json.dumps(
-                {"queued": True, "task_id": task_id, "tool": "batch_resolve"}
-            )
+        return await _execute()
 
-    @mcp.tool(
+
+def _register_enrich_paper(mcp: FastMCP, jobs: Jobs) -> None:
+    """Register the ``enrich_paper`` tool."""
+
+    @register_long_running_tool(
+        mcp,
+        jobs,
         annotations={
             "readOnlyHint": True,
             "destructiveHint": False,
@@ -242,7 +266,7 @@ def register_utility_tools(mcp: FastMCP) -> None:
         identifier: str,
         fields: list[Literal["affiliations", "funders", "oa_status", "concepts"]],
         bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
+    ) -> dict[str, Any]:
         """Fetch OpenAlex metadata to supplement Semantic Scholar data.
 
         Resolves the paper's DOI from S2, then queries OpenAlex for the
@@ -253,32 +277,32 @@ def register_utility_tools(mcp: FastMCP) -> None:
             fields: One or more of: affiliations, funders, oa_status, concepts.
 
         Returns:
-            JSON dict with requested fields plus ``doi``, or an error dict.
+            The requested fields plus ``doi``, or a structured error mapping.
         """
 
-        async def _execute(*, retry: bool = True) -> str:
+        async def _execute() -> dict[str, Any]:
             doi: str | None = None
             if identifier.startswith("DOI:"):
                 doi = identifier[4:]
             else:
                 try:
                     paper = await bundle.s2.get_paper(
-                        identifier, fields="externalIds,paperId", retry=retry
+                        identifier, fields="externalIds,paperId"
                     )
                     doi = (paper.get("externalIds") or {}).get("DOI")
                 except httpx.HTTPStatusError as exc:
                     log_s2_error(exc)
-                    return json.dumps({"error": "not_found", "identifier": identifier})
+                    return {"error": "not_found", "identifier": identifier}
 
             if not doi:
-                return json.dumps({"error": "no_doi", "identifier": identifier})
+                return {"error": "no_doi", "identifier": identifier}
 
             cached = await bundle.cache.get_openalex(doi)
             oa_data = cached
             if oa_data is None:
                 oa_data = await bundle.openalex.get_by_doi(doi)
                 if oa_data is None:
-                    return json.dumps({"error": "not_found_in_openalex", "doi": doi})
+                    return {"error": "not_found_in_openalex", "doi": doi}
                 await bundle.cache.set_openalex(doi, oa_data)
 
             result: dict[str, Any] = {"doi": doi}
@@ -306,13 +330,6 @@ def register_utility_tools(mcp: FastMCP) -> None:
                     for c in oa_data.get("concepts", [])
                 ]
 
-            return json.dumps(result)
+            return result
 
-        try:
-            return await _execute(retry=False)
-        except RateLimitedError:
-            logger.debug("rate_limited_queued tool=%s", "enrich_paper")
-            task_id = bundle.tasks.submit(_execute(retry=True), tool="enrich_paper")
-            return json.dumps(
-                {"queued": True, "task_id": task_id, "tool": "enrich_paper"}
-            )
+        return await _execute()

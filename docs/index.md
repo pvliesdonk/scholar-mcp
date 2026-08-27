@@ -69,7 +69,7 @@ See [Installation](installation.md) for all methods including Linux packages.
 │  │  (10)  │ │  (4)   │ │  (3)   │ │    (3)    │ │   (4)    │  │
 │  └────┬───┘ └────┬───┘ └────┬───┘ └─────┬─────┘ └─────┬────┘  │
 │       │         │          │           │             │       │
-│       + Cross-source Utility (1) · Task Polling (2)          │
+│       + Cross-source Utility (1) · Job Polling (1)           │
 │                                                               │
 │  ┌────▼─────────▼──────────▼───────────▼─────────────▼────┐  │
 │  │                  SQLite Cache (TTL)                    │  │

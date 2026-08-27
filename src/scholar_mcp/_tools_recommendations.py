@@ -2,29 +2,33 @@
 
 from __future__ import annotations
 
-import json
 import logging
-from typing import Literal
+from typing import Any, Literal
 
 import httpx
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
+from fastmcp_pvl_core import Jobs, register_long_running_tool
 
-from ._rate_limiter import RateLimitedError
-from ._s2_client import FIELD_SETS, format_s2_error
+from ._s2_client import FIELD_SETS, s2_error_payload
 from ._server_deps import ServiceBundle, get_bundle
 
 logger = logging.getLogger(__name__)
 
 
-def register_recommendation_tools(mcp: FastMCP) -> None:
+def register_recommendation_tools(mcp: FastMCP, jobs: Jobs) -> None:
     """Register recommendation tools on *mcp*.
 
     Args:
         mcp: FastMCP application instance.
+        jobs: Shared Jobs service. A tool that can outrun a request is
+            registered against it, so a call past the soft deadline is
+            promoted to a background job instead of holding the request.
     """
 
-    @mcp.tool(
+    @register_long_running_tool(
+        mcp,
+        jobs,
         annotations={
             "readOnlyHint": True,
             "destructiveHint": False,
@@ -37,7 +41,7 @@ def register_recommendation_tools(mcp: FastMCP) -> None:
         limit: int = 10,
         fields: Literal["compact", "standard", "full"] = "standard",
         bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
+    ) -> dict[str, Any]:
         """Recommend papers based on positive (and optionally negative) examples.
 
         Args:
@@ -47,38 +51,24 @@ def register_recommendation_tools(mcp: FastMCP) -> None:
             fields: Field set preset for returned records.
 
         Returns:
-            JSON list of recommended paper records, or an error dict.
+            ``{"recommendations": [...]}``, or a structured error mapping.
         """
         if not positive_ids:
-            return json.dumps(
-                {
-                    "error": "validation_error",
-                    "detail": "positive_ids must contain at least 1 ID",
-                }
-            )
+            return {
+                "error": "validation_error",
+                "detail": "positive_ids must contain at least 1 ID",
+            }
 
-        async def _execute(*, retry: bool = True) -> str:
+        async def _execute() -> dict[str, Any]:
             try:
                 result = await bundle.s2.recommend(
                     positive_ids[:5],
                     negative_ids=negative_ids,
                     limit=limit,
                     fields=FIELD_SETS[fields],
-                    retry=retry,
                 )
             except httpx.HTTPStatusError as exc:
-                return format_s2_error(exc)
-            return json.dumps(result)
+                return s2_error_payload(exc)
+            return {"recommendations": result}
 
-        try:
-            return await _execute(retry=False)
-        except RateLimitedError:
-            logger.debug("rate_limited_queued tool=%s", "recommend_papers")
-            task_id = bundle.tasks.submit(_execute(retry=True), tool="recommend_papers")
-            return json.dumps(
-                {
-                    "queued": True,
-                    "task_id": task_id,
-                    "tool": "recommend_papers",
-                }
-            )
+        return await _execute()

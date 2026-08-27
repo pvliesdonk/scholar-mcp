@@ -11,6 +11,7 @@ from requests.exceptions import HTTPError
 
 from scholar_mcp._epo_client import (
     EpoClient,
+    EpoQuotaExhaustedError,
     EpoRateLimitedError,
     _parse_pdf_link,
     _parse_throttle_header,
@@ -386,16 +387,27 @@ async def test_red_throttle_raises_epo_rate_limited_error(
         await epo_client.search("ti=Test")
 
 
-async def test_black_throttle_raises_runtime_error(
+async def test_black_throttle_raises_quota_exhausted(
     epo_client: EpoClient,
     mock_ops_client: MagicMock,
 ) -> None:
-    """Black traffic light raises RuntimeError (daily quota exhausted, not retryable)."""
+    """A black traffic light raises the quota type, not a bare RuntimeError.
+
+    The type matters to callers: it is a `RateLimitedError`, so every handler
+    that re-raises a throttle carries it through instead of swallowing it into
+    a generic failure. It stays a `RuntimeError` too, which is what it used to
+    be, so nothing that caught that broke.
+    """
     mock_ops_client.published_data_search.return_value = _mock_response(
         _SEARCH_XML, throttle="black"
     )
-    with pytest.raises(RuntimeError, match="daily quota exhausted"):
+    with pytest.raises(EpoQuotaExhaustedError, match="daily quota exhausted"):
         await epo_client.search("ti=Test")
+
+    assert issubclass(EpoQuotaExhaustedError, RateLimitedError)
+    assert issubclass(EpoQuotaExhaustedError, RuntimeError)
+    # Not the retryable sibling — retrying does not clear a spent quota.
+    assert not issubclass(EpoQuotaExhaustedError, EpoRateLimitedError)
 
 
 async def test_black_throttle_does_not_raise_epo_rate_limited_error(

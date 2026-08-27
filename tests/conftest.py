@@ -20,7 +20,6 @@ from scholar_mcp._rate_limiter import RateLimiter
 from scholar_mcp._s2_client import S2Client
 from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._standards_client import StandardsClient
-from scholar_mcp._task_queue import TaskQueue
 from scholar_mcp.config import ProjectConfig
 
 DOCLING_BASE = "http://docling:5001"
@@ -119,7 +118,6 @@ async def bundle(cache: ScholarCache, test_config: ProjectConfig) -> ServiceBund
         openlibrary=openlibrary,
         cache=cache,
         config=test_config,
-        tasks=TaskQueue(),
         standards=standards,
         enrichment=enrichment,
     )

@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import asyncio as _asyncio
-import json
 import logging
 from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Awaitable, Sequence
 
     from ._record_types import PaperRecord
 
@@ -17,11 +16,16 @@ from fastmcp.dependencies import Depends
 from fastmcp_pvl_core import Jobs, register_long_running_tool
 
 from ._chapter_parser import hint_to_dict, parse_chapter_hint
-from ._epo_client import EpoClient, EpoRateLimitedError
+from ._epo_client import EpoClient, EpoQuotaExhaustedError, EpoRateLimitedError
 from ._patent_numbers import DocdbNumber, normalize
 from ._pdf_markdown import markdown_fields
 from ._protocols import CacheProtocol
-from ._rate_limiter import RateLimitedError
+from ._rate_limiter import (
+    RATE_LIMIT_DAILY_QUOTA,
+    RATE_LIMIT_RETRY_SOON,
+    RateLimitedError,
+    rate_limited_payload,
+)
 from ._s2_client import FIELD_SETS, S2Client
 from ._server_deps import ServiceBundle, get_bundle
 
@@ -128,20 +132,47 @@ def register_patent_tools(mcp: FastMCP, jobs: Jobs) -> None:
 
     Args:
         mcp: FastMCP application instance.
-        jobs: Shared Jobs service, backing the dual-mode registration of
-            ``fetch_patent_pdf`` — the one tool here that downloads and
-            converts a document rather than querying metadata.
+        jobs: Shared Jobs service. All four tools here are registered
+            dual-mode against it: the three metadata queries because an EPO
+            throttle can hold them past the soft deadline, and
+            ``fetch_patent_pdf`` because it downloads and converts a
+            document.
     """
-    _register_search_patents(mcp)
-    _register_get_patent(mcp)
-    _register_get_citing_patents(mcp)
+    _register_search_patents(mcp, jobs)
+    _register_get_patent(mcp, jobs)
+    _register_get_citing_patents(mcp, jobs)
     _register_fetch_patent_pdf(mcp, jobs)
 
 
-def _register_search_patents(mcp: FastMCP) -> None:
+async def _guard_epo(coro: Awaitable[dict[str, Any]], *, tool: str) -> dict[str, Any]:
+    """Run *coro*, converting an EPO throttle into a result.
+
+    Args:
+        coro: The tool's work.
+        tool: Registered tool name, for the log line.
+
+    Returns:
+        The coroutine's result, or the throttle payload.
+    """
+    try:
+        return await coro
+    except EpoQuotaExhaustedError:
+        # Ordered before the rate-limit types because this is one of them.
+        # Retrying does not help until the quota resets, so the payload says
+        # so rather than inviting another call in a minute.
+        logger.warning("epo_daily_quota_exhausted tool=%s", tool)
+        return rate_limited_payload(RATE_LIMIT_DAILY_QUOTA, retryable=False)
+    except (RateLimitedError, EpoRateLimitedError) as exc:
+        logger.warning("epo_rate_limited tool=%s err=%s", tool, exc)
+        return rate_limited_payload(RATE_LIMIT_RETRY_SOON)
+
+
+def _register_search_patents(mcp: FastMCP, jobs: Jobs) -> None:
     """Register the ``search_patents`` tool."""
 
-    @mcp.tool(
+    @register_long_running_tool(
+        mcp,
+        jobs,
         tags={"patent"},
         annotations={
             "readOnlyHint": True,
@@ -161,7 +192,7 @@ def _register_search_patents(mcp: FastMCP) -> None:
         limit: int = 10,
         offset: int = 0,
         bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
+    ) -> dict[str, Any]:
         """Search for patents in the European Patent Office database.
 
         Covers European patents and global patents via INPADOC (100+ patent
@@ -189,26 +220,22 @@ def _register_search_patents(mcp: FastMCP) -> None:
             bundle: Injected service bundle.
 
         Returns:
-            JSON string with ``total_count`` and ``references`` list, or an
+            ``total_count`` and a ``references`` list, or an
             error dict if the EPO client is not configured or the API fails.
-            If the EPO service is busy, the request is automatically retried
-            once and ``{"queued": true, "task_id": "..."}`` is returned. Use
-            ``get_task_result`` to retrieve the result. If the retry also
-            fails, ``get_task_result`` returns ``status: failed`` — call this
-            tool again after about 60 seconds. Do not attempt to manage or
-            reason about EPO throttle states directly.
+            If the EPO service is busy, this returns
+            ``{"error": "rate_limited", "detail": ..., "retryable": true}``
+            instead. Call the tool again after about 60 seconds; do not try to
+            manage or reason about EPO throttle states directly.
         """
         if bundle.epo is None:
-            return json.dumps(
-                {
-                    "error": "epo_not_configured",
-                    "detail": (
-                        "EPO OPS credentials are not set. "
-                        "Configure SCHOLAR_MCP_EPO_CONSUMER_KEY and "
-                        "SCHOLAR_MCP_EPO_CONSUMER_SECRET."
-                    ),
-                }
-            )
+            return {
+                "error": "epo_not_configured",
+                "detail": (
+                    "EPO OPS credentials are not set. "
+                    "Configure SCHOLAR_MCP_EPO_CONSUMER_KEY and "
+                    "SCHOLAR_MCP_EPO_CONSUMER_SECRET."
+                ),
+            }
 
         try:
             cql = _build_cql(
@@ -222,7 +249,7 @@ def _register_search_patents(mcp: FastMCP) -> None:
                 jurisdiction=jurisdiction,
             )
         except ValueError as exc:
-            return json.dumps({"error": "invalid_query", "detail": str(exc)})
+            return {"error": "invalid_query", "detail": str(exc)}
         range_begin = offset + 1  # EPO OPS uses 1-based ranges
         range_end = offset + limit
         cache_key = f"{cql}|{range_begin}-{range_end}"
@@ -231,34 +258,26 @@ def _register_search_patents(mcp: FastMCP) -> None:
         cached = await bundle.cache.get_patent_search(cache_key)
         if cached is not None:
             logger.debug("patent_search_cache_hit cql=%s", cql)
-            return json.dumps(cached)
+            return cached
 
-        async def _execute(*, retry: bool = True) -> str:
-            # Note: retry flag is accepted for task queue compatibility but
-            # EPO client does not yet have a retry-aware path (unlike S2).
-            # The queued re-attempt still defers work away from the request.
+        async def _execute() -> dict[str, Any]:
             result = await bundle.epo.search(  # type: ignore[union-attr]
                 cql,
                 range_begin=range_begin,
                 range_end=range_end,
             )
             await bundle.cache.set_patent_search(cache_key, result)
-            return json.dumps(result)
+            return result
 
-        try:
-            return await _execute(retry=False)
-        except (RateLimitedError, EpoRateLimitedError):
-            logger.debug("rate_limited_queued tool=%s", "search_patents")
-            task_id = bundle.tasks.submit(_execute(retry=True), tool="search_patents")
-            return json.dumps(
-                {"queued": True, "task_id": task_id, "tool": "search_patents"}
-            )
+        return await _guard_epo(_execute(), tool="search_patents")
 
 
-def _register_get_patent(mcp: FastMCP) -> None:
+def _register_get_patent(mcp: FastMCP, jobs: Jobs) -> None:
     """Register the ``get_patent`` tool."""
 
-    @mcp.tool(
+    @register_long_running_tool(
+        mcp,
+        jobs,
         tags={"patent"},
         annotations={
             "readOnlyHint": True,
@@ -277,7 +296,7 @@ def _register_get_patent(mcp: FastMCP) -> None:
             | None
         ) = None,
         bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
+    ) -> dict[str, Any]:
         """Get detailed information about a single patent.
 
         Accepts patent numbers in any format (EP, WO, US, etc.). By default
@@ -299,44 +318,36 @@ def _register_get_patent(mcp: FastMCP) -> None:
             bundle: Injected service bundle.
 
         Returns:
-            JSON string with ``patent_number`` (normalised DOCDB format) and
+            ``patent_number`` (normalised DOCDB format) and
             the requested section data, or an error dict on failure.
-            If the EPO service is busy, the request is automatically retried
-            once and ``{"queued": true, "task_id": "..."}`` is returned. Use
-            ``get_task_result`` to retrieve the result. If the retry also
-            fails, ``get_task_result`` returns ``status: failed`` — call this
-            tool again after about 60 seconds. Do not attempt to manage or
-            reason about EPO throttle states directly.
+            If the EPO service is busy, this returns
+            ``{"error": "rate_limited", "detail": ..., "retryable": true}``
+            instead. Call the tool again after about 60 seconds; do not try to
+            manage or reason about EPO throttle states directly.
         """
         if bundle.epo is None:
-            return json.dumps(
-                {
-                    "error": "epo_not_configured",
-                    "detail": (
-                        "EPO OPS credentials are not set. "
-                        "Configure SCHOLAR_MCP_EPO_CONSUMER_KEY and "
-                        "SCHOLAR_MCP_EPO_CONSUMER_SECRET."
-                    ),
-                }
-            )
+            return {
+                "error": "epo_not_configured",
+                "detail": (
+                    "EPO OPS credentials are not set. "
+                    "Configure SCHOLAR_MCP_EPO_CONSUMER_KEY and "
+                    "SCHOLAR_MCP_EPO_CONSUMER_SECRET."
+                ),
+            }
 
         try:
             doc = normalize(patent_number)
         except ValueError as exc:
-            return json.dumps(
-                {
-                    "error": "invalid_patent_number",
-                    "detail": str(exc),
-                }
-            )
+            return {
+                "error": "invalid_patent_number",
+                "detail": str(exc),
+            }
 
         effective_sections = (
             list(dict.fromkeys(sections)) if sections is not None else ["biblio"]
         )
 
-        async def _execute(*, retry: bool = True) -> str:
-            # Note: retry flag accepted for task queue compatibility;
-            # EPO client does not yet have a retry-aware path.
+        async def _execute() -> dict[str, Any]:
             return await _fetch_patent_sections(
                 doc=doc,
                 sections=effective_sections,
@@ -345,20 +356,15 @@ def _register_get_patent(mcp: FastMCP) -> None:
                 s2=bundle.s2,
             )
 
-        try:
-            return await _execute(retry=False)
-        except (RateLimitedError, EpoRateLimitedError):
-            logger.debug("rate_limited_queued tool=%s", "get_patent")
-            task_id = bundle.tasks.submit(_execute(retry=True), tool="get_patent")
-            return json.dumps(
-                {"queued": True, "task_id": task_id, "tool": "get_patent"}
-            )
+        return await _guard_epo(_execute(), tool="get_patent")
 
 
-def _register_get_citing_patents(mcp: FastMCP) -> None:
+def _register_get_citing_patents(mcp: FastMCP, jobs: Jobs) -> None:
     """Register the ``get_citing_patents`` tool."""
 
-    @mcp.tool(
+    @register_long_running_tool(
+        mcp,
+        jobs,
         tags={"patent"},
         annotations={
             "readOnlyHint": True,
@@ -370,7 +376,7 @@ def _register_get_citing_patents(mcp: FastMCP) -> None:
         paper_id: str,
         limit: int = 10,
         bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
+    ) -> dict[str, Any]:
         """Find patents that cite a given academic paper.
 
         Coverage is incomplete -- relies on EPO OPS citation search which
@@ -386,48 +392,34 @@ def _register_get_citing_patents(mcp: FastMCP) -> None:
             bundle: Injected service bundle.
 
         Returns:
-            JSON string with ``paper_id``, ``patents`` list (each with
+            ``paper_id``, a ``patents`` list (each with
             biblio data and ``match_source``), ``total_count``, and a
             ``note`` about coverage limitations.
-            If the EPO service is busy, the request is automatically retried
-            once and ``{"queued": true, "task_id": "..."}`` is returned. Use
-            ``get_task_result`` to retrieve the result. If the retry also
-            fails, ``get_task_result`` returns ``status: failed`` — call this
-            tool again after about 60 seconds. Do not attempt to manage or
-            reason about EPO throttle states directly.
+            If the EPO service is busy, this returns
+            ``{"error": "rate_limited", "detail": ..., "retryable": true}``
+            instead. Call the tool again after about 60 seconds; do not try to
+            manage or reason about EPO throttle states directly.
         """
         if bundle.epo is None:
-            return json.dumps(
-                {
-                    "error": "epo_not_configured",
-                    "detail": (
-                        "EPO OPS credentials are not set. "
-                        "Configure SCHOLAR_MCP_EPO_CONSUMER_KEY and "
-                        "SCHOLAR_MCP_EPO_CONSUMER_SECRET."
-                    ),
-                }
-            )
+            return {
+                "error": "epo_not_configured",
+                "detail": (
+                    "EPO OPS credentials are not set. "
+                    "Configure SCHOLAR_MCP_EPO_CONSUMER_KEY and "
+                    "SCHOLAR_MCP_EPO_CONSUMER_SECRET."
+                ),
+            }
 
         effective_limit = min(limit, 25)
 
-        async def _execute(*, retry: bool = True) -> str:
-            # Note: retry flag for task queue compatibility.
+        async def _execute() -> dict[str, Any]:
             return await _get_citing_patents(
                 paper_id=paper_id,
                 epo=bundle.epo,  # type: ignore[arg-type]
                 limit=effective_limit,
             )
 
-        try:
-            return await _execute(retry=False)
-        except (RateLimitedError, EpoRateLimitedError):
-            logger.debug("rate_limited_queued tool=%s", "get_citing_patents")
-            task_id = bundle.tasks.submit(
-                _execute(retry=True), tool="get_citing_patents"
-            )
-            return json.dumps(
-                {"queued": True, "task_id": task_id, "tool": "get_citing_patents"}
-            )
+        return await _guard_epo(_execute(), tool="get_citing_patents")
 
 
 def _patent_cache_stem(patent_number: str, doc: DocdbNumber) -> str:
@@ -488,7 +480,9 @@ def _register_fetch_patent_pdf(mcp: FastMCP, jobs: Jobs) -> None:
                 VLM to be configured).
 
         Returns:
-            ``pdf_path`` and optionally ``markdown`` / ``md_path``.
+            ``pdf_path`` and optionally ``markdown`` / ``md_path``. An EPO
+            throttle comes back as
+            ``{"error": "rate_limited", "detail": ..., "retryable": ...}``.
 
             If the call outruns the jobs soft deadline it returns a job
             handle instead — poll ``get_job_result`` with its ``job_id``.
@@ -547,7 +541,7 @@ def _register_fetch_patent_pdf(mcp: FastMCP, jobs: Jobs) -> None:
                 return result
             return {**result, **fields}
 
-        return await _execute()
+        return await _guard_epo(_execute(), tool="fetch_patent_pdf")
 
 
 # All available patent sections.
@@ -585,7 +579,7 @@ async def _fetch_patent_sections(
     epo: EpoClient,
     cache: CacheProtocol,
     s2: S2Client | None = None,
-) -> str:
+) -> dict[str, Any]:
     """Fetch requested sections for a patent, with caching.
 
     Cache lookups run concurrently via ``asyncio.gather``.  Actual EPO
@@ -603,7 +597,7 @@ async def _fetch_patent_sections(
         s2: Optional S2 client for NPL resolution.
 
     Returns:
-        JSON string with patent_number and requested section data.
+        A mapping of ``patent_number`` and the requested section data.
     """
     patent_id = doc.docdb
     result: dict[str, Any] = {"patent_number": patent_id}
@@ -740,21 +734,18 @@ async def _fetch_patent_sections(
 
     # Detect not-found from biblio probe
     if result.pop("_not_found", False):
-        return json.dumps(
-            {
-                "error": "patent_not_found",
-                "detail": (
-                    f"Patent {patent_id} not found or has no data. "
-                    "Check the number format."
-                ),
-            }
-        )
+        return {
+            "error": "patent_not_found",
+            "detail": (
+                f"Patent {patent_id} not found or has no data. Check the number format."
+            ),
+        }
 
     # Remove biblio if it was only fetched as a probe for not-found detection
     if "biblio" not in sections:
         result.pop("biblio", None)
 
-    return json.dumps(result)
+    return result
 
 
 async def _get_citing_patents(
@@ -762,7 +753,7 @@ async def _get_citing_patents(
     paper_id: str,
     epo: EpoClient,
     limit: int = 10,
-) -> str:
+) -> dict[str, Any]:
     """Search EPO OPS for patents citing a paper.
 
     Uses the ``ct=`` (cited document) CQL field to find patents whose
@@ -775,23 +766,24 @@ async def _get_citing_patents(
         limit: Max results.
 
     Returns:
-        JSON string with paper_id, patents list, total_count, and note.
+        A mapping of ``paper_id``, ``patents``, ``total_count``, and ``note``.
     """
     cql = f'ct="{_cql_escape(paper_id)}"'
     try:
         search_result = await epo.search(cql, range_begin=1, range_end=limit)
     except Exception as exc:
-        if isinstance(exc, (RateLimitedError, EpoRateLimitedError)):
+        # Every EPO throttle, quota exhaustion included, is a RateLimitedError
+        # and belongs to _guard_epo. Reported here it would become "try a
+        # different identifier format", which is a dead end for the caller.
+        if isinstance(exc, RateLimitedError):
             raise
         logger.warning("citing_patent_search_failed paper=%s", paper_id)
-        return json.dumps(
-            {
-                "paper_id": paper_id,
-                "patents": [],
-                "total_count": 0,
-                "note": "EPO citation search failed. Try a different identifier format.",
-            }
-        )
+        return {
+            "paper_id": paper_id,
+            "patents": [],
+            "total_count": 0,
+            "note": "EPO citation search failed. Try a different identifier format.",
+        }
 
     patents: list[dict[str, Any]] = []
     for ref in search_result.get("references", []):
@@ -799,19 +791,17 @@ async def _get_citing_patents(
         try:
             biblio = await epo.get_biblio(doc)
             patents.append({**biblio, "match_source": "epo_search"})
-        except (RateLimitedError, EpoRateLimitedError):
+        except RateLimitedError:
             raise
         except Exception:
             logger.warning("citing_patent_biblio_failed patent=%s", doc.docdb)
 
-    return json.dumps(
-        {
-            "paper_id": paper_id,
-            "patents": patents,
-            "total_count": search_result.get("total_count", 0),
-            "note": (
-                "Coverage is incomplete. Results come from EPO OPS citation "
-                "search and may not capture all patent-to-paper citations."
-            ),
-        }
-    )
+    return {
+        "paper_id": paper_id,
+        "patents": patents,
+        "total_count": search_result.get("total_count", 0),
+        "note": (
+            "Coverage is incomplete. Results come from EPO OPS citation "
+            "search and may not capture all patent-to-paper citations."
+        ),
+    }

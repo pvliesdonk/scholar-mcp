@@ -90,6 +90,24 @@ class EpoRateLimitedError(RateLimitedError):
         super().__init__(f"EPO rate limited: {service}={color}")
 
 
+class EpoQuotaExhaustedError(RateLimitedError, RuntimeError):
+    """Raised when the EPO OPS daily quota is spent (a "black" throttle).
+
+    Subclasses :class:`RateLimitedError` so that every caller which already
+    re-raises a throttle past its own error handling re-raises this too. It
+    used to be a bare ``RuntimeError``, which those handlers swallowed and
+    reported as an ordinary failure. It also subclasses ``RuntimeError``, so
+    callers that catch that keep working.
+
+    Distinct from :class:`EpoRateLimitedError` because retrying does not help:
+    the quota resets tomorrow rather than in a minute.
+    """
+
+    def __init__(self) -> None:
+        """Initialize with the operator-facing quota message."""
+        super().__init__("EPO daily quota exhausted. Please try again tomorrow.")
+
+
 class EpoClient:
     """Async client for the EPO Open Patent Services (OPS) API.
 
@@ -180,7 +198,7 @@ class EpoClient:
         self._throttle_cache_ts = time.monotonic()
         color = throttle.get(service, throttle["_overall"])
         if color == "black":
-            raise RuntimeError("EPO daily quota exhausted. Please try again tomorrow.")
+            raise EpoQuotaExhaustedError
         if color not in ("green", "idle"):
             logger.warning("epo_throttle service=%s color=%s", service, color)
             raise EpoRateLimitedError(color, service=service)
@@ -214,9 +232,7 @@ class EpoClient:
                 "search", self._throttle_cache.get("_overall", "red")
             )
             if cached_color == "black":
-                raise RuntimeError(
-                    "EPO daily quota exhausted. Please try again tomorrow."
-                )
+                raise EpoQuotaExhaustedError
             raise EpoRateLimitedError(cached_color, service="search")
         try:
             async with self._lock:
@@ -251,9 +267,7 @@ class EpoClient:
             cached = self._throttle_cache
             color = cached.get("retrieval", cached.get("_overall", "red"))
             if color == "black":
-                raise RuntimeError(
-                    "EPO daily quota exhausted. Please try again tomorrow."
-                )
+                raise EpoQuotaExhaustedError
             raise EpoRateLimitedError(color, service="retrieval")
         inp = self._to_docdb_input(doc)
         async with self._lock:
@@ -282,9 +296,7 @@ class EpoClient:
             cached = self._throttle_cache
             color = cached.get("retrieval", cached.get("_overall", "red"))
             if color == "black":
-                raise RuntimeError(
-                    "EPO daily quota exhausted. Please try again tomorrow."
-                )
+                raise EpoQuotaExhaustedError
             raise EpoRateLimitedError(color, service="retrieval")
         inp = self._to_docdb_input(doc)
         async with self._lock:
@@ -313,9 +325,7 @@ class EpoClient:
             cached = self._throttle_cache
             color = cached.get("retrieval", cached.get("_overall", "red"))
             if color == "black":
-                raise RuntimeError(
-                    "EPO daily quota exhausted. Please try again tomorrow."
-                )
+                raise EpoQuotaExhaustedError
             raise EpoRateLimitedError(color, service="retrieval")
         inp = self._to_docdb_input(doc)
         async with self._lock:
@@ -344,9 +354,7 @@ class EpoClient:
             cached = self._throttle_cache
             color = cached.get("inpadoc", cached.get("_overall", "red"))
             if color == "black":
-                raise RuntimeError(
-                    "EPO daily quota exhausted. Please try again tomorrow."
-                )
+                raise EpoQuotaExhaustedError
             raise EpoRateLimitedError(color, service="inpadoc")
         inp = self._to_docdb_input(doc)
         async with self._lock:
@@ -374,9 +382,7 @@ class EpoClient:
             cached = self._throttle_cache
             color = cached.get("inpadoc", cached.get("_overall", "red"))
             if color == "black":
-                raise RuntimeError(
-                    "EPO daily quota exhausted. Please try again tomorrow."
-                )
+                raise EpoQuotaExhaustedError
             raise EpoRateLimitedError(color, service="inpadoc")
         inp = self._to_docdb_input(doc)
         async with self._lock:
@@ -405,9 +411,7 @@ class EpoClient:
             cached = self._throttle_cache
             color = cached.get("retrieval", cached.get("_overall", "red"))
             if color == "black":
-                raise RuntimeError(
-                    "EPO daily quota exhausted. Please try again tomorrow."
-                )
+                raise EpoQuotaExhaustedError
             raise EpoRateLimitedError(color, service="retrieval")
         inp = self._to_docdb_input(doc)
         async with self._lock:
@@ -440,9 +444,7 @@ class EpoClient:
             cached = self._throttle_cache
             color = cached.get("retrieval", cached.get("_overall", "red"))
             if color == "black":
-                raise RuntimeError(
-                    "EPO daily quota exhausted. Please try again tomorrow."
-                )
+                raise EpoQuotaExhaustedError
             raise EpoRateLimitedError(color, service="retrieval")
 
         inp = self._to_docdb_input(doc)
@@ -468,9 +470,7 @@ class EpoClient:
             cached = self._throttle_cache
             color = cached.get("retrieval", cached.get("_overall", "red"))
             if color == "black":
-                raise RuntimeError(
-                    "EPO daily quota exhausted. Please try again tomorrow."
-                )
+                raise EpoQuotaExhaustedError
             raise EpoRateLimitedError(color, service="retrieval")
 
         async with self._lock:

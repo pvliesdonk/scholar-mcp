@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 from contextlib import asynccontextmanager
 
@@ -11,6 +10,7 @@ import pytest
 import respx
 from fastmcp import FastMCP
 from fastmcp.client import Client
+from fastmcp_pvl_core import Jobs
 
 from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._tools_recommendations import register_recommendation_tools
@@ -19,13 +19,13 @@ S2_REC = "https://api.semanticscholar.org/recommendations/v1"
 
 
 @pytest.fixture
-def mcp(bundle: ServiceBundle) -> FastMCP:
+def mcp(bundle: ServiceBundle, jobs: Jobs) -> FastMCP:
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_recommendation_tools(app)
+    register_recommendation_tools(app, jobs)
     return app
 
 
@@ -50,7 +50,7 @@ async def test_recommend_papers(mcp: FastMCP) -> None:
             result = await client.call_tool(
                 "recommend_papers", {"positive_ids": ["p1", "p2"]}
             )
-    data = json.loads(result.content[0].text)
+    data = json.loads(result.content[0].text)["recommendations"]
     assert len(data) == 1
     assert data[0]["paperId"] == "r1"
 
@@ -66,7 +66,7 @@ async def test_recommend_papers_with_negatives(mcp: FastMCP) -> None:
                 {"positive_ids": ["p1"], "negative_ids": ["n1"], "limit": 5},
             )
     data = json.loads(result.content[0].text)
-    assert isinstance(data, list)
+    assert isinstance(data["recommendations"], list)
 
 
 async def test_recommend_papers_caps_positive_ids(mcp: FastMCP) -> None:
@@ -103,7 +103,7 @@ async def test_recommend_papers_upstream_error(mcp: FastMCP) -> None:
 
 
 async def test_recommend_papers_queued_on_429(
-    bundle: ServiceBundle,
+    bundle: ServiceBundle, jobs: Jobs
 ) -> None:
     """recommend_papers returns queued on 429, background completes."""
     call_count = 0
@@ -128,27 +128,11 @@ async def test_recommend_papers_queued_on_429(
             yield {"bundle": bundle}
 
         app = FastMCP("test", lifespan=lifespan)
-        register_recommendation_tools(app)
-        from scholar_mcp._tools_tasks import register_task_tools
-
-        register_task_tools(app)
+        register_recommendation_tools(app, jobs)
 
         async with Client(app) as client:
             result = await client.call_tool(
                 "recommend_papers", {"positive_ids": ["p1"]}
             )
-            data = json.loads(result.content[0].text)
-            assert data["queued"] is True
-            assert data["tool"] == "recommend_papers"
-
-            for _ in range(40):
-                poll = await client.call_tool(
-                    "get_task_result", {"task_id": data["task_id"]}
-                )
-                poll_data = json.loads(poll.content[0].text)
-                if poll_data["status"] in ("completed", "failed"):
-                    break
-                await asyncio.sleep(0.05)
-            assert poll_data["status"] == "completed"
-            inner = json.loads(poll_data["result"])
+            inner = json.loads(result.content[0].text)["recommendations"]
             assert inner[0]["paperId"] == "r1"

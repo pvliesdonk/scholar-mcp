@@ -62,11 +62,13 @@ async def test_polling_tool_is_registered() -> None:
 async def test_long_running_tools_are_task_capable(
     bundle: ServiceBundle,
 ) -> None:
-    """The slow tools register `TaskConfig(mode="optional")`.
+    """The document-producing tools register `TaskConfig(mode="optional")`.
 
     This is what stops the SEP-1686 backend being inert: before Jobs, no tool
     anywhere was task-capable, so the queue `SCHOLAR_MCP_TASKS_URL` configures
-    never received work.
+    never received work. Every tool that can outrun a request is registered
+    this way now, so the assertion names the slowest ones rather than trying
+    to enumerate the whole surface.
     """
     jobs = build_jobs(ServerConfig(kv_store_url="memory://"), JobsConfig())
     mcp = FastMCP("test")
@@ -77,8 +79,6 @@ async def test_long_running_tools_are_task_capable(
 
     for name in _LONG_RUNNING_TOOLS:
         assert modes[name] == "optional", name
-    # A metadata query is not long-running and stays a plain tool.
-    assert modes["search_patents"] == "forbidden"
 
 
 def test_jobs_config_is_read_from_env(monkeypatch: pytest.MonkeyPatch) -> None:

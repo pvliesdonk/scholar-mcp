@@ -19,7 +19,7 @@ src/scholar_mcp/
   _server_tools.py     -- MCP tools; dispatches to category modules
   _server_resources.py -- MCP resources; add domain resources here
   _server_prompts.py   -- MCP prompts; add domain prompts here
-  _task_queue.py       -- In-memory task queue for background async operations
+  _pdf_markdown.py     -- Shared PDF download + docling conversion + cache
   _rate_limiter.py     -- Rate limiter, retry, try-once + RateLimitedError
 ```
 <!-- DOMAIN-END -->
@@ -417,7 +417,8 @@ If a conflict marker appears in a copier-update bot PR, the conflict itself ofte
 - All tools have MCP annotations (`readOnlyHint`, `destructiveHint`, `openWorldHint`)
 - Auth: `build_auth(config.server)` resolved in `make_server()` (MultiAuth when both bearer and OIDC are configured); `_build_bearer_auth()` / `_build_oidc_auth()` are retained backward-compat wrappers used only by tests
 - `_ENV_PREFIX` in `config.py` controls all env var names — change once, affects everything
-- **Background work is mid-migration.** `make_server()` builds one pvl-core `Jobs` instance and passes it to `register_tools`; the PDF and patent-PDF tools are registered against it with `@register_long_running_tool(mcp, jobs, ...)` and answer inline when fast, with a job handle when slow. Every other tool still uses the bespoke `TaskQueue` in `ServiceBundle.tasks`. Consolidating the two is #264.
-- **Jobs registration pattern** (the PDF tools): annotate `-> dict[str, Any]`, because the caller receives either the result or a job handle, and return native objects rather than JSON strings — a promoted result must not be wrapped as `{"value": "<json string>"}`. Use `s2_error_payload` rather than `format_s2_error` there, and `dict(record)` when the value is a TypedDict. Never pass `task=`; the decorator owns it.
-- **Legacy queueing pattern** (everything else, until #264 lands): extract tool logic into `async def _execute(*, retry=True) -> str`, try with `retry=False`, catch `RateLimitedError` and `bundle.tasks.submit(_execute(retry=True))`
+- **Background work is pvl-core Jobs, not a domain queue.** `make_server()` builds one `Jobs` instance and passes it to `register_tools`, which threads it to every category module; `register_job_tools` registers the single `get_job_result` poller. There is no `ServiceBundle.tasks` and no bespoke queued payload.
+- **Tool registration pattern**: a tool that can outrun a request is registered with `@register_long_running_tool(mcp, jobs, ...)` and annotated `-> dict[str, Any]`, because the caller receives either the result or a job handle. Never pass `task=` — the decorator owns it. Write the body as plain domain work that always retries; the soft deadline decides inline versus promoted.
+- **Return native objects, not JSON strings.** A tool registered this way must return a mapping, so a promoted result is not wrapped as `{"value": "<json string>"}`. Use `s2_error_payload` rather than `format_s2_error` in those tools, and `dict(record)` when the value is a TypedDict.
+- **An upstream with no retry path reports a throttle as a result.** EPO and Open Library return `rate_limited_payload(...)` from `_rate_limiter.py` instead of raising; S2 retries with backoff inside `with_s2_retry` and surfaces an exhausted retry as an ordinary upstream error.
 <!-- DOMAIN-END -->

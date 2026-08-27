@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 from contextlib import asynccontextmanager
 
@@ -11,6 +10,7 @@ import pytest
 import respx
 from fastmcp import FastMCP
 from fastmcp.client import Client
+from fastmcp_pvl_core import Jobs
 
 from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._tools_search import register_search_tools
@@ -19,13 +19,13 @@ S2_BASE = "https://api.semanticscholar.org/graph/v1"
 
 
 @pytest.fixture
-def mcp(bundle: ServiceBundle) -> FastMCP:
+def mcp(bundle: ServiceBundle, jobs: Jobs) -> FastMCP:
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_search_tools(app)
+    register_search_tools(app, jobs)
     return app
 
 
@@ -250,7 +250,7 @@ async def test_get_author_by_id_upstream_error(
 
 @pytest.mark.respx(base_url=S2_BASE)
 async def test_get_author_by_id_queued_on_429(
-    respx_mock: respx.MockRouter, bundle: ServiceBundle
+    respx_mock: respx.MockRouter, bundle: ServiceBundle, jobs: Jobs
 ) -> None:
     """get_author by ID returns queued on 429, background task completes."""
     call_count = 0
@@ -278,28 +278,11 @@ async def test_get_author_by_id_queued_on_429(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_search_tools(app)
-    from scholar_mcp._tools_tasks import register_task_tools
-
-    register_task_tools(app)
+    register_search_tools(app, jobs)
 
     async with Client(app) as client:
         result = await client.call_tool("get_author", {"identifier": "12345"})
-        data = json.loads(result.content[0].text)
-        assert data["queued"] is True
-        assert data["tool"] == "get_author"
-
-        # Poll for background result
-        for _ in range(40):
-            poll = await client.call_tool(
-                "get_task_result", {"task_id": data["task_id"]}
-            )
-            poll_data = json.loads(poll.content[0].text)
-            if poll_data["status"] in ("completed", "failed"):
-                break
-            await asyncio.sleep(0.05)
-        assert poll_data["status"] == "completed"
-        inner = json.loads(poll_data["result"])
+        inner = json.loads(result.content[0].text)
         assert inner["name"] == "Ada Lovelace"
 
 
@@ -318,7 +301,7 @@ async def test_get_author_name_search_upstream_error(
 
 @pytest.mark.respx(base_url=S2_BASE)
 async def test_get_author_name_search_queued_on_429(
-    respx_mock: respx.MockRouter, bundle: ServiceBundle
+    respx_mock: respx.MockRouter, bundle: ServiceBundle, jobs: Jobs
 ) -> None:
     """get_author name search returns queued on 429, background completes."""
     call_count = 0
@@ -340,25 +323,9 @@ async def test_get_author_name_search_queued_on_429(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_search_tools(app)
-    from scholar_mcp._tools_tasks import register_task_tools
-
-    register_task_tools(app)
+    register_search_tools(app, jobs)
 
     async with Client(app) as client:
         result = await client.call_tool("get_author", {"identifier": "John Smith"})
-        data = json.loads(result.content[0].text)
-        assert data["queued"] is True
-        assert data["tool"] == "get_author"
-
-        for _ in range(40):
-            poll = await client.call_tool(
-                "get_task_result", {"task_id": data["task_id"]}
-            )
-            poll_data = json.loads(poll.content[0].text)
-            if poll_data["status"] in ("completed", "failed"):
-                break
-            await asyncio.sleep(0.05)
-        assert poll_data["status"] == "completed"
-        inner = json.loads(poll_data["result"])
+        inner = json.loads(result.content[0].text)
         assert inner["candidates"][0]["name"] == "John Smith"

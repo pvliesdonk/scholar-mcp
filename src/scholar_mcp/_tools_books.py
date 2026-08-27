@@ -6,10 +6,12 @@ import asyncio
 import json
 import logging
 import re
+from typing import Any
 
 import httpx
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
+from fastmcp_pvl_core import Jobs, register_long_running_tool
 
 from ._book_enrichment import enrich_authors_from_work
 from ._cache import normalize_isbn
@@ -18,7 +20,7 @@ from ._openlibrary_client import (
     normalize_subject,
     normalize_subject_work,
 )
-from ._rate_limiter import RateLimitedError
+from ._rate_limiter import guard_rate_limit
 from ._record_types import BookRecord
 from ._server_deps import ServiceBundle, get_bundle
 
@@ -29,14 +31,69 @@ _OL_WORK_RE = re.compile(r"^OL\d+W$")
 _OL_EDITION_RE = re.compile(r"^OL\d+M$")
 
 
-def register_book_tools(mcp: FastMCP) -> None:
+def register_book_tools(mcp: FastMCP, jobs: Jobs) -> None:
     """Register book search and lookup tools on *mcp*.
 
     Args:
         mcp: FastMCP application instance.
+        jobs: Shared Jobs service. A tool that can outrun a request is
+            registered against it, so a call past the soft deadline is
+            promoted to a background job instead of holding the request.
     """
+    _register_search_books(mcp, jobs)
+    _register_get_book(mcp, jobs)
+    _register_get_book_excerpt(mcp)
+    _register_recommend_books(mcp)
 
-    @mcp.tool(
+
+async def _broaden_by_author_token(
+    bundle: ServiceBundle,
+    docs: list[Any],
+    *,
+    tokens: list[str],
+    query: str | None,
+    title: str | None,
+    limit: int,
+) -> list[Any]:
+    """Widen a thin result set by searching each author token separately.
+
+    A multi-token author ("Frank Duffy") can miss a name variant the catalogue
+    actually holds; the "Duffy" token search finds "Francis Duffy" when the
+    full name does not.
+
+    Args:
+        bundle: Service bundle, for the Open Library client.
+        docs: The results so far, extended in place order.
+        tokens: The author name split into tokens.
+        query: Free-text query, if one is in play.
+        title: Title query, if one is in play.
+        limit: Result cap, applied to the widened set.
+
+    Returns:
+        The original results plus any new ones, capped at *limit*.
+    """
+    seen_keys = {d.get("key") for d in docs}
+    extras = await asyncio.gather(
+        *(
+            bundle.openlibrary.search(query, title=title, author=token, limit=limit)
+            for token in tokens
+        )
+    )
+    for extra in extras:
+        for doc in extra:
+            key = doc.get("key")
+            if key not in seen_keys:
+                docs.append(doc)
+                seen_keys.add(key)
+    return docs[:limit]
+
+
+def _register_search_books(mcp: FastMCP, jobs: Jobs) -> None:
+    """Register the ``search_books`` tool."""
+
+    @register_long_running_tool(
+        mcp,
+        jobs,
         annotations={
             "readOnlyHint": True,
             "destructiveHint": False,
@@ -49,7 +106,7 @@ def register_book_tools(mcp: FastMCP) -> None:
         author: str | None = None,
         limit: int = 10,
         bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
+    ) -> dict[str, Any]:
         """Search for books by title, author, or free text.
 
         Uses Open Library. Prefer ``title`` and ``author`` over ``query``
@@ -68,13 +125,11 @@ def register_book_tools(mcp: FastMCP) -> None:
             limit: Maximum results to return (max 50).
 
         Returns:
-            JSON list of book records with title, authors, publisher, year,
+            ``{"books": [...]}``. Each record carries title, authors, publisher, year,
             ISBNs, Open Library IDs, cover URL, and subjects.
         """
         if not query and not title and not author:
-            return json.dumps(
-                {"error": "provide at least one of query, title, or author"}
-            )
+            return {"error": "provide at least one of query, title, or author"}
 
         limit = max(1, min(limit, 50))
 
@@ -82,9 +137,9 @@ def register_book_tools(mcp: FastMCP) -> None:
         cached = await bundle.cache.get_book_search(cache_key)
         if cached is not None:
             logger.debug("book_search_cache_hit key=%s", cache_key[:60])
-            return json.dumps(cached)
+            return {"books": list(cached)}
 
-        async def _execute(*, retry: bool = True) -> str:
+        async def _execute() -> dict[str, Any]:
             # When only query is given (no explicit title/author), try
             # it as a title search first — OL's title index is far more
             # relevant than the free-text q= parameter.  Fall back to
@@ -102,49 +157,35 @@ def register_book_tools(mcp: FastMCP) -> None:
                 limit=limit,
             )
 
-            # When author has multiple tokens (e.g. "Frank Duffy") and
-            # results are thin, retry with individual tokens concurrently
-            # to catch name variants (Frank→Francis).  The "Duffy" token
-            # search finds "Francis Duffy" even when "Frank Duffy" misses.
             author_tokens = author.split() if author else []
             if len(docs) < 3 and len(author_tokens) > 1:
-                seen_keys = {d.get("key") for d in docs}
-                extras = await asyncio.gather(
-                    *(
-                        bundle.openlibrary.search(
-                            effective_query,
-                            title=effective_title,
-                            author=token,
-                            limit=limit,
-                        )
-                        for token in author_tokens
-                    )
+                docs = await _broaden_by_author_token(
+                    bundle,
+                    docs,
+                    tokens=author_tokens,
+                    query=effective_query,
+                    title=effective_title,
+                    limit=limit,
                 )
-                for extra in extras:
-                    for d in extra:
-                        key = d.get("key")
-                        if key not in seen_keys:
-                            docs.append(d)
-                            seen_keys.add(key)
-                docs = docs[:limit]
 
             if not docs and effective_query != query:
                 # Title search returned nothing; fall back to free-text.
                 docs = await bundle.openlibrary.search(query, limit=limit)
             books = [normalize_book(doc, source="search") for doc in docs]
             await bundle.cache.set_book_search(cache_key, books)
-            return json.dumps(books)
+            return {"books": books}
 
-        try:
-            return await _execute(retry=False)
-        except RateLimitedError:
-            logger.debug("rate_limited_queued tool=%s", "search_books")
-            task_id = bundle.tasks.submit(_execute(retry=True), tool="search_books")
-            return json.dumps(
-                {"queued": True, "task_id": task_id, "tool": "search_books"}
-            )
+        return await guard_rate_limit(
+            _execute(), tool="search_books", upstream="openlibrary"
+        )
 
-    @mcp.tool(
+
+def _register_get_book(mcp: FastMCP, jobs: Jobs) -> None:
+    """Register the ``get_book`` tool."""
+
+    @register_long_running_tool(
+        mcp,
+        jobs,
         annotations={
             "readOnlyHint": True,
             "destructiveHint": False,
@@ -157,7 +198,7 @@ def register_book_tools(mcp: FastMCP) -> None:
         download_cover: bool = False,
         cover_size: str = "M",
         bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
+    ) -> dict[str, Any]:
         """Fetch book metadata by ISBN or Open Library ID.
 
         Args:
@@ -171,11 +212,11 @@ def register_book_tools(mcp: FastMCP) -> None:
                 (medium), ``"L"`` (large). Defaults to ``"M"``.
 
         Returns:
-            JSON book record, or ``{"error": "not_found"}`` if not found.
+            The book record, or ``{"error": "not_found"}`` if not found.
         """
         cleaned = identifier.strip()
 
-        async def _execute(*, retry: bool = True) -> str:
+        async def _execute() -> dict[str, Any]:
             # Detect identifier type
             if _OL_WORK_RE.match(cleaned):
                 return await _resolve_work(cleaned, bundle)
@@ -185,14 +226,11 @@ def register_book_tools(mcp: FastMCP) -> None:
             isbn = normalize_isbn(cleaned)
             return await _resolve_isbn(isbn, bundle)
 
-        try:
-            raw = await _execute(retry=False)
-        except RateLimitedError:
-            logger.debug("rate_limited_queued tool=%s", "get_book")
-            task_id = bundle.tasks.submit(_execute(retry=True), tool="get_book")
-            return json.dumps({"queued": True, "task_id": task_id, "tool": "get_book"})
-
-        result = json.loads(raw)
+        result = await guard_rate_limit(
+            _execute(), tool="get_book", upstream="openlibrary"
+        )
+        if result.get("error") == "rate_limited":
+            return result
 
         if download_cover and result.get("cover_url") and result.get("isbn_13"):
             if bundle.config.read_only:
@@ -224,7 +262,11 @@ def register_book_tools(mcp: FastMCP) -> None:
                             exc_info=True,
                         )
 
-        return json.dumps(result)
+        return result
+
+
+def _register_get_book_excerpt(mcp: FastMCP) -> None:
+    """Register the ``get_book_excerpt`` tool."""
 
     @mcp.tool(
         annotations={
@@ -278,6 +320,10 @@ def register_book_tools(mcp: FastMCP) -> None:
             }
         )
 
+
+def _register_recommend_books(mcp: FastMCP) -> None:
+    """Register the ``recommend_books`` tool."""
+
     @mcp.tool(
         annotations={
             "readOnlyHint": True,
@@ -324,7 +370,7 @@ def register_book_tools(mcp: FastMCP) -> None:
         return json.dumps(books[:limit])
 
 
-async def _resolve_isbn(isbn: str, bundle: ServiceBundle) -> str:
+async def _resolve_isbn(isbn: str, bundle: ServiceBundle) -> dict[str, Any]:
     """Resolve a book by ISBN, checking cache first.
 
     Args:
@@ -332,15 +378,15 @@ async def _resolve_isbn(isbn: str, bundle: ServiceBundle) -> str:
         bundle: Service bundle with cache and openlibrary client.
 
     Returns:
-        JSON book record, or ``{"error": "not_found"}`` if not found.
+        The book record, or ``{"error": "not_found"}`` if not found.
     """
     cached = await bundle.cache.get_book_by_isbn(isbn)
     if cached is not None:
-        return json.dumps(cached)
+        return dict(cached)
 
     edition = await bundle.openlibrary.get_by_isbn(isbn)
     if edition is None:
-        return json.dumps({"error": "not_found", "identifier": isbn})
+        return {"error": "not_found", "identifier": isbn}
 
     book: BookRecord = normalize_book(edition, source="edition")
     await enrich_authors_from_work(book, bundle)
@@ -349,10 +395,10 @@ async def _resolve_isbn(isbn: str, bundle: ServiceBundle) -> str:
     work_id = book.get("openlibrary_work_id")
     if work_id:
         await bundle.cache.set_book_by_work(work_id, book)
-    return json.dumps(book)
+    return dict(book)
 
 
-async def _resolve_work(work_id: str, bundle: ServiceBundle) -> str:
+async def _resolve_work(work_id: str, bundle: ServiceBundle) -> dict[str, Any]:
     """Resolve a book by Open Library work ID, checking cache first.
 
     Fetches the work, resolves author names from author references, and
@@ -363,15 +409,15 @@ async def _resolve_work(work_id: str, bundle: ServiceBundle) -> str:
         bundle: Service bundle with cache and openlibrary client.
 
     Returns:
-        JSON book record, or ``{"error": "not_found"}`` if not found.
+        The book record, or ``{"error": "not_found"}`` if not found.
     """
     cached = await bundle.cache.get_book_by_work(work_id)
     if cached is not None:
-        return json.dumps(cached)
+        return dict(cached)
 
     work = await bundle.openlibrary.get_work(work_id)
     if work is None:
-        return json.dumps({"error": "not_found", "identifier": work_id})
+        return {"error": "not_found", "identifier": work_id}
 
     description = work.get("description")
     if isinstance(description, dict):
@@ -434,10 +480,10 @@ async def _resolve_work(work_id: str, bundle: ServiceBundle) -> str:
     await bundle.cache.set_book_by_work(work_id, book)
     if isbn_13:
         await bundle.cache.set_book_by_isbn(isbn_13, book)
-    return json.dumps(book)
+    return dict(book)
 
 
-async def _resolve_edition(edition_id: str, bundle: ServiceBundle) -> str:
+async def _resolve_edition(edition_id: str, bundle: ServiceBundle) -> dict[str, Any]:
     """Resolve a book by Open Library edition ID, checking cache first.
 
     Args:
@@ -445,11 +491,11 @@ async def _resolve_edition(edition_id: str, bundle: ServiceBundle) -> str:
         bundle: Service bundle with cache and openlibrary client.
 
     Returns:
-        JSON book record, or ``{"error": "not_found"}`` if not found.
+        The book record, or ``{"error": "not_found"}`` if not found.
     """
     edition = await bundle.openlibrary.get_edition(edition_id)
     if edition is None:
-        return json.dumps({"error": "not_found", "identifier": edition_id})
+        return {"error": "not_found", "identifier": edition_id}
 
     book: BookRecord = normalize_book(edition, source="edition")
     await enrich_authors_from_work(book, bundle)
@@ -460,4 +506,4 @@ async def _resolve_edition(edition_id: str, bundle: ServiceBundle) -> str:
     work_id = book.get("openlibrary_work_id")
     if work_id:
         await bundle.cache.set_book_by_work(work_id, book)
-    return json.dumps(book)
+    return dict(book)

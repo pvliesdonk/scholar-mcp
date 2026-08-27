@@ -10,6 +10,7 @@ import pytest
 import respx
 from fastmcp import FastMCP
 from fastmcp.client import Client
+from fastmcp_pvl_core import Jobs
 
 from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._tools_citation import register_citation_tools
@@ -34,13 +35,13 @@ SAMPLE_PAPER = {
 
 
 @pytest.fixture
-def mcp(bundle: ServiceBundle) -> FastMCP:
+def mcp(bundle: ServiceBundle, jobs: Jobs) -> FastMCP:
     @asynccontextmanager
     async def lifespan(app: FastMCP):
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_citation_tools(app)
+    register_citation_tools(app, jobs)
     return app
 
 
@@ -201,7 +202,7 @@ async def test_all_papers_unresolved(mcp: FastMCP) -> None:
     assert set(data["failed"]) == {"bad1", "bad2"}
 
 
-async def test_queued_on_429(bundle: ServiceBundle) -> None:
+async def test_queued_on_429(bundle: ServiceBundle, jobs: Jobs) -> None:
     call_count = 0
 
     def _side_effect(request: httpx.Request) -> httpx.Response:
@@ -219,7 +220,7 @@ async def test_queued_on_429(bundle: ServiceBundle) -> None:
             yield {"bundle": bundle}
 
         app = FastMCP("test", lifespan=lifespan)
-        register_citation_tools(app)
+        register_citation_tools(app, jobs)
 
         async with Client(app) as client:
             result = await client.call_tool(
@@ -227,5 +228,4 @@ async def test_queued_on_429(bundle: ServiceBundle) -> None:
                 {"paper_ids": ["abc123"], "citation_format": "bibtex"},
             )
             data = json.loads(result.content[0].text)
-            assert data["queued"] is True
-            assert data["tool"] == "generate_citations"
+            assert "queued" not in data

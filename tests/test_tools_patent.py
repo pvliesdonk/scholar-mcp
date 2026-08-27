@@ -6,15 +6,21 @@ import asyncio
 import json
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastmcp import FastMCP
 from fastmcp.client import Client
+from fastmcp.exceptions import ToolError
 from fastmcp_pvl_core import Jobs
 
 from scholar_mcp._docling_client import DoclingClient
-from scholar_mcp._epo_client import EpoClient, EpoRateLimitedError
+from scholar_mcp._epo_client import (
+    EpoClient,
+    EpoQuotaExhaustedError,
+    EpoRateLimitedError,
+)
 from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._tools_patent import (
     _build_cql,
@@ -332,10 +338,10 @@ async def test_search_patents_different_offsets_different_cache_entries(
     assert cached1 != cached2
 
 
-async def test_search_patents_rate_limited_queues(
+async def test_search_patents_reports_a_rate_limit(
     bundle: ServiceBundle, jobs: Jobs
 ) -> None:
-    """search_patents queues the task when EPO rate-limits the request."""
+    """An EPO throttle is a structured result, not an exception."""
     call_count = 0
 
     async def _flaky_search(*args, **kwargs):  # type: ignore[no-untyped-def]
@@ -355,28 +361,105 @@ async def test_search_patents_rate_limited_queues(
 
     app = FastMCP("test", lifespan=lifespan)
     register_patent_tools(app, jobs)
-    from scholar_mcp._tools_tasks import register_task_tools
-
-    register_task_tools(app)
 
     async with Client(app) as client:
         result = await client.call_tool("search_patents", {"query": "throttled query"})
-        data = json.loads(result.content[0].text)
-        assert data["queued"] is True
-        assert data["tool"] == "search_patents"
 
-        # Poll for background result
-        for _ in range(40):
-            poll = await client.call_tool(
-                "get_task_result", {"task_id": data["task_id"]}
-            )
-            poll_data = json.loads(poll.content[0].text)
-            if poll_data["status"] in ("completed", "failed"):
-                break
-            await asyncio.sleep(0.05)
-        assert poll_data["status"] == "completed"
-        inner = json.loads(poll_data["result"])
-        assert inner["total_count"] == 1
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "rate_limited"
+    assert data["retryable"] is True
+    assert call_count == 1  # no retry path for EPO; the throttle is reported
+
+
+async def test_search_patents_reports_an_exhausted_daily_quota(
+    bundle: ServiceBundle, jobs: Jobs
+) -> None:
+    """A black throttle is reported as a non-retryable rate limit.
+
+    `EpoQuotaExhaustedError` is a `RateLimitedError`, so the guard has to catch
+    it *before* the general rate-limit branch — otherwise it would be reported
+    as retryable, inviting a call that cannot succeed until the quota resets.
+    """
+
+    async def _quota_exhausted(*args: object, **kwargs: object) -> dict[str, Any]:
+        raise EpoQuotaExhaustedError
+
+    epo = _make_epo_client()
+    epo.search = _quota_exhausted  # type: ignore[method-assign,assignment]
+    bundle.epo = epo
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_patent_tools(app, jobs)
+
+    async with Client(app) as client:
+        result = await client.call_tool("search_patents", {"query": "anything"})
+
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "rate_limited"
+    assert data["retryable"] is False
+    assert "tomorrow" in data["detail"]
+
+
+async def test_get_citing_patents_reports_an_exhausted_daily_quota(
+    bundle: ServiceBundle, jobs: Jobs
+) -> None:
+    """A quota error reaches the guard rather than becoming a search failure.
+
+    `_get_citing_patents` catches broad exceptions and reports them as
+    "EPO citation search failed. Try a different identifier format", which is a
+    dead end for a caller whose real problem is an exhausted quota. Being a
+    `RateLimitedError` is what carries it past that handler to `_guard_epo`.
+    """
+
+    async def _quota_exhausted(*args: object, **kwargs: object) -> dict[str, Any]:
+        raise EpoQuotaExhaustedError
+
+    epo = _make_epo_client()
+    epo.search = _quota_exhausted  # type: ignore[method-assign,assignment]
+    bundle.epo = epo
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_patent_tools(app, jobs)
+
+    async with Client(app) as client:
+        result = await client.call_tool("get_citing_patents", {"paper_id": "10.1/x"})
+
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "rate_limited"
+    assert data["retryable"] is False
+    assert "note" not in data  # not misreported as a search failure
+
+
+async def test_search_patents_propagates_an_unrelated_runtime_error(
+    bundle: ServiceBundle, jobs: Jobs
+) -> None:
+    """Only the quota RuntimeError is absorbed; a real failure still raises."""
+
+    async def _boom(*args: object, **kwargs: object) -> dict[str, Any]:
+        raise RuntimeError("connection reset by peer")
+
+    epo = _make_epo_client()
+    epo.search = _boom  # type: ignore[method-assign,assignment]
+    bundle.epo = epo
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_patent_tools(app, jobs)
+
+    async with Client(app) as client:
+        with pytest.raises(ToolError):
+            await client.call_tool("search_patents", {"query": "anything"})
 
 
 async def test_search_patents_with_filters(
@@ -649,7 +732,7 @@ async def test_get_patent_not_found_without_biblio_section(
     assert data["error"] == "patent_not_found"
 
 
-async def test_get_patent_rate_limited_queues(
+async def test_get_patent_reports_a_rate_limit(
     bundle: ServiceBundle, jobs: Jobs
 ) -> None:
     """get_patent queues the task when EPO rate-limits the request."""
@@ -672,27 +755,13 @@ async def test_get_patent_rate_limited_queues(
 
     app = FastMCP("test", lifespan=lifespan)
     register_patent_tools(app, jobs)
-    from scholar_mcp._tools_tasks import register_task_tools
-
-    register_task_tools(app)
 
     async with Client(app) as client:
         result = await client.call_tool("get_patent", {"patent_number": "EP1234567A1"})
-        data = json.loads(result.content[0].text)
-        assert data["queued"] is True
-        assert data["tool"] == "get_patent"
 
-        for _ in range(40):
-            poll = await client.call_tool(
-                "get_task_result", {"task_id": data["task_id"]}
-            )
-            poll_data = json.loads(poll.content[0].text)
-            if poll_data["status"] in ("completed", "failed"):
-                break
-            await asyncio.sleep(0.05)
-        assert poll_data["status"] == "completed"
-        inner = json.loads(poll_data["result"])
-        assert inner["biblio"]["title"] == "Test Patent"
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "rate_limited"
+    assert data["retryable"] is True
 
 
 async def test_get_patent_no_epo_client_returns_error(
@@ -744,13 +813,12 @@ async def test_fetch_all_sections(bundle: ServiceBundle) -> None:
 
     epo = _make_epo_client()
     doc = DocdbNumber("EP", "1234567", "A1")
-    result_json = await _fetch_patent_sections(
+    result = await _fetch_patent_sections(
         doc=doc,
         sections=["biblio", "claims", "description", "family", "legal"],
         epo=epo,
         cache=bundle.cache,
     )
-    result = json.loads(result_json)
     assert result["patent_number"] == "EP.1234567.A1"
     assert result["biblio"]["title"] == "Test Patent"
     assert "method for testing" in result["claims"]
@@ -766,13 +834,12 @@ async def test_fetch_sections_uses_cache(bundle: ServiceBundle) -> None:
     epo = _make_epo_client()
     await bundle.cache.set_patent_claims("EP.1234567.A1", "Cached claims")
     doc = DocdbNumber("EP", "1234567", "A1")
-    result_json = await _fetch_patent_sections(
+    result = await _fetch_patent_sections(
         doc=doc,
         sections=["claims"],
         epo=epo,
         cache=bundle.cache,
     )
-    result = json.loads(result_json)
     assert result["claims"] == "Cached claims"
     epo.get_claims.assert_not_called()  # type: ignore[union-attr]
 
@@ -988,7 +1055,7 @@ async def test_get_citing_patents_no_epo_returns_error(
     assert data["error"] == "epo_not_configured"
 
 
-async def test_get_citing_patents_rate_limited_queues(
+async def test_get_citing_patents_reports_a_rate_limit(
     bundle: ServiceBundle, jobs: Jobs
 ) -> None:
     """get_citing_patents queues on rate limit."""
@@ -1008,8 +1075,8 @@ async def test_get_citing_patents_rate_limited_queues(
             {"paper_id": "10.1234/test"},
         )
     data = json.loads(result.content[0].text)
-    assert data["queued"] is True
-    assert data["tool"] == "get_citing_patents"
+    assert data["error"] == "rate_limited"
+    assert data["retryable"] is True
 
 
 # ---------------------------------------------------------------------------
@@ -1146,14 +1213,13 @@ async def test_npl_chapter_info_no_s2_branch(
     }
     epo = _make_epo_client(citations_result=citations_data)
     doc = DocdbNumber("EP", "1234567", "A1")
-    result_json = await _fetch_patent_sections(
+    result = await _fetch_patent_sections(
         doc=doc,
         sections=["citations"],
         epo=epo,
         cache=bundle.cache,
         s2=None,
     )
-    result = json.loads(result_json)
     npl = result["citations"]["npl_refs"]
     assert len(npl) == 1
     assert npl[0]["confidence"] is None
@@ -1324,8 +1390,7 @@ def test_fetch_patent_pdf_execute_downloads_pdf(
             )
         return result.content[0].text
 
-    result_json = asyncio.run(run())
-    result = json.loads(result_json)
+    result = json.loads(asyncio.run(run()))
     assert "pdf_path" in result
     epo.get_pdf.assert_called_once()  # type: ignore[attr-defined]
 
@@ -1352,8 +1417,7 @@ def test_fetch_patent_pdf_execute_pdf_not_available(
             )
         return result.content[0].text
 
-    result_json = asyncio.run(run())
-    result = json.loads(result_json)
+    result = json.loads(asyncio.run(run()))
     assert result.get("error") == "pdf_not_available"
 
 
@@ -1443,8 +1507,7 @@ def test_fetch_patent_pdf_execute_with_docling_converts_to_markdown(
             )
         return result.content[0].text
 
-    result_json = asyncio.run(run())
-    result = json.loads(result_json)
+    result = json.loads(asyncio.run(run()))
     assert "pdf_path" in result
     assert result.get("markdown") == "# Patent Markdown"
     assert result.get("vlm_used") is False
@@ -1491,8 +1554,7 @@ def test_fetch_patent_pdf_cache_hit_docling_no_md_falls_through_to_queue(
             )
         return result.content[0].text
 
-    result_json = asyncio.run(run())
-    result = json.loads(result_json)
+    result = json.loads(asyncio.run(run()))
     assert result.get("markdown") == "# Freshly Converted"
     # PDF was not re-downloaded (already existed); docling was called
     epo.get_pdf.assert_not_called()  # type: ignore[attr-defined]
@@ -1571,8 +1633,7 @@ def test_fetch_patent_pdf_execute_docling_convert_exception(
             )
         return result.content[0].text
 
-    result_json = asyncio.run(run())
-    result = json.loads(result_json)
+    result = json.loads(asyncio.run(run()))
     # Falls back to just pdf_path when docling fails
     assert "pdf_path" in result
     assert "markdown" not in result
@@ -1603,8 +1664,7 @@ def test_fetch_patent_pdf_execute_with_vlm_skip_reason(
             )
         return result.content[0].text
 
-    result_json = asyncio.run(run())
-    result = json.loads(result_json)
+    result = json.loads(asyncio.run(run()))
     assert result.get("vlm_skip_reason") == "VLM not configured"
     assert "markdown" in result
 
@@ -1647,8 +1707,7 @@ def test_fetch_patent_pdf_execute_with_docling_cached_md(
             )
         return result.content[0].text
 
-    result_json = asyncio.run(run())
-    result = json.loads(result_json)
+    result = json.loads(asyncio.run(run()))
     assert result.get("markdown") == "# Pre-cached MD"
     # convert should not be called since md was already cached
     bundle.docling.convert.assert_not_called()  # type: ignore[union-attr]

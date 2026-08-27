@@ -9,10 +9,10 @@ from typing import TYPE_CHECKING, Any, Literal
 import httpx
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
+from fastmcp_pvl_core import Jobs, register_long_running_tool
 
 from ._citation_formatter import format_bibtex, format_csl_json, format_ris
-from ._rate_limiter import RateLimitedError
-from ._s2_client import FIELD_SETS, format_s2_error
+from ._s2_client import FIELD_SETS, s2_error_payload
 from ._server_deps import ServiceBundle, get_bundle
 
 if TYPE_CHECKING:
@@ -27,14 +27,42 @@ _FORMATTERS = {
 }
 
 
-def register_citation_tools(mcp: FastMCP) -> None:
+def _render(
+    citation_format: str,
+    papers: list[PaperRecord],
+    errors: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Render resolved papers in the requested citation format.
+
+    Args:
+        citation_format: One of ``bibtex``, ``csl-json``, ``ris``.
+        papers: The papers that resolved.
+        errors: The identifiers that did not, reported alongside.
+
+    Returns:
+        ``{"format": ..., "citations": ..., "errors": [...]}``. CSL-JSON is
+        already structured, so its citations are an array rather than text a
+        caller would have to parse out of JSON.
+    """
+    rendered = _FORMATTERS[citation_format](papers, errors)
+    if citation_format == "csl-json":
+        return {"format": citation_format, **json.loads(rendered)}
+    return {"format": citation_format, "citations": rendered, "errors": errors}
+
+
+def register_citation_tools(mcp: FastMCP, jobs: Jobs) -> None:
     """Register citation generation tools on *mcp*.
 
     Args:
         mcp: FastMCP application instance.
+        jobs: Shared Jobs service. A tool that can outrun a request is
+            registered against it, so a call past the soft deadline is
+            promoted to a background job instead of holding the request.
     """
 
-    @mcp.tool(
+    @register_long_running_tool(
+        mcp,
+        jobs,
         annotations={
             "readOnlyHint": True,
             "destructiveHint": False,
@@ -46,7 +74,7 @@ def register_citation_tools(mcp: FastMCP) -> None:
         citation_format: Literal["bibtex", "csl-json", "ris"] = "bibtex",
         enrich: bool = True,
         bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
+    ) -> dict[str, Any]:
         """Generate formatted citations for one or more papers.
 
         Resolves papers via Semantic Scholar, optionally enriches with
@@ -60,26 +88,28 @@ def register_citation_tools(mcp: FastMCP) -> None:
                 data when a DOI is available.
 
         Returns:
-            Formatted citation string, or a queued task response on rate
-            limiting.
+            ``{"format": ..., "citations": ..., "errors": [...]}``. For
+            ``bibtex`` and ``ris``, ``citations`` is the rendered text; for
+            ``csl-json`` it is an array of CSL-JSON objects.
+
+            If the call outruns the jobs soft deadline it returns a job
+            handle instead — poll ``get_job_result`` with its ``job_id``.
         """
         if not paper_ids:
-            return json.dumps({"error": "paper_ids must not be empty"})
+            return {"error": "paper_ids must not be empty"}
 
         if len(paper_ids) > 100:
-            return json.dumps(
-                {"error": "paper_ids must contain at most 100 identifiers"}
-            )
+            return {"error": "paper_ids must contain at most 100 identifiers"}
 
-        async def _execute(*, retry: bool = True) -> str:
+        async def _execute() -> dict[str, Any]:
             try:
                 # batch_resolve does not pre-screen the cache (consistent
                 # with the batch_resolve tool in _tools_utility.py).
                 s2_results = await bundle.s2.batch_resolve(
-                    paper_ids, fields=FIELD_SETS["full"], retry=retry
+                    paper_ids, fields=FIELD_SETS["full"]
                 )
             except httpx.HTTPStatusError as exc:
-                return format_s2_error(exc)
+                return s2_error_payload(exc)
 
             papers: list[PaperRecord] = []
             errors: list[dict[str, Any]] = []
@@ -96,27 +126,11 @@ def register_citation_tools(mcp: FastMCP) -> None:
                 )
 
             if not papers:
-                return json.dumps(
-                    {
-                        "error": "no_papers_resolved",
-                        "failed": [e["identifier"] for e in errors],
-                    }
-                )
-
-            formatter = _FORMATTERS[citation_format]
-            return formatter(papers, errors)
-
-        try:
-            return await _execute(retry=False)
-        except RateLimitedError:
-            logger.debug("rate_limited_queued tool=%s", "generate_citations")
-            task_id = bundle.tasks.submit(
-                _execute(retry=True), tool="generate_citations"
-            )
-            return json.dumps(
-                {
-                    "queued": True,
-                    "task_id": task_id,
-                    "tool": "generate_citations",
+                return {
+                    "error": "no_papers_resolved",
+                    "failed": [e["identifier"] for e in errors],
                 }
-            )
+
+            return _render(citation_format, papers, errors)
+
+        return await _execute()

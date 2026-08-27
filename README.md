@@ -306,7 +306,7 @@ versus a transient upstream issue.
 - **Sync domain code, async MCP layer.** Backend clients are synchronous; MCP tools call them via `asyncio.to_thread()`. Simpler client code, explicit offloading at the transport boundary.
 - **SQLite cache with per-table TTLs and identifier aliases.** Papers / authors last 30 days, citations / references 7 days. DOI ↔ S2 ID ↔ arXiv ID aliasing survives across cache clears so repeated enrichment hits the same row.
 - **Read-only by default.** Write-tagged tools (PDF download/convert, patent PDF) are hidden unless `SCHOLAR_MCP_READ_ONLY=false`. Safer default for first-run.
-- **Rate-limited try-once with background queueing.** S2/OpenAlex calls try once; on 429 they queue a retry-enabled background task and return `{"queued": true, "task_id": ...}`. PDF tools always queue unless the cache already has the conversion.
+- **Dual-mode tools instead of a private queue.** A rate-limited S2/OpenAlex call is retried with backoff inside the call, so the caller usually gets the answer rather than a handle; a call still running at `SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S` is promoted to a background job and returns a handle to poll with `get_job_result`. The mechanics are `fastmcp-pvl-core`'s, so job records are persisted, scoped to the caller, and bounded per caller.
 - **Tier 2 standards sync out-of-band.** ISO/IEC/IEEE/CC/CEN catalogues come from community Relaton dumps via `scholar-mcp sync-standards`, not live at runtime. That avoids paywalled-HTML scraping and keeps tool calls fast.
 <!-- DOMAIN-END -->
 
@@ -444,14 +444,13 @@ Schedule via cron, launchd, or a systemd timer. Weekly is sufficient, because st
 
 > PDF tools are write-tagged and hidden when `SCHOLAR_MCP_READ_ONLY=true` (the default). `fetch_patent_pdf` (above) and the `get_standard` full-text mode cover the patent and standards equivalents.
 
-### Task Polling
+### Job Polling
 
 | Tool | Description |
 |---|---|
-| `get_task_result` | Poll for the result of a background task by ID. |
-| `list_tasks` | List all active background tasks. |
+| `get_job_result` | Retrieve the outcome of a background job by ID. |
 
-> Long-running operations (PDF download/conversion) and rate-limited backend requests return `{"queued": true, "task_id": "..."}` immediately. Use `get_task_result` to poll for the result.
+> A call that outruns `SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S` (25 seconds by default) keeps running in the background and returns a job handle: `{"status": "working", "job_id": "...", "poll_with": "get_job_result", ...}`. Poll the tool named in `poll_with` until the status is `completed` or `failed`.
 
 ## Docker Compose
 
