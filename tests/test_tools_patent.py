@@ -1244,8 +1244,8 @@ def test_fetch_patent_pdf_invalid_number(bundle: ServiceBundle) -> None:
     assert "error" in data
 
 
-def test_fetch_patent_pdf_queued(bundle: ServiceBundle) -> None:
-    """fetch_patent_pdf queues task and returns queued response."""
+def test_fetch_patent_pdf_runs_inline(bundle: ServiceBundle) -> None:
+    """fetch_patent_pdf returns short work inline."""
     epo = _make_epo_client()
     epo.get_pdf = AsyncMock(return_value=b"%PDF-1.4 fake pdf content")
     bundle.epo = epo
@@ -1265,8 +1265,8 @@ def test_fetch_patent_pdf_queued(bundle: ServiceBundle) -> None:
         return json.loads(result.content[0].text)
 
     data = asyncio.run(run())
-    assert data.get("queued") is True
-    assert data.get("tool") == "fetch_patent_pdf"
+    assert "queued" not in data
+    assert "task_id" not in data
 
 
 def test_fetch_patent_pdf_cache_hit_returns_pdf_path(bundle: ServiceBundle) -> None:
@@ -1330,18 +1330,7 @@ def test_fetch_patent_pdf_execute_downloads_pdf(bundle: ServiceBundle) -> None:
             result = await client.call_tool(
                 "fetch_patent_pdf", {"patent_number": "EP3491801B1"}
             )
-        queued_data = json.loads(result.content[0].text)
-        assert queued_data.get("queued") is True
-        task_id = queued_data["task_id"]
-
-        # Wait for the background task to complete
-        tasks = bundle.tasks
-        for _ in range(50):
-            task = tasks.get(task_id)
-            if task and task.status == "completed":
-                return task.result or ""
-            await asyncio.sleep(0.05)
-        return ""
+        return result.content[0].text
 
     result_json = asyncio.run(run())
     result = json.loads(result_json)
@@ -1367,16 +1356,7 @@ def test_fetch_patent_pdf_execute_pdf_not_available(bundle: ServiceBundle) -> No
             result = await client.call_tool(
                 "fetch_patent_pdf", {"patent_number": "EP3491801B1"}
             )
-        queued_data = json.loads(result.content[0].text)
-        task_id = queued_data["task_id"]
-
-        tasks = bundle.tasks
-        for _ in range(50):
-            task = tasks.get(task_id)
-            if task and task.status == "completed":
-                return task.result or ""
-            await asyncio.sleep(0.05)
-        return ""
+        return result.content[0].text
 
     result_json = asyncio.run(run())
     result = json.loads(result_json)
@@ -1467,16 +1447,7 @@ def test_fetch_patent_pdf_execute_with_docling_converts_to_markdown(
             result = await client.call_tool(
                 "fetch_patent_pdf", {"patent_number": "EP3491801B1"}
             )
-        queued_data = json.loads(result.content[0].text)
-        task_id = queued_data["task_id"]
-
-        tasks = bundle.tasks
-        for _ in range(50):
-            task = tasks.get(task_id)
-            if task and task.status == "completed":
-                return task.result or ""
-            await asyncio.sleep(0.05)
-        return ""
+        return result.content[0].text
 
     result_json = asyncio.run(run())
     result = json.loads(result_json)
@@ -1524,17 +1495,7 @@ def test_fetch_patent_pdf_cache_hit_docling_no_md_falls_through_to_queue(
             result = await client.call_tool(
                 "fetch_patent_pdf", {"patent_number": patent_number}
             )
-        queued_data = json.loads(result.content[0].text)
-        assert queued_data.get("queued") is True
-        task_id = queued_data["task_id"]
-
-        tasks = bundle.tasks
-        for _ in range(50):
-            task = tasks.get(task_id)
-            if task and task.status == "completed":
-                return task.result or ""
-            await asyncio.sleep(0.05)
-        return ""
+        return result.content[0].text
 
     result_json = asyncio.run(run())
     result = json.loads(result_json)
@@ -1614,16 +1575,7 @@ def test_fetch_patent_pdf_execute_docling_convert_exception(
             result = await client.call_tool(
                 "fetch_patent_pdf", {"patent_number": "EP3491801B1"}
             )
-        queued_data = json.loads(result.content[0].text)
-        task_id = queued_data["task_id"]
-
-        tasks = bundle.tasks
-        for _ in range(50):
-            task = tasks.get(task_id)
-            if task and task.status == "completed":
-                return task.result or ""
-            await asyncio.sleep(0.05)
-        return ""
+        return result.content[0].text
 
     result_json = asyncio.run(run())
     result = json.loads(result_json)
@@ -1655,16 +1607,7 @@ def test_fetch_patent_pdf_execute_with_vlm_skip_reason(
             result = await client.call_tool(
                 "fetch_patent_pdf", {"patent_number": "EP3491801B1"}
             )
-        queued_data = json.loads(result.content[0].text)
-        task_id = queued_data["task_id"]
-
-        tasks = bundle.tasks
-        for _ in range(50):
-            task = tasks.get(task_id)
-            if task and task.status == "completed":
-                return task.result or ""
-            await asyncio.sleep(0.05)
-        return ""
+        return result.content[0].text
 
     result_json = asyncio.run(run())
     result = json.loads(result_json)
@@ -1708,16 +1651,7 @@ def test_fetch_patent_pdf_execute_with_docling_cached_md(
             result = await client.call_tool(
                 "fetch_patent_pdf", {"patent_number": patent_number}
             )
-        queued_data = json.loads(result.content[0].text)
-        task_id = queued_data["task_id"]
-
-        tasks = bundle.tasks
-        for _ in range(50):
-            task = tasks.get(task_id)
-            if task and task.status == "completed":
-                return task.result or ""
-            await asyncio.sleep(0.05)
-        return ""
+        return result.content[0].text
 
     result_json = asyncio.run(run())
     result = json.loads(result_json)

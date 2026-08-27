@@ -11,6 +11,8 @@ from typing import TYPE_CHECKING
 import httpx
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
+from fastmcp.utilities.tasks import TaskConfig
+from fastmcp_pvl_core import JOB_RETRY_AFTER_S
 
 from ._pdf_url_resolver import ResolvedPdf, resolve_alternative_pdf
 from ._rate_limiter import RateLimitedError
@@ -18,11 +20,16 @@ from ._s2_client import format_s2_error
 from ._server_deps import ServiceBundle, get_bundle
 
 if TYPE_CHECKING:
+    from collections.abc import Coroutine
+
     from ._record_types import PaperRecord
 
-_PDF_TASK_TTL = 3600.0  # 1 hour for PDF operations
-
 logger = logging.getLogger(__name__)
+
+
+async def _decode_json_result(coro: Coroutine[object, object, str]) -> object:
+    """Return a JSON-producing operation as a native job result."""
+    return json.loads(await coro)
 
 
 def register_pdf_tools(mcp: FastMCP) -> None:
@@ -33,6 +40,7 @@ def register_pdf_tools(mcp: FastMCP) -> None:
     """
 
     @mcp.tool(
+        task=TaskConfig(mode="optional"),
         tags={"write"},
         annotations={
             "readOnlyHint": False,
@@ -43,7 +51,7 @@ def register_pdf_tools(mcp: FastMCP) -> None:
     async def fetch_paper_pdf(
         identifier: str,
         bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
+    ) -> object:
         """Download the PDF of a paper.
 
         Tries the Semantic Scholar open-access URL first. When that is
@@ -120,9 +128,9 @@ def register_pdf_tools(mcp: FastMCP) -> None:
                 fields="paperId,openAccessPdf,externalIds,title",
                 retry=False,
             )
-        except RateLimitedError:
-            # S2 rate-limited; queue entire operation for background
-            logger.debug("rate_limited_queued tool=%s", "fetch_paper_pdf")
+        except RateLimitedError as exc:
+            # S2 rate-limited; defer the complete retryable operation.
+            logger.debug("rate_limited_deferred tool=%s", "fetch_paper_pdf")
 
             async def _execute_full() -> str:
                 try:
@@ -138,15 +146,11 @@ def register_pdf_tools(mcp: FastMCP) -> None:
                     return format_s2_error(exc)
                 return await _download(p)
 
-            task_id = bundle.tasks.submit(
-                _execute_full(), ttl=_PDF_TASK_TTL, tool="fetch_paper_pdf"
-            )
-            return json.dumps(
-                {
-                    "queued": True,
-                    "task_id": task_id,
-                    "tool": "fetch_paper_pdf",
-                }
+            return await bundle.jobs.defer(
+                _decode_json_result(_execute_full()),
+                tool="fetch_paper_pdf",
+                reason="Semantic Scholar asked this client to retry later.",
+                retry_after_s=exc.retry_after_s or JOB_RETRY_AFTER_S,
             )
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 404:
@@ -180,18 +184,15 @@ def register_pdf_tools(mcp: FastMCP) -> None:
             source = alt.source if alt else "s2_oa"
             return json.dumps({"path": str(pdf_path), "source": source})
 
-        # PDF not cached — queue the download, passing resolved alt to
+        # PDF not cached — run the download, passing resolved alt to
         # avoid a duplicate Unpaywall lookup inside _download.
-        task_id = bundle.tasks.submit(
+        return await bundle.jobs.run_with_deadline(
             _download(paper, resolved=alt),
-            ttl=_PDF_TASK_TTL,
             tool="fetch_paper_pdf",
-        )
-        return json.dumps(
-            {"queued": True, "task_id": task_id, "tool": "fetch_paper_pdf"}
         )
 
     @mcp.tool(
+        task=TaskConfig(mode="optional"),
         tags={"write"},
         annotations={
             "readOnlyHint": False,
@@ -203,7 +204,7 @@ def register_pdf_tools(mcp: FastMCP) -> None:
         file_path: str,
         use_vlm: bool = False,
         bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
+    ) -> object:
         """Convert a local PDF to Markdown using docling-serve.
 
         Works on any local PDF, including manually placed paywalled papers.
@@ -277,18 +278,12 @@ def register_pdf_tools(mcp: FastMCP) -> None:
                 result["vlm_skip_reason"] = skip_reason
             return json.dumps(result)
 
-        task_id = bundle.tasks.submit(
-            _execute(), ttl=_PDF_TASK_TTL, tool="convert_pdf_to_markdown"
-        )
-        return json.dumps(
-            {
-                "queued": True,
-                "task_id": task_id,
-                "tool": "convert_pdf_to_markdown",
-            }
+        return await bundle.jobs.run_with_deadline(
+            _execute(), tool="convert_pdf_to_markdown"
         )
 
     @mcp.tool(
+        task=TaskConfig(mode="optional"),
         tags={"write"},
         annotations={
             "readOnlyHint": False,
@@ -300,7 +295,7 @@ def register_pdf_tools(mcp: FastMCP) -> None:
         identifier: str,
         use_vlm: bool = False,
         bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
+    ) -> object:
         """Resolve a paper, download its PDF, and convert to Markdown.
 
         Tries the Semantic Scholar open-access URL first, then alternative
@@ -414,14 +409,10 @@ def register_pdf_tools(mcp: FastMCP) -> None:
                 result["vlm_skip_reason"] = skip_reason
             return json.dumps(result)
 
-        task_id = bundle.tasks.submit(
-            _execute(), ttl=_PDF_TASK_TTL, tool="fetch_and_convert"
-        )
-        return json.dumps(
-            {"queued": True, "task_id": task_id, "tool": "fetch_and_convert"}
-        )
+        return await bundle.jobs.run_with_deadline(_execute(), tool="fetch_and_convert")
 
     @mcp.tool(
+        task=TaskConfig(mode="optional"),
         tags={"write"},
         annotations={
             "readOnlyHint": False,
@@ -434,7 +425,7 @@ def register_pdf_tools(mcp: FastMCP) -> None:
         filename: str | None = None,
         use_vlm: bool = False,
         bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
+    ) -> object:
         """Download a PDF from a URL and optionally convert to Markdown.
 
         Use this when you have found an alternative PDF link (e.g. from an
@@ -571,9 +562,4 @@ def register_pdf_tools(mcp: FastMCP) -> None:
                 result["vlm_skip_reason"] = skip_reason
             return json.dumps(result)
 
-        task_id = bundle.tasks.submit(
-            _execute(), ttl=_PDF_TASK_TTL, tool="fetch_pdf_by_url"
-        )
-        return json.dumps(
-            {"queued": True, "task_id": task_id, "tool": "fetch_pdf_by_url"}
-        )
+        return await bundle.jobs.run_with_deadline(_execute(), tool="fetch_pdf_by_url")

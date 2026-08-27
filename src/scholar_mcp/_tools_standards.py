@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
+from fastmcp.utilities.tasks import TaskConfig
 from fastmcp_pvl_core import JOB_RETRY_AFTER_S
 
 from ._rate_limiter import RateLimitedError
@@ -151,6 +152,7 @@ def register_standards_tools(mcp: FastMCP) -> None:
         return json.dumps(results)
 
     @mcp.tool(
+        task=TaskConfig(mode="optional"),
         annotations={
             "readOnlyHint": True,
             "destructiveHint": False,
@@ -284,7 +286,7 @@ async def _handle_full_text(
         return json.dumps(enriched)
 
     try:
-        return await _convert()
+        return await bundle.jobs.run_with_deadline(_convert(), tool="get_standard")
     except RateLimitedError as exc:
         logger.debug("rate_limited_deferred tool=%s", "get_standard")
         return await bundle.jobs.defer(

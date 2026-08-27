@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
+from fastmcp.utilities.tasks import TaskConfig
 from fastmcp_pvl_core import JOB_RETRY_AFTER_S
 
 from ._chapter_parser import hint_to_dict, parse_chapter_hint
@@ -421,6 +422,7 @@ def register_patent_tools(mcp: FastMCP) -> None:
             )
 
     @mcp.tool(
+        task=TaskConfig(mode="optional"),
         annotations={
             "readOnlyHint": False,
             "destructiveHint": False,
@@ -432,7 +434,7 @@ def register_patent_tools(mcp: FastMCP) -> None:
         patent_number: str,
         use_vlm: bool = False,
         bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
+    ) -> Any:
         """Download a patent PDF via authenticated EPO OPS and convert to Markdown.
 
         Downloads the full-document PDF for a patent using the authenticated
@@ -450,8 +452,7 @@ def register_patent_tools(mcp: FastMCP) -> None:
 
         Returns:
             JSON with ``pdf_path`` and optionally ``markdown`` / ``md_path``,
-            or ``{"queued": true, "task_id": "...", "tool": "fetch_patent_pdf"}``
-            while the download is in progress.
+            or a standard job handle while longer work continues in the background.
         """
         import hashlib
         import re
@@ -554,10 +555,7 @@ def register_patent_tools(mcp: FastMCP) -> None:
                 result["vlm_skip_reason"] = skip_reason
             return json.dumps(result)
 
-        task_id = bundle.tasks.submit(_execute(), ttl=3600.0, tool="fetch_patent_pdf")
-        return json.dumps(
-            {"queued": True, "task_id": task_id, "tool": "fetch_patent_pdf"}
-        )
+        return await bundle.jobs.run_with_deadline(_execute(), tool="fetch_patent_pdf")
 
 
 # All available patent sections.
