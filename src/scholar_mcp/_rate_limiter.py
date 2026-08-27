@@ -7,6 +7,8 @@ import logging
 import math
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from typing import Any
 
 import httpx
@@ -123,7 +125,11 @@ async def with_s2_try_once(
             try:
                 retry_after_s = float(retry_after) if retry_after is not None else None
             except ValueError:
-                retry_after_s = None
+                try:
+                    retry_at = parsedate_to_datetime(retry_after)
+                    retry_after_s = (retry_at - datetime.now(UTC)).total_seconds()
+                except (TypeError, ValueError):
+                    retry_after_s = None
             if retry_after_s is not None and (
                 not math.isfinite(retry_after_s) or retry_after_s <= 0
             ):

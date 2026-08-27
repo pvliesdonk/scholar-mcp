@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import json
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime, timedelta
+from email.utils import format_datetime
 
 import httpx
 import pytest
@@ -58,6 +60,26 @@ async def test_try_once_preserves_positive_retry_after() -> None:
     with pytest.raises(RateLimitedError) as exc_info:
         await with_s2_try_once(_rate_limited, limiter)
     assert exc_info.value.retry_after_s == 2.5
+
+
+async def test_try_once_parses_http_date_retry_after() -> None:
+    """with_s2_try_once converts a future HTTP-date into a retry delay."""
+    limiter = RateLimiter(delay=0.0)
+    retry_at = datetime.now(UTC) + timedelta(seconds=60)
+
+    async def _rate_limited() -> dict:
+        request = httpx.Request("GET", "http://test")
+        response = httpx.Response(
+            429,
+            headers={"Retry-After": format_datetime(retry_at, usegmt=True)},
+            request=request,
+        )
+        raise httpx.HTTPStatusError("", request=request, response=response)
+
+    with pytest.raises(RateLimitedError) as exc_info:
+        await with_s2_try_once(_rate_limited, limiter)
+    assert exc_info.value.retry_after_s is not None
+    assert 0 < exc_info.value.retry_after_s <= 60
 
 
 @pytest.mark.parametrize("retry_after", ["NaN", "Infinity", "-Infinity"])
