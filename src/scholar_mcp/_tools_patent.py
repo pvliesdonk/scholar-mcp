@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
+from fastmcp_pvl_core import JOB_RETRY_AFTER_S
 
 from ._chapter_parser import hint_to_dict, parse_chapter_hint
 from ._epo_client import EpoClient, EpoRateLimitedError
@@ -24,6 +25,22 @@ from ._s2_client import FIELD_SETS, S2Client
 from ._server_deps import ServiceBundle, get_bundle
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from collections.abc import Coroutine
+
+
+async def _decode_json_result(coro: Coroutine[object, object, str]) -> object:
+    """Return a legacy JSON-producing operation as a native job result."""
+    return json.loads(await coro)
+
+
+def _epo_rate_limit_reason(exc: RateLimitedError | EpoRateLimitedError) -> str:
+    """Describe the EPO throttle state when it is available to clients."""
+    if isinstance(exc, EpoRateLimitedError):
+        return f"EPO OPS asked this client to retry later (status: {exc.color})."
+    return "EPO OPS asked this client to retry later."
+
 
 # Mapping from date_type parameter to EPO CQL field name.
 _DATE_FIELDS: dict[str, str] = {
@@ -145,7 +162,7 @@ def register_patent_tools(mcp: FastMCP) -> None:
         limit: int = 10,
         offset: int = 0,
         bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
+    ) -> Any:
         """Search for patents in the European Patent Office database.
 
         Covers European patents and global patents via INPADOC (100+ patent
@@ -176,11 +193,9 @@ def register_patent_tools(mcp: FastMCP) -> None:
             JSON string with ``total_count`` and ``references`` list, or an
             error dict if the EPO client is not configured or the API fails.
             If the EPO service is busy, the request is automatically retried
-            once and ``{"queued": true, "task_id": "..."}`` is returned. Use
-            ``get_task_result`` to retrieve the result. If the retry also
-            fails, ``get_task_result`` returns ``status: failed`` — call this
-            tool again after about 60 seconds. Do not attempt to manage or
-            reason about EPO throttle states directly.
+            in the background. The response includes a ``job_id`` to poll
+            with ``get_job_result``. Do not attempt to manage or reason about
+            EPO throttle states directly.
         """
         if bundle.epo is None:
             return json.dumps(
@@ -218,9 +233,9 @@ def register_patent_tools(mcp: FastMCP) -> None:
             return json.dumps(cached)
 
         async def _execute(*, retry: bool = True) -> str:
-            # Note: retry flag is accepted for task queue compatibility but
+            # Note: retry flag is accepted for deferred-job compatibility but
             # EPO client does not yet have a retry-aware path (unlike S2).
-            # The queued re-attempt still defers work away from the request.
+            # The deferred re-attempt still moves work away from the request.
             result = await bundle.epo.search(  # type: ignore[union-attr]
                 cql,
                 range_begin=range_begin,
@@ -231,11 +246,13 @@ def register_patent_tools(mcp: FastMCP) -> None:
 
         try:
             return await _execute(retry=False)
-        except (RateLimitedError, EpoRateLimitedError):
-            logger.debug("rate_limited_queued tool=%s", "search_patents")
-            task_id = bundle.tasks.submit(_execute(retry=True), tool="search_patents")
-            return json.dumps(
-                {"queued": True, "task_id": task_id, "tool": "search_patents"}
+        except (RateLimitedError, EpoRateLimitedError) as exc:
+            logger.debug("rate_limited_deferred tool=%s", "search_patents")
+            return await bundle.jobs.defer(
+                _decode_json_result(_execute(retry=True)),
+                tool="search_patents",
+                reason=_epo_rate_limit_reason(exc),
+                retry_after_s=exc.retry_after_s or JOB_RETRY_AFTER_S,
             )
 
     @mcp.tool(
@@ -257,7 +274,7 @@ def register_patent_tools(mcp: FastMCP) -> None:
             | None
         ) = None,
         bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
+    ) -> Any:
         """Get detailed information about a single patent.
 
         Accepts patent numbers in any format (EP, WO, US, etc.). By default
@@ -282,11 +299,9 @@ def register_patent_tools(mcp: FastMCP) -> None:
             JSON string with ``patent_number`` (normalised DOCDB format) and
             the requested section data, or an error dict on failure.
             If the EPO service is busy, the request is automatically retried
-            once and ``{"queued": true, "task_id": "..."}`` is returned. Use
-            ``get_task_result`` to retrieve the result. If the retry also
-            fails, ``get_task_result`` returns ``status: failed`` — call this
-            tool again after about 60 seconds. Do not attempt to manage or
-            reason about EPO throttle states directly.
+            in the background. The response includes a ``job_id`` to poll
+            with ``get_job_result``. Do not attempt to manage or reason about
+            EPO throttle states directly.
         """
         if bundle.epo is None:
             return json.dumps(
@@ -327,11 +342,13 @@ def register_patent_tools(mcp: FastMCP) -> None:
 
         try:
             return await _execute(retry=False)
-        except (RateLimitedError, EpoRateLimitedError):
-            logger.debug("rate_limited_queued tool=%s", "get_patent")
-            task_id = bundle.tasks.submit(_execute(retry=True), tool="get_patent")
-            return json.dumps(
-                {"queued": True, "task_id": task_id, "tool": "get_patent"}
+        except (RateLimitedError, EpoRateLimitedError) as exc:
+            logger.debug("rate_limited_deferred tool=%s", "get_patent")
+            return await bundle.jobs.defer(
+                _decode_json_result(_execute(retry=True)),
+                tool="get_patent",
+                reason=_epo_rate_limit_reason(exc),
+                retry_after_s=exc.retry_after_s or JOB_RETRY_AFTER_S,
             )
 
     @mcp.tool(
@@ -346,7 +363,7 @@ def register_patent_tools(mcp: FastMCP) -> None:
         paper_id: str,
         limit: int = 10,
         bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
+    ) -> Any:
         """Find patents that cite a given academic paper.
 
         Coverage is incomplete -- relies on EPO OPS citation search which
@@ -366,11 +383,9 @@ def register_patent_tools(mcp: FastMCP) -> None:
             biblio data and ``match_source``), ``total_count``, and a
             ``note`` about coverage limitations.
             If the EPO service is busy, the request is automatically retried
-            once and ``{"queued": true, "task_id": "..."}`` is returned. Use
-            ``get_task_result`` to retrieve the result. If the retry also
-            fails, ``get_task_result`` returns ``status: failed`` — call this
-            tool again after about 60 seconds. Do not attempt to manage or
-            reason about EPO throttle states directly.
+            in the background. The response includes a ``job_id`` to poll
+            with ``get_job_result``. Do not attempt to manage or reason about
+            EPO throttle states directly.
         """
         if bundle.epo is None:
             return json.dumps(
@@ -396,13 +411,13 @@ def register_patent_tools(mcp: FastMCP) -> None:
 
         try:
             return await _execute(retry=False)
-        except (RateLimitedError, EpoRateLimitedError):
-            logger.debug("rate_limited_queued tool=%s", "get_citing_patents")
-            task_id = bundle.tasks.submit(
-                _execute(retry=True), tool="get_citing_patents"
-            )
-            return json.dumps(
-                {"queued": True, "task_id": task_id, "tool": "get_citing_patents"}
+        except (RateLimitedError, EpoRateLimitedError) as exc:
+            logger.debug("rate_limited_deferred tool=%s", "get_citing_patents")
+            return await bundle.jobs.defer(
+                _decode_json_result(_execute(retry=True)),
+                tool="get_citing_patents",
+                reason=_epo_rate_limit_reason(exc),
+                retry_after_s=exc.retry_after_s or JOB_RETRY_AFTER_S,
             )
 
     @mcp.tool(

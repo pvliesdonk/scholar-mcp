@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import httpx
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
+from fastmcp_pvl_core import JOB_RETRY_AFTER_S
 
 from ._citation_formatter import format_bibtex, format_csl_json, format_ris
 from ._rate_limiter import RateLimitedError
@@ -46,7 +47,7 @@ def register_citation_tools(mcp: FastMCP) -> None:
         citation_format: Literal["bibtex", "csl-json", "ris"] = "bibtex",
         enrich: bool = True,
         bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
+    ) -> Any:
         """Generate formatted citations for one or more papers.
 
         Resolves papers via Semantic Scholar, optionally enriches with
@@ -60,8 +61,7 @@ def register_citation_tools(mcp: FastMCP) -> None:
                 data when a DOI is available.
 
         Returns:
-            Formatted citation string, or a queued task response on rate
-            limiting.
+            Formatted citation string, or a working job handle on rate limiting.
         """
         if not paper_ids:
             return json.dumps({"error": "paper_ids must not be empty"})
@@ -108,15 +108,11 @@ def register_citation_tools(mcp: FastMCP) -> None:
 
         try:
             return await _execute(retry=False)
-        except RateLimitedError:
-            logger.debug("rate_limited_queued tool=%s", "generate_citations")
-            task_id = bundle.tasks.submit(
-                _execute(retry=True), tool="generate_citations"
-            )
-            return json.dumps(
-                {
-                    "queued": True,
-                    "task_id": task_id,
-                    "tool": "generate_citations",
-                }
+        except RateLimitedError as exc:
+            logger.debug("rate_limited_deferred tool=%s", "generate_citations")
+            return await bundle.jobs.defer(
+                _execute(retry=True),
+                tool="generate_citations",
+                reason="Semantic Scholar asked this client to retry later.",
+                retry_after_s=exc.retry_after_s or JOB_RETRY_AFTER_S,
             )

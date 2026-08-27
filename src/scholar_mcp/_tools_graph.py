@@ -5,17 +5,27 @@ from __future__ import annotations
 import json
 import logging
 from collections import deque
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import httpx
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
+from fastmcp_pvl_core import JOB_RETRY_AFTER_S
 
 from ._rate_limiter import RateLimitedError
 from ._s2_client import FIELD_SETS, format_s2_error, log_s2_error
 from ._server_deps import ServiceBundle, get_bundle
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from collections.abc import Coroutine
+
+
+async def _decode_json_result(coro: Coroutine[object, object, str]) -> object:
+    """Return a legacy JSON-producing operation as a native job result."""
+    return json.loads(await coro)
+
 
 # Pagination limits for client-side min_citations filtering.
 # S2 returns citations newest-first; high-citation papers are typically
@@ -49,7 +59,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
         fields_of_study: list[str] | None = None,
         min_citations: int | None = None,
         bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
+    ) -> Any:
         """Fetch papers that cite the given paper (forward citations).
 
         Args:
@@ -184,11 +194,13 @@ def register_graph_tools(mcp: FastMCP) -> None:
 
         try:
             return await _execute(retry=False)
-        except RateLimitedError:
-            logger.debug("rate_limited_queued tool=%s", "get_citations")
-            task_id = bundle.tasks.submit(_execute(retry=True), tool="get_citations")
-            return json.dumps(
-                {"queued": True, "task_id": task_id, "tool": "get_citations"}
+        except RateLimitedError as exc:
+            logger.debug("rate_limited_deferred tool=%s", "get_citations")
+            return await bundle.jobs.defer(
+                _decode_json_result(_execute(retry=True)),
+                tool="get_citations",
+                reason="Semantic Scholar asked this client to retry later.",
+                retry_after_s=exc.retry_after_s or JOB_RETRY_AFTER_S,
             )
 
     @mcp.tool(
@@ -204,7 +216,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
         limit: int = 50,
         offset: int = 0,
         bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
+    ) -> Any:
         """Fetch papers referenced by the given paper (backward references).
 
         Args:
@@ -240,11 +252,13 @@ def register_graph_tools(mcp: FastMCP) -> None:
 
         try:
             return await _execute(retry=False)
-        except RateLimitedError:
-            logger.debug("rate_limited_queued tool=%s", "get_references")
-            task_id = bundle.tasks.submit(_execute(retry=True), tool="get_references")
-            return json.dumps(
-                {"queued": True, "task_id": task_id, "tool": "get_references"}
+        except RateLimitedError as exc:
+            logger.debug("rate_limited_deferred tool=%s", "get_references")
+            return await bundle.jobs.defer(
+                _decode_json_result(_execute(retry=True)),
+                tool="get_references",
+                reason="Semantic Scholar asked this client to retry later.",
+                retry_after_s=exc.retry_after_s or JOB_RETRY_AFTER_S,
             )
 
     @mcp.tool(
@@ -264,7 +278,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
         fields_of_study: list[str] | None = None,
         min_citations: int | None = None,
         bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
+    ) -> Any:
         """Traverse the citation graph from one or more seed papers.
 
         Performs BFS up to *depth* hops. Returns nodes (paper records) and
@@ -502,17 +516,13 @@ def register_graph_tools(mcp: FastMCP) -> None:
 
         try:
             return await _execute(retry=False)
-        except RateLimitedError:
-            logger.debug("rate_limited_queued tool=%s", "get_citation_graph")
-            task_id = bundle.tasks.submit(
-                _execute(retry=True), tool="get_citation_graph"
-            )
-            return json.dumps(
-                {
-                    "queued": True,
-                    "task_id": task_id,
-                    "tool": "get_citation_graph",
-                }
+        except RateLimitedError as exc:
+            logger.debug("rate_limited_deferred tool=%s", "get_citation_graph")
+            return await bundle.jobs.defer(
+                _decode_json_result(_execute(retry=True)),
+                tool="get_citation_graph",
+                reason="Semantic Scholar asked this client to retry later.",
+                retry_after_s=exc.retry_after_s or JOB_RETRY_AFTER_S,
             )
 
     @mcp.tool(
@@ -528,7 +538,7 @@ def register_graph_tools(mcp: FastMCP) -> None:
         max_depth: int = 4,
         direction: Literal["citations", "references", "both"] = "both",
         bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
+    ) -> Any:
         """Find the shortest citation path between two papers.
 
         Uses BFS over the citation/reference graph. Leverages cached
@@ -619,15 +629,11 @@ def register_graph_tools(mcp: FastMCP) -> None:
 
         try:
             return await _execute(retry=False)
-        except RateLimitedError:
-            logger.debug("rate_limited_queued tool=%s", "find_bridge_papers")
-            task_id = bundle.tasks.submit(
-                _execute(retry=True), tool="find_bridge_papers"
-            )
-            return json.dumps(
-                {
-                    "queued": True,
-                    "task_id": task_id,
-                    "tool": "find_bridge_papers",
-                }
+        except RateLimitedError as exc:
+            logger.debug("rate_limited_deferred tool=%s", "find_bridge_papers")
+            return await bundle.jobs.defer(
+                _decode_json_result(_execute(retry=True)),
+                tool="find_bridge_papers",
+                reason="Semantic Scholar asked this client to retry later.",
+                retry_after_s=exc.retry_after_s or JOB_RETRY_AFTER_S,
             )

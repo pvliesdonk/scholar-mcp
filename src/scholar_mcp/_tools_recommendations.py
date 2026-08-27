@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Literal
+from typing import Any, Literal
 
 import httpx
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
+from fastmcp_pvl_core import JOB_RETRY_AFTER_S
 
 from ._rate_limiter import RateLimitedError
 from ._s2_client import FIELD_SETS, format_s2_error
@@ -37,7 +38,7 @@ def register_recommendation_tools(mcp: FastMCP) -> None:
         limit: int = 10,
         fields: Literal["compact", "standard", "full"] = "standard",
         bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
+    ) -> Any:
         """Recommend papers based on positive (and optionally negative) examples.
 
         Args:
@@ -57,7 +58,7 @@ def register_recommendation_tools(mcp: FastMCP) -> None:
                 }
             )
 
-        async def _execute(*, retry: bool = True) -> str:
+        async def _execute(*, retry: bool = True) -> Any:
             try:
                 result = await bundle.s2.recommend(
                     positive_ids[:5],
@@ -67,18 +68,16 @@ def register_recommendation_tools(mcp: FastMCP) -> None:
                     retry=retry,
                 )
             except httpx.HTTPStatusError as exc:
-                return format_s2_error(exc)
-            return json.dumps(result)
+                return json.loads(format_s2_error(exc))
+            return result
 
         try:
-            return await _execute(retry=False)
-        except RateLimitedError:
-            logger.debug("rate_limited_queued tool=%s", "recommend_papers")
-            task_id = bundle.tasks.submit(_execute(retry=True), tool="recommend_papers")
-            return json.dumps(
-                {
-                    "queued": True,
-                    "task_id": task_id,
-                    "tool": "recommend_papers",
-                }
+            return json.dumps(await _execute(retry=False))
+        except RateLimitedError as exc:
+            logger.debug("rate_limited_deferred tool=%s", "recommend_papers")
+            return await bundle.jobs.defer(
+                _execute(retry=True),
+                tool="recommend_papers",
+                reason="Semantic Scholar asked this client to retry later.",
+                retry_after_s=exc.retry_after_s or JOB_RETRY_AFTER_S,
             )

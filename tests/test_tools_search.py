@@ -11,6 +11,7 @@ import pytest
 import respx
 from fastmcp import FastMCP
 from fastmcp.client import Client
+from fastmcp_pvl_core import register_job_tools
 
 from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._tools_search import register_search_tools
@@ -249,10 +250,10 @@ async def test_get_author_by_id_upstream_error(
 
 
 @pytest.mark.respx(base_url=S2_BASE)
-async def test_get_author_by_id_queued_on_429(
+async def test_get_author_by_id_deferred_on_429(
     respx_mock: respx.MockRouter, bundle: ServiceBundle
 ) -> None:
-    """get_author by ID returns queued on 429, background task completes."""
+    """get_author by ID defers rate-limited work and returns an author mapping."""
     call_count = 0
 
     def _side_effect(request: httpx.Request) -> httpx.Response:
@@ -279,28 +280,24 @@ async def test_get_author_by_id_queued_on_429(
 
     app = FastMCP("test", lifespan=lifespan)
     register_search_tools(app)
-    from scholar_mcp._tools_tasks import register_task_tools
-
-    register_task_tools(app)
+    register_job_tools(app, bundle.jobs)
 
     async with Client(app) as client:
         result = await client.call_tool("get_author", {"identifier": "12345"})
         data = json.loads(result.content[0].text)
-        assert data["queued"] is True
-        assert data["tool"] == "get_author"
+        assert data["status"] == "working"
+        assert data["reason"] == "Semantic Scholar asked this client to retry later."
+        assert data["retry_after_s"] > 0
 
         # Poll for background result
         for _ in range(40):
-            poll = await client.call_tool(
-                "get_task_result", {"task_id": data["task_id"]}
-            )
+            poll = await client.call_tool("get_job_result", {"job_id": data["job_id"]})
             poll_data = json.loads(poll.content[0].text)
             if poll_data["status"] in ("completed", "failed"):
                 break
             await asyncio.sleep(0.05)
         assert poll_data["status"] == "completed"
-        inner = json.loads(poll_data["result"])
-        assert inner["name"] == "Ada Lovelace"
+        assert poll_data["result"]["name"] == "Ada Lovelace"
 
 
 @pytest.mark.respx(base_url=S2_BASE)
@@ -317,10 +314,10 @@ async def test_get_author_name_search_upstream_error(
 
 
 @pytest.mark.respx(base_url=S2_BASE)
-async def test_get_author_name_search_queued_on_429(
+async def test_get_author_name_search_deferred_on_429(
     respx_mock: respx.MockRouter, bundle: ServiceBundle
 ) -> None:
-    """get_author name search returns queued on 429, background completes."""
+    """get_author name search defers rate-limited work and returns candidates."""
     call_count = 0
 
     def _side_effect(request: httpx.Request) -> httpx.Response:
@@ -341,24 +338,20 @@ async def test_get_author_name_search_queued_on_429(
 
     app = FastMCP("test", lifespan=lifespan)
     register_search_tools(app)
-    from scholar_mcp._tools_tasks import register_task_tools
-
-    register_task_tools(app)
+    register_job_tools(app, bundle.jobs)
 
     async with Client(app) as client:
         result = await client.call_tool("get_author", {"identifier": "John Smith"})
         data = json.loads(result.content[0].text)
-        assert data["queued"] is True
-        assert data["tool"] == "get_author"
+        assert data["status"] == "working"
+        assert data["reason"] == "Semantic Scholar asked this client to retry later."
+        assert data["retry_after_s"] > 0
 
         for _ in range(40):
-            poll = await client.call_tool(
-                "get_task_result", {"task_id": data["task_id"]}
-            )
+            poll = await client.call_tool("get_job_result", {"job_id": data["job_id"]})
             poll_data = json.loads(poll.content[0].text)
             if poll_data["status"] in ("completed", "failed"):
                 break
             await asyncio.sleep(0.05)
         assert poll_data["status"] == "completed"
-        inner = json.loads(poll_data["result"])
-        assert inner["candidates"][0]["name"] == "John Smith"
+        assert poll_data["result"]["candidates"][0]["name"] == "John Smith"

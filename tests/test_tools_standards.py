@@ -12,6 +12,7 @@ import pytest
 import respx
 from fastmcp import FastMCP
 from fastmcp.client import Client
+from fastmcp_pvl_core import register_job_tools
 
 from scholar_mcp._docling_client import DoclingClient
 from scholar_mcp._server_deps import ServiceBundle
@@ -41,6 +42,7 @@ def mcp(bundle: ServiceBundle) -> FastMCP:
 
     app = FastMCP("test", lifespan=lifespan)
     register_standards_tools(app)
+    register_job_tools(app, bundle.jobs)
     return app
 
 
@@ -501,10 +503,10 @@ async def test_get_standard_alias_cache_hit_record_not_cached(
     assert data["identifier"] == "RFC 9000"
 
 
-async def test_handle_full_text_rate_limited_queues_task(
+async def test_handle_full_text_rate_limited_defers_job(
     mcp: FastMCP, bundle: ServiceBundle
 ) -> None:
-    """_handle_full_text queues a background task when docling is rate-limited."""
+    """_handle_full_text reports a job handle when docling is rate-limited."""
     from scholar_mcp._rate_limiter import RateLimitedError
 
     record = {
@@ -517,7 +519,7 @@ async def test_handle_full_text_rate_limited_queues_task(
     }
     await bundle.cache.set_standard("RFC 9000", record)
     mock_docling = MagicMock(spec=DoclingClient)
-    mock_docling.convert = AsyncMock(side_effect=RateLimitedError("rate limited"))
+    mock_docling.convert = AsyncMock(side_effect=[RateLimitedError(), "converted"])
     bundle.docling = mock_docling  # type: ignore[assignment]
 
     with respx.mock(assert_all_called=False) as mock:
@@ -529,8 +531,9 @@ async def test_handle_full_text_rate_limited_queues_task(
                 "get_standard", {"identifier": "RFC 9000", "fetch_full_text": True}
             )
     data = json.loads(result.content[0].text)
-    assert data.get("queued") is True
-    assert "task_id" in data
+    assert data["status"] == "working"
+    assert data["reason"] == "The standards source asked this client to retry later."
+    assert data["retry_after_s"] > 0
 
 
 # ---------------------------------------------------------------------------

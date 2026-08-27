@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import httpx
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
+from fastmcp_pvl_core import JOB_RETRY_AFTER_S
 
 from ._cache import normalize_isbn
 from ._chapter_parser import hint_to_dict, parse_chapter_hint
@@ -24,6 +25,14 @@ if TYPE_CHECKING:
     from ._record_types import PaperRecord
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from collections.abc import Coroutine
+
+
+async def _decode_json_result(coro: Coroutine[object, object, str]) -> object:
+    """Return a legacy JSON-producing operation as a native job result."""
+    return json.loads(await coro)
 
 
 def _attach_chapter_info(result: dict[str, Any], raw: str) -> None:
@@ -61,7 +70,7 @@ def register_utility_tools(mcp: FastMCP) -> None:
         identifiers: list[str],
         fields: Literal["compact", "standard", "full"] = "standard",
         bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
+    ) -> Any:
         """Resolve a list of paper, patent, or book identifiers to full records.
 
         Uses the S2 batch endpoint for paper IDs/DOIs, with OpenAlex fallback.
@@ -224,11 +233,13 @@ def register_utility_tools(mcp: FastMCP) -> None:
 
         try:
             return await _execute(retry=False)
-        except (RateLimitedError, EpoRateLimitedError):
-            logger.debug("rate_limited_queued tool=%s", "batch_resolve")
-            task_id = bundle.tasks.submit(_execute(retry=True), tool="batch_resolve")
-            return json.dumps(
-                {"queued": True, "task_id": task_id, "tool": "batch_resolve"}
+        except (RateLimitedError, EpoRateLimitedError) as exc:
+            logger.debug("rate_limited_deferred tool=%s", "batch_resolve")
+            return await bundle.jobs.defer(
+                _decode_json_result(_execute(retry=True)),
+                tool="batch_resolve",
+                reason="The upstream provider asked this client to retry later.",
+                retry_after_s=exc.retry_after_s or JOB_RETRY_AFTER_S,
             )
 
     @mcp.tool(
@@ -242,7 +253,7 @@ def register_utility_tools(mcp: FastMCP) -> None:
         identifier: str,
         fields: list[Literal["affiliations", "funders", "oa_status", "concepts"]],
         bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
+    ) -> Any:
         """Fetch OpenAlex metadata to supplement Semantic Scholar data.
 
         Resolves the paper's DOI from S2, then queries OpenAlex for the
@@ -310,9 +321,11 @@ def register_utility_tools(mcp: FastMCP) -> None:
 
         try:
             return await _execute(retry=False)
-        except RateLimitedError:
-            logger.debug("rate_limited_queued tool=%s", "enrich_paper")
-            task_id = bundle.tasks.submit(_execute(retry=True), tool="enrich_paper")
-            return json.dumps(
-                {"queued": True, "task_id": task_id, "tool": "enrich_paper"}
+        except RateLimitedError as exc:
+            logger.debug("rate_limited_deferred tool=%s", "enrich_paper")
+            return await bundle.jobs.defer(
+                _decode_json_result(_execute(retry=True)),
+                tool="enrich_paper",
+                reason="Semantic Scholar asked this client to retry later.",
+                retry_after_s=exc.retry_after_s or JOB_RETRY_AFTER_S,
             )

@@ -5,9 +5,11 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+from typing import TYPE_CHECKING, Any
 
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
+from fastmcp_pvl_core import JOB_RETRY_AFTER_S
 
 from ._rate_limiter import RateLimitedError
 from ._record_types import StandardRecord
@@ -15,6 +17,14 @@ from ._server_deps import ServiceBundle, get_bundle
 from ._standards_client import resolve_identifier_local
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from collections.abc import Coroutine
+
+
+async def _decode_json_result(coro: Coroutine[object, object, str]) -> object:
+    """Return a legacy JSON-producing operation as a native job result."""
+    return json.loads(await coro)
 
 
 def register_standards_tools(mcp: FastMCP) -> None:
@@ -151,7 +161,7 @@ def register_standards_tools(mcp: FastMCP) -> None:
         identifier: str,
         fetch_full_text: bool = False,
         bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
+    ) -> Any:
         """Retrieve a standard by identifier (canonical or fuzzy).
 
         Resolves fuzzy inputs (e.g. "rfc9000", "nist 800-53") to their
@@ -232,7 +242,7 @@ def register_standards_tools(mcp: FastMCP) -> None:
 async def _handle_full_text(
     record: StandardRecord,
     bundle: ServiceBundle,
-) -> str:
+) -> Any:
     """Download and convert full text via docling if available.
 
     If docling is not configured, no full_text_url is present, full_text is
@@ -241,11 +251,11 @@ async def _handle_full_text(
 
     Args:
         record: StandardRecord dict.
-        bundle: Service bundle with optional docling client and task queue.
+        bundle: Service bundle with optional docling client and Jobs service.
 
     Returns:
         JSON StandardRecord, possibly with ``full_text`` field populated,
-        or ``{"queued": true, "task_id": "..."}`` if conversion was queued.
+        or a working job handle if conversion is deferred.
     """
     if (
         not record.get("full_text_available")
@@ -275,10 +285,14 @@ async def _handle_full_text(
 
     try:
         return await _convert()
-    except RateLimitedError:
-        logger.debug("rate_limited_queued tool=%s", "get_standard")
-        task_id = bundle.tasks.submit(_convert(), tool="get_standard")
-        return json.dumps({"queued": True, "task_id": task_id, "tool": "get_standard"})
+    except RateLimitedError as exc:
+        logger.debug("rate_limited_deferred tool=%s", "get_standard")
+        return await bundle.jobs.defer(
+            _decode_json_result(_convert()),
+            tool="get_standard",
+            reason="The standards source asked this client to retry later.",
+            retry_after_s=exc.retry_after_s or JOB_RETRY_AFTER_S,
+        )
     except Exception as exc:
         logger.warning(
             "full_text_conversion_failed id=%s err=%s", record.get("identifier"), exc

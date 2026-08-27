@@ -11,10 +11,10 @@ import pytest
 import respx
 from fastmcp import FastMCP
 from fastmcp.client import Client
+from fastmcp_pvl_core import register_job_tools
 
 from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._tools_graph import register_graph_tools
-from scholar_mcp._tools_tasks import register_task_tools
 
 S2_BASE = "https://api.semanticscholar.org/graph/v1"
 
@@ -261,25 +261,25 @@ async def test_find_bridge_papers_not_found(
 
 
 @pytest.fixture
-def mcp_with_tasks(bundle: ServiceBundle) -> FastMCP:
+def mcp_with_jobs(bundle: ServiceBundle) -> FastMCP:
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
     register_graph_tools(app)
-    register_task_tools(app)
+    register_job_tools(app, bundle.jobs)
     return app
 
 
-async def _poll_task(client: Client, task_id: str, max_attempts: int = 40) -> dict:
+async def _poll_job(client: Client, job_id: str, max_attempts: int = 40) -> dict:
     for _ in range(max_attempts):
-        result = await client.call_tool("get_task_result", {"task_id": task_id})
+        result = await client.call_tool("get_job_result", {"job_id": job_id})
         data = json.loads(result.content[0].text)
         if data["status"] in ("completed", "failed"):
             return data
         await asyncio.sleep(0.05)
-    raise TimeoutError(f"task {task_id} did not complete")
+    raise TimeoutError(f"job {job_id} did not complete")
 
 
 # --- get_citations: upstream_error (non-404 HTTP error, lines 86, 93-95) ---
@@ -299,10 +299,10 @@ async def test_get_citations_upstream_error(
 
 
 @pytest.mark.respx(base_url=S2_BASE)
-async def test_get_citations_queued_on_429(
-    respx_mock: respx.MockRouter, mcp_with_tasks: FastMCP
+async def test_get_citations_deferred_on_429(
+    respx_mock: respx.MockRouter, mcp_with_jobs: FastMCP
 ) -> None:
-    """get_citations returns queued response on 429, background task completes."""
+    """get_citations defers 429 work and returns a native result mapping."""
     call_count = 0
 
     def _side_effect(request: httpx.Request) -> httpx.Response:
@@ -328,16 +328,16 @@ async def test_get_citations_queued_on_429(
 
     respx_mock.get("/paper/p1/citations").mock(side_effect=_side_effect)
 
-    async with Client(mcp_with_tasks) as client:
+    async with Client(mcp_with_jobs) as client:
         result = await client.call_tool("get_citations", {"identifier": "p1"})
         data = json.loads(result.content[0].text)
-        assert data["queued"] is True
-        assert data["tool"] == "get_citations"
+        assert data["status"] == "working"
+        assert data["reason"] == "Semantic Scholar asked this client to retry later."
+        assert data["retry_after_s"] > 0
 
-        task_data = await _poll_task(client, data["task_id"])
-    assert task_data["status"] == "completed"
-    inner = json.loads(task_data["result"])
-    assert inner["data"][0]["citingPaper"]["paperId"] == "c1"
+        job_data = await _poll_job(client, data["job_id"])
+    assert job_data["status"] == "completed"
+    assert job_data["result"]["data"][0]["citingPaper"]["paperId"] == "c1"
 
 
 # --- get_references: error paths (lines 134-137, 144-146) ---
@@ -370,10 +370,10 @@ async def test_get_references_upstream_error(
 
 
 @pytest.mark.respx(base_url=S2_BASE)
-async def test_get_references_queued_on_429(
-    respx_mock: respx.MockRouter, mcp_with_tasks: FastMCP
+async def test_get_references_deferred_on_429(
+    respx_mock: respx.MockRouter, mcp_with_jobs: FastMCP
 ) -> None:
-    """get_references returns queued response on 429, then completes."""
+    """get_references defers 429 work and returns a native result mapping."""
     call_count = 0
 
     def _side_effect(request: httpx.Request) -> httpx.Response:
@@ -399,16 +399,16 @@ async def test_get_references_queued_on_429(
 
     respx_mock.get("/paper/p1/references").mock(side_effect=_side_effect)
 
-    async with Client(mcp_with_tasks) as client:
+    async with Client(mcp_with_jobs) as client:
         result = await client.call_tool("get_references", {"identifier": "p1"})
         data = json.loads(result.content[0].text)
-        assert data["queued"] is True
-        assert data["tool"] == "get_references"
+        assert data["status"] == "working"
+        assert data["reason"] == "Semantic Scholar asked this client to retry later."
+        assert data["retry_after_s"] > 0
 
-        task_data = await _poll_task(client, data["task_id"])
-    assert task_data["status"] == "completed"
-    inner = json.loads(task_data["result"])
-    assert inner["data"][0]["citedPaper"]["paperId"] == "r1"
+        job_data = await _poll_job(client, data["job_id"])
+    assert job_data["status"] == "completed"
+    assert job_data["result"]["data"][0]["citedPaper"]["paperId"] == "r1"
 
 
 # --- get_citation_graph: references branch (lines 252-282) ---
@@ -538,14 +538,14 @@ async def test_get_citation_graph_both_direction(
     assert data["stats"]["total_nodes"] == 3
 
 
-# --- get_citation_graph: RateLimitedError queueing (lines 317-319) ---
+# --- get_citation_graph: RateLimitedError deferral ---
 
 
 @pytest.mark.respx(base_url=S2_BASE)
-async def test_get_citation_graph_queued_on_429(
-    respx_mock: respx.MockRouter, mcp_with_tasks: FastMCP
+async def test_get_citation_graph_deferred_on_429(
+    respx_mock: respx.MockRouter, mcp_with_jobs: FastMCP
 ) -> None:
-    """get_citation_graph queues on 429 and background task completes."""
+    """get_citation_graph defers 429 work and returns graph data."""
     batch_call_count = 0
 
     def _batch_side_effect(request: httpx.Request) -> httpx.Response:
@@ -579,7 +579,7 @@ async def test_get_citation_graph_queued_on_429(
         )
     )
 
-    async with Client(mcp_with_tasks) as client:
+    async with Client(mcp_with_jobs) as client:
         result = await client.call_tool(
             "get_citation_graph",
             {
@@ -590,13 +590,13 @@ async def test_get_citation_graph_queued_on_429(
             },
         )
         data = json.loads(result.content[0].text)
-        assert data["queued"] is True
-        assert data["tool"] == "get_citation_graph"
+        assert data["status"] == "working"
+        assert data["reason"] == "Semantic Scholar asked this client to retry later."
+        assert data["retry_after_s"] > 0
 
-        task_data = await _poll_task(client, data["task_id"])
-    assert task_data["status"] == "completed"
-    inner = json.loads(task_data["result"])
-    assert "c1" in {n["id"] for n in inner["nodes"]}
+        job_data = await _poll_job(client, data["job_id"])
+    assert job_data["status"] == "completed"
+    assert "c1" in {n["id"] for n in job_data["result"]["nodes"]}
 
 
 # --- find_bridge_papers: citations branch of _get_neighbours (lines 379-401) ---
@@ -668,14 +668,14 @@ async def test_find_bridge_papers_both_direction(
     assert ids == ["p1", "p2"]
 
 
-# --- find_bridge_papers: RateLimitedError queueing (lines 429-431) ---
+# --- find_bridge_papers: RateLimitedError deferral ---
 
 
 @pytest.mark.respx(base_url=S2_BASE)
-async def test_find_bridge_papers_queued_on_429(
-    respx_mock: respx.MockRouter, mcp_with_tasks: FastMCP
+async def test_find_bridge_papers_deferred_on_429(
+    respx_mock: respx.MockRouter, mcp_with_jobs: FastMCP
 ) -> None:
-    """find_bridge_papers queues on 429 and background task completes."""
+    """find_bridge_papers defers 429 work and returns path data."""
     call_count = 0
 
     def _side_effect(request: httpx.Request) -> httpx.Response:
@@ -694,7 +694,7 @@ async def test_find_bridge_papers_queued_on_429(
 
     respx_mock.get("/paper/p1/references").mock(side_effect=_side_effect)
 
-    async with Client(mcp_with_tasks) as client:
+    async with Client(mcp_with_jobs) as client:
         result = await client.call_tool(
             "find_bridge_papers",
             {
@@ -705,13 +705,13 @@ async def test_find_bridge_papers_queued_on_429(
             },
         )
         data = json.loads(result.content[0].text)
-        assert data["queued"] is True
-        assert data["tool"] == "find_bridge_papers"
+        assert data["status"] == "working"
+        assert data["reason"] == "Semantic Scholar asked this client to retry later."
+        assert data["retry_after_s"] > 0
 
-        task_data = await _poll_task(client, data["task_id"])
-    assert task_data["status"] == "completed"
-    inner = json.loads(task_data["result"])
-    assert inner["found"] is True
+        job_data = await _poll_job(client, data["job_id"])
+    assert job_data["status"] == "completed"
+    assert job_data["result"]["found"] is True
 
 
 # --- find_bridge_papers: HTTP error in _get_neighbours (lines 379-380, 399-400) ---

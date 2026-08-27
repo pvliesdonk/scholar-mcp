@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Literal
+from typing import Any, Literal
 
 import httpx
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
+from fastmcp_pvl_core import JOB_RETRY_AFTER_S
 
 from ._rate_limiter import RateLimitedError
 from ._s2_client import FIELD_SETS, format_s2_error
@@ -43,7 +44,7 @@ def register_search_tools(mcp: FastMCP) -> None:
         min_citations: int | None = None,
         sort: Literal["relevance", "citations", "year"] = "relevance",
         bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
+    ) -> Any:
         """Search Semantic Scholar for papers matching a query.
 
         Args:
@@ -76,7 +77,7 @@ def register_search_tools(mcp: FastMCP) -> None:
         }.get(sort)
         fos = ",".join(fields_of_study) if fields_of_study else None
 
-        async def _execute(*, retry: bool = True) -> str:
+        async def _execute(*, retry: bool = True) -> Any:
             try:
                 result = await bundle.s2.search_papers(
                     query,
@@ -92,17 +93,19 @@ def register_search_tools(mcp: FastMCP) -> None:
                 )
             except httpx.HTTPStatusError as exc:
                 if exc.response.status_code == 404:
-                    return json.dumps({"error": "not_found", "identifier": query})
-                return format_s2_error(exc)
-            return json.dumps(result)
+                    return {"error": "not_found", "identifier": query}
+                return json.loads(format_s2_error(exc))
+            return result
 
         try:
-            return await _execute(retry=False)
-        except RateLimitedError:
-            logger.debug("rate_limited_queued tool=%s", "search_papers")
-            task_id = bundle.tasks.submit(_execute(retry=True), tool="search_papers")
-            return json.dumps(
-                {"queued": True, "task_id": task_id, "tool": "search_papers"}
+            return json.dumps(await _execute(retry=False))
+        except RateLimitedError as exc:
+            logger.debug("rate_limited_deferred tool=%s", "search_papers")
+            return await bundle.jobs.defer(
+                _execute(retry=True),
+                tool="search_papers",
+                reason="Semantic Scholar asked this client to retry later.",
+                retry_after_s=exc.retry_after_s or JOB_RETRY_AFTER_S,
             )
 
     @mcp.tool(
@@ -115,7 +118,7 @@ def register_search_tools(mcp: FastMCP) -> None:
     async def get_paper(
         identifier: str,
         bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
+    ) -> Any:
         """Fetch full metadata for a single paper.
 
         Args:
@@ -134,13 +137,13 @@ def register_search_tools(mcp: FastMCP) -> None:
             await bundle.enrichment.enrich([data], bundle, tags=frozenset({"papers"}))
             return json.dumps(data)
 
-        async def _execute(*, retry: bool = True) -> str:
+        async def _execute(*, retry: bool = True) -> Any:
             try:
                 fetched = await bundle.s2.get_paper(identifier, retry=retry)
             except httpx.HTTPStatusError as exc:
                 if exc.response.status_code == 404:
-                    return json.dumps({"error": "not_found", "identifier": identifier})
-                return format_s2_error(exc)
+                    return {"error": "not_found", "identifier": identifier}
+                return json.loads(format_s2_error(exc))
 
             paper_id: str = fetched.get("paperId") or ""
             if paper_id:
@@ -151,14 +154,18 @@ def register_search_tools(mcp: FastMCP) -> None:
             await bundle.enrichment.enrich(
                 [fetched], bundle, tags=frozenset({"papers"})
             )
-            return json.dumps(fetched)
+            return fetched
 
         try:
-            return await _execute(retry=False)
-        except RateLimitedError:
-            logger.debug("rate_limited_queued tool=%s", "get_paper")
-            task_id = bundle.tasks.submit(_execute(retry=True), tool="get_paper")
-            return json.dumps({"queued": True, "task_id": task_id, "tool": "get_paper"})
+            return json.dumps(await _execute(retry=False))
+        except RateLimitedError as exc:
+            logger.debug("rate_limited_deferred tool=%s", "get_paper")
+            return await bundle.jobs.defer(
+                _execute(retry=True),
+                tool="get_paper",
+                reason="Semantic Scholar asked this client to retry later.",
+                retry_after_s=exc.retry_after_s or JOB_RETRY_AFTER_S,
+            )
 
     @mcp.tool(
         annotations={
@@ -172,7 +179,7 @@ def register_search_tools(mcp: FastMCP) -> None:
         limit: int = 20,
         offset: int = 0,
         bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
+    ) -> Any:
         """Fetch author profile and publications, or search by name.
 
         If *identifier* looks like a numeric S2 author ID, fetches the author
@@ -196,49 +203,47 @@ def register_search_tools(mcp: FastMCP) -> None:
                 if cached:
                     return json.dumps(cached)
 
-            async def _execute_author(*, retry: bool = True) -> str:
+            async def _execute_author(*, retry: bool = True) -> Any:
                 try:
                     data = await bundle.s2.get_author(
                         identifier, limit=limit, offset=offset, retry=retry
                     )
                 except httpx.HTTPStatusError as exc:
                     if exc.response.status_code == 404:
-                        return json.dumps(
-                            {"error": "not_found", "identifier": identifier}
-                        )
-                    return format_s2_error(exc)
+                        return {"error": "not_found", "identifier": identifier}
+                    return json.loads(format_s2_error(exc))
                 if offset == 0:
                     await bundle.cache.set_author(identifier, data)
-                return json.dumps(data)
+                return data
 
             try:
-                return await _execute_author(retry=False)
-            except RateLimitedError:
-                logger.debug("rate_limited_queued tool=%s", "get_author")
-                task_id = bundle.tasks.submit(
-                    _execute_author(retry=True), tool="get_author"
-                )
-                return json.dumps(
-                    {"queued": True, "task_id": task_id, "tool": "get_author"}
+                return json.dumps(await _execute_author(retry=False))
+            except RateLimitedError as exc:
+                logger.debug("rate_limited_deferred tool=%s", "get_author")
+                return await bundle.jobs.defer(
+                    _execute_author(retry=True),
+                    tool="get_author",
+                    reason="Semantic Scholar asked this client to retry later.",
+                    retry_after_s=exc.retry_after_s or JOB_RETRY_AFTER_S,
                 )
 
         # Name search — return candidates for disambiguation
-        async def _execute_search(*, retry: bool = True) -> str:
+        async def _execute_search(*, retry: bool = True) -> Any:
             try:
                 candidates = await bundle.s2.search_authors(
                     identifier, limit=5, retry=retry
                 )
             except httpx.HTTPStatusError as exc:
-                return format_s2_error(exc)
-            return json.dumps({"candidates": candidates})
+                return json.loads(format_s2_error(exc))
+            return {"candidates": candidates}
 
         try:
-            return await _execute_search(retry=False)
-        except RateLimitedError:
-            logger.debug("rate_limited_queued tool=%s", "get_author")
-            task_id = bundle.tasks.submit(
-                _execute_search(retry=True), tool="get_author"
-            )
-            return json.dumps(
-                {"queued": True, "task_id": task_id, "tool": "get_author"}
+            return json.dumps(await _execute_search(retry=False))
+        except RateLimitedError as exc:
+            logger.debug("rate_limited_deferred tool=%s", "get_author")
+            return await bundle.jobs.defer(
+                _execute_search(retry=True),
+                tool="get_author",
+                reason="Semantic Scholar asked this client to retry later.",
+                retry_after_s=exc.retry_after_s or JOB_RETRY_AFTER_S,
             )

@@ -11,11 +11,11 @@ import pytest
 import respx
 from fastmcp import FastMCP
 from fastmcp.client import Client
+from fastmcp_pvl_core import register_job_tools
 
 from scholar_mcp._rate_limiter import RateLimitedError, RateLimiter, with_s2_try_once
 from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._tools_search import register_search_tools
-from scholar_mcp._tools_tasks import register_task_tools
 
 S2_BASE = "https://api.semanticscholar.org/graph/v1"
 
@@ -46,6 +46,20 @@ async def test_try_once_raises_rate_limited() -> None:
         await with_s2_try_once(_rate_limited, limiter)
 
 
+async def test_try_once_preserves_positive_retry_after() -> None:
+    """with_s2_try_once exposes a numeric upstream retry interval."""
+    limiter = RateLimiter(delay=0.0)
+
+    async def _rate_limited() -> dict:
+        request = httpx.Request("GET", "http://test")
+        response = httpx.Response(429, headers={"Retry-After": "2.5"}, request=request)
+        raise httpx.HTTPStatusError("", request=request, response=response)
+
+    with pytest.raises(RateLimitedError) as exc_info:
+        await with_s2_try_once(_rate_limited, limiter)
+    assert exc_info.value.retry_after_s == 2.5
+
+
 async def test_try_once_propagates_other_errors() -> None:
     """with_s2_try_once re-raises non-429 errors."""
     limiter = RateLimiter(delay=0.0)
@@ -61,21 +75,21 @@ async def test_try_once_propagates_other_errors() -> None:
 # --- Integration tests for S2 tool queueing ---
 
 
-async def _poll_task(client: Client, task_id: str, max_attempts: int = 40) -> dict:
+async def _poll_job(client: Client, job_id: str, max_attempts: int = 40) -> dict:
     for _ in range(max_attempts):
-        result = await client.call_tool("get_task_result", {"task_id": task_id})
+        result = await client.call_tool("get_job_result", {"job_id": job_id})
         data = json.loads(result.content[0].text)
         if data["status"] in ("completed", "failed"):
             return data
         await asyncio.sleep(0.05)
-    raise TimeoutError(f"task {task_id} did not complete")
+    raise TimeoutError(f"job {job_id} did not complete")
 
 
 @pytest.mark.respx(base_url=S2_BASE)
-async def test_search_papers_queued_on_429(
+async def test_search_papers_deferred_on_429(
     respx_mock: respx.MockRouter, bundle: ServiceBundle
 ) -> None:
-    """search_papers returns queued response on 429, then background succeeds."""
+    """search_papers defers 429 work and returns its native result when complete."""
     call_count = 0
 
     def _side_effect(request: httpx.Request) -> httpx.Response:
@@ -93,21 +107,23 @@ async def test_search_papers_queued_on_429(
 
     app = FastMCP("test", lifespan=lifespan)
     register_search_tools(app)
-    register_task_tools(app)
+    register_job_tools(app, bundle.jobs)
 
     async with Client(app) as client:
         result = await client.call_tool(
             "search_papers", {"query": "test", "fields": "compact"}
         )
         data = json.loads(result.content[0].text)
-        assert data["queued"] is True
-        assert data["tool"] == "search_papers"
+        assert data["status"] == "working"
+        assert data["poll_with"] == "get_job_result"
+        assert data["reason"] == "Semantic Scholar asked this client to retry later."
+        assert "job_id" in data
+        assert data["retry_after_s"] > 0
 
         # Poll for background result
-        task_data = await _poll_task(client, data["task_id"])
-    assert task_data["status"] == "completed"
-    inner = json.loads(task_data["result"])
-    assert inner["data"][0]["title"] == "Paper1"
+        job_data = await _poll_job(client, data["job_id"])
+    assert job_data["status"] == "completed"
+    assert job_data["result"]["data"][0]["title"] == "Paper1"
 
 
 @pytest.mark.respx(base_url=S2_BASE)
@@ -133,15 +149,14 @@ async def test_search_papers_direct_on_success(
             "search_papers", {"query": "test", "fields": "compact"}
         )
     data = json.loads(result.content[0].text)
-    assert "queued" not in data
     assert data["data"][0]["title"] == "Paper1"
 
 
 @pytest.mark.respx(base_url=S2_BASE)
-async def test_get_paper_queued_on_429(
+async def test_get_paper_deferred_on_429(
     respx_mock: respx.MockRouter, bundle: ServiceBundle
 ) -> None:
-    """get_paper returns queued response on 429, background task completes."""
+    """get_paper defers rate-limited work and returns the completed paper."""
     call_count = 0
 
     def _side_effect(request: httpx.Request) -> httpx.Response:
@@ -159,18 +174,18 @@ async def test_get_paper_queued_on_429(
 
     app = FastMCP("test", lifespan=lifespan)
     register_search_tools(app)
-    register_task_tools(app)
+    register_job_tools(app, bundle.jobs)
 
     async with Client(app) as client:
         result = await client.call_tool("get_paper", {"identifier": "x1"})
         data = json.loads(result.content[0].text)
-        assert data["queued"] is True
-        assert data["tool"] == "get_paper"
+        assert data["status"] == "working"
+        assert data["reason"] == "Semantic Scholar asked this client to retry later."
+        assert data["retry_after_s"] > 0
 
-        task_data = await _poll_task(client, data["task_id"])
-    assert task_data["status"] == "completed"
-    inner = json.loads(task_data["result"])
-    assert inner["title"] == "Delayed"
+        job_data = await _poll_job(client, data["job_id"])
+    assert job_data["status"] == "completed"
+    assert job_data["result"]["title"] == "Delayed"
 
 
 @pytest.mark.respx(base_url=S2_BASE)
@@ -190,5 +205,4 @@ async def test_get_paper_cached_returns_direct(
     async with Client(app) as client:
         result = await client.call_tool("get_paper", {"identifier": "abc123"})
     data = json.loads(result.content[0].text)
-    assert "queued" not in data
     assert data["title"] == "Cached"

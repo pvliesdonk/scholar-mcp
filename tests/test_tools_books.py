@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from contextlib import asynccontextmanager
 from dataclasses import replace
@@ -11,6 +12,7 @@ import pytest
 import respx
 from fastmcp import FastMCP
 from fastmcp.client import Client
+from fastmcp_pvl_core import register_job_tools
 
 from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._tools_books import register_book_tools
@@ -525,15 +527,15 @@ async def test_recommend_books_empty_subject(
     assert data == []
 
 
-async def test_search_books_queued_on_rate_limit(
+async def test_search_books_deferred_on_rate_limit(
     bundle: ServiceBundle,
 ) -> None:
-    """search_books returns queued response when rate-limited."""
+    """search_books reports an Open Library rate-limit deferral."""
     from unittest.mock import AsyncMock
 
     from scholar_mcp._rate_limiter import RateLimitedError
 
-    bundle.openlibrary.search = AsyncMock(side_effect=RateLimitedError())
+    bundle.openlibrary.search = AsyncMock(side_effect=[RateLimitedError(), [], []])
 
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
@@ -541,23 +543,32 @@ async def test_search_books_queued_on_rate_limit(
 
     app = FastMCP("test", lifespan=lifespan)
     register_book_tools(app)
+    register_job_tools(app, bundle.jobs)
 
     async with Client(app) as client:
         result = await client.call_tool("search_books", {"query": "test"})
-    data = json.loads(result.content[0].text)
-    assert data["queued"] is True
-    assert data["tool"] == "search_books"
+        data = json.loads(result.content[0].text)
+        assert data["status"] == "working"
+        assert data["reason"] == "Open Library asked this client to retry later."
+        for _ in range(40):
+            poll = await client.call_tool("get_job_result", {"job_id": data["job_id"]})
+            poll_data = json.loads(poll.content[0].text)
+            if poll_data["status"] in ("completed", "failed"):
+                break
+            await asyncio.sleep(0.05)
+    assert poll_data["status"] == "completed"
+    assert poll_data["result"]["value"] == []
 
 
-async def test_get_book_queued_on_rate_limit(
+async def test_get_book_deferred_on_rate_limit(
     bundle: ServiceBundle,
 ) -> None:
-    """get_book returns queued response when rate-limited."""
+    """get_book reports an Open Library rate-limit deferral."""
     from unittest.mock import AsyncMock
 
     from scholar_mcp._rate_limiter import RateLimitedError
 
-    bundle.openlibrary.get_by_isbn = AsyncMock(side_effect=RateLimitedError())
+    bundle.openlibrary.get_by_isbn = AsyncMock(side_effect=[RateLimitedError(), None])
 
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
@@ -565,12 +576,21 @@ async def test_get_book_queued_on_rate_limit(
 
     app = FastMCP("test", lifespan=lifespan)
     register_book_tools(app)
+    register_job_tools(app, bundle.jobs)
 
     async with Client(app) as client:
         result = await client.call_tool("get_book", {"identifier": "9780201633610"})
-    data = json.loads(result.content[0].text)
-    assert data["queued"] is True
-    assert data["tool"] == "get_book"
+        data = json.loads(result.content[0].text)
+        assert data["status"] == "working"
+        assert data["reason"] == "Open Library asked this client to retry later."
+        for _ in range(40):
+            poll = await client.call_tool("get_job_result", {"job_id": data["job_id"]})
+            poll_data = json.loads(poll.content[0].text)
+            if poll_data["status"] in ("completed", "failed"):
+                break
+            await asyncio.sleep(0.05)
+    assert poll_data["status"] == "completed"
+    assert poll_data["result"]["error"] == "not_found"
 
 
 COVERS_BASE = "https://covers.openlibrary.org"

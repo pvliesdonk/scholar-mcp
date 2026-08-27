@@ -19,6 +19,11 @@ class RateLimitedError(Exception):
     Signals the caller to queue the operation for background retry.
     """
 
+    def __init__(self, *, retry_after_s: float | None = None) -> None:
+        """Initialize the exception with an optional upstream retry interval."""
+        self.retry_after_s = retry_after_s
+        super().__init__("upstream rate limited the request")
+
 
 @dataclass
 class RateLimiter:
@@ -108,5 +113,12 @@ async def with_s2_try_once(
         return await coro_func()
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 429:
-            raise RateLimitedError() from exc
+            retry_after = exc.response.headers.get("Retry-After")
+            try:
+                retry_after_s = float(retry_after) if retry_after is not None else None
+            except ValueError:
+                retry_after_s = None
+            if retry_after_s is not None and retry_after_s <= 0:
+                retry_after_s = None
+            raise RateLimitedError(retry_after_s=retry_after_s) from exc
         raise

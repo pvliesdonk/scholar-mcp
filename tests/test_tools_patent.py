@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastmcp import FastMCP
 from fastmcp.client import Client
+from fastmcp_pvl_core import register_job_tools
 
 from scholar_mcp._docling_client import DoclingClient
 from scholar_mcp._epo_client import EpoClient, EpoRateLimitedError
@@ -330,10 +331,10 @@ async def test_search_patents_different_offsets_different_cache_entries(
     assert cached1 != cached2
 
 
-async def test_search_patents_rate_limited_queues(
+async def test_search_patents_rate_limit_defers(
     bundle: ServiceBundle,
 ) -> None:
-    """search_patents queues the task when EPO rate-limits the request."""
+    """search_patents defers EPO work and reports the throttle status."""
     call_count = 0
 
     async def _flaky_search(*args, **kwargs):  # type: ignore[no-untyped-def]
@@ -353,28 +354,27 @@ async def test_search_patents_rate_limited_queues(
 
     app = FastMCP("test", lifespan=lifespan)
     register_patent_tools(app)
-    from scholar_mcp._tools_tasks import register_task_tools
-
-    register_task_tools(app)
+    register_job_tools(app, bundle.jobs)
 
     async with Client(app) as client:
         result = await client.call_tool("search_patents", {"query": "throttled query"})
         data = json.loads(result.content[0].text)
-        assert data["queued"] is True
-        assert data["tool"] == "search_patents"
+        assert data["status"] == "working"
+        assert (
+            data["reason"]
+            == "EPO OPS asked this client to retry later (status: yellow)."
+        )
+        assert data["retry_after_s"] > 0
 
         # Poll for background result
         for _ in range(40):
-            poll = await client.call_tool(
-                "get_task_result", {"task_id": data["task_id"]}
-            )
+            poll = await client.call_tool("get_job_result", {"job_id": data["job_id"]})
             poll_data = json.loads(poll.content[0].text)
             if poll_data["status"] in ("completed", "failed"):
                 break
             await asyncio.sleep(0.05)
         assert poll_data["status"] == "completed"
-        inner = json.loads(poll_data["result"])
-        assert inner["total_count"] == 1
+        assert poll_data["result"]["total_count"] == 1
 
 
 async def test_search_patents_with_filters(
@@ -647,10 +647,10 @@ async def test_get_patent_not_found_without_biblio_section(
     assert data["error"] == "patent_not_found"
 
 
-async def test_get_patent_rate_limited_queues(
+async def test_get_patent_rate_limit_defers(
     bundle: ServiceBundle,
 ) -> None:
-    """get_patent queues the task when EPO rate-limits the request."""
+    """get_patent defers EPO work and reports the throttle status."""
     call_count = 0
 
     async def _flaky_biblio(*args, **kwargs):  # type: ignore[no-untyped-def]
@@ -670,27 +670,25 @@ async def test_get_patent_rate_limited_queues(
 
     app = FastMCP("test", lifespan=lifespan)
     register_patent_tools(app)
-    from scholar_mcp._tools_tasks import register_task_tools
-
-    register_task_tools(app)
+    register_job_tools(app, bundle.jobs)
 
     async with Client(app) as client:
         result = await client.call_tool("get_patent", {"patent_number": "EP1234567A1"})
         data = json.loads(result.content[0].text)
-        assert data["queued"] is True
-        assert data["tool"] == "get_patent"
+        assert data["status"] == "working"
+        assert (
+            data["reason"] == "EPO OPS asked this client to retry later (status: red)."
+        )
+        assert data["retry_after_s"] > 0
 
         for _ in range(40):
-            poll = await client.call_tool(
-                "get_task_result", {"task_id": data["task_id"]}
-            )
+            poll = await client.call_tool("get_job_result", {"job_id": data["job_id"]})
             poll_data = json.loads(poll.content[0].text)
             if poll_data["status"] in ("completed", "failed"):
                 break
             await asyncio.sleep(0.05)
         assert poll_data["status"] == "completed"
-        inner = json.loads(poll_data["result"])
-        assert inner["biblio"]["title"] == "Test Patent"
+        assert poll_data["result"]["biblio"]["title"] == "Test Patent"
 
 
 async def test_get_patent_no_epo_client_returns_error(
@@ -988,10 +986,10 @@ async def test_get_citing_patents_no_epo_returns_error(
     assert data["error"] == "epo_not_configured"
 
 
-async def test_get_citing_patents_rate_limited_queues(
+async def test_get_citing_patents_rate_limit_defers(
     bundle: ServiceBundle,
 ) -> None:
-    """get_citing_patents queues on rate limit."""
+    """get_citing_patents reports an EPO rate-limit deferral."""
     epo = _make_epo_client(raise_on_search=EpoRateLimitedError("red"))
     bundle.epo = epo
 
@@ -1001,6 +999,7 @@ async def test_get_citing_patents_rate_limited_queues(
 
     app = FastMCP("test", lifespan=lifespan)
     register_patent_tools(app)
+    register_job_tools(app, bundle.jobs)
 
     async with Client(app) as client:
         result = await client.call_tool(
@@ -1008,8 +1007,9 @@ async def test_get_citing_patents_rate_limited_queues(
             {"paper_id": "10.1234/test"},
         )
     data = json.loads(result.content[0].text)
-    assert data["queued"] is True
-    assert data["tool"] == "get_citing_patents"
+    assert data["status"] == "working"
+    assert data["reason"] == "EPO OPS asked this client to retry later (status: red)."
+    assert data["retry_after_s"] > 0
 
 
 # ---------------------------------------------------------------------------

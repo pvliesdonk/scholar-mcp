@@ -6,10 +6,12 @@ import asyncio
 import json
 import logging
 import re
+from typing import TYPE_CHECKING, Any
 
 import httpx
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
+from fastmcp_pvl_core import JOB_RETRY_AFTER_S
 
 from ._book_enrichment import enrich_authors_from_work
 from ._cache import normalize_isbn
@@ -23,6 +25,15 @@ from ._record_types import BookRecord
 from ._server_deps import ServiceBundle, get_bundle
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from collections.abc import Coroutine
+
+
+async def _decode_json_result(coro: Coroutine[object, object, str]) -> object:
+    """Return a legacy JSON-producing operation as a native job result."""
+    return json.loads(await coro)
+
 
 # Patterns for detecting identifier types.
 _OL_WORK_RE = re.compile(r"^OL\d+W$")
@@ -49,7 +60,7 @@ def register_book_tools(mcp: FastMCP) -> None:
         author: str | None = None,
         limit: int = 10,
         bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
+    ) -> Any:
         """Search for books by title, author, or free text.
 
         Uses Open Library. Prefer ``title`` and ``author`` over ``query``
@@ -137,11 +148,13 @@ def register_book_tools(mcp: FastMCP) -> None:
 
         try:
             return await _execute(retry=False)
-        except RateLimitedError:
-            logger.debug("rate_limited_queued tool=%s", "search_books")
-            task_id = bundle.tasks.submit(_execute(retry=True), tool="search_books")
-            return json.dumps(
-                {"queued": True, "task_id": task_id, "tool": "search_books"}
+        except RateLimitedError as exc:
+            logger.debug("rate_limited_deferred tool=%s", "search_books")
+            return await bundle.jobs.defer(
+                _decode_json_result(_execute(retry=True)),
+                tool="search_books",
+                reason="Open Library asked this client to retry later.",
+                retry_after_s=exc.retry_after_s or JOB_RETRY_AFTER_S,
             )
 
     @mcp.tool(
@@ -157,7 +170,7 @@ def register_book_tools(mcp: FastMCP) -> None:
         download_cover: bool = False,
         cover_size: str = "M",
         bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
+    ) -> Any:
         """Fetch book metadata by ISBN or Open Library ID.
 
         Args:
@@ -187,10 +200,14 @@ def register_book_tools(mcp: FastMCP) -> None:
 
         try:
             raw = await _execute(retry=False)
-        except RateLimitedError:
-            logger.debug("rate_limited_queued tool=%s", "get_book")
-            task_id = bundle.tasks.submit(_execute(retry=True), tool="get_book")
-            return json.dumps({"queued": True, "task_id": task_id, "tool": "get_book"})
+        except RateLimitedError as exc:
+            logger.debug("rate_limited_deferred tool=%s", "get_book")
+            return await bundle.jobs.defer(
+                _decode_json_result(_execute(retry=True)),
+                tool="get_book",
+                reason="Open Library asked this client to retry later.",
+                retry_after_s=exc.retry_after_s or JOB_RETRY_AFTER_S,
+            )
 
         result = json.loads(raw)
 
