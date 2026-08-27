@@ -1269,6 +1269,30 @@ def test_fetch_patent_pdf_runs_inline(bundle: ServiceBundle) -> None:
     assert "task_id" not in data
 
 
+async def test_fetch_patent_pdf_supports_optional_native_tasks(
+    bundle: ServiceBundle,
+) -> None:
+    """fetch_patent_pdf accepts native task execution."""
+    epo = _make_epo_client()
+    epo.get_pdf = AsyncMock(return_value=b"%PDF native task")  # type: ignore[method-assign]
+    bundle.epo = epo
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_patent_tools(app)
+    assert (await app.get_tool("fetch_patent_pdf")).task_config.mode == "optional"
+
+    async with Client(app) as client:
+        task = await client.call_tool(
+            "fetch_patent_pdf", {"patent_number": "EP3491801B1"}, task=True
+        )
+        result = await task.result()
+    assert json.loads(result.content[0].text)["pdf_path"].endswith(".pdf")
+
+
 def test_fetch_patent_pdf_cache_hit_returns_pdf_path(bundle: ServiceBundle) -> None:
     """fetch_patent_pdf returns cached PDF path immediately when file already exists."""
     epo = _make_epo_client()

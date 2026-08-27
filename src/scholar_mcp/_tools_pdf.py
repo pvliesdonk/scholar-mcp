@@ -187,7 +187,7 @@ def register_pdf_tools(mcp: FastMCP) -> None:
         # PDF not cached — run the download, passing resolved alt to
         # avoid a duplicate Unpaywall lookup inside _download.
         return await bundle.jobs.run_with_deadline(
-            _download(paper, resolved=alt),
+            _decode_json_result(_download(paper, resolved=alt)),
             tool="fetch_paper_pdf",
         )
 
@@ -279,7 +279,7 @@ def register_pdf_tools(mcp: FastMCP) -> None:
             return json.dumps(result)
 
         return await bundle.jobs.run_with_deadline(
-            _execute(), tool="convert_pdf_to_markdown"
+            _decode_json_result(_execute()), tool="convert_pdf_to_markdown"
         )
 
     @mcp.tool(
@@ -409,7 +409,9 @@ def register_pdf_tools(mcp: FastMCP) -> None:
                 result["vlm_skip_reason"] = skip_reason
             return json.dumps(result)
 
-        return await bundle.jobs.run_with_deadline(_execute(), tool="fetch_and_convert")
+        return await bundle.jobs.run_with_deadline(
+            _decode_json_result(_execute()), tool="fetch_and_convert"
+        )
 
     @mcp.tool(
         task=TaskConfig(mode="optional"),
@@ -562,4 +564,6 @@ def register_pdf_tools(mcp: FastMCP) -> None:
                 result["vlm_skip_reason"] = skip_reason
             return json.dumps(result)
 
-        return await bundle.jobs.run_with_deadline(_execute(), tool="fetch_pdf_by_url")
+        return await bundle.jobs.run_with_deadline(
+            _decode_json_result(_execute()), tool="fetch_pdf_by_url"
+        )

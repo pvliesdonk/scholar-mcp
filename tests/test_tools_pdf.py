@@ -166,9 +166,13 @@ async def test_fetch_paper_pdf_runs_inline_or_promotes_after_deadline(
             poll = await client.call_tool(
                 "get_job_result", {"job_id": promoted_payload["job_id"]}
             )
-            if json.loads(poll.content[0].text)["status"] != "working":
+            terminal_payload = json.loads(poll.content[0].text)
+            if terminal_payload["status"] != "working":
                 break
             await asyncio.sleep(0.05)
+    assert terminal_payload["status"] == "completed"
+    assert isinstance(terminal_payload["result"], dict)
+    assert terminal_payload["result"]["source"] == "s2_oa"
 
 
 async def test_pdf_tools_support_optional_native_tasks(mcp_no_docling: FastMCP) -> None:

@@ -190,6 +190,29 @@ async def test_get_standard_by_fuzzy_id(
     assert data["full_text_available"] is True
 
 
+async def test_get_standard_supports_optional_native_tasks(
+    mcp: FastMCP, bundle: ServiceBundle
+) -> None:
+    """get_standard accepts native task execution."""
+    await bundle.cache.set_standard(
+        "RFC 9000",
+        {
+            "identifier": "RFC 9000",
+            "title": "QUIC",
+            "body": "IETF",
+            "full_text_available": False,
+        },
+    )
+    assert (await mcp.get_tool("get_standard")).task_config.mode == "optional"
+
+    async with Client(mcp) as client:
+        task = await client.call_tool(
+            "get_standard", {"identifier": "RFC 9000"}, task=True
+        )
+        result = await task.result()
+    assert json.loads(result.content[0].text)["identifier"] == "RFC 9000"
+
+
 @pytest.mark.respx(base_url=IETF_BASE)
 async def test_get_standard_caches_result(
     respx_mock: respx.MockRouter, mcp: FastMCP, bundle: ServiceBundle

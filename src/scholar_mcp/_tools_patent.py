@@ -555,7 +555,9 @@ def register_patent_tools(mcp: FastMCP) -> None:
                 result["vlm_skip_reason"] = skip_reason
             return json.dumps(result)
 
-        return await bundle.jobs.run_with_deadline(_execute(), tool="fetch_patent_pdf")
+        return await bundle.jobs.run_with_deadline(
+            _decode_json_result(_execute()), tool="fetch_patent_pdf"
+        )
 
 
 # All available patent sections.

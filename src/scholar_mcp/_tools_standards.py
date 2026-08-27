@@ -286,7 +286,9 @@ async def _handle_full_text(
         return json.dumps(enriched)
 
     try:
-        return await bundle.jobs.run_with_deadline(_convert(), tool="get_standard")
+        return await bundle.jobs.run_with_deadline(
+            _decode_json_result(_convert()), tool="get_standard"
+        )
     except RateLimitedError as exc:
         logger.debug("rate_limited_deferred tool=%s", "get_standard")
         return await bundle.jobs.defer(
