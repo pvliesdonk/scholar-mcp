@@ -1,6 +1,7 @@
 """Tests for _server_deps module."""
 
 import asyncio
+from dataclasses import fields
 from pathlib import Path
 
 import pytest
@@ -10,10 +11,16 @@ from fastmcp_pvl_core import Jobs, JobsConfig, ServerConfig, build_jobs
 from scholar_mcp._enrichment import EnrichmentPipeline
 from scholar_mcp._s2_client import S2Client
 from scholar_mcp._server_deps import (
+    ServiceBundle,
     _build_enrichment_pipeline,
     _start_s2_keepalive,
     make_service_lifespan,
 )
+
+
+def test_service_bundle_has_no_legacy_task_queue() -> None:
+    """Service bundles expose shared Jobs, not the retired task queue."""
+    assert "tasks" not in {field.name for field in fields(ServiceBundle)}
 
 
 def test_build_enrichment_pipeline() -> None:

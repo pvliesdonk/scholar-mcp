@@ -19,7 +19,6 @@ from scholar_mcp._rate_limiter import RateLimiter
 from scholar_mcp._s2_client import S2Client
 from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._standards_client import StandardsClient
-from scholar_mcp._task_queue import TaskQueue
 from scholar_mcp.config import ProjectConfig
 
 
@@ -96,7 +95,6 @@ async def bundle(cache: ScholarCache, test_config: ProjectConfig) -> ServiceBund
             ServerConfig(kv_store_url="memory://"),
             JobsConfig(soft_deadline_s=0.05, result_ttl_s=60.0),
         ),
-        tasks=TaskQueue(),
         standards=standards,
         enrichment=enrichment,
     )

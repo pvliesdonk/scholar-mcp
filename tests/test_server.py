@@ -204,9 +204,8 @@ class TestJobTools:
         server = make_server()
         tool_names = {tool.name for tool in await server.list_tools()}
 
+        assert {"get_task_result", "list_tasks"}.isdisjoint(tool_names)
         assert "get_job_result" in tool_names
-        assert "get_task_result" not in tool_names
-        assert "list_tasks" not in tool_names
 
 
 class TestResolveAuthMode:

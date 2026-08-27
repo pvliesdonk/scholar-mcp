@@ -29,7 +29,6 @@ from ._openlibrary_client import OpenLibraryClient
 from ._rate_limiter import RateLimiter
 from ._s2_client import KEEPALIVE_INTERVAL_SECONDS, S2Client, run_keepalive
 from ._standards_client import StandardsClient
-from ._task_queue import TaskQueue
 from .config import ProjectConfig
 
 if TYPE_CHECKING:
@@ -71,7 +70,6 @@ class ServiceBundle:
     cache: CacheProtocol
     config: ProjectConfig
     jobs: Jobs
-    tasks: TaskQueue
     standards: StandardsClient
     enrichment: EnrichmentPipeline
 
@@ -204,8 +202,6 @@ async def make_service_lifespan(
     cache = ScholarCache(config.cache_dir / "cache.db")
     await cache.open()
 
-    tasks = TaskQueue()
-
     standards_http = httpx.AsyncClient(timeout=30.0)
     standards = StandardsClient(standards_http, cache_dir=config.cache_dir, cache=cache)
 
@@ -224,7 +220,6 @@ async def make_service_lifespan(
         cache=cache,
         config=config,
         jobs=jobs,
-        tasks=tasks,
         standards=standards,
         enrichment=enrichment,
     )
