@@ -487,6 +487,45 @@
       "type": "text",
       "var": "SCHOLAR_MCP_GOOGLE_BOOKS_API_KEY",
       "help": "Google Books API key. Optional; book tools work unauthenticated at reduced rate limits."
+    },
+    {
+      "id": "jobs_soft_deadline_s",
+      "label": "Jobs Soft Deadline S",
+      "type": "number",
+      "var": "SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S",
+      "help": "Seconds a long-running tool call may run in the foreground before it is promoted to a background job and a job handle is returned instead.",
+      "advancedGroup": "Jobs",
+      "showIf": {
+        "deployment": [
+          "server"
+        ]
+      }
+    },
+    {
+      "id": "jobs_result_ttl_s",
+      "label": "Jobs Result Ttl S",
+      "type": "number",
+      "var": "SCHOLAR_MCP_JOBS_RESULT_TTL_S",
+      "help": "Seconds a background-job record (working or finished) is retained for polling before it expires from the store.",
+      "advancedGroup": "Jobs",
+      "showIf": {
+        "deployment": [
+          "server"
+        ]
+      }
+    },
+    {
+      "id": "jobs_max_per_subject",
+      "label": "Jobs Max Per Subject",
+      "type": "number",
+      "var": "SCHOLAR_MCP_JOBS_MAX_PER_SUBJECT",
+      "help": "Maximum live background jobs per calling subject; further promotions are rejected until older records expire.",
+      "advancedGroup": "Jobs",
+      "showIf": {
+        "deployment": [
+          "server"
+        ]
+      }
     }
   ],
   "guards": [

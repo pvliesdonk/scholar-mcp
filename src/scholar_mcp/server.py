@@ -22,9 +22,11 @@ from fastmcp_pvl_core import (
     apply_tool_visibility,
     build_auth,
     build_instructions,
+    build_jobs,
     configure_logging_from_env,
     configure_task_backend,
     env,
+    register_job_tools,
     register_server_info_tool,
     wire_middleware_stack,
 )
@@ -231,9 +233,29 @@ def make_server(
 
     wire_middleware_stack(mcp)
 
-    register_tools(mcp)
+    # One Jobs instance for the whole server, built before any tool is
+    # registered: register_long_running_tool closes over it at decoration
+    # time, and register_job_tools must resolve handles against the same
+    # store — two build_jobs calls would be two stores and polling would
+    # find nothing (#298).
+    jobs = build_jobs(config.server, config.jobs)
+
+    register_tools(mcp, jobs)
     register_resources(mcp)
     register_prompts(mcp)
+
+    # The one generic polling tool. Untagged and read-only, so the
+    # read-only and patent gates below leave it visible — a client that
+    # holds a job handle must always be able to redeem it.
+    register_job_tools(
+        mcp,
+        jobs,
+        note=(
+            "On this server, background jobs come from slow PDF downloads "
+            "and docling conversions, and from calls an upstream rate limit "
+            "held past the soft deadline."
+        ),
+    )
 
     if config.read_only:
         mcp.disable(tags={"write"})

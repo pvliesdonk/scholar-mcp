@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 from fastmcp import FastMCP
+from fastmcp_pvl_core import Jobs
 
 
-def register_tools(mcp: FastMCP, *, transport: str = "stdio") -> None:
+def register_tools(mcp: FastMCP, jobs: Jobs, *, transport: str = "stdio") -> None:
     """Register all MCP tools on *mcp*.
 
     Args:
         mcp: The FastMCP instance.
+        jobs: The shared Jobs service. Category modules whose tools can
+            outrun a request take it and register them dual-mode; the
+            rest are plain registrations and do not.
         transport: Active transport (unused currently, kept for compatibility).
     """
     # Category modules are imported here to avoid circular imports.
@@ -33,7 +37,7 @@ def register_tools(mcp: FastMCP, *, transport: str = "stdio") -> None:
 
     from ._tools_pdf import register_pdf_tools
 
-    register_pdf_tools(mcp)
+    register_pdf_tools(mcp, jobs)
 
     from ._tools_tasks import register_task_tools
 
@@ -45,7 +49,7 @@ def register_tools(mcp: FastMCP, *, transport: str = "stdio") -> None:
 
     from ._tools_patent import register_patent_tools
 
-    register_patent_tools(mcp)
+    register_patent_tools(mcp, jobs)
 
     from ._tools_books import register_book_tools
 

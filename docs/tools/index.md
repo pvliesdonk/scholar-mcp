@@ -16,18 +16,30 @@ All tools include [MCP tool annotations](https://spec.modelcontextprotocol.io/sp
 
 ## Async Task Queue
 
-Long-running operations return immediately with a task ID instead of blocking:
+Operations that can outlast a request do not block on it.
 
-- **PDF tools** always queue (unless the result is already cached locally)
-- **S2 tools** queue when the Semantic Scholar API responds with HTTP 429 (rate limited)
-
-When a tool queues an operation, it returns:
+**PDF tools** answer directly when they finish quickly. A download or
+conversion still running after the soft deadline (`SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S`,
+25 seconds by default) is promoted to a background job, and the call returns a
+handle instead:
 
 ```json
-{"queued": true, "task_id": "a1b2c3d4e5f6", "tool": "fetch_paper_pdf"}
+{
+  "status": "working",
+  "job_id": "m9Q_dXROZqJ__jjJYt_dKA",
+  "poll_with": "get_job_result",
+  "retry_after_s": 5.0,
+  "message": "fetch_paper_pdf is still running after 25s and now continues in the background."
+}
 ```
 
-Poll with `get_task_result` to check status and retrieve the result. Task results expire after 10 minutes (S2 tools) or 1 hour (PDF tools).
+Call the tool named in `poll_with` with that `job_id` until `status` is
+`completed` or `failed`. Records are kept for `SCHOLAR_MCP_JOBS_RESULT_TTL_S`
+(1 hour by default) and are scoped to the caller.
+
+**S2 tools** still use the older queueing path: when Semantic Scholar responds
+with HTTP 429 they return `{"queued": true, "task_id": "..."}`, polled with
+`get_task_result`, and those results expire after 10 minutes.
 
 ## Papers, Search & Retrieval
 
@@ -716,7 +728,55 @@ Without docling, only `pdf_path` is returned. The PDF is cached by filename, so 
 
 ---
 
+## Job Polling
+
+### `get_job_result`
+
+Retrieve the outcome of a job a tool handed you a handle for. Registered by
+`fastmcp_pvl_core.register_job_tools` rather than authored here, so its payload
+shape is pvl-core's. The handle's `poll_with` field names this tool, so a
+client that follows it needs no hard-coded name.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `job_id` | string | *(required)* | Job ID from a job handle |
+
+**Returns:**
+
+```json
+{"job_id": "m9Q_dXROZqJ__jjJYt_dKA", "status": "completed", "result": {}, "error": null}
+```
+
+Status values: `working`, `completed`, `failed`, `cancelled`. The `result`
+field holds the tool's own output as an object, not a string to parse again,
+and is populated only when `completed`. On `failed`, `error` describes the
+failure.
+
+While the job is still `working` the response carries how long it has been
+running and how long to wait before asking again:
+
+```json
+{
+  "job_id": "m9Q_dXROZqJ__jjJYt_dKA",
+  "status": "working",
+  "result": null,
+  "error": null,
+  "running_for_s": 41.3,
+  "retry_after_s": 5.0,
+  "message": "Still running."
+}
+```
+
+Jobs are scoped to the caller, so an unknown ID, an expired one, and another
+caller's are all reported the same way. Records are kept for
+`SCHOLAR_MCP_JOBS_RESULT_TTL_S`; fetch results promptly.
+
+---
+
 ## Task Polling
+
+The PDF tools no longer use this. It still backs every other tool's queued
+response, and goes away when they move too.
 
 ### `get_task_result`
 

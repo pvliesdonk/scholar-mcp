@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from fastmcp_pvl_core import (
+    JobsConfig,
     ServerConfig,
     env,
     parse_bool,
@@ -152,6 +153,17 @@ class ProjectConfig:
     # env-load in ``from_env`` below.
     # acl_path: Path | None = None
 
+    # The jobs subsystem's operator knobs — the soft deadline before a slow
+    # call is promoted to a pollable background job, the job-record TTL, and
+    # the per-subject cap — are owned by ``fastmcp_pvl_core.JobsConfig``
+    # (#298).  Composed as a nested field rather than restated here so
+    # ``scripts/gen_config_surface.py`` discovers the ``JOBS_*`` env vars from
+    # core's own field metadata and they cannot drift from it.
+    jobs: JobsConfig = field(
+        default_factory=JobsConfig,
+        metadata={"tags": ("jobs",)},
+    )
+
     @property
     def epo_configured(self) -> bool:
         """True when both EPO OPS credentials are set."""
@@ -187,6 +199,7 @@ class ProjectConfig:
         """Load :class:`ProjectConfig` from ``SCHOLAR_MCP_*`` env vars."""
         return cls(
             server=ServerConfig.from_env(_ENV_PREFIX),
+            jobs=JobsConfig.from_env(_ENV_PREFIX),
             # CONFIG-FROM-ENV-START — populate domain fields below; kept across copier update
             read_only=parse_bool(env(_ENV_PREFIX, "READ_ONLY", "true")),
             s2_api_key=env(_ENV_PREFIX, "S2_API_KEY"),

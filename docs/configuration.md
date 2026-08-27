@@ -215,19 +215,52 @@ about the disagreement.
      Conversion, EPO, Google Books, Server, Authentication, Cache TTLs, Rate
      Limiting). -->
 
+### Long-running tools and background jobs
+
+PDF downloads and docling conversions can take longer than a client is willing
+to wait, so they are registered as dual-mode tools. What a caller gets back
+depends only on how long the call takes:
+
+- Finishes within `SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S` (25 seconds by default):
+  the result, directly.
+- Takes longer: a job handle, `{"status": "working", "job_id": "...",
+  "poll_with": "get_job_result", ...}`. The work continues in the background
+  and the caller redeems it with the `get_job_result` tool.
+- Speaks the MCP task protocol: the call runs as a native background task and
+  the queue `SCHOLAR_MCP_TASKS_URL` configures does the work.
+
+Three variables tune this:
+
+- `SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S`: how long a call may run in the foreground
+  before it is promoted. Keep it below the strictest client request timeout in
+  play, so the server answers before the client hangs up.
+- `SCHOLAR_MCP_JOBS_RESULT_TTL_S`: how long a job record is kept for polling.
+  Measured from when the record is created, and settling a job never extends
+  it, so callers should collect results promptly.
+- `SCHOLAR_MCP_JOBS_MAX_PER_SUBJECT`: the cap on live job records per calling
+  subject. Over stdio every caller is the same subject, so there the cap bounds
+  the whole server.
+
+Job records live in the store `SCHOLAR_MCP_KV_STORE_URL` names, and are scoped
+to the calling subject, so one caller can never poll a job belonging to
+another. A job runs on the serving process and does not survive a restart of
+it. Its record then reports `working` until the TTL removes it, rather than
+inventing a result.
+Durable execution across a restart is the native task path's job, which means a
+`redis://` backend.
+
 ### Two task queues, one of them not configured by `SCHOLAR_MCP_TASKS_URL`
 
-`SCHOLAR_MCP_TASKS_URL`, described under [Background tasks](#background-tasks)
-above, configures the `fastmcp-pvl-core` task backend. Scholar MCP also has its
-own, separate in-process queue (`src/scholar_mcp/_task_queue.py`), and that is
-the one behind the `list_tasks` and `get_task_result` tools and the automatic
-queueing of rate-limited Semantic Scholar and PDF calls. It is always
-in-process and always lost on restart, whatever `SCHOLAR_MCP_TASKS_URL` says.
+The PDF tools above are the first to use the jobs subsystem. The remaining
+tools still queue a rate-limited call on a second, private in-process queue
+behind `list_tasks` and `get_task_result`, which is the one
+`SCHOLAR_MCP_TASKS_URL` does not configure. That queue keeps nothing across a
+restart, whatever that variable says.
 
-The practical consequence is for deployments with a Redis
-`SCHOLAR_MCP_KV_STORE_URL`: the core backend silently reuses that URL, so the
-server gains a Redis-backed task queue it does not currently put anything into.
-Set `SCHOLAR_MCP_TASKS_URL=memory://` to keep the two subsystems apart.
-Consolidating the two queues is tracked in
+The consequence is for deployments with a Redis `SCHOLAR_MCP_KV_STORE_URL`:
+the core backend reuses that URL, so the server gains a Redis-backed task queue
+those remaining tools do not put anything into. Set
+`SCHOLAR_MCP_TASKS_URL=memory://` to keep the two subsystems apart until they
+are consolidated, tracked in
 [#264](https://github.com/pvliesdonk/scholar-mcp/issues/264).
 <!-- DOMAIN-CONFIG-VARS-END -->

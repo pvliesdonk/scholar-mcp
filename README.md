@@ -283,6 +283,9 @@ Domain environment variables use the `SCHOLAR_MCP_` prefix:
 | `SCHOLAR_MCP_EPO_CONSUMER_KEY` | (none) | No | EPO Open Patent Services consumer key. Optional; patent tools are hidden when unset. Register at https://developers.epo.org/user/register. |
 | `SCHOLAR_MCP_EPO_CONSUMER_SECRET` | (none) | No | EPO Open Patent Services consumer secret. Optional; patent tools are hidden when unset. |
 | `SCHOLAR_MCP_GOOGLE_BOOKS_API_KEY` | (none) | No | Google Books API key. Optional; book tools work unauthenticated at reduced rate limits. |
+| `SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S` | `25.0` | No | Seconds a long-running tool call may run in the foreground before it is promoted to a background job and a job handle is returned instead. |
+| `SCHOLAR_MCP_JOBS_RESULT_TTL_S` | `3600.0` | No | Seconds a background-job record (working or finished) is retained for polling before it expires from the store. |
+| `SCHOLAR_MCP_JOBS_MAX_PER_SUBJECT` | `256` | No | Maximum live background jobs per calling subject; further promotions are rejected until older records expire. |
 <!-- GENERATED-ENV-TABLE-DOMAIN-END -->
 
 Domain-config fields are composed inside `src/scholar_mcp/config.py` between the `CONFIG-FIELDS-START` / `CONFIG-FIELDS-END` sentinels; env reads go through `fastmcp_pvl_core.env(_ENV_PREFIX, "SUFFIX", default)` so naming stays consistent, and field invariants go in `__post_init__` between the `CONFIG-VALIDATE-START` / `CONFIG-VALIDATE-END` sentinels. Each field's `metadata` `help` and `tags` generate the table above directly, so keep them accurate and complete.

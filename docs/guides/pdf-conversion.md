@@ -103,17 +103,29 @@ volumes:
   scholar-mcp-data:
 ```
 
-## Async task queue
+## Long-running conversions
 
-All PDF tools run in the background and return a task ID immediately:
+PDF tools answer directly whenever they can. A download usually takes 10-30
+seconds and a conversion 1-5 minutes, so a cached result or a quick download
+comes straight back.
+
+When a call is still running after the soft deadline
+(`SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S`, 25 seconds by default) it is promoted to a
+background job and returns a handle:
 
 ```json
-{"queued": true, "task_id": "a1b2c3d4e5f6", "tool": "fetch_paper_pdf"}
+{
+  "status": "working",
+  "job_id": "m9Q_dXROZqJ__jjJYt_dKA",
+  "poll_with": "get_job_result",
+  "retry_after_s": 5.0
+}
 ```
 
-Use `get_task_result` with the `task_id` to poll for completion. PDF task results are retained for 1 hour.
-
-The only exception is `convert_pdf_to_markdown` when the markdown output file already exists locally, in that case, the cached result is returned directly.
+Poll `get_job_result` with that `job_id` until `status` is `completed`, then
+read the result from the `result` field. Records are retained for
+`SCHOLAR_MCP_JOBS_RESULT_TTL_S` (1 hour by default), measured from when the job
+started rather than from when it finished.
 
 ## Alternative PDF sources
 

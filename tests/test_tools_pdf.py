@@ -13,11 +13,17 @@ import pytest
 import respx
 from fastmcp import FastMCP
 from fastmcp.client import Client
+from fastmcp_pvl_core import (
+    Jobs,
+    JobsConfig,
+    ServerConfig,
+    build_jobs,
+    register_job_tools,
+)
 
 from scholar_mcp._docling_client import DoclingClient
 from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._tools_pdf import register_pdf_tools
-from scholar_mcp._tools_tasks import register_task_tools
 
 # ---------------------------------------------------------------------------
 # DoclingClient.vlm_skip_reason unit tests
@@ -55,51 +61,36 @@ DOCLING_BASE = "http://docling:5001"
 
 
 @pytest.fixture
-def bundle_with_docling(bundle: ServiceBundle, tmp_path: Path) -> ServiceBundle:
-    docling_http = httpx.AsyncClient(base_url=DOCLING_BASE, timeout=30.0)
-    docling = DoclingClient(
-        http_client=docling_http,
-        vlm_api_url=None,
-        vlm_api_key=None,
-        vlm_model="gpt-4o",
-    )
-    bundle.docling = docling
-    return bundle
-
-
-@pytest.fixture
-def mcp_no_docling(bundle: ServiceBundle) -> FastMCP:
+def mcp_no_docling(bundle: ServiceBundle, jobs: Jobs) -> FastMCP:
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_pdf_tools(app)
-    register_task_tools(app)
+    register_pdf_tools(app, jobs)
     return app
 
 
 @pytest.fixture
-def mcp_with_docling(bundle_with_docling: ServiceBundle) -> FastMCP:
+def mcp_with_docling(bundle_with_docling: ServiceBundle, jobs: Jobs) -> FastMCP:
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle_with_docling}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_pdf_tools(app)
-    register_task_tools(app)
+    register_pdf_tools(app, jobs)
     return app
 
 
-async def _poll_task(client: Client, task_id: str, max_attempts: int = 40) -> dict:
-    """Poll a queued task until it completes or fails."""
+async def _poll_job(client: Client, job_id: str, max_attempts: int = 40) -> dict:
+    """Poll a promoted job until it reaches a terminal status."""
     for _ in range(max_attempts):
-        result = await client.call_tool("get_task_result", {"task_id": task_id})
+        result = await client.call_tool("get_job_result", {"job_id": job_id})
         data = json.loads(result.content[0].text)
-        if data["status"] in ("completed", "failed"):
+        if data["status"] in ("completed", "failed", "cancelled"):
             return data
         await asyncio.sleep(0.05)
-    raise TimeoutError(f"task {task_id} did not complete")
+    raise TimeoutError(f"job {job_id} did not settle")
 
 
 @pytest.mark.respx(base_url=S2_BASE)
@@ -124,12 +115,11 @@ async def test_fetch_paper_pdf_no_oa(
 
 
 @pytest.mark.respx(base_url=S2_BASE)
-async def test_fetch_paper_pdf_queued(
+async def test_fetch_paper_pdf_promotes_past_soft_deadline(
     respx_mock: respx.MockRouter,
-    mcp_no_docling: FastMCP,
     bundle: ServiceBundle,
 ) -> None:
-    """fetch_paper_pdf queues download when PDF not cached."""
+    """A download outrunning the soft deadline returns a pollable job handle."""
     respx_mock.get("/paper/p1").mock(
         return_value=httpx.Response(
             200,
@@ -140,11 +130,41 @@ async def test_fetch_paper_pdf_queued(
             },
         )
     )
-    async with Client(mcp_no_docling) as client:
+
+    async def _slow_download(request: httpx.Request) -> httpx.Response:
+        await asyncio.sleep(0.2)
+        return httpx.Response(200, content=b"%PDF-1.4 slow")
+
+    respx_mock.get("https://example.com/paper.pdf").mock(side_effect=_slow_download)
+
+    # A deadline far below the download time, so promotion is deterministic
+    # rather than a race (the recipe in pvl-core's docs/jobs.md).
+    jobs = build_jobs(
+        ServerConfig(kv_store_url="memory://"),
+        JobsConfig(soft_deadline_s=0.05),
+    )
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_pdf_tools(app, jobs)
+    register_job_tools(app, jobs)
+
+    async with Client(app) as client:
         result = await client.call_tool("fetch_paper_pdf", {"identifier": "p1"})
-        queued = json.loads(result.content[0].text)
-        assert queued["queued"] is True
-        assert queued["tool"] == "fetch_paper_pdf"
+        handle = json.loads(result.content[0].text)
+        assert handle["status"] == "working"
+        assert handle["poll_with"] == "get_job_result"
+
+        settled = await _poll_job(client, handle["job_id"])
+
+    assert settled["status"] == "completed"
+    # The result is a native object, not a JSON string inside JSON — the
+    # double encoding the bespoke queue's get_task_result had.
+    assert isinstance(settled["result"], dict)
+    assert Path(settled["result"]["path"]).read_bytes() == b"%PDF-1.4 slow"
 
 
 async def test_convert_no_docling(mcp_no_docling: FastMCP, tmp_path: Path) -> None:
@@ -160,7 +180,7 @@ async def test_convert_no_docling(mcp_no_docling: FastMCP, tmp_path: Path) -> No
 
 
 async def test_convert_standard(
-    bundle_with_docling: ServiceBundle, tmp_path: Path
+    bundle_with_docling: ServiceBundle, tmp_path: Path, jobs: Jobs
 ) -> None:
     """convert_pdf_to_markdown queues conversion; result available via polling."""
     pdf = tmp_path / "paper.pdf"
@@ -174,18 +194,13 @@ async def test_convert_standard(
         yield {"bundle": bundle_with_docling}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_pdf_tools(app)
-    register_task_tools(app)
+    register_pdf_tools(app, jobs)
 
     async with Client(app) as client:
         result = await client.call_tool(
             "convert_pdf_to_markdown", {"file_path": str(pdf)}
         )
-        queued = json.loads(result.content[0].text)
-        assert queued["queued"] is True
-        task_data = await _poll_task(client, queued["task_id"])
-    assert task_data["status"] == "completed"
-    inner = json.loads(task_data["result"])
+        inner = json.loads(result.content[0].text)
     assert "# Paper" in inner["markdown"]
     assert inner["vlm_used"] is False
 
@@ -283,7 +298,7 @@ async def test_convert_cached_standard_no_vlm_skip_reason(
 
 
 async def test_convert_standard_vlm_not_configured_includes_skip_reason(
-    bundle_with_docling: ServiceBundle, tmp_path: Path
+    bundle_with_docling: ServiceBundle, tmp_path: Path, jobs: Jobs
 ) -> None:
     """Non-cached conversion with use_vlm=True but VLM not configured includes vlm_skip_reason."""
     pdf = tmp_path / "paper.pdf"
@@ -297,26 +312,21 @@ async def test_convert_standard_vlm_not_configured_includes_skip_reason(
         yield {"bundle": bundle_with_docling}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_pdf_tools(app)
-    register_task_tools(app)
+    register_pdf_tools(app, jobs)
 
     async with Client(app) as client:
         result = await client.call_tool(
             "convert_pdf_to_markdown", {"file_path": str(pdf), "use_vlm": True}
         )
-        queued = json.loads(result.content[0].text)
-        assert queued["queued"] is True
-        task_data = await _poll_task(client, queued["task_id"])
+        inner = json.loads(result.content[0].text)
 
-    assert task_data["status"] == "completed"
-    inner = json.loads(task_data["result"])
     assert inner["vlm_used"] is False
     assert inner["vlm_skip_reason"] == "vlm_api_url_not_configured"
 
 
 @pytest.mark.respx(assert_all_called=False)
 async def test_fetch_paper_pdf_download_succeeds(
-    bundle: ServiceBundle,
+    bundle: ServiceBundle, jobs: Jobs
 ) -> None:
     """fetch_paper_pdf downloads PDF when not cached; background task completes."""
     pdf_url = "https://example.com/paper.pdf"
@@ -340,18 +350,12 @@ async def test_fetch_paper_pdf_download_succeeds(
             yield {"bundle": bundle}
 
         app = FastMCP("test", lifespan=lifespan)
-        register_pdf_tools(app)
-        register_task_tools(app)
+        register_pdf_tools(app, jobs)
 
         async with Client(app) as client:
             result = await client.call_tool("fetch_paper_pdf", {"identifier": "dl1"})
-            queued = json.loads(result.content[0].text)
-            assert queued["queued"] is True
+            inner = json.loads(result.content[0].text)
 
-            task_data = await _poll_task(client, queued["task_id"])
-
-    assert task_data["status"] == "completed"
-    inner = json.loads(task_data["result"])
     assert "path" in inner
     pdf_path = Path(inner["path"])
     assert pdf_path.exists()
@@ -360,7 +364,7 @@ async def test_fetch_paper_pdf_download_succeeds(
 
 @pytest.mark.respx(assert_all_called=False)
 async def test_fetch_paper_pdf_rate_limited_then_succeeds(
-    bundle: ServiceBundle,
+    bundle: ServiceBundle, jobs: Jobs
 ) -> None:
     """fetch_paper_pdf queues full operation on 429; background retry succeeds."""
     pdf_url = "https://example.com/rl_paper.pdf"
@@ -390,19 +394,12 @@ async def test_fetch_paper_pdf_rate_limited_then_succeeds(
             yield {"bundle": bundle}
 
         app = FastMCP("test", lifespan=lifespan)
-        register_pdf_tools(app)
-        register_task_tools(app)
+        register_pdf_tools(app, jobs)
 
         async with Client(app) as client:
             result = await client.call_tool("fetch_paper_pdf", {"identifier": "rl1"})
-            queued = json.loads(result.content[0].text)
-            assert queued["queued"] is True
-            assert queued["tool"] == "fetch_paper_pdf"
+            inner = json.loads(result.content[0].text)
 
-            task_data = await _poll_task(client, queued["task_id"])
-
-    assert task_data["status"] == "completed"
-    inner = json.loads(task_data["result"])
     assert "path" in inner
     pdf_path = Path(inner["path"])
     assert pdf_path.exists()
@@ -411,7 +408,7 @@ async def test_fetch_paper_pdf_rate_limited_then_succeeds(
 
 @pytest.mark.respx(assert_all_called=False)
 async def test_fetch_paper_pdf_rate_limited_arxiv_fallback(
-    bundle: ServiceBundle,
+    bundle: ServiceBundle, jobs: Jobs
 ) -> None:
     """Rate-limited path fetches externalIds and uses ArXiv fallback."""
     arxiv_pdf_url = "https://arxiv.org/pdf/2301.55555.pdf"
@@ -442,25 +439,19 @@ async def test_fetch_paper_pdf_rate_limited_arxiv_fallback(
             yield {"bundle": bundle}
 
         app = FastMCP("test", lifespan=lifespan)
-        register_pdf_tools(app)
-        register_task_tools(app)
+        register_pdf_tools(app, jobs)
 
         async with Client(app) as client:
             result = await client.call_tool("fetch_paper_pdf", {"identifier": "rl_arx"})
-            queued = json.loads(result.content[0].text)
-            assert queued["queued"] is True
+            inner = json.loads(result.content[0].text)
 
-            task_data = await _poll_task(client, queued["task_id"])
-
-    assert task_data["status"] == "completed"
-    inner = json.loads(task_data["result"])
     assert inner["source"] == "arxiv"
     assert Path(inner["path"]).exists()
 
 
 @pytest.mark.respx(assert_all_called=False)
 async def test_fetch_and_convert_success(
-    bundle_with_docling: ServiceBundle,
+    bundle_with_docling: ServiceBundle, jobs: Jobs
 ) -> None:
     """fetch_and_convert full pipeline: S2 resolve, PDF download, docling convert."""
     pdf_url = "https://example.com/fc_paper.pdf"
@@ -487,19 +478,12 @@ async def test_fetch_and_convert_success(
             yield {"bundle": bundle_with_docling}
 
         app = FastMCP("test", lifespan=lifespan)
-        register_pdf_tools(app)
-        register_task_tools(app)
+        register_pdf_tools(app, jobs)
 
         async with Client(app) as client:
             result = await client.call_tool("fetch_and_convert", {"identifier": "fc1"})
-            queued = json.loads(result.content[0].text)
-            assert queued["queued"] is True
-            assert queued["tool"] == "fetch_and_convert"
+            inner = json.loads(result.content[0].text)
 
-            task_data = await _poll_task(client, queued["task_id"])
-
-    assert task_data["status"] == "completed"
-    inner = json.loads(task_data["result"])
     assert inner["metadata"]["paperId"] == "fc1"
     assert "# Converted" in inner["markdown"]
     assert inner["pdf_path"].endswith("fc1.pdf")
@@ -515,8 +499,7 @@ async def test_fetch_and_convert_success(
 
 @pytest.mark.respx(base_url=S2_BASE)
 async def test_fetch_paper_pdf_arxiv_fallback(
-    respx_mock: respx.MockRouter,
-    bundle: ServiceBundle,
+    respx_mock: respx.MockRouter, bundle: ServiceBundle, jobs: Jobs
 ) -> None:
     """fetch_paper_pdf falls back to arXiv when openAccessPdf is null."""
     arxiv_pdf_url = "https://arxiv.org/pdf/2301.12345.pdf"
@@ -540,18 +523,12 @@ async def test_fetch_paper_pdf_arxiv_fallback(
             yield {"bundle": bundle}
 
         app = FastMCP("test", lifespan=lifespan)
-        register_pdf_tools(app)
-        register_task_tools(app)
+        register_pdf_tools(app, jobs)
 
         async with Client(app) as client:
             result = await client.call_tool("fetch_paper_pdf", {"identifier": "arx1"})
-            queued = json.loads(result.content[0].text)
-            assert queued["queued"] is True
+            inner = json.loads(result.content[0].text)
 
-            task_data = await _poll_task(client, queued["task_id"])
-
-    assert task_data["status"] == "completed"
-    inner = json.loads(task_data["result"])
     assert "path" in inner
     assert inner["source"] == "arxiv"
     assert Path(inner["path"]).exists()
@@ -559,7 +536,7 @@ async def test_fetch_paper_pdf_arxiv_fallback(
 
 @pytest.mark.respx(base_url=S2_BASE)
 async def test_fetch_and_convert_arxiv_fallback(
-    bundle_with_docling: ServiceBundle,
+    bundle_with_docling: ServiceBundle, jobs: Jobs
 ) -> None:
     """fetch_and_convert uses arXiv fallback and reports pdf_source."""
     arxiv_pdf_url = "https://arxiv.org/pdf/2301.99999.pdf"
@@ -587,16 +564,12 @@ async def test_fetch_and_convert_arxiv_fallback(
             yield {"bundle": bundle_with_docling}
 
         app = FastMCP("test", lifespan=lifespan)
-        register_pdf_tools(app)
-        register_task_tools(app)
+        register_pdf_tools(app, jobs)
 
         async with Client(app) as client:
             result = await client.call_tool("fetch_and_convert", {"identifier": "fca1"})
-            queued = json.loads(result.content[0].text)
-            task_data = await _poll_task(client, queued["task_id"])
+            inner = json.loads(result.content[0].text)
 
-    assert task_data["status"] == "completed"
-    inner = json.loads(task_data["result"])
     assert inner["pdf_source"] == "arxiv"
     assert "# ArXiv Paper" in inner["markdown"]
 
@@ -608,7 +581,7 @@ async def test_fetch_and_convert_arxiv_fallback(
 
 @pytest.mark.respx(assert_all_called=False)
 async def test_fetch_pdf_by_url_download_and_convert(
-    bundle_with_docling: ServiceBundle,
+    bundle_with_docling: ServiceBundle, jobs: Jobs
 ) -> None:
     """fetch_pdf_by_url downloads a PDF and converts to markdown."""
     pdf_url = "https://example.com/custom/paper.pdf"
@@ -627,31 +600,22 @@ async def test_fetch_pdf_by_url_download_and_convert(
             yield {"bundle": bundle_with_docling}
 
         app = FastMCP("test", lifespan=lifespan)
-        register_pdf_tools(app)
-        register_task_tools(app)
+        register_pdf_tools(app, jobs)
 
         async with Client(app) as client:
             result = await client.call_tool(
                 "fetch_pdf_by_url",
                 {"url": pdf_url, "filename": "custom_paper"},
             )
-            queued = json.loads(result.content[0].text)
-            assert queued["queued"] is True
-            assert queued["tool"] == "fetch_pdf_by_url"
+            inner = json.loads(result.content[0].text)
 
-            task_data = await _poll_task(client, queued["task_id"])
-
-    assert task_data["status"] == "completed"
-    inner = json.loads(task_data["result"])
     assert inner["pdf_path"].endswith("custom_paper.pdf")
     assert "# Custom Paper" in inner["markdown"]
     assert inner["vlm_used"] is False
 
 
 @pytest.mark.respx(assert_all_called=False)
-async def test_fetch_pdf_by_url_no_docling(
-    bundle: ServiceBundle,
-) -> None:
+async def test_fetch_pdf_by_url_no_docling(bundle: ServiceBundle, jobs: Jobs) -> None:
     """fetch_pdf_by_url without docling returns just the pdf_path."""
     pdf_url = "https://example.com/nodocling.pdf"
 
@@ -665,23 +629,17 @@ async def test_fetch_pdf_by_url_no_docling(
             yield {"bundle": bundle}
 
         app = FastMCP("test", lifespan=lifespan)
-        register_pdf_tools(app)
-        register_task_tools(app)
+        register_pdf_tools(app, jobs)
 
         async with Client(app) as client:
             result = await client.call_tool("fetch_pdf_by_url", {"url": pdf_url})
-            queued = json.loads(result.content[0].text)
-            task_data = await _poll_task(client, queued["task_id"])
+            inner = json.loads(result.content[0].text)
 
-    assert task_data["status"] == "completed"
-    inner = json.loads(task_data["result"])
     assert "pdf_path" in inner
     assert "markdown" not in inner
 
 
-async def test_fetch_pdf_by_url_cached(
-    bundle: ServiceBundle,
-) -> None:
+async def test_fetch_pdf_by_url_cached(bundle: ServiceBundle, jobs: Jobs) -> None:
     """fetch_pdf_by_url returns cached path immediately."""
     pdf_dir = bundle.config.cache_dir / "pdfs"
     pdf_dir.mkdir(parents=True, exist_ok=True)
@@ -693,7 +651,7 @@ async def test_fetch_pdf_by_url_cached(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_pdf_tools(app)
+    register_pdf_tools(app, jobs)
 
     async with Client(app) as client:
         result = await client.call_tool(

@@ -59,29 +59,47 @@ def log_s2_error(exc: httpx.HTTPStatusError) -> None:
         logger.warning("s2_upstream_error status=%s detail=%s", status, detail)
 
 
-def format_s2_error(exc: httpx.HTTPStatusError) -> str:
-    """Log and format an S2 upstream HTTP error as a caller-facing JSON string.
+def s2_error_payload(exc: httpx.HTTPStatusError) -> dict[str, Any]:
+    """Log an S2 upstream HTTP error and build the caller-facing payload.
 
     Logs full detail server-side via :func:`log_s2_error`. The returned
-    JSON intentionally omits the raw upstream response body — LLM callers
+    mapping intentionally omits the raw upstream response body — LLM callers
     get a generic, non-leaking message; operators get full detail from the
     log line.
+
+    Prefer this over :func:`format_s2_error` in tools that return native
+    objects: a tool registered with ``register_long_running_tool`` returns
+    either its own result or a job handle, so its result has to be a mapping
+    rather than a JSON string.
 
     Args:
         exc: The HTTP error raised by the S2 client.
 
     Returns:
-        JSON string: ``{"error": "upstream_error", "status": <code>,
-        "detail": <generic message>}``.
+        ``{"error": "upstream_error", "status": <code>, "detail": <generic
+        message>}``.
     """
     log_s2_error(exc)
-    return json.dumps(
-        {
-            "error": "upstream_error",
-            "status": exc.response.status_code,
-            "detail": "Semantic Scholar API request failed; see server logs for details",
-        }
-    )
+    return {
+        "error": "upstream_error",
+        "status": exc.response.status_code,
+        "detail": "Semantic Scholar API request failed; see server logs for details",
+    }
+
+
+def format_s2_error(exc: httpx.HTTPStatusError) -> str:
+    """Log and format an S2 upstream HTTP error as a caller-facing JSON string.
+
+    The JSON-string form of :func:`s2_error_payload`, for the callers that
+    still hand a string back to the client.
+
+    Args:
+        exc: The HTTP error raised by the S2 client.
+
+    Returns:
+        JSON string of :func:`s2_error_payload`'s mapping.
+    """
+    return json.dumps(s2_error_payload(exc))
 
 
 class S2Client:

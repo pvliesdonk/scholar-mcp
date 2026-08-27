@@ -7,6 +7,11 @@ ships inert, so these tests assert the wiring itself: that `make_server` calls
 `configure_task_backend`, and that the config it passes is this project's, not
 a default-constructed stand-in.
 
+That the configured backend also *receives* work is a separate claim, and a
+newer one: until the slow tools were registered dual-mode (#298) nothing on
+this server was task-capable, so the queue was reachable and empty.
+`tests/test_jobs_wiring.py` asserts that half.
+
 The assertions are on `fastmcp.settings.docket`, which is where
 `configure_task_backend` writes.  Resolution order (pvl-core ADR 0002 §4.2)
 is core's to own; what belongs here is proof the template reaches it.

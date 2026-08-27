@@ -417,6 +417,7 @@ If a conflict marker appears in a copier-update bot PR, the conflict itself ofte
 - All tools have MCP annotations (`readOnlyHint`, `destructiveHint`, `openWorldHint`)
 - Auth: `build_auth(config.server)` resolved in `make_server()` (MultiAuth when both bearer and OIDC are configured); `_build_bearer_auth()` / `_build_oidc_auth()` are retained backward-compat wrappers used only by tests
 - `_ENV_PREFIX` in `config.py` controls all env var names — change once, affects everything
-- **Async task queue**: S2 tools try once (`retry=False`); on 429 `RateLimitedError`, queue with retries for background execution. PDF tools always queue (unless cache hit). `TaskQueue` lives in `ServiceBundle.tasks`.
-- **Tool queueing pattern**: extract tool logic into `async def _execute(*, retry=True) -> str`, try with `retry=False`, catch `RateLimitedError` and `bundle.tasks.submit(_execute(retry=True))`
+- **Background work is mid-migration.** `make_server()` builds one pvl-core `Jobs` instance and passes it to `register_tools`; the PDF and patent-PDF tools are registered against it with `@register_long_running_tool(mcp, jobs, ...)` and answer inline when fast, with a job handle when slow. Every other tool still uses the bespoke `TaskQueue` in `ServiceBundle.tasks`. Consolidating the two is #264.
+- **Jobs registration pattern** (the PDF tools): annotate `-> dict[str, Any]`, because the caller receives either the result or a job handle, and return native objects rather than JSON strings — a promoted result must not be wrapped as `{"value": "<json string>"}`. Use `s2_error_payload` rather than `format_s2_error` there, and `dict(record)` when the value is a TypedDict. Never pass `task=`; the decorator owns it.
+- **Legacy queueing pattern** (everything else, until #264 lands): extract tool logic into `async def _execute(*, retry=True) -> str`, try with `retry=False`, catch `RateLimitedError` and `bundle.tasks.submit(_execute(retry=True))`
 <!-- DOMAIN-END -->

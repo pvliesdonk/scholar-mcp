@@ -7,9 +7,11 @@ from pathlib import Path
 
 import httpx
 import pytest
+from fastmcp_pvl_core import Jobs, JobsConfig, ServerConfig, build_jobs
 
 from scholar_mcp._cache import ScholarCache
 from scholar_mcp._crossref_client import CrossRefClient
+from scholar_mcp._docling_client import DoclingClient
 from scholar_mcp._enrichment import EnrichmentPipeline
 from scholar_mcp._google_books_client import GoogleBooksClient
 from scholar_mcp._openalex_client import OpenAlexClient
@@ -21,6 +23,8 @@ from scholar_mcp._standards_client import StandardsClient
 from scholar_mcp._task_queue import TaskQueue
 from scholar_mcp.config import ProjectConfig
 
+DOCLING_BASE = "http://docling:5001"
+
 
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -31,6 +35,30 @@ def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
     for key in list(os.environ):
         if key.startswith("SCHOLAR_MCP_"):
             monkeypatch.delenv(key, raising=False)
+
+
+@pytest.fixture
+def bundle_with_docling(bundle: ServiceBundle, tmp_path: Path) -> ServiceBundle:
+    """The shared bundle with a DoclingClient wired in (no VLM configured)."""
+    docling_http = httpx.AsyncClient(base_url=DOCLING_BASE, timeout=30.0)
+    bundle.docling = DoclingClient(
+        http_client=docling_http,
+        vlm_api_url=None,
+        vlm_api_key=None,
+        vlm_model="gpt-4o",
+    )
+    return bundle
+
+
+@pytest.fixture
+def jobs() -> Jobs:
+    """Provide a Jobs service backed by an in-memory store.
+
+    The soft deadline is left at its default so tools resolve inline in
+    tests; a test that wants to exercise promotion builds its own Jobs with
+    a short ``soft_deadline_s`` (the recipe in pvl-core's ``docs/jobs.md``).
+    """
+    return build_jobs(ServerConfig(kv_store_url="memory://"), JobsConfig())
 
 
 @pytest.fixture
