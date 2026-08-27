@@ -7,6 +7,7 @@ from pathlib import Path
 
 import httpx
 import pytest
+from fastmcp_pvl_core import JobsConfig, ServerConfig, build_jobs
 
 from scholar_mcp._cache import ScholarCache
 from scholar_mcp._crossref_client import CrossRefClient
@@ -91,6 +92,10 @@ async def bundle(cache: ScholarCache, test_config: ProjectConfig) -> ServiceBund
         openlibrary=openlibrary,
         cache=cache,
         config=test_config,
+        jobs=build_jobs(
+            ServerConfig(kv_store_url="memory://"),
+            JobsConfig(soft_deadline_s=0.05, result_ttl_s=60.0),
+        ),
         tasks=TaskQueue(),
         standards=standards,
         enrichment=enrichment,

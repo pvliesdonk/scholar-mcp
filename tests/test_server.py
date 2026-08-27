@@ -196,6 +196,19 @@ class TestServerInfoTool:
         assert payload["server_name"] == "scholar-mcp-prod"
 
 
+class TestJobTools:
+    """make_server() exposes the pvl-core Jobs poller, not legacy task tools."""
+
+    async def test_registers_the_jobs_result_poller(self) -> None:
+        """The shared Jobs service registers its public result polling tool."""
+        server = make_server()
+        tool_names = {tool.name for tool in await server.list_tools()}
+
+        assert "get_job_result" in tool_names
+        assert "get_task_result" not in tool_names
+        assert "list_tasks" not in tool_names
+
+
 class TestResolveAuthMode:
     """Tests for _resolve_auth_mode() auto-detection and explicit overrides."""
 

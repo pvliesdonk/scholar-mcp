@@ -17,35 +17,10 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
 ]
 dependencies = [
-    # >=4.11.3 for ServerConfig.oidc_advertised_scopes, which
-    # config-presentation.yml names: the config-surface generator rejects a
-    # presentation entry for a var core does not declare, so generation fails
-    # outright wherever an older core is resolved.  The field is the operator
-    # override for the scopes pvl-core advertises to MCP clients in
-    # protected-resource metadata — `openid offline_access` by default
-    # (pvl-core #280).  Before it, the advertised set was derived from
-    # oidc_required_scopes, which multi mode requires to be empty, so clients
-    # requested no scopes at all, the grant carried no refresh token, and
-    # every session ended at access-token expiry needing a human at a browser.
-    #
-    # 4.11.2 was the previous floor, for build_instructions without the
-    # read_only keyword: 4.11.1 declares that argument required and 4.11.2
-    # rejects it, so the floor and the server.py call site had to move in one
-    # change (#443).  4.11.2 also makes FetchResult.final_url mandatory, so a
-    # consumer constructing one — a project's test fakes included — must pass
-    # it from that floor on.
-    #
-    # 4.11.0 was the floor before that, for configure_task_backend +
-    # ServerConfig.tasks_url (the background-task backend surface, ADR 0002
-    # §4), which server.py wires unconditionally.  4.11.0 also moves
-    # fastmcp[tasks] into pvl-core's BASE dependencies, so pydocket arrives
-    # transitively — no extra to declare here, and no packaging plumbing.
-    # 4.10.1 was the floor for apply_tool_visibility, named in place of the
-    # 4.10.0 that was tagged but never reached PyPI: the generator resolves
-    # this whole constraint rather than the floor alone (#335), but a floor
-    # naming a release nobody can install is still a trap for anyone pinning
-    # to it.
-    "fastmcp-pvl-core>=4.11.3,<5",
+    # >=5.1.0 for the shared Jobs/defer service: scholar builds one Jobs
+    # instance, injects it into every lifespan bundle, and registers the
+    # core result poller. This requires pvl-core #268.
+    "fastmcp-pvl-core>=5.1.0,<6",
     "typer>=0.12",
     # PROJECT-DEPS-START — domain dependencies; kept across copier update
     "httpx",

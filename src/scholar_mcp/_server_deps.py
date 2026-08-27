@@ -14,6 +14,7 @@ import httpx
 from fastmcp import FastMCP
 from fastmcp.dependencies import CurrentContext
 from fastmcp.server.context import Context
+from fastmcp_pvl_core import Jobs
 
 from ._cache import ScholarCache
 from ._crossref_client import CrossRefClient
@@ -57,6 +58,7 @@ class ServiceBundle:
         openlibrary: Open Library API client (keyless, always available).
         cache: SQLite cache.
         config: Server configuration.
+        jobs: Shared pvl-core background Jobs service.
     """
 
     s2: S2Client
@@ -68,6 +70,7 @@ class ServiceBundle:
     openlibrary: OpenLibraryClient
     cache: CacheProtocol
     config: ProjectConfig
+    jobs: Jobs
     tasks: TaskQueue
     standards: StandardsClient
     enrichment: EnrichmentPipeline
@@ -121,11 +124,14 @@ def _start_s2_keepalive(
 @asynccontextmanager
 async def make_service_lifespan(
     app: FastMCP,
+    *,
+    jobs: Jobs,
 ) -> AsyncGenerator[dict[str, ServiceBundle], None]:
     """FastMCP lifespan: create all clients, open cache, yield bundle.
 
     Args:
         app: The FastMCP application instance (unused but required by protocol).
+        jobs: Prebuilt shared pvl-core Jobs service.
 
     Yields:
         Dict mapping ``"bundle"`` to the :class:`ServiceBundle`.
@@ -217,6 +223,7 @@ async def make_service_lifespan(
         openlibrary=openlibrary,
         cache=cache,
         config=config,
+        jobs=jobs,
         tasks=tasks,
         standards=standards,
         enrichment=enrichment,

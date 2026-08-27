@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 from fastmcp import FastMCP
+from fastmcp_pvl_core import Jobs, JobsConfig, ServerConfig, build_jobs
 
 from scholar_mcp._enrichment import EnrichmentPipeline
 from scholar_mcp._s2_client import S2Client
@@ -51,7 +52,7 @@ async def test_lifespan_starts_and_cancels_keepalive_with_key(
     app = FastMCP(name="test")
 
     with caplog.at_level("INFO", logger="scholar_mcp._server_deps"):
-        async with make_service_lifespan(app) as ctx:
+        async with make_service_lifespan(app, jobs=_test_jobs()) as ctx:
             bundle = ctx["bundle"]
             assert bundle.s2 is not None
             tasks_while_open = {
@@ -78,7 +79,7 @@ async def test_lifespan_does_not_start_keepalive_without_key(
     app = FastMCP(name="test")
 
     with caplog.at_level("INFO", logger="scholar_mcp._server_deps"):
-        async with make_service_lifespan(app) as ctx:
+        async with make_service_lifespan(app, jobs=_test_jobs()) as ctx:
             assert ctx["bundle"].s2 is not None
             tasks_while_open = {
                 t
@@ -88,3 +89,25 @@ async def test_lifespan_does_not_start_keepalive_without_key(
             assert not tasks_while_open
 
     assert "s2_keepalive_not_started reason=no_api_key" in caplog.text
+
+
+async def test_lifespan_uses_the_prebuilt_jobs_instance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The lifespan yields the exact Jobs instance constructed by the factory."""
+    monkeypatch.setenv("SCHOLAR_MCP_CACHE_DIR", str(tmp_path))
+    app = FastMCP(name="test")
+    jobs = build_jobs(
+        ServerConfig(kv_store_url="memory://"), JobsConfig(soft_deadline_s=0.05)
+    )
+
+    async with make_service_lifespan(app, jobs=jobs) as context:
+        assert context["bundle"].jobs is jobs
+
+
+def _test_jobs() -> Jobs:
+    """Build a short-lived in-memory Jobs service for lifespan tests."""
+    return build_jobs(
+        ServerConfig(kv_store_url="memory://"),
+        JobsConfig(soft_deadline_s=0.05, result_ttl_s=60.0),
+    )

@@ -8,6 +8,7 @@ server surface and the fastmcp-pvl-core README for the helpers used here.
 from __future__ import annotations
 
 import logging
+from functools import partial
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _pkg_version
 
@@ -18,13 +19,17 @@ from fastmcp_pvl_core import (
     # re-exports ServerConfig.  scholar-mcp uses it directly
     # (_load_server_config, build_event_store), so the suppression would
     # itself be unused and RUF100 would fail.
+    JobsConfig,
     ServerConfig,
     apply_tool_visibility,
     build_auth,
-    build_instructions,
+    build_jobs,
     configure_logging_from_env,
     configure_task_backend,
     env,
+    finalize_instructions,
+    instructions_for,
+    register_job_tools,
     register_server_info_tool,
     wire_middleware_stack,
 )
@@ -139,6 +144,8 @@ def make_server(
     """
     config = config or ProjectConfig.from_env()
     configure_logging_from_env()
+    jobs_config = JobsConfig.from_env(_ENV_PREFIX)
+    jobs = build_jobs(config.server, jobs_config)
 
     # Background-task backend (SEP-1686 / Docket).  Unconditional and
     # template-owned: pydocket ships in fastmcp-pvl-core's base dependencies,
@@ -155,20 +162,8 @@ def make_server(
     # prefix, so two servers sharing one Redis do not share a queue.
     configure_task_backend(_ENV_PREFIX, config.server)
 
-    # Operator overrides: SERVER_NAME renames this instance; INSTRUCTIONS
-    # replaces the default instructions text (the latter is the override that
-    # build_instructions' hint advertises). Both fall back when unset/empty.
+    # Operator override: SERVER_NAME renames this instance.
     server_name = env(_ENV_PREFIX, "SERVER_NAME") or _DEFAULT_SERVER_NAME
-    instructions = env(_ENV_PREFIX, "INSTRUCTIONS") or build_instructions(
-        env_prefix=_ENV_PREFIX,
-        domain_line=(
-            "Scholar MCP — academic literature server: Semantic Scholar + "
-            "OpenAlex + Crossref + OpenLibrary + Google Books + EPO (patents) "
-            "+ standards (ISO/IEC/IEEE/CEN/CC) enrichment and docling PDF "
-            "conversion.  Read-only tools are always available; write-tagged "
-            "tools (cache writes) are hidden in read-only mode."
-        ),
-    )
 
     auth = build_auth(config.server)
     auth_mode = _core_resolve_auth_mode(config.server)
@@ -224,12 +219,19 @@ def make_server(
 
     mcp = FastMCP(
         name=server_name,
-        instructions=instructions,
-        lifespan=make_service_lifespan,
+        lifespan=partial(make_service_lifespan, jobs=jobs),
         auth=auth,
+    )
+    instructions_for(mcp).identity(
+        "Scholar MCP — academic literature server: Semantic Scholar + "
+        "OpenAlex + Crossref + OpenLibrary + Google Books + EPO (patents) + "
+        "standards (ISO/IEC/IEEE/CEN/CC) enrichment and docling PDF conversion. "
+        "Read-only tools are always available; write-tagged tools (cache writes) "
+        "are hidden in read-only mode."
     )
 
     wire_middleware_stack(mcp)
+    register_job_tools(mcp, jobs)
 
     register_tools(mcp)
     register_resources(mcp)
@@ -320,5 +322,6 @@ def make_server(
     # visibility calls in the wiring above, and pvl-core's zero-tools-exposed
     # diagnostic judges the full registered tool set.
     apply_tool_visibility(mcp, config.server)
+    finalize_instructions(mcp, config.server, env_prefix=_ENV_PREFIX)
 
     return mcp
