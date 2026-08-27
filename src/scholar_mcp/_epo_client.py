@@ -87,7 +87,7 @@ class EpoRateLimitedError(RateLimitedError):
     def __init__(self, color: str, *, service: str = "_overall") -> None:
         self.color = color
         self.service = service
-        super().__init__()
+        super().__init__(f"EPO rate limited: {service}={color}")
 
 
 class EpoClient:
