@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -19,10 +20,15 @@ class RateLimitedError(Exception):
     Signals the caller to queue the operation for background retry.
     """
 
-    def __init__(self, *, retry_after_s: float | None = None) -> None:
+    def __init__(
+        self,
+        message: str = "upstream rate limited the request",
+        *,
+        retry_after_s: float | None = None,
+    ) -> None:
         """Initialize the exception with an optional upstream retry interval."""
         self.retry_after_s = retry_after_s
-        super().__init__("upstream rate limited the request")
+        super().__init__(message)
 
 
 @dataclass
@@ -118,7 +124,9 @@ async def with_s2_try_once(
                 retry_after_s = float(retry_after) if retry_after is not None else None
             except ValueError:
                 retry_after_s = None
-            if retry_after_s is not None and retry_after_s <= 0:
+            if retry_after_s is not None and (
+                not math.isfinite(retry_after_s) or retry_after_s <= 0
+            ):
                 retry_after_s = None
             raise RateLimitedError(retry_after_s=retry_after_s) from exc
         raise

@@ -60,6 +60,23 @@ async def test_try_once_preserves_positive_retry_after() -> None:
     assert exc_info.value.retry_after_s == 2.5
 
 
+@pytest.mark.parametrize("retry_after", ["NaN", "Infinity", "-Infinity"])
+async def test_try_once_discards_non_finite_retry_after(retry_after: str) -> None:
+    """with_s2_try_once ignores non-finite Retry-After values."""
+    limiter = RateLimiter(delay=0.0)
+
+    async def _rate_limited() -> dict:
+        request = httpx.Request("GET", "http://test")
+        response = httpx.Response(
+            429, headers={"Retry-After": retry_after}, request=request
+        )
+        raise httpx.HTTPStatusError("", request=request, response=response)
+
+    with pytest.raises(RateLimitedError) as exc_info:
+        await with_s2_try_once(_rate_limited, limiter)
+    assert exc_info.value.retry_after_s is None
+
+
 async def test_try_once_propagates_other_errors() -> None:
     """with_s2_try_once re-raises non-429 errors."""
     limiter = RateLimiter(delay=0.0)

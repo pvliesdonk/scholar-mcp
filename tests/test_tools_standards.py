@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 from contextlib import asynccontextmanager
@@ -530,10 +531,23 @@ async def test_handle_full_text_rate_limited_defers_job(
             result = await client.call_tool(
                 "get_standard", {"identifier": "RFC 9000", "fetch_full_text": True}
             )
-    data = json.loads(result.content[0].text)
-    assert data["status"] == "working"
-    assert data["reason"] == "The standards source asked this client to retry later."
-    assert data["retry_after_s"] > 0
+            data = json.loads(result.content[0].text)
+            assert data["status"] == "working"
+            assert (
+                data["reason"]
+                == "The standards source asked this client to retry later."
+            )
+            assert data["retry_after_s"] > 0
+            for _ in range(40):
+                poll = await client.call_tool(
+                    "get_job_result", {"job_id": data["job_id"]}
+                )
+                poll_data = json.loads(poll.content[0].text)
+                if poll_data["status"] in ("completed", "failed"):
+                    break
+                await asyncio.sleep(0.05)
+    assert poll_data["status"] == "completed"
+    assert poll_data["result"]["full_text"] == "converted"
 
 
 # ---------------------------------------------------------------------------

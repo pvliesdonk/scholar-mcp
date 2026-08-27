@@ -561,7 +561,10 @@ async def test_batch_resolve_patent_rate_limit_defers(
     """batch_resolve reports an EPO rate-limit deferral."""
     from scholar_mcp._epo_client import EpoRateLimitedError
 
-    bundle.epo = _make_epo_client(raise_on_biblio=EpoRateLimitedError("red"))
+    bundle.epo = _make_epo_client()
+    bundle.epo.get_biblio = AsyncMock(
+        side_effect=[EpoRateLimitedError("red"), _BIBLIO_RESULT]
+    )
 
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
@@ -576,10 +579,20 @@ async def test_batch_resolve_patent_rate_limit_defers(
             "batch_resolve",
             {"identifiers": ["EP1234567A1"]},
         )
-    data = json.loads(result.content[0].text)
-    assert data["status"] == "working"
-    assert data["reason"] == "The upstream provider asked this client to retry later."
-    assert data["retry_after_s"] > 0
+        data = json.loads(result.content[0].text)
+        assert data["status"] == "working"
+        assert (
+            data["reason"] == "The upstream provider asked this client to retry later."
+        )
+        assert data["retry_after_s"] > 0
+        for _ in range(40):
+            poll = await client.call_tool("get_job_result", {"job_id": data["job_id"]})
+            poll_data = json.loads(poll.content[0].text)
+            if poll_data["status"] in ("completed", "failed"):
+                break
+            await asyncio.sleep(0.05)
+    assert poll_data["status"] == "completed"
+    assert poll_data["result"]["value"][0]["patent"]["title"] == "Test Patent"
 
 
 OL_BASE = "https://openlibrary.org"

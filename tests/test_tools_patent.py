@@ -990,7 +990,8 @@ async def test_get_citing_patents_rate_limit_defers(
     bundle: ServiceBundle,
 ) -> None:
     """get_citing_patents reports an EPO rate-limit deferral."""
-    epo = _make_epo_client(raise_on_search=EpoRateLimitedError("red"))
+    epo = _make_epo_client()
+    epo.search = AsyncMock(side_effect=[EpoRateLimitedError("red"), _SEARCH_RESULT])
     bundle.epo = epo
 
     @asynccontextmanager
@@ -1006,10 +1007,20 @@ async def test_get_citing_patents_rate_limit_defers(
             "get_citing_patents",
             {"paper_id": "10.1234/test"},
         )
-    data = json.loads(result.content[0].text)
-    assert data["status"] == "working"
-    assert data["reason"] == "EPO OPS asked this client to retry later (status: red)."
-    assert data["retry_after_s"] > 0
+        data = json.loads(result.content[0].text)
+        assert data["status"] == "working"
+        assert (
+            data["reason"] == "EPO OPS asked this client to retry later (status: red)."
+        )
+        assert data["retry_after_s"] > 0
+        for _ in range(40):
+            poll = await client.call_tool("get_job_result", {"job_id": data["job_id"]})
+            poll_data = json.loads(poll.content[0].text)
+            if poll_data["status"] in ("completed", "failed"):
+                break
+            await asyncio.sleep(0.05)
+    assert poll_data["status"] == "completed"
+    assert poll_data["result"]["total_count"] == _SEARCH_RESULT["total_count"]
 
 
 # ---------------------------------------------------------------------------
