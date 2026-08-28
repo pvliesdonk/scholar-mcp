@@ -2357,8 +2357,8 @@
 <h2 id="async-task-queue">Async Task Queue<a class="headerlink" href="#async-task-queue" title="Permanent link">&para;</a></h2>
 <p>Long-running operations return immediately with a task ID instead of blocking:</p>
 <ul>
-<li><strong>PDF and patent tools</strong> run as background jobs when the work is slow. A cached result is returned directly instead, except that <code>fetch_and_convert</code> re-converts even when the markdown is already on disk (<a href="https://github.com/pvliesdonk/scholar-mcp/issues/318">#318</a>)</li>
-<li><strong>S2 tools</strong> queue when the Semantic Scholar API responds with HTTP 429 (rate limited)</li>
+<li><strong>Most tools</strong> run as background jobs when the work is slow. A cached result is returned directly instead, except that <code>fetch_and_convert</code> re-converts even when the markdown is already on disk (<a href="https://github.com/pvliesdonk/scholar-mcp/issues/318">#318</a>)</li>
+<li><strong>The citation-graph, cross-source utility and standards tools</strong> still queue on the older path when an upstream responds with HTTP 429</li>
 </ul>
 <p>The two use different polling tools, and each response says which one to call.</p>
 <p>A job-backed tool that exceeds <code>SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S</code> (25 seconds by default) returns:</p>
@@ -2366,11 +2366,11 @@
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w"> </span><span class="nt">&quot;retry_after_s&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">5.0</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;message&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">}</span>
 </code></pre></div>
 <p>Poll with <code>get_job_result</code>. Job records expire after <code>SCHOLAR_MCP_JOBS_RESULT_TTL_S</code> (1 hour by default), measured from when the record was created. Settling a job does not extend it.</p>
-<p>An S2 tool that hits a rate limit returns:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="p">{</span><span class="nt">&quot;queued&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;task_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;a1b2c3d4e5f6&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;tool&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;search_papers&quot;</span><span class="p">}</span>
+<p>A tool still on the older path that hits a rate limit returns:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="p">{</span><span class="nt">&quot;queued&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;task_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;a1b2c3d4e5f6&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;tool&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;get_citation_graph&quot;</span><span class="p">}</span>
 </code></pre></div>
 <p>Poll with <code>get_task_result</code>. These results expire after 10 minutes.</p>
-<p>Patent tools no longer use this path. When EPO reports its traffic light amber or red they wait for it to clear, which is what makes them long-running, so they return a <code>job_id</code> like the PDF tools. If it has not cleared by the time the retries are spent they answer with <code>{"error": "rate_limited", "retryable": true}</code> and a hint, rather than failing opaquely.</p>
+<p>The paper, book, citation, recommendation and patent tools no longer use this path; the citation-graph and cross-source utility tools still do (<a href="https://github.com/pvliesdonk/scholar-mcp/issues/322">#322</a>). When EPO reports its traffic light amber or red they wait for it to clear, which is what makes them long-running, so they return a <code>job_id</code> like the PDF tools. If it has not cleared by the time the retries are spent they answer with <code>{"error": "rate_limited", "retryable": true}</code> and a hint, rather than failing opaquely.</p>
 <h2 id="papers-search-retrieval">Papers, Search &amp; Retrieval<a class="headerlink" href="#papers-search-retrieval" title="Permanent link">&para;</a></h2>
 <h3 id="search_papers"><code>search_papers</code><a class="headerlink" href="#search_papers" title="Permanent link">&para;</a></h3>
 <p>Full-text search across the Semantic Scholar corpus.</p>
@@ -2789,7 +2789,7 @@
 </tr>
 </tbody>
 </table>
-<p><strong>Returns:</strong> JSON list of recommended papers.</p>
+<p><strong>Returns:</strong> <code>{"recommendations": [...]}</code>, the recommended paper records.</p>
 <div class="admonition tip">
 <p class="admonition-title">Tip</p>
 <p>Recommendations work best with 3 to 5 positive examples that represent the topic you're interested in. Adding 1 to 2 negative examples that are close but off-topic helps narrow results.</p>
@@ -2885,7 +2885,8 @@
 </tbody>
 </table>
 <p><strong>BibTeX output</strong> includes entry type inference (<code>@article</code>, <code>@inproceedings</code>, <code>@misc</code>, <code>@book</code>), proper author formatting (<code>{Last}, First</code>), title casing preservation, DOI, arXiv eprint fields, and special character escaping. Papers with <code>book_metadata</code> (ISBN or publisher) are emitted as <code>@book</code> entries with <code>publisher</code>, <code>edition</code>, and <code>isbn</code> fields.</p>
-<p><strong>CSL-JSON output</strong> returns <code>{"citations": [...], "errors": [...]}</code>; the citations array contains standard CSL-JSON objects compatible with Zotero, Mendeley, Pandoc, and other CSL processors. Book entries use <code>type: "book"</code> with <code>publisher</code> and <code>ISBN</code> fields.</p>
+<p><strong>Returns:</strong> <code>{"format": ..., "output": ...}</code>, where <code>output</code> is the formatted text for the chosen format. The key is <code>output</code> rather than <code>citations</code> because the CSL-JSON formatter emits its own <code>citations</code> key, which would collide.</p>
+<p><strong>CSL-JSON output</strong> puts a JSON document in <code>output</code>, so reaching the entries means parsing that string: it is <code>{"citations": [...], "errors": [...]}</code>, whose citations array contains standard CSL-JSON objects compatible with Zotero, Mendeley, Pandoc, and other CSL processors. Book entries use <code>type: "book"</code> with <code>publisher</code> and <code>ISBN</code> fields.</p>
 <p><strong>RIS output</strong> uses standard RIS tags (<code>TY</code>, <code>AU</code>, <code>TI</code>, <code>PY</code>, <code>JO</code>/<code>BT</code>, <code>DO</code>, <code>UR</code>, <code>AB</code>, <code>ER</code>). Book entries use <code>TY - BOOK</code> with <code>PB</code> (publisher) and <code>SN</code> (ISBN) tags.</p>
 <p>Papers that fail to resolve are reported inline (BibTeX/RIS: as comments, CSL-JSON: in the errors array) rather than failing the entire request. When all papers fail, a structured error is returned: <code>{"error": "no_papers_resolved", "failed": [...]}</code>.</p>
 <div class="admonition tip">
@@ -2894,7 +2895,7 @@
 </div>
 <hr />
 <h2 id="books">Books<a class="headerlink" href="#books" title="Permanent link">&para;</a></h2>
-<p>Book tools use <a href="https://openlibrary.org/">Open Library</a> and <a href="https://developers.google.com/books">Google Books</a> as data sources. No API key is required (a Google Books API key is optional for higher rate limits). Rate limits are handled automatically; if an API is temporarily unavailable, calls queue and return a task ID (see <a href="#async-task-queue">Async Task Queue</a>).</p>
+<p>Book tools use <a href="https://openlibrary.org/">Open Library</a> and <a href="https://developers.google.com/books">Google Books</a> as data sources. No API key is required (a Google Books API key is optional for higher rate limits). Rate limits are handled automatically; a slow call is promoted to a background job and returns a <code>job_id</code> to poll with <code>get_job_result</code>.</p>
 <h3 id="search_books"><code>search_books</code><a class="headerlink" href="#search_books" title="Permanent link">&para;</a></h3>
 <p>Search for books by title, author, or free text via Open Library. For best results, use the <code>title</code> and <code>author</code> parameters rather than <code>query</code>, they use dedicated search indexes and return far better results.</p>
 <table>
@@ -2935,28 +2936,37 @@
 </table>
 <p>At least one of <code>query</code>, <code>title</code>, or <code>author</code> must be provided.</p>
 <p>When only <code>query</code> is given, it is first tried as a title search (better relevance) and falls back to free-text if no results are found. When <code>author</code> is given with multiple tokens (such as "Frank Duffy") and initial results are thin, a broadened search is automatically attempted to catch name variants (such as Frank → Francis).</p>
-<p><strong>Returns:</strong> JSON list of book records. Each record contains:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="p">[</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="p">{</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">    </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Deep Learning&quot;</span><span class="p">,</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">    </span><span class="nt">&quot;authors&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;Ian Goodfellow&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;Yoshua Bengio&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;Aaron Courville&quot;</span><span class="p">],</span>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">    </span><span class="nt">&quot;publisher&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;MIT Press&quot;</span><span class="p">,</span>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">    </span><span class="nt">&quot;year&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2016</span><span class="p">,</span>
-<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">    </span><span class="nt">&quot;edition&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
-<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">    </span><span class="nt">&quot;isbn_10&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;0262035618&quot;</span><span class="p">,</span>
-<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">    </span><span class="nt">&quot;isbn_13&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;9780262035613&quot;</span><span class="p">,</span>
-<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">    </span><span class="nt">&quot;openlibrary_work_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;OL17953442W&quot;</span><span class="p">,</span>
-<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">    </span><span class="nt">&quot;openlibrary_edition_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;OL26423929M&quot;</span><span class="p">,</span>
-<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">    </span><span class="nt">&quot;cover_url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://covers.openlibrary.org/b/isbn/9780262035613-M.jpg&quot;</span><span class="p">,</span>
-<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="w">    </span><span class="nt">&quot;google_books_url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://books.google.com/books?id=Np9SDQAAQBAJ&quot;</span><span class="p">,</span>
-<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="w">    </span><span class="nt">&quot;worldcat_url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://www.worldcat.org/isbn/9780262035613&quot;</span><span class="p">,</span>
-<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="w">    </span><span class="nt">&quot;snippet&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;An introduction to a broad range of topics in deep learning...&quot;</span><span class="p">,</span>
-<a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="w">    </span><span class="nt">&quot;cover_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
-<a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="w">    </span><span class="nt">&quot;subjects&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;Machine learning&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;Artificial intelligence&quot;</span><span class="p">],</span>
-<a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a><span class="w">    </span><span class="nt">&quot;page_count&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">800</span><span class="p">,</span>
-<a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a><span class="w">    </span><span class="nt">&quot;description&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span>
-<a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a><span class="w">  </span><span class="p">}</span>
-<a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a><span class="p">]</span>
+<p><strong>Returns:</strong> <code>{"books": [...]}</code>. Each record contains:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="p">{</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">&quot;books&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">    </span><span class="p">{</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">      </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Deep Learning&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">      </span><span class="nt">&quot;authors&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">        </span><span class="s2">&quot;Ian Goodfellow&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">        </span><span class="s2">&quot;Yoshua Bengio&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">        </span><span class="s2">&quot;Aaron Courville&quot;</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">      </span><span class="p">],</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">      </span><span class="nt">&quot;publisher&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;MIT Press&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">      </span><span class="nt">&quot;year&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2016</span><span class="p">,</span>
+<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">      </span><span class="nt">&quot;edition&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
+<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="w">      </span><span class="nt">&quot;isbn_10&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;0262035618&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="w">      </span><span class="nt">&quot;isbn_13&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;9780262035613&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="w">      </span><span class="nt">&quot;openlibrary_work_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;OL17953442W&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="w">      </span><span class="nt">&quot;openlibrary_edition_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;OL26423929M&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="w">      </span><span class="nt">&quot;cover_url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://covers.openlibrary.org/b/isbn/9780262035613-M.jpg&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a><span class="w">      </span><span class="nt">&quot;google_books_url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://books.google.com/books?id=Np9SDQAAQBAJ&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a><span class="w">      </span><span class="nt">&quot;worldcat_url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://www.worldcat.org/isbn/9780262035613&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a><span class="w">      </span><span class="nt">&quot;snippet&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;An introduction to a broad range of topics in deep learning...&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a><span class="w">      </span><span class="nt">&quot;cover_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
+<a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a><span class="w">      </span><span class="nt">&quot;subjects&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a><span class="w">        </span><span class="s2">&quot;Machine learning&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a><span class="w">        </span><span class="s2">&quot;Artificial intelligence&quot;</span>
+<a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a><span class="w">      </span><span class="p">],</span>
+<a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a><span class="w">      </span><span class="nt">&quot;page_count&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">800</span><span class="p">,</span>
+<a id="__codelineno-4-27" name="__codelineno-4-27" href="#__codelineno-4-27"></a><span class="w">      </span><span class="nt">&quot;description&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span>
+<a id="__codelineno-4-28" name="__codelineno-4-28" href="#__codelineno-4-28"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-4-29" name="__codelineno-4-29" href="#__codelineno-4-29"></a><span class="w">  </span><span class="p">]</span>
+<a id="__codelineno-4-30" name="__codelineno-4-30" href="#__codelineno-4-30"></a><span class="p">}</span>
 </code></pre></div>
 <hr />
 <h3 id="get_book"><code>get_book</code><a class="headerlink" href="#get_book" title="Permanent link">&para;</a></h3>
@@ -2981,7 +2991,7 @@
 <td><code>include_editions</code></td>
 <td>bool</td>
 <td><code>false</code></td>
-<td>If true, fetch work and list editions</td>
+<td>Currently ignored (<a href="https://github.com/pvliesdonk/scholar-mcp/issues/323">#323</a>)</td>
 </tr>
 <tr>
 <td><code>download_cover</code></td>
@@ -3770,7 +3780,7 @@ unknown or expired ID is an error, not an empty result.</p>
 <a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="w">  </span><span class="nt">&quot;task_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;a1b2c3d4e5f6&quot;</span><span class="p">,</span>
 <a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">  </span><span class="nt">&quot;status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;running&quot;</span><span class="p">,</span>
 <a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">  </span><span class="nt">&quot;elapsed_seconds&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">8</span><span class="p">,</span>
-<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="w">  </span><span class="nt">&quot;tool&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;search_papers&quot;</span>
+<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="w">  </span><span class="nt">&quot;tool&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;get_citation_graph&quot;</span>
 <a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="p">}</span>
 </code></pre></div>
 <p>Keep polling until the task completes. Each tool's own description states how long it usually takes.</p>

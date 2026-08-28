@@ -2091,9 +2091,11 @@ about the disagreement.</p>
 
 <h3 id="long-running-tools-and-get_job_result">Long-running tools and <code>get_job_result</code><a class="headerlink" href="#long-running-tools-and-get_job_result" title="Permanent link">&para;</a></h3>
 <p>The PDF tools (<code>fetch_paper_pdf</code>, <code>convert_pdf_to_markdown</code>,
-<code>fetch_and_convert</code>, <code>fetch_pdf_by_url</code> and <code>fetch_patent_pdf</code>) and the patent
-tools (<code>search_patents</code>, <code>get_patent</code>, <code>get_citing_patents</code>) run as background
-jobs when they are slow. A call that finishes within
+<code>fetch_and_convert</code>, <code>fetch_pdf_by_url</code> and <code>fetch_patent_pdf</code>), the patent
+tools (<code>search_patents</code>, <code>get_patent</code>, <code>get_citing_patents</code>) and most of the
+Semantic Scholar and book tools (<code>search_papers</code>, <code>get_paper</code>, <code>get_author</code>,
+<code>recommend_papers</code>, <code>generate_citations</code>, <code>search_books</code>, <code>get_book</code>) run as
+background jobs when they are slow. A call that finishes within
 <code>SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S</code> returns its result directly. A slower one
 is promoted to a background job, and the caller gets a handle instead:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="p">{</span><span class="nt">&quot;status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;working&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;job_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;poll_with&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;get_job_result&quot;</span><span class="p">,</span>
@@ -2146,11 +2148,13 @@ settles, then <code>completed</code> with a <code>result</code> object, or <code
 <code>get_job_result</code></strong>. The allowlist matches on tool name, so leaving it out
 makes every job handle unresolvable.</p>
 <h3 id="one-remaining-bespoke-queue">One remaining bespoke queue<a class="headerlink" href="#one-remaining-bespoke-queue" title="Permanent link">&para;</a></h3>
-<p>The Semantic Scholar and standards tools still use a separate in-process queue
-(<code>src/scholar_mcp/_task_queue.py</code>), reached through the <code>list_tasks</code> and
-<code>get_task_result</code> tools. That queue always runs in-process and is always lost
-on restart, and no environment variable configures it. Moving the remaining
-tools across is tracked in
+<p>The citation-graph tools (<code>get_citations</code>, <code>get_references</code>,
+<code>get_citation_graph</code>, <code>find_bridge_papers</code>), the cross-source utility tools
+(<code>batch_resolve</code>, <code>enrich_paper</code>) and <code>get_standard</code> still use a separate
+in-process queue (<code>src/scholar_mcp/_task_queue.py</code>), reached through the
+<code>list_tasks</code> and <code>get_task_result</code> tools. That queue always runs in-process
+and is always lost on restart, and no environment variable configures it.
+Moving the remaining tools across is tracked in
 <a href="https://github.com/pvliesdonk/scholar-mcp/issues/264">#264</a>.</p>
 <h3 id="epo-throttling">EPO throttling<a class="headerlink" href="#epo-throttling" title="Permanent link">&para;</a></h3>
 <p>The patent tools wait out an amber or red EPO traffic light rather than

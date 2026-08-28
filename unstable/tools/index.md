@@ -16,8 +16,8 @@ All tools include [MCP tool annotations](https://spec.modelcontextprotocol.io/sp
 
 Long-running operations return immediately with a task ID instead of blocking:
 
-- **PDF and patent tools** run as background jobs when the work is slow. A cached result is returned directly instead, except that `fetch_and_convert` re-converts even when the markdown is already on disk ([#318](https://github.com/pvliesdonk/scholar-mcp/issues/318))
-- **S2 tools** queue when the Semantic Scholar API responds with HTTP 429 (rate limited)
+- **Most tools** run as background jobs when the work is slow. A cached result is returned directly instead, except that `fetch_and_convert` re-converts even when the markdown is already on disk ([#318](https://github.com/pvliesdonk/scholar-mcp/issues/318))
+- **The citation-graph, cross-source utility and standards tools** still queue on the older path when an upstream responds with HTTP 429
 
 The two use different polling tools, and each response says which one to call.
 
@@ -30,15 +30,15 @@ A job-backed tool that exceeds `SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S` (25 seconds by
 
 Poll with `get_job_result`. Job records expire after `SCHOLAR_MCP_JOBS_RESULT_TTL_S` (1 hour by default), measured from when the record was created. Settling a job does not extend it.
 
-An S2 tool that hits a rate limit returns:
+A tool still on the older path that hits a rate limit returns:
 
 ```
-{"queued": true, "task_id": "a1b2c3d4e5f6", "tool": "search_papers"}
+{"queued": true, "task_id": "a1b2c3d4e5f6", "tool": "get_citation_graph"}
 ```
 
 Poll with `get_task_result`. These results expire after 10 minutes.
 
-Patent tools no longer use this path. When EPO reports its traffic light amber or red they wait for it to clear, which is what makes them long-running, so they return a `job_id` like the PDF tools. If it has not cleared by the time the retries are spent they answer with `{"error": "rate_limited", "retryable": true}` and a hint, rather than failing opaquely.
+The paper, book, citation, recommendation and patent tools no longer use this path; the citation-graph and cross-source utility tools still do ([#322](https://github.com/pvliesdonk/scholar-mcp/issues/322)). When EPO reports its traffic light amber or red they wait for it to clear, which is what makes them long-running, so they return a `job_id` like the PDF tools. If it has not cleared by the time the retries are spent they answer with `{"error": "rate_limited", "retryable": true}` and a hint, rather than failing opaquely.
 
 ## Papers, Search & Retrieval
 
@@ -215,7 +215,7 @@ Paper recommendations based on positive (and optional negative) examples.
 | `limit`        | int          | `10`         | Number of recommendations                       |
 | `fields`       | string       | `"standard"` | Field set for returned papers                   |
 
-**Returns:** JSON list of recommended papers.
+**Returns:** `{"recommendations": [...]}`, the recommended paper records.
 
 Tip
 
@@ -261,7 +261,9 @@ Generate formatted citations for one or more papers. Output formats: BibTeX, CSL
 
 **BibTeX output** includes entry type inference (`@article`, `@inproceedings`, `@misc`, `@book`), proper author formatting (`{Last}, First`), title casing preservation, DOI, arXiv eprint fields, and special character escaping. Papers with `book_metadata` (ISBN or publisher) are emitted as `@book` entries with `publisher`, `edition`, and `isbn` fields.
 
-**CSL-JSON output** returns `{"citations": [...], "errors": [...]}`; the citations array contains standard CSL-JSON objects compatible with Zotero, Mendeley, Pandoc, and other CSL processors. Book entries use `type: "book"` with `publisher` and `ISBN` fields.
+**Returns:** `{"format": ..., "output": ...}`, where `output` is the formatted text for the chosen format. The key is `output` rather than `citations` because the CSL-JSON formatter emits its own `citations` key, which would collide.
+
+**CSL-JSON output** puts a JSON document in `output`, so reaching the entries means parsing that string: it is `{"citations": [...], "errors": [...]}`, whose citations array contains standard CSL-JSON objects compatible with Zotero, Mendeley, Pandoc, and other CSL processors. Book entries use `type: "book"` with `publisher` and `ISBN` fields.
 
 **RIS output** uses standard RIS tags (`TY`, `AU`, `TI`, `PY`, `JO`/`BT`, `DO`, `UR`, `AB`, `ER`). Book entries use `TY - BOOK` with `PB` (publisher) and `SN` (ISBN) tags.
 
@@ -275,7 +277,7 @@ ______________________________________________________________________
 
 ## Books
 
-Book tools use [Open Library](https://openlibrary.org/) and [Google Books](https://developers.google.com/books) as data sources. No API key is required (a Google Books API key is optional for higher rate limits). Rate limits are handled automatically; if an API is temporarily unavailable, calls queue and return a task ID (see [Async Task Queue](#async-task-queue)).
+Book tools use [Open Library](https://openlibrary.org/) and [Google Books](https://developers.google.com/books) as data sources. No API key is required (a Google Books API key is optional for higher rate limits). Rate limits are handled automatically; a slow call is promoted to a background job and returns a `job_id` to poll with `get_job_result`.
 
 ### `search_books`
 
@@ -292,30 +294,39 @@ At least one of `query`, `title`, or `author` must be provided.
 
 When only `query` is given, it is first tried as a title search (better relevance) and falls back to free-text if no results are found. When `author` is given with multiple tokens (such as "Frank Duffy") and initial results are thin, a broadened search is automatically attempted to catch name variants (such as Frank → Francis).
 
-**Returns:** JSON list of book records. Each record contains:
+**Returns:** `{"books": [...]}`. Each record contains:
 
 ```
-[
-  {
-    "title": "Deep Learning",
-    "authors": ["Ian Goodfellow", "Yoshua Bengio", "Aaron Courville"],
-    "publisher": "MIT Press",
-    "year": 2016,
-    "edition": null,
-    "isbn_10": "0262035618",
-    "isbn_13": "9780262035613",
-    "openlibrary_work_id": "OL17953442W",
-    "openlibrary_edition_id": "OL26423929M",
-    "cover_url": "https://covers.openlibrary.org/b/isbn/9780262035613-M.jpg",
-    "google_books_url": "https://books.google.com/books?id=Np9SDQAAQBAJ",
-    "worldcat_url": "https://www.worldcat.org/isbn/9780262035613",
-    "snippet": "An introduction to a broad range of topics in deep learning...",
-    "cover_path": null,
-    "subjects": ["Machine learning", "Artificial intelligence"],
-    "page_count": 800,
-    "description": null
-  }
-]
+{
+  "books": [
+    {
+      "title": "Deep Learning",
+      "authors": [
+        "Ian Goodfellow",
+        "Yoshua Bengio",
+        "Aaron Courville"
+      ],
+      "publisher": "MIT Press",
+      "year": 2016,
+      "edition": null,
+      "isbn_10": "0262035618",
+      "isbn_13": "9780262035613",
+      "openlibrary_work_id": "OL17953442W",
+      "openlibrary_edition_id": "OL26423929M",
+      "cover_url": "https://covers.openlibrary.org/b/isbn/9780262035613-M.jpg",
+      "google_books_url": "https://books.google.com/books?id=Np9SDQAAQBAJ",
+      "worldcat_url": "https://www.worldcat.org/isbn/9780262035613",
+      "snippet": "An introduction to a broad range of topics in deep learning...",
+      "cover_path": null,
+      "subjects": [
+        "Machine learning",
+        "Artificial intelligence"
+      ],
+      "page_count": 800,
+      "description": null
+    }
+  ]
+}
 ```
 
 ______________________________________________________________________
@@ -327,7 +338,7 @@ Fetch full metadata for a single book by ISBN or Open Library identifier. Option
 | Parameter          | Type   | Default      | Description                                                                      |
 | ------------------ | ------ | ------------ | -------------------------------------------------------------------------------- |
 | `identifier`       | string | *(required)* | ISBN-10, ISBN-13, Open Library work ID, or edition ID                            |
-| `include_editions` | bool   | `false`      | If true, fetch work and list editions                                            |
+| `include_editions` | bool   | `false`      | Currently ignored ([#323](https://github.com/pvliesdonk/scholar-mcp/issues/323)) |
 | `download_cover`   | bool   | `false`      | If true, download and cache the cover image locally; adds `cover_path` to result |
 | `cover_size`       | string | `"M"`        | Cover image size: `S` (small), `M` (medium), or `L` (large)                      |
 
@@ -792,7 +803,7 @@ The response includes extra fields while the task is in progress (`pending` or `
   "task_id": "a1b2c3d4e5f6",
   "status": "running",
   "elapsed_seconds": 8,
-  "tool": "search_papers"
+  "tool": "get_citation_graph"
 }
 ```
 

@@ -196,7 +196,7 @@ Worker tuning stays on the native `FASTMCP_DOCKET_*` variables (`FASTMCP_DOCKET_
 
 ### Long-running tools and `get_job_result`
 
-The PDF tools (`fetch_paper_pdf`, `convert_pdf_to_markdown`, `fetch_and_convert`, `fetch_pdf_by_url` and `fetch_patent_pdf`) and the patent tools (`search_patents`, `get_patent`, `get_citing_patents`) run as background jobs when they are slow. A call that finishes within `SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S` returns its result directly. A slower one is promoted to a background job, and the caller gets a handle instead:
+The PDF tools (`fetch_paper_pdf`, `convert_pdf_to_markdown`, `fetch_and_convert`, `fetch_pdf_by_url` and `fetch_patent_pdf`), the patent tools (`search_patents`, `get_patent`, `get_citing_patents`) and most of the Semantic Scholar and book tools (`search_papers`, `get_paper`, `get_author`, `recommend_papers`, `generate_citations`, `search_books`, `get_book`) run as background jobs when they are slow. A call that finishes within `SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S` returns its result directly. A slower one is promoted to a background job, and the caller gets a handle instead:
 
 ```
 {"status": "working", "job_id": "...", "poll_with": "get_job_result",
@@ -220,7 +220,7 @@ If you restrict the tool surface with `SCHOLAR_MCP_TOOLS_ALLOW`, **include `get_
 
 ### One remaining bespoke queue
 
-The Semantic Scholar and standards tools still use a separate in-process queue (`src/scholar_mcp/_task_queue.py`), reached through the `list_tasks` and `get_task_result` tools. That queue always runs in-process and is always lost on restart, and no environment variable configures it. Moving the remaining tools across is tracked in [#264](https://github.com/pvliesdonk/scholar-mcp/issues/264).
+The citation-graph tools (`get_citations`, `get_references`, `get_citation_graph`, `find_bridge_papers`), the cross-source utility tools (`batch_resolve`, `enrich_paper`) and `get_standard` still use a separate in-process queue (`src/scholar_mcp/_task_queue.py`), reached through the `list_tasks` and `get_task_result` tools. That queue always runs in-process and is always lost on restart, and no environment variable configures it. Moving the remaining tools across is tracked in [#264](https://github.com/pvliesdonk/scholar-mcp/issues/264).
 
 ### EPO throttling
 

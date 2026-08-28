@@ -1356,7 +1356,7 @@
 <li><strong>Standards</strong>: identifier resolution, search, and metadata retrieval for NIST, IETF, W3C, and ETSI, with optional full-text fetch and Markdown conversion via docling.</li>
 <li><strong>Cross-source Utility</strong>: resolve up to 100 mixed identifiers (paper DOIs, patent numbers, ISBNs) to full metadata in one call.</li>
 <li><strong>PDF conversion</strong>: download PDFs and convert to Markdown via <a href="https://github.com/DS4SD/docling-serve">docling-serve</a>, with optional VLM enrichment for formulas and figures; automatic fallback to ArXiv, PubMed Central, and Unpaywall; direct URL download for alternative versions.</li>
-<li><strong>Background jobs</strong>: slow PDF and patent work returns a job handle to poll with <code>get_job_result</code>, while a fast call or a cache hit answers directly. The remaining rate-limited tools still use the older task queue and <code>get_task_result</code>.</li>
+<li><strong>Background jobs</strong>: slow work returns a job handle to poll with <code>get_job_result</code>, while a fast call or a cache hit answers directly. The citation-graph, cross-source utility and standards tools still use the older task queue and <code>get_task_result</code>.</li>
 </ul>
 <p>Results are cached in a local SQLite database with per-table TTLs to reduce API calls and speed up repeated lookups.</p>
 <div class="admonition info">
