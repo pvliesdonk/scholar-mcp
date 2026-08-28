@@ -10,7 +10,8 @@ from .config import ProjectConfig
 _JOBS_NOTE = (
     "Scholar MCP promotes slow work to a background job. PDF download and "
     "docling conversion usually take 1-5 minutes, a busy EPO traffic light "
-    "is waited out, and citation formatting enriches each paper in turn. "
+    "is waited out, citation formatting enriches each paper in turn, and "
+    "graph traversal makes one rate-limited request per node. "
     "Those calls commonly answer with a job_id rather than a result; a cache "
     "hit answers inline, with no job. Tools that answer with task_id instead "
     "are polled with get_task_result, not this tool -- the response always "
@@ -52,7 +53,7 @@ def register_tools(
 
     from ._tools_graph import register_graph_tools
 
-    register_graph_tools(mcp)
+    register_graph_tools(mcp, jobs)
 
     from ._tools_recommendations import register_recommendation_tools
 
@@ -60,7 +61,7 @@ def register_tools(
 
     from ._tools_utility import register_utility_tools
 
-    register_utility_tools(mcp)
+    register_utility_tools(mcp, jobs)
 
     from ._tools_pdf import register_pdf_tools
 
