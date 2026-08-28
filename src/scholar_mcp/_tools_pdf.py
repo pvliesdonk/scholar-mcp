@@ -3,577 +3,452 @@
 from __future__ import annotations
 
 import asyncio
-import json
+import hashlib
 import logging
+import re
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
+from urllib.parse import urlparse
 
 import httpx
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
+from fastmcp_pvl_core import register_long_running_tool
 
+from ._docling_client import DoclingClient
 from ._pdf_url_resolver import ResolvedPdf, resolve_alternative_pdf
-from ._rate_limiter import RateLimitedError
-from ._s2_client import format_s2_error
+from ._s2_client import s2_error_payload
 from ._server_deps import ServiceBundle, get_bundle
 
 if TYPE_CHECKING:
-    from ._record_types import PaperRecord
+    from fastmcp_pvl_core import Jobs
 
-_PDF_TASK_TTL = 3600.0  # 1 hour for PDF operations
+    from ._record_types import PaperRecord
 
 logger = logging.getLogger(__name__)
 
+_PDF_FIELDS = "paperId,openAccessPdf,externalIds,title"
 
-def register_pdf_tools(mcp: FastMCP) -> None:
-    """Register PDF tools on *mcp*.
+
+def _vlm_extras(docling: DoclingClient, use_vlm: bool) -> dict[str, Any]:
+    """Return the ``vlm_skip_reason`` key when docling reports one.
+
+    Spread into a result dict so the key is present only when there is a
+    reason, which is the shape callers already expect.
+
+    Args:
+        docling: The configured docling client.
+        use_vlm: Whether the caller asked for VLM enrichment.
+
+    Returns:
+        A single-key mapping, or an empty one when there is nothing to report.
+    """
+    reason = docling.vlm_skip_reason(use_vlm)
+    return {"vlm_skip_reason": reason} if reason else {}
+
+
+async def _ensure_paper_pdf(
+    bundle: ServiceBundle, paper: PaperRecord, identifier: str
+) -> tuple[Path, str] | dict[str, Any]:
+    """Resolve a paper's PDF URL and make sure the file is on disk.
+
+    Shared by ``fetch_paper_pdf`` and ``fetch_and_convert``, which resolve and
+    download identically and differ only in what they do afterwards.
+
+    Args:
+        bundle: Service bundle, for the cache directory and contact email.
+        paper: The resolved Semantic Scholar paper record.
+        identifier: The caller's identifier, used to name the file when the
+            record carries no ``paperId``.
+
+    Returns:
+        ``(path, source)`` once the PDF is on disk, or an error mapping when
+        no open-access URL resolved or the download failed.
+    """
+    oa = paper.get("openAccessPdf") or {}
+    url: str | None = oa.get("url")
+    source = "s2_oa"
+    if not url:
+        alt: ResolvedPdf | None = await resolve_alternative_pdf(
+            paper, contact_email=bundle.config.contact_email
+        )
+        if alt:
+            url, source = alt.url, alt.source
+    if not url:
+        return {
+            "error": "no_oa_pdf",
+            "paper_id": paper.get("paperId"),
+            "title": paper.get("title"),
+        }
+
+    pid = paper.get("paperId", identifier.replace("/", "_"))
+    pdf_dir = bundle.config.cache_dir / "pdfs"
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+    path = pdf_dir / f"{pid}.pdf"
+    if path.exists():
+        logger.info("pdf_already_exists path=%s", path)
+        return path, source
+
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        try:
+            r = await client.get(url, follow_redirects=True)
+            r.raise_for_status()
+        except httpx.HTTPError as exc:
+            return {
+                "error": "download_failed",
+                "detail": str(exc),
+                "pdf_source": source,
+            }
+    await asyncio.to_thread(path.write_bytes, r.content)
+    logger.info(
+        "pdf_downloaded path=%s bytes=%d source=%s", path, len(r.content), source
+    )
+    return path, source
+
+
+async def fetch_paper_pdf(
+    identifier: str,
+    bundle: ServiceBundle = Depends(get_bundle),
+) -> dict[str, Any]:
+    """Download the PDF of a paper.
+
+    Tries the Semantic Scholar open-access URL first. When that is
+    unavailable, automatically checks alternative sources: ArXiv
+    (from externalIds), PubMed Central, and Unpaywall (by DOI,
+    requires ``SCHOLAR_MCP_CONTACT_EMAIL``).
+
+    Skips download if the file already exists locally, which answers
+    immediately; a fresh download usually takes 10-30 seconds and may
+    be returned as a background job handle instead.
+
+    Args:
+        identifier: Paper identifier (DOI, S2 ID, ARXIV:, etc.).
+
+    Returns:
+        ``{"path": "...", "source": "..."}`` on success, or a
+        structured error dict. The ``source`` field indicates where the
+        PDF was obtained (``s2_oa``, ``arxiv``, ``pmc``, ``unpaywall``).
+    """
+    try:
+        paper = await bundle.s2.get_paper(identifier, fields=_PDF_FIELDS)
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 404:
+            return {"error": "not_found", "identifier": identifier}
+        return s2_error_payload(exc)
+
+    fetched = await _ensure_paper_pdf(bundle, paper, identifier)
+    if isinstance(fetched, dict):
+        return fetched
+    path, source = fetched
+    return {"path": str(path), "source": source}
+
+
+async def convert_pdf_to_markdown(
+    file_path: str,
+    use_vlm: bool = False,
+    bundle: ServiceBundle = Depends(get_bundle),
+) -> dict[str, Any]:
+    """Convert a local PDF to Markdown using docling-serve.
+
+    Works on any local PDF, including manually placed paywalled papers.
+    Returns an error if the server does not have PDF conversion configured.
+
+    Conversion typically takes 1-5 minutes depending on page count, so
+    expect a background job handle rather than an inline result; a
+    previously converted file is served from cache immediately.
+
+    Tip: start with ``use_vlm=false`` (the default). Standard conversion
+    handles most papers well. Only retry with ``use_vlm=true`` when the
+    result has garbled formulas or missing figure descriptions.
+
+    VLM and standard results are cached separately (``<stem>.md`` vs
+    ``<stem>_vlm.md``), so switching modes never overwrites a previous
+    conversion. When VLM is requested but not configured, the response
+    includes a ``vlm_skip_reason`` field explaining why.
+
+    Args:
+        file_path: Absolute path to the local PDF file.
+        use_vlm: Use VLM enrichment for formulas and figures.
+            Falls back to standard conversion if VLM is not configured
+            and reports the reason in ``vlm_skip_reason``.
+
+    Returns:
+        ``{"markdown": "...", "path": "...", "vlm_used": bool}``.
+    """
+    docling = bundle.docling
+    if docling is None:
+        return {"error": "docling_not_configured"}
+
+    path = Path(file_path)
+    if not path.exists():
+        return {"error": "file_not_found", "path": file_path}
+
+    # VLM and standard conversions use separate cache files.
+    md_dir = bundle.config.cache_dir / "md"
+    vlm_suffix = "_vlm" if use_vlm and docling.vlm_available else ""
+    md_path = md_dir / f"{path.stem}{vlm_suffix}.md"
+    if md_path.exists():
+        cached = await asyncio.to_thread(md_path.read_text, encoding="utf-8")
+        return {
+            "markdown": cached,
+            "path": str(md_path),
+            "vlm_used": bool(vlm_suffix),
+            **_vlm_extras(docling, use_vlm),
+        }
+
+    pdf_bytes = await asyncio.to_thread(path.read_bytes)
+    try:
+        markdown = await docling.convert(pdf_bytes, path.name, use_vlm=use_vlm)
+    except Exception as exc:
+        logger.exception("docling_convert_failed path=%s", file_path)
+        return {"error": "docling_error", "detail": str(exc)}
+
+    md_dir.mkdir(parents=True, exist_ok=True)
+    await asyncio.to_thread(md_path.write_text, markdown, encoding="utf-8")
+    return {
+        "markdown": markdown,
+        "path": str(md_path),
+        "vlm_used": use_vlm and docling.vlm_available,
+        **_vlm_extras(docling, use_vlm),
+    }
+
+
+async def fetch_and_convert(
+    identifier: str,
+    use_vlm: bool = False,
+    bundle: ServiceBundle = Depends(get_bundle),
+) -> dict[str, Any]:
+    """Resolve a paper, download its PDF, and convert to Markdown.
+
+    Tries the Semantic Scholar open-access URL first, then alternative
+    sources (ArXiv, PubMed Central, Unpaywall). Each stage fails
+    gracefully: metadata is always returned if the paper resolves,
+    even if PDF download or conversion fails.
+
+    The full pipeline typically takes 1-5 minutes, so expect a
+    background job handle rather than an inline result.
+
+    Tip: start with ``use_vlm=false`` (the default). Standard conversion
+    handles most papers well. Only retry with ``use_vlm=true`` when the
+    result has garbled formulas or missing figure descriptions.
+
+    VLM and standard results are cached separately (``<id>.md`` vs
+    ``<id>_vlm.md``), so switching modes never overwrites a previous
+    conversion. When VLM is requested but not configured, the response
+    includes a ``vlm_skip_reason`` field explaining why.
+
+    Args:
+        identifier: Paper identifier (DOI, S2 ID, ARXIV:, etc.).
+        use_vlm: Use VLM enrichment for formula/figure extraction.
+            Falls back to standard conversion if VLM is not configured
+            and reports the reason in ``vlm_skip_reason``.
+
+    Returns:
+        ``metadata`` and ``markdown`` on full success, or ``metadata``
+        plus an ``error`` key if a stage fails.
+    """
+    try:
+        paper = await bundle.s2.get_paper(identifier)
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 404:
+            return {"error": "not_found", "identifier": identifier}
+        return s2_error_payload(exc)
+
+    fetched = await _ensure_paper_pdf(bundle, paper, identifier)
+    if isinstance(fetched, dict):
+        return {"metadata": paper, **fetched}
+    pdf_path, pdf_source = fetched
+
+    docling = bundle.docling
+    if docling is None:
+        return {
+            "metadata": paper,
+            "pdf_path": str(pdf_path),
+            "error": "docling_not_configured",
+        }
+
+    try:
+        pdf_bytes_for_convert = await asyncio.to_thread(pdf_path.read_bytes)
+        markdown = await docling.convert(
+            pdf_bytes_for_convert, pdf_path.name, use_vlm=use_vlm
+        )
+    except Exception as exc:
+        return {
+            "metadata": paper,
+            "pdf_path": str(pdf_path),
+            "error": "conversion_failed",
+            "detail": str(exc),
+        }
+
+    vlm_used = use_vlm and docling.vlm_available
+    md_dir = bundle.config.cache_dir / "md"
+    md_dir.mkdir(parents=True, exist_ok=True)
+    # The PDF is named for the paper id, so its stem is that id.
+    md_path = md_dir / f"{pdf_path.stem}{'_vlm' if vlm_used else ''}.md"
+    await asyncio.to_thread(md_path.write_text, markdown, encoding="utf-8")
+    return {
+        "metadata": paper,
+        "markdown": markdown,
+        "pdf_path": str(pdf_path),
+        "md_path": str(md_path),
+        "pdf_source": pdf_source,
+        "vlm_used": vlm_used,
+        **_vlm_extras(docling, use_vlm),
+    }
+
+
+async def fetch_pdf_by_url(
+    url: str,
+    filename: str | None = None,
+    use_vlm: bool = False,
+    bundle: ServiceBundle = Depends(get_bundle),
+) -> dict[str, Any]:
+    """Download a PDF from a URL and optionally convert to Markdown.
+
+    Use this when you have found an alternative PDF link (e.g. from an
+    author's homepage, a preprint server, or an institutional repository)
+    that is not listed in Semantic Scholar's openAccessPdf field.
+
+    The PDF is saved locally and, if docling-serve is configured,
+    converted to Markdown automatically — which typically takes 1-5
+    minutes and is returned as a background job handle. An already
+    downloaded and converted URL answers immediately.
+
+    Args:
+        url: Direct URL to a PDF file.
+        filename: Optional filename stem for caching (e.g.
+            ``"smith2024_attention"``). Derived from the URL if omitted.
+        use_vlm: Use VLM enrichment for formulas and figures.
+
+    Returns:
+        ``pdf_path`` and optionally ``markdown`` / ``md_path``.
+    """
+    # Intercept authenticated service URLs that need special handling
+    netloc = urlparse(url).netloc
+    if netloc == "ops.epo.org" or netloc.endswith(".ops.epo.org"):
+        return {
+            "error": "use_fetch_patent_pdf",
+            "detail": (
+                "EPO OPS URLs require authenticated access. "
+                "Use the fetch_patent_pdf tool instead, passing the patent number "
+                "(e.g. fetch_patent_pdf('EP3491801B1'))."
+            ),
+        }
+
+    # Derive a safe filename stem.  When no explicit filename is
+    # given, incorporate a short URL hash to avoid collisions when
+    # different URLs share the same path component.
+    if filename:
+        stem = re.sub(r"[^\w\-]", "_", filename)
+    else:
+        path_part = urlparse(url).path.rsplit("/", 1)[-1]
+        base = re.sub(r"[^\w\-]", "_", Path(path_part).stem or "download")
+        stem = f"{base}_{hashlib.sha256(url.encode()).hexdigest()[:8]}"
+
+    pdf_dir = bundle.config.cache_dir / "pdfs"
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+    pdf_path = pdf_dir / f"{stem}.pdf"
+
+    if not pdf_path.exists():
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            try:
+                r = await client.get(url, follow_redirects=True)
+                r.raise_for_status()
+            except httpx.HTTPError as exc:
+                return {"error": "download_failed", "detail": str(exc)}
+        await asyncio.to_thread(pdf_path.write_bytes, r.content)
+        logger.info("pdf_by_url_downloaded path=%s bytes=%d", pdf_path, len(r.content))
+    else:
+        logger.info("pdf_by_url_cached path=%s", pdf_path)
+
+    docling = bundle.docling
+    if docling is None:
+        return {"pdf_path": str(pdf_path)}
+
+    vlm_suffix = "_vlm" if use_vlm and docling.vlm_available else ""
+    md_dir = bundle.config.cache_dir / "md"
+    md_dir.mkdir(parents=True, exist_ok=True)
+    md_path = md_dir / f"{stem}{vlm_suffix}.md"
+
+    if md_path.exists():
+        markdown = await asyncio.to_thread(md_path.read_text, encoding="utf-8")
+    else:
+        try:
+            pdf_bytes = await asyncio.to_thread(pdf_path.read_bytes)
+            markdown = await docling.convert(pdf_bytes, pdf_path.name, use_vlm=use_vlm)
+        except Exception as exc:
+            logger.exception("docling_convert_failed path=%s", pdf_path)
+            return {
+                "pdf_path": str(pdf_path),
+                "error": "conversion_failed",
+                "detail": str(exc),
+            }
+        await asyncio.to_thread(md_path.write_text, markdown, encoding="utf-8")
+
+    return {
+        "pdf_path": str(pdf_path),
+        "markdown": markdown,
+        "md_path": str(md_path),
+        "vlm_used": bool(vlm_suffix),
+        **_vlm_extras(docling, use_vlm),
+    }
+
+
+def register_pdf_tools(mcp: FastMCP, jobs: Jobs) -> None:
+    """Register the PDF tools on *mcp*.
+
+    Each tool is a module-level coroutine registered through
+    :func:`register_long_running_tool`, so a call that finishes within
+    ``SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S`` returns its result inline and a
+    slower one is promoted to a background job the caller polls with
+    ``get_job_result``.  A cache hit therefore answers directly; only real
+    downloads and conversions promote.
 
     Args:
         mcp: FastMCP application instance.
+        jobs: Shared jobs mechanics for this server.
     """
-
-    @mcp.tool(
+    register_long_running_tool(
+        mcp,
+        jobs,
         tags={"write"},
         annotations={
+            "title": "Fetch Paper PDF",
             "readOnlyHint": False,
             "destructiveHint": False,
             "openWorldHint": True,
         },
-    )
-    async def fetch_paper_pdf(
-        identifier: str,
-        bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
-        """Download the PDF of a paper.
-
-        Tries the Semantic Scholar open-access URL first. When that is
-        unavailable, automatically checks alternative sources: ArXiv
-        (from externalIds), PubMed Central, and Unpaywall (by DOI,
-        requires ``SCHOLAR_MCP_CONTACT_EMAIL``).
-
-        Skips download if the file already exists locally.
-
-        Args:
-            identifier: Paper identifier (DOI, S2 ID, ARXIV:, etc.).
-
-        Returns:
-            JSON ``{"path": "...", "source": "..."}`` on success, or a
-            structured error dict. The ``source`` field indicates where the
-            PDF was obtained (``s2_oa``, ``arxiv``, ``pmc``, ``unpaywall``).
-        """
-
-        async def _download(
-            paper_data: PaperRecord,
-            resolved: ResolvedPdf | None = None,
-        ) -> str:
-            dl_url: str | None
-            if resolved:
-                dl_url = resolved.url
-                pdf_source = resolved.source
-            else:
-                oa = paper_data.get("openAccessPdf") or {}
-                dl_url = oa.get("url")
-                pdf_source = "s2_oa"
-                if not dl_url:
-                    alt = await resolve_alternative_pdf(
-                        paper_data,
-                        contact_email=bundle.config.contact_email,
-                    )
-                    if alt:
-                        dl_url = alt.url
-                        pdf_source = alt.source
-            if not dl_url:
-                return json.dumps(
-                    {
-                        "error": "no_oa_pdf",
-                        "paper_id": paper_data.get("paperId"),
-                        "title": paper_data.get("title"),
-                    }
-                )
-            pid = paper_data.get("paperId", identifier.replace("/", "_"))
-            dl_dir = bundle.config.cache_dir / "pdfs"
-            dl_dir.mkdir(parents=True, exist_ok=True)
-            dl_path = dl_dir / f"{pid}.pdf"
-            if dl_path.exists():
-                return json.dumps({"path": str(dl_path), "source": pdf_source})
-            async with httpx.AsyncClient(timeout=120.0) as client:
-                try:
-                    r = await client.get(dl_url, follow_redirects=True)
-                    r.raise_for_status()
-                except httpx.HTTPError as dl_exc:
-                    return json.dumps(
-                        {"error": "download_failed", "detail": str(dl_exc)}
-                    )
-            await asyncio.to_thread(dl_path.write_bytes, r.content)
-            logger.info(
-                "pdf_downloaded path=%s bytes=%d source=%s",
-                dl_path,
-                len(r.content),
-                pdf_source,
-            )
-            return json.dumps({"path": str(dl_path), "source": pdf_source})
-
-        # Resolve metadata to check local cache before queuing
-        try:
-            paper = await bundle.s2.get_paper(
-                identifier,
-                fields="paperId,openAccessPdf,externalIds,title",
-                retry=False,
-            )
-        except RateLimitedError:
-            # S2 rate-limited; queue entire operation for background
-            logger.debug("rate_limited_queued tool=%s", "fetch_paper_pdf")
-
-            async def _execute_full() -> str:
-                try:
-                    p = await bundle.s2.get_paper(
-                        identifier,
-                        fields="paperId,openAccessPdf,externalIds,title",
-                    )
-                except httpx.HTTPStatusError as exc:
-                    if exc.response.status_code == 404:
-                        return json.dumps(
-                            {"error": "not_found", "identifier": identifier}
-                        )
-                    return format_s2_error(exc)
-                return await _download(p)
-
-            task_id = bundle.tasks.submit(
-                _execute_full(), ttl=_PDF_TASK_TTL, tool="fetch_paper_pdf"
-            )
-            return json.dumps(
-                {
-                    "queued": True,
-                    "task_id": task_id,
-                    "tool": "fetch_paper_pdf",
-                }
-            )
-        except httpx.HTTPStatusError as exc:
-            if exc.response.status_code == 404:
-                return json.dumps({"error": "not_found", "identifier": identifier})
-            return format_s2_error(exc)
-
-        oa_pdf = paper.get("openAccessPdf") or {}
-        url = oa_pdf.get("url")
-        alt: ResolvedPdf | None = None
-        if not url:
-            alt = await resolve_alternative_pdf(
-                paper,
-                contact_email=bundle.config.contact_email,
-            )
-            if not alt:
-                return json.dumps(
-                    {
-                        "error": "no_oa_pdf",
-                        "paper_id": paper.get("paperId"),
-                        "title": paper.get("title"),
-                    }
-                )
-
-        paper_id = paper.get("paperId", identifier.replace("/", "_"))
-        pdf_dir = bundle.config.cache_dir / "pdfs"
-        pdf_dir.mkdir(parents=True, exist_ok=True)
-        pdf_path = pdf_dir / f"{paper_id}.pdf"
-
-        if pdf_path.exists():
-            logger.info("pdf_already_exists path=%s", pdf_path)
-            source = alt.source if alt else "s2_oa"
-            return json.dumps({"path": str(pdf_path), "source": source})
-
-        # PDF not cached — queue the download, passing resolved alt to
-        # avoid a duplicate Unpaywall lookup inside _download.
-        task_id = bundle.tasks.submit(
-            _download(paper, resolved=alt),
-            ttl=_PDF_TASK_TTL,
-            tool="fetch_paper_pdf",
-        )
-        return json.dumps(
-            {"queued": True, "task_id": task_id, "tool": "fetch_paper_pdf"}
-        )
-
-    @mcp.tool(
+    )(fetch_paper_pdf)
+    register_long_running_tool(
+        mcp,
+        jobs,
         tags={"write"},
         annotations={
+            "title": "Convert PDF to Markdown",
             "readOnlyHint": False,
             "destructiveHint": False,
             "openWorldHint": True,
         },
-    )
-    async def convert_pdf_to_markdown(
-        file_path: str,
-        use_vlm: bool = False,
-        bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
-        """Convert a local PDF to Markdown using docling-serve.
-
-        Works on any local PDF, including manually placed paywalled papers.
-        Returns an error if the server does not have PDF conversion configured.
-
-        Tip: start with ``use_vlm=false`` (the default). Standard conversion
-        handles most papers well. Only retry with ``use_vlm=true`` when the
-        result has garbled formulas or missing figure descriptions.
-
-        VLM and standard results are cached separately (``<stem>.md`` vs
-        ``<stem>_vlm.md``), so switching modes never overwrites a previous
-        conversion. When VLM is requested but not configured, the response
-        includes a ``vlm_skip_reason`` field explaining why.
-
-        Args:
-            file_path: Absolute path to the local PDF file.
-            use_vlm: Use VLM enrichment for formulas and figures.
-                Falls back to standard conversion if VLM is not configured
-                and reports the reason in ``vlm_skip_reason``.
-
-        Returns:
-            JSON ``{"markdown": "...", "path": "...", "vlm_used": bool}``.
-        """
-        if bundle.docling is None:
-            return json.dumps({"error": "docling_not_configured"})
-
-        path = Path(file_path)
-        if not path.exists():
-            return json.dumps({"error": "file_not_found", "path": file_path})
-
-        # Return cached markdown if it already exists.
-        # VLM and standard conversions use separate cache files.
-        md_dir = bundle.config.cache_dir / "md"
-        vlm_suffix = "_vlm" if use_vlm and bundle.docling.vlm_available else ""
-        md_path = md_dir / f"{path.stem}{vlm_suffix}.md"
-        if md_path.exists():
-            markdown = await asyncio.to_thread(md_path.read_text, encoding="utf-8")
-            result: dict[str, object] = {
-                "markdown": markdown,
-                "path": str(md_path),
-                "vlm_used": bool(vlm_suffix),
-            }
-            skip_reason = bundle.docling.vlm_skip_reason(use_vlm)
-            if skip_reason:
-                result["vlm_skip_reason"] = skip_reason
-            return json.dumps(result)
-
-        async def _execute() -> str:
-            pdf_bytes = await asyncio.to_thread(path.read_bytes)
-
-            try:
-                markdown = await bundle.docling.convert(  # type: ignore[union-attr]
-                    pdf_bytes, path.name, use_vlm=use_vlm
-                )
-            except Exception as exc:
-                logger.exception("docling_convert_failed path=%s", file_path)
-                return json.dumps({"error": "docling_error", "detail": str(exc)})
-
-            vlm_used = use_vlm and bundle.docling.vlm_available  # type: ignore[union-attr]
-            skip_reason = bundle.docling.vlm_skip_reason(use_vlm)  # type: ignore[union-attr]
-
-            md_dir.mkdir(parents=True, exist_ok=True)
-            await asyncio.to_thread(md_path.write_text, markdown, encoding="utf-8")
-
-            result: dict[str, object] = {
-                "markdown": markdown,
-                "path": str(md_path),
-                "vlm_used": vlm_used,
-            }
-            if skip_reason:
-                result["vlm_skip_reason"] = skip_reason
-            return json.dumps(result)
-
-        task_id = bundle.tasks.submit(
-            _execute(), ttl=_PDF_TASK_TTL, tool="convert_pdf_to_markdown"
-        )
-        return json.dumps(
-            {
-                "queued": True,
-                "task_id": task_id,
-                "tool": "convert_pdf_to_markdown",
-            }
-        )
-
-    @mcp.tool(
+    )(convert_pdf_to_markdown)
+    register_long_running_tool(
+        mcp,
+        jobs,
         tags={"write"},
         annotations={
+            "title": "Fetch and Convert Paper",
             "readOnlyHint": False,
             "destructiveHint": False,
             "openWorldHint": True,
         },
-    )
-    async def fetch_and_convert(
-        identifier: str,
-        use_vlm: bool = False,
-        bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
-        """Resolve a paper, download its PDF, and convert to Markdown.
-
-        Tries the Semantic Scholar open-access URL first, then alternative
-        sources (ArXiv, PubMed Central, Unpaywall). Each stage fails
-        gracefully: metadata is always returned if the paper resolves,
-        even if PDF download or conversion fails.
-
-        Tip: start with ``use_vlm=false`` (the default). Standard conversion
-        handles most papers well. Only retry with ``use_vlm=true`` when the
-        result has garbled formulas or missing figure descriptions.
-
-        VLM and standard results are cached separately (``<id>.md`` vs
-        ``<id>_vlm.md``), so switching modes never overwrites a previous
-        conversion. When VLM is requested but not configured, the response
-        includes a ``vlm_skip_reason`` field explaining why.
-
-        Args:
-            identifier: Paper identifier (DOI, S2 ID, ARXIV:, etc.).
-            use_vlm: Use VLM enrichment for formula/figure extraction.
-                Falls back to standard conversion if VLM is not configured
-                and reports the reason in ``vlm_skip_reason``.
-
-        Returns:
-            JSON with ``metadata`` and ``markdown`` on full success,
-            or ``metadata`` plus an ``error`` key if a stage fails.
-        """
-
-        async def _execute() -> str:
-            try:
-                paper = await bundle.s2.get_paper(identifier)
-            except httpx.HTTPStatusError as exc:
-                if exc.response.status_code == 404:
-                    return json.dumps({"error": "not_found", "identifier": identifier})
-                return format_s2_error(exc)
-
-            oa_pdf = paper.get("openAccessPdf") or {}
-            url = oa_pdf.get("url")
-            pdf_source = "s2_oa"
-            if not url:
-                alt = await resolve_alternative_pdf(
-                    paper,
-                    contact_email=bundle.config.contact_email,
-                )
-                if alt:
-                    url = alt.url
-                    pdf_source = alt.source
-            if not url:
-                return json.dumps({"metadata": paper, "error": "no_oa_pdf"})
-
-            paper_id = paper.get("paperId", identifier.replace("/", "_"))
-            pdf_dir = bundle.config.cache_dir / "pdfs"
-            pdf_dir.mkdir(parents=True, exist_ok=True)
-            pdf_path = pdf_dir / f"{paper_id}.pdf"
-
-            if not pdf_path.exists():
-                async with httpx.AsyncClient(timeout=120.0) as client:
-                    try:
-                        r = await client.get(url, follow_redirects=True)
-                        r.raise_for_status()
-                        await asyncio.to_thread(pdf_path.write_bytes, r.content)
-                    except httpx.HTTPError as exc:
-                        return json.dumps(
-                            {
-                                "metadata": paper,
-                                "error": "download_failed",
-                                "detail": str(exc),
-                                "pdf_source": pdf_source,
-                            }
-                        )
-
-            if bundle.docling is None:
-                return json.dumps(
-                    {
-                        "metadata": paper,
-                        "pdf_path": str(pdf_path),
-                        "error": "docling_not_configured",
-                    }
-                )
-
-            try:
-                pdf_bytes_for_convert = await asyncio.to_thread(pdf_path.read_bytes)
-                markdown = await bundle.docling.convert(
-                    pdf_bytes_for_convert, pdf_path.name, use_vlm=use_vlm
-                )
-            except Exception as exc:
-                return json.dumps(
-                    {
-                        "metadata": paper,
-                        "pdf_path": str(pdf_path),
-                        "error": "conversion_failed",
-                        "detail": str(exc),
-                    }
-                )
-
-            vlm_used = use_vlm and bundle.docling.vlm_available
-            vlm_suffix = "_vlm" if vlm_used else ""
-            md_dir = bundle.config.cache_dir / "md"
-            md_dir.mkdir(parents=True, exist_ok=True)
-            md_path = md_dir / f"{paper_id}{vlm_suffix}.md"
-            await asyncio.to_thread(md_path.write_text, markdown, encoding="utf-8")
-            result: dict[str, object] = {
-                "metadata": paper,
-                "markdown": markdown,
-                "pdf_path": str(pdf_path),
-                "md_path": str(md_path),
-                "pdf_source": pdf_source,
-                "vlm_used": vlm_used,
-            }
-            skip_reason = bundle.docling.vlm_skip_reason(use_vlm)
-            if skip_reason:
-                result["vlm_skip_reason"] = skip_reason
-            return json.dumps(result)
-
-        task_id = bundle.tasks.submit(
-            _execute(), ttl=_PDF_TASK_TTL, tool="fetch_and_convert"
-        )
-        return json.dumps(
-            {"queued": True, "task_id": task_id, "tool": "fetch_and_convert"}
-        )
-
-    @mcp.tool(
+    )(fetch_and_convert)
+    register_long_running_tool(
+        mcp,
+        jobs,
         tags={"write"},
         annotations={
+            "title": "Fetch PDF by URL",
             "readOnlyHint": False,
             "destructiveHint": False,
             "openWorldHint": True,
         },
-    )
-    async def fetch_pdf_by_url(
-        url: str,
-        filename: str | None = None,
-        use_vlm: bool = False,
-        bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
-        """Download a PDF from a URL and optionally convert to Markdown.
-
-        Use this when you have found an alternative PDF link (e.g. from an
-        author's homepage, a preprint server, or an institutional repository)
-        that is not listed in Semantic Scholar's openAccessPdf field.
-
-        The PDF is saved locally and, if docling-serve is configured,
-        converted to Markdown automatically.
-
-        Args:
-            url: Direct URL to a PDF file.
-            filename: Optional filename stem for caching (e.g.
-                ``"smith2024_attention"``). Derived from the URL if omitted.
-            use_vlm: Use VLM enrichment for formulas and figures.
-
-        Returns:
-            JSON with ``pdf_path`` and optionally ``markdown`` / ``md_path``.
-        """
-        # Intercept authenticated service URLs that need special handling
-        from urllib.parse import urlparse as _urlparse
-
-        _parsed = _urlparse(url)
-        if _parsed.netloc == "ops.epo.org" or _parsed.netloc.endswith(".ops.epo.org"):
-            return json.dumps(
-                {
-                    "error": "use_fetch_patent_pdf",
-                    "detail": (
-                        "EPO OPS URLs require authenticated access. "
-                        "Use the fetch_patent_pdf tool instead, passing the patent number "
-                        "(e.g. fetch_patent_pdf('EP3491801B1'))."
-                    ),
-                }
-            )
-
-        import hashlib
-        import re
-        from urllib.parse import urlparse
-
-        # Derive a safe filename stem.  When no explicit filename is
-        # given, incorporate a short URL hash to avoid collisions when
-        # different URLs share the same path component.
-        if filename:
-            stem = re.sub(r"[^\w\-]", "_", filename)
-        else:
-            path_part = urlparse(url).path.rsplit("/", 1)[-1]
-            base = Path(path_part).stem or "download"
-            base = re.sub(r"[^\w\-]", "_", base)
-            url_hash = hashlib.sha256(url.encode()).hexdigest()[:8]
-            stem = f"{base}_{url_hash}"
-
-        pdf_dir = bundle.config.cache_dir / "pdfs"
-        pdf_dir.mkdir(parents=True, exist_ok=True)
-        pdf_path = pdf_dir / f"{stem}.pdf"
-
-        if pdf_path.exists():
-            logger.info("pdf_by_url_cached path=%s", pdf_path)
-            # Still convert if docling available and markdown not cached
-            if bundle.docling is not None:
-                vlm_suffix = "_vlm" if use_vlm and bundle.docling.vlm_available else ""
-                md_dir = bundle.config.cache_dir / "md"
-                md_path = md_dir / f"{stem}{vlm_suffix}.md"
-                if md_path.exists():
-                    markdown = await asyncio.to_thread(
-                        md_path.read_text, encoding="utf-8"
-                    )
-                    result: dict[str, object] = {
-                        "pdf_path": str(pdf_path),
-                        "markdown": markdown,
-                        "md_path": str(md_path),
-                        "vlm_used": bool(vlm_suffix),
-                    }
-                    skip_reason = bundle.docling.vlm_skip_reason(use_vlm)
-                    if skip_reason:
-                        result["vlm_skip_reason"] = skip_reason
-                    return json.dumps(result)
-            else:
-                return json.dumps({"pdf_path": str(pdf_path)})
-
-        async def _execute() -> str:
-            # Download
-            if not pdf_path.exists():
-                async with httpx.AsyncClient(timeout=120.0) as client:
-                    try:
-                        r = await client.get(url, follow_redirects=True)
-                        r.raise_for_status()
-                    except httpx.HTTPError as exc:
-                        return json.dumps(
-                            {"error": "download_failed", "detail": str(exc)}
-                        )
-                await asyncio.to_thread(pdf_path.write_bytes, r.content)
-                logger.info(
-                    "pdf_by_url_downloaded path=%s bytes=%d",
-                    pdf_path,
-                    len(r.content),
-                )
-
-            # Convert if docling available
-            if bundle.docling is None:
-                return json.dumps({"pdf_path": str(pdf_path)})
-
-            vlm_suffix = "_vlm" if use_vlm and bundle.docling.vlm_available else ""
-            md_dir = bundle.config.cache_dir / "md"
-            md_dir.mkdir(parents=True, exist_ok=True)
-            md_path = md_dir / f"{stem}{vlm_suffix}.md"
-
-            if md_path.exists():
-                markdown = await asyncio.to_thread(md_path.read_text, encoding="utf-8")
-            else:
-                try:
-                    pdf_bytes = await asyncio.to_thread(pdf_path.read_bytes)
-                    markdown = await bundle.docling.convert(
-                        pdf_bytes, pdf_path.name, use_vlm=use_vlm
-                    )
-                except Exception as exc:
-                    logger.exception("docling_convert_failed path=%s", pdf_path)
-                    return json.dumps(
-                        {
-                            "pdf_path": str(pdf_path),
-                            "error": "conversion_failed",
-                            "detail": str(exc),
-                        }
-                    )
-                await asyncio.to_thread(md_path.write_text, markdown, encoding="utf-8")
-
-            vlm_used = use_vlm and bundle.docling.vlm_available
-            result: dict[str, object] = {
-                "pdf_path": str(pdf_path),
-                "markdown": markdown,
-                "md_path": str(md_path),
-                "vlm_used": vlm_used,
-            }
-            skip_reason = bundle.docling.vlm_skip_reason(use_vlm)
-            if skip_reason:
-                result["vlm_skip_reason"] = skip_reason
-            return json.dumps(result)
-
-        task_id = bundle.tasks.submit(
-            _execute(), ttl=_PDF_TASK_TTL, tool="fetch_pdf_by_url"
-        )
-        return json.dumps(
-            {"queued": True, "task_id": task_id, "tool": "fetch_pdf_by_url"}
-        )
+    )(fetch_pdf_by_url)

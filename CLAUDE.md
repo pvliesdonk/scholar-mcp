@@ -417,6 +417,8 @@ If a conflict marker appears in a copier-update bot PR, the conflict itself ofte
 - All tools have MCP annotations (`readOnlyHint`, `destructiveHint`, `openWorldHint`)
 - Auth: `build_auth(config.server)` resolved in `make_server()` (MultiAuth when both bearer and OIDC are configured); `_build_bearer_auth()` / `_build_oidc_auth()` are retained backward-compat wrappers used only by tests
 - `_ENV_PREFIX` in `config.py` controls all env var names — change once, affects everything
-- **Async task queue**: S2 tools try once (`retry=False`); on 429 `RateLimitedError`, queue with retries for background execution. PDF tools always queue (unless cache hit). `TaskQueue` lives in `ServiceBundle.tasks`.
-- **Tool queueing pattern**: extract tool logic into `async def _execute(*, retry=True) -> str`, try with `retry=False`, catch `RateLimitedError` and `bundle.tasks.submit(_execute(retry=True))`
+- **Background work is mid-migration onto pvl-core Jobs (#264).** Two mechanisms coexist; know which one a tool uses before changing it.
+- **Jobs (target shape)**: the PDF tools (`_tools_pdf.py`, plus `fetch_patent_pdf`) register via `register_long_running_tool(mcp, jobs, ...)` and return `dict[str, Any]`, never a JSON string — a `-> str` annotation makes the promoted `JobHandle` fail the client's output-schema check. One `Jobs` per server is built in `register_tools` and passed to each category module; `register_job_tools` registers the single `get_job_result` poller. Promotion is decided by elapsed time (`SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S`), so a tool never branches on whether to go background, and a cache hit needs no special case.
+- **Bespoke queue (legacy)**: S2, patent-search and standards tools still try once (`retry=False`); on 429 `RateLimitedError` they queue with retries via `bundle.tasks.submit(_execute(retry=True))`. `TaskQueue` lives in `ServiceBundle.tasks` and is polled with `get_task_result`. Do not add new tools to this path.
+- **Tests pick the branch with a fixture**, not by sleeping: `slow_jobs` (30s deadline) for inline results, `jobs` (0.05s) for promotion. Both are in `tests/conftest.py`.
 <!-- DOMAIN-END -->

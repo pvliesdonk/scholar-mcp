@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from fastmcp_pvl_core import (
+    JobsConfig,
     ServerConfig,
     env,
     parse_bool,
@@ -32,6 +33,12 @@ class ProjectConfig:
     server: ServerConfig = field(default_factory=ServerConfig)
 
     # CONFIG-FIELDS-START — add domain fields below; kept across copier update
+    # Composed, not inherited — same rule as `server` above.  It lives inside
+    # the domain block because the template does not wire jobs; scholar does
+    # (see `_server_tools.register_tools`).  Holding it here is also what
+    # puts the SCHOLAR_MCP_JOBS_* vars in front of the config-surface
+    # generator: `server_config_surface()` covers ServerConfig only.
+    jobs: JobsConfig = field(default_factory=JobsConfig)
     read_only: bool = field(
         default=True,
         metadata={
@@ -188,6 +195,7 @@ class ProjectConfig:
         return cls(
             server=ServerConfig.from_env(_ENV_PREFIX),
             # CONFIG-FROM-ENV-START — populate domain fields below; kept across copier update
+            jobs=JobsConfig.from_env(_ENV_PREFIX),
             read_only=parse_bool(env(_ENV_PREFIX, "READ_ONLY", "true")),
             s2_api_key=env(_ENV_PREFIX, "S2_API_KEY"),
             docling_url=env(_ENV_PREFIX, "DOCLING_URL"),

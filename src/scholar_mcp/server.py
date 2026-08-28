@@ -22,6 +22,7 @@ from fastmcp_pvl_core import (
     apply_tool_visibility,
     build_auth,
     build_instructions,
+    build_jobs,
     configure_logging_from_env,
     configure_task_backend,
     env,
@@ -231,7 +232,16 @@ def make_server(
 
     wire_middleware_stack(mcp)
 
-    register_tools(mcp)
+    # `jobs` is passed explicitly rather than left to register_tools' own
+    # env fallback, so an explicitly-supplied `config` governs the jobs
+    # subsystem exactly as it already governs the Docket backend above.
+    # Without it the two would read from different sources for one config
+    # object. NOTE: this line is template-owned and a `copier update` will
+    # revert it to the bare `register_tools(mcp)`; a config passthrough is
+    # requested upstream as pvliesdonk/fastmcp-server-template#534.
+    # Reverting degrades rather than breaks: register_tools still falls
+    # back to reading the environment.
+    register_tools(mcp, jobs=build_jobs(config.server, config.jobs))
     register_resources(mcp)
     register_prompts(mcp)
 

@@ -159,24 +159,40 @@ flag.) Requires `SCHOLAR_MCP_VLM_API_URL` and `SCHOLAR_MCP_VLM_API_KEY`.
 VLM and standard conversions are cached separately — switching modes never
 overwrites previous results.
 
-## Handling queued operations
+## Handling background work
 
-PDF downloads (`fetch_paper_pdf`), patent PDF fetches (`fetch_patent_pdf`),
-full pipeline runs (`fetch_and_convert`), URL-based fetches (`fetch_pdf_by_url`),
-local file conversions (`convert_pdf_to_markdown`), and any tool that hits a
-rate limit return a task ID when work is submitted to the background queue.
-Cache hits return immediately without queuing. Example queued response:
+Two mechanisms are in play, with different polling tools. Never guess which:
+every response names its own, so read the payload.
+
+**PDF tools** — `fetch_paper_pdf`, `fetch_patent_pdf`, `fetch_and_convert`,
+`fetch_pdf_by_url`, `convert_pdf_to_markdown` — answer directly when the work
+is quick, including on a cache hit. When it runs long they hand back a job
+handle instead:
 
 ```json
-{"queued": true, "task_id": "abc123", "tool": "..."}
+{"status": "working", "job_id": "hwex4wg6taLmasPZWPM7gQ",
+ "poll_with": "get_job_result", "retry_after_s": 5.0, "message": "..."}
 ```
 
-Poll with `get_task_result(task_id="abc123")`. The response includes
-`status`, `elapsed_seconds`, and a `hint` while running.
+Poll with `get_job_result(job_id="hwex4wg6taLmasPZWPM7gQ")`. While running the
+response carries `running_for_s` and `retry_after_s`; when it finishes,
+`status` is `completed` with a `result` object, or `failed` with an `error`.
+These jobs do not appear in `list_tasks`.
 
-`list_tasks` shows all active tasks. Don't poll in a tight loop — tasks
-typically complete in 10–30 seconds (PDF download) or 1–5 minutes (PDF
-conversion with VLM).
+**Rate-limited tools** — the Semantic Scholar, patent-search and standards
+tools — still use the older queue when an upstream throttles them:
+
+```json
+{"queued": true, "task_id": "abc123", "tool": "search_papers"}
+```
+
+Poll those with `get_task_result(task_id="abc123")`, whose in-progress
+response carries `status`, `elapsed_seconds` and a `hint`. `list_tasks` shows
+these tasks only.
+
+Don't poll in a tight loop. Honour `retry_after_s` where it is given;
+otherwise expect 10–30 seconds for a PDF download and 1–5 minutes for a
+conversion, longer with VLM.
 
 ## Do not
 

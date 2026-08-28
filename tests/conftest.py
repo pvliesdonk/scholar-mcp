@@ -7,6 +7,7 @@ from pathlib import Path
 
 import httpx
 import pytest
+from fastmcp_pvl_core import Jobs, JobsConfig, ServerConfig, build_jobs
 
 from scholar_mcp._cache import ScholarCache
 from scholar_mcp._crossref_client import CrossRefClient
@@ -21,16 +22,30 @@ from scholar_mcp._standards_client import StandardsClient
 from scholar_mcp._task_queue import TaskQueue
 from scholar_mcp.config import ProjectConfig
 
+_JOBS_TEST_DEADLINE_S = 0.05
+"""Soft deadline for tests: short enough that a slow tool promotes at once.
+
+Tests shrink the deadline rather than sleeping for real, so both branches of
+``run_with_deadline`` -- inline result and promoted handle -- are reachable in
+milliseconds.
+"""
+
 
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Remove all SCHOLAR_MCP_* env vars before each test.
+    """Remove all SCHOLAR_MCP_* env vars, then pin the KV backend.
 
-    Prevents env var leakage between tests that call :func:`make_server`.
+    Clearing prevents env var leakage between tests that call
+    :func:`make_server`.  Pinning `memory://` afterwards keeps job records out
+    of the filesystem: unset, pvl-core's `build_kv_store` resolves to
+    `file:///data/state` wherever that directory happens to be writable, so a
+    machine with a `/data` volume would have the suite writing real job
+    records.  Any test needing a different backend overrides it locally.
     """
     for key in list(os.environ):
         if key.startswith("SCHOLAR_MCP_"):
             monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("SCHOLAR_MCP_KV_STORE_URL", "memory://")
 
 
 @pytest.fixture
@@ -101,3 +116,28 @@ async def bundle(cache: ScholarCache, test_config: ProjectConfig) -> ServiceBund
     await openalex_http.aclose()
     await s2.aclose()
     await standards.aclose()
+
+
+@pytest.fixture
+def jobs() -> Jobs:
+    """Provide a memory-backed :class:`Jobs` with a near-zero soft deadline.
+
+    Each test gets its own store, so job ids never leak between tests.
+    """
+    return build_jobs(
+        ServerConfig(kv_store_url="memory://"),
+        JobsConfig(soft_deadline_s=_JOBS_TEST_DEADLINE_S, result_ttl_s=60.0),
+    )
+
+
+@pytest.fixture
+def slow_jobs() -> Jobs:
+    """Provide a :class:`Jobs` whose deadline is long enough to answer inline.
+
+    The counterpart to :func:`jobs`: work completes within the window, so the
+    tool returns its own result rather than a handle.
+    """
+    return build_jobs(
+        ServerConfig(kv_store_url="memory://"),
+        JobsConfig(soft_deadline_s=30.0, result_ttl_s=60.0),
+    )
