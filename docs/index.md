@@ -4,7 +4,7 @@ A [FastMCP](https://github.com/jlowin/fastmcp) server for the scholarly citation
 
 ## What it does
 
-Scholar MCP exposes 31 tools that let LLM-powered applications search, cross-reference, and retrieve scholarly sources across four peer domains:
+Scholar MCP exposes 29 tools that let LLM-powered applications search, cross-reference, and retrieve scholarly sources across four peer domains:
 
 - **Papers**: full-text search (year, venue, field, citation filters); single-paper lookup by DOI / S2 ID / arXiv / ACM / PubMed; author profile and name search; forward citations, backward references, BFS citation graph, shortest-path bridge discovery; recommendations from positive/negative examples; BibTeX/CSL-JSON/RIS citation generation; OpenAlex enrichment (affiliations, funders, OA status, and concepts).
 - **Patents**: search across 100+ patent offices via EPO OPS with CPC / applicant / inventor / jurisdiction filters; biblio, claims, description, family, legal and citations sections; NPL-to-paper resolution via Semantic Scholar and paper-to-patent citation discovery; patent PDF download via EPO OPS.
@@ -12,7 +12,7 @@ Scholar MCP exposes 31 tools that let LLM-powered applications search, cross-ref
 - **Standards**: identifier resolution, search, and metadata retrieval for NIST, IETF, W3C, and ETSI, with optional full-text fetch and Markdown conversion via docling.
 - **Cross-source Utility**: resolve up to 100 mixed identifiers (paper DOIs, patent numbers, ISBNs) to full metadata in one call.
 - **PDF conversion**: download PDFs and convert to Markdown via [docling-serve](https://github.com/DS4SD/docling-serve), with optional VLM enrichment for formulas and figures; automatic fallback to ArXiv, PubMed Central, and Unpaywall; direct URL download for alternative versions.
-- **Background jobs**: slow work returns a job handle to poll with `get_job_result`, while a fast call or a cache hit answers directly. Of the standards tools, `get_standard` still uses the older task queue and `get_task_result`; the other three run synchronously.
+- **Background jobs**: slow work returns a job handle to poll with `get_job_result`, while a fast call or a cache hit answers directly.
 
 Results are cached in a local SQLite database with per-table TTLs to reduce API calls and speed up repeated lookups.
 
@@ -69,7 +69,7 @@ See [Installation](installation.md) for all methods including Linux packages.
 │  │  (10)  │ │  (4)   │ │  (3)   │ │    (3)    │ │   (4)    │  │
 │  └────┬───┘ └────┬───┘ └────┬───┘ └─────┬─────┘ └─────┬────┘  │
 │       │         │          │           │             │       │
-│       + Cross-source Utility (1) · Task Polling (2)          │
+│       + Cross-source Utility (1) · Job Polling (1)          │
 │                                                               │
 │  ┌────▼─────────▼──────────▼───────────▼─────────────▼────┐  │
 │  │                  SQLite Cache (TTL)                    │  │

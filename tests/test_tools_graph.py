@@ -277,7 +277,7 @@ async def test_get_citations_upstream_error(
 async def test_get_citations_retries_on_429(
     respx_mock: respx.MockRouter, mcp: FastMCP
 ) -> None:
-    """get_citations returns queued response on 429, background task completes."""
+    """A 429 is retried in-client; the caller still gets the citations."""
     call_count = 0
 
     def _side_effect(request: httpx.Request) -> httpx.Response:
@@ -342,7 +342,7 @@ async def test_get_references_upstream_error(
 async def test_get_references_retries_on_429(
     respx_mock: respx.MockRouter, mcp: FastMCP
 ) -> None:
-    """get_references returns queued response on 429, then completes."""
+    """A rate limit is retried in-client rather than queued."""
     call_count = 0
 
     def _side_effect(request: httpx.Request) -> httpx.Response:
@@ -508,7 +508,7 @@ async def test_get_citation_graph_both_direction(
 async def test_get_citation_graph_retries_on_429(
     respx_mock: respx.MockRouter, mcp: FastMCP
 ) -> None:
-    """get_citation_graph queues on 429 and background task completes."""
+    """A 429 is retried in-client; the graph still comes back."""
     batch_call_count = 0
 
     def _batch_side_effect(request: httpx.Request) -> httpx.Response:
@@ -632,7 +632,7 @@ async def test_find_bridge_papers_both_direction(
 async def test_find_bridge_papers_retries_on_429(
     respx_mock: respx.MockRouter, mcp: FastMCP
 ) -> None:
-    """find_bridge_papers queues on 429 and background task completes."""
+    """A 429 is retried in-client; the path still comes back."""
     call_count = 0
 
     def _side_effect(request: httpx.Request) -> httpx.Response:

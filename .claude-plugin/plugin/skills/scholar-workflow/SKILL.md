@@ -66,8 +66,10 @@ papers).
   "NIST SP 800-53 rev5") and normalises to canonical form. Use it first when
   the user gives an informal name.
 - `get_standard` with `fetch_full_text=true` downloads and converts the
-  standard via docling (requires `SCHOLAR_MCP_DOCLING_URL`). This may block
-  until conversion completes; it only returns a task ID if rate-limited.
+  standard via docling (requires `SCHOLAR_MCP_DOCLING_URL`). Conversion takes
+  minutes, so expect a job handle rather than the record; poll it with
+  `get_job_result`. A conversion that fails still returns the record, with the
+  reason in `full_text_error`.
 
 ## Citation graph traversal
 
@@ -161,12 +163,9 @@ overwrites previous results.
 
 ## Handling background work
 
-Two mechanisms are in play, with different polling tools. Never guess which:
-every response names its own, so read the payload.
-
-**Every tool except the four standards tools** answers directly when the work is quick,
-including on a cache hit. When it runs long — waiting out an EPO throttle, or
-walking a citation graph one request per node — it hands back a job handle
+Tools answer directly when the work is quick, including on a cache hit. When
+it runs long — a docling conversion, an EPO throttle being waited out, a
+citation-graph walk making one request per node — they hand back a job handle
 instead:
 
 ```json
@@ -177,22 +176,12 @@ instead:
 Poll with `get_job_result(job_id="hwex4wg6taLmasPZWPM7gQ")`. While running the
 response carries `running_for_s` and `retry_after_s`; when it finishes,
 `status` is `completed` with a `result` object, or `failed` with an `error`.
-These jobs do not appear in `list_tasks`.
 
-**`get_standard`** alone still uses the older queue when an upstream
-throttles its full-text fetch:
+Don't poll in a tight loop. Honour `retry_after_s`; otherwise expect 10–30
+seconds for a PDF download and 1–5 minutes for a conversion, longer with VLM.
 
-```json
-{"queued": true, "task_id": "abc123", "tool": "get_standard"}
-```
-
-Poll those with `get_task_result(task_id="abc123")`, whose in-progress
-response carries `status` and `elapsed_seconds`. `list_tasks` shows these
-tasks only.
-
-Don't poll in a tight loop. Honour `retry_after_s` where it is given;
-otherwise expect 10–30 seconds for a PDF download and 1–5 minutes for a
-conversion, longer with VLM.
+Job records expire, so retrieve a result soon after it completes. A job id
+belongs to the caller that created it and cannot be polled by anyone else.
 
 ## Do not
 

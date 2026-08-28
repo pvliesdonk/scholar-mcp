@@ -19,7 +19,6 @@ src/scholar_mcp/
   _server_tools.py     -- MCP tools; dispatches to category modules
   _server_resources.py -- MCP resources; add domain resources here
   _server_prompts.py   -- MCP prompts; add domain prompts here
-  _task_queue.py       -- In-memory task queue for background async operations
   _rate_limiter.py     -- Rate limiter, retry, try-once + RateLimitedError
 ```
 <!-- DOMAIN-END -->
@@ -417,9 +416,8 @@ If a conflict marker appears in a copier-update bot PR, the conflict itself ofte
 - All tools have MCP annotations (`readOnlyHint`, `destructiveHint`, `openWorldHint`)
 - Auth: `build_auth(config.server)` resolved in `make_server()` (MultiAuth when both bearer and OIDC are configured); `_build_bearer_auth()` / `_build_oidc_auth()` are retained backward-compat wrappers used only by tests
 - `_ENV_PREFIX` in `config.py` controls all env var names — change once, affects everything
-- **Background work is mid-migration onto pvl-core Jobs (#264).** Two mechanisms coexist; know which one a tool uses before changing it.
-- **Jobs (target shape)**: every tool except the four in `_tools_standards.py` registers via `register_long_running_tool(mcp, jobs, ...)` and return `dict[str, Any]`, never a JSON string — a `-> str` annotation makes the promoted `JobHandle` fail the client's output-schema check. One `Jobs` per server is built in `register_tools` and passed to each category module; `register_job_tools` registers the single `get_job_result` poller. Promotion is decided by elapsed time (`SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S`), so a tool never branches on whether to go background, and a cache hit needs no special case.
-- **Bespoke queue (legacy)**: `get_standard` alone still tries once (`retry=False`) — the other three standards tools are neither job- nor queue-backed; on 429 `RateLimitedError` they queue with retries via `bundle.tasks.submit(_execute(retry=True))`. `TaskQueue` lives in `ServiceBundle.tasks` and is polled with `get_task_result`. Do not add new tools to this path.
+- **Background work runs on pvl-core Jobs.** There is one polling contract, `get_job_result`; the bespoke `TaskQueue` is gone (#264).
+- **Jobs**: every tool whose work can run long registers via `register_long_running_tool(mcp, jobs, ...)` and **must** return `dict[str, Any]` — a `-> str` annotation makes the promoted `JobHandle` fail the client's output-schema check. The exceptions are tools that cannot run long (`get_sync_status`, `get_book_excerpt`, `recommend_books`), registered as plain `@mcp.tool`. One `Jobs` per server is built in `register_tools` and passed to each category module; `register_job_tools` registers the single `get_job_result` poller. Promotion is decided by elapsed time (`SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S`), so a tool never branches on whether to go background, and a cache hit needs no special case.
 - **EPO reaches the network through `_run_epo`** (`_tools_patent.py`), which wraps `with_epo_retry` and turns a surviving throttle or an exhausted quota into a `retryable`-tagged payload. Backoff waits must outlast `_THROTTLE_CACHE_TTL_S`, or the retry re-reads the cached traffic light instead of asking EPO. `EpoQuotaExhaustedError` is never retried.
 - **Tests pick the branch with a fixture**, not by sleeping: `slow_jobs` (30s deadline) for inline results, `jobs` (0.05s) for promotion. Both are in `tests/conftest.py`, which also shrinks the EPO and S2 backoffs so no test waits out a real ladder.
 - **A tool's caller-facing guidance goes in the docstring *body*, above the first section header.** FastMCP publishes the summary and body but strips `Args:`, `Returns:` *and* `Examples:`, so a note placed under any of them never reaches the model. `tests/test_jobs_wiring.py` asserts the contract on the description as a client receives it.

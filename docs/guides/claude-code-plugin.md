@@ -53,7 +53,7 @@ For the full list, see [Configuration](../configuration.md).
 
 ## What you get
 
-31 tools across four scholarly source domains:
+29 tools across four scholarly source domains:
 
 - **Papers**: search, lookup, author search, citations, references, BFS graph traversal, bridge papers, recommendations, BibTeX/CSL-JSON/RIS generation, OpenAlex enrichment.
 - **Patents**: search 100+ offices via EPO OPS, full patent sections, family/legal/citations, NPL-to-paper resolution.

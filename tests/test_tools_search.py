@@ -250,10 +250,10 @@ async def test_get_author_by_id_upstream_error(
 
 
 @pytest.mark.respx(base_url=S2_BASE)
-async def test_get_author_by_id_queued_on_429(
+async def test_get_author_by_id_retries_on_429(
     respx_mock: respx.MockRouter, bundle: ServiceBundle, slow_jobs: Jobs
 ) -> None:
-    """get_author by ID returns queued on 429, background task completes."""
+    """A 429 on the by-ID path is retried in-client; the caller gets the author."""
     call_count = 0
 
     def _side_effect(request: httpx.Request) -> httpx.Response:
@@ -280,9 +280,6 @@ async def test_get_author_by_id_queued_on_429(
 
     app = FastMCP("test", lifespan=lifespan)
     register_search_tools(app, slow_jobs)
-    from scholar_mcp._tools_tasks import register_task_tools
-
-    register_task_tools(app)
 
     async with Client(app) as client:
         result = await client.call_tool("get_author", {"identifier": "12345"})
@@ -304,10 +301,10 @@ async def test_get_author_name_search_upstream_error(
 
 
 @pytest.mark.respx(base_url=S2_BASE)
-async def test_get_author_name_search_queued_on_429(
+async def test_get_author_name_search_retries_on_429(
     respx_mock: respx.MockRouter, bundle: ServiceBundle, slow_jobs: Jobs
 ) -> None:
-    """get_author name search returns queued on 429, background completes."""
+    """A 429 on the name-search path is retried in-client; candidates come back."""
     call_count = 0
 
     def _side_effect(request: httpx.Request) -> httpx.Response:
@@ -328,9 +325,6 @@ async def test_get_author_name_search_queued_on_429(
 
     app = FastMCP("test", lifespan=lifespan)
     register_search_tools(app, slow_jobs)
-    from scholar_mcp._tools_tasks import register_task_tools
-
-    register_task_tools(app)
 
     async with Client(app) as client:
         result = await client.call_tool("get_author", {"identifier": "John Smith"})

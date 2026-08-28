@@ -107,7 +107,7 @@ async def test_recommend_papers_retries_on_429(
     bundle: ServiceBundle,
     slow_jobs: Jobs,
 ) -> None:
-    """recommend_papers returns queued on 429, background completes."""
+    """A rate limit is retried in-client rather than queued."""
     call_count = 0
 
     def _side_effect(request: httpx.Request) -> httpx.Response:

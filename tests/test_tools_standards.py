@@ -12,6 +12,7 @@ import pytest
 import respx
 from fastmcp import FastMCP
 from fastmcp.client import Client
+from fastmcp_pvl_core import Jobs
 
 from scholar_mcp._docling_client import DoclingClient
 from scholar_mcp._server_deps import ServiceBundle
@@ -34,13 +35,13 @@ SAMPLE_RFC_DOC = {
 
 
 @pytest.fixture
-def mcp(bundle: ServiceBundle) -> FastMCP:
+def mcp(bundle: ServiceBundle, slow_jobs: Jobs) -> FastMCP:
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_standards_tools(app)
+    register_standards_tools(app, slow_jobs)
     return app
 
 
@@ -125,7 +126,7 @@ async def test_search_standards_returns_results(
         result = await client.call_tool(
             "search_standards", {"query": "QUIC transport", "body": "IETF"}
         )
-    data = json.loads(result.content[0].text)
+    data = json.loads(result.content[0].text)["results"]
     assert isinstance(data, list)
     assert len(data) >= 1
     assert data[0]["body"] == "IETF"
@@ -501,11 +502,16 @@ async def test_get_standard_alias_cache_hit_record_not_cached(
     assert data["identifier"] == "RFC 9000"
 
 
-async def test_handle_full_text_rate_limited_queues_task(
+async def test_handle_full_text_conversion_failure_keeps_the_record(
     mcp: FastMCP, bundle: ServiceBundle
 ) -> None:
-    """_handle_full_text queues a background task when docling is rate-limited."""
-    from scholar_mcp._rate_limiter import RateLimitedError
+    """A failed conversion returns the record, not an error.
+
+    The metadata and ``full_text_url`` are still useful -- the caller can
+    fetch the document by hand -- so losing them alongside the conversion
+    would be the worse answer. This replaces a test asserting the old queue
+    hop, which fired on a ``RateLimitedError`` the docling path never raised.
+    """
 
     record = {
         "identifier": "RFC 9000",
@@ -517,7 +523,7 @@ async def test_handle_full_text_rate_limited_queues_task(
     }
     await bundle.cache.set_standard("RFC 9000", record)
     mock_docling = MagicMock(spec=DoclingClient)
-    mock_docling.convert = AsyncMock(side_effect=RateLimitedError("rate limited"))
+    mock_docling.convert = AsyncMock(side_effect=RuntimeError("docling exploded"))
     bundle.docling = mock_docling  # type: ignore[assignment]
 
     with respx.mock(assert_all_called=False) as mock:
@@ -529,8 +535,9 @@ async def test_handle_full_text_rate_limited_queues_task(
                 "get_standard", {"identifier": "RFC 9000", "fetch_full_text": True}
             )
     data = json.loads(result.content[0].text)
-    assert data.get("queued") is True
-    assert "task_id" in data
+    assert data["identifier"] == "RFC 9000"
+    assert "full_text" not in data
+    assert data["full_text_url"].endswith("rfc9000.html")
 
 
 # ---------------------------------------------------------------------------
@@ -581,3 +588,87 @@ async def test_get_sync_status_reports_runs(
     assert isinstance(row["started_at"], float)
     assert isinstance(row["finished_at"], float)
     assert row["started_at"] < row["finished_at"]
+
+
+async def test_handle_full_text_marks_the_failure(
+    mcp: FastMCP, bundle: ServiceBundle
+) -> None:
+    """A failed conversion is distinguishable from one that was never offered.
+
+    Without a marker, three different situations return the same shape with
+    no ``full_text``: docling unconfigured, no ``full_text_url`` on the
+    record, and a conversion that actually failed. Only the last is worth
+    retrying, so the caller needs to tell them apart.
+    """
+    record = {
+        "identifier": "RFC 9000",
+        "title": "QUIC",
+        "body": "IETF",
+        "full_text_available": True,
+        "full_text_url": "https://www.rfc-editor.org/rfc/rfc9000.html",
+        "url": "https://www.rfc-editor.org/info/rfc9000",
+    }
+    await bundle.cache.set_standard("RFC 9000", record)
+    mock_docling = MagicMock(spec=DoclingClient)
+    mock_docling.convert = AsyncMock(side_effect=RuntimeError("converter exploded"))
+    bundle.docling = mock_docling  # type: ignore[assignment]
+
+    with respx.mock(assert_all_called=False) as mock:
+        mock.get("https://www.rfc-editor.org/rfc/rfc9000.html").mock(
+            return_value=httpx.Response(200, content=b"<html>content</html>")
+        )
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "get_standard", {"identifier": "RFC 9000", "fetch_full_text": True}
+            )
+
+    data = json.loads(result.content[0].text)
+    assert "converter exploded" in data["full_text_error"]
+    assert data["full_text_url"].endswith("rfc9000.html")
+
+
+async def test_handle_full_text_survives_a_cache_write_failure(
+    mcp: FastMCP, bundle: ServiceBundle
+) -> None:
+    """A failed cache write does not throw away a successful conversion.
+
+    The markdown is already in hand by then, and the conversion is the
+    expensive part -- minutes of docling. Letting a locked or full SQLite
+    propagate would cost the caller both the text and the record.
+    """
+    record = {
+        "identifier": "RFC 9000",
+        "title": "QUIC",
+        "body": "IETF",
+        "full_text_available": True,
+        "full_text_url": "https://www.rfc-editor.org/rfc/rfc9000.html",
+        "url": "https://www.rfc-editor.org/info/rfc9000",
+    }
+    await bundle.cache.set_standard("RFC 9000", record)
+    mock_docling = MagicMock(spec=DoclingClient)
+    mock_docling.convert = AsyncMock(return_value="# QUIC\n\nConverted.")
+    bundle.docling = mock_docling  # type: ignore[assignment]
+
+    original_set = bundle.cache.set_standard
+    calls = {"n": 0}
+
+    async def failing_set(*args: object, **kwargs: object) -> None:
+        calls["n"] += 1
+        raise RuntimeError("database is locked")
+
+    with respx.mock(assert_all_called=False) as mock:
+        mock.get("https://www.rfc-editor.org/rfc/rfc9000.html").mock(
+            return_value=httpx.Response(200, content=b"<html>content</html>")
+        )
+        bundle.cache.set_standard = failing_set  # type: ignore[assignment]
+        try:
+            async with Client(mcp) as client:
+                result = await client.call_tool(
+                    "get_standard", {"identifier": "RFC 9000", "fetch_full_text": True}
+                )
+        finally:
+            bundle.cache.set_standard = original_set  # type: ignore[assignment]
+
+    data = json.loads(result.content[0].text)
+    assert calls["n"] == 1, "the write must have been attempted"
+    assert "# QUIC" in data["full_text"], "the conversion must survive the failure"
