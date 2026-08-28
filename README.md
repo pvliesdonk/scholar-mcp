@@ -283,6 +283,9 @@ Domain environment variables use the `SCHOLAR_MCP_` prefix:
 | `SCHOLAR_MCP_EPO_CONSUMER_KEY` | (none) | No | EPO Open Patent Services consumer key. Optional; patent tools are hidden when unset. Register at https://developers.epo.org/user/register. |
 | `SCHOLAR_MCP_EPO_CONSUMER_SECRET` | (none) | No | EPO Open Patent Services consumer secret. Optional; patent tools are hidden when unset. |
 | `SCHOLAR_MCP_GOOGLE_BOOKS_API_KEY` | (none) | No | Google Books API key. Optional; book tools work unauthenticated at reduced rate limits. |
+| `SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S` | `25.0` | No | Seconds a long-running tool call may run in the foreground before it is promoted to a background job and a job handle is returned instead. |
+| `SCHOLAR_MCP_JOBS_RESULT_TTL_S` | `3600.0` | No | Seconds a background-job record (working or finished) is retained for polling before it expires from the store. |
+| `SCHOLAR_MCP_JOBS_MAX_PER_SUBJECT` | `256` | No | Maximum live background jobs per calling subject; further promotions are rejected until older records expire. |
 <!-- GENERATED-ENV-TABLE-DOMAIN-END -->
 
 Domain-config fields are composed inside `src/scholar_mcp/config.py` between the `CONFIG-FIELDS-START` / `CONFIG-FIELDS-END` sentinels; env reads go through `fastmcp_pvl_core.env(_ENV_PREFIX, "SUFFIX", default)` so naming stays consistent, and field invariants go in `__post_init__` between the `CONFIG-VALIDATE-START` / `CONFIG-VALIDATE-END` sentinels. Each field's `metadata` `help` and `tags` generate the table above directly, so keep them accurate and complete.
@@ -303,7 +306,8 @@ versus a transient upstream issue.
 - **Sync domain code, async MCP layer.** Backend clients are synchronous; MCP tools call them via `asyncio.to_thread()`. Simpler client code, explicit offloading at the transport boundary.
 - **SQLite cache with per-table TTLs and identifier aliases.** Papers / authors last 30 days, citations / references 7 days. DOI ↔ S2 ID ↔ arXiv ID aliasing survives across cache clears so repeated enrichment hits the same row.
 - **Read-only by default.** Write-tagged tools (PDF download/convert, patent PDF) are hidden unless `SCHOLAR_MCP_READ_ONLY=false`. Safer default for first-run.
-- **Rate-limited try-once with background queueing.** S2/OpenAlex calls try once; on 429 they queue a retry-enabled background task and return `{"queued": true, "task_id": ...}`. PDF tools always queue unless the cache already has the conversion.
+- **Slow work becomes a background job.** PDF download and conversion run through the `fastmcp-pvl-core` jobs layer. A call that beats `SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S` returns its result directly; a slower one returns a handle to poll with `get_job_result`. No tool decides in advance whether to go background, so a cache hit needs no special case.
+- **Rate-limited try-once with background queueing.** S2/OpenAlex calls try once; on 429 they queue a retry-enabled background task and return `{"queued": true, "task_id": ...}`, polled with `get_task_result`. Moving these onto the jobs layer as well is tracked in [#264](https://github.com/pvliesdonk/scholar-mcp/issues/264).
 - **Tier 2 standards sync out-of-band.** ISO/IEC/IEEE/CC/CEN catalogues come from community Relaton dumps via `scholar-mcp sync-standards`, not live at runtime — avoids paywalled-HTML scraping and keeps tool calls fast.
 <!-- DOMAIN-END -->
 
@@ -363,7 +367,7 @@ Schedule via cron / launchd / systemd timer — weekly is sufficient; standards 
 
 ## MCP Tools
 
-28 tools, organised by scholarly source type.
+31 tools, organised by scholarly source type.
 
 ### Papers
 
@@ -441,14 +445,15 @@ Schedule via cron / launchd / systemd timer — weekly is sufficient; standards 
 
 > PDF tools are write-tagged and hidden when `SCHOLAR_MCP_READ_ONLY=true` (the default). `fetch_patent_pdf` (above) and the `get_standard` full-text mode cover the patent and standards equivalents.
 
-### Task Polling
+### Job and Task Polling
 
 | Tool | Description |
 |---|---|
+| `get_job_result` | Retrieve the outcome of a background job by ID. |
 | `get_task_result` | Poll for the result of a background task by ID. |
 | `list_tasks` | List all active background tasks. |
 
-> Long-running operations (PDF download/conversion) and rate-limited backend requests return `{"queued": true, "task_id": "..."}` immediately. Use `get_task_result` to poll for the result.
+> PDF download and conversion answer directly when they are quick. A slower call returns `{"status": "working", "job_id": "..."}`, polled with `get_job_result`. Rate-limited backend requests still return `{"queued": true, "task_id": "..."}`, polled with `get_task_result`. Each response names its own poller in `poll_with` or `tool`.
 
 ## Docker Compose
 

@@ -66,7 +66,9 @@ async def test_get_task_result_in_progress_includes_context(
         await asyncio.sleep(10)
         return "{}"
 
-    task_id = bundle.tasks.submit(_slow_coro(), tool="convert_pdf_to_markdown")
+    # A tool still served by this queue.  The PDF tools moved to the jobs
+    # framework, so their hints no longer live here (#312).
+    task_id = bundle.tasks.submit(_slow_coro(), tool="search_patents")
 
     async with Client(mcp) as client:
         result = await client.call_tool("get_task_result", {"task_id": task_id})
@@ -74,9 +76,9 @@ async def test_get_task_result_in_progress_includes_context(
     assert data["status"] in ("pending", "running")
     assert "elapsed_seconds" in data
     assert isinstance(data["elapsed_seconds"], int)
-    assert data["tool"] == "convert_pdf_to_markdown"
+    assert data["tool"] == "search_patents"
     assert "hint" in data
-    assert "1-5 minutes" in data["hint"]
+    assert "5-15 seconds" in data["hint"]
 
 
 async def test_get_task_result_no_hint_for_unknown_tool(
@@ -106,7 +108,7 @@ async def test_list_tasks(mcp: FastMCP, bundle: ServiceBundle) -> None:
         await asyncio.sleep(10)
         return "{}"
 
-    task_id = bundle.tasks.submit(_slow_coro(), tool="fetch_paper_pdf")
+    task_id = bundle.tasks.submit(_slow_coro(), tool="search_patents")
 
     async with Client(mcp) as client:
         result = await client.call_tool("list_tasks", {})
@@ -114,7 +116,7 @@ async def test_list_tasks(mcp: FastMCP, bundle: ServiceBundle) -> None:
     assert isinstance(data, list)
     assert len(data) >= 1
     task_entry = next(t for t in data if t["task_id"] == task_id)
-    assert task_entry["tool"] == "fetch_paper_pdf"
+    assert task_entry["tool"] == "search_patents"
     assert "elapsed_seconds" in task_entry
 
 

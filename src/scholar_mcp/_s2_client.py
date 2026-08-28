@@ -59,11 +59,11 @@ def log_s2_error(exc: httpx.HTTPStatusError) -> None:
         logger.warning("s2_upstream_error status=%s detail=%s", status, detail)
 
 
-def format_s2_error(exc: httpx.HTTPStatusError) -> str:
-    """Log and format an S2 upstream HTTP error as a caller-facing JSON string.
+def s2_error_payload(exc: httpx.HTTPStatusError) -> dict[str, Any]:
+    """Log an S2 upstream HTTP error and build the caller-facing payload.
 
     Logs full detail server-side via :func:`log_s2_error`. The returned
-    JSON intentionally omits the raw upstream response body — LLM callers
+    mapping intentionally omits the raw upstream response body — LLM callers
     get a generic, non-leaking message; operators get full detail from the
     log line.
 
@@ -71,17 +71,31 @@ def format_s2_error(exc: httpx.HTTPStatusError) -> str:
         exc: The HTTP error raised by the S2 client.
 
     Returns:
-        JSON string: ``{"error": "upstream_error", "status": <code>,
+        ``{"error": "upstream_error", "status": <code>,
         "detail": <generic message>}``.
     """
     log_s2_error(exc)
-    return json.dumps(
-        {
-            "error": "upstream_error",
-            "status": exc.response.status_code,
-            "detail": "Semantic Scholar API request failed; see server logs for details",
-        }
-    )
+    return {
+        "error": "upstream_error",
+        "status": exc.response.status_code,
+        "detail": "Semantic Scholar API request failed; see server logs for details",
+    }
+
+
+def format_s2_error(exc: httpx.HTTPStatusError) -> str:
+    """Format an S2 upstream HTTP error as a caller-facing JSON string.
+
+    The JSON-string form kept for tools that still return ``str``; tools
+    registered through the jobs framework return
+    :func:`s2_error_payload`'s mapping directly instead.
+
+    Args:
+        exc: The HTTP error raised by the S2 client.
+
+    Returns:
+        The JSON encoding of :func:`s2_error_payload`.
+    """
+    return json.dumps(s2_error_payload(exc))
 
 
 class S2Client:

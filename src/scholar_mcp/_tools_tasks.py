@@ -13,14 +13,12 @@ from ._server_deps import ServiceBundle, get_bundle
 logger = logging.getLogger(__name__)
 
 # Expected duration hints per tool, shown while the task is in progress.
+#
+# Only tools still on this queue belong here.  The PDF-producing tools moved
+# to the jobs framework (#312), where the same guidance lives in each tool's
+# own docstring — read by the calling model *before* it calls, rather than
+# after it has already queued something.
 _DURATION_HINTS: dict[str, str] = {
-    "fetch_paper_pdf": "PDF download usually completes in 10-30 seconds.",
-    "convert_pdf_to_markdown": (
-        "PDF conversion typically takes 1-5 minutes depending on page count."
-    ),
-    "fetch_and_convert": (
-        "Full pipeline (download + conversion) typically takes 1-5 minutes."
-    ),
     "search_patents": "Patent searches usually complete in 5-15 seconds.",
     "get_patent": "Patent data retrieval usually completes in 5-20 seconds.",
     "get_citing_patents": "Citing patent lookup usually completes in 10-30 seconds.",
@@ -51,9 +49,13 @@ def register_task_tools(mcp: FastMCP) -> None:
         the operation was submitted for background processing.  Call this
         tool with the ``task_id`` to check whether it has completed.
 
-        PDF conversion tasks typically take 1-5 minutes. Keep polling —
-        the response includes ``elapsed_seconds`` and a ``hint`` with
-        expected duration while the task is in progress.
+        Keep polling — the response includes ``elapsed_seconds`` and a
+        ``hint`` with expected duration while the task is in progress.
+
+        This tool polls the tools that have not yet moved to the jobs
+        framework. Tools that answer with a ``job_id`` and
+        ``"poll_with": "get_job_result"`` are polled with that tool
+        instead; the handle always names the one to use.
 
         Args:
             task_id: The task ID returned by a queued operation.

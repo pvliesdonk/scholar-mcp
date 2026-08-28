@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastmcp import FastMCP
 from fastmcp.client import Client
+from fastmcp_pvl_core import Jobs, register_job_tools
 
 from scholar_mcp._docling_client import DoclingClient
 from scholar_mcp._epo_client import EpoClient, EpoRateLimitedError
@@ -238,7 +239,9 @@ def epo_client() -> EpoClient:
 
 
 @pytest.fixture
-def mcp_with_epo(bundle: ServiceBundle, epo_client: EpoClient) -> FastMCP:
+def mcp_with_epo(
+    bundle: ServiceBundle, epo_client: EpoClient, slow_jobs: Jobs
+) -> FastMCP:
     """FastMCP instance with patent tools and a mock EpoClient wired in."""
     bundle.epo = epo_client
 
@@ -247,7 +250,7 @@ def mcp_with_epo(bundle: ServiceBundle, epo_client: EpoClient) -> FastMCP:
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_patent_tools(app)
+    register_patent_tools(app, slow_jobs)
     return app
 
 
@@ -278,7 +281,7 @@ async def test_search_patents_no_criteria_returns_error(
 
 
 async def test_search_patents_uses_cache(
-    bundle: ServiceBundle, epo_client: EpoClient
+    bundle: ServiceBundle, epo_client: EpoClient, slow_jobs: Jobs
 ) -> None:
     """search_patents returns cached result without calling EPO API."""
     cql = 'ta="cached query"'
@@ -294,7 +297,7 @@ async def test_search_patents_uses_cache(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_patent_tools(app)
+    register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
         result = await client.call_tool("search_patents", {"query": "cached query"})
@@ -332,6 +335,7 @@ async def test_search_patents_different_offsets_different_cache_entries(
 
 async def test_search_patents_rate_limited_queues(
     bundle: ServiceBundle,
+    slow_jobs: Jobs,
 ) -> None:
     """search_patents queues the task when EPO rate-limits the request."""
     call_count = 0
@@ -352,7 +356,7 @@ async def test_search_patents_rate_limited_queues(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_patent_tools(app)
+    register_patent_tools(app, slow_jobs)
     from scholar_mcp._tools_tasks import register_task_tools
 
     register_task_tools(app)
@@ -378,7 +382,7 @@ async def test_search_patents_rate_limited_queues(
 
 
 async def test_search_patents_with_filters(
-    bundle: ServiceBundle, epo_client: EpoClient
+    bundle: ServiceBundle, epo_client: EpoClient, slow_jobs: Jobs
 ) -> None:
     """search_patents passes CQL filters to EPO client."""
     bundle.epo = epo_client
@@ -388,7 +392,7 @@ async def test_search_patents_with_filters(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_patent_tools(app)
+    register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
         await client.call_tool(
@@ -412,7 +416,7 @@ async def test_search_patents_with_filters(
 
 
 async def test_search_patents_range_from_limit_offset(
-    bundle: ServiceBundle, epo_client: EpoClient
+    bundle: ServiceBundle, epo_client: EpoClient, slow_jobs: Jobs
 ) -> None:
     """search_patents maps limit/offset to range_begin/range_end."""
     bundle.epo = epo_client
@@ -422,7 +426,7 @@ async def test_search_patents_range_from_limit_offset(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_patent_tools(app)
+    register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
         await client.call_tool(
@@ -450,7 +454,7 @@ async def test_get_patent_returns_biblio(
 
 
 async def test_get_patent_caches_result(
-    bundle: ServiceBundle, epo_client: EpoClient
+    bundle: ServiceBundle, epo_client: EpoClient, slow_jobs: Jobs
 ) -> None:
     """get_patent stores biblio result in cache after first fetch."""
     bundle.epo = epo_client
@@ -460,7 +464,7 @@ async def test_get_patent_caches_result(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_patent_tools(app)
+    register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
         await client.call_tool("get_patent", {"patent_number": "EP1234567A1"})
@@ -471,7 +475,7 @@ async def test_get_patent_caches_result(
 
 
 async def test_get_patent_cache_hit_skips_api(
-    bundle: ServiceBundle, epo_client: EpoClient
+    bundle: ServiceBundle, epo_client: EpoClient, slow_jobs: Jobs
 ) -> None:
     """get_patent returns cached biblio without calling EPO API."""
     cached_biblio = {
@@ -488,7 +492,7 @@ async def test_get_patent_cache_hit_skips_api(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_patent_tools(app)
+    register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
         result = await client.call_tool("get_patent", {"patent_number": "EP9999999B1"})
@@ -509,7 +513,7 @@ async def test_get_patent_invalid_number_returns_error(
 
 
 async def test_get_patent_default_sections_biblio_only(
-    bundle: ServiceBundle, epo_client: EpoClient
+    bundle: ServiceBundle, epo_client: EpoClient, slow_jobs: Jobs
 ) -> None:
     """get_patent defaults to sections=['biblio'] when none provided."""
     bundle.epo = epo_client
@@ -519,7 +523,7 @@ async def test_get_patent_default_sections_biblio_only(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_patent_tools(app)
+    register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
         result = await client.call_tool("get_patent", {"patent_number": "EP1234567A1"})
@@ -576,6 +580,7 @@ async def test_get_patent_citations_section_works(
 
 async def test_get_patent_empty_biblio_returns_error(
     bundle: ServiceBundle,
+    slow_jobs: Jobs,
 ) -> None:
     """get_patent returns error JSON when EPO returns empty/minimal biblio."""
     empty_biblio = {
@@ -599,7 +604,7 @@ async def test_get_patent_empty_biblio_returns_error(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_patent_tools(app)
+    register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
         result = await client.call_tool("get_patent", {"patent_number": "EP1234567A1"})
@@ -613,6 +618,7 @@ async def test_get_patent_empty_biblio_returns_error(
 
 async def test_get_patent_not_found_without_biblio_section(
     bundle: ServiceBundle,
+    slow_jobs: Jobs,
 ) -> None:
     """get_patent returns not-found even when only non-biblio sections are requested."""
     empty_biblio = {
@@ -636,7 +642,7 @@ async def test_get_patent_not_found_without_biblio_section(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_patent_tools(app)
+    register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
         result = await client.call_tool(
@@ -649,6 +655,7 @@ async def test_get_patent_not_found_without_biblio_section(
 
 async def test_get_patent_rate_limited_queues(
     bundle: ServiceBundle,
+    slow_jobs: Jobs,
 ) -> None:
     """get_patent queues the task when EPO rate-limits the request."""
     call_count = 0
@@ -669,7 +676,7 @@ async def test_get_patent_rate_limited_queues(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_patent_tools(app)
+    register_patent_tools(app, slow_jobs)
     from scholar_mcp._tools_tasks import register_task_tools
 
     register_task_tools(app)
@@ -695,6 +702,7 @@ async def test_get_patent_rate_limited_queues(
 
 async def test_get_patent_no_epo_client_returns_error(
     bundle: ServiceBundle,
+    slow_jobs: Jobs,
 ) -> None:
     """get_patent returns error JSON when EPO client is not configured."""
     bundle.epo = None
@@ -704,7 +712,7 @@ async def test_get_patent_no_epo_client_returns_error(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_patent_tools(app)
+    register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
         result = await client.call_tool("get_patent", {"patent_number": "EP1234567A1"})
@@ -714,6 +722,7 @@ async def test_get_patent_no_epo_client_returns_error(
 
 async def test_search_patents_no_epo_client_returns_error(
     bundle: ServiceBundle,
+    slow_jobs: Jobs,
 ) -> None:
     """search_patents returns error JSON when EPO client is not configured."""
     bundle.epo = None
@@ -723,7 +732,7 @@ async def test_search_patents_no_epo_client_returns_error(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_patent_tools(app)
+    register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
         result = await client.call_tool("search_patents", {"query": "test"})
@@ -795,6 +804,7 @@ async def test_fetch_sections_caches_results(bundle: ServiceBundle) -> None:
 
 async def test_get_patent_all_sections_via_tool(
     bundle: ServiceBundle,
+    slow_jobs: Jobs,
 ) -> None:
     """get_patent tool returns all five sections via MCP client."""
     epo = _make_epo_client()
@@ -805,7 +815,7 @@ async def test_get_patent_all_sections_via_tool(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_patent_tools(app)
+    register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
         result = await client.call_tool(
@@ -830,6 +840,7 @@ async def test_get_patent_all_sections_via_tool(
 
 async def test_get_patent_citations_section(
     bundle: ServiceBundle,
+    slow_jobs: Jobs,
 ) -> None:
     """get_patent with sections=['citations'] returns citation data."""
     citations_data = {
@@ -847,7 +858,7 @@ async def test_get_patent_citations_section(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_patent_tools(app)
+    register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
         result = await client.call_tool(
@@ -864,6 +875,7 @@ async def test_get_patent_citations_section(
 
 async def test_citations_npl_resolution_with_s2(
     bundle: ServiceBundle,
+    slow_jobs: Jobs,
 ) -> None:
     """NPL references with DOIs are resolved via S2 when available."""
     citations_data = {
@@ -886,7 +898,7 @@ async def test_citations_npl_resolution_with_s2(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_patent_tools(app)
+    register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
         result = await client.call_tool(
@@ -910,6 +922,7 @@ async def test_citations_npl_resolution_with_s2(
 
 async def test_get_citing_patents_returns_results(
     bundle: ServiceBundle,
+    slow_jobs: Jobs,
 ) -> None:
     """get_citing_patents finds patents citing a paper."""
     epo = _make_epo_client(
@@ -925,7 +938,7 @@ async def test_get_citing_patents_returns_results(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_patent_tools(app)
+    register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
         result = await client.call_tool(
@@ -942,6 +955,7 @@ async def test_get_citing_patents_returns_results(
 
 async def test_get_citing_patents_empty_results(
     bundle: ServiceBundle,
+    slow_jobs: Jobs,
 ) -> None:
     """get_citing_patents returns empty list when no patents found."""
     epo = _make_epo_client(
@@ -954,7 +968,7 @@ async def test_get_citing_patents_empty_results(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_patent_tools(app)
+    register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
         result = await client.call_tool(
@@ -968,6 +982,7 @@ async def test_get_citing_patents_empty_results(
 
 async def test_get_citing_patents_no_epo_returns_error(
     bundle: ServiceBundle,
+    slow_jobs: Jobs,
 ) -> None:
     """get_citing_patents returns error when EPO not configured."""
     bundle.epo = None
@@ -977,7 +992,7 @@ async def test_get_citing_patents_no_epo_returns_error(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_patent_tools(app)
+    register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
         result = await client.call_tool(
@@ -990,6 +1005,7 @@ async def test_get_citing_patents_no_epo_returns_error(
 
 async def test_get_citing_patents_rate_limited_queues(
     bundle: ServiceBundle,
+    slow_jobs: Jobs,
 ) -> None:
     """get_citing_patents queues on rate limit."""
     epo = _make_epo_client(raise_on_search=EpoRateLimitedError("red"))
@@ -1000,7 +1016,7 @@ async def test_get_citing_patents_rate_limited_queues(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_patent_tools(app)
+    register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
         result = await client.call_tool(
@@ -1019,6 +1035,7 @@ async def test_get_citing_patents_rate_limited_queues(
 
 async def test_npl_chapter_info_parsed(
     bundle: ServiceBundle,
+    slow_jobs: Jobs,
 ) -> None:
     """NPL ref with chapter pattern gets chapter_info attached."""
     citations_data = {
@@ -1038,7 +1055,7 @@ async def test_npl_chapter_info_parsed(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_patent_tools(app)
+    register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
         result = await client.call_tool(
@@ -1059,6 +1076,7 @@ async def test_npl_chapter_info_parsed(
 
 async def test_npl_no_chapter_info(
     bundle: ServiceBundle,
+    slow_jobs: Jobs,
 ) -> None:
     """NPL ref without chapter patterns has no chapter_info key."""
     citations_data = {
@@ -1075,7 +1093,7 @@ async def test_npl_no_chapter_info(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_patent_tools(app)
+    register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
         result = await client.call_tool(
@@ -1090,6 +1108,7 @@ async def test_npl_no_chapter_info(
 
 async def test_npl_chapter_info_with_s2_resolution(
     bundle: ServiceBundle,
+    slow_jobs: Jobs,
 ) -> None:
     """NPL chapter_info is attached even when S2 resolution succeeds."""
     citations_data = {
@@ -1114,7 +1133,7 @@ async def test_npl_chapter_info_with_s2_resolution(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_patent_tools(app)
+    register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
         result = await client.call_tool(
@@ -1189,7 +1208,7 @@ def _make_image_inquiry_xml(link: str, pages: int = 5) -> bytes:
 """.encode()
 
 
-def test_fetch_patent_pdf_no_epo_client(bundle: ServiceBundle) -> None:
+def test_fetch_patent_pdf_no_epo_client(bundle: ServiceBundle, slow_jobs: Jobs) -> None:
     """Returns error when EPO is not configured."""
 
     @asynccontextmanager
@@ -1197,7 +1216,7 @@ def test_fetch_patent_pdf_no_epo_client(bundle: ServiceBundle) -> None:
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_patent_tools(app)
+    register_patent_tools(app, slow_jobs)
 
     async def run() -> dict:
         async with Client(app) as client:
@@ -1211,7 +1230,9 @@ def test_fetch_patent_pdf_no_epo_client(bundle: ServiceBundle) -> None:
     assert "epo" in data["error"].lower() or "configured" in data["error"].lower()
 
 
-def test_fetch_patent_pdf_invalid_number(bundle: ServiceBundle) -> None:
+def test_fetch_patent_pdf_invalid_number(
+    bundle: ServiceBundle, slow_jobs: Jobs
+) -> None:
     """Returns error for unparseable patent number."""
     bundle.epo = _make_epo_client()
 
@@ -1220,7 +1241,7 @@ def test_fetch_patent_pdf_invalid_number(bundle: ServiceBundle) -> None:
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_patent_tools(app)
+    register_patent_tools(app, slow_jobs)
 
     async def run() -> dict:
         async with Client(app) as client:
@@ -1233,10 +1254,15 @@ def test_fetch_patent_pdf_invalid_number(bundle: ServiceBundle) -> None:
     assert "error" in data
 
 
-def test_fetch_patent_pdf_queued(bundle: ServiceBundle) -> None:
-    """fetch_patent_pdf queues task and returns queued response."""
+def test_fetch_patent_pdf_promotes_when_slow(bundle: ServiceBundle, jobs: Jobs) -> None:
+    """A slow EPO download is promoted, and the result arrives by polling."""
     epo = _make_epo_client()
-    epo.get_pdf = AsyncMock(return_value=b"%PDF-1.4 fake pdf content")
+
+    async def slow_get_pdf(*args: object, **kwargs: object) -> bytes:
+        await asyncio.sleep(0.2)
+        return b"%PDF-1.4 fake pdf content"
+
+    epo.get_pdf = slow_get_pdf  # type: ignore[method-assign]
     bundle.epo = epo
 
     @asynccontextmanager
@@ -1244,21 +1270,37 @@ def test_fetch_patent_pdf_queued(bundle: ServiceBundle) -> None:
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_patent_tools(app)
+    register_patent_tools(app, jobs)
+    register_job_tools(app, jobs)
 
     async def run() -> dict:
         async with Client(app) as client:
             result = await client.call_tool(
                 "fetch_patent_pdf", {"patent_number": "EP3491801B1"}
             )
-        return json.loads(result.content[0].text)
+            handle = json.loads(result.content[0].text)
+            assert handle["status"] == "working"
+            assert handle["poll_with"] == "get_job_result"
+            assert "fetch_patent_pdf" in handle["message"]
 
-    data = asyncio.run(run())
-    assert data.get("queued") is True
-    assert data.get("tool") == "fetch_patent_pdf"
+            for _ in range(50):
+                polled = await client.call_tool(
+                    "get_job_result", {"job_id": handle["job_id"]}
+                )
+                data = json.loads(polled.content[0].text)
+                if data["status"] != "working":
+                    return data
+                await asyncio.sleep(0.05)
+        raise TimeoutError("job did not settle")
+
+    settled = asyncio.run(run())
+    assert settled["status"] == "completed"
+    assert settled["result"]["pdf_path"].endswith(".pdf")
 
 
-def test_fetch_patent_pdf_cache_hit_returns_pdf_path(bundle: ServiceBundle) -> None:
+def test_fetch_patent_pdf_cache_hit_returns_pdf_path(
+    bundle: ServiceBundle, slow_jobs: Jobs
+) -> None:
     """fetch_patent_pdf returns cached PDF path immediately when file already exists."""
     epo = _make_epo_client()
     bundle.epo = epo
@@ -1272,7 +1314,7 @@ def test_fetch_patent_pdf_cache_hit_returns_pdf_path(bundle: ServiceBundle) -> N
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_patent_tools(app)
+    register_patent_tools(app, slow_jobs)
 
     async def run() -> dict:
         # Compute the stem the same way the tool does
@@ -1301,7 +1343,9 @@ def test_fetch_patent_pdf_cache_hit_returns_pdf_path(bundle: ServiceBundle) -> N
     epo.get_pdf = AsyncMock()  # type: ignore[method-assign]
 
 
-def test_fetch_patent_pdf_execute_downloads_pdf(bundle: ServiceBundle) -> None:
+def test_fetch_patent_pdf_execute_downloads_pdf(
+    bundle: ServiceBundle, slow_jobs: Jobs
+) -> None:
     """_execute() downloads PDF from EPO and stores it when cache is empty."""
     epo = _make_epo_client()
     epo.get_pdf = AsyncMock(return_value=b"%PDF-1.4 fresh")  # type: ignore[method-assign]
@@ -1312,33 +1356,23 @@ def test_fetch_patent_pdf_execute_downloads_pdf(bundle: ServiceBundle) -> None:
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_patent_tools(app)
+    register_patent_tools(app, slow_jobs)
 
-    async def run() -> str:
+    async def run() -> dict:
         async with Client(app) as client:
             result = await client.call_tool(
                 "fetch_patent_pdf", {"patent_number": "EP3491801B1"}
             )
-        queued_data = json.loads(result.content[0].text)
-        assert queued_data.get("queued") is True
-        task_id = queued_data["task_id"]
+        return json.loads(result.content[0].text)
 
-        # Wait for the background task to complete
-        tasks = bundle.tasks
-        for _ in range(50):
-            task = tasks.get(task_id)
-            if task and task.status == "completed":
-                return task.result or ""
-            await asyncio.sleep(0.05)
-        return ""
-
-    result_json = asyncio.run(run())
-    result = json.loads(result_json)
+    result = asyncio.run(run())
     assert "pdf_path" in result
     epo.get_pdf.assert_called_once()  # type: ignore[attr-defined]
 
 
-def test_fetch_patent_pdf_execute_pdf_not_available(bundle: ServiceBundle) -> None:
+def test_fetch_patent_pdf_execute_pdf_not_available(
+    bundle: ServiceBundle, slow_jobs: Jobs
+) -> None:
     """_execute() returns pdf_not_available error when EPO raises ValueError."""
     epo = _make_epo_client()
     epo.get_pdf = AsyncMock(side_effect=ValueError("No PDF available for EP3491801B1"))  # type: ignore[method-assign]
@@ -1349,26 +1383,16 @@ def test_fetch_patent_pdf_execute_pdf_not_available(bundle: ServiceBundle) -> No
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_patent_tools(app)
+    register_patent_tools(app, slow_jobs)
 
-    async def run() -> str:
+    async def run() -> dict:
         async with Client(app) as client:
             result = await client.call_tool(
                 "fetch_patent_pdf", {"patent_number": "EP3491801B1"}
             )
-        queued_data = json.loads(result.content[0].text)
-        task_id = queued_data["task_id"]
+        return json.loads(result.content[0].text)
 
-        tasks = bundle.tasks
-        for _ in range(50):
-            task = tasks.get(task_id)
-            if task and task.status == "completed":
-                return task.result or ""
-            await asyncio.sleep(0.05)
-        return ""
-
-    result_json = asyncio.run(run())
-    result = json.loads(result_json)
+    result = asyncio.run(run())
     assert result.get("error") == "pdf_not_available"
 
 
@@ -1387,6 +1411,7 @@ def _make_mock_docling(
 
 def test_fetch_patent_pdf_cache_hit_with_docling_and_cached_md(
     bundle: ServiceBundle,
+    slow_jobs: Jobs,
 ) -> None:
     """Cache hit returns markdown inline when both PDF and MD are already cached."""
     epo = _make_epo_client()
@@ -1403,7 +1428,7 @@ def test_fetch_patent_pdf_cache_hit_with_docling_and_cached_md(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_patent_tools(app)
+    register_patent_tools(app, slow_jobs)
 
     async def run() -> dict:
         import hashlib
@@ -1437,6 +1462,7 @@ def test_fetch_patent_pdf_cache_hit_with_docling_and_cached_md(
 
 def test_fetch_patent_pdf_execute_with_docling_converts_to_markdown(
     bundle: ServiceBundle,
+    slow_jobs: Jobs,
 ) -> None:
     """_execute() downloads PDF and converts it to markdown via docling."""
     epo = _make_epo_client()
@@ -1449,34 +1475,25 @@ def test_fetch_patent_pdf_execute_with_docling_converts_to_markdown(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_patent_tools(app)
+    register_patent_tools(app, slow_jobs)
 
-    async def run() -> str:
+    async def run() -> dict:
         async with Client(app) as client:
             result = await client.call_tool(
                 "fetch_patent_pdf", {"patent_number": "EP3491801B1"}
             )
-        queued_data = json.loads(result.content[0].text)
-        task_id = queued_data["task_id"]
+        return json.loads(result.content[0].text)
 
-        tasks = bundle.tasks
-        for _ in range(50):
-            task = tasks.get(task_id)
-            if task and task.status == "completed":
-                return task.result or ""
-            await asyncio.sleep(0.05)
-        return ""
-
-    result_json = asyncio.run(run())
-    result = json.loads(result_json)
+    result = asyncio.run(run())
     assert "pdf_path" in result
     assert result.get("markdown") == "# Patent Markdown"
     assert result.get("vlm_used") is False
     bundle.docling.convert.assert_called_once()  # type: ignore[union-attr]
 
 
-def test_fetch_patent_pdf_cache_hit_docling_no_md_falls_through_to_queue(
+def test_fetch_patent_pdf_cache_hit_docling_no_md_converts(
     bundle: ServiceBundle,
+    slow_jobs: Jobs,
 ) -> None:
     """Cache hit with docling but no cached md queues _execute() to convert."""
     epo = _make_epo_client()
@@ -1492,9 +1509,9 @@ def test_fetch_patent_pdf_cache_hit_docling_no_md_falls_through_to_queue(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_patent_tools(app)
+    register_patent_tools(app, slow_jobs)
 
-    async def run() -> str:
+    async def run() -> dict:
         import hashlib
         import re
 
@@ -1513,20 +1530,9 @@ def test_fetch_patent_pdf_cache_hit_docling_no_md_falls_through_to_queue(
             result = await client.call_tool(
                 "fetch_patent_pdf", {"patent_number": patent_number}
             )
-        queued_data = json.loads(result.content[0].text)
-        assert queued_data.get("queued") is True
-        task_id = queued_data["task_id"]
+        return json.loads(result.content[0].text)
 
-        tasks = bundle.tasks
-        for _ in range(50):
-            task = tasks.get(task_id)
-            if task and task.status == "completed":
-                return task.result or ""
-            await asyncio.sleep(0.05)
-        return ""
-
-    result_json = asyncio.run(run())
-    result = json.loads(result_json)
+    result = asyncio.run(run())
     assert result.get("markdown") == "# Freshly Converted"
     # PDF was not re-downloaded (already existed); docling was called
     epo.get_pdf.assert_not_called()  # type: ignore[attr-defined]
@@ -1535,6 +1541,7 @@ def test_fetch_patent_pdf_cache_hit_docling_no_md_falls_through_to_queue(
 
 def test_fetch_patent_pdf_cache_hit_with_vlm_skip_reason(
     bundle: ServiceBundle,
+    slow_jobs: Jobs,
 ) -> None:
     """Cache hit includes vlm_skip_reason when VLM is not available."""
     epo = _make_epo_client()
@@ -1553,7 +1560,7 @@ def test_fetch_patent_pdf_cache_hit_with_vlm_skip_reason(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_patent_tools(app)
+    register_patent_tools(app, slow_jobs)
 
     async def run() -> dict:
         import hashlib
@@ -1582,6 +1589,7 @@ def test_fetch_patent_pdf_cache_hit_with_vlm_skip_reason(
 
 def test_fetch_patent_pdf_execute_docling_convert_exception(
     bundle: ServiceBundle,
+    slow_jobs: Jobs,
 ) -> None:
     """_execute() returns pdf_path only when docling conversion raises."""
     epo = _make_epo_client()
@@ -1596,26 +1604,16 @@ def test_fetch_patent_pdf_execute_docling_convert_exception(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_patent_tools(app)
+    register_patent_tools(app, slow_jobs)
 
-    async def run() -> str:
+    async def run() -> dict:
         async with Client(app) as client:
             result = await client.call_tool(
                 "fetch_patent_pdf", {"patent_number": "EP3491801B1"}
             )
-        queued_data = json.loads(result.content[0].text)
-        task_id = queued_data["task_id"]
+        return json.loads(result.content[0].text)
 
-        tasks = bundle.tasks
-        for _ in range(50):
-            task = tasks.get(task_id)
-            if task and task.status == "completed":
-                return task.result or ""
-            await asyncio.sleep(0.05)
-        return ""
-
-    result_json = asyncio.run(run())
-    result = json.loads(result_json)
+    result = asyncio.run(run())
     # Falls back to just pdf_path when docling fails
     assert "pdf_path" in result
     assert "markdown" not in result
@@ -1623,6 +1621,7 @@ def test_fetch_patent_pdf_execute_docling_convert_exception(
 
 def test_fetch_patent_pdf_execute_with_vlm_skip_reason(
     bundle: ServiceBundle,
+    slow_jobs: Jobs,
 ) -> None:
     """_execute() includes vlm_skip_reason in result when VLM is not available."""
     epo = _make_epo_client()
@@ -1637,32 +1636,23 @@ def test_fetch_patent_pdf_execute_with_vlm_skip_reason(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_patent_tools(app)
+    register_patent_tools(app, slow_jobs)
 
-    async def run() -> str:
+    async def run() -> dict:
         async with Client(app) as client:
             result = await client.call_tool(
                 "fetch_patent_pdf", {"patent_number": "EP3491801B1"}
             )
-        queued_data = json.loads(result.content[0].text)
-        task_id = queued_data["task_id"]
+        return json.loads(result.content[0].text)
 
-        tasks = bundle.tasks
-        for _ in range(50):
-            task = tasks.get(task_id)
-            if task and task.status == "completed":
-                return task.result or ""
-            await asyncio.sleep(0.05)
-        return ""
-
-    result_json = asyncio.run(run())
-    result = json.loads(result_json)
+    result = asyncio.run(run())
     assert result.get("vlm_skip_reason") == "VLM not configured"
     assert "markdown" in result
 
 
 def test_fetch_patent_pdf_execute_with_docling_cached_md(
     bundle: ServiceBundle,
+    slow_jobs: Jobs,
 ) -> None:
     """_execute() reads markdown from cache when md_path already exists."""
     epo = _make_epo_client()
@@ -1675,9 +1665,9 @@ def test_fetch_patent_pdf_execute_with_docling_cached_md(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_patent_tools(app)
+    register_patent_tools(app, slow_jobs)
 
-    async def run() -> str:
+    async def run() -> dict:
         import hashlib
         import re
 
@@ -1697,19 +1687,77 @@ def test_fetch_patent_pdf_execute_with_docling_cached_md(
             result = await client.call_tool(
                 "fetch_patent_pdf", {"patent_number": patent_number}
             )
-        queued_data = json.loads(result.content[0].text)
-        task_id = queued_data["task_id"]
+        return json.loads(result.content[0].text)
 
-        tasks = bundle.tasks
-        for _ in range(50):
-            task = tasks.get(task_id)
-            if task and task.status == "completed":
-                return task.result or ""
-            await asyncio.sleep(0.05)
-        return ""
-
-    result_json = asyncio.run(run())
-    result = json.loads(result_json)
+    result = asyncio.run(run())
     assert result.get("markdown") == "# Pre-cached MD"
     # convert should not be called since md was already cached
     bundle.docling.convert.assert_not_called()  # type: ignore[union-attr]
+
+
+def test_fetch_patent_pdf_throttled_returns_retryable_guidance(
+    bundle: ServiceBundle, slow_jobs: Jobs
+) -> None:
+    """An EPO throttle is reported with guidance, not raised at the caller.
+
+    The traffic light short-circuits before any network call, so the error
+    arrives far inside the soft deadline and is never promoted to a job. It
+    therefore has to be handled here or it reaches the caller as a bare
+    ToolError, losing the retry advice the old queue's poller synthesised.
+    """
+    epo = _make_epo_client()
+    epo.get_pdf = AsyncMock(  # type: ignore[method-assign]
+        side_effect=EpoRateLimitedError("red", service="pdf")
+    )
+    bundle.epo = epo
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_patent_tools(app, slow_jobs)
+
+    async def run() -> dict:
+        async with Client(app) as client:
+            result = await client.call_tool(
+                "fetch_patent_pdf", {"patent_number": "EP3491801B1"}
+            )
+        return json.loads(result.content[0].text)
+
+    data = asyncio.run(run())
+    assert data["error"] == "rate_limited"
+    assert data["retryable"] is True
+    assert "60 seconds" in data["hint"]
+
+
+def test_fetch_patent_pdf_quota_exhausted_is_not_retryable(
+    bundle: ServiceBundle, slow_jobs: Jobs
+) -> None:
+    """Daily-quota exhaustion is reported as terminal rather than retryable."""
+    epo = _make_epo_client()
+    epo.get_pdf = AsyncMock(  # type: ignore[method-assign]
+        side_effect=RuntimeError(
+            "EPO daily quota exhausted. Please try again tomorrow."
+        )
+    )
+    bundle.epo = epo
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_patent_tools(app, slow_jobs)
+
+    async def run() -> dict:
+        async with Client(app) as client:
+            result = await client.call_tool(
+                "fetch_patent_pdf", {"patent_number": "EP3491801B1"}
+            )
+        return json.loads(result.content[0].text)
+
+    data = asyncio.run(run())
+    assert data["error"] == "epo_unavailable"
+    assert data["retryable"] is False
+    assert "tomorrow" in data["detail"]
