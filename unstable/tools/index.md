@@ -16,8 +16,8 @@ All tools include [MCP tool annotations](https://spec.modelcontextprotocol.io/sp
 
 Long-running operations return immediately with a task ID instead of blocking:
 
-- **Most tools** run as background jobs when the work is slow. A cached result is returned directly instead, except that `fetch_and_convert` re-converts even when the markdown is already on disk ([#318](https://github.com/pvliesdonk/scholar-mcp/issues/318))
-- **The citation-graph, cross-source utility and standards tools** still queue on the older path when an upstream responds with HTTP 429
+- **Every tool except the four standards tools** runs as a background job when the work is slow. A cached result is returned directly instead, except that `fetch_and_convert` re-converts even when the markdown is already on disk ([#318](https://github.com/pvliesdonk/scholar-mcp/issues/318))
+- **`get_standard`** still queues on the older path when an upstream responds with HTTP 429
 
 The two use different polling tools, and each response says which one to call.
 
@@ -30,15 +30,17 @@ A job-backed tool that exceeds `SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S` (25 seconds by
 
 Poll with `get_job_result`. Job records expire after `SCHOLAR_MCP_JOBS_RESULT_TTL_S` (1 hour by default), measured from when the record was created. Settling a job does not extend it.
 
-A tool still on the older path that hits a rate limit returns:
+`get_standard`, when a rate limit defers its full-text fetch, returns:
 
 ```
-{"queued": true, "task_id": "a1b2c3d4e5f6", "tool": "get_citation_graph"}
+{"queued": true, "task_id": "a1b2c3d4e5f6", "tool": "get_standard"}
 ```
 
 Poll with `get_task_result`. These results expire after 10 minutes.
 
-The paper, book, citation, recommendation and patent tools no longer use this path; the citation-graph and cross-source utility tools still do ([#322](https://github.com/pvliesdonk/scholar-mcp/issues/322)). When EPO reports its traffic light amber or red they wait for it to clear, which is what makes them long-running, so they return a `job_id` like the PDF tools. If it has not cleared by the time the retries are spent they answer with `{"error": "rate_limited", "retryable": true}` and a hint, rather than failing opaquely.
+Of the standards tools, only `get_standard` uses this path ([#264](https://github.com/pvliesdonk/scholar-mcp/issues/264)); the other three run synchronously and use neither mechanism.
+
+The patent tools sit on the job path instead. When EPO reports its traffic light amber or red they wait for it to clear, which is what makes them long-running, so they return a `job_id`. If it has not cleared by the time the retries are spent they answer with `{"error": "rate_limited", "retryable": true}` and a hint, rather than failing opaquely.
 
 ## Papers, Search & Retrieval
 
@@ -803,7 +805,7 @@ The response includes extra fields while the task is in progress (`pending` or `
   "task_id": "a1b2c3d4e5f6",
   "status": "running",
   "elapsed_seconds": 8,
-  "tool": "get_citation_graph"
+  "tool": "get_standard"
 }
 ```
 
