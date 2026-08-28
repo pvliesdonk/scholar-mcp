@@ -212,3 +212,6 @@ _to_enrichment_dict
 Datadog
 stdout
 traceback
+
+# --- Project scaffolding / template tooling ---
+scaffolded
