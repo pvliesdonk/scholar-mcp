@@ -194,8 +194,30 @@ Unset, a `redis://` `SCHOLAR_MCP_KV_STORE_URL` is reused for tasks as well, so a
 
 Worker tuning stays on the native `FASTMCP_DOCKET_*` variables (`FASTMCP_DOCKET_CONCURRENCY` and friends, listed in `.env.example`). Set the backend through `SCHOLAR_MCP_TASKS_URL` rather than `FASTMCP_DOCKET_URL`: the former wins when both are set, and the server warns about the disagreement.
 
-### Two task queues, one of them not configured by `SCHOLAR_MCP_TASKS_URL`
+### Long-running tools and `get_job_result`
 
-`SCHOLAR_MCP_TASKS_URL`, described under [Background tasks](#background-tasks) above, configures the `fastmcp-pvl-core` task backend. Scholar MCP also has its own, separate in-process queue (`src/scholar_mcp/_task_queue.py`), and that is the one behind the `list_tasks` and `get_task_result` tools and the automatic queueing of rate-limited Semantic Scholar and PDF calls. It is always in-process and always lost on restart, whatever `SCHOLAR_MCP_TASKS_URL` says.
+The PDF tools (`fetch_paper_pdf`, `convert_pdf_to_markdown`, `fetch_and_convert`, `fetch_pdf_by_url` and `fetch_patent_pdf`) run as background jobs when they are slow. A call that finishes within `SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S` returns its result directly. A slower one is promoted to a background job, and the caller gets a handle instead:
 
-The practical consequence is for deployments with a Redis `SCHOLAR_MCP_KV_STORE_URL`: the core backend silently reuses that URL, so the server gains a Redis-backed task queue it does not currently put anything into. Set `SCHOLAR_MCP_TASKS_URL=memory://` to keep the two subsystems apart. Consolidating the two queues is tracked in [#264](https://github.com/pvliesdonk/scholar-mcp/issues/264).
+```
+{"status": "working", "job_id": "...", "poll_with": "get_job_result",
+ "retry_after_s": 5.0, "message": "..."}
+```
+
+Calling `get_job_result` with that `job_id` returns `working` until the work settles, then `completed` with a `result` object, or `failed` with an `error`. A cache hit answers directly and creates no job at all.
+
+| Variable                           | Default | Meaning                                                                                         |
+| ---------------------------------- | ------- | ----------------------------------------------------------------------------------------------- |
+| `SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S` | `25`    | Foreground window before promotion. Keep it below the strictest client request timeout in play. |
+| `SCHOLAR_MCP_JOBS_RESULT_TTL_S`    | `3600`  | Job-record retention, measured from creation. Settling a job never extends it.                  |
+| `SCHOLAR_MCP_JOBS_MAX_PER_SUBJECT` | `256`   | Live-job cap per calling subject.                                                               |
+
+Two operational notes:
+
+- **Job records live in the KV backend**, so `SCHOLAR_MCP_KV_STORE_URL` covers them along with every other stateful subsystem. That is a different variable from `SCHOLAR_MCP_TASKS_URL`, which selects the native SEP-1686 Docket backend described under [Background tasks](#background-tasks).
+- **A restart does not resume promoted work.** The job stops running with the process, while its record survives, so a poll after a restart reports `working` with a growing `running_for_s` until the retention period removes the record. That is deliberate, because a result is never invented. It does mean a job still reported as `working` long past its expected duration may be orphaned rather than slow. For work that must survive a restart, use the native task path with a `redis://` backend.
+
+If you restrict the tool surface with `SCHOLAR_MCP_TOOLS_ALLOW`, **include `get_job_result`**. The allowlist matches on tool name, so leaving it out makes every job handle unresolvable.
+
+### One remaining bespoke queue
+
+The Semantic Scholar, patent-search and standards tools still use a separate in-process queue (`src/scholar_mcp/_task_queue.py`), reached through the `list_tasks` and `get_task_result` tools. That queue always runs in-process and is always lost on restart, and no environment variable configures it. Moving the remaining tools across is tracked in [#264](https://github.com/pvliesdonk/scholar-mcp/issues/264).

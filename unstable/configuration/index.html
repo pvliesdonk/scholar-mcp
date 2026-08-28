@@ -738,10 +738,21 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#two-task-queues-one-of-them-not-configured-by-scholar_mcp_tasks_url" class="md-nav__link">
+  <a href="#long-running-tools-and-get_job_result" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Two task queues, one of them not configured by SCHOLAR_MCP_TASKS_URL
+        Long-running tools and get_job_result
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#one-remaining-bespoke-queue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        One remaining bespoke queue
       
     </span>
   </a>
@@ -1593,10 +1604,21 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#two-task-queues-one-of-them-not-configured-by-scholar_mcp_tasks_url" class="md-nav__link">
+  <a href="#long-running-tools-and-get_job_result" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Two task queues, one of them not configured by SCHOLAR_MCP_TASKS_URL
+        Long-running tools and get_job_result
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#one-remaining-bespoke-queue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        One remaining bespoke queue
       
     </span>
   </a>
@@ -2045,18 +2067,67 @@ about the disagreement.</p>
      Conversion, EPO, Google Books, Server, Authentication, Cache TTLs, Rate
      Limiting). -->
 
-<h3 id="two-task-queues-one-of-them-not-configured-by-scholar_mcp_tasks_url">Two task queues, one of them not configured by <code>SCHOLAR_MCP_TASKS_URL</code><a class="headerlink" href="#two-task-queues-one-of-them-not-configured-by-scholar_mcp_tasks_url" title="Permanent link">&para;</a></h3>
-<p><code>SCHOLAR_MCP_TASKS_URL</code>, described under <a href="#background-tasks">Background tasks</a>
-above, configures the <code>fastmcp-pvl-core</code> task backend. Scholar MCP also has its
-own, separate in-process queue (<code>src/scholar_mcp/_task_queue.py</code>), and that is
-the one behind the <code>list_tasks</code> and <code>get_task_result</code> tools and the automatic
-queueing of rate-limited Semantic Scholar and PDF calls. It is always
-in-process and always lost on restart, whatever <code>SCHOLAR_MCP_TASKS_URL</code> says.</p>
-<p>The practical consequence is for deployments with a Redis
-<code>SCHOLAR_MCP_KV_STORE_URL</code>: the core backend silently reuses that URL, so the
-server gains a Redis-backed task queue it does not currently put anything into.
-Set <code>SCHOLAR_MCP_TASKS_URL=memory://</code> to keep the two subsystems apart.
-Consolidating the two queues is tracked in
+<h3 id="long-running-tools-and-get_job_result">Long-running tools and <code>get_job_result</code><a class="headerlink" href="#long-running-tools-and-get_job_result" title="Permanent link">&para;</a></h3>
+<p>The PDF tools (<code>fetch_paper_pdf</code>, <code>convert_pdf_to_markdown</code>,
+<code>fetch_and_convert</code>, <code>fetch_pdf_by_url</code> and <code>fetch_patent_pdf</code>) run as
+background jobs when they are slow. A call that finishes within
+<code>SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S</code> returns its result directly. A slower one
+is promoted to a background job, and the caller gets a handle instead:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="p">{</span><span class="nt">&quot;status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;working&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;job_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;poll_with&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;get_job_result&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w"> </span><span class="nt">&quot;retry_after_s&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">5.0</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;message&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">}</span>
+</code></pre></div>
+<p>Calling <code>get_job_result</code> with that <code>job_id</code> returns <code>working</code> until the work
+settles, then <code>completed</code> with a <code>result</code> object, or <code>failed</code> with an
+<code>error</code>. A cache hit answers directly and creates no job at all.</p>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S</code></td>
+<td><code>25</code></td>
+<td>Foreground window before promotion. Keep it below the strictest client request timeout in play.</td>
+</tr>
+<tr>
+<td><code>SCHOLAR_MCP_JOBS_RESULT_TTL_S</code></td>
+<td><code>3600</code></td>
+<td>Job-record retention, measured from creation. Settling a job never extends it.</td>
+</tr>
+<tr>
+<td><code>SCHOLAR_MCP_JOBS_MAX_PER_SUBJECT</code></td>
+<td><code>256</code></td>
+<td>Live-job cap per calling subject.</td>
+</tr>
+</tbody>
+</table>
+<p>Two operational notes:</p>
+<ul>
+<li><strong>Job records live in the KV backend</strong>, so <code>SCHOLAR_MCP_KV_STORE_URL</code>
+  covers them along with every other stateful subsystem. That is a different
+  variable from <code>SCHOLAR_MCP_TASKS_URL</code>, which selects the native SEP-1686
+  Docket backend described under <a href="#background-tasks">Background tasks</a>.</li>
+<li><strong>A restart does not resume promoted work.</strong> The job stops running with the
+  process, while its record survives, so a poll after a restart reports
+  <code>working</code> with a growing <code>running_for_s</code> until the retention period removes
+  the record. That is deliberate, because a result is never invented. It does
+  mean a job still reported as <code>working</code> long past its expected duration may
+  be orphaned rather than slow. For work that must survive a restart, use the
+  native task path with a <code>redis://</code> backend.</li>
+</ul>
+<p>If you restrict the tool surface with <code>SCHOLAR_MCP_TOOLS_ALLOW</code>, <strong>include
+<code>get_job_result</code></strong>. The allowlist matches on tool name, so leaving it out
+makes every job handle unresolvable.</p>
+<h3 id="one-remaining-bespoke-queue">One remaining bespoke queue<a class="headerlink" href="#one-remaining-bespoke-queue" title="Permanent link">&para;</a></h3>
+<p>The Semantic Scholar, patent-search and standards tools still use a separate
+in-process queue (<code>src/scholar_mcp/_task_queue.py</code>), reached through the
+<code>list_tasks</code> and <code>get_task_result</code> tools. That queue always runs in-process
+and is always lost on restart, and no environment variable configures it.
+Moving the remaining tools across is tracked in
 <a href="https://github.com/pvliesdonk/scholar-mcp/issues/264">#264</a>.</p>
 <!-- DOMAIN-CONFIG-VARS-END -->
 

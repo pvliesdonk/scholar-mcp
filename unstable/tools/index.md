@@ -1,6 +1,6 @@
 # Tools
 
-Scholar MCP provides 28 tools organised by scholarly source type: **Papers**, **Patents**, **Books**, and **Standards** are peer source domains; the remaining sections (Cross-source Utility, PDF Conversion, Task Polling) are cross-cutting. All tools return JSON.
+Scholar MCP provides 31 tools organised by scholarly source type: **Papers**, **Patents**, **Books**, and **Standards** are peer source domains; the remaining sections (Cross-source Utility, PDF Conversion, Task Polling) are cross-cutting. All tools return JSON.
 
 Coverage by domain
 
@@ -16,16 +16,27 @@ All tools include [MCP tool annotations](https://spec.modelcontextprotocol.io/sp
 
 Long-running operations return immediately with a task ID instead of blocking:
 
-- **PDF tools** always queue (unless the result is already cached locally)
+- **PDF tools** run as background jobs when the work is slow. A cached result is returned directly instead, except that `fetch_and_convert` re-converts even when the markdown is already on disk ([#318](https://github.com/pvliesdonk/scholar-mcp/issues/318))
 - **S2 tools** queue when the Semantic Scholar API responds with HTTP 429 (rate limited)
 
-When a tool queues an operation, it returns:
+The two use different polling tools, and each response says which one to call.
+
+A PDF tool that exceeds `SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S` (25 seconds by default) returns:
 
 ```
-{"queued": true, "task_id": "a1b2c3d4e5f6", "tool": "fetch_paper_pdf"}
+{"status": "working", "job_id": "hwex4wg6taLmasPZWPM7gQ", "poll_with": "get_job_result",
+ "retry_after_s": 5.0, "message": "..."}
 ```
 
-Poll with `get_task_result` to check status and retrieve the result. Task results expire after 10 minutes (S2 tools) or 1 hour (PDF tools).
+Poll with `get_job_result`. Job records expire after `SCHOLAR_MCP_JOBS_RESULT_TTL_S` (1 hour by default), measured from when the record was created. Settling a job does not extend it.
+
+An S2 tool that hits a rate limit returns:
+
+```
+{"queued": true, "task_id": "a1b2c3d4e5f6", "tool": "search_papers"}
+```
+
+Poll with `get_task_result`. These results expire after 10 minutes.
 
 ## Papers, Search & Retrieval
 
@@ -720,7 +731,41 @@ Without docling, only `pdf_path` is returned. The PDF is cached by filename, so 
 
 ______________________________________________________________________
 
-## Task Polling
+## Job and Task Polling
+
+Two polling tools, because two mechanisms are in play. Each response names the one to call, so follow `poll_with` rather than guessing.
+
+### `get_job_result`
+
+Retrieve the outcome of a background job started by a long-running tool. Used by the PDF tools.
+
+| Parameter | Type   | Default      | Description                           |
+| --------- | ------ | ------------ | ------------------------------------- |
+| `job_id`  | string | *(required)* | Job ID from a tool's `working` handle |
+
+**Returns:** while the work is still running,
+
+```
+{
+  "job_id": "hwex4wg6taLmasPZWPM7gQ",
+  "status": "working",
+  "result": null,
+  "error": null,
+  "running_for_s": 41.3,
+  "retry_after_s": 5.0,
+  "message": "Still running. Poll again with the same job_id in a few seconds."
+}
+```
+
+and once it settles,
+
+```
+{"job_id": "hwex4wg6taLmasPZWPM7gQ", "status": "completed", "result": {"markdown": "..."}, "error": null}
+```
+
+Status values: `working`, `completed`, `failed`, `cancelled`. Unlike `get_task_result`, `result` is a JSON object rather than a JSON string.
+
+Jobs belong to the caller. Another caller's `job_id` answers exactly like an unknown one, so no caller can discover the IDs of another by guessing. An unknown or expired ID is an error, not an empty result.
 
 ### `get_task_result`
 
@@ -744,9 +789,9 @@ The response includes extra fields while the task is in progress (`pending` or `
 {
   "task_id": "a1b2c3d4e5f6",
   "status": "running",
-  "elapsed_seconds": 45,
-  "tool": "convert_pdf_to_markdown",
-  "hint": "PDF conversion typically takes 1-5 minutes depending on page count."
+  "elapsed_seconds": 8,
+  "tool": "search_patents",
+  "hint": "Patent searches usually complete in 5-15 seconds."
 }
 ```
 

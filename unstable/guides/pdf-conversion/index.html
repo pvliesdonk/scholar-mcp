@@ -911,10 +911,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#async-task-queue" class="md-nav__link">
+  <a href="#background-jobs" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Async task queue
+        Background jobs
       
     </span>
   </a>
@@ -1498,10 +1498,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#async-task-queue" class="md-nav__link">
+  <a href="#background-jobs" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Async task queue
+        Background jobs
       
     </span>
   </a>
@@ -1648,12 +1648,20 @@
 <a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="nt">volumes</span><span class="p">:</span>
 <a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a><span class="w">  </span><span class="nt">scholar-mcp-data</span><span class="p">:</span>
 </code></pre></div>
-<h2 id="async-task-queue">Async task queue<a class="headerlink" href="#async-task-queue" title="Permanent link">&para;</a></h2>
-<p>All PDF tools run in the background and return a task ID immediately:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="p">{</span><span class="nt">&quot;queued&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;task_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;a1b2c3d4e5f6&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;tool&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;fetch_paper_pdf&quot;</span><span class="p">}</span>
+<h2 id="background-jobs">Background jobs<a class="headerlink" href="#background-jobs" title="Permanent link">&para;</a></h2>
+<p>PDF tools answer directly when they can. A download or conversion that takes
+longer than <code>SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S</code> (25 seconds by default)
+continues in the background, and the call returns a handle right away:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="p">{</span><span class="nt">&quot;status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;working&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;job_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;hwex4wg6taLmasPZWPM7gQ&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;poll_with&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;get_job_result&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w"> </span><span class="nt">&quot;retry_after_s&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">5.0</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;message&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">}</span>
 </code></pre></div>
-<p>Use <code>get_task_result</code> with the <code>task_id</code> to poll for completion. PDF task results are retained for 1 hour.</p>
-<p>The only exception is <code>convert_pdf_to_markdown</code> when the markdown output file already exists locally, in that case, the cached result is returned directly.</p>
+<p>Use <code>get_job_result</code> with the <code>job_id</code> to poll for completion. Job records are
+retained for <code>SCHOLAR_MCP_JOBS_RESULT_TTL_S</code>, one hour by default.</p>
+<p>A cached result needs no job. An already-downloaded PDF is never fetched
+twice, and <code>convert_pdf_to_markdown</code> and <code>fetch_pdf_by_url</code> reuse an existing
+markdown file rather than converting again. <code>fetch_and_convert</code> reuses the
+PDF but always re-runs the conversion, so calling it twice for the same paper
+converts twice (tracked in <a href="https://github.com/pvliesdonk/scholar-mcp/issues/318">#318</a>).</p>
 <h2 id="alternative-pdf-sources">Alternative PDF sources<a class="headerlink" href="#alternative-pdf-sources" title="Permanent link">&para;</a></h2>
 <p>When a paper has no open-access PDF URL in Semantic Scholar, <code>fetch_paper_pdf</code> and <code>fetch_and_convert</code> automatically try alternative sources:</p>
 <ol>
@@ -1671,7 +1679,7 @@
 <ul>
 <li><strong>Paywalled papers</strong>: Alternative resolution only finds openly available versions. Truly paywalled papers require manual download followed by <code>convert_pdf_to_markdown</code>, or use <code>fetch_pdf_by_url</code> if you find a link.</li>
 <li><strong>Conversion quality varies</strong>: OCR quality depends on the PDF source. Scanned papers produce lower-quality results than born-digital PDFs.</li>
-<li><strong>docling-serve polling</strong>: Conversion is asynchronous internally. The server polls docling-serve for completion with a timeout of ~10 minutes (200 polls at 3-second intervals). This happens in the background task, so the MCP client is not blocked.</li>
+<li><strong>docling-serve polling</strong>: Conversion is asynchronous internally. The server polls docling-serve for completion with a timeout of ~10 minutes (200 polls at 3-second intervals). This happens inside the background job, so the MCP client is not blocked.</li>
 </ul>
 
 

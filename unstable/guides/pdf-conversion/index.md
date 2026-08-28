@@ -105,17 +105,18 @@ volumes:
   scholar-mcp-data:
 ```
 
-## Async task queue
+## Background jobs
 
-All PDF tools run in the background and return a task ID immediately:
+PDF tools answer directly when they can. A download or conversion that takes longer than `SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S` (25 seconds by default) continues in the background, and the call returns a handle right away:
 
 ```
-{"queued": true, "task_id": "a1b2c3d4e5f6", "tool": "fetch_paper_pdf"}
+{"status": "working", "job_id": "hwex4wg6taLmasPZWPM7gQ", "poll_with": "get_job_result",
+ "retry_after_s": 5.0, "message": "..."}
 ```
 
-Use `get_task_result` with the `task_id` to poll for completion. PDF task results are retained for 1 hour.
+Use `get_job_result` with the `job_id` to poll for completion. Job records are retained for `SCHOLAR_MCP_JOBS_RESULT_TTL_S`, one hour by default.
 
-The only exception is `convert_pdf_to_markdown` when the markdown output file already exists locally, in that case, the cached result is returned directly.
+A cached result needs no job. An already-downloaded PDF is never fetched twice, and `convert_pdf_to_markdown` and `fetch_pdf_by_url` reuse an existing markdown file rather than converting again. `fetch_and_convert` reuses the PDF but always re-runs the conversion, so calling it twice for the same paper converts twice (tracked in [#318](https://github.com/pvliesdonk/scholar-mcp/issues/318)).
 
 ## Alternative PDF sources
 
@@ -137,4 +138,4 @@ Set `SCHOLAR_MCP_CONTACT_EMAIL` to your email address to enable Unpaywall lookup
 
 - **Paywalled papers**: Alternative resolution only finds openly available versions. Truly paywalled papers require manual download followed by `convert_pdf_to_markdown`, or use `fetch_pdf_by_url` if you find a link.
 - **Conversion quality varies**: OCR quality depends on the PDF source. Scanned papers produce lower-quality results than born-digital PDFs.
-- **docling-serve polling**: Conversion is asynchronous internally. The server polls docling-serve for completion with a timeout of ~10 minutes (200 polls at 3-second intervals). This happens in the background task, so the MCP client is not blocked.
+- **docling-serve polling**: Conversion is asynchronous internally. The server polls docling-serve for completion with a timeout of ~10 minutes (200 polls at 3-second intervals). This happens inside the background job, so the MCP client is not blocked.
