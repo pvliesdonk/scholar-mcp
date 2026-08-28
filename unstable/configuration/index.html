@@ -749,17 +749,6 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#one-remaining-bespoke-queue" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        One remaining bespoke queue
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#epo-throttling" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1626,17 +1615,6 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#one-remaining-bespoke-queue" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        One remaining bespoke queue
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#epo-throttling" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2090,9 +2068,9 @@ about the disagreement.</p>
      Limiting). -->
 
 <h3 id="long-running-tools-and-get_job_result">Long-running tools and <code>get_job_result</code><a class="headerlink" href="#long-running-tools-and-get_job_result" title="Permanent link">&para;</a></h3>
-<p>Every tool except the four standards tools runs as a background job when it
-is slow. That covers the PDF, patent, paper, book, citation, recommendation,
-citation-graph and cross-source utility tools. A call that finishes within
+<p>Every tool whose work can run long runs as a background job when it is slow.
+The exceptions are the pure cache and index reads, which cannot: they answer
+directly whatever the upstream is doing. A call that finishes within
 <code>SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S</code> returns its result directly. A slower one
 is promoted to a background job, and the caller gets a handle instead:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="p">{</span><span class="nt">&quot;status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;working&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;job_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;poll_with&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;get_job_result&quot;</span><span class="p">,</span>
@@ -2144,14 +2122,11 @@ settles, then <code>completed</code> with a <code>result</code> object, or <code
 <p>If you restrict the tool surface with <code>SCHOLAR_MCP_TOOLS_ALLOW</code>, <strong>include
 <code>get_job_result</code></strong>. The allowlist matches on tool name, so leaving it out
 makes every job handle unresolvable.</p>
-<h3 id="one-remaining-bespoke-queue">One remaining bespoke queue<a class="headerlink" href="#one-remaining-bespoke-queue" title="Permanent link">&para;</a></h3>
-<p>Of the standards tools, <code>get_standard</code> alone uses a separate in-process queue
-(the other three are neither job- nor queue-backed)
-(<code>src/scholar_mcp/_task_queue.py</code>), reached through the <code>list_tasks</code> and
-<code>get_task_result</code> tools. That queue always runs in-process and is always lost
-on restart, and no environment variable configures it. Moving the last tool
-across, and deleting the queue with it, is tracked in
-<a href="https://github.com/pvliesdonk/scholar-mcp/issues/264">#264</a>.</p>
+<p>Upgrading from a release that had <code>get_task_result</code> and <code>list_tasks</code>: those
+tools no longer exist, and an allowlist naming them keeps working because an
+unknown name is ignored rather than rejected. Nothing errors, so add
+<code>get_job_result</code> yourself. Without it the server hands out job handles that
+nothing exposed can poll.</p>
 <h3 id="epo-throttling">EPO throttling<a class="headerlink" href="#epo-throttling" title="Permanent link">&para;</a></h3>
 <p>The patent tools wait out an amber or red EPO traffic light rather than
 failing on it. Each wait is longer than the 60-second lifetime of the cached

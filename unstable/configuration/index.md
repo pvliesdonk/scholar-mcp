@@ -196,7 +196,7 @@ Worker tuning stays on the native `FASTMCP_DOCKET_*` variables (`FASTMCP_DOCKET_
 
 ### Long-running tools and `get_job_result`
 
-Every tool except the four standards tools runs as a background job when it is slow. That covers the PDF, patent, paper, book, citation, recommendation, citation-graph and cross-source utility tools. A call that finishes within `SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S` returns its result directly. A slower one is promoted to a background job, and the caller gets a handle instead:
+Every tool whose work can run long runs as a background job when it is slow. The exceptions are the pure cache and index reads, which cannot: they answer directly whatever the upstream is doing. A call that finishes within `SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S` returns its result directly. A slower one is promoted to a background job, and the caller gets a handle instead:
 
 ```
 {"status": "working", "job_id": "...", "poll_with": "get_job_result",
@@ -218,9 +218,7 @@ Two operational notes:
 
 If you restrict the tool surface with `SCHOLAR_MCP_TOOLS_ALLOW`, **include `get_job_result`**. The allowlist matches on tool name, so leaving it out makes every job handle unresolvable.
 
-### One remaining bespoke queue
-
-Of the standards tools, `get_standard` alone uses a separate in-process queue (the other three are neither job- nor queue-backed) (`src/scholar_mcp/_task_queue.py`), reached through the `list_tasks` and `get_task_result` tools. That queue always runs in-process and is always lost on restart, and no environment variable configures it. Moving the last tool across, and deleting the queue with it, is tracked in [#264](https://github.com/pvliesdonk/scholar-mcp/issues/264).
+Upgrading from a release that had `get_task_result` and `list_tasks`: those tools no longer exist, and an allowlist naming them keeps working because an unknown name is ignored rather than rejected. Nothing errors, so add `get_job_result` yourself. Without it the server hands out job handles that nothing exposed can poll.
 
 ### EPO throttling
 

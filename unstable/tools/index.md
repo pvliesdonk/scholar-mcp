@@ -1,6 +1,6 @@
 # Tools
 
-Scholar MCP provides 31 tools organised by scholarly source type: **Papers**, **Patents**, **Books**, and **Standards** are peer source domains; the remaining sections (Cross-source Utility, PDF Conversion, Task Polling) are cross-cutting. All tools return JSON.
+Scholar MCP provides 29 tools organised by scholarly source type: **Papers**, **Patents**, **Books**, and **Standards** are peer source domains; the remaining sections (Cross-source Utility, PDF Conversion, Job Polling) are cross-cutting. All tools return JSON.
 
 Coverage by domain
 
@@ -10,18 +10,13 @@ All tools include [MCP tool annotations](https://spec.modelcontextprotocol.io/sp
 
 - Read-only tools: `readOnlyHint=true`, `destructiveHint=false`, `openWorldHint=true`
 - Write tools (PDF): `readOnlyHint=false`, `destructiveHint=false`, `openWorldHint=true`
-- Task polling tools: `readOnlyHint=true`, `destructiveHint=false`, `openWorldHint=false`
+- Job polling: `readOnlyHint=true`, `destructiveHint=false`, `openWorldHint=false`
 
-## Async Task Queue
+## Background Jobs
 
-Long-running operations return immediately with a task ID instead of blocking:
+Long-running operations return a job handle instead of blocking. A cached result is returned directly instead, except that `fetch_and_convert` re-converts even when the markdown is already on disk ([#318](https://github.com/pvliesdonk/scholar-mcp/issues/318)).
 
-- **Every tool except the four standards tools** runs as a background job when the work is slow. A cached result is returned directly instead, except that `fetch_and_convert` re-converts even when the markdown is already on disk ([#318](https://github.com/pvliesdonk/scholar-mcp/issues/318))
-- **`get_standard`** still queues on the older path when an upstream responds with HTTP 429
-
-The two use different polling tools, and each response says which one to call.
-
-A job-backed tool that exceeds `SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S` (25 seconds by default) returns:
+A tool that exceeds `SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S` (25 seconds by default) returns:
 
 ```
 {"status": "working", "job_id": "hwex4wg6taLmasPZWPM7gQ", "poll_with": "get_job_result",
@@ -30,17 +25,7 @@ A job-backed tool that exceeds `SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S` (25 seconds by
 
 Poll with `get_job_result`. Job records expire after `SCHOLAR_MCP_JOBS_RESULT_TTL_S` (1 hour by default), measured from when the record was created. Settling a job does not extend it.
 
-`get_standard`, when a rate limit defers its full-text fetch, returns:
-
-```
-{"queued": true, "task_id": "a1b2c3d4e5f6", "tool": "get_standard"}
-```
-
-Poll with `get_task_result`. These results expire after 10 minutes.
-
-Of the standards tools, only `get_standard` uses this path ([#264](https://github.com/pvliesdonk/scholar-mcp/issues/264)); the other three run synchronously and use neither mechanism.
-
-The patent tools sit on the job path instead. When EPO reports its traffic light amber or red they wait for it to clear, which is what makes them long-running, so they return a `job_id`. If it has not cleared by the time the retries are spent they answer with `{"error": "rate_limited", "retryable": true}` and a hint, rather than failing opaquely.
+The patent tools are worth calling out. When EPO reports its traffic light amber or red they wait for it to clear, which is what makes them long-running, so they return a `job_id`. If it has not cleared by the time the retries are spent they answer with `{"error": "rate_limited", "retryable": true}` and a hint, rather than failing opaquely.
 
 ## Papers, Search & Retrieval
 
@@ -633,6 +618,8 @@ Retrieve a standard by identifier (canonical or fuzzy). Optionally fetches and c
 | `identifier`      | string  | ,       | Canonical or fuzzy identifier           |
 | `fetch_full_text` | boolean | false   | Fetch and convert full text via docling |
 
+With `fetch_full_text=true`, a conversion that fails still returns the record, with the reason in `full_text_error`. Absent both `full_text` and `full_text_error`, no full text was on offer or docling is not configured; neither is worth retrying.
+
 ______________________________________________________________________
 
 ### `get_sync_status`
@@ -746,13 +733,13 @@ Without docling, only `pdf_path` is returned. The PDF is cached by filename, so 
 
 ______________________________________________________________________
 
-## Job and Task Polling
+## Job Polling
 
-Two polling tools, because two mechanisms are in play. Each response names the one to call, so follow `poll_with` rather than guessing.
+One polling tool for every background job on the server.
 
 ### `get_job_result`
 
-Retrieve the outcome of a background job started by a long-running tool. Used by the PDF and patent tools.
+Retrieve the outcome of a background job started by a long-running tool.
 
 | Parameter | Type   | Default      | Description                           |
 | --------- | ------ | ------------ | ------------------------------------- |
@@ -778,43 +765,6 @@ and once it settles,
 {"job_id": "hwex4wg6taLmasPZWPM7gQ", "status": "completed", "result": {"markdown": "..."}, "error": null}
 ```
 
-Status values: `working`, `completed`, `failed`, `cancelled`. Unlike `get_task_result`, `result` is a JSON object rather than a JSON string.
+Status values: `working`, `completed`, `failed`, `cancelled`. `result` is a JSON object, so no second decode is needed.
 
 Jobs belong to the caller. Another caller's `job_id` answers exactly like an unknown one, so no caller can discover the IDs of another by guessing. An unknown or expired ID is an error, not an empty result.
-
-### `get_task_result`
-
-Poll for the result of a background task.
-
-| Parameter | Type   | Default      | Description                            |
-| --------- | ------ | ------------ | -------------------------------------- |
-| `task_id` | string | *(required)* | Task ID returned by a queued operation |
-
-**Returns:**
-
-```
-{"task_id": "a1b2c3d4e5f6", "status": "completed", "result": "{...}"}
-```
-
-Status values: `pending`, `running`, `completed`, `failed`. The `result` field contains the original tool output as a JSON string (only present when `completed`). On `failed`, an `error` field describes the failure.
-
-The response includes extra fields while the task is in progress (`pending` or `running`):
-
-```
-{
-  "task_id": "a1b2c3d4e5f6",
-  "status": "running",
-  "elapsed_seconds": 8,
-  "tool": "get_standard"
-}
-```
-
-Keep polling until the task completes. Each tool's own description states how long it usually takes.
-
-______________________________________________________________________
-
-### `list_tasks`
-
-List all active (non-expired) background tasks.
-
-**Returns:** JSON list of `{"task_id": "...", "status": "..."}` dicts.
