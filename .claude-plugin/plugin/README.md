@@ -48,7 +48,7 @@ For the full list of env vars, see the
 
 ## What you get
 
-31 tools across four scholarly source domains:
+29 tools across four scholarly source domains:
 
 - **Papers** -- search, single-paper lookup, author search, forward/backward
   citations, BFS graph traversal, shortest-path bridge, recommendations,

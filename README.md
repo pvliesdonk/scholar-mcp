@@ -306,8 +306,7 @@ versus a transient upstream issue.
 - **Sync domain code, async MCP layer.** Backend clients are synchronous; MCP tools call them via `asyncio.to_thread()`. Simpler client code, explicit offloading at the transport boundary.
 - **SQLite cache with per-table TTLs and identifier aliases.** Papers / authors last 30 days, citations / references 7 days. DOI ↔ S2 ID ↔ arXiv ID aliasing survives across cache clears so repeated enrichment hits the same row.
 - **Read-only by default.** Write-tagged tools (PDF download/convert, patent PDF) are hidden unless `SCHOLAR_MCP_READ_ONLY=false`. Safer default for first-run.
-- **Slow work becomes a background job.** Every tool except the four standards tools runs through the `fastmcp-pvl-core` jobs layer, whether the slow part is a docling conversion, an EPO throttle being waited out, or a graph walk making one request per node. A call that beats `SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S` returns its result directly; a slower one returns a handle to poll with `get_job_result`. No tool decides in advance whether to go background, so a cache hit needs no special case.
-- **Rate-limited try-once with background queueing.** `get_standard` alone still tries once; on 429 it queues a retry-enabled background task and returns `{"queued": true, "task_id": ...}`, polled with `get_task_result`. Moving it across, and deleting the queue with it, is tracked in [#264](https://github.com/pvliesdonk/scholar-mcp/issues/264).
+- **Slow work becomes a background job.** Every tool whose work can run long runs through the `fastmcp-pvl-core` jobs layer, whether the slow part is a docling conversion, an EPO throttle being waited out, or a graph walk making one request per node. A call that beats `SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S` returns its result directly; a slower one returns a handle to poll with `get_job_result`. No tool decides in advance whether to go background, so a cache hit needs no special case.
 - **EPO throttling is waited out, not queued.** The traffic light is consulted before every request and cached for a minute, so a retry sooner than that would re-read the cache rather than ask again. Each backoff outlasts the cache; an exhausted daily quota is reported immediately instead, since it will not clear today.
 - **Tier 2 standards sync out-of-band.** ISO/IEC/IEEE/CC/CEN catalogues come from community Relaton dumps via `scholar-mcp sync-standards`, not live at runtime — avoids paywalled-HTML scraping and keeps tool calls fast.
 <!-- DOMAIN-END -->
@@ -368,7 +367,7 @@ Schedule via cron / launchd / systemd timer — weekly is sufficient; standards 
 
 ## MCP Tools
 
-31 tools, organised by scholarly source type.
+29 tools, organised by scholarly source type.
 
 ### Papers
 
@@ -446,15 +445,13 @@ Schedule via cron / launchd / systemd timer — weekly is sufficient; standards 
 
 > PDF tools are write-tagged and hidden when `SCHOLAR_MCP_READ_ONLY=true` (the default). `fetch_patent_pdf` (above) and the `get_standard` full-text mode cover the patent and standards equivalents.
 
-### Job and Task Polling
+### Job Polling
 
 | Tool | Description |
 |---|---|
 | `get_job_result` | Retrieve the outcome of a background job by ID. |
-| `get_task_result` | Poll for the result of a background task by ID. |
-| `list_tasks` | List all active background tasks. |
 
-> PDF download and conversion answer directly when they are quick. A slower call returns `{"status": "working", "job_id": "..."}`, polled with `get_job_result`. Rate-limited backend requests still return `{"queued": true, "task_id": "..."}`, polled with `get_task_result`. Each response names its own poller in `poll_with` or `tool`.
+> Tools answer directly when the work is quick, including on a cache hit. A slower call returns `{"status": "working", "job_id": "...", "poll_with": "get_job_result"}`; poll with the tool the handle names until the status is terminal.
 
 ## Docker Compose
 

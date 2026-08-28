@@ -13,9 +13,7 @@ _JOBS_NOTE = (
     "is waited out, citation formatting enriches each paper in turn, and "
     "graph traversal makes one rate-limited request per node. "
     "Those calls commonly answer with a job_id rather than a result; a cache "
-    "hit answers inline, with no job. Tools that answer with task_id instead "
-    "are polled with get_task_result, not this tool -- the response always "
-    "names which one to use."
+    "hit answers inline, with no job."
 )
 
 
@@ -67,10 +65,6 @@ def register_tools(
 
     register_pdf_tools(mcp, jobs)
 
-    from ._tools_tasks import register_task_tools
-
-    register_task_tools(mcp)
-
     from ._tools_citation import register_citation_tools
 
     register_citation_tools(mcp, jobs)
@@ -85,6 +79,6 @@ def register_tools(
 
     from ._tools_standards import register_standards_tools
 
-    register_standards_tools(mcp)
+    register_standards_tools(mcp, jobs)
 
     register_job_tools(mcp, jobs, note=_JOBS_NOTE)

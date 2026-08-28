@@ -646,7 +646,7 @@ async def test_get_patent_retries_when_throttled(
     bundle: ServiceBundle,
     slow_jobs: Jobs,
 ) -> None:
-    """get_patent queues the task when EPO rate-limits the request."""
+    """A throttled get_patent is retried, not queued; the record comes back."""
     call_count = 0
 
     async def _flaky_biblio(*args, **kwargs):  # type: ignore[no-untyped-def]
@@ -1467,7 +1467,7 @@ def test_fetch_patent_pdf_cache_hit_docling_no_md_converts(
     bundle: ServiceBundle,
     slow_jobs: Jobs,
 ) -> None:
-    """Cache hit with docling but no cached md queues _execute() to convert."""
+    """A cached PDF with no cached markdown still runs the conversion."""
     epo = _make_epo_client()
     epo.get_pdf = AsyncMock(return_value=b"%PDF-1.4 fresh")  # type: ignore[method-assign]
     bundle.epo = epo

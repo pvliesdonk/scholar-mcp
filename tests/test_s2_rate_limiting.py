@@ -1,8 +1,13 @@
-"""Tests for async fire-and-forget queueing on S2 429 responses."""
+"""Tests for how the S2 client handles 429 responses.
+
+Formerly `test_async_queueing.py`. There is no queue any more: a 429 is
+absorbed by `with_s2_retry`'s backoff inside the tool call, and a call slow
+enough to matter is promoted to a background job instead. `with_s2_try_once`
+survives because `run_keepalive` deliberately does not retry its ping.
+"""
 
 from __future__ import annotations
 
-import asyncio
 import json
 from contextlib import asynccontextmanager
 
@@ -16,12 +21,11 @@ from fastmcp_pvl_core import Jobs
 from scholar_mcp._rate_limiter import RateLimitedError, RateLimiter, with_s2_try_once
 from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._tools_search import register_search_tools
-from scholar_mcp._tools_tasks import register_task_tools
 
 S2_BASE = "https://api.semanticscholar.org/graph/v1"
 
 
-# --- Unit tests for with_s2_try_once ---
+# --- Unit tests for with_s2_try_once (still used by run_keepalive) ---
 
 
 async def test_try_once_success() -> None:
@@ -59,24 +63,14 @@ async def test_try_once_propagates_other_errors() -> None:
         await with_s2_try_once(_server_error, limiter)
 
 
-# --- Integration tests for S2 tool queueing ---
-
-
-async def _poll_task(client: Client, task_id: str, max_attempts: int = 40) -> dict:
-    for _ in range(max_attempts):
-        result = await client.call_tool("get_task_result", {"task_id": task_id})
-        data = json.loads(result.content[0].text)
-        if data["status"] in ("completed", "failed"):
-            return data
-        await asyncio.sleep(0.05)
-    raise TimeoutError(f"task {task_id} did not complete")
+# --- Integration: a 429 is absorbed by the client's own backoff ---
 
 
 @pytest.mark.respx(base_url=S2_BASE)
-async def test_search_papers_queued_on_429(
+async def test_search_papers_retries_on_429(
     respx_mock: respx.MockRouter, bundle: ServiceBundle, slow_jobs: Jobs
 ) -> None:
-    """search_papers returns queued response on 429, then background succeeds."""
+    """A 429 is retried in-client; the caller still gets the result."""
     call_count = 0
 
     def _side_effect(request: httpx.Request) -> httpx.Response:
@@ -94,7 +88,6 @@ async def test_search_papers_queued_on_429(
 
     app = FastMCP("test", lifespan=lifespan)
     register_search_tools(app, slow_jobs)
-    register_task_tools(app)
 
     async with Client(app) as client:
         result = await client.call_tool(
@@ -132,10 +125,10 @@ async def test_search_papers_direct_on_success(
 
 
 @pytest.mark.respx(base_url=S2_BASE)
-async def test_get_paper_queued_on_429(
+async def test_get_paper_retries_on_429(
     respx_mock: respx.MockRouter, bundle: ServiceBundle, slow_jobs: Jobs
 ) -> None:
-    """get_paper returns queued response on 429, background task completes."""
+    """A 429 is retried in-client; the caller still gets the record."""
     call_count = 0
 
     def _side_effect(request: httpx.Request) -> httpx.Response:
@@ -153,7 +146,6 @@ async def test_get_paper_queued_on_429(
 
     app = FastMCP("test", lifespan=lifespan)
     register_search_tools(app, slow_jobs)
-    register_task_tools(app)
 
     async with Client(app) as client:
         result = await client.call_tool("get_paper", {"identifier": "x1"})
@@ -165,7 +157,7 @@ async def test_get_paper_queued_on_429(
 async def test_get_paper_cached_returns_direct(
     respx_mock: respx.MockRouter, bundle: ServiceBundle, slow_jobs: Jobs
 ) -> None:
-    """get_paper returns cached result directly, no queueing."""
+    """A cached paper answers from cache without touching the network."""
     await bundle.cache.set_paper("abc123", {"paperId": "abc123", "title": "Cached"})
 
     @asynccontextmanager

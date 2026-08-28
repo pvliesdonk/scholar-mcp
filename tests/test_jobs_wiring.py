@@ -188,8 +188,7 @@ async def test_job_records_are_scoped_to_the_caller(
     """A job id minted on one `Jobs` is unknown to another.
 
     Records are subject-scoped and per-store, so an id cannot be probed
-    across servers. The bespoke queue this is replacing has no such scoping:
-    `list_tasks` still returns every active task to any caller.
+    across servers. The bespoke queue this replaced had no such scoping.
     """
     pdf = tmp_path / "paper.pdf"
     pdf.write_bytes(b"%PDF fake")
@@ -294,6 +293,9 @@ async def test_job_backed_tools_advertise_the_polling_contract(
         "find_bridge_papers",
         "batch_resolve",
         "enrich_paper",
+        "get_standard",
+        "search_standards",
+        "resolve_standard_identifier",
     }
 
     async with Client(make_server()) as client:

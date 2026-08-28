@@ -180,7 +180,7 @@ async def test_batch_resolve_retries_on_429(
     bundle: ServiceBundle,
     slow_jobs: Jobs,
 ) -> None:
-    """batch_resolve returns queued on 429, background completes."""
+    """A rate limit is retried in-client rather than queued."""
     call_count = 0
 
     def _side_effect(request: httpx.Request) -> httpx.Response:
@@ -339,7 +339,7 @@ async def test_enrich_paper_retries_on_429(
     bundle: ServiceBundle,
     slow_jobs: Jobs,
 ) -> None:
-    """enrich_paper returns queued on 429, background completes."""
+    """A rate limit is retried in-client rather than queued."""
     call_count = 0
 
     def _side_effect(request: httpx.Request) -> httpx.Response:
@@ -540,7 +540,7 @@ async def test_batch_resolve_patent_throttled_degrades_that_entry(
     bundle: ServiceBundle,
     slow_jobs: Jobs,
 ) -> None:
-    """batch_resolve queues when EPO rate-limits during patent resolution."""
+    """An EPO throttle degrades that entry rather than queueing the batch."""
     from scholar_mcp._epo_client import EpoRateLimitedError
 
     bundle.epo = _make_epo_client(raise_on_biblio=EpoRateLimitedError("red"))
@@ -551,9 +551,6 @@ async def test_batch_resolve_patent_throttled_degrades_that_entry(
 
     app = FastMCP("test", lifespan=lifespan)
     register_utility_tools(app, slow_jobs)
-    from scholar_mcp._tools_tasks import register_task_tools
-
-    register_task_tools(app)
 
     async with Client(app) as client:
         result = await client.call_tool(
