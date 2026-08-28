@@ -164,10 +164,10 @@ overwrites previous results.
 Two mechanisms are in play, with different polling tools. Never guess which:
 every response names its own, so read the payload.
 
-**Most tools** — the PDF, patent, paper, book, citation and recommendation
-tools — answer directly when the work is quick, including on a cache hit.
-When it runs long, which includes waiting out an EPO throttle or a Semantic
-Scholar rate limit, they hand back a job handle instead:
+**Every tool except the four standards tools** answers directly when the work is quick,
+including on a cache hit. When it runs long — waiting out an EPO throttle, or
+walking a citation graph one request per node — it hands back a job handle
+instead:
 
 ```json
 {"status": "working", "job_id": "hwex4wg6taLmasPZWPM7gQ",
@@ -179,11 +179,11 @@ response carries `running_for_s` and `retry_after_s`; when it finishes,
 `status` is `completed` with a `result` object, or `failed` with an `error`.
 These jobs do not appear in `list_tasks`.
 
-**The citation-graph, cross-source utility and standards tools** still use
-the older queue when an upstream throttles them:
+**`get_standard`** alone still uses the older queue when an upstream
+throttles its full-text fetch:
 
 ```json
-{"queued": true, "task_id": "abc123", "tool": "get_citation_graph"}
+{"queued": true, "task_id": "abc123", "tool": "get_standard"}
 ```
 
 Poll those with `get_task_result(task_id="abc123")`, whose in-progress

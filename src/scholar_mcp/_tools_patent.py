@@ -22,7 +22,7 @@ from ._chapter_parser import hint_to_dict, parse_chapter_hint
 from ._epo_client import (
     EPO_REPORTED_ERRORS,
     EpoClient,
-    EpoQuotaExhaustedError,
+    epo_error_payload,
     with_epo_retry,
 )
 from ._patent_numbers import DocdbNumber, normalize
@@ -55,37 +55,6 @@ Copied on return so a caller mutating the response cannot corrupt it.
 """
 
 
-def _epo_error_payload(
-    exc: Exception,
-) -> dict[str, Any]:
-    """Turn a terminal EPO failure into a caller-facing payload.
-
-    Both cases are expected rather than exceptional, and both are more useful
-    to the calling model as a payload it can reason about than as an error.
-    The distinction that matters is whether waiting helps, so ``retryable``
-    carries it explicitly instead of leaving the caller to read the message.
-
-    Args:
-        exc: The failure that survived :func:`with_epo_retry`.
-
-    Returns:
-        An error mapping with ``retryable`` set.
-    """
-    if isinstance(exc, EpoQuotaExhaustedError):
-        logger.warning("epo_unavailable detail=%s", exc)
-        return {"error": "epo_unavailable", "detail": str(exc), "retryable": False}
-    logger.info("epo_throttled detail=%s", exc)
-    return {
-        "error": "rate_limited",
-        "detail": str(exc),
-        "retryable": True,
-        "hint": (
-            "The EPO service was busy and did not clear while waiting. "
-            "Try calling this tool again in a minute or two."
-        ),
-    }
-
-
 async def _run_epo(
     coro_func: Callable[[], Awaitable[dict[str, Any]]],
 ) -> dict[str, Any]:
@@ -104,7 +73,7 @@ async def _run_epo(
     try:
         return await with_epo_retry(coro_func)
     except EPO_REPORTED_ERRORS as exc:
-        return _epo_error_payload(exc)
+        return epo_error_payload(exc)
 
 
 def _cql_escape(s: str) -> str:
@@ -427,7 +396,7 @@ async def _download_patent_pdf(
     except ValueError as exc:
         return {"error": "pdf_not_available", "detail": str(exc)}
     except EPO_REPORTED_ERRORS as exc:
-        return _epo_error_payload(exc)
+        return epo_error_payload(exc)
     await _asyncio.to_thread(pdf_path.write_bytes, pdf_bytes)
     logger.info("patent_pdf_downloaded path=%s bytes=%d", pdf_path, len(pdf_bytes))
     return None

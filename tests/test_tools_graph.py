@@ -11,22 +11,22 @@ import pytest
 import respx
 from fastmcp import FastMCP
 from fastmcp.client import Client
+from fastmcp_pvl_core import Jobs, register_job_tools
 
 from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._tools_graph import register_graph_tools
-from scholar_mcp._tools_tasks import register_task_tools
 
 S2_BASE = "https://api.semanticscholar.org/graph/v1"
 
 
 @pytest.fixture
-def mcp(bundle: ServiceBundle) -> FastMCP:
+def mcp(bundle: ServiceBundle, slow_jobs: Jobs) -> FastMCP:
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_graph_tools(app)
+    register_graph_tools(app, slow_jobs)
     return app
 
 
@@ -257,31 +257,6 @@ async def test_find_bridge_papers_not_found(
     assert data["found"] is False
 
 
-# --- Fixture with task tools for queueing tests ---
-
-
-@pytest.fixture
-def mcp_with_tasks(bundle: ServiceBundle) -> FastMCP:
-    @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
-        yield {"bundle": bundle}
-
-    app = FastMCP("test", lifespan=lifespan)
-    register_graph_tools(app)
-    register_task_tools(app)
-    return app
-
-
-async def _poll_task(client: Client, task_id: str, max_attempts: int = 40) -> dict:
-    for _ in range(max_attempts):
-        result = await client.call_tool("get_task_result", {"task_id": task_id})
-        data = json.loads(result.content[0].text)
-        if data["status"] in ("completed", "failed"):
-            return data
-        await asyncio.sleep(0.05)
-    raise TimeoutError(f"task {task_id} did not complete")
-
-
 # --- get_citations: upstream_error (non-404 HTTP error, lines 86, 93-95) ---
 
 
@@ -299,8 +274,8 @@ async def test_get_citations_upstream_error(
 
 
 @pytest.mark.respx(base_url=S2_BASE)
-async def test_get_citations_queued_on_429(
-    respx_mock: respx.MockRouter, mcp_with_tasks: FastMCP
+async def test_get_citations_retries_on_429(
+    respx_mock: respx.MockRouter, mcp: FastMCP
 ) -> None:
     """get_citations returns queued response on 429, background task completes."""
     call_count = 0
@@ -328,15 +303,9 @@ async def test_get_citations_queued_on_429(
 
     respx_mock.get("/paper/p1/citations").mock(side_effect=_side_effect)
 
-    async with Client(mcp_with_tasks) as client:
+    async with Client(mcp) as client:
         result = await client.call_tool("get_citations", {"identifier": "p1"})
-        data = json.loads(result.content[0].text)
-        assert data["queued"] is True
-        assert data["tool"] == "get_citations"
-
-        task_data = await _poll_task(client, data["task_id"])
-    assert task_data["status"] == "completed"
-    inner = json.loads(task_data["result"])
+        inner = json.loads(result.content[0].text)
     assert inner["data"][0]["citingPaper"]["paperId"] == "c1"
 
 
@@ -370,8 +339,8 @@ async def test_get_references_upstream_error(
 
 
 @pytest.mark.respx(base_url=S2_BASE)
-async def test_get_references_queued_on_429(
-    respx_mock: respx.MockRouter, mcp_with_tasks: FastMCP
+async def test_get_references_retries_on_429(
+    respx_mock: respx.MockRouter, mcp: FastMCP
 ) -> None:
     """get_references returns queued response on 429, then completes."""
     call_count = 0
@@ -399,15 +368,9 @@ async def test_get_references_queued_on_429(
 
     respx_mock.get("/paper/p1/references").mock(side_effect=_side_effect)
 
-    async with Client(mcp_with_tasks) as client:
+    async with Client(mcp) as client:
         result = await client.call_tool("get_references", {"identifier": "p1"})
-        data = json.loads(result.content[0].text)
-        assert data["queued"] is True
-        assert data["tool"] == "get_references"
-
-        task_data = await _poll_task(client, data["task_id"])
-    assert task_data["status"] == "completed"
-    inner = json.loads(task_data["result"])
+        inner = json.loads(result.content[0].text)
     assert inner["data"][0]["citedPaper"]["paperId"] == "r1"
 
 
@@ -542,8 +505,8 @@ async def test_get_citation_graph_both_direction(
 
 
 @pytest.mark.respx(base_url=S2_BASE)
-async def test_get_citation_graph_queued_on_429(
-    respx_mock: respx.MockRouter, mcp_with_tasks: FastMCP
+async def test_get_citation_graph_retries_on_429(
+    respx_mock: respx.MockRouter, mcp: FastMCP
 ) -> None:
     """get_citation_graph queues on 429 and background task completes."""
     batch_call_count = 0
@@ -579,7 +542,7 @@ async def test_get_citation_graph_queued_on_429(
         )
     )
 
-    async with Client(mcp_with_tasks) as client:
+    async with Client(mcp) as client:
         result = await client.call_tool(
             "get_citation_graph",
             {
@@ -589,13 +552,7 @@ async def test_get_citation_graph_queued_on_429(
                 "max_nodes": 50,
             },
         )
-        data = json.loads(result.content[0].text)
-        assert data["queued"] is True
-        assert data["tool"] == "get_citation_graph"
-
-        task_data = await _poll_task(client, data["task_id"])
-    assert task_data["status"] == "completed"
-    inner = json.loads(task_data["result"])
+        inner = json.loads(result.content[0].text)
     assert "c1" in {n["id"] for n in inner["nodes"]}
 
 
@@ -672,8 +629,8 @@ async def test_find_bridge_papers_both_direction(
 
 
 @pytest.mark.respx(base_url=S2_BASE)
-async def test_find_bridge_papers_queued_on_429(
-    respx_mock: respx.MockRouter, mcp_with_tasks: FastMCP
+async def test_find_bridge_papers_retries_on_429(
+    respx_mock: respx.MockRouter, mcp: FastMCP
 ) -> None:
     """find_bridge_papers queues on 429 and background task completes."""
     call_count = 0
@@ -694,7 +651,7 @@ async def test_find_bridge_papers_queued_on_429(
 
     respx_mock.get("/paper/p1/references").mock(side_effect=_side_effect)
 
-    async with Client(mcp_with_tasks) as client:
+    async with Client(mcp) as client:
         result = await client.call_tool(
             "find_bridge_papers",
             {
@@ -704,13 +661,7 @@ async def test_find_bridge_papers_queued_on_429(
                 "direction": "references",
             },
         )
-        data = json.loads(result.content[0].text)
-        assert data["queued"] is True
-        assert data["tool"] == "find_bridge_papers"
-
-        task_data = await _poll_task(client, data["task_id"])
-    assert task_data["status"] == "completed"
-    inner = json.loads(task_data["result"])
+        inner = json.loads(result.content[0].text)
     assert inner["found"] is True
 
 
@@ -1963,3 +1914,88 @@ async def test_get_citation_graph_bfs_stops_paginating_at_max_nodes(
     # 5 nodes = 1 seed + 4 expanded; should NOT fetch 5 pages of 1000
     assert data["stats"]["total_nodes"] <= 5
     assert call_count == 1
+
+
+async def _settle(client: Client, job_id: str, attempts: int = 40) -> dict:
+    """Poll ``get_job_result`` until the job reaches a terminal status.
+
+    Args:
+        client: Connected FastMCP client.
+        job_id: Identifier from the tool's job handle.
+        attempts: Polls before giving up.
+
+    Returns:
+        The terminal polling payload.
+
+    Raises:
+        TimeoutError: If the job never settles.
+    """
+    for _ in range(attempts):
+        polled = await client.call_tool("get_job_result", {"job_id": job_id})
+        data = json.loads(polled.content[0].text)
+        if data["status"] != "working":
+            return data
+        await asyncio.sleep(0.05)
+    raise TimeoutError(f"job {job_id} did not settle")
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_citations_promotes_when_slow(
+    respx_mock: respx.MockRouter, bundle: ServiceBundle, jobs: Jobs
+) -> None:
+    """Work past the soft deadline returns a handle, resolved by polling.
+
+    These tools are the ones the migration is really for -- a graph walk
+    makes one rate-limited request per node -- so the promoted branch is the
+    normal case, not an edge case, and it is where a wrong return annotation
+    would surface as a handle failing the tool's own output schema.
+    """
+
+    async def slow(request: httpx.Request) -> httpx.Response:
+        await asyncio.sleep(0.2)
+        return httpx.Response(
+            200, json={"data": [{"citingPaper": {"paperId": "c1", "title": "Citing"}}]}
+        )
+
+    respx_mock.get("/paper/p1/citations").mock(side_effect=slow)
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_graph_tools(app, jobs)
+    register_job_tools(app, jobs)
+
+    async with Client(app) as client:
+        result = await client.call_tool("get_citations", {"identifier": "p1"})
+        handle = json.loads(result.content[0].text)
+        assert handle["status"] == "working"
+        assert handle["poll_with"] == "get_job_result"
+        assert "get_citations" in handle["message"]
+
+        settled = await _settle(client, handle["job_id"])
+
+    assert settled["status"] == "completed"
+    assert settled["result"]["data"][0]["citingPaper"]["paperId"] == "c1"
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_citations_answers_inline_when_fast(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """The counterpart: a quick call is not promoted.
+
+    Without this the test above would pass against a wiring that promoted
+    everything unconditionally.
+    """
+    respx_mock.get("/paper/p1/citations").mock(
+        return_value=httpx.Response(
+            200, json={"data": [{"citingPaper": {"paperId": "f1"}}]}
+        )
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool("get_citations", {"identifier": "p1"})
+    data = json.loads(result.content[0].text)
+    assert "job_id" not in data
+    assert data["data"][0]["citingPaper"]["paperId"] == "f1"

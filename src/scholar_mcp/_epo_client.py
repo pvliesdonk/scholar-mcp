@@ -137,6 +137,37 @@ _THROTTLE_MAX_RETRIES = 2
 minutes of patience, which the traffic light usually clears well inside."""
 
 
+def epo_error_payload(
+    exc: Exception,
+) -> dict[str, Any]:
+    """Turn a terminal EPO failure into a caller-facing payload.
+
+    Both cases are expected rather than exceptional, and both are more useful
+    to the calling model as a payload it can reason about than as an error.
+    The distinction that matters is whether waiting helps, so ``retryable``
+    carries it explicitly instead of leaving the caller to read the message.
+
+    Args:
+        exc: The failure that survived :func:`with_epo_retry`.
+
+    Returns:
+        An error mapping with ``retryable`` set.
+    """
+    if isinstance(exc, EpoQuotaExhaustedError):
+        logger.warning("epo_unavailable detail=%s", exc)
+        return {"error": "epo_unavailable", "detail": str(exc), "retryable": False}
+    logger.info("epo_throttled detail=%s", exc)
+    return {
+        "error": "rate_limited",
+        "detail": str(exc),
+        "retryable": True,
+        "hint": (
+            "The EPO service was busy and did not clear while waiting. "
+            "Try calling this tool again in a minute or two."
+        ),
+    }
+
+
 async def with_epo_retry(
     coro_func: Callable[[], Awaitable[T]],
     *,

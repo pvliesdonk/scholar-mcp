@@ -288,6 +288,12 @@ async def test_job_backed_tools_advertise_the_polling_contract(
         "generate_citations",
         "search_books",
         "get_book",
+        "get_citations",
+        "get_references",
+        "get_citation_graph",
+        "find_bridge_papers",
+        "batch_resolve",
+        "enrich_paper",
     }
 
     async with Client(make_server()) as client:
