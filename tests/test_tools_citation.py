@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from contextlib import asynccontextmanager
 
@@ -10,6 +11,7 @@ import pytest
 import respx
 from fastmcp import FastMCP
 from fastmcp.client import Client
+from fastmcp_pvl_core import Jobs, register_job_tools
 
 from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._tools_citation import register_citation_tools
@@ -34,13 +36,13 @@ SAMPLE_PAPER = {
 
 
 @pytest.fixture
-def mcp(bundle: ServiceBundle) -> FastMCP:
+def mcp(bundle: ServiceBundle, slow_jobs: Jobs) -> FastMCP:
     @asynccontextmanager
     async def lifespan(app: FastMCP):
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_citation_tools(app)
+    register_citation_tools(app, slow_jobs)
     return app
 
 
@@ -54,7 +56,7 @@ async def test_generate_bibtex_single(mcp: FastMCP) -> None:
                 "generate_citations",
                 {"paper_ids": ["abc123"], "citation_format": "bibtex"},
             )
-    text = result.content[0].text
+    text = json.loads(result.content[0].text)["output"]
     assert "@article{vaswani2017," in text
     assert "Vaswani, Ashish and Shazeer, Noam" in text
 
@@ -69,7 +71,7 @@ async def test_generate_csl_json(mcp: FastMCP) -> None:
                 "generate_citations",
                 {"paper_ids": ["abc123"], "citation_format": "csl-json"},
             )
-    data = json.loads(result.content[0].text)
+    data = json.loads(json.loads(result.content[0].text)["output"])
     assert len(data["citations"]) == 1
     assert data["citations"][0]["title"] == "Attention Is All You Need"
 
@@ -84,7 +86,7 @@ async def test_generate_ris(mcp: FastMCP) -> None:
                 "generate_citations",
                 {"paper_ids": ["abc123"], "citation_format": "ris"},
             )
-    text = result.content[0].text
+    text = json.loads(result.content[0].text)["output"]
     assert "TY  - JOUR" in text
     assert "AU  - Vaswani, Ashish" in text
 
@@ -99,7 +101,7 @@ async def test_partial_resolution(mcp: FastMCP) -> None:
                 "generate_citations",
                 {"paper_ids": ["abc123", "missing_id"], "citation_format": "bibtex"},
             )
-    text = result.content[0].text
+    text = json.loads(result.content[0].text)["output"]
     assert "@article{vaswani2017," in text
     assert "% Could not resolve: missing_id" in text
 
@@ -129,7 +131,7 @@ async def test_enrich_fills_venue(mcp: FastMCP) -> None:
                 "generate_citations",
                 {"paper_ids": ["abc123"], "citation_format": "bibtex", "enrich": True},
             )
-    text = result.content[0].text
+    text = json.loads(result.content[0].text)["output"]
     assert "Nature Machine Intelligence" in text
 
 
@@ -144,7 +146,7 @@ async def test_enrich_disabled(mcp: FastMCP) -> None:
                 "generate_citations",
                 {"paper_ids": ["abc123"], "citation_format": "bibtex", "enrich": False},
             )
-    text = result.content[0].text
+    text = json.loads(result.content[0].text)["output"]
     assert "@" in text
 
 
@@ -201,7 +203,7 @@ async def test_all_papers_unresolved(mcp: FastMCP) -> None:
     assert set(data["failed"]) == {"bad1", "bad2"}
 
 
-async def test_queued_on_429(bundle: ServiceBundle) -> None:
+async def test_retries_on_429(bundle: ServiceBundle, slow_jobs: Jobs) -> None:
     call_count = 0
 
     def _side_effect(request: httpx.Request) -> httpx.Response:
@@ -219,7 +221,7 @@ async def test_queued_on_429(bundle: ServiceBundle) -> None:
             yield {"bundle": bundle}
 
         app = FastMCP("test", lifespan=lifespan)
-        register_citation_tools(app)
+        register_citation_tools(app, slow_jobs)
 
         async with Client(app) as client:
             result = await client.call_tool(
@@ -227,5 +229,54 @@ async def test_queued_on_429(bundle: ServiceBundle) -> None:
                 {"paper_ids": ["abc123"], "citation_format": "bibtex"},
             )
             data = json.loads(result.content[0].text)
-            assert data["queued"] is True
-            assert data["tool"] == "generate_citations"
+    assert "@article" in data["output"] or "@inproceedings" in data["output"]
+
+
+async def test_generate_citations_promotes_when_slow(
+    bundle: ServiceBundle, jobs: Jobs
+) -> None:
+    """Slow resolution is promoted, and the formatted text survives polling.
+
+    This tool is the one whose payload had to be wrapped, so it is worth
+    confirming the wrapper still arrives intact through a job record rather
+    than only on the inline path.
+    """
+
+    async def slow(request: httpx.Request) -> httpx.Response:
+        await asyncio.sleep(0.2)
+        return httpx.Response(
+            200,
+            json=[{"paperId": "c9", "title": "Slow Paper", "year": 2024}],
+        )
+
+    with respx.mock:
+        respx.post(f"{S2_BASE}/paper/batch").mock(side_effect=slow)
+
+        @asynccontextmanager
+        async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+            yield {"bundle": bundle}
+
+        app = FastMCP("test", lifespan=lifespan)
+        register_citation_tools(app, jobs)
+        register_job_tools(app, jobs)
+
+        async with Client(app) as client:
+            result = await client.call_tool(
+                "generate_citations", {"paper_ids": ["c9"], "enrich": False}
+            )
+            handle = json.loads(result.content[0].text)
+            assert handle["status"] == "working"
+            assert handle["poll_with"] == "get_job_result"
+
+            for _ in range(40):
+                polled = await client.call_tool(
+                    "get_job_result", {"job_id": handle["job_id"]}
+                )
+                settled = json.loads(polled.content[0].text)
+                if settled["status"] != "working":
+                    break
+                await asyncio.sleep(0.05)
+
+    assert settled["status"] == "completed"
+    assert settled["result"]["format"] == "bibtex"
+    assert "Slow Paper" in settled["result"]["output"]

@@ -11,6 +11,7 @@ import pytest
 import respx
 from fastmcp import FastMCP
 from fastmcp.client import Client
+from fastmcp_pvl_core import Jobs, register_job_tools
 
 from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._tools_recommendations import register_recommendation_tools
@@ -19,13 +20,13 @@ S2_REC = "https://api.semanticscholar.org/recommendations/v1"
 
 
 @pytest.fixture
-def mcp(bundle: ServiceBundle) -> FastMCP:
+def mcp(bundle: ServiceBundle, slow_jobs: Jobs) -> FastMCP:
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_recommendation_tools(app)
+    register_recommendation_tools(app, slow_jobs)
     return app
 
 
@@ -50,7 +51,7 @@ async def test_recommend_papers(mcp: FastMCP) -> None:
             result = await client.call_tool(
                 "recommend_papers", {"positive_ids": ["p1", "p2"]}
             )
-    data = json.loads(result.content[0].text)
+    data = json.loads(result.content[0].text)["recommendations"]
     assert len(data) == 1
     assert data[0]["paperId"] == "r1"
 
@@ -66,7 +67,7 @@ async def test_recommend_papers_with_negatives(mcp: FastMCP) -> None:
                 {"positive_ids": ["p1"], "negative_ids": ["n1"], "limit": 5},
             )
     data = json.loads(result.content[0].text)
-    assert isinstance(data, list)
+    assert isinstance(data["recommendations"], list)
 
 
 async def test_recommend_papers_caps_positive_ids(mcp: FastMCP) -> None:
@@ -102,8 +103,9 @@ async def test_recommend_papers_upstream_error(mcp: FastMCP) -> None:
     assert data["error"] == "upstream_error"
 
 
-async def test_recommend_papers_queued_on_429(
+async def test_recommend_papers_retries_on_429(
     bundle: ServiceBundle,
+    slow_jobs: Jobs,
 ) -> None:
     """recommend_papers returns queued on 429, background completes."""
     call_count = 0
@@ -128,27 +130,52 @@ async def test_recommend_papers_queued_on_429(
             yield {"bundle": bundle}
 
         app = FastMCP("test", lifespan=lifespan)
-        register_recommendation_tools(app)
-        from scholar_mcp._tools_tasks import register_task_tools
-
-        register_task_tools(app)
+        register_recommendation_tools(app, slow_jobs)
 
         async with Client(app) as client:
             result = await client.call_tool(
                 "recommend_papers", {"positive_ids": ["p1"]}
             )
-            data = json.loads(result.content[0].text)
-            assert data["queued"] is True
-            assert data["tool"] == "recommend_papers"
+            inner = json.loads(result.content[0].text)
+    assert inner["recommendations"][0]["paperId"] == "r1"
+
+
+async def test_recommend_papers_promotes_when_slow(
+    bundle: ServiceBundle, jobs: Jobs
+) -> None:
+    """A slow upstream is promoted and the result arrives by polling."""
+
+    async def slow(request: httpx.Request) -> httpx.Response:
+        await asyncio.sleep(0.2)
+        return httpx.Response(200, json={"recommendedPapers": [{"paperId": "r9"}]})
+
+    with respx.mock:
+        respx.post(f"{S2_REC}/papers").mock(side_effect=slow)
+
+        @asynccontextmanager
+        async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+            yield {"bundle": bundle}
+
+        app = FastMCP("test", lifespan=lifespan)
+        register_recommendation_tools(app, jobs)
+        register_job_tools(app, jobs)
+
+        async with Client(app) as client:
+            result = await client.call_tool(
+                "recommend_papers", {"positive_ids": ["p1"]}
+            )
+            handle = json.loads(result.content[0].text)
+            assert handle["status"] == "working"
+            assert handle["poll_with"] == "get_job_result"
 
             for _ in range(40):
-                poll = await client.call_tool(
-                    "get_task_result", {"task_id": data["task_id"]}
+                polled = await client.call_tool(
+                    "get_job_result", {"job_id": handle["job_id"]}
                 )
-                poll_data = json.loads(poll.content[0].text)
-                if poll_data["status"] in ("completed", "failed"):
+                settled = json.loads(polled.content[0].text)
+                if settled["status"] != "working":
                     break
                 await asyncio.sleep(0.05)
-            assert poll_data["status"] == "completed"
-            inner = json.loads(poll_data["result"])
-            assert inner[0]["paperId"] == "r1"
+
+    assert settled["status"] == "completed"
+    assert settled["result"]["recommendations"][0]["paperId"] == "r9"

@@ -8,10 +8,13 @@ from fastmcp_pvl_core import Jobs, build_jobs, register_job_tools
 from .config import ProjectConfig
 
 _JOBS_NOTE = (
-    "Scholar MCP promotes slow work to a background job: PDF download and "
-    "docling conversion usually take 1-5 minutes, so those tools commonly "
-    "answer with a job_id rather than a result. A cache hit answers inline "
-    "instead, with no job."
+    "Scholar MCP promotes slow work to a background job. PDF download and "
+    "docling conversion usually take 1-5 minutes, a busy EPO traffic light "
+    "is waited out, and citation formatting enriches each paper in turn. "
+    "Those calls commonly answer with a job_id rather than a result; a cache "
+    "hit answers inline, with no job. Tools that answer with task_id instead "
+    "are polled with get_task_result, not this tool -- the response always "
+    "names which one to use."
 )
 
 
@@ -45,7 +48,7 @@ def register_tools(
     # ServiceBundle via Depends(get_bundle).
     from ._tools_search import register_search_tools
 
-    register_search_tools(mcp)
+    register_search_tools(mcp, jobs)
 
     from ._tools_graph import register_graph_tools
 
@@ -53,7 +56,7 @@ def register_tools(
 
     from ._tools_recommendations import register_recommendation_tools
 
-    register_recommendation_tools(mcp)
+    register_recommendation_tools(mcp, jobs)
 
     from ._tools_utility import register_utility_tools
 
@@ -69,7 +72,7 @@ def register_tools(
 
     from ._tools_citation import register_citation_tools
 
-    register_citation_tools(mcp)
+    register_citation_tools(mcp, jobs)
 
     from ._tools_patent import register_patent_tools
 
@@ -77,7 +80,7 @@ def register_tools(
 
     from ._tools_books import register_book_tools
 
-    register_book_tools(mcp)
+    register_book_tools(mcp, jobs)
 
     from ._tools_standards import register_standards_tools
 

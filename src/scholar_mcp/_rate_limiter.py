@@ -42,20 +42,30 @@ class RateLimiter:
             self._last = asyncio.get_running_loop().time()
 
 
+_S2_MAX_RETRIES = 3
+"""Attempts after the first failure when retrying a 429."""
+
+_S2_BASE_DELAY_S = 1.0
+"""First backoff wait in seconds; doubled on each subsequent retry."""
+
+
 async def with_s2_retry(
     coro_func: Callable[[], Awaitable[Any]],
     limiter: RateLimiter,
     *,
-    max_retries: int = 3,
-    base_delay: float = 1.0,
+    max_retries: int | None = None,
+    base_delay: float | None = None,
 ) -> Any:
     """Call an async function with exponential backoff on HTTP 429.
 
     Args:
         coro_func: Zero-argument async callable to invoke.
         limiter: Rate limiter to acquire before each attempt.
-        max_retries: Maximum number of retry attempts after the first failure.
-        base_delay: Base delay in seconds for exponential backoff.
+        max_retries: Attempts after the first failure. Defaults to
+            :data:`_S2_MAX_RETRIES`, resolved at call time so tests can
+            shrink it rather than sleeping for real seconds.
+        base_delay: Base delay in seconds for exponential backoff. Defaults
+            to :data:`_S2_BASE_DELAY_S`, resolved the same way.
 
     Returns:
         The return value of ``coro_func`` on success.
@@ -63,17 +73,19 @@ async def with_s2_retry(
     Raises:
         httpx.HTTPStatusError: If retries are exhausted or a non-429 error occurs.
     """
-    for attempt in range(max_retries + 1):
+    retries = _S2_MAX_RETRIES if max_retries is None else max_retries
+    delay_base = _S2_BASE_DELAY_S if base_delay is None else base_delay
+    for attempt in range(retries + 1):
         await limiter.acquire()
         try:
             return await coro_func()
         except httpx.HTTPStatusError as exc:
-            if exc.response.status_code == 429 and attempt < max_retries:
-                wait = base_delay * (2**attempt)
+            if exc.response.status_code == 429 and attempt < retries:
+                wait = delay_base * (2**attempt)
                 logger.warning(
                     "s2_rate_limited attempt=%d/%d waiting=%.1fs",
                     attempt + 1,
-                    max_retries + 1,
+                    retries + 1,
                     wait,
                 )
                 await asyncio.sleep(wait)

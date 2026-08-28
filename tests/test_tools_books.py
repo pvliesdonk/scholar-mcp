@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from contextlib import asynccontextmanager
 from dataclasses import replace
@@ -11,6 +12,7 @@ import pytest
 import respx
 from fastmcp import FastMCP
 from fastmcp.client import Client
+from fastmcp_pvl_core import Jobs, register_job_tools
 
 from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._tools_books import register_book_tools
@@ -84,13 +86,13 @@ SAMPLE_SUBJECT_RESPONSE = {
 
 
 @pytest.fixture
-def mcp(bundle: ServiceBundle) -> FastMCP:
+def mcp(bundle: ServiceBundle, slow_jobs: Jobs) -> FastMCP:
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_book_tools(app)
+    register_book_tools(app, slow_jobs)
     return app
 
 
@@ -103,7 +105,7 @@ async def test_search_books_returns_results(
     )
     async with Client(mcp) as client:
         result = await client.call_tool("search_books", {"query": "design patterns"})
-    data = json.loads(result.content[0].text)
+    data = json.loads(result.content[0].text)["books"]
     assert len(data) == 1
     assert data[0]["title"] == "Design Patterns"
     assert data[0]["isbn_13"] == "9780201633610"
@@ -138,7 +140,7 @@ async def test_search_books_uses_cache(
         await client.call_tool("search_books", {"query": "cached query"})
         # Second call — should come from cache
         result = await client.call_tool("search_books", {"query": "cached query"})
-    data = json.loads(result.content[0].text)
+    data = json.loads(result.content[0].text)["books"]
     assert len(data) == 1
     assert data[0]["title"] == "Design Patterns"
 
@@ -401,7 +403,7 @@ async def test_search_books_structured_params(
         result = await client.call_tool(
             "search_books", {"title": "Design Patterns", "author": "Gamma"}
         )
-    data = json.loads(result.content[0].text)
+    data = json.loads(result.content[0].text)["books"]
     assert len(data) == 1
     assert data[0]["title"] == "Design Patterns"
 
@@ -451,7 +453,7 @@ async def test_search_books_author_broadening(
             "search_books",
             {"title": "Planning Office Space", "author": "Frank Duffy"},
         )
-    data = json.loads(result.content[0].text)
+    data = json.loads(result.content[0].text)["books"]
     assert len(data) == 1
     assert data[0]["title"] == "Planning Office Space"
 
@@ -473,7 +475,7 @@ async def test_search_books_query_falls_back_to_q(
         result = await client.call_tool(
             "search_books", {"query": "obscure keyword search"}
         )
-    data = json.loads(result.content[0].text)
+    data = json.loads(result.content[0].text)["books"]
     assert len(data) == 1
     assert data[0]["title"] == "Design Patterns"
 
@@ -523,54 +525,6 @@ async def test_recommend_books_empty_subject(
         result = await client.call_tool("recommend_books", {"subject": "nonexistent"})
     data = json.loads(result.content[0].text)
     assert data == []
-
-
-async def test_search_books_queued_on_rate_limit(
-    bundle: ServiceBundle,
-) -> None:
-    """search_books returns queued response when rate-limited."""
-    from unittest.mock import AsyncMock
-
-    from scholar_mcp._rate_limiter import RateLimitedError
-
-    bundle.openlibrary.search = AsyncMock(side_effect=RateLimitedError())
-
-    @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
-        yield {"bundle": bundle}
-
-    app = FastMCP("test", lifespan=lifespan)
-    register_book_tools(app)
-
-    async with Client(app) as client:
-        result = await client.call_tool("search_books", {"query": "test"})
-    data = json.loads(result.content[0].text)
-    assert data["queued"] is True
-    assert data["tool"] == "search_books"
-
-
-async def test_get_book_queued_on_rate_limit(
-    bundle: ServiceBundle,
-) -> None:
-    """get_book returns queued response when rate-limited."""
-    from unittest.mock import AsyncMock
-
-    from scholar_mcp._rate_limiter import RateLimitedError
-
-    bundle.openlibrary.get_by_isbn = AsyncMock(side_effect=RateLimitedError())
-
-    @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
-        yield {"bundle": bundle}
-
-    app = FastMCP("test", lifespan=lifespan)
-    register_book_tools(app)
-
-    async with Client(app) as client:
-        result = await client.call_tool("get_book", {"identifier": "9780201633610"})
-    data = json.loads(result.content[0].text)
-    assert data["queued"] is True
-    assert data["tool"] == "get_book"
 
 
 COVERS_BASE = "https://covers.openlibrary.org"
@@ -767,3 +721,46 @@ async def test_get_book_excerpt_not_found(
     data = json.loads(result.content[0].text)
     assert data["error"] == "not_found"
     assert data["isbn"] == "0000000000000"
+
+
+async def test_search_books_promotes_when_slow(
+    bundle: ServiceBundle, jobs: Jobs
+) -> None:
+    """A slow Open Library answers with a handle, resolved by polling.
+
+    Open Library serialises calls behind a politeness delay, so this is the
+    tool most likely to promote in practice.
+    """
+    from unittest.mock import AsyncMock
+
+    async def slow_search(*args: object, **kwargs: object) -> list[dict]:
+        await asyncio.sleep(0.2)
+        return [{"key": "/works/OL1W", "title": "Slow Book"}]
+
+    bundle.openlibrary.search = AsyncMock(side_effect=slow_search)  # type: ignore[method-assign]
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_book_tools(app, jobs)
+    register_job_tools(app, jobs)
+
+    async with Client(app) as client:
+        result = await client.call_tool("search_books", {"title": "slow"})
+        handle = json.loads(result.content[0].text)
+        assert handle["status"] == "working"
+        assert handle["poll_with"] == "get_job_result"
+
+        for _ in range(40):
+            polled = await client.call_tool(
+                "get_job_result", {"job_id": handle["job_id"]}
+            )
+            settled = json.loads(polled.content[0].text)
+            if settled["status"] != "working":
+                break
+            await asyncio.sleep(0.05)
+
+    assert settled["status"] == "completed"
+    assert settled["result"]["books"][0]["title"] == "Slow Book"

@@ -257,9 +257,12 @@ async def test_job_backed_tools_advertise_the_polling_contract(
 
     This is the surface the calling model actually reads. FastMCP publishes a
     docstring's summary and body but strips its `Args:` and `Returns:`
-    sections, so guidance placed under `Returns:` never reaches the client --
-    which is exactly how three patent tools came to advertise the old,
-    removed task-queue contract while their `Returns:` text was updated.
+    sections, so guidance placed under any of them never reaches the client.
+    That is exactly how three patent tools came to advertise the old, removed
+    task-queue contract while their `Returns:` text was updated -- and how
+    `search_books` later hid the same note behind its `Examples:` block.
+    The rule the test enforces: the note goes in the body, above the first
+    section header of any kind.
 
     Asserting on the description as the client receives it, rather than on the
     docstring source, is what makes that failure visible.
@@ -278,6 +281,13 @@ async def test_job_backed_tools_advertise_the_polling_contract(
         "search_patents",
         "get_patent",
         "get_citing_patents",
+        "search_papers",
+        "get_paper",
+        "get_author",
+        "recommend_papers",
+        "generate_citations",
+        "search_books",
+        "get_book",
     }
 
     async with Client(make_server()) as client:
