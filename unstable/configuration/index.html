@@ -759,6 +759,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#epo-throttling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        EPO throttling
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1625,6 +1636,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#epo-throttling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        EPO throttling
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2069,8 +2091,9 @@ about the disagreement.</p>
 
 <h3 id="long-running-tools-and-get_job_result">Long-running tools and <code>get_job_result</code><a class="headerlink" href="#long-running-tools-and-get_job_result" title="Permanent link">&para;</a></h3>
 <p>The PDF tools (<code>fetch_paper_pdf</code>, <code>convert_pdf_to_markdown</code>,
-<code>fetch_and_convert</code>, <code>fetch_pdf_by_url</code> and <code>fetch_patent_pdf</code>) run as
-background jobs when they are slow. A call that finishes within
+<code>fetch_and_convert</code>, <code>fetch_pdf_by_url</code> and <code>fetch_patent_pdf</code>) and the patent
+tools (<code>search_patents</code>, <code>get_patent</code>, <code>get_citing_patents</code>) run as background
+jobs when they are slow. A call that finishes within
 <code>SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S</code> returns its result directly. A slower one
 is promoted to a background job, and the caller gets a handle instead:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="p">{</span><span class="nt">&quot;status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;working&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;job_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;poll_with&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;get_job_result&quot;</span><span class="p">,</span>
@@ -2123,12 +2146,23 @@ settles, then <code>completed</code> with a <code>result</code> object, or <code
 <code>get_job_result</code></strong>. The allowlist matches on tool name, so leaving it out
 makes every job handle unresolvable.</p>
 <h3 id="one-remaining-bespoke-queue">One remaining bespoke queue<a class="headerlink" href="#one-remaining-bespoke-queue" title="Permanent link">&para;</a></h3>
-<p>The Semantic Scholar, patent-search and standards tools still use a separate
-in-process queue (<code>src/scholar_mcp/_task_queue.py</code>), reached through the
-<code>list_tasks</code> and <code>get_task_result</code> tools. That queue always runs in-process
-and is always lost on restart, and no environment variable configures it.
-Moving the remaining tools across is tracked in
+<p>The Semantic Scholar and standards tools still use a separate in-process queue
+(<code>src/scholar_mcp/_task_queue.py</code>), reached through the <code>list_tasks</code> and
+<code>get_task_result</code> tools. That queue always runs in-process and is always lost
+on restart, and no environment variable configures it. Moving the remaining
+tools across is tracked in
 <a href="https://github.com/pvliesdonk/scholar-mcp/issues/264">#264</a>.</p>
+<h3 id="epo-throttling">EPO throttling<a class="headerlink" href="#epo-throttling" title="Permanent link">&para;</a></h3>
+<p>The patent tools wait out an amber or red EPO traffic light rather than
+failing on it. Each wait is longer than the 60-second lifetime of the cached
+light, because a shorter one would re-read the same cached colour instead of
+asking EPO again. Two retries follow the first attempt, so a throttled call
+can spend roughly three minutes waiting. That is well past
+<code>SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S</code>, so such a call is handed back as a job to
+poll rather than holding the connection open.</p>
+<p>A black light means the daily quota is spent. That does not clear until
+tomorrow, so it is reported at once with <code>"retryable": false</code> instead of
+costing the caller the full wait for the same answer.</p>
 <!-- DOMAIN-CONFIG-VARS-END -->
 
 
