@@ -18,12 +18,12 @@ All tools include [MCP tool annotations](https://spec.modelcontextprotocol.io/sp
 
 Long-running operations return immediately with a task ID instead of blocking:
 
-- **PDF tools** run as background jobs when the work is slow. A cached result is returned directly instead, except that `fetch_and_convert` re-converts even when the markdown is already on disk ([#318](https://github.com/pvliesdonk/scholar-mcp/issues/318))
+- **PDF and patent tools** run as background jobs when the work is slow. A cached result is returned directly instead, except that `fetch_and_convert` re-converts even when the markdown is already on disk ([#318](https://github.com/pvliesdonk/scholar-mcp/issues/318))
 - **S2 tools** queue when the Semantic Scholar API responds with HTTP 429 (rate limited)
 
 The two use different polling tools, and each response says which one to call.
 
-A PDF tool that exceeds `SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S` (25 seconds by default) returns:
+A job-backed tool that exceeds `SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S` (25 seconds by default) returns:
 
 ```json
 {"status": "working", "job_id": "hwex4wg6taLmasPZWPM7gQ", "poll_with": "get_job_result",
@@ -39,6 +39,8 @@ An S2 tool that hits a rate limit returns:
 ```
 
 Poll with `get_task_result`. These results expire after 10 minutes.
+
+Patent tools no longer use this path. When EPO reports its traffic light amber or red they wait for it to clear, which is what makes them long-running, so they return a `job_id` like the PDF tools. If it has not cleared by the time the retries are spent they answer with `{"error": "rate_limited", "retryable": true}` and a hint, rather than failing opaquely.
 
 ## Papers, Search & Retrieval
 
@@ -735,7 +737,7 @@ one to call, so follow `poll_with` rather than guessing.
 ### `get_job_result`
 
 Retrieve the outcome of a background job started by a long-running tool. Used
-by the PDF tools.
+by the PDF and patent tools.
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
@@ -791,12 +793,11 @@ The response includes extra fields while the task is in progress (`pending` or `
   "task_id": "a1b2c3d4e5f6",
   "status": "running",
   "elapsed_seconds": 8,
-  "tool": "search_patents",
-  "hint": "Patent searches usually complete in 5-15 seconds."
+  "tool": "search_papers"
 }
 ```
 
-The `hint` field gives expected duration, keep polling until the task completes.
+Keep polling until the task completes. Each tool's own description states how long it usually takes.
 
 ---
 

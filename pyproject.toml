@@ -241,6 +241,7 @@ log_level = "WARNING"
 markers = [
     "live: tests that hit real network services; opt-in via `pytest -m live`",
     "browser: end-to-end test that drives a headless browser (requires the 'browser' dependency group + 'playwright install chromium')",
+    "real_epo_backoff: opts out of the autouse fixture that shrinks the EPO throttle backoff, for tests asserting on the real constants",
 ]
 
 [tool.coverage.run]

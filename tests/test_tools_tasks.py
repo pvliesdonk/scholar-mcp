@@ -60,31 +60,13 @@ async def test_get_task_result_failed_task(mcp: FastMCP, bundle: ServiceBundle) 
 async def test_get_task_result_in_progress_includes_context(
     mcp: FastMCP, bundle: ServiceBundle
 ) -> None:
-    """get_task_result includes elapsed_seconds, tool, and hint while running."""
+    """get_task_result reports elapsed_seconds and the originating tool.
 
-    async def _slow_coro() -> str:
-        await asyncio.sleep(10)
-        return "{}"
-
-    # A tool still served by this queue.  The PDF tools moved to the jobs
-    # framework, so their hints no longer live here (#312).
-    task_id = bundle.tasks.submit(_slow_coro(), tool="search_patents")
-
-    async with Client(mcp) as client:
-        result = await client.call_tool("get_task_result", {"task_id": task_id})
-    data = json.loads(result.content[0].text)
-    assert data["status"] in ("pending", "running")
-    assert "elapsed_seconds" in data
-    assert isinstance(data["elapsed_seconds"], int)
-    assert data["tool"] == "search_patents"
-    assert "hint" in data
-    assert "5-15 seconds" in data["hint"]
-
-
-async def test_get_task_result_no_hint_for_unknown_tool(
-    mcp: FastMCP, bundle: ServiceBundle
-) -> None:
-    """get_task_result includes elapsed_seconds but no hint for tools without hints."""
+    Per-tool duration hints used to be synthesised here too. They moved into
+    each tool's own docstring as the tools migrated to the jobs framework,
+    where the calling model reads them before calling rather than after
+    queueing; the last hinted tool left with the patent migration (#313).
+    """
 
     async def _slow_coro() -> str:
         await asyncio.sleep(10)
@@ -97,7 +79,28 @@ async def test_get_task_result_no_hint_for_unknown_tool(
     data = json.loads(result.content[0].text)
     assert data["status"] in ("pending", "running")
     assert "elapsed_seconds" in data
+    assert isinstance(data["elapsed_seconds"], int)
     assert data["tool"] == "search_papers"
+    assert "hint" not in data
+
+
+async def test_get_task_result_reports_any_tool_name(
+    mcp: FastMCP, bundle: ServiceBundle
+) -> None:
+    """The originating tool name is echoed back whatever it is."""
+
+    async def _slow_coro() -> str:
+        await asyncio.sleep(10)
+        return "{}"
+
+    task_id = bundle.tasks.submit(_slow_coro(), tool="batch_resolve")
+
+    async with Client(mcp) as client:
+        result = await client.call_tool("get_task_result", {"task_id": task_id})
+    data = json.loads(result.content[0].text)
+    assert data["status"] in ("pending", "running")
+    assert "elapsed_seconds" in data
+    assert data["tool"] == "batch_resolve"
     assert "hint" not in data
 
 
@@ -108,7 +111,7 @@ async def test_list_tasks(mcp: FastMCP, bundle: ServiceBundle) -> None:
         await asyncio.sleep(10)
         return "{}"
 
-    task_id = bundle.tasks.submit(_slow_coro(), tool="search_patents")
+    task_id = bundle.tasks.submit(_slow_coro(), tool="search_papers")
 
     async with Client(mcp) as client:
         result = await client.call_tool("list_tasks", {})
@@ -116,7 +119,7 @@ async def test_list_tasks(mcp: FastMCP, bundle: ServiceBundle) -> None:
     assert isinstance(data, list)
     assert len(data) >= 1
     task_entry = next(t for t in data if t["task_id"] == task_id)
-    assert task_entry["tool"] == "search_patents"
+    assert task_entry["tool"] == "search_papers"
     assert "elapsed_seconds" in task_entry
 
 
@@ -173,40 +176,3 @@ async def test_get_task_result_other_error_unchanged(
     assert data["status"] == "failed"
     assert "Some other error" in data["error"]
     assert "retryable" not in data
-
-
-async def test_get_task_result_search_patents_hint(
-    mcp: FastMCP, bundle: ServiceBundle
-) -> None:
-    """get_task_result includes a hint for queued search_patents tasks."""
-
-    async def _slow_coro() -> str:
-        await asyncio.sleep(10)
-        return "{}"
-
-    task_id = bundle.tasks.submit(_slow_coro(), tool="search_patents")
-
-    async with Client(mcp) as client:
-        result = await client.call_tool("get_task_result", {"task_id": task_id})
-    data = json.loads(result.content[0].text)
-    assert data["status"] in ("pending", "running")
-    assert "hint" in data
-    assert "5-15 seconds" in data["hint"]
-
-
-async def test_get_task_result_get_patent_hint(
-    mcp: FastMCP, bundle: ServiceBundle
-) -> None:
-    """get_task_result includes a hint for queued get_patent tasks."""
-
-    async def _slow_coro() -> str:
-        await asyncio.sleep(10)
-        return "{}"
-
-    task_id = bundle.tasks.submit(_slow_coro(), tool="get_patent")
-
-    async with Client(mcp) as client:
-        result = await client.call_tool("get_task_result", {"task_id": task_id})
-    data = json.loads(result.content[0].text)
-    assert "hint" in data
-    assert "5-20 seconds" in data["hint"]

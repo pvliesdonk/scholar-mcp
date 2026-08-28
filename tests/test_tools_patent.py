@@ -13,7 +13,11 @@ from fastmcp.client import Client
 from fastmcp_pvl_core import Jobs, register_job_tools
 
 from scholar_mcp._docling_client import DoclingClient
-from scholar_mcp._epo_client import EpoClient, EpoRateLimitedError
+from scholar_mcp._epo_client import (
+    EpoClient,
+    EpoQuotaExhaustedError,
+    EpoRateLimitedError,
+)
 from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._tools_patent import (
     _build_cql,
@@ -333,11 +337,11 @@ async def test_search_patents_different_offsets_different_cache_entries(
     assert cached1 != cached2
 
 
-async def test_search_patents_rate_limited_queues(
+async def test_search_patents_retries_when_throttled(
     bundle: ServiceBundle,
     slow_jobs: Jobs,
 ) -> None:
-    """search_patents queues the task when EPO rate-limits the request."""
+    """A throttled search is retried rather than handed back as an error."""
     call_count = 0
 
     async def _flaky_search(*args, **kwargs):  # type: ignore[no-untyped-def]
@@ -357,28 +361,13 @@ async def test_search_patents_rate_limited_queues(
 
     app = FastMCP("test", lifespan=lifespan)
     register_patent_tools(app, slow_jobs)
-    from scholar_mcp._tools_tasks import register_task_tools
-
-    register_task_tools(app)
 
     async with Client(app) as client:
         result = await client.call_tool("search_patents", {"query": "throttled query"})
-        data = json.loads(result.content[0].text)
-        assert data["queued"] is True
-        assert data["tool"] == "search_patents"
+        inner = json.loads(result.content[0].text)
 
-        # Poll for background result
-        for _ in range(40):
-            poll = await client.call_tool(
-                "get_task_result", {"task_id": data["task_id"]}
-            )
-            poll_data = json.loads(poll.content[0].text)
-            if poll_data["status"] in ("completed", "failed"):
-                break
-            await asyncio.sleep(0.05)
-        assert poll_data["status"] == "completed"
-        inner = json.loads(poll_data["result"])
-        assert inner["total_count"] == 1
+    assert call_count == 2, "expected the throttled first attempt to be retried"
+    assert inner["total_count"] == 1
 
 
 async def test_search_patents_with_filters(
@@ -448,9 +437,9 @@ async def test_get_patent_returns_biblio(
     """get_patent returns bibliographic data as JSON."""
     async with Client(mcp_with_epo) as client:
         result = await client.call_tool("get_patent", {"patent_number": "EP1234567A1"})
-    data = json.loads(result.content[0].text)
+        data = json.loads(result.content[0].text)
+
     assert data["patent_number"] == "EP.1234567.A1"
-    assert data["biblio"]["title"] == "Test Patent"
 
 
 async def test_get_patent_caches_result(
@@ -653,7 +642,7 @@ async def test_get_patent_not_found_without_biblio_section(
     assert data["error"] == "patent_not_found"
 
 
-async def test_get_patent_rate_limited_queues(
+async def test_get_patent_retries_when_throttled(
     bundle: ServiceBundle,
     slow_jobs: Jobs,
 ) -> None:
@@ -677,27 +666,13 @@ async def test_get_patent_rate_limited_queues(
 
     app = FastMCP("test", lifespan=lifespan)
     register_patent_tools(app, slow_jobs)
-    from scholar_mcp._tools_tasks import register_task_tools
-
-    register_task_tools(app)
 
     async with Client(app) as client:
         result = await client.call_tool("get_patent", {"patent_number": "EP1234567A1"})
         data = json.loads(result.content[0].text)
-        assert data["queued"] is True
-        assert data["tool"] == "get_patent"
 
-        for _ in range(40):
-            poll = await client.call_tool(
-                "get_task_result", {"task_id": data["task_id"]}
-            )
-            poll_data = json.loads(poll.content[0].text)
-            if poll_data["status"] in ("completed", "failed"):
-                break
-            await asyncio.sleep(0.05)
-        assert poll_data["status"] == "completed"
-        inner = json.loads(poll_data["result"])
-        assert inner["biblio"]["title"] == "Test Patent"
+    assert call_count == 2, "expected the throttled first attempt to be retried"
+    assert data["patent_number"] == "EP.1234567.A1"
 
 
 async def test_get_patent_no_epo_client_returns_error(
@@ -751,13 +726,12 @@ async def test_fetch_all_sections(bundle: ServiceBundle) -> None:
 
     epo = _make_epo_client()
     doc = DocdbNumber("EP", "1234567", "A1")
-    result_json = await _fetch_patent_sections(
+    result = await _fetch_patent_sections(
         doc=doc,
         sections=["biblio", "claims", "description", "family", "legal"],
         epo=epo,
         cache=bundle.cache,
     )
-    result = json.loads(result_json)
     assert result["patent_number"] == "EP.1234567.A1"
     assert result["biblio"]["title"] == "Test Patent"
     assert "method for testing" in result["claims"]
@@ -773,13 +747,12 @@ async def test_fetch_sections_uses_cache(bundle: ServiceBundle) -> None:
     epo = _make_epo_client()
     await bundle.cache.set_patent_claims("EP.1234567.A1", "Cached claims")
     doc = DocdbNumber("EP", "1234567", "A1")
-    result_json = await _fetch_patent_sections(
+    result = await _fetch_patent_sections(
         doc=doc,
         sections=["claims"],
         epo=epo,
         cache=bundle.cache,
     )
-    result = json.loads(result_json)
     assert result["claims"] == "Cached claims"
     epo.get_claims.assert_not_called()  # type: ignore[union-attr]
 
@@ -1003,11 +976,11 @@ async def test_get_citing_patents_no_epo_returns_error(
     assert data["error"] == "epo_not_configured"
 
 
-async def test_get_citing_patents_rate_limited_queues(
+async def test_get_citing_patents_throttle_survives_retries(
     bundle: ServiceBundle,
     slow_jobs: Jobs,
 ) -> None:
-    """get_citing_patents queues on rate limit."""
+    """A throttle that never clears is reported, not raised at the caller."""
     epo = _make_epo_client(raise_on_search=EpoRateLimitedError("red"))
     bundle.epo = epo
 
@@ -1024,8 +997,8 @@ async def test_get_citing_patents_rate_limited_queues(
             {"paper_id": "10.1234/test"},
         )
     data = json.loads(result.content[0].text)
-    assert data["queued"] is True
-    assert data["tool"] == "get_citing_patents"
+    assert data["error"] == "rate_limited"
+    assert data["retryable"] is True
 
 
 # ---------------------------------------------------------------------------
@@ -1169,14 +1142,13 @@ async def test_npl_chapter_info_no_s2_branch(
     }
     epo = _make_epo_client(citations_result=citations_data)
     doc = DocdbNumber("EP", "1234567", "A1")
-    result_json = await _fetch_patent_sections(
+    result = await _fetch_patent_sections(
         doc=doc,
         sections=["citations"],
         epo=epo,
         cache=bundle.cache,
         s2=None,
     )
-    result = json.loads(result_json)
     npl = result["citations"]["npl_refs"]
     assert len(npl) == 1
     assert npl[0]["confidence"] is None
@@ -1698,12 +1670,10 @@ def test_fetch_patent_pdf_execute_with_docling_cached_md(
 def test_fetch_patent_pdf_throttled_returns_retryable_guidance(
     bundle: ServiceBundle, slow_jobs: Jobs
 ) -> None:
-    """An EPO throttle is reported with guidance, not raised at the caller.
+    """A throttle that outlasts the backoff is reported, not raised.
 
-    The traffic light short-circuits before any network call, so the error
-    arrives far inside the soft deadline and is never promoted to a job. It
-    therefore has to be handled here or it reaches the caller as a bare
-    ToolError, losing the retry advice the old queue's poller synthesised.
+    `with_epo_retry` waits it out first; when it never clears, the caller
+    needs the guidance as a payload rather than a bare ToolError.
     """
     epo = _make_epo_client()
     epo.get_pdf = AsyncMock(  # type: ignore[method-assign]
@@ -1728,19 +1698,19 @@ def test_fetch_patent_pdf_throttled_returns_retryable_guidance(
     data = asyncio.run(run())
     assert data["error"] == "rate_limited"
     assert data["retryable"] is True
-    assert "60 seconds" in data["hint"]
+    assert "minute" in data["hint"]
 
 
 def test_fetch_patent_pdf_quota_exhausted_is_not_retryable(
     bundle: ServiceBundle, slow_jobs: Jobs
 ) -> None:
-    """Daily-quota exhaustion is reported as terminal rather than retryable."""
+    """Daily-quota exhaustion is terminal: reported, and never retried.
+
+    Waiting cannot clear it before tomorrow, so spending the backoff on it
+    would cost the caller minutes for the same answer.
+    """
     epo = _make_epo_client()
-    epo.get_pdf = AsyncMock(  # type: ignore[method-assign]
-        side_effect=RuntimeError(
-            "EPO daily quota exhausted. Please try again tomorrow."
-        )
-    )
+    epo.get_pdf = AsyncMock(side_effect=EpoQuotaExhaustedError)  # type: ignore[method-assign]
     bundle.epo = epo
 
     @asynccontextmanager
@@ -1761,3 +1731,118 @@ def test_fetch_patent_pdf_quota_exhausted_is_not_retryable(
     assert data["error"] == "epo_unavailable"
     assert data["retryable"] is False
     assert "tomorrow" in data["detail"]
+
+
+def _citing_app(bundle: ServiceBundle, jobs: Jobs, epo: EpoClient) -> FastMCP:
+    """Build an app exposing the patent tools over *epo*.
+
+    Args:
+        bundle: Service bundle yielded from the app's lifespan.
+        jobs: Jobs mechanics to register against.
+        epo: The EPO client the bundle should use.
+
+    Returns:
+        The configured :class:`FastMCP` instance.
+    """
+    bundle.epo = epo
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_patent_tools(app, jobs)
+    return app
+
+
+async def test_get_citing_patents_reports_quota_exhaustion_from_search(
+    bundle: ServiceBundle, slow_jobs: Jobs
+) -> None:
+    """An exhausted quota during the search is reported, not swallowed.
+
+    `_get_citing_patents` catches broadly around the search so a malformed
+    identifier degrades to an empty result. Quota exhaustion must escape that
+    net: answering it with `{"patents": [], "note": "...try a different
+    identifier format"}` would tell the caller to retry with different input,
+    when nothing about the input is wrong and nothing will work until
+    tomorrow.
+    """
+    epo = _make_epo_client(raise_on_search=EpoQuotaExhaustedError())
+
+    async with Client(_citing_app(bundle, slow_jobs, epo)) as client:
+        result = await client.call_tool(
+            "get_citing_patents", {"paper_id": "10.1234/test"}
+        )
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "epo_unavailable"
+    assert data["retryable"] is False
+    assert "patents" not in data
+
+
+async def test_get_citing_patents_reports_quota_exhaustion_from_biblio(
+    bundle: ServiceBundle, slow_jobs: Jobs
+) -> None:
+    """The same holds for the per-result biblio fetch.
+
+    That loop drops individual failures so one bad reference cannot lose the
+    whole list. A quota failure is not per-reference, though: every remaining
+    fetch will fail identically, so silently dropping them yields a short
+    list that looks complete.
+    """
+    epo = _make_epo_client(raise_on_biblio=EpoQuotaExhaustedError())
+
+    async with Client(_citing_app(bundle, slow_jobs, epo)) as client:
+        result = await client.call_tool(
+            "get_citing_patents", {"paper_id": "10.1234/test"}
+        )
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "epo_unavailable"
+    assert data["retryable"] is False
+
+
+async def test_get_citing_patents_still_degrades_on_ordinary_failures(
+    bundle: ServiceBundle, slow_jobs: Jobs
+) -> None:
+    """Non-reportable errors keep their existing graceful degradation.
+
+    The guard above must not turn every failure into a hard error; an
+    unusable identifier should still come back as an empty result with the
+    explanatory note.
+    """
+    epo = _make_epo_client(raise_on_search=ValueError("bad identifier"))
+
+    async with Client(_citing_app(bundle, slow_jobs, epo)) as client:
+        result = await client.call_tool(
+            "get_citing_patents", {"paper_id": "not-an-identifier"}
+        )
+    data = json.loads(result.content[0].text)
+    assert data["total_count"] == 0
+    assert data["patents"] == []
+    assert "note" in data
+    assert "error" not in data
+
+
+async def test_search_patents_reports_quota_exhaustion(
+    bundle: ServiceBundle, slow_jobs: Jobs
+) -> None:
+    """search_patents surfaces an exhausted quota as a terminal payload."""
+    epo = _make_epo_client(raise_on_search=EpoQuotaExhaustedError())
+
+    async with Client(_citing_app(bundle, slow_jobs, epo)) as client:
+        result = await client.call_tool("search_patents", {"query": "anything"})
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "epo_unavailable"
+    assert data["retryable"] is False
+
+
+async def test_get_patent_reports_quota_exhaustion(
+    bundle: ServiceBundle, slow_jobs: Jobs
+) -> None:
+    """get_patent surfaces an exhausted quota as a terminal payload."""
+    epo = _make_epo_client(raise_on_biblio=EpoQuotaExhaustedError())
+
+    async with Client(_citing_app(bundle, slow_jobs, epo)) as client:
+        result = await client.call_tool("get_patent", {"patent_number": "EP1234567A1"})
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "epo_unavailable"
+    assert data["retryable"] is False

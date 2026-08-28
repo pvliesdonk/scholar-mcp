@@ -273,6 +273,7 @@ async def fetch_and_convert(
             pdf_bytes_for_convert, pdf_path.name, use_vlm=use_vlm
         )
     except Exception as exc:
+        logger.exception("docling_convert_failed path=%s", pdf_path)
         return {
             "metadata": paper,
             "pdf_path": str(pdf_path),

@@ -12,18 +12,6 @@ from ._server_deps import ServiceBundle, get_bundle
 
 logger = logging.getLogger(__name__)
 
-# Expected duration hints per tool, shown while the task is in progress.
-#
-# Only tools still on this queue belong here.  The PDF-producing tools moved
-# to the jobs framework (#312), where the same guidance lives in each tool's
-# own docstring — read by the calling model *before* it calls, rather than
-# after it has already queued something.
-_DURATION_HINTS: dict[str, str] = {
-    "search_patents": "Patent searches usually complete in 5-15 seconds.",
-    "get_patent": "Patent data retrieval usually completes in 5-20 seconds.",
-    "get_citing_patents": "Citing patent lookup usually completes in 10-30 seconds.",
-}
-
 
 def register_task_tools(mcp: FastMCP) -> None:
     """Register task polling tools on *mcp*.
@@ -49,8 +37,8 @@ def register_task_tools(mcp: FastMCP) -> None:
         the operation was submitted for background processing.  Call this
         tool with the ``task_id`` to check whether it has completed.
 
-        Keep polling — the response includes ``elapsed_seconds`` and a
-        ``hint`` with expected duration while the task is in progress.
+        Keep polling — the response includes ``elapsed_seconds`` while the
+        task is in progress.
 
         This tool polls the tools that have not yet moved to the jobs
         framework. Tools that answer with a ``job_id`` and
@@ -64,8 +52,8 @@ def register_task_tools(mcp: FastMCP) -> None:
             JSON with ``status`` (``pending``, ``running``, ``completed``,
             or ``failed``).  When ``completed``, ``result`` contains the
             original tool output.  When ``failed``, ``error`` describes
-            the failure.  While in progress, ``elapsed_seconds``, ``tool``,
-            and ``hint`` give context on expected wait time.
+            the failure.  While in progress, ``elapsed_seconds`` and
+            ``tool`` give context on how long it has been running.
         """
         task = bundle.tasks.get(task_id)
         if task is None:
@@ -96,9 +84,6 @@ def register_task_tools(mcp: FastMCP) -> None:
             response["elapsed_seconds"] = task.elapsed_seconds
             if task.tool:
                 response["tool"] = task.tool
-                hint = _DURATION_HINTS.get(task.tool)
-                if hint:
-                    response["hint"] = hint
         return json.dumps(response)
 
     @mcp.tool(
@@ -111,7 +96,11 @@ def register_task_tools(mcp: FastMCP) -> None:
     async def list_tasks(
         bundle: ServiceBundle = Depends(get_bundle),
     ) -> str:
-        """List all active background tasks.
+        """List active tasks on the legacy queue.
+
+        This does not cover background *jobs*. Tools that answer with a
+        ``job_id`` are polled with ``get_job_result``, and their work never
+        appears here, so an absent operation is not a lost one.
 
         Returns:
             JSON list of ``{"task_id": ..., "status": ...}`` dicts.
