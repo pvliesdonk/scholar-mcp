@@ -9,6 +9,7 @@ import httpx
 import pytest
 from fastmcp_pvl_core import Jobs, JobsConfig, ServerConfig, build_jobs
 
+from scholar_mcp import _epo_client
 from scholar_mcp._cache import ScholarCache
 from scholar_mcp._crossref_client import CrossRefClient
 from scholar_mcp._enrichment import EnrichmentPipeline
@@ -116,6 +117,25 @@ async def bundle(cache: ScholarCache, test_config: ProjectConfig) -> ServiceBund
     await openalex_http.aclose()
     await s2.aclose()
     await standards.aclose()
+
+
+@pytest.fixture(autouse=True)
+def _fast_epo_backoff(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Shrink the EPO throttle backoff so no test sleeps for real minutes.
+
+    The production delay deliberately exceeds the 60s throttle-cache lifetime
+    (see `_epo_client._THROTTLE_RETRY_DELAY_S`); waiting that out would add
+    minutes per throttled case.
+
+    A test asserting on the real constant -- the relationship between the
+    delay and the cache lifetime is load-bearing -- opts out with
+    `@pytest.mark.real_epo_backoff`, or it would be reading this stand-in.
+    """
+    if request.node.get_closest_marker("real_epo_backoff"):
+        return
+    monkeypatch.setattr(_epo_client, "_THROTTLE_RETRY_DELAY_S", 0.01)
 
 
 @pytest.fixture

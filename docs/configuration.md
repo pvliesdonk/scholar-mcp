@@ -218,8 +218,9 @@ about the disagreement.
 ### Long-running tools and `get_job_result`
 
 The PDF tools (`fetch_paper_pdf`, `convert_pdf_to_markdown`,
-`fetch_and_convert`, `fetch_pdf_by_url` and `fetch_patent_pdf`) run as
-background jobs when they are slow. A call that finishes within
+`fetch_and_convert`, `fetch_pdf_by_url` and `fetch_patent_pdf`) and the patent
+tools (`search_patents`, `get_patent`, `get_citing_patents`) run as background
+jobs when they are slow. A call that finishes within
 `SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S` returns its result directly. A slower one
 is promoted to a background job, and the caller gets a handle instead:
 
@@ -258,10 +259,24 @@ makes every job handle unresolvable.
 
 ### One remaining bespoke queue
 
-The Semantic Scholar, patent-search and standards tools still use a separate
-in-process queue (`src/scholar_mcp/_task_queue.py`), reached through the
-`list_tasks` and `get_task_result` tools. That queue always runs in-process
-and is always lost on restart, and no environment variable configures it.
-Moving the remaining tools across is tracked in
+The Semantic Scholar and standards tools still use a separate in-process queue
+(`src/scholar_mcp/_task_queue.py`), reached through the `list_tasks` and
+`get_task_result` tools. That queue always runs in-process and is always lost
+on restart, and no environment variable configures it. Moving the remaining
+tools across is tracked in
 [#264](https://github.com/pvliesdonk/scholar-mcp/issues/264).
+
+### EPO throttling
+
+The patent tools wait out an amber or red EPO traffic light rather than
+failing on it. Each wait is longer than the 60-second lifetime of the cached
+light, because a shorter one would re-read the same cached colour instead of
+asking EPO again. Two retries follow the first attempt, so a throttled call
+can spend roughly three minutes waiting. That is well past
+`SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S`, so such a call is handed back as a job to
+poll rather than holding the connection open.
+
+A black light means the daily quota is spent. That does not clear until
+tomorrow, so it is reported at once with `"retryable": false` instead of
+costing the caller the full wait for the same answer.
 <!-- DOMAIN-CONFIG-VARS-END -->

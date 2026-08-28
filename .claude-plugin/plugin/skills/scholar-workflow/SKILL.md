@@ -164,10 +164,12 @@ overwrites previous results.
 Two mechanisms are in play, with different polling tools. Never guess which:
 every response names its own, so read the payload.
 
-**PDF tools** — `fetch_paper_pdf`, `fetch_patent_pdf`, `fetch_and_convert`,
-`fetch_pdf_by_url`, `convert_pdf_to_markdown` — answer directly when the work
-is quick, including on a cache hit. When it runs long they hand back a job
-handle instead:
+**PDF and patent tools** — `fetch_paper_pdf`, `fetch_patent_pdf`,
+`fetch_and_convert`, `fetch_pdf_by_url`, `convert_pdf_to_markdown`,
+`search_patents`, `get_patent`, `get_citing_patents` — answer directly when
+the work is quick, including on a cache hit. When it runs long, which for the
+patent tools includes waiting out an EPO throttle, they hand back a job handle
+instead:
 
 ```json
 {"status": "working", "job_id": "hwex4wg6taLmasPZWPM7gQ",
@@ -179,16 +181,16 @@ response carries `running_for_s` and `retry_after_s`; when it finishes,
 `status` is `completed` with a `result` object, or `failed` with an `error`.
 These jobs do not appear in `list_tasks`.
 
-**Rate-limited tools** — the Semantic Scholar, patent-search and standards
-tools — still use the older queue when an upstream throttles them:
+**Rate-limited tools** — the Semantic Scholar and standards tools — still use
+the older queue when an upstream throttles them:
 
 ```json
 {"queued": true, "task_id": "abc123", "tool": "search_papers"}
 ```
 
 Poll those with `get_task_result(task_id="abc123")`, whose in-progress
-response carries `status`, `elapsed_seconds` and a `hint`. `list_tasks` shows
-these tasks only.
+response carries `status` and `elapsed_seconds`. `list_tasks` shows these
+tasks only.
 
 Don't poll in a tight loop. Honour `retry_after_s` where it is given;
 otherwise expect 10–30 seconds for a PDF download and 1–5 minutes for a

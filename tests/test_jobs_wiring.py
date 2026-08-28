@@ -248,3 +248,57 @@ def test_explicit_config_reaches_jobs(
     # passed config is precisely the bug this guards.
     assert captured["jobs"] is config.jobs
     assert captured["server"] is config.server
+
+
+async def test_job_backed_tools_advertise_the_polling_contract(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Every tool that can return a handle says so in its advertised description.
+
+    This is the surface the calling model actually reads. FastMCP publishes a
+    docstring's summary and body but strips its `Args:` and `Returns:`
+    sections, so guidance placed under `Returns:` never reaches the client --
+    which is exactly how three patent tools came to advertise the old,
+    removed task-queue contract while their `Returns:` text was updated.
+
+    Asserting on the description as the client receives it, rather than on the
+    docstring source, is what makes that failure visible.
+    """
+    monkeypatch.setenv("SCHOLAR_MCP_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setenv("SCHOLAR_MCP_READ_ONLY", "false")
+    monkeypatch.setenv("SCHOLAR_MCP_EPO_CONSUMER_KEY", "k")
+    monkeypatch.setenv("SCHOLAR_MCP_EPO_CONSUMER_SECRET", "s")
+
+    job_backed = {
+        "fetch_paper_pdf",
+        "convert_pdf_to_markdown",
+        "fetch_and_convert",
+        "fetch_pdf_by_url",
+        "fetch_patent_pdf",
+        "search_patents",
+        "get_patent",
+        "get_citing_patents",
+    }
+
+    async with Client(make_server()) as client:
+        described = {t.name: (t.description or "") for t in await client.list_tools()}
+
+    missing = sorted(job_backed - described.keys())
+    assert not missing, f"expected these tools to be registered: {missing}"
+
+    silent = sorted(
+        name
+        for name in job_backed
+        if "get_job_result" not in described[name]
+        and "job handle" not in described[name]
+    )
+    assert not silent, (
+        "these tools can hand back a job handle but never say so in the "
+        f"description the client sees: {silent}"
+    )
+
+    stale = sorted(name for name in job_backed if "get_task_result" in described[name])
+    assert not stale, (
+        "these tools point the caller at the legacy queue poller, which does "
+        f"not know their job ids: {stale}"
+    )
