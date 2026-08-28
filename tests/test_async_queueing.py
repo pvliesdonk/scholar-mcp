@@ -11,6 +11,7 @@ import pytest
 import respx
 from fastmcp import FastMCP
 from fastmcp.client import Client
+from fastmcp_pvl_core import Jobs
 
 from scholar_mcp._rate_limiter import RateLimitedError, RateLimiter, with_s2_try_once
 from scholar_mcp._server_deps import ServiceBundle
@@ -73,7 +74,7 @@ async def _poll_task(client: Client, task_id: str, max_attempts: int = 40) -> di
 
 @pytest.mark.respx(base_url=S2_BASE)
 async def test_search_papers_queued_on_429(
-    respx_mock: respx.MockRouter, bundle: ServiceBundle
+    respx_mock: respx.MockRouter, bundle: ServiceBundle, slow_jobs: Jobs
 ) -> None:
     """search_papers returns queued response on 429, then background succeeds."""
     call_count = 0
@@ -92,27 +93,20 @@ async def test_search_papers_queued_on_429(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_search_tools(app)
+    register_search_tools(app, slow_jobs)
     register_task_tools(app)
 
     async with Client(app) as client:
         result = await client.call_tool(
             "search_papers", {"query": "test", "fields": "compact"}
         )
-        data = json.loads(result.content[0].text)
-        assert data["queued"] is True
-        assert data["tool"] == "search_papers"
-
-        # Poll for background result
-        task_data = await _poll_task(client, data["task_id"])
-    assert task_data["status"] == "completed"
-    inner = json.loads(task_data["result"])
+        inner = json.loads(result.content[0].text)
     assert inner["data"][0]["title"] == "Paper1"
 
 
 @pytest.mark.respx(base_url=S2_BASE)
 async def test_search_papers_direct_on_success(
-    respx_mock: respx.MockRouter, bundle: ServiceBundle
+    respx_mock: respx.MockRouter, bundle: ServiceBundle, slow_jobs: Jobs
 ) -> None:
     """search_papers returns direct result when no rate limiting."""
     respx_mock.get("/paper/search").mock(
@@ -126,7 +120,7 @@ async def test_search_papers_direct_on_success(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_search_tools(app)
+    register_search_tools(app, slow_jobs)
 
     async with Client(app) as client:
         result = await client.call_tool(
@@ -139,7 +133,7 @@ async def test_search_papers_direct_on_success(
 
 @pytest.mark.respx(base_url=S2_BASE)
 async def test_get_paper_queued_on_429(
-    respx_mock: respx.MockRouter, bundle: ServiceBundle
+    respx_mock: respx.MockRouter, bundle: ServiceBundle, slow_jobs: Jobs
 ) -> None:
     """get_paper returns queued response on 429, background task completes."""
     call_count = 0
@@ -158,24 +152,18 @@ async def test_get_paper_queued_on_429(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_search_tools(app)
+    register_search_tools(app, slow_jobs)
     register_task_tools(app)
 
     async with Client(app) as client:
         result = await client.call_tool("get_paper", {"identifier": "x1"})
-        data = json.loads(result.content[0].text)
-        assert data["queued"] is True
-        assert data["tool"] == "get_paper"
-
-        task_data = await _poll_task(client, data["task_id"])
-    assert task_data["status"] == "completed"
-    inner = json.loads(task_data["result"])
+        inner = json.loads(result.content[0].text)
     assert inner["title"] == "Delayed"
 
 
 @pytest.mark.respx(base_url=S2_BASE)
 async def test_get_paper_cached_returns_direct(
-    respx_mock: respx.MockRouter, bundle: ServiceBundle
+    respx_mock: respx.MockRouter, bundle: ServiceBundle, slow_jobs: Jobs
 ) -> None:
     """get_paper returns cached result directly, no queueing."""
     await bundle.cache.set_paper("abc123", {"paperId": "abc123", "title": "Cached"})
@@ -185,7 +173,7 @@ async def test_get_paper_cached_returns_direct(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_search_tools(app)
+    register_search_tools(app, slow_jobs)
 
     async with Client(app) as client:
         result = await client.call_tool("get_paper", {"identifier": "abc123"})

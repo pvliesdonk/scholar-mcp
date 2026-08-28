@@ -11,6 +11,7 @@ import pytest
 import respx
 from fastmcp import FastMCP
 from fastmcp.client import Client
+from fastmcp_pvl_core import Jobs, register_job_tools
 
 from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._tools_search import register_search_tools
@@ -19,13 +20,13 @@ S2_BASE = "https://api.semanticscholar.org/graph/v1"
 
 
 @pytest.fixture
-def mcp(bundle: ServiceBundle) -> FastMCP:
+def mcp(bundle: ServiceBundle, slow_jobs: Jobs) -> FastMCP:
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_search_tools(app)
+    register_search_tools(app, slow_jobs)
     return app
 
 
@@ -250,7 +251,7 @@ async def test_get_author_by_id_upstream_error(
 
 @pytest.mark.respx(base_url=S2_BASE)
 async def test_get_author_by_id_queued_on_429(
-    respx_mock: respx.MockRouter, bundle: ServiceBundle
+    respx_mock: respx.MockRouter, bundle: ServiceBundle, slow_jobs: Jobs
 ) -> None:
     """get_author by ID returns queued on 429, background task completes."""
     call_count = 0
@@ -278,28 +279,14 @@ async def test_get_author_by_id_queued_on_429(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_search_tools(app)
+    register_search_tools(app, slow_jobs)
     from scholar_mcp._tools_tasks import register_task_tools
 
     register_task_tools(app)
 
     async with Client(app) as client:
         result = await client.call_tool("get_author", {"identifier": "12345"})
-        data = json.loads(result.content[0].text)
-        assert data["queued"] is True
-        assert data["tool"] == "get_author"
-
-        # Poll for background result
-        for _ in range(40):
-            poll = await client.call_tool(
-                "get_task_result", {"task_id": data["task_id"]}
-            )
-            poll_data = json.loads(poll.content[0].text)
-            if poll_data["status"] in ("completed", "failed"):
-                break
-            await asyncio.sleep(0.05)
-        assert poll_data["status"] == "completed"
-        inner = json.loads(poll_data["result"])
+        inner = json.loads(result.content[0].text)
         assert inner["name"] == "Ada Lovelace"
 
 
@@ -318,7 +305,7 @@ async def test_get_author_name_search_upstream_error(
 
 @pytest.mark.respx(base_url=S2_BASE)
 async def test_get_author_name_search_queued_on_429(
-    respx_mock: respx.MockRouter, bundle: ServiceBundle
+    respx_mock: respx.MockRouter, bundle: ServiceBundle, slow_jobs: Jobs
 ) -> None:
     """get_author name search returns queued on 429, background completes."""
     call_count = 0
@@ -340,25 +327,98 @@ async def test_get_author_name_search_queued_on_429(
         yield {"bundle": bundle}
 
     app = FastMCP("test", lifespan=lifespan)
-    register_search_tools(app)
+    register_search_tools(app, slow_jobs)
     from scholar_mcp._tools_tasks import register_task_tools
 
     register_task_tools(app)
 
     async with Client(app) as client:
         result = await client.call_tool("get_author", {"identifier": "John Smith"})
-        data = json.loads(result.content[0].text)
-        assert data["queued"] is True
-        assert data["tool"] == "get_author"
-
-        for _ in range(40):
-            poll = await client.call_tool(
-                "get_task_result", {"task_id": data["task_id"]}
-            )
-            poll_data = json.loads(poll.content[0].text)
-            if poll_data["status"] in ("completed", "failed"):
-                break
-            await asyncio.sleep(0.05)
-        assert poll_data["status"] == "completed"
-        inner = json.loads(poll_data["result"])
+        inner = json.loads(result.content[0].text)
         assert inner["candidates"][0]["name"] == "John Smith"
+
+
+# ---------------------------------------------------------------------------
+# Promotion: the migrated tools under a deadline they cannot meet
+# ---------------------------------------------------------------------------
+
+
+async def _poll_job(client: Client, job_id: str, attempts: int = 40) -> dict:
+    """Poll ``get_job_result`` until the job settles.
+
+    Args:
+        client: Connected FastMCP client.
+        job_id: Identifier from the tool's job handle.
+        attempts: Polls before giving up.
+
+    Returns:
+        The terminal polling payload.
+
+    Raises:
+        TimeoutError: If the job never settles.
+    """
+    for _ in range(attempts):
+        polled = await client.call_tool("get_job_result", {"job_id": job_id})
+        data = json.loads(polled.content[0].text)
+        if data["status"] != "working":
+            return data
+        await asyncio.sleep(0.05)
+    raise TimeoutError(f"job {job_id} did not settle")
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_search_papers_promotes_when_slow(
+    respx_mock: respx.MockRouter, bundle: ServiceBundle, jobs: Jobs
+) -> None:
+    """Work past the soft deadline hands back a handle, and polling resolves it.
+
+    The migrated tools are almost always fast enough to answer inline, so
+    without an explicitly slow upstream this branch would never be exercised
+    -- and it is the branch where a wrong return annotation would surface, as
+    a `JobHandle` failing the tool's own output schema.
+    """
+
+    async def slow_response(request: httpx.Request) -> httpx.Response:
+        await asyncio.sleep(0.2)
+        return httpx.Response(200, json={"data": [{"paperId": "s1"}], "total": 1})
+
+    respx_mock.get("/paper/search").mock(side_effect=slow_response)
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        yield {"bundle": bundle}
+
+    app = FastMCP("test", lifespan=lifespan)
+    register_search_tools(app, jobs)
+    register_job_tools(app, jobs)
+
+    async with Client(app) as client:
+        result = await client.call_tool("search_papers", {"query": "slow"})
+        handle = json.loads(result.content[0].text)
+        assert handle["status"] == "working"
+        assert handle["poll_with"] == "get_job_result"
+        assert "search_papers" in handle["message"]
+
+        settled = await _poll_job(client, handle["job_id"])
+
+    assert settled["status"] == "completed"
+    assert settled["result"]["data"][0]["paperId"] == "s1"
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_search_papers_answers_inline_when_fast(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """The counterpart: a quick call is not promoted.
+
+    Without this, the test above would pass equally against a wiring that
+    promoted everything.
+    """
+    respx_mock.get("/paper/search").mock(
+        return_value=httpx.Response(200, json={"data": [{"paperId": "f1"}], "total": 1})
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool("search_papers", {"query": "fast"})
+    data = json.loads(result.content[0].text)
+    assert "job_id" not in data
+    assert data["data"][0]["paperId"] == "f1"

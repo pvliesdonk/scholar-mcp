@@ -9,7 +9,7 @@ import httpx
 import pytest
 from fastmcp_pvl_core import Jobs, JobsConfig, ServerConfig, build_jobs
 
-from scholar_mcp import _epo_client
+from scholar_mcp import _epo_client, _rate_limiter
 from scholar_mcp._cache import ScholarCache
 from scholar_mcp._crossref_client import CrossRefClient
 from scholar_mcp._enrichment import EnrichmentPipeline
@@ -136,6 +136,10 @@ def _fast_epo_backoff(
     if request.node.get_closest_marker("real_epo_backoff"):
         return
     monkeypatch.setattr(_epo_client, "_THROTTLE_RETRY_DELAY_S", 0.01)
+    # Same reasoning for the S2 429 backoff, which the migrated tools now
+    # rely on instead of a queue hop: the real 1s/2s/4s ladder would add
+    # seconds to every rate-limit test.
+    monkeypatch.setattr(_rate_limiter, "_S2_BASE_DELAY_S", 0.01)
 
 
 @pytest.fixture

@@ -12,7 +12,7 @@ Scholar MCP exposes 31 tools that let LLM-powered applications search, cross-ref
 - **Standards**: identifier resolution, search, and metadata retrieval for NIST, IETF, W3C, and ETSI, with optional full-text fetch and Markdown conversion via docling.
 - **Cross-source Utility**: resolve up to 100 mixed identifiers (paper DOIs, patent numbers, ISBNs) to full metadata in one call.
 - **PDF conversion**: download PDFs and convert to Markdown via [docling-serve](https://github.com/DS4SD/docling-serve), with optional VLM enrichment for formulas and figures; automatic fallback to ArXiv, PubMed Central, and Unpaywall; direct URL download for alternative versions.
-- **Background jobs**: slow PDF and patent work returns a job handle to poll with `get_job_result`, while a fast call or a cache hit answers directly. The remaining rate-limited tools still use the older task queue and `get_task_result`.
+- **Background jobs**: slow work returns a job handle to poll with `get_job_result`, while a fast call or a cache hit answers directly. The citation-graph, cross-source utility and standards tools still use the older task queue and `get_task_result`.
 
 Results are cached in a local SQLite database with per-table TTLs to reduce API calls and speed up repeated lookups.
 
