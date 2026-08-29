@@ -550,7 +550,10 @@ def register_patent_tools(mcp: FastMCP, jobs: Jobs) -> None:
             "destructiveHint": False,
             "openWorldHint": True,
         },
-        tags={"write"},
+        # Both tags matter: "write" hides it in read-only mode, "patent"
+        # hides it when EPO is unconfigured. `disable` matches on any tag,
+        # so carrying both keeps it in step with its three siblings (#316).
+        tags={"write", "patent"},
     )(fetch_patent_pdf)
 
 

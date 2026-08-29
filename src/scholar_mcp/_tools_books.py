@@ -129,7 +129,6 @@ async def search_books(
 
 async def get_book(
     identifier: str,
-    include_editions: bool = False,
     download_cover: bool = False,
     cover_size: str = "M",
     bundle: ServiceBundle = Depends(get_bundle),
@@ -143,7 +142,6 @@ async def get_book(
     Args:
         identifier: ISBN-10, ISBN-13, Open Library work ID (e.g.
             OL1168083W), or edition ID (e.g. OL1429049M).
-        include_editions: Currently ignored; see #323.
         download_cover: If True, download and cache the cover image
             locally. Returns ``cover_path`` in the response. In
             read-only mode, returns ``cover_error`` instead.
