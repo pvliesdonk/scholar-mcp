@@ -546,6 +546,106 @@ async def test_fetch_and_convert_success(
 
 
 @pytest.mark.respx(assert_all_called=False)
+async def test_fetch_and_convert_reuses_cached_markdown(
+    bundle_with_docling: ServiceBundle, slow_jobs: Jobs
+) -> None:
+    """A second call reads the cached Markdown instead of converting again.
+
+    Conversion is the expensive operation this server has, so a repeat call
+    that re-ran docling paid minutes for a file already on disk, and was
+    promoted to a background job for it (#318). The two sibling tools always
+    reused the file; this asserts the third now does too.
+    """
+    pdf_url = "https://example.com/fc_cached.pdf"
+    paper_json = {
+        "paperId": "fcc_cache",
+        "openAccessPdf": {"url": pdf_url},
+        "title": "Cached Markdown Test",
+    }
+    convert = AsyncMock(return_value="# Converted once")
+    bundle_with_docling.docling.convert = convert  # type: ignore[union-attr]
+
+    with respx.mock(assert_all_called=False) as router:
+        router.get(f"{S2_BASE}/paper/fcc_cache").mock(
+            return_value=httpx.Response(200, json=paper_json)
+        )
+        router.get(pdf_url).mock(
+            return_value=httpx.Response(200, content=b"%PDF-1.4 cached content")
+        )
+        app = pdf_app(bundle_with_docling, slow_jobs)
+        async with Client(app) as client:
+            first = await client.call_tool(
+                "fetch_and_convert", {"identifier": "fcc_cache"}
+            )
+            second = await client.call_tool(
+                "fetch_and_convert", {"identifier": "fcc_cache"}
+            )
+
+    first_data = json.loads(first.content[0].text)
+    second_data = json.loads(second.content[0].text)
+    _assert_inline(first_data)
+    _assert_inline(second_data)
+    assert convert.await_count == 1, (
+        "docling ran twice for one paper; the second call should have read "
+        f"{first_data['md_path']}"
+    )
+    assert second_data["markdown"] == first_data["markdown"]
+    assert second_data["md_path"] == first_data["md_path"]
+    assert second_data["vlm_used"] is False
+    assert second_data["pdf_source"] == first_data["pdf_source"]
+
+
+@pytest.mark.respx(assert_all_called=False)
+async def test_fetch_and_convert_vlm_and_standard_cache_separately(
+    bundle_with_docling: ServiceBundle, slow_jobs: Jobs
+) -> None:
+    """Switching ``use_vlm`` converts again rather than serving the other file.
+
+    The suffixed cache path is what keeps the two modes apart, so the reuse
+    added for #318 must not make a VLM request answer from the standard file.
+    """
+    pdf_url = "https://example.com/fc_vlm.pdf"
+    paper_json = {
+        "paperId": "fcc_vlm",
+        "openAccessPdf": {"url": pdf_url},
+        "title": "VLM Cache Split Test",
+    }
+    # vlm_available is derived from the credentials, so configure them
+    # rather than patching the property.
+    bundle_with_docling.docling = DoclingClient(
+        http_client=httpx.AsyncClient(base_url=DOCLING_BASE, timeout=30.0),
+        vlm_api_url="https://vlm.example.com",
+        vlm_api_key="k",
+        vlm_model="gpt-4o",
+    )
+    convert = AsyncMock(return_value="# Converted")
+    bundle_with_docling.docling.convert = convert  # type: ignore[method-assign]
+
+    with respx.mock(assert_all_called=False) as router:
+        router.get(f"{S2_BASE}/paper/fcc_vlm").mock(
+            return_value=httpx.Response(200, json=paper_json)
+        )
+        router.get(pdf_url).mock(
+            return_value=httpx.Response(200, content=b"%PDF-1.4 vlm content")
+        )
+        app = pdf_app(bundle_with_docling, slow_jobs)
+        async with Client(app) as client:
+            plain = await client.call_tool(
+                "fetch_and_convert", {"identifier": "fcc_vlm"}
+            )
+            vlm = await client.call_tool(
+                "fetch_and_convert", {"identifier": "fcc_vlm", "use_vlm": True}
+            )
+
+    plain_data = json.loads(plain.content[0].text)
+    vlm_data = json.loads(vlm.content[0].text)
+    assert convert.await_count == 2
+    assert plain_data["md_path"] != vlm_data["md_path"]
+    assert vlm_data["md_path"].endswith("_vlm.md")
+    assert vlm_data["vlm_used"] is True
+
+
+@pytest.mark.respx(assert_all_called=False)
 async def test_fetch_and_convert_arxiv_fallback(
     bundle_with_docling: ServiceBundle, slow_jobs: Jobs
 ) -> None:
