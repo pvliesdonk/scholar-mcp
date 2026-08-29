@@ -116,7 +116,7 @@ PDF tools answer directly when they can. A download or conversion that takes lon
 
 Use `get_job_result` with the `job_id` to poll for completion. Job records are retained for `SCHOLAR_MCP_JOBS_RESULT_TTL_S`, one hour by default.
 
-A cached result needs no job. An already-downloaded PDF is never fetched twice, and `convert_pdf_to_markdown` and `fetch_pdf_by_url` reuse an existing markdown file rather than converting again. `fetch_and_convert` reuses the PDF but always re-runs the conversion, so calling it twice for the same paper converts twice (tracked in [#318](https://github.com/pvliesdonk/scholar-mcp/issues/318)).
+A cached result needs no job. An already-downloaded PDF is never fetched twice, and every tool that converts reuses an existing Markdown file rather than converting again, so calling one twice for the same paper converts once. Standard and VLM results are separate files, so switching `use_vlm` still converts. To force a fresh conversion, delete the cached `.md` file.
 
 ## Alternative PDF sources
 

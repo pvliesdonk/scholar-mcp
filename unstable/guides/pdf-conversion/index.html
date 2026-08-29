@@ -1658,10 +1658,10 @@ continues in the background, and the call returns a handle right away:</p>
 <p>Use <code>get_job_result</code> with the <code>job_id</code> to poll for completion. Job records are
 retained for <code>SCHOLAR_MCP_JOBS_RESULT_TTL_S</code>, one hour by default.</p>
 <p>A cached result needs no job. An already-downloaded PDF is never fetched
-twice, and <code>convert_pdf_to_markdown</code> and <code>fetch_pdf_by_url</code> reuse an existing
-markdown file rather than converting again. <code>fetch_and_convert</code> reuses the
-PDF but always re-runs the conversion, so calling it twice for the same paper
-converts twice (tracked in <a href="https://github.com/pvliesdonk/scholar-mcp/issues/318">#318</a>).</p>
+twice, and every tool that converts reuses an existing Markdown file rather
+than converting again, so calling one twice for the same paper converts once.
+Standard and VLM results are separate files, so switching <code>use_vlm</code> still
+converts. To force a fresh conversion, delete the cached <code>.md</code> file.</p>
 <h2 id="alternative-pdf-sources">Alternative PDF sources<a class="headerlink" href="#alternative-pdf-sources" title="Permanent link">&para;</a></h2>
 <p>When a paper has no open-access PDF URL in Semantic Scholar, <code>fetch_paper_pdf</code> and <code>fetch_and_convert</code> automatically try alternative sources:</p>
 <ol>
