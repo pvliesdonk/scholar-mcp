@@ -322,12 +322,11 @@ ______________________________________________________________________
 
 Fetch full metadata for a single book by ISBN or Open Library identifier. Optionally download and cache the cover image locally.
 
-| Parameter          | Type   | Default      | Description                                                                      |
-| ------------------ | ------ | ------------ | -------------------------------------------------------------------------------- |
-| `identifier`       | string | *(required)* | ISBN-10, ISBN-13, Open Library work ID, or edition ID                            |
-| `include_editions` | bool   | `false`      | Currently ignored ([#323](https://github.com/pvliesdonk/scholar-mcp/issues/323)) |
-| `download_cover`   | bool   | `false`      | If true, download and cache the cover image locally; adds `cover_path` to result |
-| `cover_size`       | string | `"M"`        | Cover image size: `S` (small), `M` (medium), or `L` (large)                      |
+| Parameter        | Type   | Default      | Description                                                                      |
+| ---------------- | ------ | ------------ | -------------------------------------------------------------------------------- |
+| `identifier`     | string | *(required)* | ISBN-10, ISBN-13, Open Library work ID, or edition ID                            |
+| `download_cover` | bool   | `false`      | If true, download and cache the cover image locally; adds `cover_path` to result |
+| `cover_size`     | string | `"M"`        | Cover image size: `S` (small), `M` (medium), or `L` (large)                      |
 
 **Identifier formats:**
 
@@ -579,7 +578,7 @@ Not all patents have full text available via OPS, WO and older EP patents someti
 
 Write-tagged
 
-This tool is write-tagged and hidden when `SCHOLAR_MCP_READ_ONLY=true`. It also requires EPO OPS credentials.
+This tool carries both gates: it is write-tagged and hidden when `SCHOLAR_MCP_READ_ONLY=true`, and like every patent tool it is hidden when EPO OPS credentials are not set.
 
 ______________________________________________________________________
 

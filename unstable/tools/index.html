@@ -2935,12 +2935,6 @@
 <td>ISBN-10, ISBN-13, Open Library work ID, or edition ID</td>
 </tr>
 <tr>
-<td><code>include_editions</code></td>
-<td>bool</td>
-<td><code>false</code></td>
-<td>Currently ignored (<a href="https://github.com/pvliesdonk/scholar-mcp/issues/323">#323</a>)</td>
-</tr>
-<tr>
 <td><code>download_cover</code></td>
 <td>bool</td>
 <td><code>false</code></td>
@@ -3408,7 +3402,7 @@
 <p>Not all patents have full text available via OPS, WO and older EP patents sometimes lack PDFs. Returns <code>{"error": "pdf_not_available"}</code> in that case.</p>
 <div class="admonition note">
 <p class="admonition-title">Write-tagged</p>
-<p>This tool is write-tagged and hidden when <code>SCHOLAR_MCP_READ_ONLY=true</code>. It also requires EPO OPS credentials.</p>
+<p>This tool carries both gates: it is write-tagged and hidden when <code>SCHOLAR_MCP_READ_ONLY=true</code>, and like every patent tool it is hidden when EPO OPS credentials are not set.</p>
 </div>
 <hr />
 <h2 id="standards">Standards<a class="headerlink" href="#standards" title="Permanent link">&para;</a></h2>
