@@ -267,26 +267,31 @@ async def fetch_and_convert(
             "error": "docling_not_configured",
         }
 
-    try:
-        pdf_bytes_for_convert = await asyncio.to_thread(pdf_path.read_bytes)
-        markdown = await docling.convert(
-            pdf_bytes_for_convert, pdf_path.name, use_vlm=use_vlm
-        )
-    except Exception as exc:
-        logger.exception("docling_convert_failed path=%s", pdf_path)
-        return {
-            "metadata": paper,
-            "pdf_path": str(pdf_path),
-            "error": "conversion_failed",
-            "detail": str(exc),
-        }
-
     vlm_used = use_vlm and docling.vlm_available
     md_dir = bundle.config.cache_dir / "md"
     md_dir.mkdir(parents=True, exist_ok=True)
     # The PDF is named for the paper id, so its stem is that id.
     md_path = md_dir / f"{pdf_path.stem}{'_vlm' if vlm_used else ''}.md"
-    await asyncio.to_thread(md_path.write_text, markdown, encoding="utf-8")
+
+    if md_path.exists():
+        markdown = await asyncio.to_thread(md_path.read_text, encoding="utf-8")
+        logger.debug("md_cache_hit path=%s", md_path)
+    else:
+        try:
+            pdf_bytes_for_convert = await asyncio.to_thread(pdf_path.read_bytes)
+            markdown = await docling.convert(
+                pdf_bytes_for_convert, pdf_path.name, use_vlm=use_vlm
+            )
+        except Exception as exc:
+            logger.exception("docling_convert_failed path=%s", pdf_path)
+            return {
+                "metadata": paper,
+                "pdf_path": str(pdf_path),
+                "error": "conversion_failed",
+                "detail": str(exc),
+            }
+        await asyncio.to_thread(md_path.write_text, markdown, encoding="utf-8")
+
     return {
         "metadata": paper,
         "markdown": markdown,

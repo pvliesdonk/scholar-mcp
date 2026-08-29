@@ -16,7 +16,7 @@ All tools include [MCP tool annotations](https://spec.modelcontextprotocol.io/sp
 
 ## Background Jobs
 
-Long-running operations return a job handle instead of blocking. A cached result is returned directly instead, except that `fetch_and_convert` re-converts even when the markdown is already on disk ([#318](https://github.com/pvliesdonk/scholar-mcp/issues/318)).
+Long-running operations return a job handle instead of blocking. A cached result is returned directly instead, which includes an already-converted Markdown file.
 
 A tool that exceeds `SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S` (25 seconds by default) returns:
 
