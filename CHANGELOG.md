@@ -2,6 +2,22 @@
 
 <!-- version list -->
 
+## 1.10.0 (2026-09-07)
+
+### Features
+
+- wire the pvl-core Jobs framework and move the PDF tools onto it (#320)
+- move the patent tools onto Jobs, with real EPO backoff (#321)
+- move the paper, book and citation tools onto Jobs (#324)
+- move the citation-graph and utility tools onto Jobs (#325)
+- delete the bespoke task queue and consolidate on one contract (#326)
+
+### Bug Fixes
+
+- shorten domain_description to fit the MCP registry's 100-char cap (#282)
+- gate the tool-registration metadata and close two surface defects (#328)
+- reuse the cached Markdown in fetch_and_convert (#329)
+
 ## 1.9.1 (2026-08-22)
 
 

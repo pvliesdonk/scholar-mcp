@@ -83,6 +83,7 @@ tunables
 uncached
 uncommented
 uncommenting
+unconfigured
 unparseable
 unprefixed
 unsynced
@@ -187,6 +188,7 @@ Codecov
 Cyber
 dev
 dicts
+EPO
 eprint
 IEEE
 LLMs
