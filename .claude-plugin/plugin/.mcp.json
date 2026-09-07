@@ -3,7 +3,7 @@
     "command": "uvx",
     "args": [
       "--from",
-      "pvliesdonk-scholar-mcp[mcp]==1.9.1",
+      "pvliesdonk-scholar-mcp[mcp]==1.10.0",
       "scholar-mcp",
       "serve"
     ],
