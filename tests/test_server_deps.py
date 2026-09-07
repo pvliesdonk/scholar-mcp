@@ -9,10 +9,12 @@ from fastmcp import FastMCP
 from scholar_mcp._enrichment import EnrichmentPipeline
 from scholar_mcp._s2_client import S2Client
 from scholar_mcp._server_deps import (
+    _build_docling,
     _build_enrichment_pipeline,
     _start_s2_keepalive,
     server_lifespan,
 )
+from scholar_mcp.config import ProjectConfig
 
 
 def test_build_enrichment_pipeline() -> None:
@@ -88,3 +90,40 @@ async def test_lifespan_does_not_start_keepalive_without_key(
             assert not tasks_while_open
 
     assert "s2_keepalive_not_started reason=no_api_key" in caplog.text
+
+
+async def test_lifespan_builds_and_closes_docling_when_configured(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A configured docling URL reaches the bundle and its HTTP client is
+    closed on teardown."""
+    monkeypatch.setenv("SCHOLAR_MCP_CACHE_DIR", str(tmp_path))
+    monkeypatch.setenv("SCHOLAR_MCP_DOCLING_URL", "http://docling.invalid")
+    monkeypatch.setenv("SCHOLAR_MCP_VLM_API_URL", "http://vlm.invalid/v1")
+    monkeypatch.setenv("SCHOLAR_MCP_VLM_API_KEY", "fake-key")
+    monkeypatch.setenv("SCHOLAR_MCP_VLM_MODEL", "gpt-4o")
+    app = FastMCP(name="test")
+
+    with caplog.at_level("INFO", logger="scholar_mcp._server_deps"):
+        async with server_lifespan(app) as ctx:
+            docling = ctx["bundle"].docling
+            assert docling is not None
+            assert docling.vlm_available is True
+            http = docling.http_client
+
+    assert "docling_configured url=http://docling.invalid" in caplog.text
+    assert "vlm_available=True" in caplog.text
+    assert http.is_closed
+
+
+async def test_build_docling_returns_none_pair_when_unconfigured(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """No docling URL yields no client pair and says so in the log."""
+    monkeypatch.delenv("SCHOLAR_MCP_DOCLING_URL", raising=False)
+
+    with caplog.at_level("INFO", logger="scholar_mcp._server_deps"):
+        http, docling = _build_docling(ProjectConfig.from_env())
+
+    assert (http, docling) == (None, None)
+    assert "docling_not_configured pdf_tools_disabled" in caplog.text
