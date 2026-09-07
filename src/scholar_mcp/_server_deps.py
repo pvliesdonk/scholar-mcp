@@ -117,7 +117,7 @@ def _start_s2_keepalive(
 
 
 @asynccontextmanager
-async def make_service_lifespan(
+async def server_lifespan(
     app: FastMCP,
 ) -> AsyncGenerator[dict[str, ServiceBundle], None]:
     """FastMCP lifespan: create all clients, open cache, yield bundle.

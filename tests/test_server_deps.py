@@ -11,7 +11,7 @@ from scholar_mcp._s2_client import S2Client
 from scholar_mcp._server_deps import (
     _build_enrichment_pipeline,
     _start_s2_keepalive,
-    make_service_lifespan,
+    server_lifespan,
 )
 
 
@@ -51,7 +51,7 @@ async def test_lifespan_starts_and_cancels_keepalive_with_key(
     app = FastMCP(name="test")
 
     with caplog.at_level("INFO", logger="scholar_mcp._server_deps"):
-        async with make_service_lifespan(app) as ctx:
+        async with server_lifespan(app) as ctx:
             bundle = ctx["bundle"]
             assert bundle.s2 is not None
             tasks_while_open = {
@@ -78,7 +78,7 @@ async def test_lifespan_does_not_start_keepalive_without_key(
     app = FastMCP(name="test")
 
     with caplog.at_level("INFO", logger="scholar_mcp._server_deps"):
-        async with make_service_lifespan(app) as ctx:
+        async with server_lifespan(app) as ctx:
             assert ctx["bundle"].s2 is not None
             tasks_while_open = {
                 t
