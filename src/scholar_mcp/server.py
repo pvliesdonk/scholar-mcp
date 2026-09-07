@@ -21,11 +21,18 @@ from fastmcp_pvl_core import (
     ServerConfig,
     apply_tool_visibility,
     build_auth,
+<<<<<<< before updating
     build_instructions,
     build_jobs,
+=======
+    build_event_store,  # noqa: F401  — re-exported for downstream projects' convenience
+    build_kv_store,  # noqa: F401  — re-exported for downstream projects' convenience
+>>>>>>> after updating
     configure_logging_from_env,
     configure_task_backend,
     env,
+    finalize_instructions,
+    instructions_for,
     register_server_info_tool,
     wire_middleware_stack,
 )
@@ -156,6 +163,7 @@ def make_server(
     # prefix, so two servers sharing one Redis do not share a queue.
     configure_task_backend(_ENV_PREFIX, config.server)
 
+<<<<<<< before updating
     # Operator overrides: SERVER_NAME renames this instance; INSTRUCTIONS
     # replaces the default instructions text (the latter is the override that
     # build_instructions' hint advertises). Both fall back when unset/empty.
@@ -170,6 +178,12 @@ def make_server(
             "tools (cache writes) are hidden in read-only mode."
         ),
     )
+=======
+    # Operator override: SERVER_NAME renames this instance (falls back when
+    # unset/empty).  Instructions are composed by pvl-core's InstructionsBuilder
+    # below and finalised last; see finalize_instructions() at the end.
+    server_name = env(_ENV_PREFIX, "SERVER_NAME", "scholar-mcp")
+>>>>>>> after updating
 
     auth = build_auth(config.server)
     auth_mode = _core_resolve_auth_mode(config.server)
@@ -225,13 +239,18 @@ def make_server(
 
     mcp = FastMCP(
         name=server_name,
+<<<<<<< before updating
         instructions=instructions,
         lifespan=make_service_lifespan,
+=======
+        lifespan=server_lifespan,
+>>>>>>> after updating
         auth=auth,
     )
 
     wire_middleware_stack(mcp)
 
+<<<<<<< before updating
     # `jobs` is passed explicitly rather than left to register_tools' own
     # env fallback, so an explicitly-supplied `config` governs the jobs
     # subsystem exactly as it already governs the Docket backend above.
@@ -242,6 +261,24 @@ def make_server(
     # Reverting degrades rather than breaks: register_tools still falls
     # back to reading the environment.
     register_tools(mcp, jobs=build_jobs(config.server, config.jobs))
+=======
+    # Server instructions are composed, not templated: every contributor adds
+    # a snippet to the builder (identity here; core register_* helpers add
+    # their workflow prose; domain code adds its own via
+    # ``instructions_for(mcp).add(text, priority=WORKFLOWS, tools=(...))`` in
+    # the DOMAIN-WIRING block, using the ``IDENTITY < DOCS < CAPABILITIES <
+    # WORKFLOWS < INSTANCE < OPERATOR`` anchors pvl-core exports — never
+    # ``priority=0``, which is ``IDENTITY`` and must stay unique), and
+    # ``finalize_instructions`` renders them once, after tool visibility.
+    instructions_for(mcp).identity("FastMCP server for scholarly papers, patents, books and standards with docling PDF conversion")
+    # The docs site publishes llms.txt per version (mkdocs-llmstxt, mike);
+    # `/latest/` resolves once the first release has published the site.
+    instructions_for(mcp).documentation(
+        "https://pvliesdonk.github.io/scholar-mcp/latest/llms.txt"
+    )
+
+    register_tools(mcp)
+>>>>>>> after updating
     register_resources(mcp)
     register_prompts(mcp)
 
@@ -311,7 +348,7 @@ def make_server(
     # caller ref itself, then mints over the already-validated sink handle:
     #
     # if transport != "stdio":
-    #     from fastmcp_pvl_core import build_transfer_links
+    #     from fastmcp_pvl_core import add_transfer_workflow, build_transfer_links
     #
     #     links = build_transfer_links(
     #         mcp, config.server, config.transfer, sink=_my_transfer_sink
@@ -322,6 +359,10 @@ def make_server(
     #         """Mint a one-shot download link for a document."""
     #         handle = _resolve_and_check(doc_id)  # your validation -> sink handle
     #         return await links.mint_download(handle)
+    #
+    #     # Contribute the core's capability-link workflow prose for your tool
+    #     # (dropped automatically if the tool is hidden by TOOLS_DENY):
+    #     add_transfer_workflow(mcp, download_tool="share_document")
     # DOMAIN-WIRING-END
 
     # Operator tool visibility (SCHOLAR_MCP_TOOLS_ALLOW /
@@ -330,5 +371,12 @@ def make_server(
     # visibility calls in the wiring above, and pvl-core's zero-tools-exposed
     # diagnostic judges the full registered tool set.
     apply_tool_visibility(mcp, config.server)
+
+    # Render the composed instructions exactly once, after visibility: a
+    # snippet whose tools are hidden is dropped, SCHOLAR_MCP_INSTRUCTIONS_EXTRA
+    # is appended, and the legacy SCHOLAR_MCP_INSTRUCTIONS full-replace
+    # still wins (with a deprecation warning).  Must stay the last call that
+    # touches tools or instructions.
+    finalize_instructions(mcp, config.server, env_prefix=_ENV_PREFIX)
 
     return mcp

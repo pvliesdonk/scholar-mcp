@@ -1,6 +1,6 @@
 site_name: Scholar MCP Server
 site_url: https://pvliesdonk.github.io/scholar-mcp/
-site_description: FastMCP server for scholarly papers, patents, books and standards with docling PDF conversion
+site_description: "FastMCP server for scholarly papers, patents, books and standards with docling PDF conversion"
 repo_url: https://github.com/pvliesdonk/scholar-mcp
 repo_name: pvliesdonk/scholar-mcp
 edit_uri: edit/main/docs/
@@ -8,13 +8,18 @@ edit_uri: edit/main/docs/
 # Internal dev docs live under docs/ but are NOT part of the published site.
 # Keep this set in lockstep with the Vale exclusion (ci.yml vale_flags glob +
 # the pre-commit `- id: vale` exclude); see the Documentation Conventions
+<<<<<<< before updating
 # section in CLAUDE.md. superpowers/ is also gitignored.
 # The first three entries are the template's internal-doc subtrees; plans/,
 # specs/ and design.md are this project's pre-template equivalents, kept here
 # until they are migrated onto the template's convention.
+=======
+# section in AGENTS.md. superpowers/ is also gitignored.
+>>>>>>> after updating
 exclude_docs: |
   design/**
   decisions/**
+  releases/next.md
   superpowers/**
   plans/**
   specs/**
@@ -85,13 +90,19 @@ plugins:
         Tools:
           - tools/index.md: All MCP tools with parameters, return values, and usage tips
         Deployment:
+<<<<<<< before updating
           - deployment/docker.md: Docker Compose with docling-serve, Traefik, volumes, UID/GID
           - deployment/systemd.md: systemd service — package install, security hardening
           - deployment/oidc.md: OIDC authentication setup with Authelia
         # Glob deliberately: each minor's release-notes page is auto-indexed
         # without a sections-list update (same rationale as guides/*).
+=======
+          - deployment/*.md
+        # Character-class prefix excludes the unversioned staging page while
+        # auto-indexing each canonical minor page.
+>>>>>>> after updating
         Release Notes:
-          - releases/*.md
+          - releases/[0-9]*.[0-9]*.md
         # PROJECT-LLMSTXT-SECTIONS-END
   - mkdocstrings:
       handlers:
@@ -150,6 +161,7 @@ nav:
       - OIDC Authentication: deployment/oidc.md
       - Claude Desktop: deployment/claude-desktop.md
       - Release Process: deployment/release-process.md
+      - Template Updates: deployment/template-updates.md
       - Repository Protection: deployment/repository-protection.md
   # Landing page only, deliberately: per-minor pages stay out of nav so a new
   # release never needs a nav edit (mkdocs treats not-in-nav pages as INFO,
