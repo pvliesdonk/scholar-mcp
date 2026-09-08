@@ -7,6 +7,7 @@ import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
+from fastmcp import FastMCP
 from mcp.types import TextContent
 
 from scholar_mcp import server as server_module
@@ -23,6 +24,16 @@ _OIDC_REQUIRED = {
     "SCHOLAR_MCP_OIDC_CLIENT_ID": "mcp-client",
     "SCHOLAR_MCP_OIDC_CLIENT_SECRET": "test-secret",
 }
+
+# Env applied to the `server` fixture by indirect parametrisation.  The fixture
+# builds the server synchronously, so an async test never calls `make_server()`
+# inside the running loop -- see the fixture's docstring and #338.
+_READ_WRITE = {"SCHOLAR_MCP_READ_ONLY": "false"}
+_EPO_READ_WRITE = _READ_WRITE | {
+    "SCHOLAR_MCP_EPO_CONSUMER_KEY": "test-key",
+    "SCHOLAR_MCP_EPO_CONSUMER_SECRET": "test-secret",
+}
+_NAMED = {"SCHOLAR_MCP_SERVER_NAME": "scholar-mcp-prod"}
 
 
 class TestAuthModeSelection:
@@ -103,19 +114,17 @@ class TestAuthModeSelection:
 class TestReadOnlyMode:
     """Tests for read-only vs read-write tool visibility."""
 
-    async def test_read_only_by_default(self) -> None:
+    async def test_read_only_by_default(self, server: FastMCP) -> None:
         """Server is read-only by default — creates without error."""
-        server = make_server()
         # No write-tagged tools should be present in read-only mode.
         write_tools = [
             t for t in await server.list_tools() if "write" in (t.tags or set())
         ]
         assert write_tools == []
 
-    async def test_read_write_mode(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    @pytest.mark.parametrize("server", [_READ_WRITE], indirect=True, ids=["read-write"])
+    async def test_read_write_mode(self, server: FastMCP) -> None:
         """Setting READ_ONLY=false creates server in read-write mode."""
-        monkeypatch.setenv("SCHOLAR_MCP_READ_ONLY", "false")
-        server = make_server()
         # Server should be created successfully in read-write mode.
         assert server is not None
 
@@ -123,26 +132,20 @@ class TestReadOnlyMode:
 class TestPatentToolGating:
     """Patent tools (tagged 'patent') are hidden unless EPO OPS is configured."""
 
-    async def test_patent_tools_hidden_without_epo(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """With no EPO env vars, patent-tagged tools must be disabled."""
-        monkeypatch.delenv("SCHOLAR_MCP_EPO_CONSUMER_KEY", raising=False)
-        monkeypatch.delenv("SCHOLAR_MCP_EPO_CONSUMER_SECRET", raising=False)
-        server = make_server()
+    async def test_patent_tools_hidden_without_epo(self, server: FastMCP) -> None:
+        """With no EPO env vars, patent-tagged tools must be disabled.
+
+        The autouse `_clean_env` fixture strips every `SCHOLAR_MCP_*` var, so
+        the default `server` is already the unconfigured case.
+        """
         patent_tools = [
             t for t in await server.list_tools() if "patent" in (t.tags or set())
         ]
         assert patent_tools == []
 
-    async def test_patent_tools_visible_with_epo(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    @pytest.mark.parametrize("server", [_EPO_READ_WRITE], indirect=True, ids=["epo"])
+    async def test_patent_tools_visible_with_epo(self, server: FastMCP) -> None:
         """With both EPO creds set, patent-tagged tools stay visible."""
-        monkeypatch.setenv("SCHOLAR_MCP_EPO_CONSUMER_KEY", "test-key")
-        monkeypatch.setenv("SCHOLAR_MCP_EPO_CONSUMER_SECRET", "test-secret")
-        monkeypatch.setenv("SCHOLAR_MCP_READ_ONLY", "false")
-        server = make_server()
         # At least one patent-tagged tool should be visible when EPO is configured.
         patent_tools = [
             t for t in await server.list_tools() if "patent" in (t.tags or set())
@@ -153,20 +156,18 @@ class TestPatentToolGating:
 class TestServerInfoTool:
     """make_server() registers the get_server_info tool from pvl-core."""
 
-    async def test_get_server_info_registered(self) -> None:
+    async def test_get_server_info_registered(self, server: FastMCP) -> None:
         """get_server_info is registered and visible in default (read-only) mode."""
-        server = make_server()
         tool_names = {t.name for t in await server.list_tools()}
         assert "get_server_info" in tool_names
 
-    async def test_get_server_info_payload_shape(self) -> None:
+    async def test_get_server_info_payload_shape(self, server: FastMCP) -> None:
         """Calling get_server_info returns scholar's identity and version keys.
 
         Locks in that this server wires the pvl-core helper (catches an
         accidental swap to a custom tool that names itself get_server_info
         but returns a different payload).
         """
-        server = make_server()
         result = await server.call_tool("get_server_info")
         assert result.content, "get_server_info returned empty content"
         first = result.content[0]
@@ -176,8 +177,9 @@ class TestServerInfoTool:
         assert isinstance(payload["server_version"], str) and payload["server_version"]
         assert "core_version" in payload
 
+    @pytest.mark.parametrize("server", [_NAMED], indirect=True, ids=["named"])
     async def test_get_server_info_uses_configured_server_name(
-        self, monkeypatch: pytest.MonkeyPatch
+        self, server: FastMCP
     ) -> None:
         """A custom SCHOLAR_MCP_SERVER_NAME flows through to get_server_info.
 
@@ -186,8 +188,6 @@ class TestServerInfoTool:
         operators reading get_server_info see a different name than the one
         used by the FastMCP instance and operational logs.
         """
-        monkeypatch.setenv("SCHOLAR_MCP_SERVER_NAME", "scholar-mcp-prod")
-        server = make_server()
         result = await server.call_tool("get_server_info")
         assert result.content, "get_server_info returned empty content"
         first = result.content[0]

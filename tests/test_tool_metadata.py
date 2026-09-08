@@ -19,13 +19,11 @@ filtered listing.
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import Any
 
 import pytest
-from fastmcp.client import Client
+from fastmcp import Client, FastMCP
 from mcp.types import Tool
-
-from scholar_mcp.server import make_server
 
 # The four tools `make_server` hides together when EPO is unconfigured.
 _PATENT_TOOLS = frozenset(
@@ -33,45 +31,34 @@ _PATENT_TOOLS = frozenset(
 )
 
 
-def _configure(monkeypatch: pytest.MonkeyPatch, tmp: Path, *, epo: bool) -> None:
-    """Point the server at scratch state and set the visibility inputs.
+# Visibility inputs for the `server` fixture, applied by indirect
+# parametrisation.  The fixture builds the server synchronously and points
+# `cache_dir` at scratch state itself, so an async test never calls
+# `make_server()` inside the running loop (#338).  The autouse `_clean_env`
+# fixture already strips every `SCHOLAR_MCP_*` var, so "no EPO" needs no
+# explicit unset.
+_NO_EPO = {"SCHOLAR_MCP_READ_ONLY": "false"}
+_WITH_EPO = _NO_EPO | {
+    "SCHOLAR_MCP_EPO_CONSUMER_KEY": "k",
+    "SCHOLAR_MCP_EPO_CONSUMER_SECRET": "s",
+}
+
+
+async def _full_registry(server: FastMCP) -> list[Tool]:
+    """Return every registered tool on *server*, including those config hides.
 
     Args:
-        monkeypatch: Used to supply the environment the server reads.
-        tmp: Scratch directory for the cache, so no real state is touched.
-        epo: Whether to supply EPO credentials. With them the patent tools
-            are visible; without them `make_server` hides the tag.
-    """
-    monkeypatch.setenv("SCHOLAR_MCP_CACHE_DIR", str(tmp / "cache"))
-    monkeypatch.setenv("SCHOLAR_MCP_KV_STORE_URL", "memory://")
-    monkeypatch.setenv("SCHOLAR_MCP_READ_ONLY", "false")
-    if epo:
-        monkeypatch.setenv("SCHOLAR_MCP_EPO_CONSUMER_KEY", "k")
-        monkeypatch.setenv("SCHOLAR_MCP_EPO_CONSUMER_SECRET", "s")
-    else:
-        monkeypatch.delenv("SCHOLAR_MCP_EPO_CONSUMER_KEY", raising=False)
-        monkeypatch.delenv("SCHOLAR_MCP_EPO_CONSUMER_SECRET", raising=False)
-
-
-async def _full_registry(
-    monkeypatch: pytest.MonkeyPatch, tmp: Path, *, epo: bool = True
-) -> list[Tool]:
-    """Return every registered tool, including those the config hides.
-
-    Args:
-        monkeypatch: Used to supply the configuration.
-        tmp: Scratch directory for the cache.
-        epo: Whether to supply EPO credentials.
+        server: A server built by the synchronous `server` fixture.
 
     Returns:
         Every tool in the registry, gated or not.
     """
-    _configure(monkeypatch, tmp, epo=epo)
-    return list(await make_server()._list_tools())
+    return list(await server._list_tools())
 
 
+@pytest.mark.parametrize("server", [_NO_EPO], indirect=True, ids=["no-epo"])
 async def test_the_full_registry_is_larger_than_the_client_listing(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    server: FastMCP, client: Client[Any]
 ) -> None:
     """The two enumerations differ, so asserting on the wrong one is silent.
 
@@ -79,11 +66,8 @@ async def test_the_full_registry_is_larger_than_the_client_listing(
     ever starts returning only what the configuration exposes, the title
     assertion below stops covering hidden tools without failing.
     """
-    _configure(monkeypatch, tmp_path, epo=False)
-    mcp = make_server()
-    async with Client(mcp) as client:
-        visible = {t.name for t in await client.list_tools()}
-    registered = {t.name for t in await mcp._list_tools()}
+    visible = {t.name for t in await client.list_tools()}
+    registered = {t.name for t in await server._list_tools()}
     assert visible < registered, (
         "expected the EPO and write gates to hide part of the registry; "
         "if nothing is hidden this test no longer proves _list_tools is the "
@@ -92,9 +76,8 @@ async def test_the_full_registry_is_larger_than_the_client_listing(
     assert registered - visible >= _PATENT_TOOLS
 
 
-async def test_every_registered_tool_has_a_title(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+@pytest.mark.parametrize("server", [_WITH_EPO], indirect=True, ids=["epo"])
+async def test_every_registered_tool_has_a_title(server: FastMCP) -> None:
     """Every tool carries a non-empty `annotations.title`.
 
     Title-aware clients (VS Code honours only `title` and `readOnlyHint`)
@@ -102,7 +85,7 @@ async def test_every_registered_tool_has_a_title(
     """
     untitled = sorted(
         t.name
-        for t in await _full_registry(monkeypatch, tmp_path)
+        for t in await _full_registry(server)
         if not (t.annotations and (t.annotations.title or "").strip())
     )
     assert not untitled, (
@@ -112,9 +95,8 @@ async def test_every_registered_tool_has_a_title(
     )
 
 
-async def test_every_registered_tool_declares_read_only_hint(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+@pytest.mark.parametrize("server", [_WITH_EPO], indirect=True, ids=["epo"])
+async def test_every_registered_tool_declares_read_only_hint(server: FastMCP) -> None:
     """Every tool states whether it has side effects.
 
     `readOnlyHint` is the other annotation VS Code reads, and an absent hint
@@ -122,14 +104,15 @@ async def test_every_registered_tool_declares_read_only_hint(
     """
     unhinted = sorted(
         t.name
-        for t in await _full_registry(monkeypatch, tmp_path)
+        for t in await _full_registry(server)
         if not t.annotations or t.annotations.readOnlyHint is None
     )
     assert not unhinted, f"tools without annotations.readOnlyHint: {unhinted}"
 
 
+@pytest.mark.parametrize("server", [_NO_EPO], indirect=True, ids=["no-epo"])
 async def test_patent_tools_hide_together_when_epo_is_unconfigured(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    client: Client[Any],
 ) -> None:
     """No patent tool is advertised without EPO credentials.
 
@@ -137,26 +120,23 @@ async def test_patent_tools_hide_together_when_epo_is_unconfigured(
     while its three siblings disappeared, leaving the model a tool that can
     only answer `epo_not_configured` (#316).
     """
-    _configure(monkeypatch, tmp_path, epo=False)
-    async with Client(make_server()) as client:
-        visible = {t.name for t in await client.list_tools()}
+    visible = {t.name for t in await client.list_tools()}
     assert not (_PATENT_TOOLS & visible), (
         f"patent tools advertised without EPO credentials: "
         f"{sorted(_PATENT_TOOLS & visible)}"
     )
 
 
+@pytest.mark.parametrize("server", [_WITH_EPO], indirect=True, ids=["epo"])
 async def test_patent_tools_appear_together_when_epo_is_configured(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    client: Client[Any],
 ) -> None:
     """All four patent tools return once EPO credentials are present.
 
     The companion to the test above: it proves the gate is what hides them,
     rather than the tools being absent or misnamed.
     """
-    _configure(monkeypatch, tmp_path, epo=True)
-    async with Client(make_server()) as client:
-        visible = {t.name for t in await client.list_tools()}
+    visible = {t.name for t in await client.list_tools()}
     assert visible >= _PATENT_TOOLS, (
         f"patent tools missing with EPO configured: {sorted(_PATENT_TOOLS - visible)}"
     )

@@ -15,11 +15,10 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import Any
 
 import pytest
-from fastmcp.client import Client
-
-from scholar_mcp.server import make_server
+from fastmcp import Client
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -33,34 +32,28 @@ _DOCUMENTED_COUNTS: dict[str, str] = {
 }
 
 
-async def _registered_tool_count(monkeypatch: pytest.MonkeyPatch, tmp: Path) -> int:
-    """Count every tool a fully-configured server exposes.
-
-    Args:
-        monkeypatch: Used to supply the configuration that unhides everything.
-        tmp: Scratch directory for the cache, so no real state is touched.
-
-    Returns:
-        The number of tools listed over the protocol.
-    """
-    monkeypatch.setenv("SCHOLAR_MCP_CACHE_DIR", str(tmp / "cache"))
-    monkeypatch.setenv("SCHOLAR_MCP_READ_ONLY", "false")
-    monkeypatch.setenv("SCHOLAR_MCP_EPO_CONSUMER_KEY", "k")
-    monkeypatch.setenv("SCHOLAR_MCP_EPO_CONSUMER_SECRET", "s")
-    async with Client(make_server()) as client:
-        return len(await client.list_tools())
+# The configuration that unhides everything, applied to the `server` fixture by
+# indirect parametrisation.  The fixture builds the server synchronously and
+# points `cache_dir` at scratch state itself, so an async test never calls
+# `make_server()` inside the running loop (#338).
+_EVERYTHING_VISIBLE = {
+    "SCHOLAR_MCP_READ_ONLY": "false",
+    "SCHOLAR_MCP_EPO_CONSUMER_KEY": "k",
+    "SCHOLAR_MCP_EPO_CONSUMER_SECRET": "s",
+}
 
 
+@pytest.mark.parametrize("server", [_EVERYTHING_VISIBLE], indirect=True, ids=["all"])
 @pytest.mark.parametrize("relative_path", sorted(_DOCUMENTED_COUNTS))
 async def test_documented_tool_count_matches_the_registry(
-    relative_path: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    relative_path: str, client: Client[Any]
 ) -> None:
     """Every document's stated tool count equals the registry's.
 
     Parametrised per file so a failure names the document that drifted rather
     than the first one checked.
     """
-    actual = await _registered_tool_count(monkeypatch, tmp_path)
+    actual = len(await client.list_tools())
     pattern = _DOCUMENTED_COUNTS[relative_path]
     text = (_REPO_ROOT / relative_path).read_text(encoding="utf-8")
 
