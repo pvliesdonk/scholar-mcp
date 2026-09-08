@@ -39,7 +39,7 @@ from fastmcp_pvl_core import (
     resolve_auth_mode as _core_resolve_auth_mode,
 )
 
-from scholar_mcp._server_deps import make_service_lifespan
+from scholar_mcp._server_deps import server_lifespan
 from scholar_mcp._server_prompts import register_prompts
 from scholar_mcp._server_resources import register_resources
 from scholar_mcp._server_tools import register_tools
@@ -226,7 +226,7 @@ def make_server(
     mcp = FastMCP(
         name=server_name,
         instructions=instructions,
-        lifespan=make_service_lifespan,
+        lifespan=server_lifespan,
         auth=auth,
     )
 

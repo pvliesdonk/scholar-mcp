@@ -201,7 +201,7 @@ class ServiceBundle:
     standards: StandardsClient   # always available, no credentials needed
 ```
 
-Created in `make_service_lifespan`, closed on shutdown. `standards` is not optional, Tier 1 sources require no API keys.
+Created in `server_lifespan`, closed on shutdown. `standards` is not optional, Tier 1 sources require no API keys.
 
 ## Tools (`_tools_standards.py`)
 

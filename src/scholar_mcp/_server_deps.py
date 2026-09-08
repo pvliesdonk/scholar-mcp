@@ -116,8 +116,66 @@ def _start_s2_keepalive(
     return asyncio.create_task(run_keepalive(client))
 
 
+def _build_docling(
+    config: ProjectConfig,
+) -> tuple[httpx.AsyncClient | None, DoclingClient | None]:
+    """Build the optional docling-serve client pair.
+
+    Args:
+        config: Loaded project configuration.
+
+    Returns:
+        The ``(http_client, docling_client)`` pair, or ``(None, None)`` when
+        ``SCHOLAR_MCP_DOCLING_URL`` is unset.  The raw HTTP client is
+        returned alongside so the lifespan can close it on teardown.
+    """
+    if not config.docling_url:
+        logger.info("docling_not_configured pdf_tools_disabled")
+        return None, None
+
+    http = httpx.AsyncClient(base_url=config.docling_url, timeout=300.0)
+    docling = DoclingClient(
+        http_client=http,
+        vlm_api_url=config.vlm_api_url,
+        vlm_api_key=config.vlm_api_key,
+        vlm_model=config.vlm_model,
+    )
+    logger.info(
+        "docling_configured url=%s vlm_available=%s vlm_model=%s",
+        config.docling_url,
+        docling.vlm_available,
+        config.vlm_model if docling.vlm_available else "(n/a)",
+    )
+    return http, docling
+
+
+def _build_epo(config: ProjectConfig) -> EpoClient | None:
+    """Build the optional EPO OPS client.
+
+    Patent tools are only registered when the OPS credentials are present, so
+    an unconfigured deployment yields ``None`` rather than a client that fails
+    at call time.
+
+    Args:
+        config: Loaded project configuration.
+
+    Returns:
+        The configured :class:`EpoClient`, or ``None``.
+    """
+    if not config.epo_configured:
+        logger.info("epo_ops status=not_configured")
+        return None
+
+    epo = EpoClient(
+        consumer_key=config.epo_consumer_key,  # type: ignore[arg-type]
+        consumer_secret=config.epo_consumer_secret,  # type: ignore[arg-type]
+    )
+    logger.info("epo_ops status=configured")
+    return epo
+
+
 @asynccontextmanager
-async def make_service_lifespan(
+async def server_lifespan(
     app: FastMCP,
 ) -> AsyncGenerator[dict[str, ServiceBundle], None]:
     """FastMCP lifespan: create all clients, open cache, yield bundle.
@@ -163,35 +221,8 @@ async def make_service_lifespan(
     )
     openlibrary_limiter = RateLimiter(delay=_OPENLIBRARY_DELAY)
     openlibrary = OpenLibraryClient(openlibrary_http, openlibrary_limiter)
-    docling_http: httpx.AsyncClient | None = None
-    docling: DoclingClient | None = None
-    if config.docling_url:
-        docling_http = httpx.AsyncClient(base_url=config.docling_url, timeout=300.0)
-        docling = DoclingClient(
-            http_client=docling_http,
-            vlm_api_url=config.vlm_api_url,
-            vlm_api_key=config.vlm_api_key,
-            vlm_model=config.vlm_model,
-        )
-        logger.info(
-            "docling_configured url=%s vlm_available=%s vlm_model=%s",
-            config.docling_url,
-            docling.vlm_available,
-            config.vlm_model if docling.vlm_available else "(n/a)",
-        )
-    else:
-        logger.info("docling_not_configured pdf_tools_disabled")
-
-    # EPO OPS (optional — patent tools only available when configured)
-    epo: EpoClient | None = None
-    if config.epo_configured:
-        epo = EpoClient(
-            consumer_key=config.epo_consumer_key,  # type: ignore[arg-type]
-            consumer_secret=config.epo_consumer_secret,  # type: ignore[arg-type]
-        )
-        logger.info("epo_ops status=configured")
-    else:
-        logger.info("epo_ops status=not_configured")
+    docling_http, docling = _build_docling(config)
+    epo = _build_epo(config)
 
     cache = ScholarCache(config.cache_dir / "cache.db")
     await cache.open()
