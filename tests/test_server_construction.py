@@ -20,7 +20,15 @@ The check is deliberately not "no `make_server` on a line inside an `async
 def`". It also follows one level of indirection -- a synchronous helper that
 builds the server is fine on its own, and only becomes a violation when an
 async function calls it -- because extracting the call into a helper is the
-first thing a contributor reaches for.
+first thing a contributor reaches for. The builder set is collected across
+the whole suite, not per module, so a helper parked in `conftest.py` and
+called from a test file is caught too; that is the likeliest shape of all.
+
+The indirection is one level by design. A helper calling a helper is not
+followed, and the set is keyed on the callee's bare name, so a same-named
+callable that does not build a server is flagged. Both are deliberate: the
+gate errs toward a message a contributor can act on rather than toward
+silence.
 """
 
 from __future__ import annotations
@@ -81,18 +89,33 @@ def _sync_builders(tree: ast.Module) -> set[str]:
     }
 
 
-def _violations(path: Path) -> list[str]:
+def _suite_builders(trees: dict[Path, ast.Module]) -> set[str]:
+    """Return every synchronous builder name in the suite, across modules.
+
+    Collecting per module would miss the likeliest shape of all: a helper in
+    `conftest.py` that an async test in another file calls.
+
+    Args:
+        trees: Parsed modules, keyed by path.
+
+    Returns:
+        The union of each module's synchronous builder names.
+    """
+    return set().union(*(_sync_builders(tree) for tree in trees.values()))
+
+
+def _violations(path: Path, tree: ast.Module, builders: set[str]) -> list[str]:
     """Return one message per async function in *path* that builds a server.
 
     Args:
-        path: A test module to check.
+        path: The module's path, used for the message.
+        tree: The parsed module.
+        builders: Synchronous builder names collected across the whole suite.
 
     Returns:
         A list of ``"file:line function -- reason"`` strings; empty when the
         module is clean.
     """
-    tree = ast.parse(path.read_text(encoding="utf-8"))
-    builders = _sync_builders(tree)
     found = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.AsyncFunctionDef):
@@ -113,10 +136,19 @@ def _violations(path: Path) -> list[str]:
 
 def test_no_async_function_constructs_the_server() -> None:
     """No `async def` in the suite reaches `make_server`, directly or via a helper."""
+    trees = {
+        path: ast.parse(path.read_text(encoding="utf-8"))
+        for path in sorted(_TESTS_DIR.rglob("*.py"))
+    }
+    builders = _suite_builders(trees)
+    assert "server" in builders, (
+        "the `server` fixture in tests/conftest.py no longer builds the "
+        "server; this gate is measuring the wrong thing"
+    )
     offenders = [
         message
-        for path in sorted(_TESTS_DIR.rglob("*.py"))
-        for message in _violations(path)
+        for path, tree in trees.items()
+        for message in _violations(path, tree, builders)
     ]
     assert not offenders, (
         "these async functions construct the server inside a running event "
@@ -124,14 +156,18 @@ def test_no_async_function_constructs_the_server() -> None:
     )
 
 
-def test_the_check_detects_both_shapes() -> None:
-    """The gate itself catches the direct call and the helper indirection.
+def test_the_check_detects_all_three_shapes() -> None:
+    """The gate catches the direct call and both helper indirections.
 
     Without this, a refactor that broke `_violations` -- a renamed target, a
-    walk that stops at function boundaries -- would report a clean suite and
-    the gate would pass by being blind.
+    walk that stops at function boundaries, a builder set collected per file
+    again -- would report a clean suite and the gate would pass by being
+    blind. The cross-module case is the one a per-module scan misses, so it
+    is asserted rather than described.
     """
-    source = """
+    shared = ast.parse("def build_in_conftest():\n    return make_server()\n")
+    module = ast.parse(
+        """
 def _build():
     return make_server()
 
@@ -141,20 +177,33 @@ def sync_is_fine():
 async def direct():
     return make_server()
 
-async def indirect():
+async def same_module_indirect():
     return _build()
+
+async def cross_module_indirect():
+    return build_in_conftest()
 
 async def clean(server):
     return server
 """
-    tree = ast.parse(source)
-    assert _sync_builders(tree) == {"_build", "sync_is_fine"}
+    )
+    fake_conftest = _TESTS_DIR / "conftest.py"
+    fake_module = _TESTS_DIR / "test_x.py"
+    trees = {fake_conftest: shared, fake_module: module}
+    builders = _suite_builders(trees)
+    assert builders == {"build_in_conftest", "_build", "sync_is_fine"}
+
     flagged = {
-        node.name
-        for node in ast.walk(tree)
-        if isinstance(node, ast.AsyncFunctionDef)
-        and (
-            _TARGET in _called_names(node) or _called_names(node) & _sync_builders(tree)
-        )
+        message.split(" -- ")[0].split(" ")[-1]
+        for path, tree in trees.items()
+        for message in _violations(path, tree, builders)
     }
-    assert flagged == {"direct", "indirect"}
+    assert flagged == {"direct", "same_module_indirect", "cross_module_indirect"}
+
+    # A per-module builder set would miss the cross-module case; prove it, so
+    # a regression to that shape fails here rather than passing silently.
+    per_module_only = {
+        message.split(" -- ")[0].split(" ")[-1]
+        for message in _violations(fake_module, module, _sync_builders(module))
+    }
+    assert "cross_module_indirect" not in per_module_only
