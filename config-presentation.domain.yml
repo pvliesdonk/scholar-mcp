@@ -23,6 +23,15 @@ vars:
       GitHub token used to raise rate limits when fetching standards documents
       from GitHub. Optional; unauthenticated requests work at reduced limits.
     tags: [standards]
+    wizard:
+      # NOTE: this group renders FIRST among the reference's sub-sections, above
+      # PDF conversion / Patents / Books, and that is not a preference — the
+      # generator orders groups by first appearance and collects vars declared
+      # here before it scans ProjectConfig's fields. Nothing in field metadata
+      # can reorder it; only moving the var into the AST-visible scan could,
+      # which the non-prefixed SCHOLAR_GITHUB_TOKEN read rules out.
+      group: Standards
+      secret: true
 
 # Install-channel screens.  The generator owns two objects in each artifact
 # below and strips anything not declared here, so every field the screen
