@@ -40,6 +40,10 @@ site/
 # contributor-facing authoring skill(s), template-owned and re-rendered on
 # copier update.  .claude/CLAUDE.md is project-owned and tracked, so it needs
 # its own negation.
+# Provider-neutral contributor skills are tracked under .agents/; everything
+# else under .agents/ is local.
+.agents/*
+!.agents/skills/
 .claude/*
 !.claude/skills/
 !.claude/CLAUDE.md

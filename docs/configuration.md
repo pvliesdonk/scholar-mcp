@@ -87,7 +87,8 @@ Google Books integration is available without configuration (unauthenticated, 10
 | Variable | Default | Description |
 |---|---|---|
 | `SCHOLAR_MCP_SERVER_NAME` | `scholar-mcp` | MCP server display name shown to clients. |
-| `SCHOLAR_MCP_INSTRUCTIONS` | *(auto-generated)* | Custom system-level instructions for LLM clients. When unset, auto-generated instructions describe available tools and the current read-only/write mode. |
+| `SCHOLAR_MCP_INSTRUCTIONS_EXTRA` | _(none)_ | Operator context appended to the generated MCP instructions (deployment notes, house rules). The generated text (identity, tool workflows, documentation pointer) stays intact. |
+| `SCHOLAR_MCP_INSTRUCTIONS` | *(auto-generated)* | Legacy. Replaces the entire generated instructions text and logs a deprecation warning at startup; when both are set, `_INSTRUCTIONS_EXTRA` is ignored. Move operator context to `_INSTRUCTIONS_EXTRA`. |
 | `SCHOLAR_MCP_HTTP_PATH` | `/mcp` | Mount path for HTTP transport. |
 
 ## Authentication

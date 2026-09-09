@@ -116,7 +116,8 @@ See [Configuration](../configuration.md) for the full reference. Key variables f
 | `SCHOLAR_MCP_BEARER_TOKEN` | n/a | Bearer token for HTTP auth |
 | `FASTMCP_LOG_LEVEL` | `INFO` | Logging level (use `-v` or set to `DEBUG` for verbose output) |
 | `FASTMCP_ENABLE_RICH_LOGGING` | `true` | Set `false` for structured JSON logging with aggregators |
-| `SCHOLAR_MCP_INSTRUCTIONS` | (computed at startup) | System instructions for LLM context |
+| `SCHOLAR_MCP_INSTRUCTIONS_EXTRA` | n/a | Operator context appended to the generated MCP instructions |
+| `SCHOLAR_MCP_INSTRUCTIONS` | (computed at startup) | Legacy full replacement of the generated instructions (deprecated) |
 | `SCHOLAR_MCP_DEBUG_PORT` | n/a | Remote-debugger TCP port (see [Remote debugging](#remote-debugging); requires `--build-arg DEBUG=true` image) |
 | `SCHOLAR_MCP_DEBUG_WAIT` | `false` | Block startup until IDE attaches (see [Remote debugging](#remote-debugging)) |
 
