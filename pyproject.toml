@@ -195,6 +195,18 @@ ignore = ["E501"]
 # `# noqa: PLR0913` routine. It only bites when enable_structural_gate is on
 # (PLR0913 isn't in the base select); domain modules keep the check, and
 # C901/PLR0912/PLR0915 still catch a genuinely complex tool here.
+# Template-owned script the template's own managed list above does not cover:
+# scripts/migrate_agent_instructions.py reads the pre-update CLAUDE.md with a
+# fixed-argv `git show HEAD:CLAUDE.md` (no shell), which trips S607's bare-`git`
+# partial-path rule on the structural diff-gate the first time an update ships
+# the file — exactly what the managed entries for stamp_manifests.py,
+# promote_release_notes.py and report_seeded_changes.py exist to prevent.
+# The gap is known upstream and was declined: fastmcp-server-template#524 is
+# closed as not-planned, and names this local entry as the resolution (the
+# same one markdown-vault-mcp carries). So this is permanent, not a carry
+# awaiting a fix. If the template ever does add the entry to its managed block,
+# remove this one — two entries for one path is a duplicate TOML key.
+"scripts/migrate_agent_instructions.py" = ["S603", "S607"]
 "src/scholar_mcp/server.py" = ["ARG001", "B008", "TC002"]
 "src/scholar_mcp/cli.py" = ["B008", "TC002", "TC003", "PLR0913"]
 "src/scholar_mcp/_server_apps.py" = ["TC002", "PLR0913"]
