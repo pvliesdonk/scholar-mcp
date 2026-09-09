@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import os
+from collections.abc import AsyncIterator
 from pathlib import Path
+from typing import Any
 
 import httpx
 import pytest
+from fastmcp import Client, FastMCP
 from fastmcp_pvl_core import Jobs, JobsConfig, ServerConfig, build_jobs
 
 from scholar_mcp import _epo_client, _rate_limiter
@@ -21,6 +24,7 @@ from scholar_mcp._s2_client import S2Client
 from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._standards_client import StandardsClient
 from scholar_mcp.config import ProjectConfig
+from scholar_mcp.server import make_server
 
 _JOBS_TEST_DEADLINE_S = 0.05
 """Soft deadline for tests: short enough that a slow tool promotes at once.
@@ -46,6 +50,47 @@ def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
         if key.startswith("SCHOLAR_MCP_"):
             monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("SCHOLAR_MCP_KV_STORE_URL", "memory://")
+
+
+@pytest.fixture
+def server(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> FastMCP:
+    """Construct a fresh server *synchronously*, outside any event loop.
+
+    ``make_server()`` must not run inside a running loop. From pvl-core 6 the
+    instruction finalizer enumerates the effective tool set through
+    ``effective_tool_names``, which calls ``asyncio.get_running_loop()`` and
+    raises rather than move loop-affine providers onto a worker loop
+    (fastmcp-pvl-core ``_visibility.py``). A synchronous fixture is set up
+    before pytest-asyncio enters the loop it runs an ``async def`` test in, so
+    an async test takes its server from here instead of building one in the
+    body. ``tests/test_server_construction.py`` enforces that.
+
+    Environment the server reads is supplied by indirect parametrisation::
+
+        @pytest.mark.parametrize("server", [_EPO_ENV], indirect=True, ids=["epo"])
+        async def test_patent_tools_are_visible(server: FastMCP) -> None: ...
+
+    ``cache_dir`` always points into ``tmp_path``, so entering the lifespan
+    creates its state directory under the test's scratch space rather than in
+    the real cache location.
+    """
+    monkeypatch.setenv("SCHOLAR_MCP_CACHE_DIR", str(tmp_path / "cache"))
+    for key, value in getattr(request, "param", {}).items():
+        monkeypatch.setenv(key, value)
+    return make_server()
+
+
+@pytest.fixture
+async def client(server: FastMCP) -> AsyncIterator[Client[Any]]:
+    """Provide an in-memory client connected to the :func:`server` fixture.
+
+    The client is async because connecting enters the server's lifespan; the
+    server it wraps was already built synchronously.
+    """
+    async with Client(server) as c:
+        yield c
 
 
 @pytest.fixture

@@ -20,6 +20,7 @@ import asyncio
 import json
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any
 
 import httpx
 import pytest
@@ -41,6 +42,16 @@ from scholar_mcp._server_tools import register_tools
 from scholar_mcp._tools_pdf import register_pdf_tools
 from scholar_mcp.config import ProjectConfig
 from scholar_mcp.server import make_server
+
+# Unhides every job-backed tool, applied to the `server` fixture by indirect
+# parametrisation.  The fixture builds the server synchronously and points
+# `cache_dir` at scratch state itself, so an async test never calls
+# `make_server()` inside the running loop (#338).
+_EVERYTHING_VISIBLE = {
+    "SCHOLAR_MCP_READ_ONLY": "false",
+    "SCHOLAR_MCP_EPO_CONSUMER_KEY": "k",
+    "SCHOLAR_MCP_EPO_CONSUMER_SECRET": "s",
+}
 
 
 def _slow_docling_bundle(bundle: ServiceBundle) -> ServiceBundle:
@@ -172,13 +183,13 @@ def test_injected_jobs_bypasses_the_environment(
     register_tools(FastMCP("test"), jobs=jobs)
 
 
-async def test_make_server_exposes_the_polling_tool(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The production entry point wires jobs, not just `register_tools`."""
-    monkeypatch.setenv("SCHOLAR_MCP_CACHE_DIR", str(tmp_path / "cache"))
-    async with Client(make_server()) as client:
-        names = [t.name for t in await client.list_tools()]
+async def test_make_server_exposes_the_polling_tool(client: Client[Any]) -> None:
+    """The production entry point wires jobs, not just `register_tools`.
+
+    The `client` fixture wraps the synchronous `server` fixture, so the
+    construction happens outside this test's event loop (#338).
+    """
+    names = [t.name for t in await client.list_tools()]
     assert "get_job_result" in names
 
 
@@ -249,8 +260,9 @@ def test_explicit_config_reaches_jobs(
     assert captured["server"] is config.server
 
 
+@pytest.mark.parametrize("server", [_EVERYTHING_VISIBLE], indirect=True, ids=["all"])
 async def test_job_backed_tools_advertise_the_polling_contract(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    client: Client[Any],
 ) -> None:
     """Every tool that can return a handle says so in its advertised description.
 
@@ -266,11 +278,6 @@ async def test_job_backed_tools_advertise_the_polling_contract(
     Asserting on the description as the client receives it, rather than on the
     docstring source, is what makes that failure visible.
     """
-    monkeypatch.setenv("SCHOLAR_MCP_CACHE_DIR", str(tmp_path / "cache"))
-    monkeypatch.setenv("SCHOLAR_MCP_READ_ONLY", "false")
-    monkeypatch.setenv("SCHOLAR_MCP_EPO_CONSUMER_KEY", "k")
-    monkeypatch.setenv("SCHOLAR_MCP_EPO_CONSUMER_SECRET", "s")
-
     job_backed = {
         "fetch_paper_pdf",
         "convert_pdf_to_markdown",
@@ -298,8 +305,7 @@ async def test_job_backed_tools_advertise_the_polling_contract(
         "resolve_standard_identifier",
     }
 
-    async with Client(make_server()) as client:
-        described = {t.name: (t.description or "") for t in await client.list_tools()}
+    described = {t.name: (t.description or "") for t in await client.list_tools()}
 
     missing = sorted(job_backed - described.keys())
     assert not missing, f"expected these tools to be registered: {missing}"
