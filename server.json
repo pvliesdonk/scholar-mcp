@@ -64,7 +64,8 @@
         },
         {
           "name": "SCHOLAR_GITHUB_TOKEN",
-          "description": "GitHub token used to raise rate limits when fetching standards documents from GitHub. Optional; unauthenticated requests work at reduced limits."
+          "description": "GitHub token used to raise rate limits when fetching standards documents from GitHub. Optional; unauthenticated requests work at reduced limits.",
+          "isSecret": true
         },
         {
           "name": "SCHOLAR_MCP_READ_ONLY",
@@ -74,7 +75,8 @@
         },
         {
           "name": "SCHOLAR_MCP_S2_API_KEY",
-          "description": "Semantic Scholar API key. Optional but strongly recommended: unauthenticated requests are limited to ~1 req/s. Request one at https://www.semanticscholar.org/product/api#api-key-form."
+          "description": "Semantic Scholar API key. Optional but strongly recommended: unauthenticated requests are limited to ~1 req/s. Request one at https://www.semanticscholar.org/product/api#api-key-form.",
+          "isSecret": true
         },
         {
           "name": "SCHOLAR_MCP_DOCLING_URL",
@@ -86,7 +88,8 @@
         },
         {
           "name": "SCHOLAR_MCP_VLM_API_KEY",
-          "description": "API key for the VLM endpoint."
+          "description": "API key for the VLM endpoint.",
+          "isSecret": true
         },
         {
           "name": "SCHOLAR_MCP_VLM_MODEL",
@@ -109,11 +112,13 @@
         },
         {
           "name": "SCHOLAR_MCP_EPO_CONSUMER_SECRET",
-          "description": "EPO Open Patent Services consumer secret. Optional; patent tools are hidden when unset."
+          "description": "EPO Open Patent Services consumer secret. Optional; patent tools are hidden when unset.",
+          "isSecret": true
         },
         {
           "name": "SCHOLAR_MCP_GOOGLE_BOOKS_API_KEY",
-          "description": "Google Books API key. Optional; book tools work unauthenticated at reduced rate limits."
+          "description": "Google Books API key. Optional; book tools work unauthenticated at reduced rate limits.",
+          "isSecret": true
         },
         {
           "name": "SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S",
@@ -256,7 +261,7 @@
         },
         {
           "name": "PUID",
-          "description": "Run the server process as this UID; the container entrypoint chowns writable paths to match.",
+          "description": "Run the server process as this UID; the container entrypoint reassigns ownership of writable paths to match.",
           "format": "number",
           "default": "1000"
         },
@@ -286,7 +291,8 @@
         },
         {
           "name": "SCHOLAR_GITHUB_TOKEN",
-          "description": "GitHub token used to raise rate limits when fetching standards documents from GitHub. Optional; unauthenticated requests work at reduced limits."
+          "description": "GitHub token used to raise rate limits when fetching standards documents from GitHub. Optional; unauthenticated requests work at reduced limits.",
+          "isSecret": true
         },
         {
           "name": "SCHOLAR_MCP_READ_ONLY",
@@ -296,7 +302,8 @@
         },
         {
           "name": "SCHOLAR_MCP_S2_API_KEY",
-          "description": "Semantic Scholar API key. Optional but strongly recommended: unauthenticated requests are limited to ~1 req/s. Request one at https://www.semanticscholar.org/product/api#api-key-form."
+          "description": "Semantic Scholar API key. Optional but strongly recommended: unauthenticated requests are limited to ~1 req/s. Request one at https://www.semanticscholar.org/product/api#api-key-form.",
+          "isSecret": true
         },
         {
           "name": "SCHOLAR_MCP_DOCLING_URL",
@@ -308,7 +315,8 @@
         },
         {
           "name": "SCHOLAR_MCP_VLM_API_KEY",
-          "description": "API key for the VLM endpoint."
+          "description": "API key for the VLM endpoint.",
+          "isSecret": true
         },
         {
           "name": "SCHOLAR_MCP_VLM_MODEL",
@@ -331,11 +339,13 @@
         },
         {
           "name": "SCHOLAR_MCP_EPO_CONSUMER_SECRET",
-          "description": "EPO Open Patent Services consumer secret. Optional; patent tools are hidden when unset."
+          "description": "EPO Open Patent Services consumer secret. Optional; patent tools are hidden when unset.",
+          "isSecret": true
         },
         {
           "name": "SCHOLAR_MCP_GOOGLE_BOOKS_API_KEY",
-          "description": "Google Books API key. Optional; book tools work unauthenticated at reduced rate limits."
+          "description": "Google Books API key. Optional; book tools work unauthenticated at reduced rate limits.",
+          "isSecret": true
         },
         {
           "name": "SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S",

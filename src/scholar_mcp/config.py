@@ -46,7 +46,7 @@ class ProjectConfig:
                 "When true, write-tagged tools (PDF download and conversion "
                 "cache writes) are hidden. Set false to enable them."
             ),
-            "tags": ("mode",),
+            "tags": ("mode", "readme"),
         },
     )
     s2_api_key: str | None = field(
@@ -57,7 +57,10 @@ class ProjectConfig:
                 "unauthenticated requests are limited to ~1 req/s. Request one "
                 "at https://www.semanticscholar.org/product/api#api-key-form."
             ),
-            "tags": ("s2",),
+            "tags": ("s2", "readme"),
+            # No wizard group: this is an entry-point variable, and ungrouped
+            # fields render above the grouped sub-sections in the reference.
+            "wizard": {"secret": True},
         },
     )
     docling_url: str | None = field(
@@ -68,7 +71,8 @@ class ProjectConfig:
                 "conversion (e.g. http://localhost:5001). When unset, PDF "
                 "conversion tools return an error."
             ),
-            "tags": ("pdf",),
+            "tags": ("pdf", "readme"),
+            "wizard": {"group": "PDF conversion"},
         },
     )
     vlm_api_url: str | None = field(
@@ -79,6 +83,7 @@ class ProjectConfig:
                 "enrichment during PDF conversion."
             ),
             "tags": ("pdf",),
+            "wizard": {"group": "PDF conversion"},
         },
     )
     vlm_api_key: str | None = field(
@@ -86,6 +91,7 @@ class ProjectConfig:
         metadata={
             "help": "API key for the VLM endpoint.",
             "tags": ("pdf",),
+            "wizard": {"group": "PDF conversion", "secret": True},
         },
     )
     vlm_model: str = field(
@@ -93,6 +99,7 @@ class ProjectConfig:
         metadata={
             "help": "Model name to use with the VLM endpoint.",
             "tags": ("pdf",),
+            "wizard": {"group": "PDF conversion"},
         },
     )
     cache_dir: Path = field(
@@ -102,7 +109,7 @@ class ProjectConfig:
                 "Directory for the SQLite cache database (cache.db) and "
                 "downloaded PDFs (pdfs/, md/)."
             ),
-            "tags": ("cache",),
+            "tags": ("cache", "readme"),
         },
     )
     contact_email: str | None = field(
@@ -113,7 +120,7 @@ class ProjectConfig:
                 "limits). Also enables Unpaywall lookups as a PDF fallback "
                 "source."
             ),
-            "tags": ("enrichment",),
+            "tags": ("enrichment", "readme"),
         },
     )
     epo_consumer_key: str | None = field(
@@ -125,6 +132,7 @@ class ProjectConfig:
                 "https://developers.epo.org/user/register."
             ),
             "tags": ("patents",),
+            "wizard": {"group": "Patents (EPO OPS)"},
         },
     )
     epo_consumer_secret: str | None = field(
@@ -135,6 +143,7 @@ class ProjectConfig:
                 "tools are hidden when unset."
             ),
             "tags": ("patents",),
+            "wizard": {"group": "Patents (EPO OPS)", "secret": True},
         },
     )
     google_books_api_key: str | None = field(
@@ -145,6 +154,7 @@ class ProjectConfig:
                 "unauthenticated at reduced rate limits."
             ),
             "tags": ("books",),
+            "wizard": {"group": "Books", "secret": True},
         },
     )
     # Populated from SCHOLAR_GITHUB_TOKEN (not SCHOLAR_MCP_GITHUB_TOKEN) — the

@@ -8,7 +8,12 @@
   "secretKeys": [
     "SCHOLAR_MCP_BEARER_TOKEN",
     "SCHOLAR_MCP_OIDC_CLIENT_SECRET",
-    "SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY"
+    "SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY",
+    "SCHOLAR_GITHUB_TOKEN",
+    "SCHOLAR_MCP_S2_API_KEY",
+    "SCHOLAR_MCP_VLM_API_KEY",
+    "SCHOLAR_MCP_EPO_CONSUMER_SECRET",
+    "SCHOLAR_MCP_GOOGLE_BOOKS_API_KEY"
   ],
   "questions": [
     {
@@ -422,7 +427,8 @@
       "label": "Scholar Github Token",
       "type": "text",
       "var": "SCHOLAR_GITHUB_TOKEN",
-      "help": "GitHub token used to raise rate limits when fetching standards documents from GitHub. Optional; unauthenticated requests work at reduced limits."
+      "help": "GitHub token used to raise rate limits when fetching standards documents from GitHub. Optional; unauthenticated requests work at reduced limits.",
+      "advancedGroup": "Standards"
     },
     {
       "id": "read_only",
@@ -443,28 +449,32 @@
       "label": "Docling Url",
       "type": "text",
       "var": "SCHOLAR_MCP_DOCLING_URL",
-      "help": "Base URL of a running docling-serve instance for PDF conversion (e.g. http://localhost:5001). When unset, PDF conversion tools return an error."
+      "help": "Base URL of a running docling-serve instance for PDF conversion (e.g. http://localhost:5001). When unset, PDF conversion tools return an error.",
+      "advancedGroup": "PDF conversion"
     },
     {
       "id": "vlm_api_url",
       "label": "Vlm Api Url",
       "type": "text",
       "var": "SCHOLAR_MCP_VLM_API_URL",
-      "help": "OpenAI-compatible VLM endpoint for formula and figure enrichment during PDF conversion."
+      "help": "OpenAI-compatible VLM endpoint for formula and figure enrichment during PDF conversion.",
+      "advancedGroup": "PDF conversion"
     },
     {
       "id": "vlm_api_key",
       "label": "Vlm Api Key",
       "type": "text",
       "var": "SCHOLAR_MCP_VLM_API_KEY",
-      "help": "API key for the VLM endpoint."
+      "help": "API key for the VLM endpoint.",
+      "advancedGroup": "PDF conversion"
     },
     {
       "id": "vlm_model",
       "label": "Vlm Model",
       "type": "text",
       "var": "SCHOLAR_MCP_VLM_MODEL",
-      "help": "Model name to use with the VLM endpoint."
+      "help": "Model name to use with the VLM endpoint.",
+      "advancedGroup": "PDF conversion"
     },
     {
       "id": "cache_dir",
@@ -485,21 +495,24 @@
       "label": "Epo Consumer Key",
       "type": "text",
       "var": "SCHOLAR_MCP_EPO_CONSUMER_KEY",
-      "help": "EPO Open Patent Services consumer key. Optional; patent tools are hidden when unset. Register at https://developers.epo.org/user/register."
+      "help": "EPO Open Patent Services consumer key. Optional; patent tools are hidden when unset. Register at https://developers.epo.org/user/register.",
+      "advancedGroup": "Patents (EPO OPS)"
     },
     {
       "id": "epo_consumer_secret",
       "label": "Epo Consumer Secret",
       "type": "text",
       "var": "SCHOLAR_MCP_EPO_CONSUMER_SECRET",
-      "help": "EPO Open Patent Services consumer secret. Optional; patent tools are hidden when unset."
+      "help": "EPO Open Patent Services consumer secret. Optional; patent tools are hidden when unset.",
+      "advancedGroup": "Patents (EPO OPS)"
     },
     {
       "id": "google_books_api_key",
       "label": "Google Books Api Key",
       "type": "text",
       "var": "SCHOLAR_MCP_GOOGLE_BOOKS_API_KEY",
-      "help": "Google Books API key. Optional; book tools work unauthenticated at reduced rate limits."
+      "help": "Google Books API key. Optional; book tools work unauthenticated at reduced rate limits.",
+      "advancedGroup": "Books"
     },
     {
       "id": "jobs_soft_deadline_s",

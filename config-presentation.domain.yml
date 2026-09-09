@@ -23,6 +23,9 @@ vars:
       GitHub token used to raise rate limits when fetching standards documents
       from GitHub. Optional; unauthenticated requests work at reduced limits.
     tags: [standards]
+    wizard:
+      group: Standards
+      secret: true
 
 # Install-channel screens.  The generator owns two objects in each artifact
 # below and strips anything not declared here, so every field the screen

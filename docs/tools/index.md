@@ -440,7 +440,7 @@ Resolve up to 100 paper, patent, or book identifiers to full metadata in a singl
 ## Patents
 
 !!! note "Credentials required"
-    Patent tools require EPO OPS credentials. When `SCHOLAR_MCP_EPO_CONSUMER_KEY` and `SCHOLAR_MCP_EPO_CONSUMER_SECRET` are not set, these tools are automatically hidden. See [EPO OPS configuration](../configuration.md#epo-open-patent-services) for setup instructions.
+    Patent tools require EPO OPS credentials. When `SCHOLAR_MCP_EPO_CONSUMER_KEY` and `SCHOLAR_MCP_EPO_CONSUMER_SECRET` are not set, these tools are automatically hidden. See [EPO OPS configuration](../configuration.md#patents-obtaining-epo-ops-credentials) for setup instructions.
 
 ### `search_patents`
 
