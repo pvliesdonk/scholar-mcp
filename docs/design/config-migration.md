@@ -44,6 +44,16 @@ the pre-update commit), save the prose you wrote in `.env.example`,
 variable (the ones your project added beyond what the template shipped). That
 text is about to be replaced and is the only copy of it.
 
+Save your **active assignments** from `packaging/env.example` too, not only the
+prose. That file is a template an operator copies to
+`/etc/scholar-mcp/env`, so its job is to carry the few deviations a
+systemd install needs — a state directory under `/var/lib/`, say, matching the
+`ReadWritePaths=` the shipped unit grants. The generated file comments every
+variable out, exactly like `.env.example`, so an override that was a live line
+in your hand-written copy comes back commented and stops taking effect. Re-apply
+each one in your deployed `/etc/scholar-mcp/env`, which the package
+never overwrites.
+
 ### 2. Move each domain env var into `ProjectConfig`'s `CONFIG-FIELDS` block
 
 For every domain env var you found in step 1, add or update its field in
@@ -124,12 +134,14 @@ flagged string literal that is not an env var at all, list it under
 
 The inverse direction raises the same duplicate-name error: a var the scan
 *does* see that the template already declares. `config-presentation.yml`
-declares `SCHOLAR_MCP_SERVER_NAME` and `SCHOLAR_MCP_INSTRUCTIONS`
-with template provenance, so a literal `env(...)` read of either inside
+declares `SCHOLAR_MCP_SERVER_NAME`,
+`SCHOLAR_MCP_INSTANCE_DESCRIPTION`,
+`SCHOLAR_MCP_INSTRUCTIONS_EXTRA`, and `SCHOLAR_MCP_INSTRUCTIONS`
+with template provenance, so a literal `env(...)` read of any of them inside
 `from_env` gets discovered as a domain var too, and the generator exits with
-the duplicate-name error. If your project honors either var (an anticipated
-pattern since the template started honoring them), keep the field but move
-the read outside `from_env` — for example a module-level helper your server
+the duplicate-name error. If your project honors any of these variables (an
+anticipated pattern since the template started honoring them), keep the field
+but move the read outside `from_env` — for example a module-level helper your server
 assembly calls. The scan only walks `from_env`, so the read stays invisible
 to it while runtime behavior is unchanged.
 
@@ -311,7 +323,8 @@ auth vars such as `SCHOLAR_MCP_OIDC_CLIENT_ID` and
 array, the one a remote HTTP deployment reads. The `pypi` package's
 array keeps only what a stdio install needs: the log-level and
 rich-logging switches, together with `SCHOLAR_MCP_SERVER_NAME`,
-`SCHOLAR_MCP_INSTRUCTIONS`, and `SCHOLAR_MCP_KV_STORE_URL`.
+`SCHOLAR_MCP_INSTANCE_DESCRIPTION`, the two instruction overrides, and
+`SCHOLAR_MCP_KV_STORE_URL`.
 If you diff your project's old `server.json` against the regenerated
 one, expect the `pypi` array to shrink. That is the intended split, not
 lost data; the vars that dropped out of the `pypi` array are still
