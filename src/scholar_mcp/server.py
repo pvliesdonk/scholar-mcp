@@ -280,6 +280,11 @@ def make_server(
         # DOMAIN-UPSTREAM-END
     )
 
+    # DOMAIN-WIRING-START — project-specific wiring (custom HTTP routes,
+    # transforms, mode toggles, alternative middleware, additional registrations);
+    # kept across copier update. Leave empty for projects that don't customise
+    # make_server() beyond the standard scaffold.
+    #
     # The pre-v6 ``domain_line`` also stated that read-only tools are always
     # available while write-tagged ones are hidden in read-only mode. That is
     # workflow prose, not identity, so the v6 hop deferred it to here, where
@@ -304,10 +309,6 @@ def make_server(
         ),
     )
 
-    # DOMAIN-WIRING-START — project-specific wiring (custom HTTP routes,
-    # transforms, mode toggles, alternative middleware, additional registrations);
-    # kept across copier update. Leave empty for projects that don't customise
-    # make_server() beyond the standard scaffold.
     #
     # -- Transfer subsystem (capability-link upload + download) ----------------
     #
