@@ -25,7 +25,7 @@ from fastmcp_pvl_core import (
     build_jobs,
     configure_logging_from_env,
     configure_task_backend,
-    env,
+    env,  # noqa: F401  — re-exported so DOMAIN-WIRING additions don't need a new import
     finalize_instructions,
     instructions_for,
     register_server_info_tool,
@@ -48,8 +48,6 @@ from scholar_mcp._server_tools import register_tools
 from scholar_mcp.config import _ENV_PREFIX, ProjectConfig
 
 logger = logging.getLogger(__name__)
-
-_DEFAULT_SERVER_NAME = "scholar-mcp"
 
 
 def _load_server_config() -> ServerConfig:
@@ -143,25 +141,15 @@ def make_server(
     config = config or ProjectConfig.from_env()
     configure_logging_from_env()
 
-    # Background-task backend (SEP-1686 / Docket).  Unconditional and
-    # template-owned: pydocket ships in fastmcp-pvl-core's base dependencies,
-    # so the backend is always configurable, and whether this server actually
-    # uses tasks is decided by registering ``task=True`` tools — not by
-    # packaging or by an opt-in switch here.  It mutates fastmcp's
-    # process-global settings, which fastmcp reads lazily at root-lifespan
-    # entry, so doing it inside ``make_server`` covers both CLI paths (
-    # ``server.run(...)`` and the uvicorn ``http_app()`` one).
-    # ``SCHOLAR_MCP_TASKS_URL`` selects the backend; unset, a
-    # ``redis://`` ``SCHOLAR_MCP_KV_STORE_URL`` is reused so one URL
-    # configures every stateful subsystem, and otherwise fastmcp's
-    # ``memory://`` default applies.  The queue name is derived from the env
-    # prefix, so two servers sharing one Redis do not share a queue.
-    configure_task_backend(_ENV_PREFIX, config.server)
-
-    # Operator override: SERVER_NAME renames this instance (falls back when
-    # unset/empty).  Instructions are composed by pvl-core's InstructionsBuilder
-    # below and finalised last; see finalize_instructions() at the end.
-    server_name = env(_ENV_PREFIX, "SERVER_NAME") or _DEFAULT_SERVER_NAME
+    # One source for the name, so `FastMCP(name=...)` below and the shaped
+    # instruction identity cannot disagree.  `ProjectConfig.server_name`
+    # defaults to `SCHOLAR_MCP_SERVER_NAME` (falling back to the project
+    # name) via a default_factory, so the operator override still works
+    # unchanged — but a config passed in programmatically now wins, which
+    # reading the environment here would have ignored.  Instructions are
+    # composed by pvl-core's InstructionsBuilder below and finalised last; see
+    # finalize_instructions() at the end.
+    server_name = config.server_name
 
     auth = build_auth(config.server)
     auth_mode = _core_resolve_auth_mode(config.server)
@@ -222,6 +210,23 @@ def make_server(
     )
 
     wire_middleware_stack(mcp)
+
+    # Background-task backend (SEP-2663 / Docket).  Unconditional and
+    # template-owned: fastmcp-tasks (and pydocket with it) ships in
+    # fastmcp-pvl-core's base dependencies, so the backend is always
+    # configurable, and whether this server actually uses tasks is decided
+    # by registering ``task=True`` tools — not by packaging or by an opt-in
+    # switch here.  The helper registers the SEP-2663 tasks extension on
+    # ``mcp`` with the resolved backend — fastmcp refuses to start a server
+    # carrying task-enabled tools without one — so doing it inside
+    # ``make_server`` covers both CLI paths (``server.run(...)`` and the
+    # uvicorn ``http_app()`` one).
+    # ``SCHOLAR_MCP_TASKS_URL`` selects the backend; unset, a
+    # ``redis://`` ``SCHOLAR_MCP_KV_STORE_URL`` is reused so one URL
+    # configures every stateful subsystem, and otherwise the ``memory://``
+    # default applies.  The queue name is derived from the env prefix, so
+    # two servers sharing one Redis do not share a queue.
+    configure_task_backend(mcp, _ENV_PREFIX, config.server)
 
     # Server instructions are composed, not templated: every contributor adds
     # a snippet to the builder (identity here; core register_* helpers add

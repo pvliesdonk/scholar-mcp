@@ -68,4 +68,9 @@ VOLUME ["/data/service", "/data/state"]
 # DOCKERFILE-VOLUMES-END
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
-CMD ["scholar-mcp", "serve", "--transport", "http", "--host", "0.0.0.0"]
+# Both the bind address and the port are fixed by the image, not read from the
+# environment: `EXPOSE`, the compose port mapping and the compose healthcheck
+# all name 8000, and `SCHOLAR_MCP_PORT` in a `.env` would otherwise move
+# the listener out from under all three.  Publish a different host port
+# instead (`-p 9000:8000`, or compose's `ports:`).
+CMD ["scholar-mcp", "serve", "--transport", "http", "--host", "0.0.0.0", "--port", "8000"]

@@ -21,6 +21,7 @@ from fastmcp_pvl_core import Jobs
 from scholar_mcp._rate_limiter import RateLimitedError, RateLimiter, with_s2_try_once
 from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._tools_search import register_search_tools
+from tests.conftest import tasks_server
 
 S2_BASE = "https://api.semanticscholar.org/graph/v1"
 
@@ -86,7 +87,7 @@ async def test_search_papers_retries_on_429(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_search_tools(app, slow_jobs)
 
     async with Client(app) as client:
@@ -112,7 +113,7 @@ async def test_search_papers_direct_on_success(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_search_tools(app, slow_jobs)
 
     async with Client(app) as client:
@@ -144,7 +145,7 @@ async def test_get_paper_retries_on_429(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_search_tools(app, slow_jobs)
 
     async with Client(app) as client:
@@ -164,7 +165,7 @@ async def test_get_paper_cached_returns_direct(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_search_tools(app, slow_jobs)
 
     async with Client(app) as client:

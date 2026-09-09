@@ -42,6 +42,7 @@ from scholar_mcp._server_tools import register_tools
 from scholar_mcp._tools_pdf import register_pdf_tools
 from scholar_mcp.config import ProjectConfig
 from scholar_mcp.server import make_server
+from tests.conftest import PlainClient, tasks_server
 
 # Unhides every job-backed tool, applied to the `server` fixture by indirect
 # parametrisation.  The fixture builds the server synchronously and points
@@ -93,7 +94,7 @@ def _app(bundle: ServiceBundle) -> FastMCP:
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_tools(app)
     return app
 
@@ -125,7 +126,7 @@ async def test_soft_deadline_from_the_environment_reaches_jobs(
     pdf = tmp_path / "paper.pdf"
     pdf.write_bytes(b"%PDF fake")
 
-    async with Client(_app(_slow_docling_bundle(bundle))) as client:
+    async with PlainClient(_app(_slow_docling_bundle(bundle))) as client:
         result = await client.call_tool(
             "convert_pdf_to_markdown", {"file_path": str(pdf)}
         )
@@ -166,7 +167,7 @@ def test_malformed_jobs_var_fails_at_registration(
     """
     monkeypatch.setenv("SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S", "not-a-number")
     with pytest.raises(ConfigurationError, match="JOBS_SOFT_DEADLINE_S"):
-        register_tools(FastMCP("test"))
+        register_tools(tasks_server("test"))
 
 
 def test_injected_jobs_bypasses_the_environment(
@@ -180,7 +181,7 @@ def test_injected_jobs_bypasses_the_environment(
     """
     monkeypatch.setenv("SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S", "not-a-number")
     jobs = build_jobs(ServerConfig(kv_store_url="memory://"), JobsConfig())
-    register_tools(FastMCP("test"), jobs=jobs)
+    register_tools(tasks_server("test"), jobs=jobs)
 
 
 async def test_make_server_exposes_the_polling_tool(client: Client[Any]) -> None:
@@ -211,10 +212,10 @@ async def test_job_records_are_scoped_to_the_caller(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": _slow_docling_bundle(bundle)}
 
-    minting = FastMCP("minting", lifespan=lifespan)
+    minting = tasks_server("minting", lifespan=lifespan)
     register_pdf_tools(minting, mine)
 
-    async with Client(minting) as client:
+    async with PlainClient(minting) as client:
         result = await client.call_tool(
             "convert_pdf_to_markdown", {"file_path": str(pdf)}
         )

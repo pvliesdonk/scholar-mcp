@@ -10,7 +10,13 @@ from typing import Any
 import httpx
 import pytest
 from fastmcp import Client, FastMCP
-from fastmcp_pvl_core import Jobs, JobsConfig, ServerConfig, build_jobs
+from fastmcp_pvl_core import (
+    Jobs,
+    JobsConfig,
+    ServerConfig,
+    build_jobs,
+    configure_task_backend,
+)
 
 from scholar_mcp import _epo_client, _rate_limiter
 from scholar_mcp._cache import ScholarCache
@@ -23,7 +29,7 @@ from scholar_mcp._rate_limiter import RateLimiter
 from scholar_mcp._s2_client import S2Client
 from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._standards_client import StandardsClient
-from scholar_mcp.config import ProjectConfig
+from scholar_mcp.config import _ENV_PREFIX, ProjectConfig
 from scholar_mcp.server import make_server
 
 _JOBS_TEST_DEADLINE_S = 0.05
@@ -50,6 +56,54 @@ def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
         if key.startswith("SCHOLAR_MCP_"):
             monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("SCHOLAR_MCP_KV_STORE_URL", "memory://")
+
+
+def tasks_server(*args: Any, **kwargs: Any) -> FastMCP:
+    """A bare ``FastMCP`` carrying the SEP-2663 tasks extension.
+
+    Every tool registered through ``register_long_running_tool`` is
+    task-enabled, and from FastMCP 4 a server carrying one refuses to start
+    unless the tasks extension is registered on it -- the client's connect
+    fails with ``require the tasks extension``.  ``make_server`` gets that
+    from ``configure_task_backend``; a test assembling its own server has to
+    do the same, or it is testing a server production never builds.
+
+    ``tasks_url`` is pinned to ``memory://`` rather than read from the
+    environment, so no test can reach a real Redis even if one is configured
+    on the machine running the suite.
+
+    Args:
+        *args: Positional arguments for ``FastMCP`` (typically the name).
+        **kwargs: Keyword arguments for ``FastMCP`` (typically ``lifespan``).
+
+    Returns:
+        The constructed server, with the tasks extension already registered.
+    """
+    app = FastMCP(*args, **kwargs)
+    configure_task_backend(app, _ENV_PREFIX, ServerConfig(tasks_url="memory://"))
+    return app
+
+
+class PlainClient(Client[Any]):
+    """A ``Client`` that does not negotiate the SEP-2663 tasks extension.
+
+    ``fastmcp.Client`` sets ``_auto_internal_extensions = True`` and folds the
+    ``fastmcp-tasks`` client extension in at construction, so an ordinary
+    client transparently drives a server's background tasks.  A tool
+    registered by ``register_long_running_tool`` is ``TaskConfig(mode=
+    "optional")``, and the server's ``intercept_tool_call`` runs an optional
+    tool as a task *only when the client opted in* -- so under an ordinary
+    client the native path always wins and pvl-core's soft-deadline promotion
+    never happens.
+
+    The promotion fallback is what a client that does not speak tasks gets,
+    which is most MCP clients today, so it needs a client of that shape to be
+    testable at all.  Overriding the class attribute is the only lever
+    fastmcp offers; it is the same one ``ProxyClient`` uses, for the same
+    reason -- a proxy must not advertise task support it cannot honour.
+    """
+
+    _auto_internal_extensions = False
 
 
 @pytest.fixture

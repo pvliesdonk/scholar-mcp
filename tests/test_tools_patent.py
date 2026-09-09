@@ -24,6 +24,7 @@ from scholar_mcp._tools_patent import (
     _fetch_patent_sections,
     register_patent_tools,
 )
+from tests.conftest import PlainClient, tasks_server
 
 # ---------------------------------------------------------------------------
 # Inline fixtures
@@ -253,7 +254,7 @@ def mcp_with_epo(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_patent_tools(app, slow_jobs)
     return app
 
@@ -300,7 +301,7 @@ async def test_search_patents_uses_cache(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
@@ -359,7 +360,7 @@ async def test_search_patents_retries_when_throttled(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
@@ -380,7 +381,7 @@ async def test_search_patents_with_filters(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
@@ -414,7 +415,7 @@ async def test_search_patents_range_from_limit_offset(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
@@ -452,7 +453,7 @@ async def test_get_patent_caches_result(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
@@ -480,7 +481,7 @@ async def test_get_patent_cache_hit_skips_api(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
@@ -511,7 +512,7 @@ async def test_get_patent_default_sections_biblio_only(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
@@ -592,7 +593,7 @@ async def test_get_patent_empty_biblio_returns_error(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
@@ -630,7 +631,7 @@ async def test_get_patent_not_found_without_biblio_section(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
@@ -664,7 +665,7 @@ async def test_get_patent_retries_when_throttled(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
@@ -686,7 +687,7 @@ async def test_get_patent_no_epo_client_returns_error(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
@@ -706,7 +707,7 @@ async def test_search_patents_no_epo_client_returns_error(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
@@ -787,7 +788,7 @@ async def test_get_patent_all_sections_via_tool(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
@@ -830,7 +831,7 @@ async def test_get_patent_citations_section(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
@@ -870,7 +871,7 @@ async def test_citations_npl_resolution_with_s2(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
@@ -910,7 +911,7 @@ async def test_get_citing_patents_returns_results(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
@@ -940,7 +941,7 @@ async def test_get_citing_patents_empty_results(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
@@ -964,7 +965,7 @@ async def test_get_citing_patents_no_epo_returns_error(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
@@ -988,7 +989,7 @@ async def test_get_citing_patents_throttle_survives_retries(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
@@ -1027,7 +1028,7 @@ async def test_npl_chapter_info_parsed(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
@@ -1065,7 +1066,7 @@ async def test_npl_no_chapter_info(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
@@ -1105,7 +1106,7 @@ async def test_npl_chapter_info_with_s2_resolution(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_patent_tools(app, slow_jobs)
 
     async with Client(app) as client:
@@ -1187,7 +1188,7 @@ def test_fetch_patent_pdf_no_epo_client(bundle: ServiceBundle, slow_jobs: Jobs) 
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_patent_tools(app, slow_jobs)
 
     async def run() -> dict:
@@ -1212,7 +1213,7 @@ def test_fetch_patent_pdf_invalid_number(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_patent_tools(app, slow_jobs)
 
     async def run() -> dict:
@@ -1241,12 +1242,12 @@ def test_fetch_patent_pdf_promotes_when_slow(bundle: ServiceBundle, jobs: Jobs) 
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_patent_tools(app, jobs)
     register_job_tools(app, jobs)
 
     async def run() -> dict:
-        async with Client(app) as client:
+        async with PlainClient(app) as client:
             result = await client.call_tool(
                 "fetch_patent_pdf", {"patent_number": "EP3491801B1"}
             )
@@ -1285,7 +1286,7 @@ def test_fetch_patent_pdf_cache_hit_returns_pdf_path(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_patent_tools(app, slow_jobs)
 
     async def run() -> dict:
@@ -1327,7 +1328,7 @@ def test_fetch_patent_pdf_execute_downloads_pdf(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_patent_tools(app, slow_jobs)
 
     async def run() -> dict:
@@ -1354,7 +1355,7 @@ def test_fetch_patent_pdf_execute_pdf_not_available(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_patent_tools(app, slow_jobs)
 
     async def run() -> dict:
@@ -1399,7 +1400,7 @@ def test_fetch_patent_pdf_cache_hit_with_docling_and_cached_md(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_patent_tools(app, slow_jobs)
 
     async def run() -> dict:
@@ -1446,7 +1447,7 @@ def test_fetch_patent_pdf_execute_with_docling_converts_to_markdown(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_patent_tools(app, slow_jobs)
 
     async def run() -> dict:
@@ -1480,7 +1481,7 @@ def test_fetch_patent_pdf_cache_hit_docling_no_md_converts(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_patent_tools(app, slow_jobs)
 
     async def run() -> dict:
@@ -1531,7 +1532,7 @@ def test_fetch_patent_pdf_cache_hit_with_vlm_skip_reason(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_patent_tools(app, slow_jobs)
 
     async def run() -> dict:
@@ -1575,7 +1576,7 @@ def test_fetch_patent_pdf_execute_docling_convert_exception(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_patent_tools(app, slow_jobs)
 
     async def run() -> dict:
@@ -1607,7 +1608,7 @@ def test_fetch_patent_pdf_execute_with_vlm_skip_reason(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_patent_tools(app, slow_jobs)
 
     async def run() -> dict:
@@ -1636,7 +1637,7 @@ def test_fetch_patent_pdf_execute_with_docling_cached_md(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_patent_tools(app, slow_jobs)
 
     async def run() -> dict:
@@ -1685,7 +1686,7 @@ def test_fetch_patent_pdf_throttled_returns_retryable_guidance(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_patent_tools(app, slow_jobs)
 
     async def run() -> dict:
@@ -1717,7 +1718,7 @@ def test_fetch_patent_pdf_quota_exhausted_is_not_retryable(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_patent_tools(app, slow_jobs)
 
     async def run() -> dict:
@@ -1750,7 +1751,7 @@ def _citing_app(bundle: ServiceBundle, jobs: Jobs, epo: EpoClient) -> FastMCP:
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_patent_tools(app, jobs)
     return app
 

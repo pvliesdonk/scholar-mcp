@@ -15,6 +15,7 @@ from fastmcp_pvl_core import Jobs, register_job_tools
 
 from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._tools_search import register_search_tools
+from tests.conftest import PlainClient, tasks_server
 
 S2_BASE = "https://api.semanticscholar.org/graph/v1"
 
@@ -25,7 +26,7 @@ def mcp(bundle: ServiceBundle, slow_jobs: Jobs) -> FastMCP:
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_search_tools(app, slow_jobs)
     return app
 
@@ -278,7 +279,7 @@ async def test_get_author_by_id_retries_on_429(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_search_tools(app, slow_jobs)
 
     async with Client(app) as client:
@@ -323,7 +324,7 @@ async def test_get_author_name_search_retries_on_429(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_search_tools(app, slow_jobs)
 
     async with Client(app) as client:
@@ -382,11 +383,11 @@ async def test_search_papers_promotes_when_slow(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_search_tools(app, jobs)
     register_job_tools(app, jobs)
 
-    async with Client(app) as client:
+    async with PlainClient(app) as client:
         result = await client.call_tool("search_papers", {"query": "slow"})
         handle = json.loads(result.content[0].text)
         assert handle["status"] == "working"

@@ -3,10 +3,27 @@ name = "pvliesdonk-scholar-mcp"
 version = "1.10.0"
 description = "FastMCP server for scholarly papers, patents, books and standards with docling PDF conversion"
 readme = "README.md"
+# PROJECT-LICENSE-START — the license you picked; replace the value below and
+# it is kept across copier update.  The template ships a proprietary starter
+# because it cannot know your choice, and it does not re-render over yours.
+# See LICENSE for the other places the same choice has to be stated.
 license = "MIT"
+# PROJECT-LICENSE-END
 requires-python = ">=3.11"
-authors = [{ name = "Peter van Liesdonk" }]
-keywords = ["mcp", "pvliesdonk-scholar-mcp", "scholar-mcp", "model-context-protocol", "fastmcp"]
+authors = [{ name = "Peter van Liesdonk", email = "pvliesdonk@users.noreply.github.com" }]
+# The template knows the terms that are true of every server it generates and
+# the project's own names; it cannot know the domain terms, which go in the
+# seam.  An empty list was not a decision, just nobody's job (#583).
+keywords = [
+    "mcp",
+    "model-context-protocol",
+    "fastmcp",
+    "scholar-mcp",
+    "pvliesdonk-scholar-mcp",
+    # PROJECT-KEYWORDS-START — add this project's domain terms below (what it
+    # is *about*: "vault", "ocr", "patents"); kept across copier update.
+    # PROJECT-KEYWORDS-END
+]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Programming Language :: Python :: 3",
@@ -14,16 +31,26 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
+    # PROJECT-LICENSE-CLASSIFIER-START — kept across copier update; the trove
+    # name is not the SPDX id (Apache-2.0 is "Apache Software License"), which
+    # is one reason this is a separate edit rather than a derived one.
     "License :: OSI Approved :: MIT License",
+    # PROJECT-LICENSE-CLASSIFIER-END
 ]
 dependencies = [
-    # >=6.0.0 for semantic InstructionRole values, shaped deployment identity,
-    # effective FastMCP tool visibility during instruction finalization, and
-    # the split operator contract: {PREFIX}_INSTANCE_DESCRIPTION supplies
-    # routing context while {PREFIX}_INSTRUCTIONS_EXTRA supplies policy (#553).
-    # The identity call and every domain contribution must move with this floor.
+    # >=7.0.0 for the FastMCP 4 adoption: configure_task_backend takes the
+    # server as its first argument and registers the SEP-2663 tasks extension
+    # on it (the fastmcp.settings.docket global it previously mutated is gone),
+    # and pvl-core itself moves to fastmcp[tasks]>=4,<5 (pvl-core#307).
+    # server.py's call site moves after FastMCP construction with this floor.
     #
-    # 5.0.0 was the previous floor, for the InstructionsBuilder
+    # 6.0.0 was the previous floor, for semantic InstructionRole values, shaped
+    # deployment identity, effective FastMCP tool visibility during instruction
+    # finalization, and the split operator contract:
+    # {PREFIX}_INSTANCE_DESCRIPTION supplies routing context while
+    # {PREFIX}_INSTRUCTIONS_EXTRA supplies policy (#553).
+    #
+    # 5.0.0 was the floor before that, for the InstructionsBuilder
     # (instructions_for / finalize_instructions). It removed
     # build_instructions, retained {PREFIX}_INSTRUCTIONS as a deprecated full
     # replacement, and added {PREFIX}_INSTRUCTIONS_EXTRA as the additive path;
@@ -57,7 +84,7 @@ dependencies = [
     # this whole constraint rather than the floor alone (#335), but a floor
     # naming a release nobody can install is still a trap for anyone pinning
     # to it.
-    "fastmcp-pvl-core>=6.0.0,<7",
+    "fastmcp-pvl-core>=7.0.0,<8",
     "typer>=0.12",
     # PROJECT-DEPS-START — domain dependencies; kept across copier update
     "httpx",
@@ -70,7 +97,7 @@ dependencies = [
 
 [project.optional-dependencies]
 # PROJECT-EXTRAS-START — domain optional-dependency groups; kept across copier update
-mcp = ["fastmcp[tasks]>=3.2.0,<4"]
+mcp = ["fastmcp[tasks]>=4,<5"]
 # Pulls debugpy transitively via fastmcp-pvl-core's [debug] extra.  The
 # version range is inherited from the [project] dependency on
 # fastmcp-pvl-core above; pip resolves a single, consistent version.
@@ -79,7 +106,7 @@ debug = ["fastmcp-pvl-core[debug]"]
 # installs with ``pip install pvliesdonk-scholar-mcp[all]``.  Debug is opt-in
 # separately (``--extra debug`` or, in the Dockerfile, ``--build-arg DEBUG=true``)
 # so ``[all]`` images stay lean.  CI uses ``--all-extras`` which picks up both.
-all = ["fastmcp[tasks]>=3.2.0,<4"]
+all = ["fastmcp[tasks]>=4,<5"]
 # PROJECT-EXTRAS-END
 
 # Tooling lives under PEP 735 [dependency-groups] (not [project.optional-dependencies])
@@ -101,6 +128,9 @@ dev = [
     # hostile, and liable to resolve a different fastmcp-pvl-core than this
     # project pins (#262). Declared here so the requirement is stated.
     "pyyaml>=6",
+    # PyYAML ships no inline types, so `import yaml` in tests/test_compose.py
+    # is an untyped import that fails `mypy src/ tests/` without these stubs.
+    "types-PyYAML>=6",
 ]
 docs = [
     "mike>=2",
@@ -136,6 +166,23 @@ Issues = "https://github.com/pvliesdonk/scholar-mcp/issues"
 # with a publisher that accepts whatever the new minor emits.
 requires = ["hatchling>=1.32,<1.33"]
 build-backend = "hatchling.build"
+
+[tool.uv]
+# PROJECT-UV-START — project-owned uv settings; kept across copier update.  The
+# template ships none, but it does ship the rules for what goes here.
+#
+# This is where a temporary dependency bound belongs.  `constraint-dependencies`
+# and `override-dependencies` are invisible to Renovate, so its update-lockfile
+# fallback cannot rewrite a deliberate cap the way it can one expressed in
+# `[project]` (#508) — and `scripts/check_pins.py` fails CI unless every entry
+# carries `# until: <issue URL>`, and again once that issue closes, so a pin
+# here cannot quietly outlive its reason.  Keep one bound per package: the same
+# script rejects a package bounded both here and in `[project]`.
+#
+#   constraint-dependencies = [
+#     "numpy<2.5",  # until: https://github.com/<org>/<repo>/issues/123
+#   ]
+# PROJECT-UV-END
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/scholar_mcp"]
