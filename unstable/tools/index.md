@@ -443,7 +443,7 @@ ______________________________________________________________________
 
 Credentials required
 
-Patent tools require EPO OPS credentials. When `SCHOLAR_MCP_EPO_CONSUMER_KEY` and `SCHOLAR_MCP_EPO_CONSUMER_SECRET` are not set, these tools are automatically hidden. See [EPO OPS configuration](https://pvliesdonk.github.io/scholar-mcp/unstable/configuration/#epo-open-patent-services) for setup instructions.
+Patent tools require EPO OPS credentials. When `SCHOLAR_MCP_EPO_CONSUMER_KEY` and `SCHOLAR_MCP_EPO_CONSUMER_SECRET` are not set, these tools are automatically hidden. See [EPO OPS configuration](https://pvliesdonk.github.io/scholar-mcp/unstable/configuration/#patents-obtaining-epo-ops-credentials) for setup instructions.
 
 ### `search_patents`
 
