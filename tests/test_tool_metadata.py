@@ -99,15 +99,17 @@ async def test_every_registered_tool_has_a_title(server: FastMCP) -> None:
 async def test_every_registered_tool_declares_read_only_hint(server: FastMCP) -> None:
     """Every tool states whether it has side effects.
 
-    `readOnlyHint` is the other annotation VS Code reads, and an absent hint
-    is not the same claim as `False` -- it says nothing at all.
+    `read_only_hint` is the other annotation VS Code reads, and an absent hint
+    is not the same claim as `False` -- it says nothing at all.  MCP SDK 2
+    exposes it under that snake_case name; the camelCase alias still resolves
+    but warns, and the wire format is camelCase either way.
     """
     unhinted = sorted(
         t.name
         for t in await _full_registry(server)
-        if not t.annotations or t.annotations.readOnlyHint is None
+        if not t.annotations or t.annotations.read_only_hint is None
     )
-    assert not unhinted, f"tools without annotations.readOnlyHint: {unhinted}"
+    assert not unhinted, f"tools without annotations.read_only_hint: {unhinted}"
 
 
 @pytest.mark.parametrize("server", [_NO_EPO], indirect=True, ids=["no-epo"])

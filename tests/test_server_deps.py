@@ -4,7 +4,6 @@ import asyncio
 from pathlib import Path
 
 import pytest
-from fastmcp import FastMCP
 
 from scholar_mcp._enrichment import EnrichmentPipeline
 from scholar_mcp._s2_client import S2Client
@@ -15,6 +14,7 @@ from scholar_mcp._server_deps import (
     server_lifespan,
 )
 from scholar_mcp.config import ProjectConfig
+from tests.conftest import tasks_server
 
 
 def test_build_enrichment_pipeline() -> None:
@@ -50,7 +50,7 @@ async def test_lifespan_starts_and_cancels_keepalive_with_key(
     keepalive task end-to-end when an S2 API key is configured."""
     monkeypatch.setenv("SCHOLAR_MCP_S2_API_KEY", "fake-key")
     monkeypatch.setenv("SCHOLAR_MCP_CACHE_DIR", str(tmp_path))
-    app = FastMCP(name="test")
+    app = tasks_server(name="test")
 
     with caplog.at_level("INFO", logger="scholar_mcp._server_deps"):
         async with server_lifespan(app) as ctx:
@@ -77,7 +77,7 @@ async def test_lifespan_does_not_start_keepalive_without_key(
     keepalive task."""
     monkeypatch.delenv("SCHOLAR_MCP_S2_API_KEY", raising=False)
     monkeypatch.setenv("SCHOLAR_MCP_CACHE_DIR", str(tmp_path))
-    app = FastMCP(name="test")
+    app = tasks_server(name="test")
 
     with caplog.at_level("INFO", logger="scholar_mcp._server_deps"):
         async with server_lifespan(app) as ctx:
@@ -102,7 +102,7 @@ async def test_lifespan_builds_and_closes_docling_when_configured(
     monkeypatch.setenv("SCHOLAR_MCP_VLM_API_URL", "http://vlm.invalid/v1")
     monkeypatch.setenv("SCHOLAR_MCP_VLM_API_KEY", "fake-key")
     monkeypatch.setenv("SCHOLAR_MCP_VLM_MODEL", "gpt-4o")
-    app = FastMCP(name="test")
+    app = tasks_server(name="test")
 
     with caplog.at_level("INFO", logger="scholar_mcp._server_deps"):
         async with server_lifespan(app) as ctx:

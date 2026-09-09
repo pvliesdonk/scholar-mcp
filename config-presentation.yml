@@ -223,8 +223,12 @@ required_vars:
 # A var listed nowhere here appears in no package — the arrays are a curated
 # per-packaging selection, not a dump of the whole surface. Deliberately
 # absent: TRANSPORT (fixed by the packaging itself), PORT (an `oci`
-# packageArguments entry, not an env var), HOST (the entrypoint owns the
-# in-container bind address), DEBUG_PORT/DEBUG_WAIT (they do nothing unless
+# packageArguments entry, not an env var — server.json templates its
+# `transport.url` from that argument), HOST (the image's CMD pins the bind
+# address: `--host 0.0.0.0` in Dockerfile.jinja, which also pins `--port
+# 8000`, so neither is read from the environment in a container — the
+# entrypoint itself does no bind handling),
+# DEBUG_PORT/DEBUG_WAIT (they do nothing unless
 # the image was built with --build-arg DEBUG=true), and EVENT_STORE_URL (a
 # legacy fallback honoured only when KV_STORE_URL is unset; offering a
 # deprecated knob in an install prompt is noise, and it stays fully

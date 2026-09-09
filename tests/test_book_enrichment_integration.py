@@ -14,6 +14,7 @@ from fastmcp_pvl_core import Jobs
 
 from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._tools_search import register_search_tools
+from tests.conftest import tasks_server
 
 S2_BASE = "https://api.semanticscholar.org/graph/v1"
 OL_BASE = "https://openlibrary.org"
@@ -44,7 +45,7 @@ def mcp(bundle: ServiceBundle, slow_jobs: Jobs) -> FastMCP:
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_search_tools(app, slow_jobs)
     return app
 

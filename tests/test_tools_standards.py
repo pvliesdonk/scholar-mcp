@@ -17,6 +17,7 @@ from fastmcp_pvl_core import Jobs
 from scholar_mcp._docling_client import DoclingClient
 from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._tools_standards import register_standards_tools
+from tests.conftest import tasks_server
 
 IETF_BASE = "https://datatracker.ietf.org"
 
@@ -40,7 +41,7 @@ def mcp(bundle: ServiceBundle, slow_jobs: Jobs) -> FastMCP:
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_standards_tools(app, slow_jobs)
     return app
 

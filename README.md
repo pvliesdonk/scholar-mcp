@@ -100,7 +100,7 @@ To run the newest merged code instead of the newest release, use the rolling `ed
 docker pull ghcr.io/pvliesdonk/scholar-mcp:edge
 ```
 
-A `compose.yml` ships at the repo root as a starting point. Copy `.env.example` to `.env`, edit, and `docker compose up -d`.
+A `compose.yml` ships at the repo root and runs as-is: copy `.env.example` to `.env`, then `docker compose up -d`. It publishes port 8000 on the host and assumes no reverse proxy; [Docker Compose](docs/deployment/docker.md#docker-compose) covers the configuration split, the domain sentinel blocks, and a Traefik overlay.
 
 To attach a remote Python debugger (development only; the protocol is unauthenticated), see [Remote debugging](docs/deployment/docker.md#remote-debugging).
 

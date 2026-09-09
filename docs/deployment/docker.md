@@ -3,86 +3,95 @@
 ## Quick start
 
 ```bash
-docker run -v scholar-mcp-data:/data/scholar-mcp \
-           ghcr.io/pvliesdonk/scholar-mcp:latest
+cp .env.example .env
+docker compose up -d
 ```
 
-The server listens on port 8000 with HTTP transport by default. Add `-e SCHOLAR_MCP_S2_API_KEY=your-key` for higher rate limits (see below).
+The server listens on port 8000 with HTTP transport, published on the host as `8000:8000`. No reverse proxy, TLS terminator, or external network is assumed.
+
+Copying `.env.example` first is the step to keep. Every variable in it arrives commented out, so the server starts on its defaults and the copy changes no behaviour by itself. It is the file you edit next, and `compose.yml` names it.
+
+Apply a later edit with `docker compose up -d`, which recreates the container with the new values. `docker compose restart` does not pick them up: an env file is read when a container is created, so a restarted container keeps the values it was created with and the edit is ignored without any message.
 
 ## Docker Compose
 
-### Basic setup
+`compose.yml` is a working deployment, not an illustration. It is re-rendered on every `copier update`, so fixes and new defaults reach it; edit it inside the sentinel blocks described below and your changes survive.
+
+### Where configuration goes
+
+The split matters, because two files can set the same variable:
+
+- **`.env` holds the server's configuration.** `compose.yml` reads it with `env_file:`. `.env.example` is generated from the server's own config surface and lists every variable with its default and a one-line description, so it is both the checklist and the place to edit. [Configuration](../configuration.md) carries the full reference.
+- **`compose.yml`'s `environment:` block holds only what the file itself determines.** Currently that is `FASTMCP_HOME`, which points at the state volume the file mounts. Values here override `.env`, so a knob set in both places takes the value from `compose.yml`, which is rarely what an operator editing `.env` expects.
+
+The `env_file:` entry is marked `required: false`, so a checkout with no `.env` still starts on defaults. That form needs Compose 2.24.0 or newer; on an older engine, either upgrade or replace the entry with plain `env_file: .env` and make sure the file exists.
+
+### Ports
+
+The image pins its own listener: `CMD` passes `--host 0.0.0.0 --port 8000`, so `SCHOLAR_MCP_HOST` and `SCHOLAR_MCP_PORT` in a `.env` do not move it. To serve on a different host port, change the left-hand side of the mapping (`"9000:8000"`) rather than the server's port.
+
+### Domain content and `copier update`
+
+Four sentinel blocks mark the parts of `compose.yml` a project owns. Content inside them survives a template update; content outside them does not, and will conflict.
+
+| Block | For |
+|-------|-----|
+| `DOMAIN-COMPOSE-VOLUMES` | Extra mounts on the service |
+| `DOMAIN-COMPOSE-ENVIRONMENT` | Extra environment this file determines |
+| `DOMAIN-COMPOSE-SERVICES` | Sidecars, such as a task backend or a cache |
+| `DOMAIN-COMPOSE-VOLUME-NAMES` | Top-level declarations for any named volume added above |
+
+A named volume needs an entry in two of those: the mount in `DOMAIN-COMPOSE-VOLUMES`, and its declaration in `DOMAIN-COMPOSE-VOLUME-NAMES`. A bind mount needs only the first.
+
+### Behind a reverse proxy
+
+Proxy configuration is deployment-specific, so `compose.yml` ships none. Add it in a second file rather than by editing `compose.yml`, which is template-owned and re-rendered: save this as `compose.override.yml`, which Compose loads automatically alongside `compose.yml`.
 
 ```yaml
 services:
   scholar-mcp:
-    image: ghcr.io/pvliesdonk/scholar-mcp:latest
-    restart: unless-stopped
-    environment:
-      SCHOLAR_MCP_S2_API_KEY: "${SCHOLAR_MCP_S2_API_KEY}"
-      SCHOLAR_MCP_CACHE_DIR: "/data/scholar-mcp"
-    volumes:
-      - scholar-mcp-data:/data/scholar-mcp
-
-volumes:
-  scholar-mcp-data:
-```
-
-### With docling-serve (PDF conversion)
-
-```yaml
-services:
-  scholar-mcp:
-    image: ghcr.io/pvliesdonk/scholar-mcp:latest
-    restart: unless-stopped
-    environment:
-      SCHOLAR_MCP_S2_API_KEY: "${SCHOLAR_MCP_S2_API_KEY}"
-      SCHOLAR_MCP_DOCLING_URL: "http://docling-serve:5001"
-      SCHOLAR_MCP_READ_ONLY: "false"
-      SCHOLAR_MCP_CACHE_DIR: "/data/scholar-mcp"
-      SCHOLAR_MCP_CONTACT_EMAIL: "${SCHOLAR_MCP_CONTACT_EMAIL:-}"
-    volumes:
-      - scholar-mcp-data:/data/scholar-mcp
-
-  docling-serve:
-    image: ghcr.io/ds4sd/docling-serve:latest
-    restart: unless-stopped
-
-volumes:
-  scholar-mcp-data:
-```
-
-### With Traefik reverse proxy
-
-```yaml
-services:
-  scholar-mcp:
-    image: ghcr.io/pvliesdonk/scholar-mcp:latest
-    restart: unless-stopped
-    env_file: .env
-    volumes:
-      - scholar-mcp-data:/data/scholar-mcp
+    # `!reset` drops the published port: the proxy reaches the container over
+    # the shared network, so nothing needs to be on the host. Plain merging
+    # appends to sequences, so without this the port stays published.
+    ports: !reset []
+    networks:
+      - traefik
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.scholar-mcp.rule=Host(`scholar-mcp.yourdomain.com`)"
+      - "traefik.http.routers.scholar-mcp.rule=Host(`mcp.example.com`)"
       - "traefik.http.routers.scholar-mcp.tls.certresolver=letsencrypt"
       - "traefik.http.services.scholar-mcp.loadbalancer.server.port=8000"
-    networks:
-      - traefik
-
-  docling-serve:
-    image: ghcr.io/ds4sd/docling-serve:latest
-    restart: unless-stopped
-    networks:
-      - traefik
-
-volumes:
-  scholar-mcp-data:
 
 networks:
   traefik:
     external: true
 ```
+
+`!reset` needs Compose 2.24.4 or newer. On an older engine, drop that line and remove the port mapping from `compose.yml` directly, accepting that the edit conflicts on the next template update.
+
+Check the result before starting anything, since a merge that silently kept the port mapping looks identical until the port clashes:
+
+```bash
+docker compose config
+```
+
+Substitute your own hostname for `mcp.example.com`. Set `SCHOLAR_MCP_BASE_URL` to the public URL as well: the server needs it to advertise its own address, and it is required once OIDC is enabled. Do not reach for `SCHOLAR_MCP_HOST` here. That variable is the interface the server binds to, which is not the name the proxy routes.
+
+The network must already exist and be the one the proxy watches. For the same overlay with OIDC, see [OIDC](oidc.md).
+
+### Building the image yourself
+
+`compose.yml` pulls a published image rather than building one, so `docker compose up -d` never rebuilds from a stale checkout. To run your own build, build and tag it first:
+
+```bash
+docker build -t ghcr.io/pvliesdonk/scholar-mcp:dev .
+```
+
+then point the `image:` line at that tag.
+
+### Health
+
+The service declares a health check that opens a TCP connection to port 8000 inside the container, so `docker compose ps` reports `healthy` once the server is listening. It does not assert that the server is working, because there is no health route to probe. Read it as evidence that the process is up, not that the deployment is good.
 
 ## Image tags
 
@@ -202,7 +211,24 @@ When the helper is invoked but `debugpy` isn't installed (say, someone sets `DEB
 
 
 <!-- DOMAIN-DOCKER-EXTRA-START -->
-<!-- Project-specific notes for Docker deployment go here; kept across copier
-     update. (E.g. "the /data/uploads volume must be writable by UID Y",
-     "container needs cap_add: SYS_PTRACE for debugging tools".) -->
+## The cache volume
+
+`compose.yml` mounts a third named volume, `cache-data`, at `/data/scholar-mcp`. That path is the default of `SCHOLAR_MCP_CACHE_DIR`, which holds the SQLite cache database and every downloaded PDF and converted Markdown file. It is neither of the two volumes the template mounts, so without that entry the cache would sit in the container's writable layer and vanish on the next `docker compose up -d`. Point `SCHOLAR_MCP_CACHE_DIR` somewhere else and the mount has to move with it.
+
+## Running docling-serve alongside
+
+PDF conversion is off unless `SCHOLAR_MCP_DOCLING_URL` names a reachable [docling-serve](https://github.com/docling-project/docling-serve). The sidecar is optional, and heavy, so `compose.yml` does not ship it. Add it in `compose.override.yml`, which Compose loads automatically:
+
+```yaml
+services:
+  scholar-mcp:
+    environment:
+      SCHOLAR_MCP_DOCLING_URL: "http://docling-serve:5001"
+
+  docling-serve:
+    image: ghcr.io/ds4sd/docling-serve:latest
+    restart: unless-stopped
+```
+
+Values in `environment:` override `.env`, so set the URL in one place, not both. Conversion also writes to the cache, which the read-only default forbids: set `SCHOLAR_MCP_READ_ONLY=false` in `.env` to expose the write-tagged tools that populate it.
 <!-- DOMAIN-DOCKER-EXTRA-END -->

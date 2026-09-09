@@ -19,6 +19,9 @@ from pathlib import Path
 from fastmcp_pvl_core import (
     JobsConfig,
     ServerConfig,
+    # Used by `_default_server_name` below, and re-exported so CONFIG-FROM-ENV
+    # additions don't need a new import.  No `noqa: F401` — that factory makes
+    # the import genuinely used, and a redundant directive fails RUF100.
     env,
     parse_bool,
 )
@@ -26,11 +29,40 @@ from fastmcp_pvl_core import (
 _ENV_PREFIX = "SCHOLAR_MCP"
 
 
+def _default_server_name() -> str:
+    """``SCHOLAR_MCP_SERVER_NAME``, falling back to the project name.
+
+    A module-level factory rather than a read inside `from_env`, for two
+    reasons that both bite if it moves:
+
+    - The generator AST-scans `ProjectConfig.from_env` for literal
+      ``env(prefix, "SUFFIX")`` calls and turns each into a *domain* var.
+      ``SCHOLAR_MCP_SERVER_NAME`` is already declared with template
+      provenance in the template's `config-presentation.yml`, so a read in
+      `from_env` would be discovered twice and fail generation with the
+      duplicate-name error. `docs/design/config-migration.md` documents this
+      case and prescribes exactly this workaround; the scan only walks
+      `from_env`, so a module-level helper stays invisible to it.
+    - As a ``default_factory`` the env read happens per construction, so
+      ``ProjectConfig()`` still honours the environment while
+      ``ProjectConfig(server_name=...)`` wins outright — which is the whole
+      point of the field.
+    """
+    return env(_ENV_PREFIX, "SERVER_NAME", "scholar-mcp")
+
+
 @dataclass(frozen=True)
 class ProjectConfig:
     """Domain config for Scholar MCP.  Compose — don't inherit."""
 
     server: ServerConfig = field(default_factory=ServerConfig)
+
+    # Template-owned, deliberately OUTSIDE the CONFIG-FIELDS sentinels: the
+    # server's own name is part of the scaffold's contract with
+    # `server.py`, which uses it for both `FastMCP(name=...)` and the shaped
+    # instruction identity so the two cannot disagree.  Do not redeclare it
+    # inside the block below.
+    server_name: str = field(default_factory=_default_server_name)
 
     # CONFIG-FIELDS-START — add domain fields below; kept across copier update
     # Composed, not inherited — same rule as `server` above.  It lives inside

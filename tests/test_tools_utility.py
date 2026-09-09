@@ -17,6 +17,7 @@ from fastmcp_pvl_core import Jobs, register_job_tools
 from scholar_mcp._epo_client import EpoClient
 from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._tools_utility import register_utility_tools
+from tests.conftest import PlainClient, tasks_server
 
 S2_BASE = "https://api.semanticscholar.org/graph/v1"
 OA_BASE = "https://api.openalex.org"
@@ -57,7 +58,7 @@ def mcp(bundle: ServiceBundle, slow_jobs: Jobs) -> FastMCP:
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_utility_tools(app, slow_jobs)
     return app
 
@@ -71,7 +72,7 @@ def mcp_with_epo(bundle: ServiceBundle, slow_jobs: Jobs) -> FastMCP:
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_utility_tools(app, slow_jobs)
     return app
 
@@ -197,7 +198,7 @@ async def test_batch_resolve_retries_on_429(
         async def lifespan(app: FastMCP):  # type: ignore[type-arg]
             yield {"bundle": bundle}
 
-        app = FastMCP("test", lifespan=lifespan)
+        app = tasks_server("test", lifespan=lifespan)
         register_utility_tools(app, slow_jobs)
 
         async with Client(app) as client:
@@ -370,7 +371,7 @@ async def test_enrich_paper_retries_on_429(
         async def lifespan(app: FastMCP):  # type: ignore[type-arg]
             yield {"bundle": bundle}
 
-        app = FastMCP("test", lifespan=lifespan)
+        app = tasks_server("test", lifespan=lifespan)
         register_utility_tools(app, slow_jobs)
 
         async with Client(app) as client:
@@ -462,7 +463,7 @@ async def test_batch_resolve_patent_resolve_failed(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_utility_tools(app, slow_jobs)
 
     async with Client(app) as client:
@@ -487,7 +488,7 @@ async def test_batch_resolve_patent_not_found_empty_biblio(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_utility_tools(app, slow_jobs)
 
     async with Client(app) as client:
@@ -549,7 +550,7 @@ async def test_batch_resolve_patent_throttled_degrades_that_entry(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_utility_tools(app, slow_jobs)
 
     async with Client(app) as client:
@@ -736,11 +737,11 @@ async def test_batch_resolve_promotes_when_slow(
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
         yield {"bundle": bundle}
 
-    app = FastMCP("test", lifespan=lifespan)
+    app = tasks_server("test", lifespan=lifespan)
     register_utility_tools(app, jobs)
     register_job_tools(app, jobs)
 
-    async with Client(app) as client:
+    async with PlainClient(app) as client:
         result = await client.call_tool("batch_resolve", {"identifiers": ["b1"]})
         handle = json.loads(result.content[0].text)
         assert handle["status"] == "working"
@@ -785,7 +786,7 @@ async def test_batch_resolve_reports_quota_exhaustion_per_entry(
         async def lifespan(app: FastMCP):  # type: ignore[type-arg]
             yield {"bundle": bundle}
 
-        app = FastMCP("test", lifespan=lifespan)
+        app = tasks_server("test", lifespan=lifespan)
         register_utility_tools(app, slow_jobs)
 
         async with Client(app) as client:
@@ -815,7 +816,7 @@ async def test_enrich_paper_reports_a_sustained_rate_limit_as_retryable(
         async def lifespan(app: FastMCP):  # type: ignore[type-arg]
             yield {"bundle": bundle}
 
-        app = FastMCP("test", lifespan=lifespan)
+        app = tasks_server("test", lifespan=lifespan)
         register_utility_tools(app, slow_jobs)
 
         async with Client(app) as client:
