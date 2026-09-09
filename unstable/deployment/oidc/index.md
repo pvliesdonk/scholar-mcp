@@ -132,16 +132,31 @@ Client → scholar-mcp (with OIDCProxy) → OIDC Provider (Authelia/Keycloak)
 
 ## Docker Compose with OIDC
 
+This is the shipped `compose.yml` with a reverse proxy added. The service joins an external `traefik` network and carries router labels. It publishes no host port, because the proxy reaches it over that network instead. See [Docker](https://pvliesdonk.github.io/scholar-mcp/unstable/deployment/docker/index.md) for the base file and the same overlay without OIDC.
+
 ```
 services:
   scholar-mcp:
     image: ghcr.io/pvliesdonk/scholar-mcp:latest
-    env_file: .env
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
     volumes:
+      - service-data:/data/service
       - state-data:/data/state
     environment:
       FASTMCP_HOME: /data/state/fastmcp
-    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import socket; socket.create_connection(('127.0.0.1', 8000), 2).close()"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.scholar-mcp.rule=Host(`mcp.example.com`)"
@@ -151,6 +166,7 @@ services:
       - traefik
 
 volumes:
+  service-data:
   state-data:
 
 networks:

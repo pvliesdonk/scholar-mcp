@@ -1057,10 +1057,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#basic-setup" class="md-nav__link">
+  <a href="#where-configuration-goes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Basic setup
+        Where configuration goes
       
     </span>
   </a>
@@ -1068,10 +1068,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#with-docling-serve-pdf-conversion" class="md-nav__link">
+  <a href="#ports" class="md-nav__link">
     <span class="md-ellipsis">
       
-        With docling-serve (PDF conversion)
+        Ports
       
     </span>
   </a>
@@ -1079,10 +1079,43 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#with-traefik-reverse-proxy" class="md-nav__link">
+  <a href="#domain-content-and-copier-update" class="md-nav__link">
     <span class="md-ellipsis">
       
-        With Traefik reverse proxy
+        Domain content and copier update
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#behind-a-reverse-proxy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Behind a reverse proxy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#building-the-image-yourself" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Building the image yourself
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#health" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Health
       
     </span>
   </a>
@@ -1143,6 +1176,28 @@
     <span class="md-ellipsis">
       
         Remote debugging
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-cache-volume" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The cache volume
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#running-docling-serve-alongside" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Running docling-serve alongside
       
     </span>
   </a>
@@ -1410,10 +1465,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#basic-setup" class="md-nav__link">
+  <a href="#where-configuration-goes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Basic setup
+        Where configuration goes
       
     </span>
   </a>
@@ -1421,10 +1476,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#with-docling-serve-pdf-conversion" class="md-nav__link">
+  <a href="#ports" class="md-nav__link">
     <span class="md-ellipsis">
       
-        With docling-serve (PDF conversion)
+        Ports
       
     </span>
   </a>
@@ -1432,10 +1487,43 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#with-traefik-reverse-proxy" class="md-nav__link">
+  <a href="#domain-content-and-copier-update" class="md-nav__link">
     <span class="md-ellipsis">
       
-        With Traefik reverse proxy
+        Domain content and copier update
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#behind-a-reverse-proxy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Behind a reverse proxy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#building-the-image-yourself" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Building the image yourself
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#health" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Health
       
     </span>
   </a>
@@ -1502,6 +1590,28 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#the-cache-volume" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The cache volume
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#running-docling-serve-alongside" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Running docling-serve alongside
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1524,75 +1634,85 @@
 
 <h1 id="docker-deployment">Docker Deployment<a class="headerlink" href="#docker-deployment" title="Permanent link">&para;</a></h1>
 <h2 id="quick-start">Quick start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>docker<span class="w"> </span>run<span class="w"> </span>-v<span class="w"> </span>scholar-mcp-data:/data/scholar-mcp<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">           </span>ghcr.io/pvliesdonk/scholar-mcp:latest
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>cp<span class="w"> </span>.env.example<span class="w"> </span>.env
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>docker<span class="w"> </span>compose<span class="w"> </span>up<span class="w"> </span>-d
 </code></pre></div>
-<p>The server listens on port 8000 with HTTP transport by default. Add <code>-e SCHOLAR_MCP_S2_API_KEY=your-key</code> for higher rate limits (see below).</p>
+<p>The server listens on port 8000 with HTTP transport, published on the host as <code>8000:8000</code>. No reverse proxy, TLS terminator, or external network is assumed.</p>
+<p>Copying <code>.env.example</code> first is the step to keep. Every variable in it arrives commented out, so the server starts on its defaults and the copy changes no behaviour by itself. It is the file you edit next, and <code>compose.yml</code> names it.</p>
+<p>Apply a later edit with <code>docker compose up -d</code>, which recreates the container with the new values. <code>docker compose restart</code> does not pick them up: an env file is read when a container is created, so a restarted container keeps the values it was created with and the edit is ignored without any message.</p>
 <h2 id="docker-compose">Docker Compose<a class="headerlink" href="#docker-compose" title="Permanent link">&para;</a></h2>
-<h3 id="basic-setup">Basic setup<a class="headerlink" href="#basic-setup" title="Permanent link">&para;</a></h3>
+<p><code>compose.yml</code> is a working deployment, not an illustration. It is re-rendered on every <code>copier update</code>, so fixes and new defaults reach it; edit it inside the sentinel blocks described below and your changes survive.</p>
+<h3 id="where-configuration-goes">Where configuration goes<a class="headerlink" href="#where-configuration-goes" title="Permanent link">&para;</a></h3>
+<p>The split matters, because two files can set the same variable:</p>
+<ul>
+<li><strong><code>.env</code> holds the server's configuration.</strong> <code>compose.yml</code> reads it with <code>env_file:</code>. <code>.env.example</code> is generated from the server's own config surface and lists every variable with its default and a one-line description, so it is both the checklist and the place to edit. <a href="../../configuration/">Configuration</a> carries the full reference.</li>
+<li><strong><code>compose.yml</code>'s <code>environment:</code> block holds only what the file itself determines.</strong> Currently that is <code>FASTMCP_HOME</code>, which points at the state volume the file mounts. Values here override <code>.env</code>, so a knob set in both places takes the value from <code>compose.yml</code>, which is rarely what an operator editing <code>.env</code> expects.</li>
+</ul>
+<p>The <code>env_file:</code> entry is marked <code>required: false</code>, so a checkout with no <code>.env</code> still starts on defaults. That form needs Compose 2.24.0 or newer; on an older engine, either upgrade or replace the entry with plain <code>env_file: .env</code> and make sure the file exists.</p>
+<h3 id="ports">Ports<a class="headerlink" href="#ports" title="Permanent link">&para;</a></h3>
+<p>The image pins its own listener: <code>CMD</code> passes <code>--host 0.0.0.0 --port 8000</code>, so <code>SCHOLAR_MCP_HOST</code> and <code>SCHOLAR_MCP_PORT</code> in a <code>.env</code> do not move it. To serve on a different host port, change the left-hand side of the mapping (<code>"9000:8000"</code>) rather than the server's port.</p>
+<h3 id="domain-content-and-copier-update">Domain content and <code>copier update</code><a class="headerlink" href="#domain-content-and-copier-update" title="Permanent link">&para;</a></h3>
+<p>Four sentinel blocks mark the parts of <code>compose.yml</code> a project owns. Content inside them survives a template update; content outside them does not, and will conflict.</p>
+<table>
+<thead>
+<tr>
+<th>Block</th>
+<th>For</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>DOMAIN-COMPOSE-VOLUMES</code></td>
+<td>Extra mounts on the service</td>
+</tr>
+<tr>
+<td><code>DOMAIN-COMPOSE-ENVIRONMENT</code></td>
+<td>Extra environment this file determines</td>
+</tr>
+<tr>
+<td><code>DOMAIN-COMPOSE-SERVICES</code></td>
+<td>Sidecars, such as a task backend or a cache</td>
+</tr>
+<tr>
+<td><code>DOMAIN-COMPOSE-VOLUME-NAMES</code></td>
+<td>Top-level declarations for any named volume added above</td>
+</tr>
+</tbody>
+</table>
+<p>A named volume needs an entry in two of those: the mount in <code>DOMAIN-COMPOSE-VOLUMES</code>, and its declaration in <code>DOMAIN-COMPOSE-VOLUME-NAMES</code>. A bind mount needs only the first.</p>
+<h3 id="behind-a-reverse-proxy">Behind a reverse proxy<a class="headerlink" href="#behind-a-reverse-proxy" title="Permanent link">&para;</a></h3>
+<p>Proxy configuration is deployment-specific, so <code>compose.yml</code> ships none. Add it in a second file rather than by editing <code>compose.yml</code>, which is template-owned and re-rendered: save this as <code>compose.override.yml</code>, which Compose loads automatically alongside <code>compose.yml</code>.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">services</span><span class="p">:</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">scholar-mcp</span><span class="p">:</span>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ghcr.io/pvliesdonk/scholar-mcp:latest</span>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">    </span><span class="nt">restart</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">unless-stopped</span>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">      </span><span class="nt">SCHOLAR_MCP_S2_API_KEY</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;${SCHOLAR_MCP_S2_API_KEY}&quot;</span>
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">      </span><span class="nt">SCHOLAR_MCP_CACHE_DIR</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;/data/scholar-mcp&quot;</span>
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">    </span><span class="nt">volumes</span><span class="p">:</span>
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">scholar-mcp-data:/data/scholar-mcp</span>
-<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>
-<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="nt">volumes</span><span class="p">:</span>
-<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">  </span><span class="nt">scholar-mcp-data</span><span class="p">:</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="c1"># `!reset` drops the published port: the proxy reaches the container over</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">    </span><span class="c1"># the shared network, so nothing needs to be on the host. Plain merging</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">    </span><span class="c1"># appends to sequences, so without this the port stays published.</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">    </span><span class="nt">ports</span><span class="p">:</span><span class="w"> </span><span class="kt">!reset</span><span class="w"> </span><span class="p p-Indicator">[]</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">    </span><span class="nt">networks</span><span class="p">:</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">traefik</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">    </span><span class="nt">labels</span><span class="p">:</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;traefik.enable=true&quot;</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;traefik.http.routers.scholar-mcp.rule=Host(`mcp.example.com`)&quot;</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;traefik.http.routers.scholar-mcp.tls.certresolver=letsencrypt&quot;</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;traefik.http.services.scholar-mcp.loadbalancer.server.port=8000&quot;</span>
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="nt">networks</span><span class="p">:</span>
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="w">  </span><span class="nt">traefik</span><span class="p">:</span>
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="w">    </span><span class="nt">external</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </code></pre></div>
-<h3 id="with-docling-serve-pdf-conversion">With docling-serve (PDF conversion)<a class="headerlink" href="#with-docling-serve-pdf-conversion" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">services</span><span class="p">:</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">scholar-mcp</span><span class="p">:</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ghcr.io/pvliesdonk/scholar-mcp:latest</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span><span class="nt">restart</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">unless-stopped</span>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
-<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">      </span><span class="nt">SCHOLAR_MCP_S2_API_KEY</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;${SCHOLAR_MCP_S2_API_KEY}&quot;</span>
-<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">      </span><span class="nt">SCHOLAR_MCP_DOCLING_URL</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;http://docling-serve:5001&quot;</span>
-<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">      </span><span class="nt">SCHOLAR_MCP_READ_ONLY</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;false&quot;</span>
-<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">      </span><span class="nt">SCHOLAR_MCP_CACHE_DIR</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;/data/scholar-mcp&quot;</span>
-<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">      </span><span class="nt">SCHOLAR_MCP_CONTACT_EMAIL</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;${SCHOLAR_MCP_CONTACT_EMAIL:-}&quot;</span>
-<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="w">    </span><span class="nt">volumes</span><span class="p">:</span>
-<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">scholar-mcp-data:/data/scholar-mcp</span>
-<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>
-<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="w">  </span><span class="nt">docling-serve</span><span class="p">:</span>
-<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ghcr.io/ds4sd/docling-serve:latest</span>
-<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="w">    </span><span class="nt">restart</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">unless-stopped</span>
-<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>
-<a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="nt">volumes</span><span class="p">:</span>
-<a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="w">  </span><span class="nt">scholar-mcp-data</span><span class="p">:</span>
+<p><code>!reset</code> needs Compose 2.24.4 or newer. On an older engine, drop that line and remove the port mapping from <code>compose.yml</code> directly, accepting that the edit conflicts on the next template update.</p>
+<p>Check the result before starting anything, since a merge that silently kept the port mapping looks identical until the port clashes:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>docker<span class="w"> </span>compose<span class="w"> </span>config
 </code></pre></div>
-<h3 id="with-traefik-reverse-proxy">With Traefik reverse proxy<a class="headerlink" href="#with-traefik-reverse-proxy" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">services</span><span class="p">:</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="nt">scholar-mcp</span><span class="p">:</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ghcr.io/pvliesdonk/scholar-mcp:latest</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">    </span><span class="nt">restart</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">unless-stopped</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">    </span><span class="nt">env_file</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">.env</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">    </span><span class="nt">volumes</span><span class="p">:</span>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">scholar-mcp-data:/data/scholar-mcp</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">    </span><span class="nt">labels</span><span class="p">:</span>
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;traefik.enable=true&quot;</span>
-<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;traefik.http.routers.scholar-mcp.rule=Host(`scholar-mcp.yourdomain.com`)&quot;</span>
-<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;traefik.http.routers.scholar-mcp.tls.certresolver=letsencrypt&quot;</span>
-<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;traefik.http.services.scholar-mcp.loadbalancer.server.port=8000&quot;</span>
-<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="w">    </span><span class="nt">networks</span><span class="p">:</span>
-<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">traefik</span>
-<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>
-<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="w">  </span><span class="nt">docling-serve</span><span class="p">:</span>
-<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ghcr.io/ds4sd/docling-serve:latest</span>
-<a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="w">    </span><span class="nt">restart</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">unless-stopped</span>
-<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="w">    </span><span class="nt">networks</span><span class="p">:</span>
-<a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">traefik</span>
-<a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a>
-<a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a><span class="nt">volumes</span><span class="p">:</span>
-<a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a><span class="w">  </span><span class="nt">scholar-mcp-data</span><span class="p">:</span>
-<a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a>
-<a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a><span class="nt">networks</span><span class="p">:</span>
-<a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a><span class="w">  </span><span class="nt">traefik</span><span class="p">:</span>
-<a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a><span class="w">    </span><span class="nt">external</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<p>Substitute your own hostname for <code>mcp.example.com</code>. Set <code>SCHOLAR_MCP_BASE_URL</code> to the public URL as well: the server needs it to advertise its own address, and it is required once OIDC is enabled. Do not reach for <code>SCHOLAR_MCP_HOST</code> here. That variable is the interface the server binds to, which is not the name the proxy routes.</p>
+<p>The network must already exist and be the one the proxy watches. For the same overlay with OIDC, see <a href="../oidc/">OIDC</a>.</p>
+<h3 id="building-the-image-yourself">Building the image yourself<a class="headerlink" href="#building-the-image-yourself" title="Permanent link">&para;</a></h3>
+<p><code>compose.yml</code> pulls a published image rather than building one, so <code>docker compose up -d</code> never rebuilds from a stale checkout. To run your own build, build and tag it first:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>docker<span class="w"> </span>build<span class="w"> </span>-t<span class="w"> </span>ghcr.io/pvliesdonk/scholar-mcp:dev<span class="w"> </span>.
 </code></pre></div>
+<p>then point the <code>image:</code> line at that tag.</p>
+<h3 id="health">Health<a class="headerlink" href="#health" title="Permanent link">&para;</a></h3>
+<p>The service declares a health check that opens a TCP connection to port 8000 inside the container, so <code>docker compose ps</code> reports <code>healthy</code> once the server is listening. It does not assert that the server is working, because there is no health route to probe. Read it as evidence that the process is up, not that the deployment is good.</p>
 <h2 id="image-tags">Image tags<a class="headerlink" href="#image-tags" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -1798,9 +1918,20 @@
 </div>
 <p>When the helper is invoked but <code>debugpy</code> isn't installed (say, someone sets <code>DEBUG_PORT</code> on a non-debug image), it logs a WARNING and continues; this is the safe failure mode.</p>
 <!-- DOMAIN-DOCKER-EXTRA-START -->
-<!-- Project-specific notes for Docker deployment go here; kept across copier
-     update. (E.g. "the /data/uploads volume must be writable by UID Y",
-     "container needs cap_add: SYS_PTRACE for debugging tools".) -->
+<h2 id="the-cache-volume">The cache volume<a class="headerlink" href="#the-cache-volume" title="Permanent link">&para;</a></h2>
+<p><code>compose.yml</code> mounts a third named volume, <code>cache-data</code>, at <code>/data/scholar-mcp</code>. That path is the default of <code>SCHOLAR_MCP_CACHE_DIR</code>, which holds the SQLite cache database and every downloaded PDF and converted Markdown file. It is neither of the two volumes the template mounts, so without that entry the cache would sit in the container's writable layer and vanish on the next <code>docker compose up -d</code>. Point <code>SCHOLAR_MCP_CACHE_DIR</code> somewhere else and the mount has to move with it.</p>
+<h2 id="running-docling-serve-alongside">Running docling-serve alongside<a class="headerlink" href="#running-docling-serve-alongside" title="Permanent link">&para;</a></h2>
+<p>PDF conversion is off unless <code>SCHOLAR_MCP_DOCLING_URL</code> names a reachable <a href="https://github.com/docling-project/docling-serve">docling-serve</a>. The sidecar is optional, and heavy, so <code>compose.yml</code> does not ship it. Add it in <code>compose.override.yml</code>, which Compose loads automatically:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nt">services</span><span class="p">:</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="nt">scholar-mcp</span><span class="p">:</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">      </span><span class="nt">SCHOLAR_MCP_DOCLING_URL</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;http://docling-serve:5001&quot;</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">  </span><span class="nt">docling-serve</span><span class="p">:</span>
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ghcr.io/ds4sd/docling-serve:latest</span>
+<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">    </span><span class="nt">restart</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">unless-stopped</span>
+</code></pre></div>
+<p>Values in <code>environment:</code> override <code>.env</code>, so set the URL in one place, not both. Conversion also writes to the cache, which the read-only default forbids: set <code>SCHOLAR_MCP_READ_ONLY=false</code> in <code>.env</code> to expose the write-tagged tools that populate it.</p>
 <!-- DOMAIN-DOCKER-EXTRA-END -->
 
 
