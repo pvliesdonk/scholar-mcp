@@ -13,6 +13,7 @@ Authelia
 Keycloak
 OAuth
 OIDC
+OIDCProxy
 Traefik
 
 # --- HTTP / URL terminology ---
@@ -48,6 +49,7 @@ env
 hotfix
 knope
 repo
+repowise
 ruleset
 rulesets
 systemd

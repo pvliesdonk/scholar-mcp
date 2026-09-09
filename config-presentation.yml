@@ -16,11 +16,19 @@ vars:
     tags: [server]
     wizard: {group: Server, when: server}
 
+  - name: "{PREFIX}_INSTANCE_DESCRIPTION"
+    provenance: template
+    type_name: "str"
+    default: null
+    help: "Concise routing context that distinguishes this deployment's material or responsibility."
+    tags: [server]
+    wizard: {group: Server}
+
   - name: "{PREFIX}_INSTRUCTIONS_EXTRA"
     provenance: template
     type_name: "str"
     default: null
-    help: "Operator context appended to the generated MCP instructions."
+    help: "Deployment-specific behavioral policy added to the generated MCP instructions."
     tags: [server]
     wizard: {group: Server, when: server}
 
@@ -28,7 +36,7 @@ vars:
     provenance: template
     type_name: "str"
     default: null
-    help: "Legacy: replaces the entire generated MCP instructions text (deprecated; prefer the _EXTRA variant)."
+    help: "Legacy: replaces all generated MCP instructions (deprecated; use _INSTANCE_DESCRIPTION for routing and _INSTRUCTIONS_EXTRA for policy)."
     tags: [server]
     wizard: {group: Server, when: server}
 
@@ -155,7 +163,12 @@ vars:
     default: null
     help: "Subject-to-scope ACL file (TOML), for bearer and any auth mode."
     tags: [authz]
-    wizard: {group: Authorization, when: server}
+    # dockerVolume: the operator supplies this file from the host, so the
+    # wizard's `docker run` must carry a matching `-v <answer>:<container
+    # path>` or the container cannot read the file the -e just named (#261).
+    # Container path mirrors the `examples:` value below, which is also the
+    # path the systemd/nfpm layout uses.
+    wizard: {group: Authorization, when: server, dockerVolume: "/etc/{PROJECT_NAME}/acl.toml"}
 
   - name: "{PREFIX}_AUTHZ_CLAIM"
     provenance: template
@@ -224,6 +237,7 @@ packaging:
   FASTMCP_LOG_LEVEL: [pypi, oci]
   FASTMCP_ENABLE_RICH_LOGGING: [pypi, oci]
   "{PREFIX}_SERVER_NAME": [pypi, oci]
+  "{PREFIX}_INSTANCE_DESCRIPTION": [pypi, oci]
   "{PREFIX}_INSTRUCTIONS_EXTRA": [pypi, oci]
   "{PREFIX}_INSTRUCTIONS": [pypi, oci]
   "{PREFIX}_HTTP_PATH": [oci]
@@ -399,6 +413,13 @@ wizard_help:
 wizard_hints:
   "{PREFIX}_TOOLS_ALLOW": {group: Tools}
   "{PREFIX}_TOOLS_DENY": {group: Tools}
+  # Same host-supplied-file case as {PREFIX}_ACL_PATH above, but this var is
+  # core's, so the hint arrives through this map instead of a `vars:` entry.
+  # `_apply_wizard_hint_overrides` REPLACES a var's hint mapping wholesale,
+  # so core's own `{group: Auth, when: bearer}` has to be restated here —
+  # dropping either would move the question out of its group or make it
+  # unconditionally visible.
+  "{PREFIX}_BEARER_TOKENS_FILE": {group: Auth, when: bearer, dockerVolume: "/etc/{PROJECT_NAME}/tokens.toml"}
 
 # Wizard routing questions that emit a var rather than mapping 1:1 to one.
 wizard_routing:
@@ -449,11 +470,20 @@ files:
   # LOCAL DEVIATION (scholar-mcp#252): packaging/env.example is deliberately
   # NOT generated. It is an nfpm `config|noreplace` EnvironmentFile whose role
   # is to carry the systemd install's deliberate overrides (cache dir under
-  # /var/lib per FHS, reachable bind host) — generation emits one value per
-  # var across all artifacts and turns the override file into a defaults
-  # listing. Restore the template's `packaging/env.example:` files entry here
-  # once fastmcp-server-template#290 (per-target values / override semantics)
-  # lands.
+  # /var/lib per FHS, reachable bind host) — generating it emitted one value
+  # per var across all artifacts and turned the override file into a defaults
+  # listing.
+  #
+  # The exit condition this block used to name has been met: template v7.0.2
+  # generates the file fully commented (fastmcp-server-template#290), and the
+  # template's own entry now carries the same reasoning this comment does.
+  # Retiring the deviation is still a decision rather than a formality —
+  # `commented: true` turns the systemd install's two live overrides into
+  # comments, so a packaged install would get its cache dir and bind host by
+  # operator edit rather than by default. That question is scholar-mcp#345 and
+  # is deliberately not answered by this template hop. Keep the deviation
+  # until #345 decides; restore the template's `packaging/env.example:` entry
+  # then.
 
   examples/bearer-auth.env:
     kind: env
@@ -624,6 +654,9 @@ files:
       "{PREFIX}_SERVER_NAME":
         id: server_name
         title: "Server name"
+      "{PREFIX}_INSTANCE_DESCRIPTION":
+        id: instance_description
+        title: "Instance description"
       FASTMCP_LOG_LEVEL:
         id: log_level
         title: "Log level"

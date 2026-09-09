@@ -14,6 +14,7 @@ from importlib.metadata import version as _pkg_version
 from fastmcp import FastMCP
 from fastmcp.server.event_store import EventStore
 from fastmcp_pvl_core import (
+    InstructionRole,
     # The template scaffold suppresses F401 on this import because it only
     # re-exports ServerConfig.  scholar-mcp uses it directly
     # (_load_server_config, build_event_store), so the suppression would
@@ -225,23 +226,17 @@ def make_server(
     # Server instructions are composed, not templated: every contributor adds
     # a snippet to the builder (identity here; core register_* helpers add
     # their workflow prose; domain code adds its own via
-    # ``instructions_for(mcp).add(text, priority=WORKFLOWS, tools=(...))`` in
-    # the DOMAIN-WIRING block, using the ``IDENTITY < DOCS < CAPABILITIES <
-    # WORKFLOWS < INSTANCE < OPERATOR`` anchors pvl-core exports — never
-    # ``priority=0``, which is ``IDENTITY`` and must stay unique), and
+    # ``instructions_for(mcp).add(text, role=InstructionRole.WORKFLOWS,
+    # requires_tools=(...))`` in the DOMAIN-WIRING block. General contributors
+    # may use only INSTANCE, CAPABILITIES, and WORKFLOWS; pvl-core reserves the
+    # shaped identity, operator routing/policy, and documentation roles.
     # ``finalize_instructions`` renders them once, after tool visibility.
-    #
-    # This carries the identity sentence of the pre-v6 ``domain_line`` only.
-    # The rest of it -- that read-only tools are always available while
-    # write-tagged ones are hidden in read-only mode -- is workflow prose and
-    # belongs in an ``.add(..., role=..., requires_tools=...)`` call, whose
-    # spelling pvl-core 6 renames at the v7 hop; adding it here would mean
-    # writing it twice (#341).
     instructions_for(mcp).identity(
+        server_name,
         "Scholar MCP — academic literature server: Semantic Scholar + "
         "OpenAlex + Crossref + OpenLibrary + Google Books + EPO (patents) "
         "+ standards (ISO/IEC/IEEE/CEN/CC) enrichment and docling PDF "
-        "conversion."
+        "conversion.",
     )
     # The docs site publishes llms.txt per version (mkdocs-llmstxt, mike);
     # `/latest/` resolves once the first release has published the site.
@@ -289,6 +284,31 @@ def make_server(
     # transforms, mode toggles, alternative middleware, additional registrations);
     # kept across copier update. Leave empty for projects that don't customise
     # make_server() beyond the standard scaffold.
+    #
+    # The pre-v6 ``domain_line`` also stated that read-only tools are always
+    # available while write-tagged ones are hidden in read-only mode. That is
+    # workflow prose, not identity, so the v6 hop deferred it to here, where
+    # pvl-core 6's role form exists to carry it (#339, #341).
+    #
+    # ``requires_tools`` is what makes it honest rather than a claim the model
+    # cannot check: pvl-core drops a snippet whose required tools are hidden,
+    # so a read-only deployment — where these four are disabled by tag — never
+    # sees a sentence about tools it does not have.
+    instructions_for(mcp).add(
+        "This instance is in read-write mode: alongside the read-only tools, "
+        "it exposes write-tagged tools that populate the local cache by "
+        "downloading open-access PDFs and converting them to Markdown. Their "
+        "results persist, so a repeated request is served from the cache "
+        "rather than re-downloaded.",
+        role=InstructionRole.WORKFLOWS,
+        requires_tools=(
+            "fetch_paper_pdf",
+            "convert_pdf_to_markdown",
+            "fetch_and_convert",
+            "fetch_pdf_by_url",
+        ),
+    )
+
     #
     # -- Transfer subsystem (capability-link upload + download) ----------------
     #
@@ -353,9 +373,11 @@ def make_server(
     apply_tool_visibility(mcp, config.server)
 
     # Render the composed instructions exactly once, after visibility: a
-    # snippet whose tools are hidden is dropped, SCHOLAR_MCP_INSTRUCTIONS_EXTRA
-    # is appended, and the legacy SCHOLAR_MCP_INSTRUCTIONS full-replace
-    # still wins (with a deprecation warning).  Must stay the last call that
+    # snippet whose required tools are hidden is dropped,
+    # SCHOLAR_MCP_INSTANCE_DESCRIPTION supplies operator routing,
+    # SCHOLAR_MCP_INSTRUCTIONS_EXTRA supplies operator policy, and the
+    # legacy SCHOLAR_MCP_INSTRUCTIONS full replacement still wins with a
+    # deprecation warning. Must run synchronously and stay the last call that
     # touches tools or instructions.
     finalize_instructions(mcp, config.server, env_prefix=_ENV_PREFIX)
 
