@@ -1355,6 +1355,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../deployment/template-updates/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Template Updates
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../deployment/repository-protection/" class="md-nav__link">
         
   
@@ -1821,9 +1849,14 @@
 <td>MCP server display name shown to clients.</td>
 </tr>
 <tr>
+<td><code>SCHOLAR_MCP_INSTRUCTIONS_EXTRA</code></td>
+<td><em>(none)</em></td>
+<td>Operator context appended to the generated MCP instructions (deployment notes, house rules). The generated text (identity, tool workflows, documentation pointer) stays intact.</td>
+</tr>
+<tr>
 <td><code>SCHOLAR_MCP_INSTRUCTIONS</code></td>
 <td><em>(auto-generated)</em></td>
-<td>Custom system-level instructions for LLM clients. When unset, auto-generated instructions describe available tools and the current read-only/write mode.</td>
+<td>Legacy. Replaces the entire generated instructions text and logs a deprecation warning at startup; when both are set, <code>_INSTRUCTIONS_EXTRA</code> is ignored. Move operator context to <code>_INSTRUCTIONS_EXTRA</code>.</td>
 </tr>
 <tr>
 <td><code>SCHOLAR_MCP_HTTP_PATH</code></td>
