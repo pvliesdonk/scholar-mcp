@@ -119,9 +119,20 @@ ______________________________________________________________________
 
 ## OIDC proxy
 
-Full OAuth 2.1 authentication using an external identity provider. The MCP server itself acts as an OAuth proxy, supports user login flows, SSO, and multi-user access control without an external auth reverse proxy.
+Full OAuth 2.1 authentication using an external identity provider. The MCP server itself acts as an OAuth proxy, supports user login flows, SSO, and multi-user access control without an external auth reverse proxy. Which of the two OIDC modes runs follows from which variables are set; `SCHOLAR_MCP_AUTH_MODE` states the choice instead of leaving it to be inferred.
 
-### How it works
+### How remote mode works
+
+The client authenticates with the identity provider and presents the resulting token, which the server validates locally against the provider's JWKS:
+
+```
+Client → OIDC Provider (log in, get JWT)
+Client → scholar-mcp (present JWT, validated via JWKS)
+```
+
+No redirect passes through the server and no code exchange happens, so the provider needs no client registered for this server.
+
+### How oidc-proxy mode works
 
 The server proxies OIDC itself, with no external auth sidecar to deploy:
 
@@ -135,7 +146,11 @@ Client → scholar-mcp (OIDCProxy) → OIDC Provider
 1. Server exchanges the code for tokens
 1. Subsequent requests include the JWT
 
-### Required variables
+### Remote mode variables
+
+`SCHOLAR_MCP_BASE_URL` and `SCHOLAR_MCP_OIDC_CONFIG_URL`, plus any of the optional variables below. Omitting the two client credentials is what selects this mode.
+
+### OIDCProxy required variables
 
 | Variable                         | Description                                                                                                                                                        |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |

@@ -1,12 +1,32 @@
 # OIDC Authentication
 
-Optional token-based authentication for HTTP deployments. OIDC activates automatically when all four required environment variables are set. For an overview of all authentication modes (bearer token, OIDC, no auth), see the [Authentication guide](https://pvliesdonk.github.io/scholar-mcp/unstable/guides/authentication/index.md).
+Optional token-based authentication for HTTP deployments. OIDC activates automatically based on which environment variables are set. For an overview of all authentication modes (bearer token, OIDC, no auth), see the [Authentication guide](https://pvliesdonk.github.io/scholar-mcp/unstable/guides/authentication/index.md).
 
 Transport requirement
 
 OIDC requires `--transport http` (or `sse`). It has no effect with `--transport stdio`.
 
-## Required Variables
+## Auth Modes
+
+| Mode           | Required Variables                                                    | Description                                          |
+| -------------- | --------------------------------------------------------------------- | ---------------------------------------------------- |
+| **remote**     | `BASE_URL`, `OIDC_CONFIG_URL`                                         | Local JWKS validation. No client credentials needed. |
+| **oidc-proxy** | `BASE_URL`, `OIDC_CONFIG_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` | Full OAuth proxy with session management.            |
+
+Set `SCHOLAR_MCP_AUTH_MODE` to state the mode, or let the server auto-detect it from which variables are set.
+
+## Remote Mode Variables
+
+| Variable                      | Description                   |
+| ----------------------------- | ----------------------------- |
+| `SCHOLAR_MCP_BASE_URL`        | Public base URL of the server |
+| `SCHOLAR_MCP_OIDC_CONFIG_URL` | OIDC discovery endpoint       |
+
+Optional: `OIDC_AUDIENCE`, `OIDC_REQUIRED_SCOPES` (same as OIDCProxy mode).
+
+No `CLIENT_ID` or `CLIENT_SECRET` needed. Tokens are validated locally via JWKS.
+
+## OIDCProxy Required Variables
 
 | Variable                         | Description                                                                                                                                                        |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -27,7 +47,7 @@ OIDC requires `--transport http` (or `sse`). It has no effect with `--transport 
 
 ## JWT Signing Key
 
-When `SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY` is unset, FastMCP derives the signing key from the OIDC client secret using deterministic key derivation, so the key stays the same across restarts and tokens keep validating.
+The signing key applies to oidc-proxy mode; remote mode does not use it. When `SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY` is unset, FastMCP derives the signing key from the OIDC client secret using deterministic key derivation, so the key stays the same across restarts and tokens keep validating.
 
 The real reason to set an explicit key is secret rotation: because the default key is derived from the client secret, rotating that secret changes the derived key and invalidates every token issued under the old one. Setting an explicit signing key decouples token validity from client-secret rotation:
 
@@ -37,6 +57,8 @@ openssl rand -hex 32
 ```
 
 ## Setup with Authelia
+
+This section configures oidc-proxy mode. Remote mode needs no client registration, since the client authenticates with the provider itself.
 
 Note
 
@@ -79,6 +101,22 @@ scholar-mcp serve --transport http --port 8000
 ```
 
 ## Architecture
+
+### Remote mode
+
+The server validates tokens locally using JWKS, with no upstream token calls after startup:
+
+```
+Client → IdP (authenticate + get JWT)
+Client → scholar-mcp (present JWT → validate via JWKS)
+```
+
+1. Client authenticates directly with the OIDC provider
+1. Client presents the JWT access token to the MCP server
+1. Server validates the token locally using the provider's JWKS keys
+1. No upstream calls. Token refresh is between client and IdP.
+
+### OIDCProxy mode
 
 The server uses FastMCP's built-in `OIDCProxy` auth provider (not the external `mcp-auth-proxy` sidecar). The authentication flow:
 

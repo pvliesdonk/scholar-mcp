@@ -181,26 +181,31 @@ This page is the complete reference: every variable the server reads appears in 
 
 ## Server
 
-Transport, identity, and tool visibility. `SCHOLAR_MCP_SERVER_NAME` and `SCHOLAR_MCP_INSTRUCTIONS_EXTRA` let an operator rename an instance or append deployment notes to the generated MCP instructions without touching code; the legacy `SCHOLAR_MCP_INSTRUCTIONS` replaces the generated text wholesale and logs a deprecation warning at startup.
+Transport, identity, and tool visibility. `SCHOLAR_MCP_SERVER_NAME` identifies the deployment, `SCHOLAR_MCP_INSTANCE_DESCRIPTION` distinguishes its material or responsibility for routing, and `SCHOLAR_MCP_INSTRUCTIONS_EXTRA` supplies deployment-specific behavioral policy. The legacy `SCHOLAR_MCP_INSTRUCTIONS` replaces all generated text, ignores both additive variables, and logs a deprecation warning at startup.
+
+Generated guidance targets 1,536 UTF-16 units, reserving 512 units for normal operator routing and policy within Claude Code's known 2,048-unit limit. Crossing either threshold logs a warning; startup continues and the server does not truncate the instructions.
 
 `SCHOLAR_MCP_TOOLS_ALLOW` and `SCHOLAR_MCP_TOOLS_DENY` trim which tools an instance exposes. Hidden tools disappear from `tools/list` and are rejected on `tools/call`; resources and prompts are unaffected. Setting both variables, or setting one to a value with no names in it, is a startup error. A name matching no registered tool is ignored, but an allowlist that matches nothing logs a startup warning, since the instance then exposes zero tools. See `fastmcp-pvl-core`'s README for the full semantics.
 
-| Variable                         | Default     | Description                                                                                                                                                                                                                                                 |
-| -------------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SCHOLAR_MCP_TRANSPORT`          | `stdio`     | Transport the server speaks: `stdio` for local Claude Desktop/Code, `http` or `sse` for a network server.                                                                                                                                                   |
-| `SCHOLAR_MCP_HOST`               | `127.0.0.1` | Interface the HTTP server binds to.                                                                                                                                                                                                                         |
-| `SCHOLAR_MCP_PORT`               | `8000`      | TCP port for the HTTP server.                                                                                                                                                                                                                               |
-| `SCHOLAR_MCP_BASE_URL`           | (none)      | Public base URL of the deployed server (`https://mcp.example.com`). Required for OIDC. Also the fallback source of the MCP Apps domain when `app_domain` is unset.                                                                                          |
-| `SCHOLAR_MCP_TOOLS_ALLOW`        | (none)      | Comma-separated explicit tool names this instance exposes; every other tool is hidden from listings and cannot be invoked. Names matching no registered tool are inert. Mutually exclusive with `tools_deny`. Takes effect through `apply_tool_visibility`. |
-| `SCHOLAR_MCP_TOOLS_DENY`         | (none)      | Comma-separated explicit tool names hidden from this instance (absent from listings, cannot be invoked). Names matching no registered tool are inert. Mutually exclusive with `tools_allow`. Takes effect through `apply_tool_visibility`.                  |
-| `SCHOLAR_MCP_SERVER_NAME`        | (none)      | Rename this server instance; defaults to the project name.                                                                                                                                                                                                  |
-| `SCHOLAR_MCP_INSTRUCTIONS_EXTRA` | (none)      | Operator context appended to the generated MCP instructions.                                                                                                                                                                                                |
-| `SCHOLAR_MCP_INSTRUCTIONS`       | (none)      | Legacy: replaces the entire generated MCP instructions text (deprecated; prefer the \_EXTRA variant).                                                                                                                                                       |
-| `SCHOLAR_MCP_HTTP_PATH`          | `/mcp`      | Mount path for the MCP endpoint.                                                                                                                                                                                                                            |
+| Variable                           | Default     | Description                                                                                                                                                                                                                                                 |
+| ---------------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SCHOLAR_MCP_TRANSPORT`            | `stdio`     | Transport the server speaks: `stdio` for local Claude Desktop/Code, `http` or `sse` for a network server.                                                                                                                                                   |
+| `SCHOLAR_MCP_HOST`                 | `127.0.0.1` | Interface the HTTP server binds to.                                                                                                                                                                                                                         |
+| `SCHOLAR_MCP_PORT`                 | `8000`      | TCP port for the HTTP server.                                                                                                                                                                                                                               |
+| `SCHOLAR_MCP_BASE_URL`             | (none)      | Public base URL of the deployed server (`https://mcp.example.com`). Required for OIDC. Also the fallback source of the MCP Apps domain when `app_domain` is unset.                                                                                          |
+| `SCHOLAR_MCP_TOOLS_ALLOW`          | (none)      | Comma-separated explicit tool names this instance exposes; every other tool is hidden from listings and cannot be invoked. Names matching no registered tool are inert. Mutually exclusive with `tools_deny`. Takes effect through `apply_tool_visibility`. |
+| `SCHOLAR_MCP_TOOLS_DENY`           | (none)      | Comma-separated explicit tool names hidden from this instance (absent from listings, cannot be invoked). Names matching no registered tool are inert. Mutually exclusive with `tools_allow`. Takes effect through `apply_tool_visibility`.                  |
+| `SCHOLAR_MCP_SERVER_NAME`          | (none)      | Rename this server instance; defaults to the project name.                                                                                                                                                                                                  |
+| `SCHOLAR_MCP_INSTANCE_DESCRIPTION` | (none)      | Concise routing context that distinguishes this deployment's material or responsibility.                                                                                                                                                                    |
+| `SCHOLAR_MCP_INSTRUCTIONS_EXTRA`   | (none)      | Deployment-specific behavioral policy added to the generated MCP instructions.                                                                                                                                                                              |
+| `SCHOLAR_MCP_INSTRUCTIONS`         | (none)      | Legacy: replaces all generated MCP instructions (deprecated; use \_INSTANCE_DESCRIPTION for routing and \_INSTRUCTIONS_EXTRA for policy).                                                                                                                   |
+| `SCHOLAR_MCP_HTTP_PATH`            | `/mcp`      | Mount path for the MCP endpoint.                                                                                                                                                                                                                            |
 
 ## Authentication
 
-Callers authenticate with a bearer token or OIDC; the two are mutually exclusive, and `SCHOLAR_MCP_AUTH_MODE` is normally inferred from which credentials are set. The Required column below means "required to enable OIDC": with none of these set, the server starts and serves unauthenticated. See the [authentication guide](https://pvliesdonk.github.io/scholar-mcp/unstable/guides/authentication/index.md) for setup, mapped multi-subject tokens, and troubleshooting.
+Callers authenticate with a bearer token, with OIDC, or with both. OIDC itself has two modes. **remote** validates tokens locally against the provider's JWKS and needs only `SCHOLAR_MCP_BASE_URL` and `SCHOLAR_MCP_OIDC_CONFIG_URL`. **oidc-proxy** runs the OAuth flow itself and also needs `SCHOLAR_MCP_OIDC_CLIENT_ID` and `SCHOLAR_MCP_OIDC_CLIENT_SECRET`, registered with the provider as a confidential client whose redirect URI points at this server.
+
+The Required column below marks the oidc-proxy set. Setting all four selects that mode and omitting the two client credentials selects remote, so `SCHOLAR_MCP_AUTH_MODE` is the way to state the choice rather than leave it to be inferred. With none of these set, the server starts and serves unauthenticated. See the [authentication guide](https://pvliesdonk.github.io/scholar-mcp/unstable/guides/authentication/index.md) for setup, mapped multi-subject tokens, and troubleshooting.
 
 | Variable                               | Default                 | Required | Description                                                                                                                                                                                                                                                                                                                                                                   |
 | -------------------------------------- | ----------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -685,9 +690,20 @@ ______________________________________________________________________
 
 ## OIDC proxy
 
-Full OAuth 2.1 authentication using an external identity provider. The MCP server itself acts as an OAuth proxy, supports user login flows, SSO, and multi-user access control without an external auth reverse proxy.
+Full OAuth 2.1 authentication using an external identity provider. The MCP server itself acts as an OAuth proxy, supports user login flows, SSO, and multi-user access control without an external auth reverse proxy. Which of the two OIDC modes runs follows from which variables are set; `SCHOLAR_MCP_AUTH_MODE` states the choice instead of leaving it to be inferred.
 
-### How it works
+### How remote mode works
+
+The client authenticates with the identity provider and presents the resulting token, which the server validates locally against the provider's JWKS:
+
+```
+Client → OIDC Provider (log in, get JWT)
+Client → scholar-mcp (present JWT, validated via JWKS)
+```
+
+No redirect passes through the server and no code exchange happens, so the provider needs no client registered for this server.
+
+### How oidc-proxy mode works
 
 The server proxies OIDC itself, with no external auth sidecar to deploy:
 
@@ -701,7 +717,11 @@ Client → scholar-mcp (OIDCProxy) → OIDC Provider
 1. Server exchanges the code for tokens
 1. Subsequent requests include the JWT
 
-### Required variables
+### Remote mode variables
+
+`SCHOLAR_MCP_BASE_URL` and `SCHOLAR_MCP_OIDC_CONFIG_URL`, plus any of the optional variables below. Omitting the two client credentials is what selects this mode.
+
+### OIDCProxy required variables
 
 | Variable                         | Description                                                                                                                                                        |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -2038,19 +2058,20 @@ docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.revis
 
 See [Configuration](https://pvliesdonk.github.io/scholar-mcp/unstable/configuration/index.md) for the full reference. Key variables for Docker:
 
-| Variable                         | Default               | Description                                                                                                   |
-| -------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `SCHOLAR_MCP_S2_API_KEY`         | n/a                   | Semantic Scholar API key (optional; ~1 req/s without, ~10 req/s with)                                         |
-| `SCHOLAR_MCP_CACHE_DIR`          | `/data/scholar-mcp`   | Cache and PDF storage directory                                                                               |
-| `SCHOLAR_MCP_READ_ONLY`          | `true`                | Set `false` to enable PDF tools                                                                               |
-| `SCHOLAR_MCP_DOCLING_URL`        | n/a                   | docling-serve URL (such as `http://docling-serve:5001`)                                                       |
-| `SCHOLAR_MCP_BEARER_TOKEN`       | n/a                   | Bearer token for HTTP auth                                                                                    |
-| `FASTMCP_LOG_LEVEL`              | `INFO`                | Logging level (use `-v` or set to `DEBUG` for verbose output)                                                 |
-| `FASTMCP_ENABLE_RICH_LOGGING`    | `true`                | Set `false` for structured JSON logging with aggregators                                                      |
-| `SCHOLAR_MCP_INSTRUCTIONS_EXTRA` | n/a                   | Operator context appended to the generated MCP instructions                                                   |
-| `SCHOLAR_MCP_INSTRUCTIONS`       | (computed at startup) | Legacy full replacement of the generated instructions (deprecated)                                            |
-| `SCHOLAR_MCP_DEBUG_PORT`         | n/a                   | Remote-debugger TCP port (see [Remote debugging](#remote-debugging); requires `--build-arg DEBUG=true` image) |
-| `SCHOLAR_MCP_DEBUG_WAIT`         | `false`               | Block startup until IDE attaches (see [Remote debugging](#remote-debugging))                                  |
+| Variable                           | Default               | Description                                                                                                   |
+| ---------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `SCHOLAR_MCP_S2_API_KEY`           | n/a                   | Semantic Scholar API key (optional; ~1 req/s without, ~10 req/s with)                                         |
+| `SCHOLAR_MCP_CACHE_DIR`            | `/data/scholar-mcp`   | Cache and PDF storage directory                                                                               |
+| `SCHOLAR_MCP_READ_ONLY`            | `true`                | Set `false` to enable PDF tools                                                                               |
+| `SCHOLAR_MCP_DOCLING_URL`          | n/a                   | docling-serve URL (such as `http://docling-serve:5001`)                                                       |
+| `SCHOLAR_MCP_BEARER_TOKEN`         | n/a                   | Bearer token for HTTP auth                                                                                    |
+| `FASTMCP_LOG_LEVEL`                | `INFO`                | Logging level (use `-v` or set to `DEBUG` for verbose output)                                                 |
+| `FASTMCP_ENABLE_RICH_LOGGING`      | `true`                | Set `false` for structured JSON logging with aggregators                                                      |
+| `SCHOLAR_MCP_INSTANCE_DESCRIPTION` | n/a                   | Routing context that distinguishes this deployment                                                            |
+| `SCHOLAR_MCP_INSTRUCTIONS_EXTRA`   | n/a                   | Deployment-specific behavioral policy added to the generated MCP instructions                                 |
+| `SCHOLAR_MCP_INSTRUCTIONS`         | (computed at startup) | Legacy full replacement of the generated instructions (deprecated)                                            |
+| `SCHOLAR_MCP_DEBUG_PORT`           | n/a                   | Remote-debugger TCP port (see [Remote debugging](#remote-debugging); requires `--build-arg DEBUG=true` image) |
+| `SCHOLAR_MCP_DEBUG_WAIT`           | `false`               | Block startup until IDE attaches (see [Remote debugging](#remote-debugging))                                  |
 
 For OIDC authentication, see [OIDC deployment](https://pvliesdonk.github.io/scholar-mcp/unstable/deployment/oidc/index.md).
 
@@ -2279,13 +2300,33 @@ sudo systemctl restart scholar-mcp
 
 # OIDC Authentication
 
-Optional token-based authentication for HTTP deployments. OIDC activates automatically when all four required environment variables are set. For an overview of all authentication modes (bearer token, OIDC, no auth), see the [Authentication guide](https://pvliesdonk.github.io/scholar-mcp/unstable/guides/authentication/index.md).
+Optional token-based authentication for HTTP deployments. OIDC activates automatically based on which environment variables are set. For an overview of all authentication modes (bearer token, OIDC, no auth), see the [Authentication guide](https://pvliesdonk.github.io/scholar-mcp/unstable/guides/authentication/index.md).
 
 Transport requirement
 
 OIDC requires `--transport http` (or `sse`). It has no effect with `--transport stdio`.
 
-## Required Variables
+## Auth Modes
+
+| Mode           | Required Variables                                                    | Description                                          |
+| -------------- | --------------------------------------------------------------------- | ---------------------------------------------------- |
+| **remote**     | `BASE_URL`, `OIDC_CONFIG_URL`                                         | Local JWKS validation. No client credentials needed. |
+| **oidc-proxy** | `BASE_URL`, `OIDC_CONFIG_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` | Full OAuth proxy with session management.            |
+
+Set `SCHOLAR_MCP_AUTH_MODE` to state the mode, or let the server auto-detect it from which variables are set.
+
+## Remote Mode Variables
+
+| Variable                      | Description                   |
+| ----------------------------- | ----------------------------- |
+| `SCHOLAR_MCP_BASE_URL`        | Public base URL of the server |
+| `SCHOLAR_MCP_OIDC_CONFIG_URL` | OIDC discovery endpoint       |
+
+Optional: `OIDC_AUDIENCE`, `OIDC_REQUIRED_SCOPES` (same as OIDCProxy mode).
+
+No `CLIENT_ID` or `CLIENT_SECRET` needed. Tokens are validated locally via JWKS.
+
+## OIDCProxy Required Variables
 
 | Variable                         | Description                                                                                                                                                        |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -2306,7 +2347,7 @@ OIDC requires `--transport http` (or `sse`). It has no effect with `--transport 
 
 ## JWT Signing Key
 
-When `SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY` is unset, FastMCP derives the signing key from the OIDC client secret using deterministic key derivation, so the key stays the same across restarts and tokens keep validating.
+The signing key applies to oidc-proxy mode; remote mode does not use it. When `SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY` is unset, FastMCP derives the signing key from the OIDC client secret using deterministic key derivation, so the key stays the same across restarts and tokens keep validating.
 
 The real reason to set an explicit key is secret rotation: because the default key is derived from the client secret, rotating that secret changes the derived key and invalidates every token issued under the old one. Setting an explicit signing key decouples token validity from client-secret rotation:
 
@@ -2316,6 +2357,8 @@ openssl rand -hex 32
 ```
 
 ## Setup with Authelia
+
+This section configures oidc-proxy mode. Remote mode needs no client registration, since the client authenticates with the provider itself.
 
 Note
 
@@ -2358,6 +2401,22 @@ scholar-mcp serve --transport http --port 8000
 ```
 
 ## Architecture
+
+### Remote mode
+
+The server validates tokens locally using JWKS, with no upstream token calls after startup:
+
+```
+Client → IdP (authenticate + get JWT)
+Client → scholar-mcp (present JWT → validate via JWKS)
+```
+
+1. Client authenticates directly with the OIDC provider
+1. Client presents the JWT access token to the MCP server
+1. Server validates the token locally using the provider's JWKS keys
+1. No upstream calls. Token refresh is between client and IdP.
+
+### OIDCProxy mode
 
 The server uses FastMCP's built-in `OIDCProxy` auth provider (not the external `mcp-auth-proxy` sidecar). The authentication flow:
 

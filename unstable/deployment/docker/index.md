@@ -107,19 +107,20 @@ docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.revis
 
 See [Configuration](https://pvliesdonk.github.io/scholar-mcp/unstable/configuration/index.md) for the full reference. Key variables for Docker:
 
-| Variable                         | Default               | Description                                                                                                   |
-| -------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `SCHOLAR_MCP_S2_API_KEY`         | n/a                   | Semantic Scholar API key (optional; ~1 req/s without, ~10 req/s with)                                         |
-| `SCHOLAR_MCP_CACHE_DIR`          | `/data/scholar-mcp`   | Cache and PDF storage directory                                                                               |
-| `SCHOLAR_MCP_READ_ONLY`          | `true`                | Set `false` to enable PDF tools                                                                               |
-| `SCHOLAR_MCP_DOCLING_URL`        | n/a                   | docling-serve URL (such as `http://docling-serve:5001`)                                                       |
-| `SCHOLAR_MCP_BEARER_TOKEN`       | n/a                   | Bearer token for HTTP auth                                                                                    |
-| `FASTMCP_LOG_LEVEL`              | `INFO`                | Logging level (use `-v` or set to `DEBUG` for verbose output)                                                 |
-| `FASTMCP_ENABLE_RICH_LOGGING`    | `true`                | Set `false` for structured JSON logging with aggregators                                                      |
-| `SCHOLAR_MCP_INSTRUCTIONS_EXTRA` | n/a                   | Operator context appended to the generated MCP instructions                                                   |
-| `SCHOLAR_MCP_INSTRUCTIONS`       | (computed at startup) | Legacy full replacement of the generated instructions (deprecated)                                            |
-| `SCHOLAR_MCP_DEBUG_PORT`         | n/a                   | Remote-debugger TCP port (see [Remote debugging](#remote-debugging); requires `--build-arg DEBUG=true` image) |
-| `SCHOLAR_MCP_DEBUG_WAIT`         | `false`               | Block startup until IDE attaches (see [Remote debugging](#remote-debugging))                                  |
+| Variable                           | Default               | Description                                                                                                   |
+| ---------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `SCHOLAR_MCP_S2_API_KEY`           | n/a                   | Semantic Scholar API key (optional; ~1 req/s without, ~10 req/s with)                                         |
+| `SCHOLAR_MCP_CACHE_DIR`            | `/data/scholar-mcp`   | Cache and PDF storage directory                                                                               |
+| `SCHOLAR_MCP_READ_ONLY`            | `true`                | Set `false` to enable PDF tools                                                                               |
+| `SCHOLAR_MCP_DOCLING_URL`          | n/a                   | docling-serve URL (such as `http://docling-serve:5001`)                                                       |
+| `SCHOLAR_MCP_BEARER_TOKEN`         | n/a                   | Bearer token for HTTP auth                                                                                    |
+| `FASTMCP_LOG_LEVEL`                | `INFO`                | Logging level (use `-v` or set to `DEBUG` for verbose output)                                                 |
+| `FASTMCP_ENABLE_RICH_LOGGING`      | `true`                | Set `false` for structured JSON logging with aggregators                                                      |
+| `SCHOLAR_MCP_INSTANCE_DESCRIPTION` | n/a                   | Routing context that distinguishes this deployment                                                            |
+| `SCHOLAR_MCP_INSTRUCTIONS_EXTRA`   | n/a                   | Deployment-specific behavioral policy added to the generated MCP instructions                                 |
+| `SCHOLAR_MCP_INSTRUCTIONS`         | (computed at startup) | Legacy full replacement of the generated instructions (deprecated)                                            |
+| `SCHOLAR_MCP_DEBUG_PORT`           | n/a                   | Remote-debugger TCP port (see [Remote debugging](#remote-debugging); requires `--build-arg DEBUG=true` image) |
+| `SCHOLAR_MCP_DEBUG_WAIT`           | `false`               | Block startup until IDE attaches (see [Remote debugging](#remote-debugging))                                  |
 
 For OIDC authentication, see [OIDC deployment](https://pvliesdonk.github.io/scholar-mcp/unstable/deployment/oidc/index.md).
 
