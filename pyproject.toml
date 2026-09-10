@@ -92,6 +92,9 @@ dependencies = [
     "python-epo-ops-client>=4.2",
     "lxml>=5.0",
     "beautifulsoup4>=4.14.3",
+    # EPO OPS serves patent images one page per call, so a full document has to
+    # be reassembled client-side (#379). pypdf is the merge step.
+    "pypdf>=5.1",
     # PROJECT-DEPS-END
 ]
 
