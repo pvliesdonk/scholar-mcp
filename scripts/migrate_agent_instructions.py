@@ -43,6 +43,7 @@ TEMPLATE_SKILLS: tuple[str, ...] = (
     "logging-standard",
     "releasing",
     "repository-protection",
+    "researching-references",
     "tool-registration",
     "writing-release-notes",
 )

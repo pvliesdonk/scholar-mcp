@@ -18,6 +18,7 @@ Traefik
 
 # --- HTTP / URL terminology ---
 hostname
+liveness
 resumability
 sandboxing
 subpath

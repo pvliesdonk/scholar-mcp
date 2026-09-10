@@ -407,7 +407,20 @@
       "label": "HTTP endpoint path",
       "type": "text",
       "var": "SCHOLAR_MCP_HTTP_PATH",
-      "help": "Mount path for the MCP endpoint.",
+      "help": "Mount path for the MCP endpoint; the health routes derive their prefix from it.",
+      "advancedGroup": "Server",
+      "showIf": {
+        "deployment": [
+          "server"
+        ]
+      }
+    },
+    {
+      "id": "health_detail",
+      "label": "Health body detail",
+      "type": "text",
+      "var": "SCHOLAR_MCP_HEALTH_DETAIL",
+      "help": "How much the unauthenticated /health and /health/ready bodies say: status, standard (adds name, version and per-check verdicts), or full (adds redacted reasons; trusted networks only).",
       "advancedGroup": "Server",
       "showIf": {
         "deployment": [

@@ -47,15 +47,25 @@ services:
       FASTMCP_HOME: /data/state/fastmcp
       # DOMAIN-COMPOSE-ENVIRONMENT-START — project env; kept across copier update
       # DOMAIN-COMPOSE-ENVIRONMENT-END
-    # Liveness only: the port is served, so the process is up and listening.
-    # It does not assert the server is healthy — there is no health route to
-    # probe yet.  `python` is the image's venv interpreter, already on PATH.
+    # Liveness: `GET /health` answers 200 for as long as the process serves.
+    # Compose itself only reports the verdict (`docker compose ps`, `up
+    # --wait`, `depends_on: condition: service_healthy`); an orchestrator that
+    # acts on it (Swarm, a Kubernetes livenessProbe, an autoheal sidecar)
+    # restarts the container.  Deliberately not `/health/ready` (503 when a
+    # backing store is gone): a restart does not fix an unreachable backend,
+    # and a readiness verdict here would hold up every `service_healthy`
+    # dependent for one.  Probe `/health/ready` from the load balancer instead.
+    # The path assumes the conventional `/mcp` mount — the server derives its
+    # health prefix from `SCHOLAR_MCP_HTTP_PATH`, so a `.env` that mounts
+    # under `/x/mcp` moves the route to `/x/health` and this probe must
+    # follow.  `python` is the image's venv interpreter, already on PATH;
+    # `urlopen` raises on any non-2xx, so a 503 or a refused socket exits 1.
     healthcheck:
       test:
         - CMD
         - python
         - -c
-        - "import socket; socket.create_connection(('127.0.0.1', 8000), 2).close()"
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).close()"
       interval: 30s
       timeout: 5s
       retries: 3

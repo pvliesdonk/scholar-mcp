@@ -145,6 +145,10 @@ For library usage (embedding the domain logic without the MCP transport), import
 
 The server registers a built-in `get_server_info` tool (via `fastmcp_pvl_core.register_server_info_tool`) so operators can confirm the deployed version with a single MCP call. The default response carries `server_name`, `server_version`, and `core_version`. Servers that talk to a remote upstream wire upstream version reporting inside the `DOMAIN-UPSTREAM-START` / `DOMAIN-UPSTREAM-END` sentinel in `src/scholar_mcp/server.py`; see [`tool-registration`](.agents/skills/tool-registration/SKILL.md#server-info-tool-get_server_info) for the wiring pattern.
 
+### Health
+
+The server serves `/health` (liveness, a static `200`) and `/health/ready` (readiness, `503` when a backing store or a domain check fails) outside the MCP mount and outside auth, via `fastmcp_pvl_core.register_health_routes`. `compose.yml` probes the first. Domain readiness checks go in the `health_checks` dict in `src/scholar_mcp/server.py`; see [Docker deployment](docs/deployment/docker.md#health) for the routes, the mount-path rule, and `SCHOLAR_MCP_HEALTH_DETAIL`.
+
 ## Configuration
 
 The most common environment variables, shared across all
