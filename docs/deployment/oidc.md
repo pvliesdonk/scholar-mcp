@@ -153,7 +153,7 @@ services:
         - CMD
         - python
         - -c
-        - "import socket; socket.create_connection(('127.0.0.1', 8000), 2).close()"
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).close()"
       interval: 30s
       timeout: 5s
       retries: 3
@@ -261,7 +261,7 @@ Two routers rather than one is deliberate. A single router carrying the strip ru
 
 The failure that follows from point 2 above is worth spelling out, because its symptom points somewhere else entirely.
 
-The discovery URL sits outside the prefix, so on a hostname shared with other services, prefix-based routing cannot claim it. Without a router that matches it explicitly, the request falls through to whatever else holds the host: an OAuth gateway, an SSO portal, or another MCP server at the root. That service answers with **its** metadata, the client builds an authorization URL from another service's endpoints, and the visible symptom is an authorization URL 404ing at a path nobody configured. It reads as a client bug or an auth bug; it is a routing rule one path too narrow.
+The discovery URL sits outside the prefix, so on a hostname shared with other services, prefix-based routing cannot claim it. Without a router that matches it explicitly, the request falls through to whatever else holds the host, such as an SSO portal or another MCP server mounted at the root. That service answers with **its** metadata, the client builds an authorization URL from another service's endpoints, and the visible symptom is an authorization URL 404ing at a path nobody configured. It reads as a client bug or an auth bug; it is a routing rule one path too narrow.
 
 The `mcp-wellknown` router above is the fix. In Traefik it also wins by default: routers sort by rule length, so a rule naming the full well-known path outranks a bare `Host(...)` catch-all. Where the competing service sets an explicit `priority`, set a higher one here, because Traefik ignores its rule-length default for any router that carries one.
 

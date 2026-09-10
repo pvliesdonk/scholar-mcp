@@ -46,8 +46,9 @@ explains it.
    already exist, and every job derives from the reviewed version string,
    so a re-run publishes the same artefacts.
 6. **If the release was cut from a `release/X.Y` branch**, expect the
-   automated pull request that ports the changelog section back to
-   `main`, and merge it. See [Stabilisation branches](#stabilisation-branches).
+   automated pull request that ports the release back to `main`, and
+   merge it with a merge commit. See
+   [Stabilisation branches](#stabilisation-branches).
 
 ## Channels
 
@@ -133,7 +134,8 @@ picks the release kind: `auto` prepares a release candidate on
 replaces the computed version with an explicit one, for the rare range
 whose commits the tool counts nothing in; the workflow refuses a
 dispatch on any branch other than the default branch or `release/X.Y`,
-and refuses a computed version whose tag already exists.
+and refuses a computed version whose tag already exists, or a release
+candidate whose stable version is already tagged.
 
 The release pull request is an ordinary pull request: full CI runs on it,
 and the reviewer checks the computed version against the breaking-change
@@ -162,9 +164,9 @@ must ship whole is mid-flight), dispatch Release Prepare on `main` and
 merge the release pull request: no branch, no ceremony. The prepare
 workflow prints an advisory warning when a release-named milestone still
 has open issues, or when an open `ships-atomically` epic shows work in
-flight. It counts the epic's native sub-issues, which may live in another
-repository, so a cross-repo epic stays visible. Either way the warning
-never blocks, since the cut may still be intentional.
+flight. It counts the epic's native sub-issues even when they live in
+another repository, which keeps a cross-repo epic visible. The warning
+never blocks: the cut may still be intentional.
 
 ## Stabilisation branches
 
@@ -180,11 +182,24 @@ A short-lived `release/X.Y` branch is the exception tool, for two cases:
 
 Fixes flow from trunk to the branch: they land on `main` first and are
 cherry-picked over. After a stable release cut from a `release/X.Y`
-branch, an automated job opens an ordinary pull request that carries the
-release's changelog section back to `main`, reviewed and CI-gated like
-any other change, with no direct pushes to protected branches. Release
-candidates port nothing: the stable's changelog section covers the whole
-cycle.
+branch, an automated job opens an ordinary pull request back to `main`,
+reviewed and CI-gated like any other change, with no direct pushes to
+protected branches. When that release is the newest stable, the pull
+request is a merge of the release commit together with its version
+stamps, because the next release on `main` computes its version and its
+changelog range from the last stable in its own history. Merge it with a
+merge commit; the other merge methods discard that history, and the next
+Release Prepare on `main` refuses until the port has landed. If the
+merge hits a conflict outside the release's own files (its version
+stamps, its notes page, the notes index and the staging notes), the job
+opens the files-only pull request instead and its description names the
+conflicting files: merge the release commit by hand, with a merge
+commit, before the next release from `main`. When the release patches
+an older series, or a higher release has merged but not yet tagged, the
+pull request carries only the changelog section, the notes page and the
+index entry, and merges any way you like.
+Release candidates port nothing: the stable's changelog section covers
+the whole cycle.
 
 Release branches carry shipped releases, so they get the same protection
 as `main`: pull requests plus green CI, applied by the shipped rulesets.

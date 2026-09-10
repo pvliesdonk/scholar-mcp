@@ -81,6 +81,7 @@ Detailed guidance lives in skills under `.agents/skills/` (portable; Claude Code
 - `code-review` — before opening a PR, marking one ready, or pushing further commits to a branch with an open PR: self-review the cumulative diff.
 - `applying-template-updates` — when working through the weekly template update PR (`copier/update` branch) or after running `copier update`.
 - `writing-release-notes` — when drafting a `docs/releases/` page.
+- `researching-references` — when a change depends on how something outside the repo behaves (a markdown dialect, git, a file format, a vendor API) and `docs/design/reference/` has no current page for it.
 
 Project-owned skills follow the same shape: a directory under `.agents/skills/` plus a relative symlink in `.claude/skills/`.
 
@@ -188,6 +189,7 @@ Always fetch both before declaring a review round complete.
 Every issue, PR, and code change must consider documentation impact. Before closing any issue or creating any PR, check whether the following need updating:
 
 - **`docs/design/`** — internal design specs and architecture decisions (the authoritative dev reference). Any new feature, changed behavior, or architectural decision must be reflected here. Not part of the published site.
+- **`docs/design/reference/`** — an OKF v0.2 bundle of dated, sourced references on how *external* things behave (see the `researching-references` skill). A bug rooted in an external behaviour closes with a reference entry, not only a design-doc narrative; a reference past its `stale_after` date is re-researched, never trusted.
 - **`README.md`** — user-facing documentation. New env vars, tools, resources, prompts, CLI flags, or configuration options must be documented here.
 - **`docs/` site pages** — the published documentation site. New or changed MCP tools/resources/prompts, new env vars, new installation methods or deployment options.
 - **`CHANGELOG.md`** — machine-generated audit trail: knope writes each release's version section (below the `<!-- version list -->` insertion flag) into the release PR's diff. Never hand-edit version sections or the flag line. If this project was generated before the flag existed, add the flag line to `CHANGELOG.md` once by hand — `tests/test_release_flow_contract.py` fails with the exact line until it is present.
@@ -204,7 +206,7 @@ Everything under `docs/`, plus **`README.md`**, is operator-facing prose and is
 **Internal / developer docs are not user-facing and are not linted.** They live
 under a fixed set of subtrees, excluded from both the published site and Vale:
 
-- `docs/design/` — design specs and architecture notes
+- `docs/design/` — design specs and architecture notes; `docs/design/reference/` holds the external-behaviour references
 - `docs/decisions/` — architecture decision records (ADRs)
 - `docs/superpowers/` — agent working specs and plans (also gitignored)
 

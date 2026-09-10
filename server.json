@@ -264,8 +264,18 @@
         },
         {
           "name": "SCHOLAR_MCP_HTTP_PATH",
-          "description": "Mount path for the MCP endpoint.",
+          "description": "Mount path for the MCP endpoint; the health routes derive their prefix from it.",
           "default": "/mcp"
+        },
+        {
+          "name": "SCHOLAR_MCP_HEALTH_DETAIL",
+          "description": "How much the unauthenticated /health and /health/ready bodies say: status, standard (adds name, version and per-check verdicts), or full (adds redacted reasons; trusted networks only).",
+          "default": "standard",
+          "choices": [
+            "status",
+            "standard",
+            "full"
+          ]
         },
         {
           "name": "PUID",
