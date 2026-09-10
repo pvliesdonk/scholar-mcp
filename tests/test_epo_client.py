@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -892,23 +893,89 @@ async def test_preflight_cache_expires_after_60s(
 # _parse_pdf_link tests
 # ---------------------------------------------------------------------------
 
+_EPO_FIXTURES = Path(__file__).parent / "fixtures" / "epo"
+
+
+def _real_inquiry(name: str) -> bytes:
+    """Read a verbatim captured EPO image-inquiry response.
+
+    Args:
+        name: File name under ``tests/fixtures/epo``.
+
+    Returns:
+        The raw response bytes exactly as EPO sent them.
+    """
+    return (_EPO_FIXTURES / name).read_bytes()
+
+
+@pytest.mark.parametrize(
+    "fixture_name,expected_link",
+    [
+        (
+            "images_inquiry_ep3491801b1.xml",
+            "published-data/images/EP/3491801/B1/fullimage",
+        ),
+        (
+            "images_inquiry_wo2019016210a1.xml",
+            "published-data/images/WO/2019016210/A1/fullimage",
+        ),
+    ],
+    ids=["ep-b1", "wo-a1"],
+)
+def test_parse_pdf_link_reads_the_shape_epo_actually_sends(
+    fixture_name: str, expected_link: str
+) -> None:
+    """The parser works against verbatim EPO responses, not hand-written ones.
+
+    EPO nests the MIME type as element text inside
+    ``ops:document-format-options``. The fixtures this replaced put it in a
+    ``desc`` attribute on a direct child, which EPO never sends -- so the
+    parser passed its tests while returning None for every real patent (#371).
+    """
+    assert _parse_pdf_link(_real_inquiry(fixture_name)) == expected_link
+
+
+def test_parse_pdf_link_ignores_non_fulldocument_instances() -> None:
+    """A real response also carries Drawing and FirstPageClipping instances.
+
+    Those offer application/pdf too, so matching on the format alone would
+    return a thumbnail link. Only the FullDocument instance is the document.
+    """
+    link = _parse_pdf_link(_real_inquiry("images_inquiry_wo2019016210a1.xml"))
+    assert link is not None
+    assert "thumbnail" not in link
+    assert "firstpage" not in link
+
+
+# These two are trimmed to the shape EPO actually sends, cross-checked against
+# the verbatim captures in tests/fixtures/epo. They previously carried
+# `<ops:document-format desc="application/pdf"/>` as a direct child, an
+# attribute shape that appears in no real response (#371).
 _IMAGE_INQUIRY_XML = b"""<?xml version="1.0" encoding="UTF-8"?>
 <ops:world-patent-data xmlns:ops="http://ops.epo.org">
   <ops:document-inquiry>
     <ops:inquiry-result>
       <ops:document-instance desc="FullDocument" link="published-data/images/EP/1234567/A1/fullimage" number-of-pages="5">
-        <ops:document-format desc="application/pdf"/>
+        <ops:document-format-options>
+          <ops:document-format>application/pdf</ops:document-format>
+          <ops:document-format>application/tiff</ops:document-format>
+        </ops:document-format-options>
       </ops:document-instance>
     </ops:inquiry-result>
   </ops:document-inquiry>
 </ops:world-patent-data>"""
 
+# Derived, not captured: every patent probed while fixing #371 offered a PDF,
+# so no real no-PDF response was available. The element shape is real; only
+# the absence of application/pdf is constructed.
 _IMAGE_INQUIRY_NO_PDF_XML = b"""<?xml version="1.0" encoding="UTF-8"?>
 <ops:world-patent-data xmlns:ops="http://ops.epo.org">
   <ops:document-inquiry>
     <ops:inquiry-result>
       <ops:document-instance desc="FullDocument" link="published-data/images/EP/1234567/A1/fullimage" number-of-pages="5">
-        <ops:document-format desc="image/tiff"/>
+        <ops:document-format-options>
+          <ops:document-format>application/tiff</ops:document-format>
+        </ops:document-format-options>
       </ops:document-instance>
     </ops:inquiry-result>
   </ops:document-inquiry>

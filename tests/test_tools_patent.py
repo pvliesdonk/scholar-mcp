@@ -1167,13 +1167,23 @@ async def test_npl_chapter_info_no_s2_branch(
 
 
 def _make_image_inquiry_xml(link: str, pages: int = 5) -> bytes:
-    """Build a minimal EPO image inquiry XML response."""
+    """Build a minimal EPO image inquiry XML response.
+
+    The format elements carry the MIME type as text inside
+    ``document-format-options``, which is what EPO sends; see the verbatim
+    captures in ``tests/fixtures/epo``. This builder previously emitted a
+    ``desc`` attribute on a direct child, a shape no real response uses,
+    which is why the tests passed while the tool never found a PDF (#371).
+    """
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <ops:world-patent-data xmlns:ops="http://ops.epo.org" xmlns:exch="http://www.epo.org/exchange">
   <ops:document-inquiry>
     <ops:inquiry-result>
       <ops:document-instance desc="FullDocument" link="{link}" number-of-pages="{pages}">
-        <ops:document-format desc="application/pdf"/>
+        <ops:document-format-options>
+          <ops:document-format>application/pdf</ops:document-format>
+          <ops:document-format>application/tiff</ops:document-format>
+        </ops:document-format-options>
       </ops:document-instance>
     </ops:inquiry-result>
   </ops:document-inquiry>

@@ -60,6 +60,24 @@ def _parse_throttle_header(header: str) -> dict[str, str]:
 def _parse_pdf_link(inquiry_xml: bytes) -> str | None:
     """Extract the FullDocument PDF link path from an EPO image inquiry response.
 
+    EPO advertises the available formats as the *text* of
+    ``ops:document-format`` elements, wrapped in ``document-format-options``::
+
+        <ops:document-instance desc="FullDocument" link="...">
+          <ops:document-format-options>
+            <ops:document-format>application/pdf</ops:document-format>
+
+    The descendant axis is deliberate: it matches whether or not the wrapper
+    is present, without depending on the exact nesting depth. Matching a
+    ``desc`` attribute instead is what made this return ``None`` for every
+    real patent while its hand-written fixtures passed (#371); verbatim
+    captured responses now live in ``tests/fixtures/epo``.
+
+    Only the FullDocument instance qualifies. A real response also carries
+    ``Drawing`` and ``FirstPageClipping`` instances that offer
+    ``application/pdf``, so matching on the format alone would hand back a
+    thumbnail.
+
     Args:
         inquiry_xml: Raw XML bytes from ``published_data(..., endpoint='images')``.
 
@@ -73,10 +91,13 @@ def _parse_pdf_link(inquiry_xml: bytes) -> str | None:
         for el in root.xpath(
             "//ops:document-instance[@desc='FullDocument']", namespaces=ns
         ):
-            for fmt in el:
-                if fmt.get("desc") == "application/pdf":
-                    link = el.get("link")
-                    return str(link) if link is not None else None
+            formats = {
+                str(text).strip()
+                for text in el.xpath(".//ops:document-format/text()", namespaces=ns)
+            }
+            if "application/pdf" in formats:
+                link = el.get("link")
+                return str(link) if link is not None else None
         return None
     except (RateLimitedError, EpoRateLimitedError):
         raise
