@@ -1264,7 +1264,12 @@ async def test_get_pdf_second_throttle_check_raises(
     mock_ops_client: MagicMock,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """get_pdf() raises after step-1 when retrieval becomes throttled before step-2."""
+    """get_pdf() raises when the images light turns amber before the download.
+
+    The inquiry bills ``retrieval`` and the page download bills ``images``
+    (they are different OPS operations), so this pre-flight is about the
+    images light specifically.
+    """
     # Step 1 returns green so _check_throttle passes; step-2 pre-flight returns True.
     mock_ops_client.published_data.return_value = _mock_response(_IMAGE_INQUIRY_XML)
 
@@ -1274,7 +1279,7 @@ async def test_get_pdf_second_throttle_check_raises(
         nonlocal call_count
         call_count += 1
         if call_count > 1:
-            epo_client._throttle_cache = {"retrieval": "yellow", "_overall": "green"}
+            epo_client._throttle_cache = {"images": "yellow", "_overall": "green"}
             epo_client._throttle_cache_ts = time.monotonic()
             return True
         return False
@@ -1282,7 +1287,7 @@ async def test_get_pdf_second_throttle_check_raises(
     monkeypatch.setattr(epo_client, "_is_service_throttled", throttled_on_second_call)
 
     doc = DocdbNumber(country="EP", number="1234567", kind="A1")
-    with pytest.raises(EpoRateLimitedError, match="retrieval"):
+    with pytest.raises(EpoRateLimitedError, match="images"):
         await epo_client.get_pdf(doc)
 
     mock_ops_client.image.assert_not_called()
@@ -1293,7 +1298,7 @@ async def test_get_pdf_second_throttle_check_black_raises_runtime_error(
     mock_ops_client: MagicMock,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """get_pdf() raises RuntimeError if retrieval goes black between step-1 and step-2."""
+    """get_pdf() raises RuntimeError if images goes black between step-1 and step-2."""
     mock_ops_client.published_data.return_value = _mock_response(_IMAGE_INQUIRY_XML)
 
     call_count = 0
@@ -1302,7 +1307,7 @@ async def test_get_pdf_second_throttle_check_black_raises_runtime_error(
         nonlocal call_count
         call_count += 1
         if call_count > 1:
-            epo_client._throttle_cache = {"retrieval": "black", "_overall": "green"}
+            epo_client._throttle_cache = {"images": "black", "_overall": "green"}
             epo_client._throttle_cache_ts = time.monotonic()
             return True
         return False

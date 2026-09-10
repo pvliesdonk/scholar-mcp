@@ -701,12 +701,16 @@ class EpoClient:
         document: a 21-page patent is 21 calls, and EPO can turn amber
         part-way through.
 
-        Both the ``images`` and ``retrieval`` lights are consulted. Which of
-        them OPS bills an image download against is not something the
-        throttle header reveals, and confirming it would mean driving a
-        shared quota off green, so this honours whichever is stricter.
-        ``retrieval`` is tested first only so the error keeps naming the
-        service this path has always named.
+        The light consulted is ``images``, not ``retrieval``. OPS documents
+        exactly one image-retrieval operation,
+        ``/published-data/images/{country}/{number}/{kind}/{type}``, and the
+        reference client classifies that path prefix under the ``images``
+        service (``epo_ops/middlewares/throttle/utils.py``). The inquiry that
+        produced the link lives at ``/published-data/{type}/{format}/{number}
+        /images``, which falls through to ``retrieval`` -- so the two steps of
+        this download bill different buckets, and checking ``retrieval`` here
+        would abandon a part-fetched document over congestion that does not
+        apply to it.
 
         Args:
             link: Image-service path from the inquiry response.
@@ -719,14 +723,11 @@ class EpoClient:
             EpoQuotaExhaustedError: When the daily quota is spent.
             EpoRateLimitedError: When either light is not green.
         """
-        # retrieval first: it is the light this path has always reported, so
-        # an error keeps naming it when both are amber.
-        for service in ("retrieval", "images"):
-            if self._is_service_throttled(service):
-                color = self._throttle_color(service)
-                if color == "black":
-                    raise EpoQuotaExhaustedError
-                raise EpoRateLimitedError(color, service=service)
+        if self._is_service_throttled("images"):
+            color = self._throttle_color("images")
+            if color == "black":
+                raise EpoQuotaExhaustedError
+            raise EpoRateLimitedError(color, service="images")
 
         async with self._lock:
             pdf_resp = await asyncio.to_thread(
@@ -735,9 +736,7 @@ class EpoClient:
                 range=page_no,
                 document_format="application/pdf",
             )
-        # Names retrieval, but caches every colour in the header, so the next
-        # page's pre-check sees a fresh images light too.
-        self._check_throttle(pdf_resp, service="retrieval")
+        self._check_throttle(pdf_resp, service="images")
         return bytes(pdf_resp.content)
 
     async def aclose(self) -> None:
