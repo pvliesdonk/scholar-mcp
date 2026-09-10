@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from scholar_mcp._epo_xml import (
     parse_biblio_xml,
     parse_citations_from_biblio,
@@ -642,27 +644,9 @@ FAMILY_XML = b"""\
   </ops:patent-family>
 </ops:world-patent-data>"""
 
-LEGAL_XML = b"""\
-<?xml version="1.0" encoding="UTF-8"?>
-<ops:world-patent-data xmlns:ops="http://ops.epo.org"
-    xmlns="http://www.epo.org/exchange">
-  <ops:register-documents>
-    <ops:register-document country="EP" doc-number="1234567" kind="A1">
-      <ops:legal>
-        <ops:legal-event>
-          <ops:event-date><ops:date>20190501</ops:date></ops:event-date>
-          <ops:event-code>APPLICATION</ops:event-code>
-          <ops:event-text>Application filed</ops:event-text>
-        </ops:legal-event>
-        <ops:legal-event>
-          <ops:event-date><ops:date>20200115</ops:date></ops:event-date>
-          <ops:event-code>PUBLICATION</ops:event-code>
-          <ops:event-text>Publication of application</ops:event-text>
-        </ops:legal-event>
-      </ops:legal>
-    </ops:register-document>
-  </ops:register-documents>
-</ops:world-patent-data>"""
+REAL_LEGAL_XML = (
+    Path(__file__).parent / "fixtures" / "epo" / "legal_ep1000000a1.xml"
+).read_bytes()
 
 
 # ---------------------------------------------------------------------------
@@ -696,15 +680,43 @@ class TestParseFamilyXml:
 
 
 class TestParseLegalXml:
-    def test_legal_events(self) -> None:
-        result = parse_legal_xml(LEGAL_XML)
-        assert len(result) == 2
+    def test_reads_the_shape_epo_actually_sends(self) -> None:
+        """Parse a verbatim response, not a hand-written approximation.
 
-    def test_event_fields(self) -> None:
-        result = parse_legal_xml(LEGAL_XML)
-        assert result[0]["date"] == "2019-05-01"
-        assert result[0]["code"] == "APPLICATION"
-        assert "filed" in result[0]["description"]
+        The fixture this replaced wrapped `ops:legal-event` elements in
+        `ops:register-documents`; OPS sends neither. The parser matched the
+        invention, so the suite stayed green while every legal lookup came
+        back empty (#390).
+        """
+        result = parse_legal_xml(REAL_LEGAL_XML)
+        assert len(result) == 50
+
+    def test_event_meaning_comes_from_the_legal_element(self) -> None:
+        """`code` and `desc` on `ops:legal` carry the event; children are fields."""
+        result = parse_legal_xml(REAL_LEGAL_XML)
+        first = result[0]
+        assert first["code"] == "17Q"
+        assert first["description"] == "FIRST EXAMINATION REPORT DESPATCHED"
+
+    def test_code_is_stripped_of_its_padding(self) -> None:
+        """EPO pads codes to four characters: `code="17Q "`, `code="AK  "`."""
+        codes = [e["code"] for e in parse_legal_xml(REAL_LEGAL_XML)]
+        assert all(c == c.strip() for c in codes)
+        assert "AK" in codes
+
+    def test_date_is_the_gazette_date(self) -> None:
+        """L007EP, not L018EP or L019EP, which are present and differ.
+
+        See docs/design/reference/epo-ops-legal-events.md, "Dates".
+        """
+        first = parse_legal_xml(REAL_LEGAL_XML)[0]
+        assert first["date"] == "2002-06-05"
+
+    def test_every_event_has_a_date_code_and_description(self) -> None:
+        for event in parse_legal_xml(REAL_LEGAL_XML):
+            assert event["code"]
+            assert event["description"]
+            assert event["date"]
 
     def test_empty_xml(self) -> None:
         empty = b'<?xml version="1.0"?><ops:world-patent-data xmlns:ops="http://ops.epo.org"></ops:world-patent-data>'

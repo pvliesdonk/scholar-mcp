@@ -13,6 +13,15 @@ Python dicts.  Supported endpoints:
 The parsers use ``lxml.etree`` with XPath and namespace-aware element
 traversal.  All helper functions are module-private; the public
 ``parse_*`` functions are the module's interface.
+
+How OPS shapes these responses is recorded with its evidence under
+``docs/design/reference/`` -- see ``epo-ops-legal-events.md`` for the legal
+service and ``epo-ops-images.md`` for the image inquiry. Read the relevant
+page before changing a parser here: both parsers in this module that were
+written from an assumed shape turned out to match nothing EPO sends (#371,
+#390), and their fixtures encoded the same assumption, so the suite stayed
+green.
+
 """
 
 from __future__ import annotations
@@ -28,6 +37,9 @@ from ._record_types import PatentRecord
 logger = logging.getLogger(__name__)
 
 # XML namespaces used in EPO OPS responses.
+_ISO_DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
+"""Dates the legal service already sends hyphenated, unlike the compact form."""
+
 _NS: dict[str, str] = {
     "ops": "http://ops.epo.org",
     "exch": "http://www.epo.org/exchange",
@@ -71,6 +83,9 @@ def _date_fmt(raw: str) -> str:
         not exactly 8 characters.
     """
     raw = raw.strip()
+    if _ISO_DATE_RE.fullmatch(raw):
+        # The legal service sends dates already hyphenated.
+        return raw
     if len(raw) == 8:
         return f"{raw[:4]}-{raw[4:6]}-{raw[6:8]}"
     return ""
@@ -424,25 +439,32 @@ def parse_family_xml(xml_data: bytes) -> list[dict[str, str]]:
 def parse_legal_xml(xml_data: bytes) -> list[dict[str, str]]:
     """Parse EPO OPS legal status response into event list.
 
+    An event is an ``ops:legal`` element whose ``code`` and ``desc``
+    attributes carry its meaning; the ``L###EP`` children are the fields
+    within it, each naming itself in its own ``desc``. The date comes from
+    ``L007EP`` ("Gazette DATE") rather than ``L018EP`` or ``L019EP``, which
+    are also present and differ -- see
+    ``docs/design/reference/epo-ops-legal-events.md``.
+
     Args:
         xml_data: Raw XML bytes from the legal endpoint.
 
     Returns:
         List of dicts with ``date``, ``code``, ``description`` for each
-        legal event.
+        legal event, in document order.
     """
     root = etree.fromstring(xml_data)
     events: list[dict[str, str]] = []
 
-    for event in root.findall(".//ops:legal-event", _NS):
-        date_el = event.find("ops:event-date/ops:date", _NS)
-        code_el = event.find("ops:event-code", _NS)
-        text_el = event.find("ops:event-text", _NS)
+    for event in root.findall(".//ops:legal", _NS):
+        # EPO pads the code to four characters ("17Q ", "AK  ").
+        code = (event.get("code") or "").strip()
+        description = (event.get("desc") or "").strip()
         events.append(
             {
-                "date": _date_fmt(_text(date_el)),
-                "code": _text(code_el),
-                "description": _text(text_el),
+                "date": _date_fmt(_text(event.find("ops:L007EP", _NS))),
+                "code": code,
+                "description": description,
             }
         )
 
