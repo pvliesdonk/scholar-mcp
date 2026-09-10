@@ -143,11 +143,33 @@ For library usage (embedding the domain logic without the MCP transport), import
 
 ### Server info
 
-The server registers a built-in `get_server_info` tool (via `fastmcp_pvl_core.register_server_info_tool`) so operators can confirm the deployed version with a single MCP call. The default response carries `server_name`, `server_version`, and `core_version`. Servers that talk to a remote upstream wire upstream version reporting inside the `DOMAIN-UPSTREAM-START` / `DOMAIN-UPSTREAM-END` sentinel in `src/scholar_mcp/server.py`; see [`tool-registration`](.agents/skills/tool-registration/SKILL.md#server-info-tool-get_server_info) for the wiring pattern.
+The server registers a built-in `get_server_info` tool (via `fastmcp_pvl_core.register_server_info_tool`) so operators can confirm the deployed version with a single MCP call. The default response carries `server_name`, `server_version`, and `core_version`. Servers that talk to a remote upstream wire upstream reporting inside the `DOMAIN-UPSTREAM-START` / `DOMAIN-UPSTREAM-END` sentinel in `src/scholar_mcp/server.py`; see [`tool-registration`](.agents/skills/tool-registration/SKILL.md#server-info-tool-get_server_info) for the wiring pattern.
+
+Scholar uses that slot for **Semantic Scholar key health**, under a `semantic_scholar` key:
+
+```json
+{
+  "server_name": "pvliesdonk-scholar-mcp",
+  "server_version": "2.0.0",
+  "core_version": "7.1.0",
+  "semantic_scholar": {
+    "key_configured": true,
+    "key_status": "degraded",
+    "consecutive_failures": 26,
+    "last_success": "2026-09-03T12:00:00+00:00",
+    "last_failure": "2026-09-10T18:00:00+00:00",
+    "last_failure_kind": "rate_limited"
+  }
+}
+```
+
+`key_status` is one of `not_configured` (no key set, so the anonymous tier serves), `unknown` (configured, not yet pinged), `ok`, `failing` (refused, but not for long enough to mean more than throttling), or `degraded`. The `degraded` threshold is the same one the keepalive escalates at, so this field and the `s2_keepalive_degraded` log line never disagree.
+
+This is reported here rather than as a `/health/ready` check on purpose. A revoked key breaks the Semantic Scholar tools, while OpenAlex, Crossref, EPO, Open Library and the standards sources keep serving. No restart revives it either, so failing readiness would drop the server from rotation over a condition a restart cannot repair, and `compose.yml`'s probe would restart the container in a loop.
 
 ### Health
 
-The server serves `/health` (liveness, a static `200`) and `/health/ready` (readiness, `503` when a backing store or a domain check fails) outside the MCP mount and outside auth, via `fastmcp_pvl_core.register_health_routes`. `compose.yml` probes the first. Domain readiness checks go in the `health_checks` dict in `src/scholar_mcp/server.py`; see [Docker deployment](docs/deployment/docker.md#health) for the routes, the mount-path rule, and `SCHOLAR_MCP_HEALTH_DETAIL`.
+The server serves `/health` (liveness, a static `200`) and `/health/ready` (readiness, `503` when a backing store or a domain check fails) outside the MCP mount and outside auth, via `fastmcp_pvl_core.register_health_routes`. `compose.yml` probes the first. Domain readiness checks go in the `health_checks` dict in `src/scholar_mcp/server.py`, deliberately empty here, because scholar's one candidate signal is a partial degradation better reported through `get_server_info` (above) than gated on; see [Docker deployment](docs/deployment/docker.md#health) for the routes, the mount-path rule, and `SCHOLAR_MCP_HEALTH_DETAIL`.
 
 ## Configuration
 

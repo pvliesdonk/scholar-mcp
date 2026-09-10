@@ -44,6 +44,7 @@ from fastmcp_pvl_core import (
     resolve_auth_mode as _core_resolve_auth_mode,
 )
 
+from scholar_mcp._s2_client import S2_KEEPALIVE_STATUS
 from scholar_mcp._server_deps import server_lifespan
 from scholar_mcp._server_prompts import register_prompts
 from scholar_mcp._server_resources import register_resources
@@ -288,14 +289,23 @@ def make_server(
         mcp,
         server_name=server_name,
         server_version=pkg_ver,
-        # DOMAIN-UPSTREAM-START — wire upstream version reporting for servers
-        # that talk to a single remote service. Scholar consumes multiple
-        # upstreams (S2/OpenAlex/EPO/OpenLibrary/...) with no canonical
-        # "the upstream", so this block stays empty by default. Uncomment if
-        # we ever want to surface a primary upstream's version through
-        # get_server_info.
-        # upstream_version=lambda: _upstream_client.remote_version(),
-        # upstream_label="semantic-scholar",
+        # DOMAIN-UPSTREAM-START — wire upstream reporting for servers that
+        # talk to a single remote service. Scholar consumes many upstreams
+        # (S2/OpenAlex/EPO/OpenLibrary/...) with no canonical "the upstream",
+        # so this slot reports the one piece of upstream state an operator
+        # cannot otherwise see: whether the configured Semantic Scholar key
+        # still buys authenticated quota (#229).
+        #
+        # Reported here rather than as a `/health/ready` check on purpose. A
+        # readiness failure takes the whole server out of rotation and, under
+        # the compose healthcheck, restarts the container -- neither of which
+        # revives a revoked key, while OpenAlex, Crossref, EPO, OpenLibrary
+        # and the standards sources carry on serving. A partial degradation
+        # you would rather report than be restarted for belongs in
+        # get_server_info; see docs/design/reference/ for what the keepalive
+        # can and cannot tell.
+        upstream_version=S2_KEEPALIVE_STATUS.as_dict,
+        upstream_label="semantic_scholar",
         # DOMAIN-UPSTREAM-END
     )
 

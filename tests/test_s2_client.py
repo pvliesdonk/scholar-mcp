@@ -7,9 +7,11 @@ import pytest
 
 from scholar_mcp._s2_client import (
     FIELD_SETS,
+    KEEPALIVE_DEGRADED_AFTER_FAILURES,
     KEEPALIVE_INTERVAL_SECONDS,
     KEEPALIVE_PAPER_ID,
     KEEPALIVE_RETRY_INTERVAL_SECONDS,
+    KeepaliveStatus,
     S2Client,
     format_s2_error,
     log_s2_error,
@@ -148,7 +150,7 @@ async def test_run_keepalive_calls_immediately_then_on_interval(
         caplog.at_level(logging.DEBUG, logger="scholar_mcp._s2_client"),
         pytest.raises(asyncio.CancelledError),
     ):
-        await run_keepalive(client)
+        await run_keepalive(client, status=KeepaliveStatus())
 
     assert route.call_count == 2
     assert sleep_calls == [KEEPALIVE_INTERVAL_SECONDS, KEEPALIVE_INTERVAL_SECONDS]
@@ -178,7 +180,7 @@ async def test_run_keepalive_403_logs_and_continues(
         caplog.at_level(logging.DEBUG, logger="scholar_mcp._s2_client"),
         pytest.raises(asyncio.CancelledError),
     ):
-        await run_keepalive(client)
+        await run_keepalive(client, status=KeepaliveStatus())
 
     assert route.call_count == 1
     assert "s2_keepalive_key_forbidden" in caplog.text
@@ -204,7 +206,7 @@ async def test_run_keepalive_other_failure_logs_warning_and_continues(
         caplog.at_level(logging.DEBUG, logger="scholar_mcp._s2_client"),
         pytest.raises(asyncio.CancelledError),
     ):
-        await run_keepalive(client)
+        await run_keepalive(client, status=KeepaliveStatus())
 
     assert route.call_count == 1
     assert "s2_keepalive_failed" in caplog.text
@@ -231,7 +233,7 @@ async def test_run_keepalive_rate_limited_logs_and_continues(
         caplog.at_level(logging.DEBUG, logger="scholar_mcp._s2_client"),
         pytest.raises(asyncio.CancelledError),
     ):
-        await run_keepalive(client)
+        await run_keepalive(client, status=KeepaliveStatus())
 
     assert route.call_count == 1
     assert "s2_keepalive_rate_limited" in caplog.text
@@ -258,7 +260,7 @@ async def test_run_keepalive_network_error_logs_and_continues(
         caplog.at_level(logging.DEBUG, logger="scholar_mcp._s2_client"),
         pytest.raises(asyncio.CancelledError),
     ):
-        await run_keepalive(client)
+        await run_keepalive(client, status=KeepaliveStatus())
 
     assert route.call_count == 1
     assert "s2_keepalive_failed status=network_error" in caplog.text
@@ -284,7 +286,7 @@ async def test_run_keepalive_retries_soon_after_a_refused_ping(
 
     monkeypatch.setattr("scholar_mcp._s2_client.asyncio.sleep", fake_sleep)
     with pytest.raises(asyncio.CancelledError):
-        await run_keepalive(client)
+        await run_keepalive(client, status=KeepaliveStatus())
 
     assert sleep_calls == [
         KEEPALIVE_RETRY_INTERVAL_SECONDS,
@@ -312,7 +314,7 @@ async def test_run_keepalive_returns_to_full_interval_after_recovery(
 
     monkeypatch.setattr("scholar_mcp._s2_client.asyncio.sleep", fake_sleep)
     with pytest.raises(asyncio.CancelledError):
-        await run_keepalive(client)
+        await run_keepalive(client, status=KeepaliveStatus())
 
     assert sleep_calls == [
         KEEPALIVE_RETRY_INTERVAL_SECONDS,
@@ -345,7 +347,7 @@ async def test_run_keepalive_escalates_once_when_failures_persist(
         caplog.at_level(logging.DEBUG, logger="scholar_mcp._s2_client"),
         pytest.raises(asyncio.CancelledError),
     ):
-        await run_keepalive(client)
+        await run_keepalive(client, status=KeepaliveStatus())
 
     degraded = [r for r in caplog.records if "s2_keepalive_degraded" in r.message]
     assert len(degraded) == 1, "escalation must not re-log on every retry"
@@ -378,7 +380,7 @@ async def test_run_keepalive_reports_recovery_after_degrading(
         caplog.at_level(logging.DEBUG, logger="scholar_mcp._s2_client"),
         pytest.raises(asyncio.CancelledError),
     ):
-        await run_keepalive(client)
+        await run_keepalive(client, status=KeepaliveStatus())
 
     assert "s2_keepalive_recovered after_failures=2" in caplog.text
 
@@ -406,7 +408,94 @@ async def test_run_keepalive_stays_quiet_when_never_degraded(
         caplog.at_level(logging.DEBUG, logger="scholar_mcp._s2_client"),
         pytest.raises(asyncio.CancelledError),
     ):
-        await run_keepalive(client)
+        await run_keepalive(client, status=KeepaliveStatus())
 
     assert "s2_keepalive_degraded" not in caplog.text
     assert "s2_keepalive_recovered" not in caplog.text
+
+
+# --- The keepalive's verdict is readable, not only loggable (#229) ---
+
+
+def test_keepalive_status_is_unknown_before_the_first_ping() -> None:
+    """A configured key with no result yet is unknown, never ok.
+
+    The window matters: the loop pings on startup, so anything reading this
+    in the first moments of a process must not be told the key is fine.
+    """
+    status = KeepaliveStatus()
+    status.mark_configured()
+    assert status.as_dict()["key_status"] == "unknown"
+
+
+def test_keepalive_status_reports_not_configured_without_a_key() -> None:
+    """No key is a deployment choice, not a fault: the anonymous tier works."""
+    status = KeepaliveStatus()
+    status.mark_not_configured()
+    payload = status.as_dict()
+    assert payload["key_status"] == "not_configured"
+    assert payload["key_configured"] is False
+
+
+def test_keepalive_status_reports_ok_after_a_successful_ping() -> None:
+    status = KeepaliveStatus()
+    status.mark_configured()
+    status.record_success()
+    payload = status.as_dict()
+    assert payload["key_status"] == "ok"
+    assert payload["consecutive_failures"] == 0
+    assert payload["last_success"] is not None
+
+
+def test_keepalive_status_distinguishes_failing_from_degraded() -> None:
+    """One refusal is noise; a day of them is the signal #368 escalates on."""
+    status = KeepaliveStatus()
+    status.mark_configured()
+    status.record_failure("rate_limited")
+    assert status.as_dict()["key_status"] == "failing"
+
+    for _ in range(KEEPALIVE_DEGRADED_AFTER_FAILURES - 1):
+        status.record_failure("rate_limited")
+    payload = status.as_dict()
+    assert payload["key_status"] == "degraded"
+    assert payload["consecutive_failures"] == KEEPALIVE_DEGRADED_AFTER_FAILURES
+    assert payload["last_failure_kind"] == "rate_limited"
+
+
+def test_keepalive_status_clears_on_recovery() -> None:
+    """A recovered key must stop reporting degraded, and keep the history."""
+    status = KeepaliveStatus()
+    status.mark_configured()
+    for _ in range(KEEPALIVE_DEGRADED_AFTER_FAILURES):
+        status.record_failure("rate_limited")
+    status.record_success()
+    payload = status.as_dict()
+    assert payload["key_status"] == "ok"
+    assert payload["consecutive_failures"] == 0
+    assert payload["last_failure"] is not None, "the failure history survives recovery"
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_run_keepalive_publishes_its_verdict(
+    respx_mock, client, monkeypatch
+) -> None:
+    """The loop updates the shared status, so a reader sees what the log says."""
+    respx_mock.get(f"/paper/{KEEPALIVE_PAPER_ID}").mock(
+        return_value=httpx.Response(429, text="slow down")
+    )
+    status = KeepaliveStatus()
+    sleep_calls: list[float] = []
+
+    async def fake_sleep(seconds: float) -> None:
+        sleep_calls.append(seconds)
+        if len(sleep_calls) >= 2:
+            raise asyncio.CancelledError
+
+    monkeypatch.setattr("scholar_mcp._s2_client.asyncio.sleep", fake_sleep)
+    with pytest.raises(asyncio.CancelledError):
+        await run_keepalive(client, status=status)
+
+    payload = status.as_dict()
+    assert payload["consecutive_failures"] == 2
+    assert payload["key_status"] == "failing"
+    assert payload["last_failure_kind"] == "rate_limited"

@@ -195,6 +195,47 @@ class TestServerInfoTool:
         payload = json.loads(first.text)
         assert payload["server_name"] == "scholar-mcp-prod"
 
+    async def test_get_server_info_reports_s2_key_health(self, server: FastMCP) -> None:
+        """The keepalive's verdict is readable, not only loggable (#229).
+
+        Reported here rather than gated on in `/health/ready`: a revoked key
+        breaks the Semantic Scholar tools while every other upstream keeps
+        serving, and no restart revives it.
+        """
+        result = await server.call_tool("get_server_info")
+        payload = json.loads(result.content[0].text)
+
+        assert "semantic_scholar" in payload, f"no S2 block in {sorted(payload)}"
+        s2 = payload["semantic_scholar"]
+        assert set(s2) == {
+            "key_configured",
+            "key_status",
+            "consecutive_failures",
+            "last_success",
+            "last_failure",
+            "last_failure_kind",
+        }
+        # The test server configures no key, so the absence reports itself
+        # rather than looking like a key that has never been pinged.
+        assert s2["key_configured"] is False
+        assert s2["key_status"] == "not_configured"
+
+    async def test_get_server_info_s2_block_tracks_the_keepalive(
+        self, server: FastMCP, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A degraded key shows up in the payload, not just the log."""
+        from scholar_mcp._s2_client import S2_KEEPALIVE_STATUS
+
+        monkeypatch.setattr(S2_KEEPALIVE_STATUS, "configured", True)
+        monkeypatch.setattr(S2_KEEPALIVE_STATUS, "consecutive_failures", 24)
+        monkeypatch.setattr(S2_KEEPALIVE_STATUS, "last_failure_kind", "rate_limited")
+
+        result = await server.call_tool("get_server_info")
+        s2 = json.loads(result.content[0].text)["semantic_scholar"]
+        assert s2["key_status"] == "degraded"
+        assert s2["consecutive_failures"] == 24
+        assert s2["last_failure_kind"] == "rate_limited"
+
 
 class TestResolveAuthMode:
     """Tests for _resolve_auth_mode() auto-detection and explicit overrides."""

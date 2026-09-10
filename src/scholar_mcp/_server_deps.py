@@ -26,7 +26,13 @@ from ._google_books_client import GoogleBooksClient
 from ._openalex_client import OpenAlexClient
 from ._openlibrary_client import OpenLibraryClient
 from ._rate_limiter import RateLimiter
-from ._s2_client import KEEPALIVE_INTERVAL_SECONDS, S2Client, run_keepalive
+from ._s2_client import (
+    KEEPALIVE_INTERVAL_SECONDS,
+    S2_KEEPALIVE_STATUS,
+    KeepaliveStatus,
+    S2Client,
+    run_keepalive,
+)
 from ._standards_client import StandardsClient
 from .config import ProjectConfig
 
@@ -96,24 +102,28 @@ def _build_enrichment_pipeline() -> EnrichmentPipeline:
 
 
 def _start_s2_keepalive(
-    client: S2Client, *, api_key: str | None
+    client: S2Client, *, api_key: str | None, status: KeepaliveStatus
 ) -> asyncio.Task[None] | None:
     """Start the S2 keepalive background task if an API key is configured.
 
     Args:
         client: The S2 client to keep alive.
         api_key: The configured S2 API key, or None.
+        status: The shared record ``get_server_info`` reads. Marked
+            not-configured when no key is set, so the absence reports itself
+            rather than looking like a key that has never been pinged (#229).
 
     Returns:
         The created task, or None if no API key is configured.
     """
     if not api_key:
         logger.info("s2_keepalive_not_started reason=no_api_key")
+        status.mark_not_configured()
         return None
     logger.info(
         "s2_keepalive_started interval_days=%s", KEEPALIVE_INTERVAL_SECONDS // 86400
     )
-    return asyncio.create_task(run_keepalive(client))
+    return asyncio.create_task(run_keepalive(client, status=status))
 
 
 def _build_docling(
@@ -232,7 +242,9 @@ async def server_lifespan(
 
     enrichment = _build_enrichment_pipeline()
 
-    s2_keepalive_task = _start_s2_keepalive(s2, api_key=config.s2_api_key)
+    s2_keepalive_task = _start_s2_keepalive(
+        s2, api_key=config.s2_api_key, status=S2_KEEPALIVE_STATUS
+    )
 
     bundle = ServiceBundle(
         s2=s2,

@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 import httpx
@@ -49,6 +51,111 @@ KEEPALIVE_RETRY_INTERVAL_SECONDS = 60 * 60
 # ERROR. At the retry interval above this is roughly a day of refusal --
 # far longer than any throttling S2 applies, so it does not fire on noise.
 KEEPALIVE_DEGRADED_AFTER_FAILURES = 24
+
+
+@dataclass
+class KeepaliveStatus:
+    """What the keepalive loop last observed about the configured S2 key.
+
+    Deliberately *reported*, not gated on. A dead key degrades the Semantic
+    Scholar tools while OpenAlex, Crossref, EPO and the rest keep working, and
+    no restart can revive it -- so this belongs in ``get_server_info`` rather
+    than in a readiness check that would take the whole server out of
+    rotation, or crash-loop a container, over one upstream (#229).
+
+    Attributes:
+        configured: Whether an API key was supplied at all.
+        consecutive_failures: Pings refused since the last success.
+        last_success: ISO-8601 UTC timestamp of the last answered ping.
+        last_failure: ISO-8601 UTC timestamp of the last refused ping.
+        last_failure_kind: Which failure it was -- ``rate_limited``,
+            ``forbidden``, ``http_error`` or ``network_error``.
+    """
+
+    configured: bool = False
+    consecutive_failures: int = 0
+    last_success: str | None = None
+    last_failure: str | None = None
+    last_failure_kind: str | None = None
+
+    def mark_configured(self) -> None:
+        """Record that a key was supplied, before any ping has run."""
+        self.configured = True
+
+    def mark_not_configured(self) -> None:
+        """Record that no key was supplied; the anonymous tier still serves."""
+        self.configured = False
+
+    def record_success(self) -> None:
+        """Record an answered ping, clearing the failure streak."""
+        self.consecutive_failures = 0
+        self.last_success = _utc_now()
+
+    def record_failure(self, kind: str) -> None:
+        """Record a refused ping.
+
+        Args:
+            kind: The failure class, as the loop's log event names it.
+        """
+        self.consecutive_failures += 1
+        self.last_failure = _utc_now()
+        self.last_failure_kind = kind
+
+    @property
+    def key_status(self) -> str:
+        """A one-word verdict a reader can act on.
+
+        ``not_configured`` (no key, anonymous tier), ``unknown`` (configured
+        but never yet pinged), ``ok``, ``failing`` (refused, but not for long
+        enough to mean more than throttling), or ``degraded`` -- the same
+        threshold the loop escalates at, so the field and the
+        ``s2_keepalive_degraded`` log line never disagree.
+
+        Returns:
+            One of the five states above.
+        """
+        if not self.configured:
+            return "not_configured"
+        if self.consecutive_failures >= KEEPALIVE_DEGRADED_AFTER_FAILURES:
+            return "degraded"
+        if self.consecutive_failures:
+            return "failing"
+        return "ok" if self.last_success else "unknown"
+
+    def as_dict(self) -> dict[str, Any]:
+        """Render the status for ``get_server_info``.
+
+        Returns:
+            A JSON-safe mapping; the failure history survives a recovery so a
+            reader can see that the key has been flapping.
+        """
+        return {
+            "key_configured": self.configured,
+            "key_status": self.key_status,
+            "consecutive_failures": self.consecutive_failures,
+            "last_success": self.last_success,
+            "last_failure": self.last_failure,
+            "last_failure_kind": self.last_failure_kind,
+        }
+
+
+S2_KEEPALIVE_STATUS = KeepaliveStatus()
+"""Process-wide record of the keepalive's verdict.
+
+A module singleton because there is exactly one keepalive per process, and
+because ``get_server_info``'s provider is a zero-argument callable registered
+in ``make_server`` -- long before the lifespan builds the service bundle, so
+there is nothing else for it to read.
+"""
+
+
+def _utc_now() -> str:
+    """Return the current UTC time as an ISO-8601 string.
+
+    Returns:
+        e.g. ``"2026-09-10T18:52:33+00:00"``.
+    """
+    return datetime.now(tz=UTC).isoformat(timespec="seconds")
 
 
 def log_s2_error(exc: httpx.HTTPStatusError) -> None:
@@ -400,7 +507,7 @@ class S2Client:
         return await with_s2_try_once(_call, self._limiter)  # type: ignore[no-any-return]
 
 
-async def _keepalive_ping(client: S2Client) -> bool:
+async def _keepalive_ping(client: S2Client, status: KeepaliveStatus) -> bool:
     """Fire one keepalive ping and log whatever came back.
 
     The ping stays single-shot (``retry=False``): hammering the endpoint the
@@ -409,6 +516,8 @@ async def _keepalive_ping(client: S2Client) -> bool:
 
     Args:
         client: The S2 client to ping.
+        status: Updated in place with the outcome, so a reader sees the same
+            verdict the log line reports.
 
     Returns:
         True when S2 answered the ping.
@@ -418,24 +527,29 @@ async def _keepalive_ping(client: S2Client) -> bool:
     except RateLimitedError:
         # get_paper(retry=False) raises this (not HTTPStatusError) on a 429.
         logger.warning("s2_keepalive_rate_limited")
+        status.record_failure("rate_limited")
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 403:
             logger.error("s2_keepalive_key_forbidden", exc_info=True)
+            status.record_failure("forbidden")
         else:
             logger.warning(
                 "s2_keepalive_failed status=%s",
                 exc.response.status_code,
                 exc_info=True,
             )
+            status.record_failure("http_error")
     except httpx.HTTPError:
         logger.warning("s2_keepalive_failed status=network_error", exc_info=True)
+        status.record_failure("network_error")
     else:
         logger.debug("s2_keepalive_ok")
+        status.record_success()
         return True
     return False
 
 
-async def run_keepalive(client: S2Client) -> None:
+async def run_keepalive(client: S2Client, *, status: KeepaliveStatus) -> None:
     """Ping S2 periodically to keep the API key from being removed for inactivity.
 
     Semantic Scholar may remove API keys that see no traffic for 60 days.
@@ -459,22 +573,27 @@ async def run_keepalive(client: S2Client) -> None:
 
     Args:
         client: The S2 client to ping.
+        status: The shared record this loop keeps current, so
+            ``get_server_info`` can report what the log lines say (#229).
     """
-    consecutive_failures = 0
+    # The loop only starts when a key is configured, so record that here
+    # rather than trusting the caller: `not_configured` outranks a failure
+    # streak in `key_status`, and a caller who forgot would report "no key"
+    # about a key that is actively being refused.
+    status.mark_configured()
     while True:
-        if await _keepalive_ping(client):
-            if consecutive_failures >= KEEPALIVE_DEGRADED_AFTER_FAILURES:
-                logger.info(
-                    "s2_keepalive_recovered after_failures=%d", consecutive_failures
-                )
-            consecutive_failures = 0
+        # Read before the ping: a success resets the count, and the recovery
+        # line needs the streak that just ended.
+        failures_before = status.consecutive_failures
+        if await _keepalive_ping(client, status):
+            if failures_before >= KEEPALIVE_DEGRADED_AFTER_FAILURES:
+                logger.info("s2_keepalive_recovered after_failures=%d", failures_before)
             await asyncio.sleep(KEEPALIVE_INTERVAL_SECONDS)
             continue
-        consecutive_failures += 1
-        if consecutive_failures == KEEPALIVE_DEGRADED_AFTER_FAILURES:
+        if status.consecutive_failures == KEEPALIVE_DEGRADED_AFTER_FAILURES:
             logger.error(
                 "s2_keepalive_degraded consecutive_failures=%d "
                 "detail=key_may_no_longer_confer_quota",
-                consecutive_failures,
+                status.consecutive_failures,
             )
         await asyncio.sleep(KEEPALIVE_RETRY_INTERVAL_SECONDS)
