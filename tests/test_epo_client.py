@@ -2,18 +2,21 @@
 
 from __future__ import annotations
 
+import io
+import logging
 import time
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 import requests
+from pypdf import PdfReader, PdfWriter
 from requests.exceptions import HTTPError
 
 from scholar_mcp._epo_client import (
     EpoClient,
     EpoRateLimitedError,
-    _parse_pdf_link,
+    _parse_pdf_instance,
     _parse_throttle_header,
 )
 from scholar_mcp._patent_numbers import DocdbNumber
@@ -909,21 +912,23 @@ def _real_inquiry(name: str) -> bytes:
 
 
 @pytest.mark.parametrize(
-    "fixture_name,expected_link",
+    "fixture_name,expected_link,expected_pages",
     [
         (
             "images_inquiry_ep3491801b1.xml",
             "published-data/images/EP/3491801/B1/fullimage",
+            21,
         ),
         (
             "images_inquiry_wo2019016210a1.xml",
             "published-data/images/WO/2019016210/A1/fullimage",
+            29,
         ),
     ],
     ids=["ep-b1", "wo-a1"],
 )
 def test_parse_pdf_link_reads_the_shape_epo_actually_sends(
-    fixture_name: str, expected_link: str
+    fixture_name: str, expected_link: str, expected_pages: int
 ) -> None:
     """The parser works against verbatim EPO responses, not hand-written ones.
 
@@ -932,7 +937,11 @@ def test_parse_pdf_link_reads_the_shape_epo_actually_sends(
     ``desc`` attribute on a direct child, which EPO never sends -- so the
     parser passed its tests while returning None for every real patent (#371).
     """
-    assert _parse_pdf_link(_real_inquiry(fixture_name)) == expected_link
+    instance = _parse_pdf_instance(_real_inquiry(fixture_name))
+    assert instance is not None
+    assert instance.link == expected_link
+    # The page count drives how many OPS calls the download makes (#379).
+    assert instance.pages == expected_pages
 
 
 def test_parse_pdf_link_ignores_non_fulldocument_instances() -> None:
@@ -941,10 +950,35 @@ def test_parse_pdf_link_ignores_non_fulldocument_instances() -> None:
     Those offer application/pdf too, so matching on the format alone would
     return a thumbnail link. Only the FullDocument instance is the document.
     """
-    link = _parse_pdf_link(_real_inquiry("images_inquiry_wo2019016210a1.xml"))
-    assert link is not None
+    instance = _parse_pdf_instance(_real_inquiry("images_inquiry_wo2019016210a1.xml"))
+    assert instance is not None
+    link = instance.link
     assert "thumbnail" not in link
     assert "firstpage" not in link
+
+
+def _make_inquiry_xml(pages: int | None) -> bytes:
+    """Build an image-inquiry response with a chosen page count.
+
+    Args:
+        pages: Value for ``number-of-pages``; ``None`` omits the attribute.
+
+    Returns:
+        XML bytes in the shape EPO sends (see tests/fixtures/epo).
+    """
+    attr = "" if pages is None else f' number-of-pages="{pages}"'
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<ops:world-patent-data xmlns:ops="http://ops.epo.org">
+  <ops:document-inquiry>
+    <ops:inquiry-result>
+      <ops:document-instance desc="FullDocument" link="published-data/images/EP/1234567/A1/fullimage"{attr}>
+        <ops:document-format-options>
+          <ops:document-format>application/pdf</ops:document-format>
+        </ops:document-format-options>
+      </ops:document-instance>
+    </ops:inquiry-result>
+  </ops:document-inquiry>
+</ops:world-patent-data>""".encode()
 
 
 # These two are trimmed to the shape EPO actually sends, cross-checked against
@@ -995,25 +1029,27 @@ _IMAGE_INQUIRY_NO_FULL_DOC_XML = b"""<?xml version="1.0" encoding="UTF-8"?>
 
 def test_parse_pdf_link_returns_link_from_valid_xml() -> None:
     """_parse_pdf_link extracts the link attribute from a FullDocument PDF instance."""
-    link = _parse_pdf_link(_IMAGE_INQUIRY_XML)
-    assert link == "published-data/images/EP/1234567/A1/fullimage"
+    instance = _parse_pdf_instance(_IMAGE_INQUIRY_XML)
+    assert instance is not None
+    assert instance.link == "published-data/images/EP/1234567/A1/fullimage"
+    assert instance.pages == 5
 
 
 def test_parse_pdf_link_returns_none_when_no_pdf_format() -> None:
     """_parse_pdf_link returns None when FullDocument has no PDF format child."""
-    link = _parse_pdf_link(_IMAGE_INQUIRY_NO_PDF_XML)
+    link = _parse_pdf_instance(_IMAGE_INQUIRY_NO_PDF_XML)
     assert link is None
 
 
 def test_parse_pdf_link_returns_none_when_no_full_document() -> None:
     """_parse_pdf_link returns None when there is no FullDocument instance."""
-    link = _parse_pdf_link(_IMAGE_INQUIRY_NO_FULL_DOC_XML)
+    link = _parse_pdf_instance(_IMAGE_INQUIRY_NO_FULL_DOC_XML)
     assert link is None
 
 
 def test_parse_pdf_link_returns_none_on_parse_error() -> None:
     """_parse_pdf_link returns None (and logs) on malformed XML."""
-    link = _parse_pdf_link(b"not xml at all <<<!>>")
+    link = _parse_pdf_instance(b"not xml at all <<<!>>")
     assert link is None
 
 
@@ -1029,7 +1065,7 @@ def test_parse_pdf_link_reraises_rate_limit_errors(
         lambda _data: (_ for _ in ()).throw(EpoRateLimitedError("yellow")),
     )
     with pytest.raises(EpoRateLimitedError):
-        _parse_pdf_link(b"<xml/>")
+        _parse_pdf_instance(b"<xml/>")
 
 
 # ---------------------------------------------------------------------------
@@ -1041,18 +1077,146 @@ async def test_get_pdf_returns_pdf_bytes(
     epo_client: EpoClient,
     mock_ops_client: MagicMock,
 ) -> None:
-    """get_pdf() returns raw PDF bytes on success."""
-    inquiry_resp = _mock_response(_IMAGE_INQUIRY_XML)
-    pdf_resp = _mock_response(b"%PDF-1.4 fake")
-    mock_ops_client.published_data.return_value = inquiry_resp
-    mock_ops_client.image.return_value = pdf_resp
+    """get_pdf() returns a merged PDF covering every advertised page.
+
+    The fixture advertises five pages, and OPS serves one per call, so five
+    calls merge into a five-page document.
+    """
+    mock_ops_client.published_data.return_value = _mock_response(_IMAGE_INQUIRY_XML)
+    mock_ops_client.image.side_effect = [
+        _mock_response(_one_page_pdf(f"page-{n}")) for n in range(1, 6)
+    ]
 
     doc = DocdbNumber(country="EP", number="1234567", kind="A1")
     result = await epo_client.get_pdf(doc)
 
-    assert result == b"%PDF-1.4 fake"
+    assert result[:5] == b"%PDF-"
+    assert _page_count(result) == 5
     mock_ops_client.published_data.assert_called_once()
-    mock_ops_client.image.assert_called_once()
+    assert mock_ops_client.image.call_count == 5
+
+
+def _one_page_pdf(marker: str) -> bytes:
+    """Build a valid single-page PDF, the way OPS returns one page per call.
+
+    Args:
+        marker: Text drawn on the page, so merged output can be traced back
+            to the page it came from.
+
+    Returns:
+        PDF bytes with exactly one page.
+    """
+    writer = PdfWriter()
+    page = writer.add_blank_page(width=200, height=200)
+    page.merge_page(page)  # no-op; keeps the page object realised
+    writer.add_metadata({"/Title": marker})
+    buf = io.BytesIO()
+    writer.write(buf)
+    return buf.getvalue()
+
+
+def _page_count(pdf: bytes) -> int:
+    """Count pages in a PDF the authoritative way.
+
+    Args:
+        pdf: PDF bytes.
+
+    Returns:
+        The number of pages.
+    """
+    return len(PdfReader(io.BytesIO(pdf)).pages)
+
+
+async def test_get_pdf_fetches_every_page_and_merges(
+    epo_client: EpoClient,
+    mock_ops_client: MagicMock,
+) -> None:
+    """A 3-page document is 3 OPS calls merged into one 3-page PDF.
+
+    OPS serves one page per image call, so anything less than every page
+    silently drops the claims and description (#379).
+    """
+    mock_ops_client.published_data.return_value = _mock_response(
+        _make_inquiry_xml(pages=3)
+    )
+    mock_ops_client.image.side_effect = [
+        _mock_response(_one_page_pdf(f"page-{n}")) for n in (1, 2, 3)
+    ]
+
+    doc = DocdbNumber(country="EP", number="1234567", kind="A1")
+    result = await epo_client.get_pdf(doc)
+
+    assert _page_count(result) == 3
+    assert mock_ops_client.image.call_count == 3
+    assert [c.kwargs["range"] for c in mock_ops_client.image.call_args_list] == [
+        1,
+        2,
+        3,
+    ]
+
+
+async def test_get_pdf_single_page_document_makes_one_call(
+    epo_client: EpoClient,
+    mock_ops_client: MagicMock,
+) -> None:
+    """A 1-page document costs exactly one call; no needless paging."""
+    mock_ops_client.published_data.return_value = _mock_response(
+        _make_inquiry_xml(pages=1)
+    )
+    mock_ops_client.image.return_value = _mock_response(_one_page_pdf("only"))
+
+    doc = DocdbNumber(country="EP", number="1234567", kind="A1")
+    result = await epo_client.get_pdf(doc)
+
+    assert _page_count(result) == 1
+    assert mock_ops_client.image.call_count == 1
+
+
+async def test_get_pdf_without_a_page_count_fetches_the_first_page(
+    epo_client: EpoClient,
+    mock_ops_client: MagicMock,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A missing number-of-pages degrades to page one, and says so.
+
+    Guessing a page count would either truncate silently or hammer OPS; one
+    page plus a warning is the honest floor.
+    """
+    mock_ops_client.published_data.return_value = _mock_response(
+        _make_inquiry_xml(pages=None)
+    )
+    mock_ops_client.image.return_value = _mock_response(_one_page_pdf("only"))
+
+    doc = DocdbNumber(country="EP", number="1234567", kind="A1")
+    with caplog.at_level(logging.WARNING, logger="scholar_mcp._epo_client"):
+        result = await epo_client.get_pdf(doc)
+
+    assert _page_count(result) == 1
+    assert mock_ops_client.image.call_count == 1
+    assert "epo_pdf_page_count_missing" in caplog.text
+
+
+@pytest.mark.parametrize(
+    "raw,reason",
+    [("not-a-number", "unparsable"), ("0", "not positive"), ("-3", "negative")],
+    ids=["unparsable", "zero", "negative"],
+)
+def test_parse_pdf_instance_rejects_a_nonsense_page_count(
+    raw: str, reason: str, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A page count that cannot be trusted becomes None, not a bad loop bound.
+
+    Feeding a zero or negative count into the download loop would fetch
+    nothing and merge an empty document; a string would raise mid-download.
+    """
+    xml = _make_inquiry_xml(pages=1).replace(
+        b'number-of-pages="1"', f'number-of-pages="{raw}"'.encode()
+    )
+    with caplog.at_level(logging.WARNING, logger="scholar_mcp._epo_client"):
+        instance = _parse_pdf_instance(xml)
+
+    assert instance is not None, reason
+    assert instance.pages is None
 
 
 async def test_get_pdf_raises_value_error_when_no_pdf_available(

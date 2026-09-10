@@ -411,7 +411,9 @@ async def fetch_patent_pdf(
 
     Downloads the full-document PDF for a patent using the authenticated
     EPO Open Patent Services session, saves it locally, and if docling is
-    configured converts it to Markdown.
+    configured converts it to Markdown. EPO serves patent images one page
+    per request, so a long patent costs one request per page and the
+    document is reassembled before conversion.
 
     Not all patents have full text available via OPS — WO and older EP
     patents sometimes lack PDFs. Returns an error in that case.
