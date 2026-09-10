@@ -555,6 +555,8 @@ async def test_get_citation_graph_retries_on_429(
         )
         inner = json.loads(result.content[0].text)
     assert "c1" in {n["id"] for n in inner["nodes"]}
+    # The 429 never survived the retry ladder, so nothing went unfetched.
+    assert inner["stats"]["partial"] is False
 
 
 # --- find_bridge_papers: citations branch of _get_neighbours (lines 379-401) ---
@@ -664,6 +666,8 @@ async def test_find_bridge_papers_retries_on_429(
         )
         inner = json.loads(result.content[0].text)
     assert inner["found"] is True
+    # The 429 never survived the retry ladder, so nothing went unfetched.
+    assert inner["partial"] is False
 
 
 # --- find_bridge_papers: HTTP error in _get_neighbours (lines 379-380, 399-400) ---
@@ -673,7 +677,7 @@ async def test_find_bridge_papers_retries_on_429(
 async def test_find_bridge_papers_http_error_in_references(
     respx_mock: respx.MockRouter, mcp: FastMCP
 ) -> None:
-    """find_bridge_papers handles HTTP errors in reference expansion gracefully."""
+    """An HTTP error in reference expansion degrades to a flagged partial search."""
     respx_mock.get("/paper/p1/references").mock(return_value=httpx.Response(500))
     async with Client(mcp) as client:
         result = await client.call_tool(
@@ -686,15 +690,16 @@ async def test_find_bridge_papers_http_error_in_references(
             },
         )
     data = json.loads(result.content[0].text)
-    # HTTP error causes empty neighbours, so target is not found
+    # The empty neighbour list is reported as a gap, not as a definite answer.
     assert data["found"] is False
+    assert data["partial"] is True
 
 
 @pytest.mark.respx(base_url=S2_BASE)
 async def test_find_bridge_papers_http_error_in_citations(
     respx_mock: respx.MockRouter, mcp: FastMCP
 ) -> None:
-    """find_bridge_papers handles HTTP errors in citation expansion gracefully."""
+    """An HTTP error in citation expansion degrades to a flagged partial search."""
     respx_mock.get("/paper/p1/citations").mock(return_value=httpx.Response(500))
     async with Client(mcp) as client:
         result = await client.call_tool(
@@ -707,8 +712,9 @@ async def test_find_bridge_papers_http_error_in_citations(
             },
         )
     data = json.loads(result.content[0].text)
-    # HTTP error causes empty neighbours, so target is not found
+    # The empty neighbour list is reported as a gap, not as a definite answer.
     assert data["found"] is False
+    assert data["partial"] is True
 
 
 # --- find_bridge_papers: multi-hop path with cached paper (lines 407, 417, 421-423) ---
@@ -854,7 +860,7 @@ async def test_find_bridge_papers_depth_zero_skips_expansion(
 async def test_get_citation_graph_references_http_error(
     respx_mock: respx.MockRouter, mcp: FastMCP
 ) -> None:
-    """get_citation_graph swallows HTTP errors in the references branch."""
+    """An HTTP error in the references branch degrades to a partial graph."""
     respx_mock.post("/paper/batch").mock(
         return_value=httpx.Response(
             200,
@@ -875,10 +881,11 @@ async def test_get_citation_graph_references_http_error(
             },
         )
     data = json.loads(result.content[0].text)
-    # Only the seed node should be present (error swallowed)
+    # Only the seed node survives, and the gap is reported rather than swallowed.
     assert data["stats"]["total_nodes"] == 1
     assert data["nodes"][0]["id"] == "p1"
     assert data["stats"]["truncated"] is False
+    assert data["stats"]["partial"] is True
 
 
 # --- get_citation_graph: batch_resolve failure falls back gracefully ---
@@ -888,7 +895,7 @@ async def test_get_citation_graph_references_http_error(
 async def test_get_citation_graph_batch_resolve_failure(
     respx_mock: respx.MockRouter, mcp: FastMCP
 ) -> None:
-    """Seed nodes fall back to null metadata when batch_resolve fails."""
+    """Seed nodes fall back to null metadata, flagged, when batch_resolve fails."""
     respx_mock.post("/paper/batch").mock(return_value=httpx.Response(500))
     respx_mock.get("/paper/p1/citations").mock(
         return_value=httpx.Response(
@@ -916,6 +923,8 @@ async def test_get_citation_graph_batch_resolve_failure(
     # Seed node present but with null metadata (fallback)
     seed = next(n for n in data["nodes"] if n["id"] == "p1")
     assert seed["title"] is None
+    # The null metadata is attributed to the failed resolve, not to the paper.
+    assert data["stats"]["partial"] is True
     # Expansion still works
     assert "c1" in {n["id"] for n in data["nodes"]}
 
@@ -2000,3 +2009,288 @@ async def test_get_citations_answers_inline_when_fast(
     data = json.loads(result.content[0].text)
     assert "job_id" not in data
     assert data["data"][0]["citingPaper"]["paperId"] == "f1"
+
+
+# --- Upstream failures are reported, not silently absorbed (#365, #374) ---
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_citation_graph_marks_reference_failure_partial(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """A failed reference expansion is reported, not passed off as no references."""
+    respx_mock.post("/paper/batch").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {"paperId": "p1", "title": "Seed", "year": 2020, "citationCount": 10}
+            ],
+        )
+    )
+    respx_mock.get("/paper/p1/references").mock(return_value=httpx.Response(429))
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_citation_graph",
+            {
+                "seed_ids": ["p1"],
+                "direction": "references",
+                "depth": 1,
+                "max_nodes": 50,
+            },
+        )
+    data = json.loads(result.content[0].text)
+    assert data["stats"]["partial"] is True
+    assert data["stats"]["failed_requests"] == 1
+    assert "429" in data["warning"]
+    # The partial graph is still returned, and truncation stays a separate signal.
+    assert data["stats"]["total_nodes"] == 1
+    assert data["stats"]["truncated"] is False
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_citation_graph_marks_seed_resolution_failure_partial(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """Null seed metadata from a failed batch resolve is flagged, not silent."""
+    respx_mock.post("/paper/batch").mock(return_value=httpx.Response(429))
+    respx_mock.get("/paper/p1/citations").mock(
+        return_value=httpx.Response(200, json={"data": []})
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_citation_graph",
+            {"seed_ids": ["p1"], "direction": "citations", "depth": 1, "max_nodes": 50},
+        )
+    data = json.loads(result.content[0].text)
+    assert data["stats"]["partial"] is True
+    assert "seed metadata" in data["warning"]
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_citation_graph_complete_walk_carries_no_warning(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """A walk with no upstream failure reports partial false and omits warning."""
+    respx_mock.post("/paper/batch").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {"paperId": "p1", "title": "Seed", "year": 2020, "citationCount": 10}
+            ],
+        )
+    )
+    respx_mock.get("/paper/p1/references").mock(
+        return_value=httpx.Response(200, json={"data": []})
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_citation_graph",
+            {
+                "seed_ids": ["p1"],
+                "direction": "references",
+                "depth": 1,
+                "max_nodes": 50,
+            },
+        )
+    data = json.loads(result.content[0].text)
+    assert data["stats"]["partial"] is False
+    assert data["stats"]["failed_requests"] == 0
+    assert "warning" not in data
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_citation_graph_marks_transport_failure_partial(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """A transport error carries no status but still marks the graph partial."""
+    respx_mock.post("/paper/batch").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {"paperId": "p1", "title": "Seed", "year": 2020, "citationCount": 10}
+            ],
+        )
+    )
+    respx_mock.get("/paper/p1/references").mock(side_effect=httpx.ConnectError("boom"))
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_citation_graph",
+            {
+                "seed_ids": ["p1"],
+                "direction": "references",
+                "depth": 1,
+                "max_nodes": 50,
+            },
+        )
+    data = json.loads(result.content[0].text)
+    assert data["stats"]["partial"] is True
+    assert "transport" in data["warning"]
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_citation_graph_marks_citation_failure_partial(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """A failed citation expansion is reported the same way as a reference one."""
+    respx_mock.post("/paper/batch").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {"paperId": "p1", "title": "Seed", "year": 2020, "citationCount": 10}
+            ],
+        )
+    )
+    respx_mock.get("/paper/p1/citations").mock(return_value=httpx.Response(429))
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_citation_graph",
+            {"seed_ids": ["p1"], "direction": "citations", "depth": 1, "max_nodes": 50},
+        )
+    data = json.loads(result.content[0].text)
+    assert data["stats"]["partial"] is True
+    assert "citations" in data["warning"]
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_find_bridge_papers_marks_failed_search_partial(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """A failed neighbour fetch is not reported as 'no path exists'."""
+    respx_mock.get("/paper/p1/references").mock(return_value=httpx.Response(429))
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "find_bridge_papers",
+            {
+                "source_id": "p1",
+                "target_id": "p2",
+                "max_depth": 1,
+                "direction": "references",
+            },
+        )
+    data = json.loads(result.content[0].text)
+    assert data["found"] is False
+    assert data["partial"] is True
+    assert data["failed_requests"] == 1
+    assert "429" in data["warning"]
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_find_bridge_papers_complete_search_carries_no_warning(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """A search that reached every neighbour reports no partiality."""
+    respx_mock.get("/paper/p1/references").mock(
+        return_value=httpx.Response(200, json={"data": []})
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "find_bridge_papers",
+            {
+                "source_id": "p1",
+                "target_id": "p2",
+                "max_depth": 1,
+                "direction": "references",
+            },
+        )
+    data = json.loads(result.content[0].text)
+    assert data["found"] is False
+    assert data["partial"] is False
+    assert data["failed_requests"] == 0
+    assert "warning" not in data
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_find_bridge_papers_flags_partiality_on_a_found_path(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """A path found while another branch failed is not guaranteed shortest."""
+    respx_mock.get("/paper/p1/references").mock(
+        return_value=httpx.Response(
+            200, json={"data": [{"citedPaper": {"paperId": "p2"}}]}
+        )
+    )
+    respx_mock.get("/paper/p1/citations").mock(return_value=httpx.Response(429))
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "find_bridge_papers",
+            {
+                "source_id": "p1",
+                "target_id": "p2",
+                "max_depth": 1,
+                "direction": "both",
+            },
+        )
+    data = json.loads(result.content[0].text)
+    assert data["found"] is True
+    assert data["partial"] is True
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_citation_graph_malformed_seed_response_is_not_partial(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """A malformed batch response leaves null seeds but is not an upstream gap."""
+    respx_mock.post("/paper/batch").mock(
+        return_value=httpx.Response(200, text="not json")
+    )
+    respx_mock.get("/paper/p1/references").mock(
+        return_value=httpx.Response(200, json={"data": []})
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_citation_graph",
+            {
+                "seed_ids": ["p1"],
+                "direction": "references",
+                "depth": 1,
+                "max_nodes": 50,
+            },
+        )
+    data = json.loads(result.content[0].text)
+    assert data["nodes"][0]["title"] is None
+    # Nothing upstream went unasked, so the walk is complete, not partial.
+    assert data["stats"]["partial"] is False
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_find_bridge_papers_cached_neighbours_report_no_failure(
+    respx_mock: respx.MockRouter, mcp: FastMCP, bundle: ServiceBundle
+) -> None:
+    """A cached neighbour list makes no upstream call and no partiality claim."""
+    await bundle.cache.set_references("p1", ["p2"])
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "find_bridge_papers",
+            {
+                "source_id": "p1",
+                "target_id": "p2",
+                "max_depth": 1,
+                "direction": "references",
+            },
+        )
+    data = json.loads(result.content[0].text)
+    assert data["found"] is True
+    assert data["partial"] is False
+    assert not respx_mock.calls
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_find_bridge_papers_marks_transport_failure_partial(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """A transport error is absorbed into a flagged partial search, not raised."""
+    respx_mock.get("/paper/p1/references").mock(side_effect=httpx.ConnectError("boom"))
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "find_bridge_papers",
+            {
+                "source_id": "p1",
+                "target_id": "p2",
+                "max_depth": 1,
+                "direction": "references",
+            },
+        )
+    data = json.loads(result.content[0].text)
+    assert data["found"] is False
+    assert data["partial"] is True
+    assert "transport" in data["warning"]
