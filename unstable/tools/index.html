@@ -3052,7 +3052,12 @@
 <a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">  </span><span class="nt">&quot;preview_available&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
 <a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="p">}</span>
 </code></pre></div>
-<p>Or <code>{"error": "not_found", "isbn": "..."}</code> if Google Books has no matching volume.</p>
+<p>Or <code>{"error": "not_found", "isbn": "..."}</code> if Google Books answered and has no matching volume.</p>
+<div class="admonition warning">
+<p class="admonition-title">A refused lookup is not a missing book</p>
+<p><code>not_found</code> means Google Books answered, so stop asking about that ISBN. A lookup that never got an answer reports itself separately: <code>{"error": "rate_limited", "isbn": "...", "retryable": true}</code> for a 429, or <code>{"error": "upstream_error", "isbn": "...", "status": &lt;code or null&gt;}</code> for anything else. Both invite a retry; the ISBN may well exist.</p>
+<p>Without <code>SCHOLAR_MCP_GOOGLE_BOOKS_API_KEY</code> set, requests use the anonymous tier, where 429 is common.</p>
+</div>
 <div class="admonition note">
 <p class="admonition-title">Write-tagged</p>
 <p>This tool is write-tagged and hidden when <code>SCHOLAR_MCP_READ_ONLY=true</code>.</p>
