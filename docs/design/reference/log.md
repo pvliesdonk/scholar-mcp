@@ -4,6 +4,34 @@ Newest first. One entry per research pass.
 
 ## 2026-09-10
 
+### Legal-status events
+
+Subject: EPO OPS legal-status events, prompted by #388 — a decision about
+whether to reproduce an EPO manual marked `DISTRIBUTION: Exchange Partners`.
+
+**The decision dissolved on inspection.** A live `get_legal` call showed the
+response is self-describing at both levels: the event's meaning is a
+plain-language `desc` on `ops:legal`, and every `L###EP` child names the field
+it holds. The `L###EP` tags are field labels *within* an event, not opaque event
+codes needing a lookup table — which was the premise #388 rested on. The manual
+documents the T12 weekly exchange file, a different product this project does
+not consume, so it was never the right source.
+
+Resolution, per the maintainer: no protected document and no transcription of
+one. The index points at the public OPS page as where artefacts are obtained.
+
+**Found while probing:** `parse_legal_xml` searches for a `legal-event` element
+that exists in neither the schema nor any response, and returns zero events from
+a verbatim 76 KB response containing fifty. Its tests pass because their fixtures
+encode the same invented shape — the third instance of the pattern behind #371.
+Filed as #390 and written up here *before* fixing, so the fix follows the
+recorded behaviour rather than another assumption.
+
+The response is checked in at `tests/fixtures/epo/legal_ep1000000a1.xml` as the
+evidence for this page's observations, and as what #390 will test against.
+
+### Images, throttling and quota
+
 First pass. Subject: EPO Open Patent Services 3.2, prompted by four patent bugs
 that each turned on undocumented-to-us behaviour — #371, #379, #384, and the
 throttle-bucket question inside #381.
