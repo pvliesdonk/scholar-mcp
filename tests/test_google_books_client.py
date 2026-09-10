@@ -88,12 +88,23 @@ async def test_get_volume_returns_none_on_404(
 
 
 @pytest.mark.respx(base_url=GB_BASE)
-async def test_search_by_isbn_returns_none_on_error(
+async def test_search_by_isbn_raises_on_error(
     respx_mock: respx.MockRouter, client: GoogleBooksClient
 ) -> None:
+    """A refused request raises; only a genuine no-match returns None."""
     respx_mock.get("/volumes").mock(return_value=httpx.Response(500))
-    result = await client.search_by_isbn("9780123456789")
-    assert result is None
+    with pytest.raises(httpx.HTTPStatusError):
+        await client.search_by_isbn("9780123456789")
+
+
+@pytest.mark.respx(base_url=GB_BASE)
+async def test_search_by_isbn_raises_on_transport_error(
+    respx_mock: respx.MockRouter, client: GoogleBooksClient
+) -> None:
+    """A request that never reached Google Books raises too."""
+    respx_mock.get("/volumes").mock(side_effect=httpx.ConnectError("boom"))
+    with pytest.raises(httpx.RequestError):
+        await client.search_by_isbn("9780123456789")
 
 
 @pytest.mark.respx(base_url=GB_BASE)

@@ -194,6 +194,29 @@ async def get_book(
     return result
 
 
+def _google_books_error(exc: httpx.HTTPError, isbn: str) -> dict[str, Any]:
+    """Map a Google Books failure to a payload distinct from ``not_found``.
+
+    ``not_found`` tells an LLM caller to stop asking about this ISBN. A
+    refused request has to say the opposite, so a 429 is reported as
+    ``rate_limited`` with ``retryable``, matching the shape ``enrich_paper``
+    and the EPO tools already use.
+
+    Args:
+        exc: The error raised by the Google Books client.
+        isbn: The ISBN that was being looked up.
+
+    Returns:
+        The caller-facing error mapping.
+    """
+    status = (
+        exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
+    )
+    if status == 429:
+        return {"error": "rate_limited", "isbn": isbn, "retryable": True}
+    return {"error": "upstream_error", "isbn": isbn, "status": status}
+
+
 async def get_book_excerpt(
     isbn: str,
     bundle: ServiceBundle = Depends(get_bundle),
@@ -204,6 +227,11 @@ async def get_book_excerpt(
     the Google Books preview page. Google Books does not expose full
     chapter text via API -- the excerpt is a publisher-provided summary
     and/or search snippet.
+
+    An ``error`` of ``not_found`` means Google Books answered and has no
+    such volume: stop asking about that ISBN. A lookup that never got an
+    answer says so instead, as ``rate_limited`` (with ``retryable``) or
+    ``upstream_error``, and is worth retrying -- the book may well exist.
 
     Args:
         isbn: ISBN-10 or ISBN-13.
@@ -218,7 +246,10 @@ async def get_book_excerpt(
     """
     volume = await bundle.cache.get_google_books(isbn)
     if volume is None:
-        volume = await bundle.google_books.search_by_isbn(isbn)
+        try:
+            volume = await bundle.google_books.search_by_isbn(isbn)
+        except httpx.HTTPError as exc:
+            return json.dumps(_google_books_error(exc, isbn))
         if volume is None:
             return json.dumps({"error": "not_found", "isbn": isbn})
         await bundle.cache.set_google_books(isbn, volume)

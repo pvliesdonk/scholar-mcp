@@ -376,7 +376,12 @@ Fetch a book excerpt and description from Google Books by ISBN. Shows preview av
 }
 ```
 
-Or `{"error": "not_found", "isbn": "..."}` if Google Books has no matching volume.
+Or `{"error": "not_found", "isbn": "..."}` if Google Books answered and has no matching volume.
+
+!!! warning "A refused lookup is not a missing book"
+    `not_found` means Google Books answered, so stop asking about that ISBN. A lookup that never got an answer reports itself separately: `{"error": "rate_limited", "isbn": "...", "retryable": true}` for a 429, or `{"error": "upstream_error", "isbn": "...", "status": <code or null>}` for anything else. Both invite a retry; the ISBN may well exist.
+
+    Without `SCHOLAR_MCP_GOOGLE_BOOKS_API_KEY` set, requests use the anonymous tier, where 429 is common.
 
 !!! note "Write-tagged"
     This tool is write-tagged and hidden when `SCHOLAR_MCP_READ_ONLY=true`.

@@ -724,6 +724,58 @@ async def test_get_book_excerpt_not_found(
     assert data["isbn"] == "0000000000000"
 
 
+@pytest.mark.respx(base_url=GB_BASE)
+async def test_get_book_excerpt_reports_rate_limit_not_absence(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """A 429 is a refused request, not a missing book."""
+    respx_mock.get("/volumes").mock(return_value=httpx.Response(429))
+    async with Client(mcp) as client:
+        result = await client.call_tool("get_book_excerpt", {"isbn": "9780201633610"})
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "rate_limited"
+    assert data["isbn"] == "9780201633610"
+    assert data["retryable"] is True
+
+
+@pytest.mark.respx(base_url=GB_BASE)
+async def test_get_book_excerpt_reports_upstream_error_not_absence(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """A non-429 upstream failure is also distinct from a missing book."""
+    respx_mock.get("/volumes").mock(return_value=httpx.Response(500))
+    async with Client(mcp) as client:
+        result = await client.call_tool("get_book_excerpt", {"isbn": "9780201633610"})
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "upstream_error"
+    assert data["status"] == 500
+    assert data["isbn"] == "9780201633610"
+
+
+@pytest.mark.respx(base_url=GB_BASE)
+async def test_get_book_excerpt_reports_transport_error_not_absence(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """A transport failure carries no status but is still not a missing book."""
+    respx_mock.get("/volumes").mock(side_effect=httpx.ConnectError("boom"))
+    async with Client(mcp) as client:
+        result = await client.call_tool("get_book_excerpt", {"isbn": "9780201633610"})
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "upstream_error"
+    assert data["status"] is None
+
+
+@pytest.mark.respx(base_url=GB_BASE)
+async def test_get_book_excerpt_does_not_cache_a_failed_lookup(
+    respx_mock: respx.MockRouter, mcp: FastMCP, bundle: ServiceBundle
+) -> None:
+    """A refused request must not poison the cache for the retry it invites."""
+    respx_mock.get("/volumes").mock(return_value=httpx.Response(429))
+    async with Client(mcp) as client:
+        await client.call_tool("get_book_excerpt", {"isbn": "9780201633610"})
+    assert await bundle.cache.get_google_books("9780201633610") is None
+
+
 async def test_search_books_promotes_when_slow(
     bundle: ServiceBundle, jobs: Jobs
 ) -> None:
