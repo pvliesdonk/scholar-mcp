@@ -1,4 +1,13 @@
-"""Async wrapper around the synchronous python-epo-ops-client library."""
+"""Async wrapper around the synchronous python-epo-ops-client library.
+
+How OPS itself behaves -- the image inquiry content model, why a whole
+document costs one request per page, and which throttle bucket a given path
+bills against -- is recorded with its evidence under
+``docs/design/reference/``: ``epo-ops-images.md`` and
+``epo-ops-throttling.md``. Read those before changing the image path or a
+``service=`` argument. They exist because answering those questions from
+memory is what produced #371 and #379.
+"""
 
 from __future__ import annotations
 
@@ -687,12 +696,10 @@ class EpoClient:
             )
         page_count = instance.pages or 1
 
-        # Step 2: download every page. EPO's reference guide says it plainly
-        # under "Full document retrieval": assembling a whole document "is
-        # quite resource consumptive... Thus it is not possible to get the
-        # full document in one request but you can download it page by page",
-        # and the Range parameter "may accept only a single number (not a
-        # range)". So a patent costs one request per page (#379).
+        # Step 2: download every page. OPS serves exactly one per call and
+        # offers no whole-document route; see
+        # docs/design/reference/epo-ops-images.md, "Retrieval serves one
+        # page", for EPO's own wording and its reason (#379).
         logger.debug("epo_pdf_download link=%s pages=%d", instance.link, page_count)
         pages: list[bytes] = []
         for page_no in range(1, page_count + 1):
@@ -706,15 +713,12 @@ class EpoClient:
         document: a 21-page patent is 21 calls, and EPO can turn amber
         part-way through.
 
-        The light consulted is ``images``, not ``retrieval``. EPO's reference
-        guide maps REST paths to throttle buckets directly (v1.3.20, Table 16,
-        "Mapping between services and throttles"): ``/published-data/images/*``
-        bills ``images``, while the catch-all ``/published-data/*/`` bills
-        ``retrieval``. The inquiry that produced this link sits at
-        ``/published-data/{type}/{format}/{number}/images`` and so falls under
-        the catch-all -- the two steps of one download bill *different*
-        buckets. Checking ``retrieval`` here would abandon a part-fetched
-        document over congestion that does not apply to it.
+        The light consulted is ``images``, not ``retrieval``: the two steps
+        of one download bill *different* buckets. See
+        ``docs/design/reference/epo-ops-throttling.md``, "Which bucket a path
+        bills", for EPO's Table 16 and the sentence in the guide that
+        misleads on this. Checking ``retrieval`` here would abandon a
+        part-fetched document over congestion that does not apply to it.
 
         The quota headers are a separate mechanism from this traffic light and
         are not handled yet; see #384.
