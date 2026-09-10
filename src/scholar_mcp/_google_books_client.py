@@ -47,11 +47,22 @@ class GoogleBooksClient:
     async def search_by_isbn(self, isbn: str) -> dict[str, Any] | None:
         """Search for a volume by ISBN.
 
+        ``None`` means Google Books answered and had no such volume. A
+        refused or failed request raises instead of returning ``None``:
+        collapsing the two leaves a caller unable to tell "no such book"
+        from "ask again later", and the anonymous tier returns 429 often
+        enough for that to matter.
+
         Args:
             isbn: ISBN-10 or ISBN-13 string.
 
         Returns:
-            First matching volume dict, or None if not found.
+            The first matching volume dict, or None when Google Books
+            reports no match.
+
+        Raises:
+            httpx.HTTPStatusError: Google Books returned an error status.
+            httpx.RequestError: the request never reached Google Books.
         """
         try:
             r = await self._client.get(
@@ -59,18 +70,19 @@ class GoogleBooksClient:
                 params=self._params({"q": f"isbn:{isbn}"}),
             )
             r.raise_for_status()
-            data = r.json()
-            items = data.get("items", [])
-            if not items:
-                return None
-            return items[0]  # type: ignore[no-any-return]
         except (httpx.HTTPStatusError, httpx.RequestError):
+            # Logged here, where the status is in hand, then re-raised so
+            # each caller decides: a tool reports it, enrichment skips it.
             logger.warning(
                 "google_books_search_error isbn=%s",
                 isbn,
                 exc_info=True,
             )
+            raise
+        items = r.json().get("items", [])
+        if not items:
             return None
+        return items[0]  # type: ignore[no-any-return]
 
     async def get_volume(self, volume_id: str) -> dict[str, Any] | None:
         """Fetch a specific volume by its Google Books ID.

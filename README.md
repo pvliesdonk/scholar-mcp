@@ -431,7 +431,7 @@ Schedule via cron, launchd, or a systemd timer. Weekly is sufficient; standards 
 |---|---|
 | `search_books` | Search for books by title, author, ISBN, or keywords via Open Library. Returns up to 50 results. |
 | `get_book` | Fetch book metadata by ISBN-10, ISBN-13, Open Library work ID, or edition ID. Optionally download and cache the cover image locally. |
-| `get_book_excerpt` | Fetch a book excerpt and description from Google Books by ISBN. Shows preview availability and link. |
+| `get_book_excerpt` | Fetch a book excerpt and description from Google Books by ISBN. Shows preview availability and link. Reports a refused lookup as `rate_limited` or `upstream_error`, distinct from `not_found`. |
 | `recommend_books` | Recommend books for a subject via Open Library, sorted by popularity. |
 
 > Papers with an ISBN in their `externalIds` are automatically enriched with `book_metadata` (publisher, edition, cover URL, subjects, and more) from Open Library when fetched via `get_paper`, `get_citations`, `get_references`, or `get_citation_graph`. Book records also include `worldcat_url` (when ISBN-13 is present), `google_books_url`, and `snippet` from Google Books enrichment. Cover images can be downloaded and cached locally via `get_book`.

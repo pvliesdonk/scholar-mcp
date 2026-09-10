@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+import httpx
 import pytest
 
 from scholar_mcp._enricher_google_books import GoogleBooksEnricher
@@ -119,6 +120,26 @@ async def test_enrich_handles_error_silently() -> None:
     enricher = GoogleBooksEnricher()
     bundle = _make_bundle()
     bundle.cache.get_google_books = AsyncMock(side_effect=RuntimeError("boom"))
+    record: dict[str, Any] = {"isbn_13": "9780201633610"}
+
+    await enricher.enrich(record, bundle)
+
+    assert "google_books_url" not in record
+    assert "snippet" not in record
+
+
+async def test_enrich_survives_a_rate_limited_lookup() -> None:
+    """The client now raises on a 429; enrichment must still stay silent."""
+    enricher = GoogleBooksEnricher()
+    bundle = _make_bundle()
+    bundle.cache.get_google_books = AsyncMock(return_value=None)
+    bundle.google_books.search_by_isbn = AsyncMock(
+        side_effect=httpx.HTTPStatusError(
+            "429",
+            request=httpx.Request("GET", "https://www.googleapis.com/books/v1/volumes"),
+            response=httpx.Response(429),
+        )
+    )
     record: dict[str, Any] = {"isbn_13": "9780201633610"}
 
     await enricher.enrich(record, bundle)
