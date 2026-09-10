@@ -854,16 +854,16 @@ tasks = [
 
 [[package]]
 name = "fastmcp-pvl-core"
-version = "7.0.0"
+version = "7.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "fastmcp", extra = ["tasks"] },
     { name = "httpx" },
     { name = "httpx2" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/94/33/c4f6e2bbb4954b81f9fd0e968596213960dfb7b84ad24261daad3ca8d8b1/fastmcp_pvl_core-7.0.0.tar.gz", hash = "sha256:cc3c18052b07e84a30b9f01a0ddef59614dbf046c08f4bad185fafa1ecd0d4d5", size = 573365, upload-time = "2026-09-01T14:13:35.567Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/69/80/d3f7837e52d70d078693da75cb2bcd70451f78cfeba8620cc05c41f5de59/fastmcp_pvl_core-7.1.0.tar.gz", hash = "sha256:2b48e02dc6dc099f4e68e24d197c3a50a418d1bf9d68e3cb0ed68bb99ec37639", size = 592577, upload-time = "2026-09-10T14:52:49.92Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/bb/ea/5fb31e224621082a6135286be028ab71b8c5a0330cf81aa42715184fb8af/fastmcp_pvl_core-7.0.0-py3-none-any.whl", hash = "sha256:ef65f68e58b0477ac309fa6cc41468adc8235e290619d0d0429b82c44cfde3b9", size = 136167, upload-time = "2026-09-01T14:13:34.013Z" },
+    { url = "https://files.pythonhosted.org/packages/ee/7f/004b4c209dd5b5d8db9662b96ef6d3fd0d2ad44eb1a0ee8e1ab2482b1624/fastmcp_pvl_core-7.1.0-py3-none-any.whl", hash = "sha256:000aeaa41ef2502dcee505a3608f2c9cc10a2ca2ca4b28d0f7282ed53870500a", size = 146772, upload-time = "2026-09-10T14:52:48.081Z" },
 ]
 
 [package.optional-dependencies]
