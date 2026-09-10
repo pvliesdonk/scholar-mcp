@@ -3446,6 +3446,10 @@
 <p><strong>Returns:</strong> <code>{"pdf_path": "/data/scholar-mcp/pdfs/&lt;stem&gt;.pdf", "markdown": "...", "md_path": "/data/scholar-mcp/md/&lt;stem&gt;.md"}</code> when docling is configured, or just <code>{"pdf_path": "..."}</code> without it.</p>
 <p>Not all patents have full text available via OPS, WO and older EP patents sometimes lack PDFs. Returns <code>{"error": "pdf_not_available"}</code> in that case.</p>
 <div class="admonition note">
+<p class="admonition-title">One request per page</p>
+<p>EPO serves patent images a single page per request, so a full document costs one request per page and is reassembled before conversion. A 21-page patent takes roughly 20 seconds to download; longer patents scale linearly, which is part of why this tool commonly answers with a job handle.</p>
+</div>
+<div class="admonition note">
 <p class="admonition-title">Write-tagged</p>
 <p>This tool carries both gates: it is write-tagged and hidden when <code>SCHOLAR_MCP_READ_ONLY=true</code>, and like every patent tool it is hidden when EPO OPS credentials are not set.</p>
 </div>
