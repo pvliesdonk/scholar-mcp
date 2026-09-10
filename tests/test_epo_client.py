@@ -100,22 +100,12 @@ _FAMILY_RESPONSE_XML = b"""\
   </ops:patent-family>
 </ops:world-patent-data>"""
 
-_LEGAL_RESPONSE_XML = b"""\
-<?xml version="1.0" encoding="UTF-8"?>
-<ops:world-patent-data xmlns:ops="http://ops.epo.org"
-    xmlns="http://www.epo.org/exchange">
-  <ops:register-documents>
-    <ops:register-document country="EP" doc-number="1234567" kind="A1">
-      <ops:legal>
-        <ops:legal-event>
-          <ops:event-date><ops:date>20200115</ops:date></ops:event-date>
-          <ops:event-code>PUB</ops:event-code>
-          <ops:event-text>Published</ops:event-text>
-        </ops:legal-event>
-      </ops:legal>
-    </ops:register-document>
-  </ops:register-documents>
-</ops:world-patent-data>"""
+_EPO_FIXTURES = Path(__file__).parent / "fixtures" / "epo"
+
+# The invented fixture this replaced wrapped `ops:legal-event` elements in
+# `ops:register-documents`; OPS sends neither, so the parser matched nothing
+# and every legal lookup came back empty while the suite stayed green (#390).
+_LEGAL_RESPONSE_XML = (_EPO_FIXTURES / "legal_ep1000000a1.xml").read_bytes()
 
 
 # ---------------------------------------------------------------------------
@@ -572,8 +562,9 @@ async def test_get_legal_returns_events(
     mock_ops_client.legal.return_value = _mock_response(_LEGAL_RESPONSE_XML)
     doc = DocdbNumber(country="EP", number="1234567", kind="A1")
     result = await epo_client.get_legal(doc)
-    assert len(result) == 1
-    assert result[0]["code"] == "PUB"
+    assert len(result) == 50
+    assert result[0]["code"] == "17Q"
+    assert result[0]["description"] == "FIRST EXAMINATION REPORT DESPATCHED"
 
 
 async def test_get_legal_calls_legal_method(
@@ -895,8 +886,6 @@ async def test_preflight_cache_expires_after_60s(
 # ---------------------------------------------------------------------------
 # _parse_pdf_link tests
 # ---------------------------------------------------------------------------
-
-_EPO_FIXTURES = Path(__file__).parent / "fixtures" / "epo"
 
 
 def _real_inquiry(name: str) -> bytes:

@@ -46,6 +46,10 @@ that so nobody goes looking for the dictionary again.
 
 ### Structure
 
+- `code` is padded to four characters (`"17Q "`, `"AK  "`), so a consumer that
+  compares codes must strip it. [observed: the fixture above]
+  [pins: tests/test_epo_xml.py::TestParseLegalXml::test_code_is_stripped_of_its_padding]
+
 - The service is `GET /legal/{type}/{format}/{number}`, and it bills the
   `inpadoc` throttle bucket, not `retrieval` — see
   [throttling](epo-ops-throttling.md).
@@ -58,7 +62,8 @@ that so nobody goes looking for the dictionary again.
 - **No element named `legal-event` exists in the schema**, and none is returned.
   Neither do `event-code`, `event-date` or `event-text`.
   [source: ops-legal-xsd]
-  [observed: `tests/fixtures/epo/legal_ep1000000a1.xml`, a verbatim 76 123-byte response; `legal-event` occurs 0 times, `<ops:legal ` 50 times]
+  [observed: `tests/fixtures/epo/legal_ep1000000a1.xml`, a captured 76 KB response; `legal-event` occurs 0 times, `<ops:legal ` 50 times]
+  [pins: tests/test_epo_xml.py::TestParseLegalXml::test_reads_the_shape_epo_actually_sends]
 
 ### The response is self-describing
 
@@ -66,6 +71,7 @@ that so nobody goes looking for the dictionary again.
   language: `FIRST EXAMINATION REPORT DESPATCHED`, `DESIGNATED CONTRACTING
   STATES`, `REFERENCE TO A NATIONAL CODE`.
   [observed: the fixture above, 50 events across 22 distinct codes]
+  [pins: tests/test_epo_xml.py::TestParseLegalXml::test_event_meaning_comes_from_the_legal_element]
 - Every `L###EP` child carries its own `desc` naming the field it holds —
   `Country Code`, `Filing / Published Document`, `Document Number`, `Kind Code`,
   `IPR Type`, `Gazette DATE`, `Legal Event Code 1`, `DATE last exchanged`,
@@ -83,20 +89,22 @@ that so nobody goes looking for the dictionary again.
   created". A consumer must choose deliberately; `L007EP` is the date the event
   was published in the gazette and is the one a reader means by "when did this
   happen". [observed: the same fixture]
+  [pins: tests/test_epo_xml.py::TestParseLegalXml::test_date_is_the_gazette_date]
 - `dateMigr` on `ops:legal` is declared `xs:string`, not a date type.
   [source: ops-legal-xsd]
 
 ## Where this project departs from the subject
 
-**Not deliberately — this is a defect.** `parse_legal_xml` searches for
-`.//ops:legal-event` with `ops:event-date/ops:date`, `ops:event-code` and
-`ops:event-text` children, none of which OPS sends. Fed the verbatim fixture
-above it returns zero events from fifty, so `get_patent(include=["legal"])`
-answers `"legal": []` for every patent. Tracked in **#390**; its tests pass
-because their fixtures encode the same invented shape.
+Nowhere deliberately, now that #390 is fixed. `parse_legal_xml` reads
+`ops:legal/@code` and `@desc` for the event and `L007EP` for the date, exactly
+as recorded above.
 
-This page is deliberately written *before* that fix, so the fix is a
-consequence of the recorded behaviour rather than another guess.
+This page was written *before* that fix, which is what the
+`researching-references` skill directs: the fix followed the recorded
+behaviour rather than being another guess a later reference would contradict.
+Until it landed, the parser searched for `.//ops:legal-event` — an element OPS
+does not send — and returned zero events from the fifty this page's fixture
+contains.
 
 ## Not covered
 
