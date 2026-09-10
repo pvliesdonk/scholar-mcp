@@ -14,6 +14,7 @@ from importlib.metadata import version as _pkg_version
 from fastmcp import FastMCP
 from fastmcp.server.event_store import EventStore
 from fastmcp_pvl_core import (
+    HealthCheck,
     InstructionRole,
     # The template scaffold suppresses F401 on this import because it only
     # re-exports ServerConfig.  scholar-mcp uses it directly
@@ -25,9 +26,11 @@ from fastmcp_pvl_core import (
     build_jobs,
     configure_logging_from_env,
     configure_task_backend,
-    env,  # noqa: F401  — re-exported so DOMAIN-WIRING additions don't need a new import
+    env,  # also used by DOMAIN-WIRING additions, so no new import is needed there
     finalize_instructions,
     instructions_for,
+    normalise_http_path,
+    register_health_routes,
     register_server_info_tool,
     wire_middleware_stack,
 )
@@ -125,6 +128,7 @@ def make_server(
     *,
     transport: str = "stdio",
     config: ProjectConfig | None = None,
+    http_path: str | None = None,
 ) -> FastMCP:
     """Construct the Scholar MCP FastMCP server.
 
@@ -132,14 +136,24 @@ def make_server(
         transport: ``"stdio"`` / ``"http"`` / ``"sse"``.  Gates any
             transport-specific wiring added in the DOMAIN-WIRING block
             (e.g. HTTP-only custom routes, which cannot be served under
-            stdio) and appears as ``transport=%s`` in the startup log.
+            stdio), gates the template's own liveness and readiness
+            routes, which register for ``"http"`` alone, and appears as
+            ``transport=%s`` in the startup log.
         config: Optional pre-loaded config; default loads from env.
+        http_path: The MCP mount path the caller will hand to
+            ``http_app(path=...)``.  The health routes derive their prefix
+            from it, so the CLI passes the value it resolved; unset, the
+            same ``SCHOLAR_MCP_HTTP_PATH``-or-``/mcp`` fallback the
+            CLI uses applies, so a direct ``make_server(transport="http")``
+            and ``serve --transport http`` publish the routes at the same
+            place.
 
     Returns:
         A configured :class:`fastmcp.FastMCP` instance.
     """
     config = config or ProjectConfig.from_env()
     configure_logging_from_env()
+    mount_path = normalise_http_path(http_path or env(_ENV_PREFIX, "HTTP_PATH"))
 
     # One source for the name, so `FastMCP(name=...)` below and the shaped
     # instruction identity cannot disagree.  `ProjectConfig.server_name`
@@ -285,6 +299,23 @@ def make_server(
         # DOMAIN-UPSTREAM-END
     )
 
+    # Readiness checks for ``<prefix>/health/ready``, registered below once
+    # the DOMAIN-WIRING block has had its say.  pvl-core contributes the
+    # ``kv_store`` write probe itself; this dict is the domain hook, filled
+    # from inside the block (the name ``kv_store`` is reserved).  A check is
+    # a zero-arg callable, sync or async, answering "does this make the
+    # server unable to serve" — falsy or raising means not-ready and the
+    # route answers 503.  Nothing about *how* it answers is prescribed:
+    # a cached flag a background task keeps fresh is as valid as a live
+    # round-trip, and anything touching the network should be async so the
+    # five-second ceiling applies.  A partial degradation you would rather
+    # report than be taken out of rotation for belongs in ``get_server_info``.
+    # Two shapes that both fit:
+    #
+    #   health_checks["upstream_key"] = lambda: _keepalive.last_ok   # cached flag
+    #   health_checks["index"] = _index.is_loaded                    # async probe
+    health_checks: dict[str, HealthCheck] = {}
+
     # DOMAIN-WIRING-START — project-specific wiring (custom HTTP routes,
     # transforms, mode toggles, alternative middleware, additional registrations);
     # kept across copier update. Leave empty for projects that don't customise
@@ -369,6 +400,28 @@ def make_server(
     #     # (dropped automatically if the tool is hidden by TOOLS_DENY):
     #     add_transfer_workflow(mcp, download_tool="share_document")
     # DOMAIN-WIRING-END
+
+    # Unauthenticated liveness (``<prefix>/health``, static 200) and readiness
+    # (``<prefix>/health/ready``, 503 when any check fails) routes for a
+    # container orchestrator; ``compose.yml`` probes the first.  They sit
+    # outside the MCP mount and outside auth, which is what a probe needs.
+    # ``<prefix>`` is the mount path minus a conventional trailing ``mcp``
+    # segment, so the default ``/mcp`` publishes ``/health`` and
+    # ``/scholar/mcp`` publishes ``/scholar/health`` — two servers on one
+    # hostname never collide.  Registered for the http transport only: it is
+    # the one the CLI mounts at ``http_path``, so it is the only one where
+    # the derived prefix is a fact rather than a guess, and under stdio there
+    # is no HTTP app at all.  ``SCHOLAR_MCP_HEALTH_DETAIL`` (``status``
+    # / ``standard`` / ``full``) decides how much the bodies say.
+    if transport == "http":
+        register_health_routes(
+            mcp,
+            config.server,
+            server_version=pkg_ver,
+            http_path=mount_path,
+            env_prefix=_ENV_PREFIX,
+            checks=health_checks,
+        )
 
     # Operator tool visibility (SCHOLAR_MCP_TOOLS_ALLOW /
     # SCHOLAR_MCP_TOOLS_DENY) applies last: fastmcp resolves visibility

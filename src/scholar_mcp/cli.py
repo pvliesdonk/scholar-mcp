@@ -111,7 +111,14 @@ def serve(
         # re-run with ``-v`` (FASTMCP_LOG_LEVEL=DEBUG) — the DEBUG line
         # below renders the traceback when the level allows it.
         config = ProjectConfig.from_env()
-        server = make_server(transport=transport, config=config)
+        # Resolved once, ahead of ``make_server``: the health routes it
+        # registers derive their prefix from the mount path, so the value
+        # handed to ``http_app(path=...)`` below and the one the server saw
+        # must be the same object, not two reads that could drift.
+        path = normalise_http_path(
+            http_path or os.environ.get(f"{_ENV_PREFIX}_HTTP_PATH")
+        )
+        server = make_server(transport=transport, config=config, http_path=path)
     except ConfigurationError as exc:
         typer.echo(f"ERROR: configuration error: {exc}", err=True)
         logger.debug("configuration_error_traceback", exc_info=True)
@@ -132,9 +139,6 @@ def serve(
             )
             raise typer.Exit(code=1) from exc
 
-        path = normalise_http_path(
-            http_path or os.environ.get(f"{_ENV_PREFIX}_HTTP_PATH")
-        )
         event_store = build_event_store(_ENV_PREFIX, config.server)
         # lifespan="on" is essential: FastMCP's lifespan (startup/shutdown
         # hooks, including service init) runs through the ASGI lifespan

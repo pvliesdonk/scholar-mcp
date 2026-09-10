@@ -68,9 +68,17 @@ VOLUME ["/data/service", "/data/state"]
 # DOCKERFILE-VOLUMES-END
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+# Liveness for a bare `docker run`: the same `GET /health` probe compose.yml
+# declares, so a container reports health with or without Compose (a compose
+# `healthcheck:` overrides this one where both exist).  Assumes the
+# conventional `/mcp` mount — see the compose.yml comment for the
+# `SCHOLAR_MCP_HTTP_PATH` caveat.  Shell form on purpose: `python` is the
+# venv interpreter on PATH, and the one-liner needs no argument splitting.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).close()"
 # Both the bind address and the port are fixed by the image, not read from the
-# environment: `EXPOSE`, the compose port mapping and the compose healthcheck
-# all name 8000, and `SCHOLAR_MCP_PORT` in a `.env` would otherwise move
-# the listener out from under all three.  Publish a different host port
-# instead (`-p 9000:8000`, or compose's `ports:`).
+# environment: `EXPOSE`, `HEALTHCHECK`, the compose port mapping and the compose
+# healthcheck all name 8000, and `SCHOLAR_MCP_PORT` in a `.env` would
+# otherwise move the listener out from under all four.  Publish a different
+# host port instead (`-p 9000:8000`, or compose's `ports:`).
 CMD ["scholar-mcp", "serve", "--transport", "http", "--host", "0.0.0.0", "--port", "8000"]

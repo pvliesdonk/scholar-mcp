@@ -357,6 +357,8 @@ def test_docker_targets_omit_the_pinned_listener_vars(page: Page) -> None:
     a knob the container ignores -- and before the CMD pinned the port, a
     `PORT=9000` answer beside `-p 8000:8000` published a port nothing served.
     The dotenv target still carries them: outside a container they are real.
+    Also pins the liveness probe URL the compose frame shares with the shipped
+    `compose.yml`.
     """
     result = _eval_generators(
         page,
@@ -384,6 +386,9 @@ def test_docker_targets_omit_the_pinned_listener_vars(page: Page) -> None:
         assert "DEMO_OTHER" in result[target]
     assert "8000:8000" in result["docker"]
     assert "8000:8000" in result["compose"]
+    # The wizard's compose frame mirrors the shipped compose.yml, liveness
+    # probe included; tests/test_compose.py pins the same URL on that file.
+    assert "127.0.0.1:8000/health" in result["compose"], result["compose"]
     # The dotenv target is for the non-container paths, where both are real.
     assert "DEMO_HOST=0.0.0.0" in result["dotenv"]
     assert "DEMO_PORT=9000" in result["dotenv"]

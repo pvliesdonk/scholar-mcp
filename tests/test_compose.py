@@ -133,10 +133,23 @@ def test_environment_holds_only_what_compose_determines(
     )
 
 
-def test_declares_a_healthcheck(service: dict[str, Any]) -> None:
+def test_declares_a_liveness_healthcheck(service: dict[str, Any]) -> None:
+    """The probe is a ``GET`` of the liveness route on the image's port.
+
+    ``/health`` and not ``/health/ready``: readiness fails on an unreachable
+    backing store, which no restart fixes and which would hold up every
+    ``service_healthy`` dependent. The path is the one the default ``/mcp``
+    mount publishes — a deployment that moves the mount must move the probe.
+    """
     test = service["healthcheck"]["test"]
     assert test[0] == "CMD", f"expected an exec-form healthcheck, found {test!r}"
-    assert "8000" in " ".join(str(part) for part in test)
+    command = " ".join(str(part) for part in test)
+    assert "127.0.0.1:8000/health" in command, (
+        f"expected the probe to GET /health on port 8000, found {command!r}"
+    )
+    assert "/health/ready" not in command, (
+        "the compose probe is liveness; readiness belongs to the load balancer"
+    )
 
 
 def test_every_named_volume_mounted_is_also_declared(

@@ -2255,7 +2255,7 @@ requires-dist = [
     { name = "beautifulsoup4", specifier = ">=4.14.3" },
     { name = "fastmcp", extras = ["tasks"], marker = "extra == 'all'", specifier = ">=4,<5" },
     { name = "fastmcp", extras = ["tasks"], marker = "extra == 'mcp'", specifier = ">=4,<5" },
-    { name = "fastmcp-pvl-core", specifier = ">=7.0.0,<8" },
+    { name = "fastmcp-pvl-core", specifier = ">=7.1.0,<8" },
     { name = "fastmcp-pvl-core", extras = ["debug"], marker = "extra == 'debug'" },
     { name = "httpx" },
     { name = "lxml", specifier = ">=5.0" },
