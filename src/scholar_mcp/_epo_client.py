@@ -71,7 +71,9 @@ def _parse_pdf_link(inquiry_xml: bytes) -> str | None:
     is present, without depending on the exact nesting depth. Matching a
     ``desc`` attribute instead is what made this return ``None`` for every
     real patent while its hand-written fixtures passed (#371); verbatim
-    captured responses now live in ``tests/fixtures/epo``.
+    captured responses now live in ``tests/fixtures/epo``, and EPO's own
+    content model is vendored at ``docs/design/epo-ops/schemas/ops.xsd``,
+    which declares ``document-format-options`` a required child.
 
     Only the FullDocument instance qualifies. A real response also carries
     ``Drawing`` and ``FirstPageClipping`` instances that offer
