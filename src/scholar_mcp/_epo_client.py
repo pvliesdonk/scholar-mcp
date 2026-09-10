@@ -685,11 +685,12 @@ class EpoClient:
             )
         page_count = instance.pages or 1
 
-        # Step 2: download every page. The OPS v3.2 API description types the
-        # images service's Range parameter as an integer named "Page number",
-        # and marks it required -- one page per call, no range form, and
-        # omitting it is an error. So the document is reassembled here, and a
-        # patent costs one request per page (#379).
+        # Step 2: download every page. EPO's reference guide says it plainly
+        # under "Full document retrieval": assembling a whole document "is
+        # quite resource consumptive... Thus it is not possible to get the
+        # full document in one request but you can download it page by page",
+        # and the Range parameter "may accept only a single number (not a
+        # range)". So a patent costs one request per page (#379).
         logger.debug("epo_pdf_download link=%s pages=%d", instance.link, page_count)
         pages: list[bytes] = []
         for page_no in range(1, page_count + 1):
@@ -703,16 +704,18 @@ class EpoClient:
         document: a 21-page patent is 21 calls, and EPO can turn amber
         part-way through.
 
-        The light consulted is ``images``, not ``retrieval``. OPS documents
-        exactly one image-retrieval operation,
-        ``/published-data/images/{country}/{number}/{kind}/{type}``, and the
-        reference client classifies that path prefix under the ``images``
-        service (``epo_ops/middlewares/throttle/utils.py``). The inquiry that
-        produced the link lives at ``/published-data/{type}/{format}/{number}
-        /images``, which falls through to ``retrieval`` -- so the two steps of
-        this download bill different buckets, and checking ``retrieval`` here
-        would abandon a part-fetched document over congestion that does not
-        apply to it.
+        The light consulted is ``images``, not ``retrieval``. EPO's reference
+        guide maps REST paths to throttle buckets directly (v1.3.20, Table 16,
+        "Mapping between services and throttles"): ``/published-data/images/*``
+        bills ``images``, while the catch-all ``/published-data/*/`` bills
+        ``retrieval``. The inquiry that produced this link sits at
+        ``/published-data/{type}/{format}/{number}/images`` and so falls under
+        the catch-all -- the two steps of one download bill *different*
+        buckets. Checking ``retrieval`` here would abandon a part-fetched
+        document over congestion that does not apply to it.
+
+        The quota headers are a separate mechanism from this traffic light and
+        are not handled yet; see #384.
 
         Args:
             link: Image-service path from the inquiry response.
