@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import logging
 import re
 import time
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, TypeVar
 
 import epo_ops
 import epo_ops.models
 from lxml import etree as _lxml_etree
+from pypdf import PdfReader, PdfWriter
 from requests.exceptions import HTTPError
 
 from scholar_mcp._epo_xml import (
@@ -57,7 +60,22 @@ def _parse_throttle_header(header: str) -> dict[str, str]:
     return result
 
 
-def _parse_pdf_link(inquiry_xml: bytes) -> str | None:
+@dataclass(frozen=True)
+class _PdfInstance:
+    """The FullDocument instance EPO offers as a PDF.
+
+    Attributes:
+        link: Image-service path to fetch pages from.
+        pages: Page count from ``number-of-pages``. ``None`` when EPO omitted
+            it, which the caller treats as "fetch page one and say so" rather
+            than guessing a count.
+    """
+
+    link: str
+    pages: int | None
+
+
+def _parse_pdf_instance(inquiry_xml: bytes) -> _PdfInstance | None:
     """Extract the FullDocument PDF link path from an EPO image inquiry response.
 
     EPO advertises the available formats as the *text* of
@@ -82,8 +100,7 @@ def _parse_pdf_link(inquiry_xml: bytes) -> str | None:
         inquiry_xml: Raw XML bytes from ``published_data(..., endpoint='images')``.
 
     Returns:
-        The ``link`` attribute value for the FullDocument PDF instance, or
-        ``None`` if no PDF is available.
+        The FullDocument PDF instance, or ``None`` if no PDF is available.
     """
     try:
         root = _lxml_etree.fromstring(inquiry_xml)
@@ -95,15 +112,54 @@ def _parse_pdf_link(inquiry_xml: bytes) -> str | None:
                 str(text).strip()
                 for text in el.xpath(".//ops:document-format/text()", namespaces=ns)
             }
-            if "application/pdf" in formats:
-                link = el.get("link")
-                return str(link) if link is not None else None
+            link = el.get("link")
+            if "application/pdf" in formats and link is not None:
+                return _PdfInstance(str(link), _page_count_of(el))
         return None
     except (RateLimitedError, EpoRateLimitedError):
         raise
     except _lxml_etree.LxmlError as exc:
         logger.warning("epo_pdf_link_parse_failed err=%s", exc)
         return None
+
+
+def _page_count_of(element: Any) -> int | None:
+    """Read ``number-of-pages`` off a document-instance element.
+
+    Args:
+        element: The ``ops:document-instance`` element.
+
+    Returns:
+        The page count, or ``None`` when the attribute is absent or not a
+        positive integer.
+    """
+    raw = element.get("number-of-pages")
+    if raw is None:
+        return None
+    try:
+        pages = int(raw)
+    except ValueError:
+        logger.warning("epo_pdf_page_count_unparsable raw=%s", raw)
+        return None
+    return pages if pages > 0 else None
+
+
+def _merge_pdf_pages(pages: list[bytes]) -> bytes:
+    """Concatenate single-page PDFs into one document.
+
+    Args:
+        pages: One PDF per page, in document order.
+
+    Returns:
+        The merged PDF bytes.
+    """
+    writer = PdfWriter()
+    for page_pdf in pages:
+        for page in PdfReader(io.BytesIO(page_pdf)).pages:
+            writer.add_page(page)
+    buf = io.BytesIO()
+    writer.write(buf)
+    return buf.getvalue()
 
 
 class EpoQuotaExhaustedError(RuntimeError):
@@ -317,6 +373,22 @@ class EpoClient:
         cached = self._throttle_cache
         color = cached.get(service, cached.get("_overall", "green"))
         return color not in ("green", "idle")
+
+    def _throttle_color(self, service: str) -> str:
+        """Resolve a service's cached traffic-light colour.
+
+        Shares its fallback chain with :meth:`_is_service_throttled` so the
+        two can never disagree -- reporting a colour of ``green`` while
+        refusing to proceed is a contradiction a caller cannot act on.
+
+        Args:
+            service: The EPO service name, e.g. ``"images"``.
+
+        Returns:
+            The cached colour, falling back to the overall light.
+        """
+        cached = self._throttle_cache
+        return cached.get(service, cached.get("_overall", "green"))
 
     def _check_throttle(self, response: Any, service: str = "_overall") -> None:
         """Check the throttle header and raise if the relevant service is throttled.
@@ -598,28 +670,78 @@ class EpoClient:
             )
         self._check_throttle(inquiry_resp, service="retrieval")
 
-        pdf_link = _parse_pdf_link(inquiry_resp.content)
-        if pdf_link is None:
+        instance = _parse_pdf_instance(inquiry_resp.content)
+        if instance is None:
             raise ValueError(
                 f"No PDF available for patent {doc.country}{doc.number}{doc.kind or ''}"
             )
 
-        # Step 2: download the PDF
-        if self._is_service_throttled("retrieval"):
-            cached = self._throttle_cache
-            color = cached.get("retrieval", cached.get("_overall", "red"))
+        if instance.pages is None:
+            # Guessing a count would either truncate silently -- the defect
+            # this replaced -- or hammer OPS until it 404s. One page, loudly.
+            logger.warning(
+                "epo_pdf_page_count_missing link=%s detail=fetching_first_page_only",
+                instance.link,
+            )
+        page_count = instance.pages or 1
+
+        # Step 2: download every page. EPO's reference guide says it plainly
+        # under "Full document retrieval": assembling a whole document "is
+        # quite resource consumptive... Thus it is not possible to get the
+        # full document in one request but you can download it page by page",
+        # and the Range parameter "may accept only a single number (not a
+        # range)". So a patent costs one request per page (#379).
+        logger.debug("epo_pdf_download link=%s pages=%d", instance.link, page_count)
+        pages: list[bytes] = []
+        for page_no in range(1, page_count + 1):
+            pages.append(await self._fetch_pdf_page(instance.link, page_no))
+        return await asyncio.to_thread(_merge_pdf_pages, pages)
+
+    async def _fetch_pdf_page(self, link: str, page_no: int) -> bytes:
+        """Fetch one page of a patent PDF, respecting the throttle first.
+
+        The traffic light is checked before every page rather than once per
+        document: a 21-page patent is 21 calls, and EPO can turn amber
+        part-way through.
+
+        The light consulted is ``images``, not ``retrieval``. EPO's reference
+        guide maps REST paths to throttle buckets directly (v1.3.20, Table 16,
+        "Mapping between services and throttles"): ``/published-data/images/*``
+        bills ``images``, while the catch-all ``/published-data/*/`` bills
+        ``retrieval``. The inquiry that produced this link sits at
+        ``/published-data/{type}/{format}/{number}/images`` and so falls under
+        the catch-all -- the two steps of one download bill *different*
+        buckets. Checking ``retrieval`` here would abandon a part-fetched
+        document over congestion that does not apply to it.
+
+        The quota headers are a separate mechanism from this traffic light and
+        are not handled yet; see #384.
+
+        Args:
+            link: Image-service path from the inquiry response.
+            page_no: 1-based page number.
+
+        Returns:
+            Raw PDF bytes for that single page.
+
+        Raises:
+            EpoQuotaExhaustedError: When the daily quota is spent.
+            EpoRateLimitedError: When either light is not green.
+        """
+        if self._is_service_throttled("images"):
+            color = self._throttle_color("images")
             if color == "black":
                 raise EpoQuotaExhaustedError
-            raise EpoRateLimitedError(color, service="retrieval")
+            raise EpoRateLimitedError(color, service="images")
 
         async with self._lock:
             pdf_resp = await asyncio.to_thread(
                 self._client.image,
-                pdf_link,
-                range=1,
+                link,
+                range=page_no,
                 document_format="application/pdf",
             )
-        self._check_throttle(pdf_resp, service="retrieval")
+        self._check_throttle(pdf_resp, service="images")
         return bytes(pdf_resp.content)
 
     async def aclose(self) -> None:
