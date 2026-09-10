@@ -2294,3 +2294,72 @@ async def test_find_bridge_papers_marks_transport_failure_partial(
     assert data["found"] is False
     assert data["partial"] is True
     assert "transport" in data["warning"]
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_citation_graph_keeps_earlier_pages_when_a_later_one_fails(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """Deep-scan pagination keeps what it collected before the failing page."""
+    respx_mock.post("/paper/batch").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {
+                    "paperId": "seed",
+                    "title": "Seed",
+                    "year": 2009,
+                    "citationCount": 7000,
+                }
+            ],
+        )
+    )
+
+    def _cit_handler(request: httpx.Request) -> httpx.Response:
+        offset = int(request.url.params.get("offset", 0))
+        limit = int(request.url.params.get("limit", 1000))
+        if offset:
+            return httpx.Response(429)
+        # A full first page, so the scan pages on: one qualifying paper
+        # among filler that the min_citations threshold rejects.
+        page = [
+            {
+                "citingPaper": {
+                    "paperId": f"low{i}",
+                    "title": f"Low {i}",
+                    "year": 2024,
+                    "citationCount": 2,
+                }
+            }
+            for i in range(limit - 1)
+        ]
+        page.append(
+            {
+                "citingPaper": {
+                    "paperId": "keeper",
+                    "title": "Keeper",
+                    "year": 2012,
+                    "citationCount": 1500,
+                }
+            }
+        )
+        return httpx.Response(200, json={"data": page})
+
+    respx_mock.get("/paper/seed/citations").mock(side_effect=_cit_handler)
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_citation_graph",
+            {
+                "seed_ids": ["seed"],
+                "direction": "citations",
+                "depth": 1,
+                "max_nodes": 50,
+                "min_citations": 100,
+            },
+        )
+    data = json.loads(result.content[0].text)
+    # The page-one match survives the page-two failure...
+    assert "keeper" in {n["id"] for n in data["nodes"]}
+    # ...and the failure is still reported rather than absorbed by the success.
+    assert data["stats"]["partial"] is True
+    assert data["stats"]["failed_requests"] == 1

@@ -712,7 +712,11 @@ async def get_citation_graph(
         to a single discipline.
 
     Returns:
-        JSON ``{"nodes": [...], "edges": [...], "stats": {...}}``.
+        JSON ``{"nodes": [...], "edges": [...], "stats": {...}}``, where
+        ``stats`` carries ``total_nodes``, ``total_edges``,
+        ``depth_reached``, ``truncated``, ``partial`` and
+        ``failed_requests``. A ``warning`` key joins the top level when
+        ``partial`` is true.
     """
     clamped_depth = max(1, min(depth, 3))
 
@@ -896,7 +900,9 @@ async def find_bridge_papers(
         direction: Expand via citations, references, or both.
 
     Returns:
-        JSON ``{"found": true, "path": [...]}`` or ``{"found": false}``.
+        JSON ``{"found": true, "path": [...]}`` or ``{"found": false}``,
+        either way carrying ``partial`` and ``failed_requests``. A
+        ``warning`` key joins them when ``partial`` is true.
     """
 
     async def _execute() -> dict[str, Any]:
