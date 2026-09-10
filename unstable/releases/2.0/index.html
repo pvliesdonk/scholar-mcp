@@ -1270,6 +1270,50 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#tools-that-could-not-tell-you-they-had-failed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tools that could not tell you they had failed
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#patent-retrieval" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Patent retrieval
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#health-routes-for-an-orchestrator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Health routes for an orchestrator
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#whether-the-semantic-scholar-key-still-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Whether the Semantic Scholar key still works
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#upgrading" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1301,10 +1345,10 @@
 
 
 <h1 id="20">2.0<a class="headerlink" href="#20" title="Permanent link">&para;</a></h1>
-<!-- notes-range-end: cd380bc40f4d61498c6fec85c555c565c8d4f2da -->
+<!-- notes-range-end: 94170990923f136d475bbb28e73549b33c59a8d9 -->
 
 <!-- RELEASE-SUMMARY v2.0.0 START -->
-<p>Scholar MCP moves to FastMCP 4 and adopts three majors of the shared server template it is generated from. Container operators have work to do: the image now serves on a fixed port 8000, and the shipped <code>compose.yml</code> no longer carries reverse-proxy configuration. What arrives in exchange is a compose file that runs as shipped and, for the first time, keeps the cache it downloads.</p>
+<p>Scholar MCP moves to FastMCP 4 and adopts three majors of the shared server template it is generated from. Container operators have work to do: the image now serves on a fixed port 8000, and the shipped <code>compose.yml</code> no longer carries reverse-proxy configuration. What arrives in exchange is a compose file that runs as shipped, keeps the cache it downloads and answers a real health route. Several tools also stop reporting an upstream refusal as a fact about the world (an empty citation graph, a book that does not exist, a patent with no PDF), and patent retrieval, which could not return a PDF or a legal event at all, now does both.</p>
 <!-- RELEASE-SUMMARY v2.0.0 END -->
 
 <h2 id="the-containers-port-is-fixed-at-8000">The container's port is fixed at 8000<a class="headerlink" href="#the-containers-port-is-fixed-at-8000" title="Permanent link">&para;</a></h2>
@@ -1338,7 +1382,7 @@
 <p><code>compose.yml</code> was an illustration. It is now a deployment, and three things follow from that.</p>
 <p><strong>The cache survives a restart.</strong> <code>SCHOLAR_MCP_CACHE_DIR</code> defaults to <code>/data/scholar-mcp</code>, and the compose file mounted neither that path nor anything containing it. The SQLite cache database and every downloaded PDF and converted Markdown file lived in the container's writable layer, so <code>docker compose up -d</code> discarded them. A <code>cache-data</code> volume now mounts that path (<a href="https://github.com/pvliesdonk/scholar-mcp/pull/360">#360</a>). Nothing regresses, since the data was already being lost, but a deployment that followed the old documented example with a <code>scholar-mcp-data</code> volume will find the new one empty on first start.</p>
 <p><strong>The reverse-proxy configuration is gone, deliberately.</strong> The file used to ship Traefik labels that never worked: it declared no <code>networks:</code> stanza, so the service sat on the compose project's default network and the proxy had no route to it. Proxy setup is now an overlay you supply, and <code>docs/deployment/docker.md</code> carries a Traefik <code>compose.override.yml</code> to copy. That overlay needs one line most people would omit, <code>ports: !reset []</code>, because Compose appends to sequences rather than replacing them. Without it the service joins the proxy network and keeps publishing 8000 as well.</p>
-<p><strong>Port 8000 is published on the host,</strong> where previously nothing was. A health check is new too. Every 30 seconds it opens a TCP connection to port 8000 inside the container, which is evidence that the process is listening and nothing more. No health route exists to probe, so it says nothing about whether the deployment is good.</p>
+<p><strong>Port 8000 is published on the host,</strong> where previously nothing was. A health check is new too: every 30 seconds the container fetches <code>http://127.0.0.1:8000/health</code>, a route the server now serves (see <a href="#health-routes-for-an-orchestrator">Health routes for an orchestrator</a> below). The image carries the same probe as its <code>HEALTHCHECK</code>, so a bare <code>docker run</code> reports health as well.</p>
 <p>Two version floors come with this. The <code>env_file</code> entry is marked <code>required: false</code>, so a checkout with no <code>.env</code> still starts on defaults; that form needs Compose 2.24.0 or newer. The <code>!reset</code> in the proxy overlay needs 2.24.4.</p>
 <p><code>build: .</code> is gone as well. The file pulls the published image, so <code>docker compose up -d</code> can no longer rebuild from a stale checkout.</p>
 <h2 id="instructions-the-model-reads-now-match-the-deployment">Instructions the model reads now match the deployment<a class="headerlink" href="#instructions-the-model-reads-now-match-the-deployment" title="Permanent link">&para;</a></h2>
@@ -1375,8 +1419,159 @@
 <p>A client that does not advertise the SEP-2663 tasks extension, which is most MCP clients today, is unaffected. A tool whose work outlives <code>SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S</code> still hands back a job handle to poll with <code>get_job_result</code>.</p>
 <p>A client that does advertise it now gets native background-task execution instead, with the task backend owning the lifecycle. FastMCP's own <code>Client</code> advertises the extension by default, so a script or test harness built on it takes the native path and blocks for the tool's full duration rather than receiving a handle. FastMCP's <code>ProxyClient</code> is the exception: it deliberately does not advertise task support to its backend, so a call arriving through a proxy still gets the handle (<a href="https://github.com/pvliesdonk/scholar-mcp/pull/360">#360</a>).</p>
 <p>No tool was added, removed or renamed, and no documented tool behaviour changed.</p>
+<h2 id="tools-that-could-not-tell-you-they-had-failed">Tools that could not tell you they had failed<a class="headerlink" href="#tools-that-could-not-tell-you-they-had-failed" title="Permanent link">&para;</a></h2>
+<p>Three tools answered an upstream refusal with a shape that reads as a finding.
+<code>get_citation_graph</code> returned <code>edges: []</code> with <code>truncated: false</code>;
+<code>find_bridge_papers</code> returned <code>{"found": false}</code>; <code>get_book_excerpt</code> returned
+<code>{"error": "not_found"}</code>. Each is a statement about the world, and each was
+produced by a request that never got an answer.</p>
+<p>That matters more here than it would in a library a person reads.
+<a href="https://github.com/pvliesdonk/scholar-mcp/issues/365">#365</a> asks for "a
+response that lets the caller distinguish" a refused request from a paper that
+has no references at all, and gives the reason: these tools are consumed by
+LLM agents, which act on what comes back, so an empty <code>edges</code> list beside
+<code>truncated: false</code> reads to them as a settled answer.</p>
+<p>The strategy has not changed: a traversal still absorbs a failed request and
+carries on, because a partial graph answers most questions. What changed is that
+the response now says so.</p>
+<p><strong>The two graph tools state their completeness on every response</strong>, including
+when nothing went wrong (<a href="https://github.com/pvliesdonk/scholar-mcp/pull/375">#375</a>).
+<code>get_citation_graph</code> carries <code>stats.partial</code> and <code>stats.failed_requests</code>;
+<code>find_bridge_papers</code> carries <code>partial</code> and <code>failed_requests</code> at the top level, on
+both the <code>found: true</code> and <code>found: false</code> shapes. When something did fail, a
+top-level <code>warning</code> names how many requests, which HTTP statuses, and which
+operations: <code>seed metadata</code>, <code>citations</code> or <code>references</code>. The fields are always
+present, including as <code>false</code> and <code>0</code>, because only an affirmative "this answer
+is complete" lets a caller tell a gap from an absence.</p>
+<p><code>stats.truncated</code> keeps its old meaning and is now explicitly a different
+signal: it says <code>max_nodes</code> stopped an otherwise successful walk.</p>
+<p><strong><code>get_book_excerpt</code> keeps <code>not_found</code> for a real no-match</strong> and reports a
+refusal separately (<a href="https://github.com/pvliesdonk/scholar-mcp/pull/377">#377</a>):
+<code>{"error": "rate_limited", "isbn": …, "retryable": true}</code> for a Google Books
+429, or <code>{"error": "upstream_error", "isbn": …, "status": &lt;code or null&gt;}</code>
+otherwise, where a null status means the request never reached Google Books.
+<a href="https://github.com/pvliesdonk/scholar-mcp/issues/366">#366</a> records why the old
+answer was worse than unhelpful: "<code>not_found</code> tells an LLM caller to stop asking
+about an ISBN that exists and would have resolved on a retry." Nothing is cached
+on the failing path, so the retry it invites is not served a poisoned entry.</p>
+<p>The <code>retryable</code> flag is on the book payload only. The graph payloads do not carry
+one, and Semantic Scholar's <code>upstream_error</code> still does not either; that is
+<a href="https://github.com/pvliesdonk/scholar-mcp/issues/369">#369</a> and remains open.
+<code>get_book_excerpt</code> also still returns its payload as a JSON string rather than a
+mapping, which is <a href="https://github.com/pvliesdonk/scholar-mcp/issues/370">#370</a>.</p>
+<h2 id="patent-retrieval">Patent retrieval<a class="headerlink" href="#patent-retrieval" title="Permanent link">&para;</a></h2>
+<p><code>fetch_patent_pdf</code> answered <code>{"error": "pdf_not_available"}</code> for every patent,
+including <code>EP3491801B1</code>, the example in its own docstring. Two independent faults
+sat behind that, and both are fixed.</p>
+<p><strong>The PDF link is found.</strong> The client looked for the format in a <code>desc</code> attribute
+on a direct child of the inquiry response; EPO carries it as the <em>text</em> of an
+<code>ops:document-format</code> element nested inside <code>ops:document-format-options</code>
+(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/380">#380</a>). The match is now
+scoped to the <code>FullDocument</code> instance, because a real response advertises
+<code>application/pdf</code> on its <code>Drawing</code> and <code>FirstPageClipping</code> instances too, so a
+match that ignored the instance type would return a thumbnail.</p>
+<p><strong>The whole document arrives, not its first page.</strong> EPO serves patent images one
+page per request and offers no whole-document route. Its own reference guide
+calls the assembly costly enough to decline doing it, and states that "it is not
+possible to get the full document in one request but you can download it page by
+page." The client now makes one request per page and reassembles them
+(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/381">#381</a>). A 21-page patent
+costs 21 requests and about 19 seconds, which is part of why this tool commonly
+answers with a job handle. <code>pypdf</code> joins the dependency set as the merge step, so
+an install is slightly larger; nothing else changes for an operator.</p>
+<p>Before this, the tool saved one page and docling converted it, so a patent's
+claims and description were absent from the Markdown with nothing reporting a
+problem (<a href="https://github.com/pvliesdonk/scholar-mcp/issues/379">#379</a>).</p>
+<p><strong>Legal-status events are returned.</strong> <code>get_patent</code> with <code>legal</code> among its
+<code>sections</code> answered <code>"legal": []</code> for every patent: the parser searched for an
+<code>ops:legal-event</code> element that does not exist in EPO's schema, and a real
+response carrying fifty events yielded zero
+(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/392">#392</a>). Events now come
+back in the same <code>date</code> / <code>code</code> / <code>description</code> shape as before, so no caller
+changes. The date is the gazette date, EPO pads its codes to four characters and
+the padding is stripped, so a caller comparing <code>17Q</code> need not know about <code>"17Q "</code>.</p>
+<h2 id="health-routes-for-an-orchestrator">Health routes for an orchestrator<a class="headerlink" href="#health-routes-for-an-orchestrator" title="Permanent link">&para;</a></h2>
+<p>The server serves two unauthenticated routes under HTTP, outside the MCP mount
+and outside auth, so they answer normally while <code>/mcp</code> still returns <code>401</code>. They
+arrive with <code>fastmcp-pvl-core</code> 7.1 by way of template v8.1
+(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/387">#387</a>).</p>
+<table>
+<thead>
+<tr>
+<th>Route</th>
+<th>Question</th>
+<th>Answer</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/health</code></td>
+<td>Is the process serving?</td>
+<td>Static <code>200</code> for as long as it does</td>
+</tr>
+<tr>
+<td><code>/health/ready</code></td>
+<td>Can it do its job?</td>
+<td>Runs every readiness check, <code>503</code> if any fails</td>
+</tr>
+</tbody>
+</table>
+<p>Readiness ships one check, <code>kv_store</code>, and it is a write rather than a read: each
+probe writes a short-lived key, so a state volume that has silently vanished is
+detected. Scholar adds no checks of its own; the next section explains why.</p>
+<p>The paths follow the mount. The prefix is <code>SCHOLAR_MCP_HTTP_PATH</code> with a trailing
+<code>mcp</code> segment stripped, so the default <code>/mcp</code> gives <code>/health</code>, and a server
+mounted at <code>/scholar-mcp/mcp</code> serves <code>/scholar-mcp/health</code>. <strong>The shipped compose
+and image probes assume the default.</strong> If you have moved the mount, edit both to
+match, or the container reports unhealthy.</p>
+<p><code>SCHOLAR_MCP_HEALTH_DETAIL</code> decides how much the bodies say, since anyone who can
+reach the port can read them: <code>status</code> alone, the default <code>standard</code> with the
+server name, version and a verdict per check, or <code>full</code> with a redacted reason
+for each check that raised. <code>standard</code> means an unauthenticated caller can read
+your server name and version, which was not previously exposed; set <code>status</code> if
+the port is reachable by anyone you would rather not tell. See
+<a href="../../deployment/docker/#health">Docker deployment</a> for the routes in full.</p>
+<h2 id="whether-the-semantic-scholar-key-still-works">Whether the Semantic Scholar key still works<a class="headerlink" href="#whether-the-semantic-scholar-key-still-works" title="Permanent link">&para;</a></h2>
+<p>A configured <code>SCHOLAR_MCP_S2_API_KEY</code> can stop conferring authenticated quota
+without saying so. Semantic Scholar answers <code>429</code>, indefinitely, which is exactly
+what ordinary throttling looks like, so the condition was visible only as a
+warning indistinguishable from routine noise, and was found by hand
+(<a href="https://github.com/pvliesdonk/scholar-mcp/issues/368">#368</a>).</p>
+<p>Two changes follow.</p>
+<p><strong>The keepalive stops losing a week to one refusal.</strong> It pinged once every seven
+days and treated a refusal as something to retry next cycle, which left roughly
+eight single-shot attempts inside the 60-day window the ping exists to stay
+inside. A
+refused ping now retries in an hour; a successful one returns to the full
+interval. Sustained refusal escalates on persistence rather than on a status
+code, because the failure observed never became anything other than a <code>429</code>:
+after about a day of hourly refusals the server logs <code>s2_keepalive_degraded</code> at
+ERROR, once, and logs <code>s2_keepalive_recovered</code> when a ping lands
+(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/378">#378</a>).</p>
+<p><strong><code>get_server_info</code> reports the verdict</strong>, so a caller can read it instead of
+hunting through the log (<a href="https://github.com/pvliesdonk/scholar-mcp/pull/393">#393</a>):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">&quot;semantic_scholar&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">&quot;key_configured&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">&quot;key_status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;degraded&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">&quot;consecutive_failures&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">26</span><span class="p">,</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="nt">&quot;last_success&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2026-09-03T12:00:00+00:00&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">  </span><span class="nt">&quot;last_failure&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2026-09-10T18:00:00+00:00&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">  </span><span class="nt">&quot;last_failure_kind&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;rate_limited&quot;</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="p">}</span>
+</code></pre></div>
+<p><code>key_status</code> is <code>not_configured</code> (no key, and the anonymous tier still serves),
+<code>unknown</code> (configured, not yet pinged), <code>ok</code>, <code>failing</code>, or <code>degraded</code>. The
+<code>degraded</code> threshold is the same constant the keepalive escalates at, so the
+field and the log line cannot disagree. The failure timestamps survive a
+recovery, so a key that is flapping looks different from one that is well.</p>
+<p>This is a reported field and not a readiness check, deliberately. A revoked key
+breaks the Semantic Scholar tools while OpenAlex, Crossref, EPO, Open Library and
+the standards sources keep serving, and a <code>503</code> from <code>/health/ready</code> would drop
+the whole server from rotation over a condition that removing it from rotation
+does not repair. The <code>health_checks</code> dict stays empty, and the README records
+why, so the emptiness does not read as an oversight.</p>
 <h2 id="upgrading">Upgrading<a class="headerlink" href="#upgrading" title="Permanent link">&para;</a></h2>
-<p>The public import surface is unchanged, <code>requires-python</code> stays at 3.11, no environment variable was removed, and no default changed. The systemd unit and <code>packaging/env.example</code> are untouched, so a package or <code>pip</code> install needs only the last two steps below.</p>
+<p>The public import surface is unchanged, <code>requires-python</code> stays at 3.11, no environment variable was removed, and no default changed. No tool was added, removed or renamed. The systemd unit and <code>packaging/env.example</code> are untouched, so a package or <code>pip</code> install needs only the last three steps below.</p>
 <p>For a container deployment, in order:</p>
 <ol>
 <li><strong>Check your Compose version.</strong> <code>docker compose version</code> must report 2.24.0 or newer, or 2.24.4 if you will use the proxy overlay. On an older engine, replace the <code>env_file:</code> block with plain <code>env_file: .env</code> and make sure the file exists.</li>
@@ -1386,12 +1581,19 @@
 <li><strong>If <code>SCHOLAR_MCP_HOST</code> held a public hostname</strong> for the old Traefik router rule, put that hostname in your overlay's <code>Host(...)</code> rule and set <code>SCHOLAR_MCP_BASE_URL</code> to the public URL. Reset <code>SCHOLAR_MCP_HOST</code> to a bind address or drop the line: it is the interface the server binds to, and a name that does not resolve locally now fails startup.</li>
 <li><strong>If you built from <code>compose.yml</code>,</strong> build and tag explicitly with <code>docker build -t ghcr.io/pvliesdonk/scholar-mcp:dev .</code>, then point <code>image:</code> at that tag.</li>
 <li><strong>Move any hand edits to <code>compose.yml</code></strong> into the <code>DOMAIN-COMPOSE-VOLUMES</code>, <code>-ENVIRONMENT</code>, <code>-SERVICES</code> and <code>-VOLUME-NAMES</code> blocks, where they survive future template updates. A named volume needs two entries: the mount, and its top-level declaration.</li>
-<li><strong>Apply changes with <code>docker compose up -d</code>, not <code>docker compose restart</code>.</strong> An environment file is read when a container is created, so a restarted container keeps the values it was created with and the edit is ignored without any message.</li>
+<li>
+<p><strong>Apply changes with <code>docker compose up -d</code>, not <code>docker compose restart</code>.</strong> An environment file is read when a container is created, so a restarted container keeps the values it was created with and the edit is ignored without any message.</p>
+</li>
+<li>
+<p><strong>If you have moved the MCP mount</strong> off the default <code>/mcp</code> with <code>SCHOLAR_MCP_HTTP_PATH</code>, point the health probes at the matching prefix. The shipped <code>compose.yml</code> <code>healthcheck</code> and the image's <code>HEALTHCHECK</code> both fetch <code>http://127.0.0.1:8000/health</code>; a server mounted at <code>/scholar-mcp/mcp</code> serves <code>/scholar-mcp/health</code>, and an unedited probe reports the container unhealthy.</p>
+</li>
+<li><strong>Decide what <code>/health</code> may tell an unauthenticated caller.</strong> At the default <code>SCHOLAR_MCP_HEALTH_DETAIL=standard</code> the body carries the server name and version. Set <code>status</code> where the port is reachable by parties you would rather not tell. Reserve <code>full</code>, which adds redacted failure reasons, for trusted networks.</li>
 </ol>
 <p>For every deployment:</p>
 <ol>
 <li><strong>Python consumers</strong> should relax any pin below <code>fastmcp-pvl-core</code> 7 or FastMCP 4. Installing alongside FastMCP 3, or <code>fastmcp-pvl-core</code> 4 through 6, no longer resolves.</li>
-<li><strong>If you track <code>.env</code>,</strong> two optional variables were added and none removed. Nothing must be set.</li>
+<li><strong>If you track <code>.env</code>,</strong> three optional variables were added and none removed: <code>SCHOLAR_MCP_INSTANCE_DESCRIPTION</code>, <code>SCHOLAR_MCP_INSTRUCTIONS_EXTRA</code> and <code>SCHOLAR_MCP_HEALTH_DETAIL</code>. Nothing must be set.</li>
+<li><strong><code>pypdf</code> is a new dependency,</strong> pulled in to reassemble patent PDFs. A <code>pip</code> or <code>uv</code> install resolves it automatically. Only an offline or mirrored install needs to add it by hand.</li>
 </ol>
 <!-- PATCH-RELEASES-START -->
 <!-- PATCH-RELEASES-END -->
