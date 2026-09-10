@@ -70,7 +70,7 @@ The floor moves to FastMCP 4 and `fastmcp-pvl-core` 7, with MCP SDK 2. Long-runn
 
 A client that does not advertise the SEP-2663 tasks extension, which is most MCP clients today, is unaffected. A tool whose work outlives `SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S` still hands back a job handle to poll with `get_job_result`.
 
-A client that does advertise it now gets native background-task execution instead, with the task backend owning the lifecycle. FastMCP's own `Client` advertises the extension by default, so proxies, scripts and test harnesses built on it take the native path and block for the tool's full duration rather than receiving a handle ([#360](https://github.com/pvliesdonk/scholar-mcp/pull/360)).
+A client that does advertise it now gets native background-task execution instead, with the task backend owning the lifecycle. FastMCP's own `Client` advertises the extension by default, so a script or test harness built on it takes the native path and blocks for the tool's full duration rather than receiving a handle. FastMCP's `ProxyClient` is the exception: it deliberately does not advertise task support to its backend, so a call arriving through a proxy still gets the handle ([#360](https://github.com/pvliesdonk/scholar-mcp/pull/360)).
 
 No tool was added, removed or renamed, and no documented tool behaviour changed.
 
