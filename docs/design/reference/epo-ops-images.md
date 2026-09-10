@@ -47,7 +47,8 @@ large-file hook refuses it, so its passages are quoted here instead.
 - Does not cover: throttling and quota, which decide *whether* a request is
   allowed — see [EPO OPS throttling and fair-use quota](epo-ops-throttling.md).
   Also not covered: the fulltext, family, register, classification and CCD
-  services, none of which this project calls for images.
+  services, none of which this project calls for images, and the legal-event
+  tag semantics of `sources/epo-ops/ops_legal.xsd` (#388).
 - Depended on by: `src/scholar_mcp/_epo_client.py` (`_parse_pdf_instance`,
   `_page_count_of`, `get_pdf`, `_fetch_pdf_page`, `_merge_pdf_pages`).
 

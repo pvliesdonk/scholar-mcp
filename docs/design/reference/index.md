@@ -32,6 +32,17 @@ kept — the register, CCD and CPC schemas are not, and neither is the reference
 guide PDF, which at 4.8 MB the repository's large-file hook refuses. Its
 passages are quoted in the pages instead.
 
+## Known gaps
+
+- **Legal-event tag semantics.** `sources/epo-ops/ops_legal.xsd` declares
+  `L001EP`–`L533EP`, and `parse_legal_xml` reads them, but nothing here records
+  what an individual tag *means*. EPO documents that in a manual marked for
+  restricted distribution; whether and how to reflect it in a public repository
+  is #388.
+- **Semantic Scholar and Google Books** have no page yet, though the same class
+  of undocumented behaviour sat behind #365, #366, #368 and #369. Tracked in
+  #389.
+
 **Whitespace in the vendored files was normalised** by the repository's
 `trailing-whitespace` and `end-of-file-fixer` hooks. Verified whitespace-only:
 `diff -w` against the captures is empty, and each file parses. Expect a
