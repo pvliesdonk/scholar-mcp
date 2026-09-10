@@ -297,13 +297,14 @@ def make_server(
         # still buys authenticated quota (#229).
         #
         # Reported here rather than as a `/health/ready` check on purpose. A
-        # readiness failure takes the whole server out of rotation and, under
-        # the compose healthcheck, restarts the container -- neither of which
-        # revives a revoked key, while OpenAlex, Crossref, EPO, OpenLibrary
-        # and the standards sources carry on serving. A partial degradation
-        # you would rather report than be restarted for belongs in
-        # get_server_info; see docs/design/reference/ for what the keepalive
-        # can and cannot tell.
+        # readiness failure answers 503 for the whole server, dropping it from
+        # rotation wherever something polls that route, and that does not
+        # revive a revoked key -- while OpenAlex, Crossref, EPO, OpenLibrary
+        # and the standards sources carry on serving. The shipped compose
+        # probe reads /health, so it is unaffected either way. A partial
+        # degradation you would rather report than be dropped from rotation
+        # for belongs in get_server_info; README's "Server info" section
+        # records the reasoning for an operator.
         upstream_version=S2_KEEPALIVE_STATUS.as_dict,
         upstream_label="semantic_scholar",
         # DOMAIN-UPSTREAM-END

@@ -165,7 +165,7 @@ Scholar uses that slot for **Semantic Scholar key health**, under a `semantic_sc
 
 `key_status` is one of `not_configured` (no key set, so the anonymous tier serves), `unknown` (configured, not yet pinged), `ok`, `failing` (refused, but not for long enough to mean more than throttling), or `degraded`. The `degraded` threshold is the same one the keepalive escalates at, so this field and the `s2_keepalive_degraded` log line never disagree.
 
-This is reported here rather than as a `/health/ready` check on purpose. A revoked key breaks the Semantic Scholar tools, while OpenAlex, Crossref, EPO, Open Library and the standards sources keep serving. No restart revives it either, so failing readiness would drop the server from rotation over a condition a restart cannot repair, and `compose.yml`'s probe would restart the container in a loop.
+This is reported here rather than as a `/health/ready` check on purpose. A revoked key breaks the Semantic Scholar tools, while OpenAlex, Crossref, EPO, Open Library and the standards sources keep serving. Failing readiness answers `503` for the whole server, which drops it from rotation wherever something polls that route, such as a load balancer or a Kubernetes `readinessProbe`, over a condition that removal from rotation does not repair. The shipped `compose.yml` probes `/health` rather than `/health/ready` and reports the verdict without restarting anything, so it is unaffected either way.
 
 ### Health
 
