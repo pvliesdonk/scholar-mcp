@@ -9,6 +9,7 @@ from scholar_mcp._s2_client import (
     FIELD_SETS,
     KEEPALIVE_INTERVAL_SECONDS,
     KEEPALIVE_PAPER_ID,
+    KEEPALIVE_RETRY_INTERVAL_SECONDS,
     S2Client,
     format_s2_error,
     log_s2_error,
@@ -261,3 +262,151 @@ async def test_run_keepalive_network_error_logs_and_continues(
 
     assert route.call_count == 1
     assert "s2_keepalive_failed status=network_error" in caplog.text
+
+
+# --- A refused ping costs a retry interval, not the whole cycle (#368) ---
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_run_keepalive_retries_soon_after_a_refused_ping(
+    respx_mock, client, caplog, monkeypatch
+):
+    """A 429 sleeps the short retry interval, not the full 7-day cycle."""
+    respx_mock.get(f"/paper/{KEEPALIVE_PAPER_ID}").mock(
+        return_value=httpx.Response(429, text="slow down")
+    )
+    sleep_calls: list[float] = []
+
+    async def fake_sleep(seconds: float) -> None:
+        sleep_calls.append(seconds)
+        if len(sleep_calls) >= 2:
+            raise asyncio.CancelledError
+
+    monkeypatch.setattr("scholar_mcp._s2_client.asyncio.sleep", fake_sleep)
+    with pytest.raises(asyncio.CancelledError):
+        await run_keepalive(client)
+
+    assert sleep_calls == [
+        KEEPALIVE_RETRY_INTERVAL_SECONDS,
+        KEEPALIVE_RETRY_INTERVAL_SECONDS,
+    ]
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_run_keepalive_returns_to_full_interval_after_recovery(
+    respx_mock, client, caplog, monkeypatch
+):
+    """Once a ping lands, the loop goes back to the full cycle."""
+    respx_mock.get(f"/paper/{KEEPALIVE_PAPER_ID}").mock(
+        side_effect=[
+            httpx.Response(429, text="slow down"),
+            httpx.Response(200, json={"paperId": "x"}),
+        ]
+    )
+    sleep_calls: list[float] = []
+
+    async def fake_sleep(seconds: float) -> None:
+        sleep_calls.append(seconds)
+        if len(sleep_calls) >= 2:
+            raise asyncio.CancelledError
+
+    monkeypatch.setattr("scholar_mcp._s2_client.asyncio.sleep", fake_sleep)
+    with pytest.raises(asyncio.CancelledError):
+        await run_keepalive(client)
+
+    assert sleep_calls == [
+        KEEPALIVE_RETRY_INTERVAL_SECONDS,
+        KEEPALIVE_INTERVAL_SECONDS,
+    ]
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_run_keepalive_escalates_once_when_failures_persist(
+    respx_mock, client, caplog, monkeypatch
+):
+    """Sustained refusal is an operator-visible ERROR, logged once, not spam.
+
+    The observed failure mode is an endless 429 that never becomes a 403,
+    so the escalation keys on persistence rather than on a status code.
+    """
+    respx_mock.get(f"/paper/{KEEPALIVE_PAPER_ID}").mock(
+        return_value=httpx.Response(429, text="slow down")
+    )
+    monkeypatch.setattr("scholar_mcp._s2_client.KEEPALIVE_DEGRADED_AFTER_FAILURES", 2)
+    sleep_calls: list[float] = []
+
+    async def fake_sleep(seconds: float) -> None:
+        sleep_calls.append(seconds)
+        if len(sleep_calls) >= 4:
+            raise asyncio.CancelledError
+
+    monkeypatch.setattr("scholar_mcp._s2_client.asyncio.sleep", fake_sleep)
+    with (
+        caplog.at_level(logging.DEBUG, logger="scholar_mcp._s2_client"),
+        pytest.raises(asyncio.CancelledError),
+    ):
+        await run_keepalive(client)
+
+    degraded = [r for r in caplog.records if "s2_keepalive_degraded" in r.message]
+    assert len(degraded) == 1, "escalation must not re-log on every retry"
+    assert degraded[0].levelno == logging.ERROR
+    assert "consecutive_failures=2" in degraded[0].message
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_run_keepalive_reports_recovery_after_degrading(
+    respx_mock, client, caplog, monkeypatch
+):
+    """The operator who saw the ERROR gets told when the key works again."""
+    respx_mock.get(f"/paper/{KEEPALIVE_PAPER_ID}").mock(
+        side_effect=[
+            httpx.Response(429, text="slow down"),
+            httpx.Response(429, text="slow down"),
+            httpx.Response(200, json={"paperId": "x"}),
+        ]
+    )
+    monkeypatch.setattr("scholar_mcp._s2_client.KEEPALIVE_DEGRADED_AFTER_FAILURES", 2)
+    sleep_calls: list[float] = []
+
+    async def fake_sleep(seconds: float) -> None:
+        sleep_calls.append(seconds)
+        if len(sleep_calls) >= 3:
+            raise asyncio.CancelledError
+
+    monkeypatch.setattr("scholar_mcp._s2_client.asyncio.sleep", fake_sleep)
+    with (
+        caplog.at_level(logging.DEBUG, logger="scholar_mcp._s2_client"),
+        pytest.raises(asyncio.CancelledError),
+    ):
+        await run_keepalive(client)
+
+    assert "s2_keepalive_recovered after_failures=2" in caplog.text
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_run_keepalive_stays_quiet_when_never_degraded(
+    respx_mock, client, caplog, monkeypatch
+):
+    """A single failure that clears reports no recovery: nothing was announced."""
+    respx_mock.get(f"/paper/{KEEPALIVE_PAPER_ID}").mock(
+        side_effect=[
+            httpx.Response(429, text="slow down"),
+            httpx.Response(200, json={"paperId": "x"}),
+        ]
+    )
+    sleep_calls: list[float] = []
+
+    async def fake_sleep(seconds: float) -> None:
+        sleep_calls.append(seconds)
+        if len(sleep_calls) >= 2:
+            raise asyncio.CancelledError
+
+    monkeypatch.setattr("scholar_mcp._s2_client.asyncio.sleep", fake_sleep)
+    with (
+        caplog.at_level(logging.DEBUG, logger="scholar_mcp._s2_client"),
+        pytest.raises(asyncio.CancelledError),
+    ):
+        await run_keepalive(client)
+
+    assert "s2_keepalive_degraded" not in caplog.text
+    assert "s2_keepalive_recovered" not in caplog.text
