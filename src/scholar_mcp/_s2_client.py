@@ -59,9 +59,9 @@ class KeepaliveStatus:
 
     Deliberately *reported*, not gated on. A dead key degrades the Semantic
     Scholar tools while OpenAlex, Crossref, EPO and the rest keep working, and
-    no restart can revive it -- so this belongs in ``get_server_info`` rather
-    than in a readiness check that would take the whole server out of
-    rotation, or crash-loop a container, over one upstream (#229).
+    dropping the server from rotation does not revive it -- so this belongs in
+    ``get_server_info`` rather than in a readiness check that would answer 503
+    for the whole server over one upstream (#229).
 
     Attributes:
         configured: Whether an API key was supplied at all.
