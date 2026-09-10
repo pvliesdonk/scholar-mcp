@@ -91,7 +91,26 @@ then point the `image:` line at that tag.
 
 ### Health
 
-The service declares a health check that opens a TCP connection to port 8000 inside the container, so `docker compose ps` reports `healthy` once the server is listening. It does not assert that the server is working, because there is no health route to probe. Read it as evidence that the process is up, not that the deployment is good.
+The server serves two unauthenticated routes for an orchestrator to probe. They sit outside the MCP mount and outside auth, so they answer normally while the MCP endpoint still answers `401`.
+
+| Route           | Question                | Answer                                                                                              |
+| --------------- | ----------------------- | --------------------------------------------------------------------------------------------------- |
+| `/health`       | Is the process serving? | Static `200` for as long as it does. A failure means restart it.                                    |
+| `/health/ready` | Can it do its job?      | Runs every readiness check and answers `503` if any fails. A failure means take it out of rotation. |
+
+`compose.yml` probes `/health`, so `docker compose ps` reports `healthy` once the server answers and `docker compose up --wait` returns. The image carries the same probe as its `HEALTHCHECK`, so a bare `docker run` reports health too. Compose only reports the verdict: it gates `depends_on: condition: service_healthy` on it but restarts nothing. An orchestrator that does act on liveness, such as Swarm or a Kubernetes `livenessProbe`, restarts the container, so the probe is deliberately not `/health/ready`. A restart does not fix an unreachable backing store, and a readiness verdict here would hold up every dependent service for one. Point a load balancer or a Kubernetes `readinessProbe` at `/health/ready` instead.
+
+Readiness ships with one check, `kv_store`, which writes a short-lived key so a state volume that has silently vanished is detected. A project adds its own checks, such as whether an upstream API key is still valid, in the `health_checks` dict beside the `DOMAIN-WIRING` block in `src/scholar_mcp/server.py`.
+
+The paths follow the mount. The server strips a conventional trailing `mcp` segment from `SCHOLAR_MCP_HTTP_PATH`, so the default `/mcp` publishes `/health` and a mount at `/scholar-mcp/mcp` publishes `/scholar-mcp/health`. The shipped probe assumes the default, so a `.env` that changes the mount path must move the probe with it.
+
+Check the readiness verdict through the published port; `curl` prints the body on a `503` as well, which is where the failing check is named:
+
+```
+curl -s http://localhost:8000/health/ready
+```
+
+`SCHOLAR_MCP_HEALTH_DETAIL` decides how much the bodies say, because anyone who can reach the port can read them. `status` returns the status alone. The default, `standard`, adds the server name and version on `/health` and a verdict per check on `/health/ready`. `full` adds the exception type and a redacted reason for each check that raised, and belongs only where the port is reachable from a trusted network.
 
 ## Image tags
 

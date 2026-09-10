@@ -1712,7 +1712,35 @@
 </code></pre></div>
 <p>then point the <code>image:</code> line at that tag.</p>
 <h3 id="health">Health<a class="headerlink" href="#health" title="Permanent link">&para;</a></h3>
-<p>The service declares a health check that opens a TCP connection to port 8000 inside the container, so <code>docker compose ps</code> reports <code>healthy</code> once the server is listening. It does not assert that the server is working, because there is no health route to probe. Read it as evidence that the process is up, not that the deployment is good.</p>
+<p>The server serves two unauthenticated routes for an orchestrator to probe. They sit outside the MCP mount and outside auth, so they answer normally while the MCP endpoint still answers <code>401</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Route</th>
+<th>Question</th>
+<th>Answer</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/health</code></td>
+<td>Is the process serving?</td>
+<td>Static <code>200</code> for as long as it does. A failure means restart it.</td>
+</tr>
+<tr>
+<td><code>/health/ready</code></td>
+<td>Can it do its job?</td>
+<td>Runs every readiness check and answers <code>503</code> if any fails. A failure means take it out of rotation.</td>
+</tr>
+</tbody>
+</table>
+<p><code>compose.yml</code> probes <code>/health</code>, so <code>docker compose ps</code> reports <code>healthy</code> once the server answers and <code>docker compose up --wait</code> returns. The image carries the same probe as its <code>HEALTHCHECK</code>, so a bare <code>docker run</code> reports health too. Compose only reports the verdict: it gates <code>depends_on: condition: service_healthy</code> on it but restarts nothing. An orchestrator that does act on liveness, such as Swarm or a Kubernetes <code>livenessProbe</code>, restarts the container, so the probe is deliberately not <code>/health/ready</code>. A restart does not fix an unreachable backing store, and a readiness verdict here would hold up every dependent service for one. Point a load balancer or a Kubernetes <code>readinessProbe</code> at <code>/health/ready</code> instead.</p>
+<p>Readiness ships with one check, <code>kv_store</code>, which writes a short-lived key so a state volume that has silently vanished is detected. A project adds its own checks, such as whether an upstream API key is still valid, in the <code>health_checks</code> dict beside the <code>DOMAIN-WIRING</code> block in <code>src/scholar_mcp/server.py</code>.</p>
+<p>The paths follow the mount. The server strips a conventional trailing <code>mcp</code> segment from <code>SCHOLAR_MCP_HTTP_PATH</code>, so the default <code>/mcp</code> publishes <code>/health</code> and a mount at <code>/scholar-mcp/mcp</code> publishes <code>/scholar-mcp/health</code>. The shipped probe assumes the default, so a <code>.env</code> that changes the mount path must move the probe with it.</p>
+<p>Check the readiness verdict through the published port; <code>curl</code> prints the body on a <code>503</code> as well, which is where the failing check is named:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>curl<span class="w"> </span>-s<span class="w"> </span>http://localhost:8000/health/ready
+</code></pre></div>
+<p><code>SCHOLAR_MCP_HEALTH_DETAIL</code> decides how much the bodies say, because anyone who can reach the port can read them. <code>status</code> returns the status alone. The default, <code>standard</code>, adds the server name and version on <code>/health</code> and a verdict per check on <code>/health/ready</code>. <code>full</code> adds the exception type and a redacted reason for each check that raised, and belongs only where the port is reachable from a trusted network.</p>
 <h2 id="image-tags">Image tags<a class="headerlink" href="#image-tags" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -1752,8 +1780,8 @@
 </table>
 <p>Rolling tags are ordering-aware: a patch release cut from an old <code>release/X.Y</code> branch after a newer stable has shipped updates its own series tags but never <code>latest</code>. The same rule governs <code>rc</code>: a candidate only moves the tag while its version is still ahead of the newest stable, so a candidate for an already-released version never pulls <code>rc</code> behind <code>latest</code>.</p>
 <p>The three rolling tags answer different questions. Use <code>latest</code> to run released code, <code>rc</code> to test the candidate for the next release, and <code>edge</code> to run the newest merged commit. Note that <code>rc</code> is not cleared when its release ships: it keeps pointing at the last candidate until the next one is cut, so <code>latest</code> is the tag to follow in production. To find the commit behind an <code>edge</code> image, read its <code>org.opencontainers.image.revision</code> label:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>docker<span class="w"> </span>inspect<span class="w"> </span>--format<span class="w"> </span><span class="s1">&#39;{{ index .Config.Labels &quot;org.opencontainers.image.revision&quot; }}&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>ghcr.io/pvliesdonk/scholar-mcp:edge
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>docker<span class="w"> </span>inspect<span class="w"> </span>--format<span class="w"> </span><span class="s1">&#39;{{ index .Config.Labels &quot;org.opencontainers.image.revision&quot; }}&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span>ghcr.io/pvliesdonk/scholar-mcp:edge
 </code></pre></div>
 <h2 id="environment-variables">Environment variables<a class="headerlink" href="#environment-variables" title="Permanent link">&para;</a></h2>
 <p>See <a href="../../configuration/">Configuration</a> for the full reference. Key variables for Docker:</p>
@@ -1850,36 +1878,36 @@
 </tbody>
 </table>
 <p>Use named volumes (shown above) for persistence. Bind mounts also work:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">volumes</span><span class="p">:</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">./data/scholar-mcp:/data/scholar-mcp</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">volumes</span><span class="p">:</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">./data/scholar-mcp:/data/scholar-mcp</span>
 </code></pre></div>
 <h2 id="uidgid">UID/GID<a class="headerlink" href="#uidgid" title="Permanent link">&para;</a></h2>
 <p>The image runs as a non-root user with UID/GID 1000 by default. To match your host user for bind mounts, set build args:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">services</span><span class="p">:</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">scholar-mcp</span><span class="p">:</span>
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">    </span><span class="nt">build</span><span class="p">:</span>
-<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">      </span><span class="nt">context</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">.</span>
-<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">      </span><span class="nt">args</span><span class="p">:</span>
-<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">        </span><span class="nt">APP_UID</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1000</span>
-<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">        </span><span class="nt">APP_GID</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1000</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">services</span><span class="p">:</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">scholar-mcp</span><span class="p">:</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">    </span><span class="nt">build</span><span class="p">:</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">      </span><span class="nt">context</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">.</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">      </span><span class="nt">args</span><span class="p">:</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">        </span><span class="nt">APP_UID</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1000</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">        </span><span class="nt">APP_GID</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1000</span>
 </code></pre></div>
 <h2 id="remote-debugging">Remote debugging<a class="headerlink" href="#remote-debugging" title="Permanent link">&para;</a></h2>
 <p>Production images ship without <code>debugpy</code> to keep the image lean. To attach a remote Python debugger from VS Code or PyCharm:</p>
 <ol>
 <li>
 <p><strong>Build with the debug extra:</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>docker<span class="w"> </span>build<span class="w"> </span>--build-arg<span class="w"> </span><span class="nv">DEBUG</span><span class="o">=</span><span class="nb">true</span><span class="w"> </span>-t<span class="w"> </span>scholar-mcp:debug<span class="w"> </span>.
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>docker<span class="w"> </span>build<span class="w"> </span>--build-arg<span class="w"> </span><span class="nv">DEBUG</span><span class="o">=</span><span class="nb">true</span><span class="w"> </span>-t<span class="w"> </span>scholar-mcp:debug<span class="w"> </span>.
 </code></pre></div>
 <p>This installs the <code>[debug]</code> optional-dependency group (which pulls <code>debugpy</code> transitively from <code>fastmcp-pvl-core</code>). Default builds (<code>DEBUG=false</code>) skip it.</p>
 </li>
 <li>
 <p><strong>Run with the debug env vars set and the port mapped:</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span>-e<span class="w"> </span><span class="nv">SCHOLAR_MCP_DEBUG_PORT</span><span class="o">=</span><span class="m">5678</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span>-e<span class="w"> </span><span class="nv">SCHOLAR_MCP_DEBUG_WAIT</span><span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">  </span>-p<span class="w"> </span><span class="m">127</span>.0.0.1:5678:5678<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">  </span>-p<span class="w"> </span><span class="m">8000</span>:8000<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">  </span>scholar-mcp:debug
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span>-e<span class="w"> </span><span class="nv">SCHOLAR_MCP_DEBUG_PORT</span><span class="o">=</span><span class="m">5678</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span>-e<span class="w"> </span><span class="nv">SCHOLAR_MCP_DEBUG_WAIT</span><span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">  </span>-p<span class="w"> </span><span class="m">127</span>.0.0.1:5678:5678<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">  </span>-p<span class="w"> </span><span class="m">8000</span>:8000<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">  </span>scholar-mcp:debug
 </code></pre></div>
 <table>
 <thead>
@@ -1902,12 +1930,12 @@
 </li>
 <li>
 <p><strong>Attach from VS Code</strong>, adding a launch config:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="p">{</span>
-<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Attach to scholar-mcp&quot;</span><span class="p">,</span>
-<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;debugpy&quot;</span><span class="p">,</span>
-<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">  </span><span class="nt">&quot;request&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;attach&quot;</span><span class="p">,</span>
-<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">  </span><span class="nt">&quot;connect&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;host&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;localhost&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;port&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">5678</span><span class="w"> </span><span class="p">}</span>
-<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="p">}</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="p">{</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Attach to scholar-mcp&quot;</span><span class="p">,</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;debugpy&quot;</span><span class="p">,</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">  </span><span class="nt">&quot;request&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;attach&quot;</span><span class="p">,</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">  </span><span class="nt">&quot;connect&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;host&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;localhost&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;port&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">5678</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="p">}</span>
 </code></pre></div>
 <p>PyCharm uses <em>Run → Edit Configurations → Python Debug Server</em> with the same host/port.</p>
 </li>
@@ -1922,14 +1950,14 @@
 <p><code>compose.yml</code> mounts a third named volume, <code>cache-data</code>, at <code>/data/scholar-mcp</code>. That path is the default of <code>SCHOLAR_MCP_CACHE_DIR</code>, which holds the SQLite cache database and every downloaded PDF and converted Markdown file. It is neither of the two volumes the template mounts, so without that entry the cache would sit in the container's writable layer and vanish on the next <code>docker compose up -d</code>. Point <code>SCHOLAR_MCP_CACHE_DIR</code> somewhere else and the mount has to move with it.</p>
 <h2 id="running-docling-serve-alongside">Running docling-serve alongside<a class="headerlink" href="#running-docling-serve-alongside" title="Permanent link">&para;</a></h2>
 <p>PDF conversion is off unless <code>SCHOLAR_MCP_DOCLING_URL</code> names a reachable <a href="https://github.com/docling-project/docling-serve">docling-serve</a>. The sidecar is optional, and heavy, so <code>compose.yml</code> does not ship it. Add it in <code>compose.override.yml</code>, which Compose loads automatically:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nt">services</span><span class="p">:</span>
-<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="nt">scholar-mcp</span><span class="p">:</span>
-<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
-<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">      </span><span class="nt">SCHOLAR_MCP_DOCLING_URL</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;http://docling-serve:5001&quot;</span>
-<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>
-<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">  </span><span class="nt">docling-serve</span><span class="p">:</span>
-<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ghcr.io/ds4sd/docling-serve:latest</span>
-<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">    </span><span class="nt">restart</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">unless-stopped</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nt">services</span><span class="p">:</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="w">  </span><span class="nt">scholar-mcp</span><span class="p">:</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">      </span><span class="nt">SCHOLAR_MCP_DOCLING_URL</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;http://docling-serve:5001&quot;</span>
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>
+<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">  </span><span class="nt">docling-serve</span><span class="p">:</span>
+<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ghcr.io/ds4sd/docling-serve:latest</span>
+<a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="w">    </span><span class="nt">restart</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">unless-stopped</span>
 </code></pre></div>
 <p>Values in <code>environment:</code> override <code>.env</code>, so set the URL in one place, not both. Conversion also writes to the cache, which the read-only default forbids: set <code>SCHOLAR_MCP_READ_ONLY=false</code> in <code>.env</code> to expose the write-tagged tools that populate it.</p>
 <!-- DOMAIN-DOCKER-EXTRA-END -->
