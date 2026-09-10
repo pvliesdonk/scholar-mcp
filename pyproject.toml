@@ -1,6 +1,6 @@
 [project]
 name = "pvliesdonk-scholar-mcp"
-version = "1.10.0"
+version = "2.0.0-rc.0"
 description = "FastMCP server for scholarly papers, patents, books and standards with docling PDF conversion"
 readme = "README.md"
 # PROJECT-LICENSE-START — the license you picked; replace the value below and
