@@ -45,6 +45,111 @@ class _FilteredScan:
     error: dict[str, Any] | None = None
 
 
+# One discovered neighbour: its id, its graph node, and the edge reaching it.
+_Triple = tuple[str, dict[str, object], dict[str, object]]
+
+
+@dataclass(frozen=True)
+class _UpstreamFailure:
+    """One upstream request that failed while walking the graph.
+
+    A walk absorbs individual failures rather than aborting, so the caller
+    needs a record of what was never fetched; otherwise a missing edge is
+    indistinguishable from an edge that does not exist.
+
+    Attributes:
+        operation: What was being fetched, phrased for the caller-facing
+            warning (``seed metadata``, ``citations``, ``references``).
+        status: The upstream HTTP status, or ``None`` for a transport-level
+            failure that never produced a response.
+    """
+
+    operation: str
+    status: int | None
+
+
+def _failure_from(
+    exc: httpx.HTTPError, operation: str, identifier: str
+) -> _UpstreamFailure:
+    """Log an upstream failure and describe it for the caller.
+
+    Args:
+        exc: The error raised by the S2 client.
+        operation: What was being fetched, for the caller-facing warning.
+        identifier: The paper the request was for, for the log line only.
+
+    Returns:
+        The failure record to accumulate into the walk.
+    """
+    if isinstance(exc, httpx.HTTPStatusError):
+        log_s2_error(exc)
+        return _UpstreamFailure(operation, exc.response.status_code)
+    logger.warning(
+        "s2_transport_error operation=%s identifier=%s detail=%s",
+        operation,
+        identifier,
+        type(exc).__name__,
+    )
+    return _UpstreamFailure(operation, None)
+
+
+def _partial_warning(failures: list[_UpstreamFailure]) -> str:
+    """Describe the failed requests so a caller does not read a gap as fact.
+
+    Args:
+        failures: Every upstream failure the walk absorbed; must be non-empty.
+
+    Returns:
+        A single caller-facing sentence naming the count, the statuses and
+        the operations affected.
+    """
+    statuses = sorted({f.status for f in failures if f.status is not None})
+    causes = [f"HTTP {status}" for status in statuses]
+    if any(f.status is None for f in failures):
+        causes.append("transport errors")
+    operations = sorted({f.operation for f in failures})
+    return (
+        f"Partial result: {len(failures)} Semantic Scholar request(s) failed "
+        f"({', '.join(causes)}) while fetching {', '.join(operations)}. "
+        "The missing papers are unknown, not absent -- do not read this "
+        "result as a complete answer."
+    )
+
+
+def _partial_signal(failures: list[_UpstreamFailure]) -> dict[str, Any]:
+    """Build the completeness fields both traversal tools report.
+
+    ``partial`` is always present, including as ``False``: the point of the
+    signal is to let a caller tell a gap from an absence, and only an
+    affirmative "this answer is complete" does that.
+
+    Args:
+        failures: Upstream failures absorbed while building the answer.
+
+    Returns:
+        ``{"partial": bool, "failed_requests": int}``.
+    """
+    return {"partial": bool(failures), "failed_requests": len(failures)}
+
+
+def _with_partial(
+    payload: dict[str, Any], failures: list[_UpstreamFailure]
+) -> dict[str, Any]:
+    """Attach the completeness fields and any warning to a flat payload.
+
+    Args:
+        payload: The answer built so far, mutated in place.
+        failures: Upstream failures absorbed while building it.
+
+    Returns:
+        The same mapping, carrying the signal.
+    """
+    payload.update(_partial_signal(failures))
+    if failures:
+        payload["warning"] = _partial_warning(failures)
+    return payload
+
+
 async def _scan_citations_for_threshold(
     bundle: ServiceBundle,
     identifier: str,
@@ -312,28 +417,34 @@ def _node_from(paper: dict[str, Any]) -> dict[str, object]:
 
 async def _seed_nodes(
     bundle: ServiceBundle, seed_batch: list[str]
-) -> dict[str, dict[str, object]]:
+) -> tuple[dict[str, dict[str, object]], _UpstreamFailure | None]:
     """Resolve seed metadata so seed nodes carry titles and years.
 
     A failure here is not fatal: the graph is still walkable from bare ids,
-    so the seeds simply keep null metadata.
+    so the seeds keep null metadata and the failure is reported alongside.
 
     Args:
         bundle: Injected service bundle.
         seed_batch: Seed identifiers, already capped.
 
     Returns:
-        Seed id to node mapping, in the order given.
+        The seed id to node mapping in the order given, and the upstream
+        failure that left the metadata null, if there was one.
     """
+    failure: _UpstreamFailure | None = None
     try:
         resolved = await bundle.s2.batch_resolve(
             seed_batch, fields=FIELD_SETS["compact"]
         )
-    except (httpx.HTTPError, ValueError) as exc:
-        if isinstance(exc, httpx.HTTPStatusError):
-            log_s2_error(exc)
+    except httpx.HTTPError as exc:
+        failure = _failure_from(exc, "seed metadata", ",".join(seed_batch))
         resolved = [None] * len(seed_batch)
-    return {
+    except ValueError:
+        # A malformed identifier, not an upstream refusal: the walk still
+        # proceeds from the bare id and nothing upstream went unasked.
+        logger.warning("seed_resolution_rejected identifiers=%s", seed_batch)
+        resolved = [None] * len(seed_batch)
+    nodes: dict[str, dict[str, object]] = {
         seed_id: {
             "id": seed_id,
             "title": data.get("title") if data else None,
@@ -342,17 +453,18 @@ async def _seed_nodes(
         }
         for seed_id, data in zip(seed_batch, resolved, strict=False)
     }
+    return nodes, failure
 
 
 async def _expand_citations(
     bundle: ServiceBundle, paper_id: str, filters: _GraphFilters, room: int
-) -> list[tuple[str, dict[str, object], dict[str, object]]]:
+) -> tuple[list[_Triple], _UpstreamFailure | None]:
     """Collect papers citing *paper_id*, newest-first, honouring the threshold.
 
     With ``min_citations`` set this pages deeply, because S2 returns
     citations newest-first while highly-cited papers are usually older.
     Upstream failures yield what was collected so far rather than aborting
-    the walk.
+    the walk, and are reported so the caller can tell a gap from an absence.
 
     Args:
         bundle: Injected service bundle.
@@ -361,9 +473,10 @@ async def _expand_citations(
         room: How many more nodes the graph can still hold.
 
     Returns:
-        ``(id, node, edge)`` triples.
+        ``(id, node, edge)`` triples, and the upstream failure that cut the
+        expansion short, if there was one.
     """
-    found: list[tuple[str, dict[str, object], dict[str, object]]] = []
+    found: list[_Triple] = []
     deep = filters.min_citations is not None
     scan_cap = _MAX_PER_NODE_SCAN if deep else filters.fetch_limit
     offset = 0
@@ -401,11 +514,9 @@ async def _expand_citations(
             offset += len(data)
             if len(data) < batch or not deep:
                 break
-    except httpx.HTTPStatusError as exc:
-        log_s2_error(exc)
-    except httpx.HTTPError:
-        pass
-    return found
+    except httpx.HTTPError as exc:
+        return found, _failure_from(exc, "citations", paper_id)
+    return found, None
 
 
 def _passes_reference_filters(paper: dict[str, Any], filters: _GraphFilters) -> bool:
@@ -436,8 +547,11 @@ def _passes_reference_filters(paper: dict[str, Any], filters: _GraphFilters) -> 
 
 async def _expand_references(
     bundle: ServiceBundle, paper_id: str, filters: _GraphFilters
-) -> list[tuple[str, dict[str, object], dict[str, object]]]:
+) -> tuple[list[_Triple], _UpstreamFailure | None]:
     """Collect the papers *paper_id* references.
+
+    An upstream failure yields no triples rather than aborting the walk, and
+    is reported so the caller can tell a gap from an absence.
 
     Args:
         bundle: Injected service bundle.
@@ -445,18 +559,16 @@ async def _expand_references(
         filters: Active filters and page size.
 
     Returns:
-        ``(id, node, edge)`` triples.
+        ``(id, node, edge)`` triples, and the upstream failure that produced
+        an empty expansion, if there was one.
     """
-    found: list[tuple[str, dict[str, object], dict[str, object]]] = []
+    found: list[_Triple] = []
     try:
         result = await bundle.s2.get_references(
             paper_id, fields=filters.fields, limit=filters.fetch_limit, offset=0
         )
-    except httpx.HTTPStatusError as exc:
-        log_s2_error(exc)
-        return found
-    except httpx.HTTPError:
-        return found
+    except httpx.HTTPError as exc:
+        return found, _failure_from(exc, "references", paper_id)
     for item in result.get("data") or []:
         paper = item.get("citedPaper", {})
         pid = paper.get("paperId")
@@ -469,7 +581,7 @@ async def _expand_references(
                 {"source": paper_id, "target": pid, "direction": "cites"},
             )
         )
-    return found
+    return found, None
 
 
 @dataclass
@@ -481,12 +593,14 @@ class _Walk:
         edges: Every edge seen, before pruning to surviving nodes.
         depth_reached: Deepest hop actually expanded.
         truncated: True when ``max_nodes`` stopped the walk early.
+        failures: Upstream requests the walk absorbed instead of aborting.
     """
 
     nodes: dict[str, dict[str, object]]
     edges: list[dict[str, object]]
     depth_reached: int
     truncated: bool
+    failures: list[_UpstreamFailure]
 
 
 async def _walk_graph(
@@ -516,6 +630,7 @@ async def _walk_graph(
     queue: deque[tuple[str, int]] = deque((sid, 0) for sid in seeds)
     visited: set[str] = set(seeds)
     depth_reached = 0
+    failures: list[_UpstreamFailure] = []
 
     while queue:
         paper_id, current_depth = queue.popleft()
@@ -523,24 +638,32 @@ async def _walk_graph(
             continue
         depth_reached = max(depth_reached, current_depth + 1)
 
-        found: list[tuple[str, dict[str, object], dict[str, object]]] = []
+        found: list[_Triple] = []
         if direction in ("citations", "both"):
-            found += await _expand_citations(
+            citing, failure = await _expand_citations(
                 bundle, paper_id, filters, max_nodes - len(nodes)
             )
+            found += citing
+            if failure:
+                failures.append(failure)
         if direction in ("references", "both"):
-            found += await _expand_references(bundle, paper_id, filters)
+            cited, failure = await _expand_references(bundle, paper_id, filters)
+            found += cited
+            if failure:
+                failures.append(failure)
 
         for pid, node, edge in found:
             edges.append(edge)
             if len(nodes) >= max_nodes:
-                return _Walk(nodes, edges, depth_reached, truncated=True)
+                return _Walk(
+                    nodes, edges, depth_reached, truncated=True, failures=failures
+                )
             nodes.setdefault(pid, node)
             if pid not in visited:
                 visited.add(pid)
                 queue.append((pid, current_depth + 1))
 
-    return _Walk(nodes, edges, depth_reached, truncated=False)
+    return _Walk(nodes, edges, depth_reached, truncated=False, failures=failures)
 
 
 async def get_citation_graph(
@@ -563,6 +686,13 @@ async def get_citation_graph(
     shallow, narrow graph runs long: expect a job handle to poll with
     ``get_job_result`` rather than the graph itself.
 
+    A failed upstream request does not abort the walk. When one happens,
+    ``stats.partial`` is true, ``stats.failed_requests`` counts them, and a
+    ``warning`` key explains what went unfetched. Treat such a graph as
+    incomplete: a missing node or edge is unknown, not absent. This is
+    distinct from ``stats.truncated``, which means ``max_nodes`` stopped an
+    otherwise successful walk.
+
     Args:
         seed_ids: 1-10 paper identifiers to start from.
         direction: Expand via citations, references, or both.
@@ -582,7 +712,11 @@ async def get_citation_graph(
         to a single discipline.
 
     Returns:
-        JSON ``{"nodes": [...], "edges": [...], "stats": {...}}``.
+        JSON ``{"nodes": [...], "edges": [...], "stats": {...}}``, where
+        ``stats`` carries ``total_nodes``, ``total_edges``,
+        ``depth_reached``, ``truncated``, ``partial`` and
+        ``failed_requests``. A ``warning`` key joins the top level when
+        ``partial`` is true.
     """
     clamped_depth = max(1, min(depth, 3))
 
@@ -604,9 +738,10 @@ async def get_citation_graph(
         has_client_filters = (
             min_citations is not None or year is not None or fos is not None
         )
+        seeds, seed_failure = await _seed_nodes(bundle, seed_batch)
         walk = await _walk_graph(
             bundle,
-            await _seed_nodes(bundle, seed_batch),
+            seeds,
             direction=direction,
             depth=clamped_depth,
             max_nodes=max_nodes,
@@ -628,7 +763,11 @@ async def get_citation_graph(
         ]
 
         await bundle.enrichment.enrich(node_list, bundle, tags=frozenset({"papers"}))
-        return {
+        failures = ([seed_failure] if seed_failure else []) + walk.failures
+        # The completeness fields sit in stats beside truncated, which answers
+        # the neighbouring question; the warning stays top-level, matching the
+        # key get_citations already uses.
+        result: dict[str, Any] = {
             "nodes": node_list,
             "edges": edge_list,
             "stats": {
@@ -636,15 +775,19 @@ async def get_citation_graph(
                 "total_edges": len(edge_list),
                 "depth_reached": walk.depth_reached,
                 "truncated": walk.truncated,
+                **_partial_signal(failures),
             },
         }
+        if failures:
+            result["warning"] = _partial_warning(failures)
+        return result
 
     return await _execute()
 
 
 async def _cached_neighbour_ids(
     bundle: ServiceBundle, paper_id: str, *, kind: str
-) -> list[str]:
+) -> tuple[list[str], _UpstreamFailure | None]:
     """Return one direction's neighbour ids, reading through the cache.
 
     Args:
@@ -653,7 +796,9 @@ async def _cached_neighbour_ids(
         kind: ``"references"`` or ``"citations"``.
 
     Returns:
-        Neighbour paper ids; empty when the upstream call failed.
+        The neighbour paper ids, and the upstream failure that left the list
+        empty, if there was one. An empty list with no failure means the
+        paper genuinely has no neighbours in that direction.
     """
     if kind == "references":
         cached = await bundle.cache.get_references(paper_id)
@@ -670,24 +815,23 @@ async def _cached_neighbour_ids(
             bundle.cache.set_citations,
         )
     if cached is not None:
-        return list(cached)
+        return list(cached), None
     try:
         result = await fetch(paper_id, fields="paperId", limit=100, offset=0)
-    except httpx.HTTPStatusError as exc:
-        log_s2_error(exc)
-        return []
+    except httpx.HTTPError as exc:
+        return [], _failure_from(exc, kind, paper_id)
     ids = [
         item[item_key]["paperId"]
         for item in (result.get("data") or [])
         if item.get(item_key, {}).get("paperId")
     ]
     await store(paper_id, ids)
-    return ids
+    return ids, None
 
 
 async def _neighbours(
     bundle: ServiceBundle, paper_id: str, direction: str
-) -> list[str]:
+) -> tuple[list[str], list[_UpstreamFailure]]:
     """Return neighbour ids in the requested direction(s).
 
     Args:
@@ -696,14 +840,18 @@ async def _neighbours(
         direction: ``references``, ``citations`` or ``both``.
 
     Returns:
-        Neighbour paper ids.
+        The neighbour paper ids, and every upstream failure absorbed while
+        collecting them.
     """
     found: list[str] = []
-    if direction in ("references", "both"):
-        found += await _cached_neighbour_ids(bundle, paper_id, kind="references")
-    if direction in ("citations", "both"):
-        found += await _cached_neighbour_ids(bundle, paper_id, kind="citations")
-    return found
+    failures: list[_UpstreamFailure] = []
+    kinds = ("references", "citations") if direction == "both" else (direction,)
+    for kind in kinds:
+        ids, failure = await _cached_neighbour_ids(bundle, paper_id, kind=kind)
+        found += ids
+        if failure:
+            failures.append(failure)
+    return found, failures
 
 
 async def _path_records(bundle: ServiceBundle, path: list[str]) -> list[dict[str, Any]]:
@@ -739,6 +887,12 @@ async def find_bridge_papers(
     commonly runs long and returns a job handle to poll with
     ``get_job_result`` rather than the path itself.
 
+    A failed upstream request does not abort the search. When one happens,
+    ``partial`` is true, ``failed_requests`` counts them, and a ``warning``
+    key explains what went unfetched. A partial ``{"found": false}`` is not
+    evidence that no path exists, and a partial ``{"found": true}`` path is
+    not guaranteed to be the shortest one.
+
     Args:
         source_id: Starting paper S2 ID.
         target_id: Target paper S2 ID.
@@ -746,29 +900,37 @@ async def find_bridge_papers(
         direction: Expand via citations, references, or both.
 
     Returns:
-        JSON ``{"found": true, "path": [...]}`` or ``{"found": false}``.
+        JSON ``{"found": true, "path": [...]}`` or ``{"found": false}``,
+        either way carrying ``partial`` and ``failed_requests``. A
+        ``warning`` key joins them when ``partial`` is true.
     """
 
     async def _execute() -> dict[str, Any]:
         queue: deque[tuple[str, list[str]]] = deque([(source_id, [source_id])])
         visited: set[str] = {source_id}
+        failures: list[_UpstreamFailure] = []
 
         while queue:
             current_id, path = queue.popleft()
             if len(path) > max_depth + 1:
                 continue
 
-            for neighbour_id in await _neighbours(bundle, current_id, direction):
+            neighbours, hop_failures = await _neighbours(bundle, current_id, direction)
+            failures += hop_failures
+            for neighbour_id in neighbours:
                 if neighbour_id == target_id:
-                    return {
-                        "found": True,
-                        "path": await _path_records(bundle, [*path, target_id]),
-                    }
+                    return _with_partial(
+                        {
+                            "found": True,
+                            "path": await _path_records(bundle, [*path, target_id]),
+                        },
+                        failures,
+                    )
                 if neighbour_id not in visited:
                     visited.add(neighbour_id)
                     queue.append((neighbour_id, [*path, neighbour_id]))
 
-        return {"found": False}
+        return _with_partial({"found": False}, failures)
 
     return await _execute()
 

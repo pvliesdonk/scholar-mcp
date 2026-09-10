@@ -404,6 +404,8 @@ Schedule via cron, launchd, or a systemd timer. Weekly is sufficient; standards 
 | `get_citation_graph` | BFS traversal from seed papers, returning nodes + edges up to configurable depth. |
 | `find_bridge_papers` | Shortest citation path between two papers. |
 
+> Both traversal tools carry on when an upstream request fails rather than aborting the walk. Every response states its completeness as `partial` and `failed_requests` (in `stats` for `get_citation_graph`, at the top level for `find_bridge_papers`); when something did fail, a `warning` names the statuses involved. A partial result says what was found, not what exists. See the [Citation Graphs guide](https://pvliesdonk.github.io/scholar-mcp/latest/guides/citation-graphs/).
+
 #### Recommendations & citation generation
 
 | Tool | Description |
