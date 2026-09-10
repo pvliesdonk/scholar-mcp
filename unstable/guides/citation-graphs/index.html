@@ -944,6 +944,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#when-the-graph-is-incomplete" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When the graph is incomplete
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1548,6 +1559,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#when-the-graph-is-incomplete" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When the graph is incomplete
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1725,15 +1747,21 @@
 <a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">    </span><span class="nt">&quot;total_nodes&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">42</span><span class="p">,</span>
 <a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">    </span><span class="nt">&quot;total_edges&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">67</span><span class="p">,</span>
 <a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">    </span><span class="nt">&quot;depth_reached&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span>
-<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">    </span><span class="nt">&quot;truncated&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span>
-<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">  </span><span class="p">}</span>
-<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="p">}</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">    </span><span class="nt">&quot;truncated&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">    </span><span class="nt">&quot;partial&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">    </span><span class="nt">&quot;failed_requests&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span>
+<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="p">}</span>
 </code></pre></div>
 <ul>
 <li><strong>nodes</strong>: full paper metadata for each paper in the graph</li>
 <li><strong>edges</strong>: directed edges from citing paper to cited paper</li>
 <li><strong>stats.truncated</strong>: if <code>true</code>, the graph was cut short by <code>max_nodes</code></li>
+<li><strong>stats.partial</strong>: if <code>true</code>, at least one upstream request failed and the walk carried on without it. <code>stats.failed_requests</code> counts them and a top-level <code>warning</code> key names the statuses involved.</li>
 </ul>
+<h3 id="when-the-graph-is-incomplete">When the graph is incomplete<a class="headerlink" href="#when-the-graph-is-incomplete" title="Permanent link">&para;</a></h3>
+<p>An upstream failure, most often a Semantic Scholar rate limit, does not abort the traversal: the nodes already collected are still returned. Check <code>stats.partial</code> before you read anything into the shape of the graph. A partial graph tells you what was found, not what exists, so an absent edge means the answer is unknown rather than negative. Retrying the same call once the rate limit clears is the way to get the full picture.</p>
+<p><code>truncated</code> and <code>partial</code> answer different questions. <code>truncated</code> means the walk succeeded and <code>max_nodes</code> stopped it; <code>partial</code> means part of the walk never happened.</p>
 <h2 id="bridge-papers">Bridge papers<a class="headerlink" href="#bridge-papers" title="Permanent link">&para;</a></h2>
 <p><code>find_bridge_papers</code> finds the shortest citation path between two papers. This is useful for:</p>
 <ul>
@@ -1758,6 +1786,7 @@
 <a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">  </span><span class="p">]</span>
 <a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="p">}</span>
 </code></pre></div>
+<p>Every response also carries <code>"partial"</code> and <code>"failed_requests"</code>. When an upstream request fails, <code>partial</code> is <code>true</code> and a <code>warning</code> key names the statuses involved. A partial <code>{"found": false}</code> is not evidence that no path exists, and a partial <code>{"found": true}</code> path is not guaranteed to be the shortest one.</p>
 <h3 id="tips">Tips<a class="headerlink" href="#tips" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Direction matters</strong>: <code>citations</code> follows forward citations (A cites B); <code>references</code> follows backward references. Try both if one direction doesn't find a path.</li>

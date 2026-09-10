@@ -109,7 +109,9 @@ The response contains:
     "total_nodes": 42,
     "total_edges": 67,
     "depth_reached": 2,
-    "truncated": false
+    "truncated": false,
+    "partial": false,
+    "failed_requests": 0
   }
 }
 ```
@@ -117,6 +119,13 @@ The response contains:
 - **nodes**: full paper metadata for each paper in the graph
 - **edges**: directed edges from citing paper to cited paper
 - **stats.truncated**: if `true`, the graph was cut short by `max_nodes`
+- **stats.partial**: if `true`, at least one upstream request failed and the walk carried on without it. `stats.failed_requests` counts them and a top-level `warning` key names the statuses involved.
+
+### When the graph is incomplete
+
+An upstream failure, most often a Semantic Scholar rate limit, does not abort the traversal: the nodes already collected are still returned. Check `stats.partial` before you read anything into the shape of the graph. A partial graph tells you what was found, not what exists, so an absent edge means the answer is unknown rather than negative. Retrying the same call once the rate limit clears is the way to get the full picture.
+
+`truncated` and `partial` answer different questions. `truncated` means the walk succeeded and `max_nodes` stopped it; `partial` means part of the walk never happened.
 
 ## Bridge papers
 
@@ -147,6 +156,8 @@ The response includes the full path with metadata for each paper:
   ]
 }
 ```
+
+Every response also carries `"partial"` and `"failed_requests"`. When an upstream request fails, `partial` is `true` and a `warning` key names the statuses involved. A partial `{"found": false}` is not evidence that no path exists, and a partial `{"found": true}` path is not guaranteed to be the shortest one.
 
 ### Tips
 

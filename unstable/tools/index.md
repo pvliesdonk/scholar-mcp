@@ -148,10 +148,18 @@ BFS traversal from one or more seed papers, collecting nodes and edges.
     "total_nodes": 42,
     "total_edges": 67,
     "depth_reached": 2,
-    "truncated": false
+    "truncated": false,
+    "partial": false,
+    "failed_requests": 0
   }
 }
 ```
+
+Partial graphs
+
+A failed upstream request does not abort the traversal. When one happens, `stats.partial` is `true`, `stats.failed_requests` counts them, and a top-level `warning` key names the statuses and the operations affected. Treat such a graph as incomplete: a missing node or edge is unknown, not absent.
+
+This is separate from `stats.truncated`, which means `max_nodes` stopped an otherwise successful walk.
 
 Controlling graph size
 
@@ -185,7 +193,13 @@ Find the shortest citation path between two papers.
 }
 ```
 
-Or `{"found": false}` if no path exists within `max_depth`.
+If no path exists within `max_depth`, `found` is `false` and `path` is absent. Every response also carries `"partial"` and `"failed_requests"`.
+
+Partial searches
+
+A failed upstream request does not abort the search. When one happens, `partial` is `true`, `failed_requests` counts them, and a `warning` key names the statuses and the operations affected.
+
+A partial `{"found": false}` is not evidence that no path exists, and a partial `{"found": true}` path is not guaranteed to be the shortest one.
 
 ______________________________________________________________________
 
