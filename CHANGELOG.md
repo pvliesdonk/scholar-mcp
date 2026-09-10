@@ -2,6 +2,61 @@
 
 <!-- version list -->
 
+## 2.0.0-rc.0 (2026-09-10)
+
+### Breaking Changes
+
+- the container image's CMD now pins `--host 0.0.0.0 --port
+8000`, so SCHOLAR_MCP_PORT no longer reaches the server inside a container.
+An operator running `-e SCHOLAR_MCP_PORT=9000 -p 9000:9000` gets a mapping
+onto a closed port with no error. Verified against the built image: with the
+variable set the container still logs `Uvicorn running on http://0.0.0.0:8000`
+and host->9000 refuses, while host->8000 answers. Change the mapping's host
+side instead (`-p 9000:8000`) and drop the variable from any .env a container
+reads. Outside a container the variable is unchanged.
+
+Template changes applied:
+
+- configure_task_backend moves after FastMCP() construction and takes the
+  server first; it registers the SEP-2663 tasks extension, since the
+  fastmcp.settings.docket global it used to mutate is gone.
+- ProjectConfig gains a template-owned `server_name` field; server.py reads
+  it instead of calling env() itself, so a programmatically supplied name
+  reaches the shaped instruction identity too. The project's now-unused
+  _DEFAULT_SERVER_NAME is dropped.
+- fastmcp[tasks] extras move from >=3.2.0,<4 to >=4,<5.
+- tests/test_tool_metadata.py reads annotations.read_only_hint; the SDK v2
+  camelCase alias resolves but warns. The wire format is unchanged.
+- compose.yml becomes a working deployment with four DOMAIN-COMPOSE-* seams.
+  The project's cache volume goes in DOMAIN-COMPOSE-VOLUMES: cache_dir
+  defaults to /data/scholar-mcp, which neither template volume covers, so
+  without it the cache and downloaded PDFs die with the container.
+- docs/deployment/docker.md takes the template's rewritten Compose section;
+  the project's docling-serve sidecar and cache-volume prose move into the
+  DOMAIN-DOCKER-EXTRA seam as a compose.override.yml overlay.
+- pyproject.toml and packaging/nfpm.yaml gain PROJECT-LICENSE,
+  PROJECT-LICENSE-CLASSIFIER, PROJECT-KEYWORDS and DOMAIN-NFPM-DESCRIPTION
+  seams; the MIT choice and the hand-written package description now sit
+  inside them and survive future updates.
+- author_name / author_email answers are set explicitly so the rendered
+  authors and maintainer lines reproduce the existing identity rather than
+  the github_org default.
+
+Test suite: tests that assemble a bare FastMCP and register task-enabled
+tools now go through a `tasks_server` helper in conftest, because FastMCP 4
+refuses to start a server carrying a task-enabled tool without the extension.
+That fixes 261 failures.
+
+Ten `*_promotes_when_slow` tests needed a client that does not negotiate the
+SEP-2663 tasks extension. `fastmcp.Client` folds that extension in at
+construction (`_auto_internal_extensions = True`), and the server runs an
+`optional`-mode tool as a task only when the client opted in, so an ordinary
+client now always takes the native path and pvl-core's soft-deadline promotion
+never fires. Those tests assert the fallback -- what a client that does not
+speak tasks gets, which is most MCP clients today -- so they go through a
+`PlainClient` subclass in conftest that leaves the extension unadvertised, the
+same lever `ProxyClient` uses.
+
 ## 1.10.0 (2026-09-07)
 
 ### Features

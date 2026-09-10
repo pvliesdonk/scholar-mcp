@@ -8,6 +8,7 @@ GitHub release links back to its page here.
 
 <!-- RELEASE-PAGES-START: newest series first; one list entry per page.
      The first real entry replaces the placeholder line below. -->
+- [2.0](2.0.md)
 - [1.10](1.10.md): one background-job queue replaces two, with EPO retry and tool-surface fixes
 - [1.9](1.9.md): S2 API key liveness; v1.9.0 released 2026-07-19
 <!-- RELEASE-PAGES-END -->
