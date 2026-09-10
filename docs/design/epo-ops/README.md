@@ -31,6 +31,7 @@ quota from a shared allowance.
 
 | File | Use it for |
 |---|---|
+| `reference-guide-notes.md` | **Start here.** Cited excerpts from EPO's RESTful Web Services Reference Guide v1.3.20 — the only source that documents *behaviour* rather than *shape*: throttling, quotas, and why the image service works as it does. The 4.8 MB PDF itself is not vendored; the notes say where to get it. |
 | `ops.yaml` | The OPS 3.2 OpenAPI (Swagger 2.0) description: every operation, its parameters, and their types. |
 | `schemas/ops.xsd` | Response content models — `document-instance`, `document-format-options`, `inquiry-result`, fault shapes, and the `desc` enumeration. |
 | `schemas/ops_legal.xsd` | The `L###EP` legal-event element vocabulary. Load-bearing: `EpoClient.get_legal` feeds `parse_legal_xml` (`src/scholar_mcp/_epo_xml.py`). |
@@ -42,8 +43,8 @@ quota from a shared allowance.
 
 ## Answers worth knowing about
 
-Three findings that cost live API calls to establish, each stated plainly in
-these files:
+Findings that cost live API calls to establish, each stated plainly in these
+files:
 
 **One page per image request.** `ops.xsd`, `document-formatType-REST`:
 
@@ -61,21 +62,64 @@ guessing a page count is how documents get silently truncated.
 `/published-data/images/{image-country}/{image-number}/{image-kind}/{image-type}`
 and its POST twin. There is no whole-document route to find.
 
+**Which throttle bucket a request bills against.** Reference guide §2.3.3,
+Table 16, *"Mapping between services and throttles"*:
+
+| Throttle | REST service URI |
+|---|---|
+| `search` | `/published-data/search/*` |
+| `retrieval` | `/published-data/*/` |
+| `inpadoc` | `/family/*` |
+| `inpadoc` | `/legal/*` |
+| `images` | `/published-data/images/*` |
+| `images` | `/classification/cpc/media/*` |
+
+Everything else bills `other`. The two steps of a patent PDF download bill
+**different** buckets: the inquiry at
+`/published-data/{type}/{format}/{number}/images` falls under the `retrieval`
+catch-all, the page fetch at `/published-data/images/*` bills `images`. Every
+`_check_throttle` service assignment in `_epo_client.py` was audited against
+this table and matches.
+
+**Why one request per page.** Reference guide §3.1.3, "Full document retrieval":
+
+> In order to provide user with full document, OPS internally must do image
+> inquiry and then assemble full document page by page. It's quite resource
+> consumptive process and might load OPS significantly. Thus it is not possible
+> to get the full document in one request but you can download it page by page.
+
+and *"X-OPS-Range header is obligatory. It may accept only a single number (not
+a range)."* The constraint is deliberate, not an accident of the parameter.
+
+## Throttling and quota are two different mechanisms
+
+Easy to conflate; the guide keeps them apart, and so should we.
+
+- **`X-Throttling-Control`** is concurrency self-throttling over a rolling
+  60-second window, per service, with a green/yellow/red/black light. Black
+  means temporarily suspended and carries `Retry-After` in milliseconds.
+- **Quota headers** — `X-IndividualQuotaPerHour-Used`,
+  `X-RegisteredQuotaPerWeek-Used`, `X-RegisteredPayingQuotaPerWeek-Used` —
+  track the fair-use *data* allowance. Exhausting one yields **`403` with
+  `X-Rejection-Reason`**, not a black light and not a 429. The hourly quota
+  refreshes on a rolling window, the weekly one at midnight UTC.
+
+Only the traffic light is handled today. See #384.
+
 ## What these do not cover
 
-`X-Throttling-Control` and its per-service buckets appear in **neither** the
-OpenAPI description nor the schemas. Searching the full API page for `throttl`,
-`quota`, `retry-after`, `rate limit` and `fair use` returns nothing. That
-material lives in EPO's separate OPS usage documentation, which is not vendored
-here. The service each operation bills against is inferred from the documented
-path split plus the reference client's prefix mapping — see #379.
+`ops.yaml` and the schemas document *shape*, not *behaviour* — neither mentions
+throttling, quotas or fair use. That is why the reference guide is the first
+place to look, and why questions answered from the schemas alone kept coming
+back inferred.
 
 ## Provenance
 
 Captured 2026-09-10 from the EPO Developer Portal
 (`developers.epo.org/apis/ops-v32`) and the OPS schema distribution, using a
-maintainer's own developer account. The portal requires a login; the OPS data
-service itself does not serve these files (every conventional spec path 404s).
+maintainer's own developer account. The portal
+requires a login; the OPS data service itself does not serve these files (every
+conventional spec path 404s).
 
 `ops.yaml` self-describes as *"Open API specification of OPS API. Version 1.2
 only is supported by Apigee SmartDocs"*, carries `version: "3.2"`, and names its
