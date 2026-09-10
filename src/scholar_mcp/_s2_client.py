@@ -39,6 +39,17 @@ KEEPALIVE_INTERVAL_SECONDS = (
     7 * 24 * 60 * 60
 )  # 7 days; well under S2's 60-day key-inactivity window
 
+# A refused ping used to cost a whole 7-day cycle, leaving roughly eight
+# single-shot attempts inside the 60-day window. An hour is the compromise:
+# a transient 429 costs almost nothing, while a key that never recovers
+# produces 24 log lines a day rather than thousands.
+KEEPALIVE_RETRY_INTERVAL_SECONDS = 60 * 60
+
+# Consecutive failed pings before the loop escalates to an operator-visible
+# ERROR. At the retry interval above this is roughly a day of refusal --
+# far longer than any throttling S2 applies, so it does not fire on noise.
+KEEPALIVE_DEGRADED_AFTER_FAILURES = 24
+
 
 def log_s2_error(exc: httpx.HTTPStatusError) -> None:
     """Log an S2 upstream HTTP error at a level and event name operators can alert on.
@@ -389,36 +400,81 @@ class S2Client:
         return await with_s2_try_once(_call, self._limiter)  # type: ignore[no-any-return]
 
 
+async def _keepalive_ping(client: S2Client) -> bool:
+    """Fire one keepalive ping and log whatever came back.
+
+    The ping stays single-shot (``retry=False``): hammering the endpoint the
+    key is already being refused by helps nobody, and the caller shortens the
+    cycle instead. Only ``asyncio.CancelledError`` escapes.
+
+    Args:
+        client: The S2 client to ping.
+
+    Returns:
+        True when S2 answered the ping.
+    """
+    try:
+        await client.get_paper(KEEPALIVE_PAPER_ID, fields="paperId", retry=False)
+    except RateLimitedError:
+        # get_paper(retry=False) raises this (not HTTPStatusError) on a 429.
+        logger.warning("s2_keepalive_rate_limited")
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 403:
+            logger.error("s2_keepalive_key_forbidden", exc_info=True)
+        else:
+            logger.warning(
+                "s2_keepalive_failed status=%s",
+                exc.response.status_code,
+                exc_info=True,
+            )
+    except httpx.HTTPError:
+        logger.warning("s2_keepalive_failed status=network_error", exc_info=True)
+    else:
+        logger.debug("s2_keepalive_ok")
+        return True
+    return False
+
+
 async def run_keepalive(client: S2Client) -> None:
     """Ping S2 periodically to keep the API key from being removed for inactivity.
 
     Semantic Scholar may remove API keys that see no traffic for 60 days.
-    This loop fires an immediate cheap call on startup, then repeats every
-    :data:`KEEPALIVE_INTERVAL_SECONDS`. Each iteration's failure is caught
-    and logged so one bad cycle never stops future ones; only
-    ``asyncio.CancelledError`` (server shutdown) propagates out.
+    The loop pings immediately on startup, then sleeps
+    :data:`KEEPALIVE_INTERVAL_SECONDS` after a ping S2 answered and only
+    :data:`KEEPALIVE_RETRY_INTERVAL_SECONDS` after one it refused, so a
+    single refusal no longer costs a whole cycle.
+
+    Sustained refusal is escalated on **persistence, not on status code**.
+    A key that has stopped conferring quota was observed to return 429
+    indefinitely and never 403, so counting consecutive failures is what
+    catches it. At :data:`KEEPALIVE_DEGRADED_AFTER_FAILURES` the loop logs
+    ``s2_keepalive_degraded`` at ERROR **once**, not on every retry -- an
+    alert that repeats hourly is an alert that gets muted -- and logs
+    ``s2_keepalive_recovered`` when a ping finally lands. The per-ping
+    warnings continue throughout.
+
+    Each iteration's failure is caught and logged so one bad cycle never
+    stops future ones; only ``asyncio.CancelledError`` (server shutdown)
+    propagates out.
 
     Args:
         client: The S2 client to ping.
     """
+    consecutive_failures = 0
     while True:
-        try:
-            await client.get_paper(KEEPALIVE_PAPER_ID, fields="paperId", retry=False)
-        except RateLimitedError:
-            # get_paper(retry=False) raises this (not HTTPStatusError) on a
-            # 429 — transient, try again next cycle.
-            logger.warning("s2_keepalive_rate_limited")
-        except httpx.HTTPStatusError as exc:
-            if exc.response.status_code == 403:
-                logger.error("s2_keepalive_key_forbidden", exc_info=True)
-            else:
-                logger.warning(
-                    "s2_keepalive_failed status=%s",
-                    exc.response.status_code,
-                    exc_info=True,
+        if await _keepalive_ping(client):
+            if consecutive_failures >= KEEPALIVE_DEGRADED_AFTER_FAILURES:
+                logger.info(
+                    "s2_keepalive_recovered after_failures=%d", consecutive_failures
                 )
-        except httpx.HTTPError:
-            logger.warning("s2_keepalive_failed status=network_error", exc_info=True)
-        else:
-            logger.debug("s2_keepalive_ok")
-        await asyncio.sleep(KEEPALIVE_INTERVAL_SECONDS)
+            consecutive_failures = 0
+            await asyncio.sleep(KEEPALIVE_INTERVAL_SECONDS)
+            continue
+        consecutive_failures += 1
+        if consecutive_failures == KEEPALIVE_DEGRADED_AFTER_FAILURES:
+            logger.error(
+                "s2_keepalive_degraded consecutive_failures=%d "
+                "detail=key_may_no_longer_confer_quota",
+                consecutive_failures,
+            )
+        await asyncio.sleep(KEEPALIVE_RETRY_INTERVAL_SECONDS)

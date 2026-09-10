@@ -308,11 +308,20 @@ Domain-config fields are composed inside `src/scholar_mcp/config.py` between the
 
 Scholar-mcp pings Semantic Scholar once on startup and every 7 days
 thereafter to keep the configured key from being removed for inactivity
-(Semantic Scholar may remove keys unused for 60+ days). If S2 starts
-rejecting the key with `403 Forbidden`, this shows up in the server logs
-as `s2_key_forbidden` (on real tool calls) or `s2_keepalive_key_forbidden`
-(from the background keepalive); grep for either to confirm a dead key
-versus a transient upstream issue.
+(Semantic Scholar may remove keys unused for 60+ days). A ping S2 refuses
+is retried in an hour rather than waiting out the full cycle, so one bad
+moment does not cost a week of key activity.
+
+To tell a dead key from a transient upstream issue, grep the server logs
+for `s2_keepalive_degraded`. The keepalive logs it at `ERROR`, once, after
+a day of consecutive refusals, and follows it with
+`s2_keepalive_recovered` if a later ping lands. It keys on persistence
+rather than on a status code, because a key that has stopped conferring
+quota was observed returning `429` indefinitely and never `403`.
+
+A `403 Forbidden` remains the cheaper signal when S2 does send one:
+`s2_key_forbidden` on real tool calls, `s2_keepalive_key_forbidden` from
+the keepalive. Do not rely on it alone.
 
 ## Key design decisions
 
