@@ -685,9 +685,11 @@ class EpoClient:
             )
         page_count = instance.pages or 1
 
-        # Step 2: download every page. OPS serves exactly one page per image
-        # call -- Range is a page selector, not a range, and omitting it is a
-        # 404 -- so the document is reassembled here (#379).
+        # Step 2: download every page. The OPS v3.2 API description types the
+        # images service's Range parameter as an integer named "Page number",
+        # and marks it required -- one page per call, no range form, and
+        # omitting it is an error. So the document is reassembled here, and a
+        # patent costs one request per page (#379).
         logger.debug("epo_pdf_download link=%s pages=%d", instance.link, page_count)
         pages: list[bytes] = []
         for page_no in range(1, page_count + 1):
