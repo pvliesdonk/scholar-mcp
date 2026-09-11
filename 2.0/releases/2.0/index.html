@@ -1,0 +1,1666 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="FastMCP server for scholarly papers, patents, books and standards with docling PDF conversion">
+      
+      
+      
+        <link rel="canonical" href="https://pvliesdonk.github.io/scholar-mcp/2.0/releases/2.0/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>2.0 - Scholar MCP Server</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../../stylesheets/config-wizard.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#20" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Scholar MCP Server" class="md-header__button md-logo" aria-label="Scholar MCP Server" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Scholar MCP Server
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              2.0
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/pvliesdonk/scholar-mcp" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    pvliesdonk/scholar-mcp
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../installation/" class="md-tabs__link">
+          
+  
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../guides/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../tools/" class="md-tabs__link">
+          
+  
+  
+  MCP Interface
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../deployment/docker/" class="md-tabs__link">
+          
+  
+  
+  Deployment
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Release Notes
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Scholar MCP Server" class="md-nav__button md-logo" aria-label="Scholar MCP Server" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Scholar MCP Server
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/pvliesdonk/scholar-mcp" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    pvliesdonk/scholar-mcp
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration-generator/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration Generator
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/claude-code-plugin/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Claude Code Plugin
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/claude-desktop/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Claude Desktop
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/authentication/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Authentication
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/pdf-conversion/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PDF Conversion
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/citation-graphs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Citation Graphs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Interface
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    MCP Interface
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tools/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tools
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../prompts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prompts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Deployment
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/docker/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Docker
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/systemd/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    systemd
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/oidc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OIDC Authentication
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/claude-desktop/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Claude Desktop
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/release-process/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Process
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/template-updates/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Template Updates
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/repository-protection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Repository Protection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-containers-port-is-fixed-at-8000" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The container's port is fixed at 8000
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-compose-file-that-runs-as-shipped-and-keeps-its-cache" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A compose file that runs as shipped, and keeps its cache
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#instructions-the-model-reads-now-match-the-deployment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Instructions the model reads now match the deployment
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#one-generated-configuration-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        One generated configuration reference
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fastmcp-4-and-which-clients-get-a-job-handle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FastMCP 4, and which clients get a job handle
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tools-that-could-not-tell-you-they-had-failed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tools that could not tell you they had failed
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#patent-retrieval" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Patent retrieval
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#health-routes-for-an-orchestrator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Health routes for an orchestrator
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#whether-the-semantic-scholar-key-still-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Whether the Semantic Scholar key still works
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#upgrading" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Upgrading
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="20">2.0<a class="headerlink" href="#20" title="Permanent link">&para;</a></h1>
+<!-- notes-range-end: 94170990923f136d475bbb28e73549b33c59a8d9 -->
+
+<!-- RELEASE-SUMMARY v2.0.0 START -->
+<p>Scholar MCP moves to FastMCP 4 and adopts three majors of the shared server template it is generated from. Container operators have work to do: the image now serves on a fixed port 8000, and the shipped <code>compose.yml</code> no longer carries reverse-proxy configuration. What arrives in exchange is a compose file that runs as shipped, keeps the cache it downloads and answers a real health route. Several tools also stop reporting an upstream refusal as a fact about the world (an empty citation graph, a book that does not exist, a patent with no PDF), and patent retrieval, which could not return a PDF or a legal event at all, now does both.</p>
+<!-- RELEASE-SUMMARY v2.0.0 END -->
+
+<h2 id="the-containers-port-is-fixed-at-8000">The container's port is fixed at 8000<a class="headerlink" href="#the-containers-port-is-fixed-at-8000" title="Permanent link">&para;</a></h2>
+<p>The image's start command now pins <code>--port 8000</code>. Inside a container, <code>SCHOLAR_MCP_PORT</code> no longer reaches the server.</p>
+<p>This is the one change that can break a working deployment quietly. The problem it settles, <a href="https://github.com/pvliesdonk/scholar-mcp/issues/342">as #342 put it</a>, is that "a container run with <code>-e SCHOLAR_MCP_PORT=9000 -p 9000:9000</code> serves 8000 behind a mapping to a closed port, with no error." The variable moved the server, the port mapping did not follow it, and nothing complained.</p>
+<p>The behaviour was verified against the built image in <a href="https://github.com/pvliesdonk/scholar-mcp/pull/360">#360</a>:</p>
+<table>
+<thead>
+<tr>
+<th>Container</th>
+<th>host→8000</th>
+<th>host→9000</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>default</td>
+<td><code>400</code> on a bare <code>GET /mcp</code>, so the port is live</td>
+<td>not mapped</td>
+</tr>
+<tr>
+<td><code>-e SCHOLAR_MCP_PORT=9000</code></td>
+<td><code>400</code></td>
+<td><code>000</code>, connection refused</td>
+</tr>
+</tbody>
+</table>
+<p>With the variable set, the container still logs <code>Uvicorn running on http://0.0.0.0:8000</code>.</p>
+<p>Express a custom port as the host side of the mapping instead, as in <code>-p 9000:8000</code>, and leave the right-hand side alone. Outside a container, on a systemd unit or a plain <code>scholar-mcp serve</code>, the variable is untouched and still works.</p>
+<h2 id="a-compose-file-that-runs-as-shipped-and-keeps-its-cache">A compose file that runs as shipped, and keeps its cache<a class="headerlink" href="#a-compose-file-that-runs-as-shipped-and-keeps-its-cache" title="Permanent link">&para;</a></h2>
+<p><code>compose.yml</code> was an illustration. It is now a deployment, and three things follow from that.</p>
+<p><strong>The cache survives a restart.</strong> <code>SCHOLAR_MCP_CACHE_DIR</code> defaults to <code>/data/scholar-mcp</code>, and the compose file mounted neither that path nor anything containing it. The SQLite cache database and every downloaded PDF and converted Markdown file lived in the container's writable layer, so <code>docker compose up -d</code> discarded them. A <code>cache-data</code> volume now mounts that path (<a href="https://github.com/pvliesdonk/scholar-mcp/pull/360">#360</a>). Nothing regresses, since the data was already being lost, but a deployment that followed the old documented example with a <code>scholar-mcp-data</code> volume will find the new one empty on first start.</p>
+<p><strong>The reverse-proxy configuration is gone, deliberately.</strong> The file used to ship Traefik labels that never worked: it declared no <code>networks:</code> stanza, so the service sat on the compose project's default network and the proxy had no route to it. Proxy setup is now an overlay you supply, and <code>docs/deployment/docker.md</code> carries a Traefik <code>compose.override.yml</code> to copy. That overlay needs one line most people would omit, <code>ports: !reset []</code>, because Compose appends to sequences rather than replacing them. Without it the service joins the proxy network and keeps publishing 8000 as well.</p>
+<p><strong>Port 8000 is published on the host,</strong> where previously nothing was. A health check is new too: every 30 seconds the container fetches <code>http://127.0.0.1:8000/health</code>, a route the server now serves (see <a href="#health-routes-for-an-orchestrator">Health routes for an orchestrator</a> below). The image carries the same probe as its <code>HEALTHCHECK</code>, so a bare <code>docker run</code> reports health as well.</p>
+<p>Two version floors come with this. The <code>env_file</code> entry is marked <code>required: false</code>, so a checkout with no <code>.env</code> still starts on defaults; that form needs Compose 2.24.0 or newer. The <code>!reset</code> in the proxy overlay needs 2.24.4.</p>
+<p><code>build: .</code> is gone as well. The file pulls the published image, so <code>docker compose up -d</code> can no longer rebuild from a stale checkout.</p>
+<h2 id="instructions-the-model-reads-now-match-the-deployment">Instructions the model reads now match the deployment<a class="headerlink" href="#instructions-the-model-reads-now-match-the-deployment" title="Permanent link">&para;</a></h2>
+<p>The text an MCP client receives on connect was one flat paragraph. It is now composed from contributions that each carry a role, rendered in a fixed order: identity, then operator routing, then instance facts, policy, capabilities, workflows, and a documentation pointer (<a href="https://github.com/pvliesdonk/fastmcp-pvl-core/pull/301">pvl-core#301</a>, adopted in <a href="https://github.com/pvliesdonk/scholar-mcp/pull/359">#359</a>).</p>
+<p>Two consequences are visible to anyone running the server.</p>
+<p>A read-only instance no longer reads about tools it cannot call. The paragraph describing the cache-populating tools is registered with <code>requires_tools</code>, naming <code>fetch_paper_pdf</code>, <code>convert_pdf_to_markdown</code>, <code>fetch_and_convert</code> and <code>fetch_pdf_by_url</code>. When <code>SCHOLAR_MCP_READ_ONLY</code> hides those tools, the paragraph is dropped with them.</p>
+<p>The old text also ended with a sentence addressed to operators, asking them to set <code>SCHOLAR_MCP_INSTRUCTIONS</code>, that was delivered to the language model instead. The model could act on none of it. That sentence is gone.</p>
+<p>Two new optional variables replace it, splitting what used to be a single override:</p>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>For</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>SCHOLAR_MCP_INSTANCE_DESCRIPTION</code></td>
+<td>Routing context: what distinguishes this deployment's material or responsibility</td>
+</tr>
+<tr>
+<td><code>SCHOLAR_MCP_INSTRUCTIONS_EXTRA</code></td>
+<td>Behavioural policy specific to this deployment</td>
+</tr>
+</tbody>
+</table>
+<p>Both default to empty, and neither is required. <code>SCHOLAR_MCP_INSTRUCTIONS</code> still replaces the generated text outright, so nothing an operator set before needs changing, but it now logs a deprecation warning naming the two additive variables it suppresses.</p>
+<h2 id="one-generated-configuration-reference">One generated configuration reference<a class="headerlink" href="#one-generated-configuration-reference" title="Permanent link">&para;</a></h2>
+<p><code>docs/configuration.md</code> was a hand-written table that had drifted from the code it described. Every row is now generated from the field metadata in <code>config.py</code>, and a completeness check fails the build when a variable lands in no section, so the two cannot separate again (<a href="https://github.com/pvliesdonk/scholar-mcp/issues/340">#340</a>, <a href="https://github.com/pvliesdonk/scholar-mcp/pull/358">#358</a>). The README keeps a curated five-row table of the variables worth meeting first (<code>SCHOLAR_MCP_READ_ONLY</code>, <code>SCHOLAR_MCP_S2_API_KEY</code>, <code>SCHOLAR_MCP_DOCLING_URL</code>, <code>SCHOLAR_MCP_CACHE_DIR</code> and <code>SCHOLAR_MCP_CONTACT_EMAIL</code>) and points at the reference for the rest. The EPO OPS registration walkthrough, the cache TTLs and the rate-limiting prose moved onto that page.</p>
+<p>The same field metadata drives two install surfaces. Five credentials that were not previously flagged are now marked as secrets in <code>server.json</code>, so the MCP registry's install screen masks them. They are <code>SCHOLAR_MCP_S2_API_KEY</code>, <code>SCHOLAR_MCP_VLM_API_KEY</code>, <code>SCHOLAR_MCP_EPO_CONSUMER_SECRET</code>, <code>SCHOLAR_MCP_GOOGLE_BOOKS_API_KEY</code> and <code>SCHOLAR_GITHUB_TOKEN</code>.</p>
+<p>The guided-setup wizard also gained a fix it had been missing since its output became generated. A field whose value is a file path now emits the <code>-v</code> mount alongside the <code>-e</code> variable. For this server that is <code>SCHOLAR_MCP_BEARER_TOKENS_FILE</code>, whose generated <code>docker run</code> previously named a path the container could not read (<a href="https://github.com/pvliesdonk/fastmcp-server-template/pull/569">template#569</a>).</p>
+<h2 id="fastmcp-4-and-which-clients-get-a-job-handle">FastMCP 4, and which clients get a job handle<a class="headerlink" href="#fastmcp-4-and-which-clients-get-a-job-handle" title="Permanent link">&para;</a></h2>
+<p>The floor moves to FastMCP 4 and <code>fastmcp-pvl-core</code> 7, with MCP SDK 2. Long-running tools keep their two paths, and which path a client takes now depends on what that client negotiates.</p>
+<p>A client that does not advertise the SEP-2663 tasks extension, which is most MCP clients today, is unaffected. A tool whose work outlives <code>SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S</code> still hands back a job handle to poll with <code>get_job_result</code>.</p>
+<p>A client that does advertise it now gets native background-task execution instead, with the task backend owning the lifecycle. FastMCP's own <code>Client</code> advertises the extension by default, so a script or test harness built on it takes the native path and blocks for the tool's full duration rather than receiving a handle. FastMCP's <code>ProxyClient</code> is the exception: it deliberately does not advertise task support to its backend, so a call arriving through a proxy still gets the handle (<a href="https://github.com/pvliesdonk/scholar-mcp/pull/360">#360</a>).</p>
+<p>No tool was added, removed or renamed, and no documented tool behaviour changed.</p>
+<h2 id="tools-that-could-not-tell-you-they-had-failed">Tools that could not tell you they had failed<a class="headerlink" href="#tools-that-could-not-tell-you-they-had-failed" title="Permanent link">&para;</a></h2>
+<p>Three tools answered an upstream refusal with a shape that reads as a finding.
+<code>get_citation_graph</code> returned <code>edges: []</code> with <code>truncated: false</code>;
+<code>find_bridge_papers</code> returned <code>{"found": false}</code>; <code>get_book_excerpt</code> returned
+<code>{"error": "not_found"}</code>. Each is a statement about the world, and each was
+produced by a request that never got an answer.</p>
+<p>That matters more here than it would in a library a person reads.
+<a href="https://github.com/pvliesdonk/scholar-mcp/issues/365">#365</a> asks for "a
+response that lets the caller distinguish" a refused request from a paper that
+has no references at all, and gives the reason: these tools are consumed by
+LLM agents, which act on what comes back, so an empty <code>edges</code> list beside
+<code>truncated: false</code> reads to them as a settled answer.</p>
+<p>The strategy has not changed: a traversal still absorbs a failed request and
+carries on, because a partial graph answers most questions. What changed is that
+the response now says so.</p>
+<p><strong>The two graph tools state their completeness on every response</strong>, including
+when nothing went wrong (<a href="https://github.com/pvliesdonk/scholar-mcp/pull/375">#375</a>).
+<code>get_citation_graph</code> carries <code>stats.partial</code> and <code>stats.failed_requests</code>;
+<code>find_bridge_papers</code> carries <code>partial</code> and <code>failed_requests</code> at the top level, on
+both the <code>found: true</code> and <code>found: false</code> shapes. When something did fail, a
+top-level <code>warning</code> names how many requests, which HTTP statuses, and which
+operations: <code>seed metadata</code>, <code>citations</code> or <code>references</code>. The fields are always
+present, including as <code>false</code> and <code>0</code>, because only an affirmative "this answer
+is complete" lets a caller tell a gap from an absence.</p>
+<p><code>stats.truncated</code> keeps its old meaning and is now explicitly a different
+signal: it says <code>max_nodes</code> stopped an otherwise successful walk.</p>
+<p><strong><code>get_book_excerpt</code> keeps <code>not_found</code> for a real no-match</strong> and reports a
+refusal separately (<a href="https://github.com/pvliesdonk/scholar-mcp/pull/377">#377</a>):
+<code>{"error": "rate_limited", "isbn": …, "retryable": true}</code> for a Google Books
+429, or <code>{"error": "upstream_error", "isbn": …, "status": &lt;code or null&gt;}</code>
+otherwise, where a null status means the request never reached Google Books.
+<a href="https://github.com/pvliesdonk/scholar-mcp/issues/366">#366</a> records why the old
+answer was worse than unhelpful: "<code>not_found</code> tells an LLM caller to stop asking
+about an ISBN that exists and would have resolved on a retry." Nothing is cached
+on the failing path, so the retry it invites is not served a poisoned entry.</p>
+<p>The <code>retryable</code> flag is on the book payload only. The graph payloads do not carry
+one, and Semantic Scholar's <code>upstream_error</code> still does not either; that is
+<a href="https://github.com/pvliesdonk/scholar-mcp/issues/369">#369</a> and remains open.
+<code>get_book_excerpt</code> also still returns its payload as a JSON string rather than a
+mapping, which is <a href="https://github.com/pvliesdonk/scholar-mcp/issues/370">#370</a>.</p>
+<h2 id="patent-retrieval">Patent retrieval<a class="headerlink" href="#patent-retrieval" title="Permanent link">&para;</a></h2>
+<p><code>fetch_patent_pdf</code> answered <code>{"error": "pdf_not_available"}</code> for every patent,
+including <code>EP3491801B1</code>, the example in its own docstring. Two independent faults
+sat behind that, and both are fixed.</p>
+<p><strong>The PDF link is found.</strong> The client looked for the format in a <code>desc</code> attribute
+on a direct child of the inquiry response; EPO carries it as the <em>text</em> of an
+<code>ops:document-format</code> element nested inside <code>ops:document-format-options</code>
+(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/380">#380</a>). The match is now
+scoped to the <code>FullDocument</code> instance, because a real response advertises
+<code>application/pdf</code> on its <code>Drawing</code> and <code>FirstPageClipping</code> instances too, so a
+match that ignored the instance type would return a thumbnail.</p>
+<p><strong>The whole document arrives, not its first page.</strong> EPO serves patent images one
+page per request and offers no whole-document route. Its own reference guide
+calls the assembly costly enough to decline doing it, and states that "it is not
+possible to get the full document in one request but you can download it page by
+page." The client now makes one request per page and reassembles them
+(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/381">#381</a>). A 21-page patent
+costs 21 requests and about 19 seconds, which is part of why this tool commonly
+answers with a job handle. <code>pypdf</code> joins the dependency set as the merge step, so
+an install is slightly larger; nothing else changes for an operator.</p>
+<p>Before this, the tool saved one page and docling converted it, so a patent's
+claims and description were absent from the Markdown with nothing reporting a
+problem (<a href="https://github.com/pvliesdonk/scholar-mcp/issues/379">#379</a>).</p>
+<p><strong>Legal-status events are returned.</strong> <code>get_patent</code> with <code>legal</code> among its
+<code>sections</code> answered <code>"legal": []</code> for every patent: the parser searched for an
+<code>ops:legal-event</code> element that does not exist in EPO's schema, and a real
+response carrying fifty events yielded zero
+(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/392">#392</a>). Events now come
+back in the same <code>date</code> / <code>code</code> / <code>description</code> shape as before, so no caller
+changes. The date is the gazette date, EPO pads its codes to four characters and
+the padding is stripped, so a caller comparing <code>17Q</code> need not know about <code>"17Q "</code>.</p>
+<h2 id="health-routes-for-an-orchestrator">Health routes for an orchestrator<a class="headerlink" href="#health-routes-for-an-orchestrator" title="Permanent link">&para;</a></h2>
+<p>The server serves two unauthenticated routes under HTTP, outside the MCP mount
+and outside auth, so they answer normally while <code>/mcp</code> still returns <code>401</code>. They
+arrive with <code>fastmcp-pvl-core</code> 7.1 by way of template v8.1
+(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/387">#387</a>).</p>
+<table>
+<thead>
+<tr>
+<th>Route</th>
+<th>Question</th>
+<th>Answer</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/health</code></td>
+<td>Is the process serving?</td>
+<td>Static <code>200</code> for as long as it does</td>
+</tr>
+<tr>
+<td><code>/health/ready</code></td>
+<td>Can it do its job?</td>
+<td>Runs every readiness check, <code>503</code> if any fails</td>
+</tr>
+</tbody>
+</table>
+<p>Readiness ships one check, <code>kv_store</code>, and it is a write rather than a read: each
+probe writes a short-lived key, so a state volume that has silently vanished is
+detected. Scholar adds no checks of its own; the next section explains why.</p>
+<p>The paths follow the mount. The prefix is <code>SCHOLAR_MCP_HTTP_PATH</code> with a trailing
+<code>mcp</code> segment stripped, so the default <code>/mcp</code> gives <code>/health</code>, and a server
+mounted at <code>/scholar-mcp/mcp</code> serves <code>/scholar-mcp/health</code>. <strong>The shipped compose
+and image probes assume the default.</strong> If you have moved the mount, edit both to
+match, or the container reports unhealthy.</p>
+<p><code>SCHOLAR_MCP_HEALTH_DETAIL</code> decides how much the bodies say, since anyone who can
+reach the port can read them: <code>status</code> alone, the default <code>standard</code> with the
+server name, version and a verdict per check, or <code>full</code> with a redacted reason
+for each check that raised. <code>standard</code> means an unauthenticated caller can read
+your server name and version, which was not previously exposed; set <code>status</code> if
+the port is reachable by anyone you would rather not tell. See
+<a href="../../deployment/docker/#health">Docker deployment</a> for the routes in full.</p>
+<h2 id="whether-the-semantic-scholar-key-still-works">Whether the Semantic Scholar key still works<a class="headerlink" href="#whether-the-semantic-scholar-key-still-works" title="Permanent link">&para;</a></h2>
+<p>A configured <code>SCHOLAR_MCP_S2_API_KEY</code> can stop conferring authenticated quota
+without saying so. Semantic Scholar answers <code>429</code>, indefinitely, which is exactly
+what ordinary throttling looks like, so the condition was visible only as a
+warning indistinguishable from routine noise, and was found by hand
+(<a href="https://github.com/pvliesdonk/scholar-mcp/issues/368">#368</a>).</p>
+<p>Two changes follow.</p>
+<p><strong>The keepalive stops losing a week to one refusal.</strong> It pinged once every seven
+days and treated a refusal as something to retry next cycle, which left roughly
+eight single-shot attempts inside the 60-day window the ping exists to stay
+inside. A
+refused ping now retries in an hour; a successful one returns to the full
+interval. Sustained refusal escalates on persistence rather than on a status
+code, because the failure observed never became anything other than a <code>429</code>:
+after about a day of hourly refusals the server logs <code>s2_keepalive_degraded</code> at
+ERROR, once, and logs <code>s2_keepalive_recovered</code> when a ping lands
+(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/378">#378</a>).</p>
+<p><strong><code>get_server_info</code> reports the verdict</strong>, so a caller can read it instead of
+hunting through the log (<a href="https://github.com/pvliesdonk/scholar-mcp/pull/393">#393</a>):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">&quot;semantic_scholar&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">&quot;key_configured&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">&quot;key_status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;degraded&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">&quot;consecutive_failures&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">26</span><span class="p">,</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="nt">&quot;last_success&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2026-09-03T12:00:00+00:00&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">  </span><span class="nt">&quot;last_failure&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2026-09-10T18:00:00+00:00&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">  </span><span class="nt">&quot;last_failure_kind&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;rate_limited&quot;</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="p">}</span>
+</code></pre></div>
+<p><code>key_status</code> is <code>not_configured</code> (no key, and the anonymous tier still serves),
+<code>unknown</code> (configured, not yet pinged), <code>ok</code>, <code>failing</code>, or <code>degraded</code>. The
+<code>degraded</code> threshold is the same constant the keepalive escalates at, so the
+field and the log line cannot disagree. The failure timestamps survive a
+recovery, so a key that is flapping looks different from one that is well.</p>
+<p>This is a reported field and not a readiness check, deliberately. A revoked key
+breaks the Semantic Scholar tools while OpenAlex, Crossref, EPO, Open Library and
+the standards sources keep serving, and a <code>503</code> from <code>/health/ready</code> would drop
+the whole server from rotation over a condition that removing it from rotation
+does not repair. The <code>health_checks</code> dict stays empty, and the README records
+why, so the emptiness does not read as an oversight.</p>
+<h2 id="upgrading">Upgrading<a class="headerlink" href="#upgrading" title="Permanent link">&para;</a></h2>
+<p>The public import surface is unchanged, <code>requires-python</code> stays at 3.11, no environment variable was removed, and no default changed. No tool was added, removed or renamed. The systemd unit and <code>packaging/env.example</code> are untouched, so a package or <code>pip</code> install needs only the last three steps below.</p>
+<p>For a container deployment, in order:</p>
+<ol>
+<li><strong>Check your Compose version.</strong> <code>docker compose version</code> must report 2.24.0 or newer, or 2.24.4 if you will use the proxy overlay. On an older engine, replace the <code>env_file:</code> block with plain <code>env_file: .env</code> and make sure the file exists.</li>
+<li><strong>Remove <code>SCHOLAR_MCP_PORT</code> from any <code>.env</code> a container reads.</strong> It is ignored there now.</li>
+<li><strong>Re-express a custom port as the host side of the mapping,</strong> as <code>-p 9000:8000</code> or <code>ports: - "9000:8000"</code>. Never change the right-hand side.</li>
+<li><strong>Recreate your reverse-proxy routing yourself.</strong> Copy the overlay from <a href="../../deployment/docker/">Docker deployment</a> into <code>compose.override.yml</code>, keep the <code>ports: !reset []</code> line, and check the result with <code>docker compose config</code> before starting anything.</li>
+<li><strong>If <code>SCHOLAR_MCP_HOST</code> held a public hostname</strong> for the old Traefik router rule, put that hostname in your overlay's <code>Host(...)</code> rule and set <code>SCHOLAR_MCP_BASE_URL</code> to the public URL. Reset <code>SCHOLAR_MCP_HOST</code> to a bind address or drop the line: it is the interface the server binds to, and a name that does not resolve locally now fails startup.</li>
+<li><strong>If you built from <code>compose.yml</code>,</strong> build and tag explicitly with <code>docker build -t ghcr.io/pvliesdonk/scholar-mcp:dev .</code>, then point <code>image:</code> at that tag.</li>
+<li><strong>Move any hand edits to <code>compose.yml</code></strong> into the <code>DOMAIN-COMPOSE-VOLUMES</code>, <code>-ENVIRONMENT</code>, <code>-SERVICES</code> and <code>-VOLUME-NAMES</code> blocks, where they survive future template updates. A named volume needs two entries: the mount, and its top-level declaration.</li>
+<li>
+<p><strong>Apply changes with <code>docker compose up -d</code>, not <code>docker compose restart</code>.</strong> An environment file is read when a container is created, so a restarted container keeps the values it was created with and the edit is ignored without any message.</p>
+</li>
+<li>
+<p><strong>If you have moved the MCP mount</strong> off the default <code>/mcp</code> with <code>SCHOLAR_MCP_HTTP_PATH</code>, point the health probes at the matching prefix. The shipped <code>compose.yml</code> <code>healthcheck</code> and the image's <code>HEALTHCHECK</code> both fetch <code>http://127.0.0.1:8000/health</code>; a server mounted at <code>/scholar-mcp/mcp</code> serves <code>/scholar-mcp/health</code>, and an unedited probe reports the container unhealthy.</p>
+</li>
+<li><strong>Decide what <code>/health</code> may tell an unauthenticated caller.</strong> At the default <code>SCHOLAR_MCP_HEALTH_DETAIL=standard</code> the body carries the server name and version. Set <code>status</code> where the port is reachable by parties you would rather not tell. Reserve <code>full</code>, which adds redacted failure reasons, for trusted networks.</li>
+</ol>
+<p>For every deployment:</p>
+<ol>
+<li><strong>Python consumers</strong> should relax any pin below <code>fastmcp-pvl-core</code> 7 or FastMCP 4. Installing alongside FastMCP 3, or <code>fastmcp-pvl-core</code> 4 through 6, no longer resolves.</li>
+<li><strong>If you track <code>.env</code>,</strong> three optional variables were added and none removed: <code>SCHOLAR_MCP_INSTANCE_DESCRIPTION</code>, <code>SCHOLAR_MCP_INSTRUCTIONS_EXTRA</code> and <code>SCHOLAR_MCP_HEALTH_DETAIL</code>. Nothing must be set.</li>
+<li><strong><code>pypdf</code> is a new dependency,</strong> pulled in to reassemble patent PDFs. A <code>pip</code> or <code>uv</code> install resolves it automatically. Only an offline or mirrored install needs to add it by hand.</li>
+</ol>
+<!-- PATCH-RELEASES-START -->
+<!-- PATCH-RELEASES-END -->
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../../javascripts/config-wizard/wizard.js" type="module"></script>
+      
+    
+  </body>
+</html>
