@@ -241,6 +241,8 @@ ignore = ["E501"]
 # from an explicit repository root. Its `git add -A --` uses fixed argv with no
 # shell interpolation, so the same subprocess and partial-path exceptions apply.
 "scripts/promote_release_notes.py" = ["S603", "S607"]
+# Package bookkeeping invokes gh with fixed argv and JSON on stdin, never a shell.
+"scripts/package_milestones.py" = ["S603", "S607"]
 "scripts/check_pins.py" = ["S310"]  # urlopen on a validated api.github.com URL
 "scripts/report_seeded_changes.py" = ["S603", "S606", "S607"]
 

@@ -81,6 +81,7 @@ Detailed guidance lives in skills under `.agents/skills/` (portable; Claude Code
 - `code-review` — before opening a PR, marking one ready, or pushing further commits to a branch with an open PR: self-review the cumulative diff.
 - `applying-template-updates` — when working through the weekly template update PR (`copier/update` branch) or after running `copier update`.
 - `writing-release-notes` — when drafting a `docs/releases/` page.
+- `roadmapping` — when charting, refining or revisiting epics and release packages; before planning work that spans PRs.
 - `researching-references` — when a change depends on how something outside the repo behaves (a markdown dialect, git, a file format, a vendor API) and `docs/design/reference/` has no current page for it.
 
 Project-owned skills follow the same shape: a directory under `.agents/skills/` plus a relative symlink in `.claude/skills/`.
@@ -208,7 +209,7 @@ under a fixed set of subtrees, excluded from both the published site and Vale:
 
 - `docs/design/` — design specs and architecture notes; `docs/design/reference/` holds the external-behaviour references
 - `docs/decisions/` — architecture decision records (ADRs)
-- `docs/superpowers/` — agent working specs and plans (also gitignored)
+- `docs/superpowers/` — agent scratch, gitignored; a feature's approved spec ships in its PR body
 
 This boundary is declared in three places that **must stay in lockstep** (the
 `template-ci` "vale exclusion-scope lockstep" job asserts the CI glob and the
@@ -218,6 +219,12 @@ with brace alternation, because Vale honors only a single `--glob`), and
 the `- id: vale` pre-commit hook's `exclude:` regex
 (`^docs/(superpowers|design|decisions)/`). The set is fixed by convention — do
 not add per-project exclusions; put internal docs in one of the subtrees above.
+
+## Roadmap
+
+Read `docs/design/roadmap.md` before planning; update its argument when direction changes.
+Epics are parent issues with native sub-issues; packages are ordinal-named milestones for one release cut.
+The `roadmapping` skill defines refinement, evidence and package membership. GitHub owns status; the index owns the argument.
 
 <!-- TEMPLATE-TRACKING-START -->
 ## Shared Infrastructure

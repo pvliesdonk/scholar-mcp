@@ -52,8 +52,18 @@ RUN if [ "$APP_UID" -eq 0 ] || [ "$APP_GID" -eq 0 ]; then \
     && chown -R appuser:appuser /app /data
 
 COPY --chmod=0755 docker-entrypoint.sh /usr/local/bin/
+# `FASTMCP_ENABLE_RICH_LOGGING=false` because a container has no terminal.
+# Rich then assumes 80 columns, and a structured request-log record is longer
+# than the room left beside its time, level and source columns, so every
+# record wraps across three space-padded lines that neither `docker logs` nor
+# a collector can read back.  Off, each record is one line: JSON from the
+# request-logging middleware, `LEVEL: message` from the rest of FastMCP's own
+# loggers.  Rich's time column goes with it, and Docker's log driver timestamps
+# every line it captures anyway (`docker logs -t`).  An image default rather
+# than a compose `environment:` entry, so a `.env` can still turn it back on.
 ENV PATH="/app/.venv/bin:$PATH" \
-    FASTMCP_HOME=/data/state/fastmcp
+    FASTMCP_HOME=/data/state/fastmcp \
+    FASTMCP_ENABLE_RICH_LOGGING=false
 
 EXPOSE 8000
 # Remote debugger: ``EXPOSE`` is metadata — nothing actually listens unless

@@ -112,6 +112,23 @@ curl -s http://localhost:8000/health/ready
 
 `SCHOLAR_MCP_HEALTH_DETAIL` decides how much the bodies say, because anyone who can reach the port can read them. `status` returns the status alone. The default, `standard`, adds the server name and version on `/health` and a verdict per check on `/health/ready`. `full` adds the exception type and a redacted reason for each check that raised, and belongs only where the port is reachable from a trusted network.
 
+### Logs
+
+The image sets `FASTMCP_ENABLE_RICH_LOGGING=false`, so `docker logs` gets one line per record: a JSON object for every MCP request the logging middleware sees, `LEVEL: message` from the rest of FastMCP. Both grep cleanly and both survive a log collector. The server's own loggers print one line either way.
+
+The reason is that a container has no terminal. Rich falls back to 80 columns, its time, level and source columns claim most of them, and a structured record then wraps across three space-padded lines that no reader and no parser puts back together. Rich's time column goes with the setting, and Docker timestamps every line it captures anyway, so `docker logs -t` prints them.
+
+This is an image default like any other, so `.env` or the compose `environment:` block overrides it. Turning Rich back on for a human reading `docker logs` needs `COLUMNS` set as well, since that is what Rich reads in place of asking a terminal it does not have. In `.env`:
+
+```ini
+FASTMCP_ENABLE_RICH_LOGGING=true
+COLUMNS=200
+```
+
+Records then render one line each, in color, padded out to the full width. The packaged Debian and RPM installs make the same trade for `journalctl`: the systemd unit sets `FASTMCP_ENABLE_RICH_LOGGING=false`, and `/etc/scholar-mcp/env` overrides it.
+
+`FASTMCP_LOG_LEVEL` sets how much is logged; see [Configuration](../configuration.md#logging).
+
 ## Image tags
 
 | Tag | Contents | Updated by |
@@ -136,14 +153,10 @@ docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.revis
 See [Configuration](../configuration.md) for the full reference. Key variables for Docker:
 
 | Variable | Default | Description |
-|---|---|---|
-| `SCHOLAR_MCP_S2_API_KEY` | n/a | Semantic Scholar API key (optional; ~1 req/s without, ~10 req/s with) |
-| `SCHOLAR_MCP_CACHE_DIR` | `/data/scholar-mcp` | Cache and PDF storage directory |
-| `SCHOLAR_MCP_READ_ONLY` | `true` | Set `false` to enable PDF tools |
-| `SCHOLAR_MCP_DOCLING_URL` | n/a | docling-serve URL (such as `http://docling-serve:5001`) |
-| `SCHOLAR_MCP_BEARER_TOKEN` | n/a | Bearer token for HTTP auth |
-| `FASTMCP_LOG_LEVEL` | `INFO` | Logging level (use `-v` or set to `DEBUG` for verbose output) |
-| `FASTMCP_ENABLE_RICH_LOGGING` | `true` | Set `false` for structured JSON logging with aggregators |
+|----------|---------|-------------|
+| `SCHOLAR_MCP_BEARER_TOKEN` | n/a | Enable bearer token auth |
+| `FASTMCP_LOG_LEVEL` | `INFO` | Log level (`DEBUG` / `INFO` / `WARNING` / `ERROR`) |
+| `FASTMCP_ENABLE_RICH_LOGGING` | `false` in the image | Rich output; off means one plain or JSON line per record (see [Logs](#logs)) |
 | `SCHOLAR_MCP_INSTANCE_DESCRIPTION` | n/a | Routing context that distinguishes this deployment |
 | `SCHOLAR_MCP_INSTRUCTIONS_EXTRA` | n/a | Deployment-specific behavioral policy added to the generated MCP instructions |
 | `SCHOLAR_MCP_INSTRUCTIONS` | (computed at startup) | Legacy full replacement of the generated instructions (deprecated) |

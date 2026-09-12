@@ -33,24 +33,24 @@ v0.8.0, Standards support (Tier 1)
 
 ```python
 class StandardRecord(TypedDict, total=False):
-    identifier: str           # canonical: "NIST SP 800-53 Rev. 5", "RFC 9000"
-    aliases: list[str]        # alt forms seen in citations
+    identifier: str  # canonical: "NIST SP 800-53 Rev. 5", "RFC 9000"
+    aliases: list[str]  # alt forms seen in citations
     title: str
-    body: str                 # "NIST" | "IETF" | "W3C" | "ETSI"
-    number: str               # "800-53", "9000", "2.1"
-    revision: str | None      # "Rev. 5", "2022", "3rd edition"
-    status: str               # "published" | "withdrawn" | "superseded" | "draft"
+    body: str  # "NIST" | "IETF" | "W3C" | "ETSI"
+    number: str  # "800-53", "9000", "2.1"
+    revision: str | None  # "Rev. 5", "2022", "3rd edition"
+    status: str  # "published" | "withdrawn" | "superseded" | "draft"
     published_date: str | None
     withdrawn_date: str | None
     superseded_by: str | None
     supersedes: list[str]
-    scope: str | None         # abstract / scope statement
+    scope: str | None  # abstract / scope statement
     committee: str | None
-    url: str                  # canonical catalogue URL
-    full_text_url: str | None # direct PDF/HTML link if freely available
-    full_text_available: bool # True for all Tier 1 sources
-    price: str | None         # None for Tier 1; populated for Tier 2
-    related: list[str]        # related standard identifiers
+    url: str  # canonical catalogue URL
+    full_text_url: str | None  # direct PDF/HTML link if freely available
+    full_text_available: bool  # True for all Tier 1 sources
+    price: str | None  # None for Tier 1; populated for Tier 2
+    related: list[str]  # related standard identifiers
 ```
 
 `total=False` is consistent with `BookRecord`. The `body` field is constrained to known values but typed as `str` to allow forward-compatible extension.
@@ -149,10 +149,10 @@ New tables added to `_cache.py` following existing TTL patterns.
 
 TTL constants:
 ```python
-_STANDARD_TTL = 90 * 86400        # 90 days, standards rarely change
+_STANDARD_TTL = 90 * 86400  # 90 days, standards rarely change
 _STANDARD_ALIAS_TTL = 90 * 86400  # 90 days
 _STANDARD_SEARCH_TTL = 7 * 86400  # 7 days
-_STANDARD_INDEX_TTL = 7 * 86400   # 7 days, re-scrape weekly
+_STANDARD_INDEX_TTL = 7 * 86400  # 7 days, re-scrape weekly
 ```
 
 ### Cache methods added to `ScholarCache`
@@ -181,12 +181,15 @@ class StandardsClient:
         body: str | None = None,
         limit: int = 10,
     ) -> list[StandardRecord]: ...
+
     # body=None searches all four sources; body="NIST" restricts to NIST
 
     async def get(self, identifier: str) -> StandardRecord | None: ...
+
     # resolves fuzzy identifiers before fetching
 
     async def resolve(self, raw: str) -> list[StandardRecord]: ...
+
     # single-item list when unambiguous; multi-item when ambiguous
 
     async def aclose(self) -> None: ...
@@ -198,7 +201,7 @@ class StandardsClient:
 @dataclass
 class ServiceBundle:
     ...
-    standards: StandardsClient   # always available, no credentials needed
+    standards: StandardsClient  # always available, no credentials needed
 ```
 
 Created in `server_lifespan`, closed on shutdown. `standards` is not optional, Tier 1 sources require no API keys.

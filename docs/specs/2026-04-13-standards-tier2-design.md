@@ -128,10 +128,10 @@ Backs a new `get_sync_status` MCP tool/resource that surfaces per-body freshness
 ### Existing TTL constants
 
 ```python
-_STANDARD_TTL          = 90 * 86400  # unchanged, live-fetched record expiry
-_STANDARD_ALIAS_TTL    = 90 * 86400  # unchanged
-_STANDARD_SEARCH_TTL   = 30 * 86400  # bumped 7 → 30
-_STANDARD_INDEX_TTL    = 30 * 86400  # bumped 7 → 30
+_STANDARD_TTL = 90 * 86400  # unchanged, live-fetched record expiry
+_STANDARD_ALIAS_TTL = 90 * 86400  # unchanged
+_STANDARD_SEARCH_TTL = 30 * 86400  # bumped 7 → 30
+_STANDARD_INDEX_TTL = 30 * 86400  # bumped 7 → 30
 ```
 
 ## Sync Subsystem
@@ -170,8 +170,8 @@ Covers ISO, IEC, IEEE via a body-config table:
 
 ```python
 _RELATON_BODIES = {
-    "ISO":  RelatonConfig(repo="relaton/relaton-data-iso",     branch="main"),
-    "IEC":  RelatonConfig(repo="relaton/relaton-data-iec",     branch="main"),
+    "ISO": RelatonConfig(repo="relaton/relaton-data-iso", branch="main"),
+    "IEC": RelatonConfig(repo="relaton/relaton-data-iec", branch="main"),
     "IEEE": RelatonConfig(repo="ietf-tools/relaton-data-ieee", branch="main"),
 }
 ```

@@ -208,12 +208,48 @@ _PATENT_RE = re.compile(
 )
 
 # Known patent country codes (subset, covers major offices)
-_PATENT_COUNTRIES = frozenset({
-    "EP", "WO", "US", "JP", "CN", "KR", "DE", "FR", "GB", "CA", "AU",
-    "IN", "BR", "RU", "TW", "IL", "NZ", "SG", "HK", "AT", "BE", "CH",
-    "CZ", "DK", "ES", "FI", "GR", "HU", "IE", "IT", "LU", "NL", "NO",
-    "PL", "PT", "SE", "SK", "TR",
-})
+_PATENT_COUNTRIES = frozenset(
+    {
+        "EP",
+        "WO",
+        "US",
+        "JP",
+        "CN",
+        "KR",
+        "DE",
+        "FR",
+        "GB",
+        "CA",
+        "AU",
+        "IN",
+        "BR",
+        "RU",
+        "TW",
+        "IL",
+        "NZ",
+        "SG",
+        "HK",
+        "AT",
+        "BE",
+        "CH",
+        "CZ",
+        "DK",
+        "ES",
+        "FI",
+        "GR",
+        "HU",
+        "IE",
+        "IT",
+        "LU",
+        "NL",
+        "NO",
+        "PL",
+        "PT",
+        "SE",
+        "SK",
+        "TR",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -396,7 +432,10 @@ class TestParseBiblioXml:
     def test_basic_fields(self) -> None:
         result = parse_biblio_xml(BIBLIO_XML)
         assert result["title"] == "Method for improved widget processing"
-        assert result["abstract"] == "A method for processing widgets with improved efficiency."
+        assert (
+            result["abstract"]
+            == "A method for processing widgets with improved efficiency."
+        )
         assert result["publication_number"] == "EP.1234567.A1"
         assert result["publication_date"] == "2020-01-15"
         assert result["family_id"] == "54321"
@@ -471,9 +510,7 @@ def _date_fmt(raw: str) -> str:
     return raw
 
 
-def _find_docdb_id(
-    parent: etree._Element, ref_tag: str
-) -> dict[str, str]:
+def _find_docdb_id(parent: etree._Element, ref_tag: str) -> dict[str, str]:
     """Extract country, number, kind, date from a docdb document-id."""
     ref = parent.find(f"exch:{ref_tag}", _NS)
     if ref is None:
@@ -511,7 +548,9 @@ def parse_biblio_xml(xml_data: bytes) -> dict[str, Any]:
 
     # Publication reference
     pub = _find_docdb_id(bib, "publication-reference")
-    pub_number = f"{pub.get('country', '')}.{pub.get('number', '')}.{pub.get('kind', '')}"
+    pub_number = (
+        f"{pub.get('country', '')}.{pub.get('number', '')}.{pub.get('kind', '')}"
+    )
     pub_date = pub.get("date", "")
 
     # Application reference (filing date)
@@ -530,9 +569,7 @@ def parse_biblio_xml(xml_data: bytes) -> dict[str, Any]:
             if prio_id is None:
                 prio_id = first_prio.find("exch:document-id", _NS)
             if prio_id is not None:
-                priority_date = _date_fmt(
-                    _text(prio_id.find("exch:date", _NS))
-                )
+                priority_date = _date_fmt(_text(prio_id.find("exch:date", _NS)))
 
     # Title (prefer English)
     title = ""
@@ -591,7 +628,9 @@ def parse_biblio_xml(xml_data: bytes) -> dict[str, Any]:
     country = pub.get("country", "")
     number = pub.get("number", "")
     kind = pub.get("kind", "")
-    url = f"https://worldwide.espacenet.com/patent/search?q=pn%3D{country}{number}{kind}"
+    url = (
+        f"https://worldwide.espacenet.com/patent/search?q=pn%3D{country}{number}{kind}"
+    )
 
     return {
         "title": title,
@@ -720,16 +759,16 @@ def parse_search_xml(xml_data: bytes) -> dict[str, Any]:
         for pub_ref in search.findall(
             "ops:search-result/ops:publication-reference", _NS
         ):
-            doc_id = pub_ref.find(
-                "exch:document-id[@document-id-type='docdb']", _NS
-            )
+            doc_id = pub_ref.find("exch:document-id[@document-id-type='docdb']", _NS)
             if doc_id is None:
                 continue
-            references.append({
-                "country": _text(doc_id.find("exch:country", _NS)),
-                "number": _text(doc_id.find("exch:doc-number", _NS)),
-                "kind": _text(doc_id.find("exch:kind", _NS)),
-            })
+            references.append(
+                {
+                    "country": _text(doc_id.find("exch:country", _NS)),
+                    "number": _text(doc_id.find("exch:doc-number", _NS)),
+                    "kind": _text(doc_id.find("exch:kind", _NS)),
+                }
+            )
 
     return {"total_count": total, "references": references}
 ```
@@ -816,6 +855,7 @@ In `src/scholar_mcp/config.py`, add to `ServerConfig`:
 epo_consumer_key: str | None = None
 epo_consumer_secret: str | None = None
 
+
 @property
 def epo_configured(self) -> bool:
     """True when both EPO OPS credentials are set."""
@@ -825,8 +865,11 @@ def epo_configured(self) -> bool:
 In `load_config()`, add:
 
 ```python
-epo_consumer_key=_str("EPO_CONSUMER_KEY"),
-epo_consumer_secret=_str("EPO_CONSUMER_SECRET"),
+return ServerConfig(
+    ...,
+    epo_consumer_key=_str("EPO_CONSUMER_KEY"),
+    epo_consumer_secret=_str("EPO_CONSUMER_SECRET"),
+)
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
@@ -927,9 +970,7 @@ def _mock_response(
     resp = MagicMock(spec=requests.Response)
     resp.content = content
     resp.status_code = status_code
-    resp.headers = {
-        "X-Throttling-Control": f"{throttle} (search={throttle}:30)"
-    }
+    resp.headers = {"X-Throttling-Control": f"{throttle} (search={throttle}:30)"}
     resp.raise_for_status = MagicMock()
     if status_code >= 400:
         resp.raise_for_status.side_effect = requests.HTTPError(response=resp)
@@ -943,23 +984,17 @@ def mock_epo_ops() -> MagicMock:
     client.published_data_search = MagicMock(
         return_value=_mock_response(_SEARCH_RESPONSE_XML)
     )
-    client.published_data = MagicMock(
-        return_value=_mock_response(_BIBLIO_RESPONSE_XML)
-    )
+    client.published_data = MagicMock(return_value=_mock_response(_BIBLIO_RESPONSE_XML))
     return client
 
 
 @pytest.fixture
 def epo_client(mock_epo_ops: MagicMock) -> EpoClient:
-    return EpoClient(
-        consumer_key="test", consumer_secret="test", _client=mock_epo_ops
-    )
+    return EpoClient(consumer_key="test", consumer_secret="test", _client=mock_epo_ops)
 
 
 class TestEpoClientSearch:
-    async def test_search_returns_parsed_results(
-        self, epo_client: EpoClient
-    ) -> None:
+    async def test_search_returns_parsed_results(self, epo_client: EpoClient) -> None:
         result = await epo_client.search("ta=solar cell")
         assert result["total_count"] == 1
         assert len(result["references"]) == 1
@@ -975,9 +1010,7 @@ class TestEpoClientSearch:
 
 
 class TestEpoClientGetBiblio:
-    async def test_get_biblio_returns_parsed(
-        self, epo_client: EpoClient
-    ) -> None:
+    async def test_get_biblio_returns_parsed(self, epo_client: EpoClient) -> None:
         doc = DocdbNumber("EP", "1234567", "A1")
         result = await epo_client.get_biblio(doc)
         assert result["title"] == "Test Patent"
@@ -989,14 +1022,13 @@ class TestEpoClientGetBiblio:
         doc = DocdbNumber("EP", "1234567", "A1")
         await epo_client.get_biblio(doc)
         call_args = mock_epo_ops.published_data.call_args
-        assert call_args.kwargs.get("endpoint") == "biblio" or \
-            (len(call_args.args) >= 3 and call_args.args[2] == "biblio")
+        assert call_args.kwargs.get("endpoint") == "biblio" or (
+            len(call_args.args) >= 3 and call_args.args[2] == "biblio"
+        )
 
 
 class TestEpoClientRateLimiting:
-    async def test_yellow_raises_rate_limited(
-        self, mock_epo_ops: MagicMock
-    ) -> None:
+    async def test_yellow_raises_rate_limited(self, mock_epo_ops: MagicMock) -> None:
         mock_epo_ops.published_data_search.return_value = _mock_response(
             _SEARCH_RESPONSE_XML, throttle="yellow"
         )
@@ -1006,9 +1038,7 @@ class TestEpoClientRateLimiting:
         with pytest.raises(EpoRateLimitedError, match="yellow"):
             await client.search("ta=test")
 
-    async def test_green_does_not_raise(
-        self, epo_client: EpoClient
-    ) -> None:
+    async def test_green_does_not_raise(self, epo_client: EpoClient) -> None:
         # Default fixture uses green, should not raise
         result = await epo_client.search("ta=test")
         assert result["total_count"] == 1
@@ -1251,12 +1281,12 @@ Expected: FAIL, `AttributeError: 'ScholarCache' object has no attribute 'set_pat
 Add these constants near the existing TTL constants:
 
 ```python
-_PATENT_TTL = 90 * 86400       # 90 days
+_PATENT_TTL = 90 * 86400  # 90 days
 _PATENT_CLAIMS_TTL = 180 * 86400  # 180 days
-_PATENT_DESC_TTL = 180 * 86400    # 180 days
-_PATENT_FAMILY_TTL = 90 * 86400   # 90 days
-_PATENT_LEGAL_TTL = 7 * 86400     # 7 days
-_PATENT_SEARCH_TTL = 7 * 86400    # 7 days
+_PATENT_DESC_TTL = 180 * 86400  # 180 days
+_PATENT_FAMILY_TTL = 90 * 86400  # 90 days
+_PATENT_LEGAL_TTL = 7 * 86400  # 7 days
+_PATENT_SEARCH_TTL = 7 * 86400  # 7 days
 ```
 
 Add to the `_SCHEMA` string:
@@ -1323,14 +1353,15 @@ async def get_patent(self, patent_id: str) -> dict | None:
         return None
     return json.loads(row[0])
 
+
 async def set_patent(self, patent_id: str, data: dict) -> None:
     db = _require_open(self._db)
     await db.execute(
-        "INSERT OR REPLACE INTO patents (patent_id, data, cached_at)"
-        " VALUES (?, ?, ?)",
+        "INSERT OR REPLACE INTO patents (patent_id, data, cached_at) VALUES (?, ?, ?)",
         (patent_id, json.dumps(data), time.time()),
     )
     await db.commit()
+
 
 async def get_patent_claims(self, patent_id: str) -> str | None:
     db = _require_open(self._db)
@@ -1345,6 +1376,7 @@ async def get_patent_claims(self, patent_id: str) -> str | None:
         return None
     return row[0]  # plain text, not JSON
 
+
 async def set_patent_claims(self, patent_id: str, text: str) -> None:
     db = _require_open(self._db)
     await db.execute(
@@ -1353,6 +1385,7 @@ async def set_patent_claims(self, patent_id: str, text: str) -> None:
         (patent_id, text, time.time()),
     )
     await db.commit()
+
 
 async def get_patent_description(self, patent_id: str) -> str | None:
     db = _require_open(self._db)
@@ -1367,6 +1400,7 @@ async def get_patent_description(self, patent_id: str) -> str | None:
         return None
     return row[0]
 
+
 async def set_patent_description(self, patent_id: str, text: str) -> None:
     db = _require_open(self._db)
     await db.execute(
@@ -1375,6 +1409,7 @@ async def set_patent_description(self, patent_id: str, text: str) -> None:
         (patent_id, text, time.time()),
     )
     await db.commit()
+
 
 async def get_patent_family(self, patent_id: str) -> list | None:
     db = _require_open(self._db)
@@ -1389,6 +1424,7 @@ async def get_patent_family(self, patent_id: str) -> list | None:
         return None
     return json.loads(row[0])
 
+
 async def set_patent_family(self, patent_id: str, data: list) -> None:
     db = _require_open(self._db)
     await db.execute(
@@ -1397,6 +1433,7 @@ async def set_patent_family(self, patent_id: str, data: list) -> None:
         (patent_id, json.dumps(data), time.time()),
     )
     await db.commit()
+
 
 async def get_patent_legal(self, patent_id: str) -> list | None:
     db = _require_open(self._db)
@@ -1411,6 +1448,7 @@ async def get_patent_legal(self, patent_id: str) -> list | None:
         return None
     return json.loads(row[0])
 
+
 async def set_patent_legal(self, patent_id: str, data: list) -> None:
     db = _require_open(self._db)
     await db.execute(
@@ -1419,6 +1457,7 @@ async def set_patent_legal(self, patent_id: str, data: list) -> None:
         (patent_id, json.dumps(data), time.time()),
     )
     await db.commit()
+
 
 async def get_patent_search(self, query: str) -> dict | None:
     db = _require_open(self._db)
@@ -1433,6 +1472,7 @@ async def get_patent_search(self, query: str) -> dict | None:
     if time.time() - row[1] > _PATENT_SEARCH_TTL:
         return None
     return json.loads(row[0])
+
 
 async def set_patent_search(self, query: str, data: dict) -> None:
     db = _require_open(self._db)
@@ -1563,23 +1603,27 @@ from scholar_mcp._patent_numbers import DocdbNumber
 def mock_epo() -> MagicMock:
     """Mock EpoClient with async methods."""
     epo = MagicMock(spec=EpoClient)
-    epo.search = AsyncMock(return_value={
-        "total_count": 1,
-        "references": [{"country": "EP", "number": "1234567", "kind": "A1"}],
-    })
-    epo.get_biblio = AsyncMock(return_value={
-        "title": "Test Patent",
-        "abstract": "Test abstract.",
-        "applicants": ["TEST CORP"],
-        "inventors": ["SMITH, JOHN"],
-        "publication_number": "EP.1234567.A1",
-        "publication_date": "2020-01-15",
-        "filing_date": "2019-05-01",
-        "priority_date": "2018-06-01",
-        "family_id": "54321",
-        "classifications": ["H04L29/06"],
-        "url": "https://worldwide.espacenet.com/patent/search?q=pn%3DEP1234567A1",
-    })
+    epo.search = AsyncMock(
+        return_value={
+            "total_count": 1,
+            "references": [{"country": "EP", "number": "1234567", "kind": "A1"}],
+        }
+    )
+    epo.get_biblio = AsyncMock(
+        return_value={
+            "title": "Test Patent",
+            "abstract": "Test abstract.",
+            "applicants": ["TEST CORP"],
+            "inventors": ["SMITH, JOHN"],
+            "publication_number": "EP.1234567.A1",
+            "publication_date": "2020-01-15",
+            "filing_date": "2019-05-01",
+            "priority_date": "2018-06-01",
+            "family_id": "54321",
+            "classifications": ["H04L29/06"],
+            "url": "https://worldwide.espacenet.com/patent/search?q=pn%3DEP1234567A1",
+        }
+    )
     return epo
 ```
 
@@ -1732,7 +1776,7 @@ def _build_cql(
     if inventor:
         parts.append(f'in="{inventor}"')
     if jurisdiction:
-        parts.append(f'pn={jurisdiction}')
+        parts.append(f"pn={jurisdiction}")
 
     # Date range
     date_field_map = {
@@ -1899,14 +1943,14 @@ def register_patent_tools(mcp: FastMCP) -> None:
         try:
             return await _execute(retry=False)
         except RateLimitedError:
-            task_id = bundle.tasks.submit(
-                _execute(retry=True), tool="search_patents"
+            task_id = bundle.tasks.submit(_execute(retry=True), tool="search_patents")
+            return json.dumps(
+                {
+                    "queued": True,
+                    "task_id": task_id,
+                    "tool": "search_patents",
+                }
             )
-            return json.dumps({
-                "queued": True,
-                "task_id": task_id,
-                "tool": "search_patents",
-            })
 
     @mcp.tool(
         annotations={
@@ -1919,7 +1963,8 @@ def register_patent_tools(mcp: FastMCP) -> None:
         patent_number: str,
         sections: list[
             Literal["biblio", "claims", "description", "family", "legal", "citations"]
-        ] | None = None,
+        ]
+        | None = None,
         bundle: ServiceBundle = Depends(get_bundle),
     ) -> str:
         """Get detailed information about a single patent.
@@ -1953,14 +1998,14 @@ def register_patent_tools(mcp: FastMCP) -> None:
         try:
             return await _execute(retry=False)
         except RateLimitedError:
-            task_id = bundle.tasks.submit(
-                _execute(retry=True), tool="get_patent"
+            task_id = bundle.tasks.submit(_execute(retry=True), tool="get_patent")
+            return json.dumps(
+                {
+                    "queued": True,
+                    "task_id": task_id,
+                    "tool": "get_patent",
+                }
             )
-            return json.dumps({
-                "queued": True,
-                "task_id": task_id,
-                "tool": "get_patent",
-            })
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
@@ -2383,12 +2428,14 @@ def parse_family_xml(xml_data: bytes) -> list[dict[str, str]]:
         )
         if pub_ref is None:
             continue
-        members.append({
-            "country": _text(pub_ref.find("exch:country", _NS)),
-            "number": _text(pub_ref.find("exch:doc-number", _NS)),
-            "kind": _text(pub_ref.find("exch:kind", _NS)),
-            "date": _date_fmt(_text(pub_ref.find("exch:date", _NS))),
-        })
+        members.append(
+            {
+                "country": _text(pub_ref.find("exch:country", _NS)),
+                "number": _text(pub_ref.find("exch:doc-number", _NS)),
+                "kind": _text(pub_ref.find("exch:kind", _NS)),
+                "date": _date_fmt(_text(pub_ref.find("exch:date", _NS))),
+            }
+        )
 
     return members
 
@@ -2409,11 +2456,13 @@ def parse_legal_xml(xml_data: bytes) -> list[dict[str, str]]:
         date_el = event.find("ops:event-date/ops:date", _NS)
         code_el = event.find("ops:event-code", _NS)
         text_el = event.find("ops:event-text", _NS)
-        events.append({
-            "date": _date_fmt(_text(date_el)),
-            "code": _text(code_el),
-            "description": _text(text_el),
-        })
+        events.append(
+            {
+                "date": _date_fmt(_text(date_el)),
+                "code": _text(code_el),
+                "description": _text(text_el),
+            }
+        )
 
     return events
 ```
@@ -2508,9 +2557,7 @@ _LEGAL_RESPONSE_XML = b"""\
 
 class TestEpoClientClaims:
     async def test_get_claims(self, epo_client, mock_epo_ops) -> None:
-        mock_epo_ops.published_data.return_value = _mock_response(
-            _CLAIMS_RESPONSE_XML
-        )
+        mock_epo_ops.published_data.return_value = _mock_response(_CLAIMS_RESPONSE_XML)
         doc = DocdbNumber("EP", "1234567", "A1")
         result = await epo_client.get_claims(doc)
         assert "method for testing" in result
@@ -2580,6 +2627,7 @@ async def get_claims(self, doc: DocdbNumber) -> str:
     self._check_throttle(response)
     return parse_claims_xml(response.content)
 
+
 async def get_description(self, doc: DocdbNumber) -> str:
     """Fetch description text for a patent."""
     inp = self._to_docdb_input(doc)
@@ -2593,6 +2641,7 @@ async def get_description(self, doc: DocdbNumber) -> str:
     self._check_throttle(response)
     return parse_description_xml(response.content)
 
+
 async def get_family(self, doc: DocdbNumber) -> list[dict[str, str]]:
     """Fetch patent family members."""
     inp = self._to_docdb_input(doc)
@@ -2604,6 +2653,7 @@ async def get_family(self, doc: DocdbNumber) -> list[dict[str, str]]:
         )
     self._check_throttle(response)
     return parse_family_xml(response.content)
+
 
 async def get_legal(self, doc: DocdbNumber) -> list[dict[str, str]]:
     """Fetch legal status events for a patent."""
@@ -2932,9 +2982,7 @@ def parse_citations_from_biblio(xml_data: bytes) -> dict[str, list[dict[str, Any
     patent_refs: list[dict[str, str]] = []
     npl_refs: list[dict[str, Any]] = []
 
-    refs_cited = doc.find(
-        "exch:bibliographic-data/exch:references-cited", _NS
-    )
+    refs_cited = doc.find("exch:bibliographic-data/exch:references-cited", _NS)
     if refs_cited is None:
         return {"patent_refs": [], "npl_refs": []}
 
@@ -2942,15 +2990,15 @@ def parse_citations_from_biblio(xml_data: bytes) -> dict[str, list[dict[str, Any
         # Patent citation
         patcit = citation.find("exch:patcit", _NS)
         if patcit is not None:
-            doc_id = patcit.find(
-                "exch:document-id[@document-id-type='docdb']", _NS
-            )
+            doc_id = patcit.find("exch:document-id[@document-id-type='docdb']", _NS)
             if doc_id is not None:
-                patent_refs.append({
-                    "country": _text(doc_id.find("exch:country", _NS)),
-                    "number": _text(doc_id.find("exch:doc-number", _NS)),
-                    "kind": _text(doc_id.find("exch:kind", _NS)),
-                })
+                patent_refs.append(
+                    {
+                        "country": _text(doc_id.find("exch:country", _NS)),
+                        "number": _text(doc_id.find("exch:doc-number", _NS)),
+                        "kind": _text(doc_id.find("exch:kind", _NS)),
+                    }
+                )
             continue
 
         # Non-patent literature citation
@@ -2994,20 +3042,24 @@ class TestGetPatentCitations:
         from scholar_mcp._tools_patent import _get_patent_execute
 
         # Mock biblio with citations endpoint
-        mock_epo.get_biblio_with_citations = AsyncMock(return_value={
-            "patent_refs": [{"country": "US", "number": "9876543", "kind": "B2"}],
-            "npl_refs": [
-                {"raw": "Smith, doi:10.1234/test", "doi": "10.1234/test"},
-                {"raw": "Unknown reference", "doi": None},
-            ],
-        })
+        mock_epo.get_biblio_with_citations = AsyncMock(
+            return_value={
+                "patent_refs": [{"country": "US", "number": "9876543", "kind": "B2"}],
+                "npl_refs": [
+                    {"raw": "Smith, doi:10.1234/test", "doi": "10.1234/test"},
+                    {"raw": "Unknown reference", "doi": None},
+                ],
+            }
+        )
 
         # We need a mock S2 client for NPL resolution
         mock_s2 = AsyncMock()
-        mock_s2.batch_resolve = AsyncMock(return_value=[
-            {"paperId": "abc123", "title": "Smith Paper"},
-            None,
-        ])
+        mock_s2.batch_resolve = AsyncMock(
+            return_value=[
+                {"paperId": "abc123", "title": "Smith Paper"},
+                None,
+            ]
+        )
 
         result_json = await _get_patent_execute(
             patent_number="EP1234567A1",
@@ -3039,6 +3091,7 @@ Update `_get_patent_execute` to accept an optional `s2` parameter and add a `_fe
 
 ```python
 from scholar_mcp._epo_xml import parse_citations_from_biblio
+
 
 async def _get_patent_execute(
     *,
@@ -3158,23 +3211,27 @@ class TestGetCitingPatentsLogic:
     async def test_citing_from_epo(self, mock_epo, cache) -> None:
         from scholar_mcp._tools_patent import _get_citing_patents_execute
 
-        mock_epo.search = AsyncMock(return_value={
-            "total_count": 1,
-            "references": [{"country": "EP", "number": "9999999", "kind": "A1"}],
-        })
-        mock_epo.get_biblio = AsyncMock(return_value={
-            "title": "Citing Patent",
-            "publication_number": "EP.9999999.A1",
-            "applicants": [],
-            "inventors": [],
-            "abstract": "",
-            "publication_date": "",
-            "filing_date": "",
-            "priority_date": "",
-            "family_id": "",
-            "classifications": [],
-            "url": "",
-        })
+        mock_epo.search = AsyncMock(
+            return_value={
+                "total_count": 1,
+                "references": [{"country": "EP", "number": "9999999", "kind": "A1"}],
+            }
+        )
+        mock_epo.get_biblio = AsyncMock(
+            return_value={
+                "title": "Citing Patent",
+                "publication_number": "EP.9999999.A1",
+                "applicants": [],
+                "inventors": [],
+                "abstract": "",
+                "publication_date": "",
+                "filing_date": "",
+                "priority_date": "",
+                "family_id": "",
+                "classifications": [],
+                "url": "",
+            }
+        )
 
         result_json = await _get_citing_patents_execute(
             paper_id="10.1234/test",
@@ -3190,10 +3247,12 @@ class TestGetCitingPatentsLogic:
     async def test_empty_results(self, mock_epo, cache) -> None:
         from scholar_mcp._tools_patent import _get_citing_patents_execute
 
-        mock_epo.search = AsyncMock(return_value={
-            "total_count": 0,
-            "references": [],
-        })
+        mock_epo.search = AsyncMock(
+            return_value={
+                "total_count": 0,
+                "references": [],
+            }
+        )
         result_json = await _get_citing_patents_execute(
             paper_id="10.9999/nonexistent",
             epo=mock_epo,
@@ -3254,14 +3313,16 @@ async def _get_citing_patents_execute(
     if openalex is not None:
         pass  # TODO: implement when OpenAlex patent citation API is available
 
-    return json.dumps({
-        "paper_id": paper_id,
-        "patents": patents[:limit],
-        "note": (
-            "Coverage is incomplete. Results come from EPO OPS citation search "
-            "and may not capture all patent-to-paper citations."
-        ),
-    })
+    return json.dumps(
+        {
+            "paper_id": paper_id,
+            "patents": patents[:limit],
+            "note": (
+                "Coverage is incomplete. Results come from EPO OPS citation search "
+                "and may not capture all patent-to-paper citations."
+            ),
+        }
+    )
 ```
 
 Add the tool registration in `register_patent_tools`:
@@ -3307,14 +3368,14 @@ async def get_citing_patents(
     try:
         return await _execute(retry=False)
     except RateLimitedError:
-        task_id = bundle.tasks.submit(
-            _execute(retry=True), tool="get_citing_patents"
+        task_id = bundle.tasks.submit(_execute(retry=True), tool="get_citing_patents")
+        return json.dumps(
+            {
+                "queued": True,
+                "task_id": task_id,
+                "tool": "get_citing_patents",
+            }
         )
-        return json.dumps({
-            "queued": True,
-            "task_id": task_id,
-            "tool": "get_citing_patents",
-        })
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**

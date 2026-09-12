@@ -23,6 +23,7 @@ world does. Read the relevant one before changing code that talks to it — the
 | [EPO OPS image inquiry and retrieval](epo-ops-images.md) | How OPS advertises and serves patent page images | `_epo_client.py`: `_parse_pdf_instance`, `get_pdf`, `_fetch_pdf_page` |
 | [EPO OPS throttling and fair-use quota](epo-ops-throttling.md) | The two independent limits OPS applies, and which path bills which bucket | `_epo_client.py`: `_check_throttle`, `_is_service_throttled`, every `service=` argument |
 | [EPO OPS legal-status events](epo-ops-legal-events.md) | How OPS represents INPADOC legal events, and why they need no code dictionary | `_epo_xml.py`: `parse_legal_xml`; `_epo_client.py`: `get_legal` |
+| [GitHub planning objects](github-planning-objects.md) | Milestones, issue relationships, and pull request design material | `roadmapping` and release automation |
 
 ## Vendored sources
 

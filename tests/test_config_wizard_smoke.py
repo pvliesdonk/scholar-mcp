@@ -349,6 +349,10 @@ def test_systemd_uses_raw_host_path_not_container(page: Page) -> None:
     # systemd is a host-path context: no container-path rewrite.
     assert "DEMO_DATA_DIR=/host/data" in result
     assert "/data/app" not in result
+    # The wizard's unit frame mirrors the packaged one, whose journald output
+    # is not a terminal either; tests/test_container_logging.py pins the same
+    # default on that file.
+    assert "Environment=FASTMCP_ENABLE_RICH_LOGGING=false" in result, result
 
 
 def test_docker_targets_omit_the_pinned_listener_vars(page: Page) -> None:

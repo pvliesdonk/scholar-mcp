@@ -441,7 +441,7 @@
       "label": "Rich logging",
       "type": "bool",
       "var": "FASTMCP_ENABLE_RICH_LOGGING",
-      "help": "Set false for plain or structured JSON log output.",
+      "help": "Rich color output for a terminal; false gives one plain or JSON line per record. Off in the container image and the systemd unit, since neither is a terminal and Rich wraps a structured record at its 80-column fallback.",
       "advancedGroup": "Logging"
     },
     {
