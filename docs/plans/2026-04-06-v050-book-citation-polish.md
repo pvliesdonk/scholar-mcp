@@ -366,36 +366,24 @@ class CacheProtocol(Protocol):
     async def set_patent_family(
         self, patent_id: str, data: list[dict[str, Any]]
     ) -> None: ...
-    async def get_patent_legal(
-        self, patent_id: str
-    ) -> list[dict[str, Any]] | None: ...
+    async def get_patent_legal(self, patent_id: str) -> list[dict[str, Any]] | None: ...
     async def set_patent_legal(
         self, patent_id: str, data: list[dict[str, Any]]
     ) -> None: ...
-    async def get_patent_citations(
-        self, patent_id: str
-    ) -> dict[str, Any] | None: ...
+    async def get_patent_citations(self, patent_id: str) -> dict[str, Any] | None: ...
     async def set_patent_citations(
         self, patent_id: str, data: dict[str, Any]
     ) -> None: ...
     async def get_patent_search(self, query: str) -> dict[str, Any] | None: ...
-    async def set_patent_search(
-        self, query: str, data: dict[str, Any]
-    ) -> None: ...
+    async def set_patent_search(self, query: str, data: dict[str, Any]) -> None: ...
 
     # Book methods
     async def get_book_by_isbn(self, isbn: str) -> BookRecord | None: ...
     async def set_book_by_isbn(self, isbn: str, data: BookRecord) -> None: ...
     async def get_book_by_work(self, work_id: str) -> BookRecord | None: ...
-    async def set_book_by_work(
-        self, work_id: str, data: BookRecord
-    ) -> None: ...
-    async def get_book_search(
-        self, query: str
-    ) -> list[BookRecord] | None: ...
-    async def set_book_search(
-        self, query: str, data: list[BookRecord]
-    ) -> None: ...
+    async def set_book_by_work(self, work_id: str, data: BookRecord) -> None: ...
+    async def get_book_search(self, query: str) -> list[BookRecord] | None: ...
+    async def set_book_search(self, query: str, data: list[BookRecord]) -> None: ...
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
@@ -449,7 +437,7 @@ Change the `cache` parameter on `_fetch_patent_sections` (line 381):
 Also update the `s2` parameter type from `Any` to `S2Client | None` while here (it's already imported):
 
 ```python
-    s2: S2Client | None = None,
+s2: S2Client | None = (None,)
 ```
 
 - [ ] **Step 3: Run full test suite**
@@ -562,9 +550,7 @@ async def test_get_author(respx_mock: respx.MockRouter) -> None:
 
 @pytest.mark.respx(base_url=OL_BASE)
 async def test_get_author_not_found(respx_mock: respx.MockRouter) -> None:
-    respx_mock.get("/authors/OL0000000A.json").mock(
-        return_value=httpx.Response(404)
-    )
+    respx_mock.get("/authors/OL0000000A.json").mock(return_value=httpx.Response(404))
     client = OpenLibraryClient(
         httpx.AsyncClient(base_url=OL_BASE),
         RateLimiter(delay=0.0),
@@ -714,9 +700,7 @@ def _extract_author_keys(work: dict[str, Any]) -> list[str]:
     return keys
 
 
-async def _enrich_authors_from_work(
-    book: BookRecord, bundle: ServiceBundle
-) -> None:
+async def _enrich_authors_from_work(book: BookRecord, bundle: ServiceBundle) -> None:
     """Enrich book in-place with authors from its work record.
 
     Best-effort: failures are logged and silently skipped (matching
@@ -741,9 +725,7 @@ async def _enrich_authors_from_work(
             if names:
                 book["authors"] = names
     except Exception:
-        logger.debug(
-            "author_enrichment_failed work_id=%s", work_id, exc_info=True
-        )
+        logger.debug("author_enrichment_failed work_id=%s", work_id, exc_info=True)
 ```
 
 Add `from typing import Any` import if not already present.
@@ -1100,7 +1082,9 @@ async def test_get_subject(respx_mock: respx.MockRouter) -> None:
 @pytest.mark.respx(base_url=OL_BASE)
 async def test_get_subject_not_found(respx_mock: respx.MockRouter) -> None:
     respx_mock.get("/subjects/nonexistent_topic_xyz.json").mock(
-        return_value=httpx.Response(200, json={"name": "nonexistent_topic_xyz", "work_count": 0, "works": []})
+        return_value=httpx.Response(
+            200, json={"name": "nonexistent_topic_xyz", "work_count": 0, "works": []}
+        )
     )
     client = OpenLibraryClient(
         httpx.AsyncClient(base_url=OL_BASE),
@@ -1124,31 +1108,27 @@ Expected: FAIL (AttributeError)
 Add to `OpenLibraryClient` in `_openlibrary_client.py`:
 
 ```python
-    async def get_subject(
-        self, subject: str, *, limit: int = 10
-    ) -> dict[str, Any] | None:
-        """Fetch books for a subject.
+async def get_subject(self, subject: str, *, limit: int = 10) -> dict[str, Any] | None:
+    """Fetch books for a subject.
 
-        Args:
-            subject: Subject slug (such as ``machine_learning``).
-            limit: Maximum number of works to return.
+    Args:
+        subject: Subject slug (such as ``machine_learning``).
+        limit: Maximum number of works to return.
 
-        Returns:
-            Subject dict with ``name``, ``work_count``, and ``works`` list,
-            or None on HTTP error.
-        """
-        await self._limiter.acquire()
-        try:
-            r = await self._client.get(
-                f"/subjects/{subject}.json", params={"limit": limit}
-            )
-            if r.status_code == 404:
-                return None
-            r.raise_for_status()
-            return r.json()  # type: ignore[no-any-return]
-        except httpx.HTTPStatusError:
-            logger.warning("openlibrary_subject_error subject=%s", subject)
+    Returns:
+        Subject dict with ``name``, ``work_count``, and ``works`` list,
+        or None on HTTP error.
+    """
+    await self._limiter.acquire()
+    try:
+        r = await self._client.get(f"/subjects/{subject}.json", params={"limit": limit})
+        if r.status_code == 404:
             return None
+        r.raise_for_status()
+        return r.json()  # type: ignore[no-any-return]
+    except httpx.HTTPStatusError:
+        logger.warning("openlibrary_subject_error subject=%s", subject)
+        return None
 ```
 
 - [ ] **Step 4: Run tests**
@@ -1181,7 +1161,10 @@ def test_normalize_subject() -> None:
     assert normalize_subject("Machine Learning") == "machine_learning"
     assert normalize_subject("  deep learning  ") == "deep_learning"
     assert normalize_subject("algorithms") == "algorithms"
-    assert normalize_subject("Natural Language Processing") == "natural_language_processing"
+    assert (
+        normalize_subject("Natural Language Processing")
+        == "natural_language_processing"
+    )
 
 
 def test_normalize_subject_work() -> None:
@@ -1236,7 +1219,8 @@ def normalize_subject_work(work: dict[str, Any]) -> BookRecord:
     work_match = _OL_WORK_RE.search(work_key)
     cover_id = work.get("cover_id")
     authors = [
-        a["name"] for a in (work.get("authors") or [])
+        a["name"]
+        for a in (work.get("authors") or [])
         if isinstance(a, dict) and a.get("name")
     ]
     return BookRecord(
@@ -1331,40 +1315,41 @@ Add `"books_subject"` to `_TTL_TABLES` tuple.
 Add methods to `ScholarCache` (after `set_book_search`):
 
 ```python
-    async def get_book_subject(self, subject: str) -> list[BookRecord] | None:
-        """Return cached book subject results or None if missing/stale.
+async def get_book_subject(self, subject: str) -> list[BookRecord] | None:
+    """Return cached book subject results or None if missing/stale.
 
-        Args:
-            subject: Normalized subject slug; SHA-256 hash used as cache key.
+    Args:
+        subject: Normalized subject slug; SHA-256 hash used as cache key.
 
-        Returns:
-            List of BookRecord dicts or None.
-        """
-        db = _require_open(self._db)
-        query_hash = hashlib.sha256(subject.encode()).hexdigest()
-        async with db.execute(
-            "SELECT data, cached_at FROM books_subject WHERE query_hash = ?",
-            (query_hash,),
-        ) as cur:
-            row = await cur.fetchone()
-        if row is None or time.time() - row[1] > _BOOK_SUBJECT_TTL:
-            return None
-        return json.loads(row[0])  # type: ignore[no-any-return]
+    Returns:
+        List of BookRecord dicts or None.
+    """
+    db = _require_open(self._db)
+    query_hash = hashlib.sha256(subject.encode()).hexdigest()
+    async with db.execute(
+        "SELECT data, cached_at FROM books_subject WHERE query_hash = ?",
+        (query_hash,),
+    ) as cur:
+        row = await cur.fetchone()
+    if row is None or time.time() - row[1] > _BOOK_SUBJECT_TTL:
+        return None
+    return json.loads(row[0])  # type: ignore[no-any-return]
 
-    async def set_book_subject(self, subject: str, data: list[BookRecord]) -> None:
-        """Cache book subject results.
 
-        Args:
-            subject: Normalized subject slug; SHA-256 hash used as cache key.
-            data: List of BookRecord dicts.
-        """
-        db = _require_open(self._db)
-        query_hash = hashlib.sha256(subject.encode()).hexdigest()
-        await db.execute(
-            "INSERT OR REPLACE INTO books_subject (query_hash, data, cached_at) VALUES (?, ?, ?)",
-            (query_hash, json.dumps(data), time.time()),
-        )
-        await db.commit()
+async def set_book_subject(self, subject: str, data: list[BookRecord]) -> None:
+    """Cache book subject results.
+
+    Args:
+        subject: Normalized subject slug; SHA-256 hash used as cache key.
+        data: List of BookRecord dicts.
+    """
+    db = _require_open(self._db)
+    query_hash = hashlib.sha256(subject.encode()).hexdigest()
+    await db.execute(
+        "INSERT OR REPLACE INTO books_subject (query_hash, data, cached_at) VALUES (?, ?, ?)",
+        (query_hash, json.dumps(data), time.time()),
+    )
+    await db.commit()
 ```
 
 - [ ] **Step 4: Update CacheProtocol**
@@ -1372,12 +1357,8 @@ Add methods to `ScholarCache` (after `set_book_search`):
 Add to `CacheProtocol` in `_protocols.py` (after `set_book_search`):
 
 ```python
-    async def get_book_subject(
-        self, subject: str
-    ) -> list[BookRecord] | None: ...
-    async def set_book_subject(
-        self, subject: str, data: list[BookRecord]
-    ) -> None: ...
+async def get_book_subject(self, subject: str) -> list[BookRecord] | None: ...
+async def set_book_subject(self, subject: str, data: list[BookRecord]) -> None: ...
 ```
 
 - [ ] **Step 5: Run tests**
@@ -1467,9 +1448,7 @@ async def test_recommend_books_empty_subject(
         )
     )
     async with Client(mcp) as client:
-        result = await client.call_tool(
-            "recommend_books", {"subject": "nonexistent"}
-        )
+        result = await client.call_tool("recommend_books", {"subject": "nonexistent"})
     data = json.loads(result.content[0].text)
     assert data == []
 ```
@@ -1484,63 +1463,65 @@ Expected: FAIL
 In `_tools_books.py`, add import at top:
 
 ```python
-from ._openlibrary_client import normalize_book, normalize_subject, normalize_subject_work
+from ._openlibrary_client import (
+    normalize_book,
+    normalize_subject,
+    normalize_subject_work,
+)
 ```
 
 Inside `register_book_tools(mcp)`, add after the `get_book` tool:
 
 ```python
-    @mcp.tool(
-        annotations={
-            "readOnlyHint": True,
-            "destructiveHint": False,
-            "openWorldHint": True,
-        },
-    )
-    async def recommend_books(
-        subject: str,
-        limit: int = 10,
-        bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
-        """Recommend books for a subject via Open Library.
+@mcp.tool(
+    annotations={
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "openWorldHint": True,
+    },
+)
+async def recommend_books(
+    subject: str,
+    limit: int = 10,
+    bundle: ServiceBundle = Depends(get_bundle),
+) -> str:
+    """Recommend books for a subject via Open Library.
 
-        Uses the Open Library subject API to find popular books on a
-        topic, sorted by edition count (a proxy for popularity).
+    Uses the Open Library subject API to find popular books on a
+    topic, sorted by edition count (a proxy for popularity).
 
-        Args:
-            subject: Subject or topic (such as "machine learning",
-                "algorithms", "computer vision").
-            limit: Maximum results to return (max 50).
+    Args:
+        subject: Subject or topic (such as "machine learning",
+            "algorithms", "computer vision").
+        limit: Maximum results to return (max 50).
 
-        Returns:
-            JSON list of book records sorted by popularity.
-        """
-        limit = max(1, min(limit, 50))
-        slug = normalize_subject(subject)
+    Returns:
+        JSON list of book records sorted by popularity.
+    """
+    limit = max(1, min(limit, 50))
+    slug = normalize_subject(subject)
 
-        cached = await bundle.cache.get_book_subject(slug)
-        if cached is not None:
-            logger.debug("book_subject_cache_hit subject=%s", slug)
-            return json.dumps(cached[:limit])
+    cached = await bundle.cache.get_book_subject(slug)
+    if cached is not None:
+        logger.debug("book_subject_cache_hit subject=%s", slug)
+        return json.dumps(cached[:limit])
 
-        async def _execute(*, retry: bool = True) -> str:
-            subject_data = await bundle.openlibrary.get_subject(slug, limit=limit)
-            if subject_data is None:
-                return json.dumps([])
-            works = subject_data.get("works") or []
-            books = [normalize_subject_work(w) for w in works]
-            await bundle.cache.set_book_subject(slug, books)
-            return json.dumps(books)
+    async def _execute(*, retry: bool = True) -> str:
+        subject_data = await bundle.openlibrary.get_subject(slug, limit=limit)
+        if subject_data is None:
+            return json.dumps([])
+        works = subject_data.get("works") or []
+        books = [normalize_subject_work(w) for w in works]
+        await bundle.cache.set_book_subject(slug, books)
+        return json.dumps(books)
 
-        try:
-            return await _execute(retry=False)
-        except RateLimitedError:
-            task_id = bundle.tasks.submit(
-                _execute(retry=True), tool="recommend_books"
-            )
-            return json.dumps(
-                {"queued": True, "task_id": task_id, "tool": "recommend_books"}
-            )
+    try:
+        return await _execute(retry=False)
+    except RateLimitedError:
+        task_id = bundle.tasks.submit(_execute(retry=True), tool="recommend_books")
+        return json.dumps(
+            {"queued": True, "task_id": task_id, "tool": "recommend_books"}
+        )
 ```
 
 - [ ] **Step 4: Run tests**
@@ -1622,11 +1603,17 @@ class TestInferEntryType:
         assert infer_entry_type({"venue": "Conference on X"}) == "inproceedings"
 
     def test_misc_arxiv(self) -> None:
-        assert infer_entry_type({"externalIds": {"ArXiv": "2301.00001"}, "venue": ""}) == "misc"
+        assert (
+            infer_entry_type({"externalIds": {"ArXiv": "2301.00001"}, "venue": ""})
+            == "misc"
+        )
 
     def test_book_with_isbn(self) -> None:
         paper = {
-            "book_metadata": {"isbn_13": "9780201633610", "publisher": "Addison-Wesley"},
+            "book_metadata": {
+                "isbn_13": "9780201633610",
+                "publisher": "Addison-Wesley",
+            },
         }
         assert infer_entry_type(paper) == "book"
 
@@ -1754,17 +1741,15 @@ In `_citation_formatter.py`, update `format_bibtex` (around line 215-258). After
 Replace the author block to handle fallback:
 
 ```python
-        # Author: prefer S2 authors, fall back to book_metadata authors
-        author_str = _format_bibtex_author(paper)
-        if not author_str and entry_type == "book":
-            bm = paper.get("book_metadata") or {}
-            bm_authors = bm.get("authors") or []
-            if bm_authors:
-                author_str = " and ".join(
-                    escape_bibtex(a) for a in bm_authors
-                )
-        if author_str:
-            fields.append(f"  author = {{{author_str}}}")
+# Author: prefer S2 authors, fall back to book_metadata authors
+author_str = _format_bibtex_author(paper)
+if not author_str and entry_type == "book":
+    bm = paper.get("book_metadata") or {}
+    bm_authors = bm.get("authors") or []
+    if bm_authors:
+        author_str = " and ".join(escape_bibtex(a) for a in bm_authors)
+if author_str:
+    fields.append(f"  author = {{{author_str}}}")
 ```
 
 After the venue block, add book-specific fields:
@@ -1989,21 +1974,19 @@ _RIS_TYPE_MAP: dict[str, str] = {
 In `format_ris`, after the author lines, add author fallback:
 
 ```python
-        author_lines = _ris_author_line(paper)
-        if not author_lines and entry_type == "book":
-            bm = paper.get("book_metadata") or {}
-            for author_name in bm.get("authors") or []:
-                parsed = parse_author_name(author_name)
-                name = (
-                    f"{parsed.prefix} {parsed.last}" if parsed.prefix else parsed.last
-                )
-                if parsed.first:
-                    name = f"{name}, {parsed.first}"
-                if parsed.suffix:
-                    name = f"{name}, {parsed.suffix}"
-                if name:
-                    author_lines.append(f"AU  - {name}")
-        lines.extend(author_lines)
+author_lines = _ris_author_line(paper)
+if not author_lines and entry_type == "book":
+    bm = paper.get("book_metadata") or {}
+    for author_name in bm.get("authors") or []:
+        parsed = parse_author_name(author_name)
+        name = f"{parsed.prefix} {parsed.last}" if parsed.prefix else parsed.last
+        if parsed.first:
+            name = f"{name}, {parsed.first}"
+        if parsed.suffix:
+            name = f"{name}, {parsed.suffix}"
+        if name:
+            author_lines.append(f"AU  - {name}")
+lines.extend(author_lines)
 ```
 
 After the venue/DOI/URL/abstract block, add book-specific tags:

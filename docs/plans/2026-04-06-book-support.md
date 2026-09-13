@@ -98,9 +98,7 @@ def isbn10_to_isbn13(isbn10: str) -> str:
         13-digit ISBN string.
     """
     stem = "978" + isbn10[:9]
-    total = sum(
-        int(d) * (1 if i % 2 == 0 else 3) for i, d in enumerate(stem)
-    )
+    total = sum(int(d) * (1 if i % 2 == 0 else 3) for i, d in enumerate(stem))
     check = (10 - total % 10) % 10
     return stem + str(check)
 
@@ -221,9 +219,9 @@ CREATE INDEX IF NOT EXISTS idx_books_search_cached ON books_search(cached_at);
 Add table names to `_TTL_TABLES` tuple (after `"patent_search"`):
 
 ```python
-    "books_isbn",
-    "books_openlibrary",
-    "books_search",
+("books_isbn",)
+("books_openlibrary",)
+("books_search",)
 ```
 
 - [ ] **Step 8: Add cache get/set methods to `ScholarCache`**
@@ -231,111 +229,115 @@ Add table names to `_TTL_TABLES` tuple (after `"patent_search"`):
 Add after the patent search section (after line 661) in `src/scholar_mcp/_cache.py`:
 
 ```python
-    # ------------------------------------------------------------------
-    # Books (Open Library)
-    # ------------------------------------------------------------------
+# ------------------------------------------------------------------
+# Books (Open Library)
+# ------------------------------------------------------------------
 
-    async def get_book_by_isbn(self, isbn: str) -> dict[str, Any] | None:
-        """Return cached book data by ISBN or None if missing/stale.
 
-        Args:
-            isbn: ISBN-13 string (already normalized).
+async def get_book_by_isbn(self, isbn: str) -> dict[str, Any] | None:
+    """Return cached book data by ISBN or None if missing/stale.
 
-        Returns:
-            Book metadata dict or None.
-        """
-        db = _require_open(self._db)
-        async with db.execute(
-            "SELECT data, cached_at FROM books_isbn WHERE isbn = ?", (isbn,)
-        ) as cur:
-            row = await cur.fetchone()
-        if row is None or time.time() - row[1] > _BOOK_ISBN_TTL:
-            return None
-        return json.loads(row[0])  # type: ignore[no-any-return]
+    Args:
+        isbn: ISBN-13 string (already normalized).
 
-    async def set_book_by_isbn(self, isbn: str, data: dict[str, Any]) -> None:
-        """Cache book data by ISBN.
+    Returns:
+        Book metadata dict or None.
+    """
+    db = _require_open(self._db)
+    async with db.execute(
+        "SELECT data, cached_at FROM books_isbn WHERE isbn = ?", (isbn,)
+    ) as cur:
+        row = await cur.fetchone()
+    if row is None or time.time() - row[1] > _BOOK_ISBN_TTL:
+        return None
+    return json.loads(row[0])  # type: ignore[no-any-return]
 
-        Args:
-            isbn: ISBN-13 string (already normalized).
-            data: Book metadata dict.
-        """
-        db = _require_open(self._db)
-        await db.execute(
-            "INSERT OR REPLACE INTO books_isbn (isbn, data, cached_at) VALUES (?, ?, ?)",
-            (isbn, json.dumps(data), time.time()),
-        )
-        await db.commit()
 
-    async def get_book_by_work(self, work_id: str) -> dict[str, Any] | None:
-        """Return cached book data by Open Library work ID or None.
+async def set_book_by_isbn(self, isbn: str, data: dict[str, Any]) -> None:
+    """Cache book data by ISBN.
 
-        Args:
-            work_id: Open Library work ID (such as ``OL1168083W``).
+    Args:
+        isbn: ISBN-13 string (already normalized).
+        data: Book metadata dict.
+    """
+    db = _require_open(self._db)
+    await db.execute(
+        "INSERT OR REPLACE INTO books_isbn (isbn, data, cached_at) VALUES (?, ?, ?)",
+        (isbn, json.dumps(data), time.time()),
+    )
+    await db.commit()
 
-        Returns:
-            Book metadata dict or None.
-        """
-        db = _require_open(self._db)
-        async with db.execute(
-            "SELECT data, cached_at FROM books_openlibrary WHERE work_id = ?",
-            (work_id,),
-        ) as cur:
-            row = await cur.fetchone()
-        if row is None or time.time() - row[1] > _BOOK_WORK_TTL:
-            return None
-        return json.loads(row[0])  # type: ignore[no-any-return]
 
-    async def set_book_by_work(self, work_id: str, data: dict[str, Any]) -> None:
-        """Cache book data by Open Library work ID.
+async def get_book_by_work(self, work_id: str) -> dict[str, Any] | None:
+    """Return cached book data by Open Library work ID or None.
 
-        Args:
-            work_id: Open Library work ID.
-            data: Book metadata dict.
-        """
-        db = _require_open(self._db)
-        await db.execute(
-            "INSERT OR REPLACE INTO books_openlibrary (work_id, data, cached_at) VALUES (?, ?, ?)",
-            (work_id, json.dumps(data), time.time()),
-        )
-        await db.commit()
+    Args:
+        work_id: Open Library work ID (such as ``OL1168083W``).
 
-    async def get_book_search(self, query: str) -> list[dict[str, Any]] | None:
-        """Return cached book search results or None if missing/stale.
+    Returns:
+        Book metadata dict or None.
+    """
+    db = _require_open(self._db)
+    async with db.execute(
+        "SELECT data, cached_at FROM books_openlibrary WHERE work_id = ?",
+        (work_id,),
+    ) as cur:
+        row = await cur.fetchone()
+    if row is None or time.time() - row[1] > _BOOK_WORK_TTL:
+        return None
+    return json.loads(row[0])  # type: ignore[no-any-return]
 
-        Args:
-            query: Search query string; SHA-256 hash used as cache key.
 
-        Returns:
-            List of book metadata dicts or None.
-        """
-        db = _require_open(self._db)
-        query_hash = hashlib.sha256(query.encode()).hexdigest()
-        async with db.execute(
-            "SELECT data, cached_at FROM books_search WHERE query_hash = ?",
-            (query_hash,),
-        ) as cur:
-            row = await cur.fetchone()
-        if row is None or time.time() - row[1] > _BOOK_SEARCH_TTL:
-            return None
-        return json.loads(row[0])  # type: ignore[no-any-return]
+async def set_book_by_work(self, work_id: str, data: dict[str, Any]) -> None:
+    """Cache book data by Open Library work ID.
 
-    async def set_book_search(
-        self, query: str, data: list[dict[str, Any]]
-    ) -> None:
-        """Cache book search results.
+    Args:
+        work_id: Open Library work ID.
+        data: Book metadata dict.
+    """
+    db = _require_open(self._db)
+    await db.execute(
+        "INSERT OR REPLACE INTO books_openlibrary (work_id, data, cached_at) VALUES (?, ?, ?)",
+        (work_id, json.dumps(data), time.time()),
+    )
+    await db.commit()
 
-        Args:
-            query: Search query string; SHA-256 hash used as cache key.
-            data: List of book metadata dicts.
-        """
-        db = _require_open(self._db)
-        query_hash = hashlib.sha256(query.encode()).hexdigest()
-        await db.execute(
-            "INSERT OR REPLACE INTO books_search (query_hash, data, cached_at) VALUES (?, ?, ?)",
-            (query_hash, json.dumps(data), time.time()),
-        )
-        await db.commit()
+
+async def get_book_search(self, query: str) -> list[dict[str, Any]] | None:
+    """Return cached book search results or None if missing/stale.
+
+    Args:
+        query: Search query string; SHA-256 hash used as cache key.
+
+    Returns:
+        List of book metadata dicts or None.
+    """
+    db = _require_open(self._db)
+    query_hash = hashlib.sha256(query.encode()).hexdigest()
+    async with db.execute(
+        "SELECT data, cached_at FROM books_search WHERE query_hash = ?",
+        (query_hash,),
+    ) as cur:
+        row = await cur.fetchone()
+    if row is None or time.time() - row[1] > _BOOK_SEARCH_TTL:
+        return None
+    return json.loads(row[0])  # type: ignore[no-any-return]
+
+
+async def set_book_search(self, query: str, data: list[dict[str, Any]]) -> None:
+    """Cache book search results.
+
+    Args:
+        query: Search query string; SHA-256 hash used as cache key.
+        data: List of book metadata dicts.
+    """
+    db = _require_open(self._db)
+    query_hash = hashlib.sha256(query.encode()).hexdigest()
+    await db.execute(
+        "INSERT OR REPLACE INTO books_search (query_hash, data, cached_at) VALUES (?, ?, ?)",
+        (query_hash, json.dumps(data), time.time()),
+    )
+    await db.commit()
 ```
 
 - [ ] **Step 9: Run all cache tests to verify they pass**
@@ -415,7 +417,9 @@ SAMPLE_WORK = {
     "key": "/works/OL1168083W",
     "description": "A foundational book on software design patterns.",
     "subjects": ["Software patterns", "Object-oriented programming"],
-    "authors": [{"author": {"key": "/authors/OL239963A"}, "type": {"key": "/type/author_role"}}],
+    "authors": [
+        {"author": {"key": "/authors/OL239963A"}, "type": {"key": "/type/author_role"}}
+    ],
 }
 
 SAMPLE_AUTHOR = {
@@ -481,9 +485,7 @@ async def test_get_by_isbn(
 async def test_get_by_isbn_not_found(
     respx_mock: respx.MockRouter, ol_client: OpenLibraryClient
 ) -> None:
-    respx_mock.get("/isbn/0000000000000.json").mock(
-        return_value=httpx.Response(404)
-    )
+    respx_mock.get("/isbn/0000000000000.json").mock(return_value=httpx.Response(404))
     result = await ol_client.get_by_isbn("0000000000000")
     assert result is None
 
@@ -504,9 +506,7 @@ async def test_get_work(
 async def test_get_work_not_found(
     respx_mock: respx.MockRouter, ol_client: OpenLibraryClient
 ) -> None:
-    respx_mock.get("/works/OL0000000W.json").mock(
-        return_value=httpx.Response(404)
-    )
+    respx_mock.get("/works/OL0000000W.json").mock(return_value=httpx.Response(404))
     result = await ol_client.get_work("OL0000000W")
     assert result is None
 
@@ -515,9 +515,7 @@ async def test_get_work_not_found(
 async def test_get_by_isbn_server_error(
     respx_mock: respx.MockRouter, ol_client: OpenLibraryClient
 ) -> None:
-    respx_mock.get("/isbn/9780201633610.json").mock(
-        return_value=httpx.Response(500)
-    )
+    respx_mock.get("/isbn/9780201633610.json").mock(return_value=httpx.Response(500))
     result = await ol_client.get_by_isbn("9780201633610")
     assert result is None
 
@@ -586,15 +584,11 @@ class OpenLibraryClient:
         limiter: Rate limiter (~0.6s delay for ~100 req/min politeness).
     """
 
-    def __init__(
-        self, http_client: httpx.AsyncClient, limiter: RateLimiter
-    ) -> None:
+    def __init__(self, http_client: httpx.AsyncClient, limiter: RateLimiter) -> None:
         self._client = http_client
         self._limiter = limiter
 
-    async def search(
-        self, query: str, *, limit: int = 10
-    ) -> list[dict[str, Any]]:
+    async def search(self, query: str, *, limit: int = 10) -> list[dict[str, Any]]:
         """Search Open Library for books.
 
         Args:
@@ -660,9 +654,7 @@ class OpenLibraryClient:
         await self._client.aclose()
 
 
-def _normalize_book(
-    data: dict[str, Any], *, source: str = "search"
-) -> dict[str, Any]:
+def _normalize_book(data: dict[str, Any], *, source: str = "search") -> dict[str, Any]:
     """Normalize an Open Library response to the standard book record shape.
 
     Args:
@@ -731,12 +723,8 @@ def _normalize_book(
         "isbn_10": isbn_10,
         "isbn_13": isbn_13,
         "openlibrary_work_id": work_match.group(0) if work_match else None,
-        "openlibrary_edition_id": (
-            edition_match.group(0) if edition_match else None
-        ),
-        "cover_url": (
-            f"{_COVER_BASE}/{isbn_13}-M.jpg" if isbn_13 else None
-        ),
+        "openlibrary_edition_id": (edition_match.group(0) if edition_match else None),
+        "cover_url": (f"{_COVER_BASE}/{isbn_13}-M.jpg" if isbn_13 else None),
         "google_books_url": None,
         "subjects": data.get("subjects") or [],
         "page_count": data.get("number_of_pages"),
@@ -802,7 +790,7 @@ from ._rate_limiter import RateLimiter
 
 Add to `ServiceBundle(...)` instantiation (after `epo=epo,`):
 ```python
-        openlibrary=openlibrary,
+openlibrary = (openlibrary,)
 ```
 
 Add cleanup in the `finally` block (after `await openalex_http.aclose()`):
@@ -820,26 +808,24 @@ from scholar_mcp._rate_limiter import RateLimiter
 
 Update the `bundle` fixture to include OpenLibraryClient. Replace the fixture body (lines 48-61):
 ```python
-    s2 = S2Client(api_key=None, delay=0.0)
-    openalex_http = httpx.AsyncClient(base_url="https://api.openalex.org")
-    openalex = OpenAlexClient(openalex_http)
-    openlibrary_http = httpx.AsyncClient(
-        base_url="https://openlibrary.org", timeout=10.0
-    )
-    openlibrary = OpenLibraryClient(openlibrary_http, RateLimiter(delay=0.0))
-    yield ServiceBundle(
-        s2=s2,
-        openalex=openalex,
-        docling=None,
-        epo=None,
-        openlibrary=openlibrary,
-        cache=cache,
-        config=test_config,
-        tasks=TaskQueue(),
-    )
-    await openlibrary_http.aclose()
-    await openalex_http.aclose()
-    await s2.aclose()
+s2 = S2Client(api_key=None, delay=0.0)
+openalex_http = httpx.AsyncClient(base_url="https://api.openalex.org")
+openalex = OpenAlexClient(openalex_http)
+openlibrary_http = httpx.AsyncClient(base_url="https://openlibrary.org", timeout=10.0)
+openlibrary = OpenLibraryClient(openlibrary_http, RateLimiter(delay=0.0))
+yield ServiceBundle(
+    s2=s2,
+    openalex=openalex,
+    docling=None,
+    epo=None,
+    openlibrary=openlibrary,
+    cache=cache,
+    config=test_config,
+    tasks=TaskQueue(),
+)
+await openlibrary_http.aclose()
+await openalex_http.aclose()
+await s2.aclose()
 ```
 
 - [ ] **Step 3: Run full test suite to check for regressions**
@@ -935,9 +921,7 @@ async def test_search_books_returns_results(
         return_value=httpx.Response(200, json=SAMPLE_SEARCH_RESPONSE)
     )
     async with Client(mcp) as client:
-        result = await client.call_tool(
-            "search_books", {"query": "design patterns"}
-        )
+        result = await client.call_tool("search_books", {"query": "design patterns"})
     data = json.loads(result.content[0].text)
     assert len(data) == 1
     assert data[0]["title"] == "Design Patterns"
@@ -960,16 +944,12 @@ async def test_search_books_caches_results(
 
 
 @pytest.mark.respx(base_url=OL_BASE)
-async def test_get_book_by_isbn(
-    respx_mock: respx.MockRouter, mcp: FastMCP
-) -> None:
+async def test_get_book_by_isbn(respx_mock: respx.MockRouter, mcp: FastMCP) -> None:
     respx_mock.get("/isbn/9780201633610.json").mock(
         return_value=httpx.Response(200, json=SAMPLE_EDITION_RESPONSE)
     )
     async with Client(mcp) as client:
-        result = await client.call_tool(
-            "get_book", {"identifier": "9780201633610"}
-        )
+        result = await client.call_tool("get_book", {"identifier": "9780201633610"})
     data = json.loads(result.content[0].text)
     assert data["title"] == "Design Patterns"
     assert data["isbn_13"] == "9780201633610"
@@ -979,21 +959,15 @@ async def test_get_book_by_isbn(
 async def test_get_book_by_isbn_not_found(
     respx_mock: respx.MockRouter, mcp: FastMCP
 ) -> None:
-    respx_mock.get("/isbn/0000000000000.json").mock(
-        return_value=httpx.Response(404)
-    )
+    respx_mock.get("/isbn/0000000000000.json").mock(return_value=httpx.Response(404))
     async with Client(mcp) as client:
-        result = await client.call_tool(
-            "get_book", {"identifier": "0000000000000"}
-        )
+        result = await client.call_tool("get_book", {"identifier": "0000000000000"})
     data = json.loads(result.content[0].text)
     assert data["error"] == "not_found"
 
 
 @pytest.mark.respx(base_url=OL_BASE)
-async def test_get_book_by_work_id(
-    respx_mock: respx.MockRouter, mcp: FastMCP
-) -> None:
+async def test_get_book_by_work_id(respx_mock: respx.MockRouter, mcp: FastMCP) -> None:
     respx_mock.get("/works/OL1168083W.json").mock(
         return_value=httpx.Response(
             200,
@@ -1006,9 +980,7 @@ async def test_get_book_by_work_id(
         )
     )
     async with Client(mcp) as client:
-        result = await client.call_tool(
-            "get_book", {"identifier": "OL1168083W"}
-        )
+        result = await client.call_tool("get_book", {"identifier": "OL1168083W"})
     data = json.loads(result.content[0].text)
     assert data["title"] == "Design Patterns"
     assert data["openlibrary_work_id"] == "OL1168083W"
@@ -1096,9 +1068,7 @@ def register_book_tools(mcp: FastMCP) -> None:
         try:
             return await _execute(retry=False)
         except RateLimitedError:
-            task_id = bundle.tasks.submit(
-                _execute(retry=True), tool="search_books"
-            )
+            task_id = bundle.tasks.submit(_execute(retry=True), tool="search_books")
             return json.dumps(
                 {"queued": True, "task_id": task_id, "tool": "search_books"}
             )
@@ -1140,12 +1110,8 @@ def register_book_tools(mcp: FastMCP) -> None:
         try:
             return await _execute(retry=False)
         except RateLimitedError:
-            task_id = bundle.tasks.submit(
-                _execute(retry=True), tool="get_book"
-            )
-            return json.dumps(
-                {"queued": True, "task_id": task_id, "tool": "get_book"}
-            )
+            task_id = bundle.tasks.submit(_execute(retry=True), tool="get_book")
+            return json.dumps({"queued": True, "task_id": task_id, "tool": "get_book"})
 
 
 async def _resolve_isbn(isbn: str, bundle: ServiceBundle) -> str:
@@ -1306,9 +1272,7 @@ async def test_enrichment_triggered_by_publication_type_with_isbn(
     respx_mock.get("/isbn/9780201633610.json").mock(
         return_value=httpx.Response(200, json=SAMPLE_EDITION)
     )
-    paper = _make_paper(
-        publication_types=["Book"], isbn="9780201633610"
-    )
+    paper = _make_paper(publication_types=["Book"], isbn="9780201633610")
     await enrich_books([paper], bundle)
     assert "book_metadata" in paper
 
@@ -1335,9 +1299,7 @@ async def test_enrichment_skipped_for_regular_paper(
 async def test_enrichment_failure_leaves_paper_unchanged(
     respx_mock: respx.MockRouter, bundle: ServiceBundle
 ) -> None:
-    respx_mock.get("/isbn/9780201633610.json").mock(
-        return_value=httpx.Response(500)
-    )
+    respx_mock.get("/isbn/9780201633610.json").mock(return_value=httpx.Response(500))
     paper = _make_paper(isbn="9780201633610")
     await enrich_books([paper], bundle)
     assert "book_metadata" not in paper
@@ -1460,9 +1422,7 @@ async def _enrich_one(paper: dict[str, Any], bundle: ServiceBundle) -> None:
         book = _normalize_book(edition, source="edition")
         await bundle.cache.set_book_by_isbn(isbn, book)
         if book.get("openlibrary_work_id"):
-            await bundle.cache.set_book_by_work(
-                book["openlibrary_work_id"], book
-            )
+            await bundle.cache.set_book_by_work(book["openlibrary_work_id"], book)
         paper["book_metadata"] = _to_enrichment_dict(book)
     except Exception:
         logger.debug(
@@ -1608,9 +1568,7 @@ async def test_get_paper_enriches_book(mcp: FastMCP) -> None:
             return_value=httpx.Response(200, json=OL_EDITION)
         )
         async with Client(mcp) as client:
-            result = await client.call_tool(
-                "get_paper", {"identifier": "book1"}
-            )
+            result = await client.call_tool("get_paper", {"identifier": "book1"})
     data = json.loads(result.content[0].text)
     assert "book_metadata" in data
     assert data["book_metadata"]["publisher"] == "Addison-Wesley"
@@ -1627,9 +1585,7 @@ async def test_get_paper_no_enrichment_for_regular_paper(mcp: FastMCP) -> None:
             return_value=httpx.Response(200, json=regular_paper)
         )
         async with Client(mcp) as client:
-            result = await client.call_tool(
-                "get_paper", {"identifier": "reg1"}
-            )
+            result = await client.call_tool("get_paper", {"identifier": "reg1"})
     data = json.loads(result.content[0].text)
     assert "book_metadata" not in data
 ```

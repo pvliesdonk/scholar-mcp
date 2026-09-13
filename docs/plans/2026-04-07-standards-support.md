@@ -100,7 +100,13 @@ async def test_get_standards_index_miss(cache: ScholarCache) -> None:
 
 
 async def test_set_and_get_standards_index(cache: ScholarCache) -> None:
-    stubs = [{"identifier": "ETSI EN 303 645", "title": "IoT Cyber Security", "url": "https://etsi.org"}]
+    stubs = [
+        {
+            "identifier": "ETSI EN 303 645",
+            "title": "IoT Cyber Security",
+            "url": "https://etsi.org",
+        }
+    ]
     await cache.set_standards_index("ETSI", stubs)
     result = await cache.get_standards_index("ETSI")
     assert result is not None
@@ -126,24 +132,24 @@ class StandardRecord(TypedDict, total=False):
     and may have absent fields from partial API responses or cache.
     """
 
-    identifier: str           # canonical: "NIST SP 800-53 Rev. 5", "RFC 9000"
-    aliases: list[str]        # alt forms seen in citations
+    identifier: str  # canonical: "NIST SP 800-53 Rev. 5", "RFC 9000"
+    aliases: list[str]  # alt forms seen in citations
     title: str
-    body: str                 # "NIST" | "IETF" | "W3C" | "ETSI"
-    number: str               # "800-53", "9000", "2.1"
-    revision: str | None      # "Rev. 5", "2022", "3rd edition"
-    status: str               # "published" | "withdrawn" | "superseded" | "draft"
+    body: str  # "NIST" | "IETF" | "W3C" | "ETSI"
+    number: str  # "800-53", "9000", "2.1"
+    revision: str | None  # "Rev. 5", "2022", "3rd edition"
+    status: str  # "published" | "withdrawn" | "superseded" | "draft"
     published_date: str | None
     withdrawn_date: str | None
     superseded_by: str | None
     supersedes: list[str]
-    scope: str | None         # abstract / scope statement
+    scope: str | None  # abstract / scope statement
     committee: str | None
-    url: str                  # canonical catalogue URL
-    full_text_url: str | None # direct PDF/HTML link if freely available
-    full_text_available: bool # True for all Tier 1 sources
-    price: str | None         # None for Tier 1; populated for Tier 2
-    related: list[str]        # related standard identifiers
+    url: str  # canonical catalogue URL
+    full_text_url: str | None  # direct PDF/HTML link if freely available
+    full_text_available: bool  # True for all Tier 1 sources
+    price: str | None  # None for Tier 1; populated for Tier 2
+    related: list[str]  # related standard identifiers
 ```
 
 - [ ] **Step 4: Add standards tables + TTLs to `_cache.py`**
@@ -151,10 +157,10 @@ class StandardRecord(TypedDict, total=False):
 Add TTL constants after the existing `_BOOK_SUBJECT_TTL` line:
 
 ```python
-_STANDARD_TTL = 90 * 86400        # 90 days, standards rarely change
+_STANDARD_TTL = 90 * 86400  # 90 days, standards rarely change
 _STANDARD_ALIAS_TTL = 90 * 86400  # 90 days
 _STANDARD_SEARCH_TTL = 7 * 86400  # 7 days
-_STANDARD_INDEX_TTL = 7 * 86400   # 7 days, re-scrape weekly
+_STANDARD_INDEX_TTL = 7 * 86400  # 7 days, re-scrape weekly
 ```
 
 Add to `_SCHEMA` string (append before the closing `"""`):
@@ -223,6 +229,7 @@ Add eight cache methods to `ScholarCache` (after the books section):
 # Standards
 # ------------------------------------------------------------------
 
+
 async def get_standard(self, identifier: str) -> dict[str, Any] | None:
     """Return cached standard record or None if missing/stale.
 
@@ -241,6 +248,7 @@ async def get_standard(self, identifier: str) -> dict[str, Any] | None:
         return None
     return json.loads(row[0])  # type: ignore[no-any-return]
 
+
 async def set_standard(self, identifier: str, data: dict[str, Any]) -> None:
     """Cache a standard record.
 
@@ -254,6 +262,7 @@ async def set_standard(self, identifier: str, data: dict[str, Any]) -> None:
         (identifier, json.dumps(data), time.time()),
     )
     await db.commit()
+
 
 async def get_standard_alias(self, raw: str) -> str | None:
     """Return canonical identifier for a raw alias string, or None.
@@ -273,6 +282,7 @@ async def get_standard_alias(self, raw: str) -> str | None:
         return None
     return row[0]  # type: ignore[no-any-return]
 
+
 async def set_standard_alias(self, raw: str, canonical: str) -> None:
     """Cache a raw-to-canonical alias mapping.
 
@@ -286,6 +296,7 @@ async def set_standard_alias(self, raw: str, canonical: str) -> None:
         (raw, canonical, time.time()),
     )
     await db.commit()
+
 
 async def get_standards_search(self, query: str) -> list[dict[str, Any]] | None:
     """Return cached standards search results or None if missing/stale.
@@ -307,6 +318,7 @@ async def get_standards_search(self, query: str) -> list[dict[str, Any]] | None:
         return None
     return json.loads(row[0])  # type: ignore[no-any-return]
 
+
 async def set_standards_search(self, query: str, data: list[dict[str, Any]]) -> None:
     """Cache standards search results.
 
@@ -321,6 +333,7 @@ async def set_standards_search(self, query: str, data: list[dict[str, Any]]) -> 
         (query_hash, json.dumps(data), time.time()),
     )
     await db.commit()
+
 
 async def get_standards_index(self, body: str) -> list[dict[str, Any]] | None:
     """Return cached standards catalogue index for a body, or None if stale.
@@ -339,6 +352,7 @@ async def get_standards_index(self, body: str) -> list[dict[str, Any]] | None:
     if row is None or time.time() - row[1] > _STANDARD_INDEX_TTL:
         return None
     return json.loads(row[0])  # type: ignore[no-any-return]
+
 
 async def set_standards_index(self, body: str, data: list[dict[str, Any]]) -> None:
     """Cache a standards catalogue index for a body.
@@ -360,15 +374,17 @@ async def set_standards_index(self, body: str, data: list[dict[str, Any]]) -> No
 After the Book methods block, add:
 
 ```python
-    # Standards methods
-    async def get_standard(self, identifier: str) -> dict[str, Any] | None: ...
-    async def set_standard(self, identifier: str, data: dict[str, Any]) -> None: ...
-    async def get_standard_alias(self, raw: str) -> str | None: ...
-    async def set_standard_alias(self, raw: str, canonical: str) -> None: ...
-    async def get_standards_search(self, query: str) -> list[dict[str, Any]] | None: ...
-    async def set_standards_search(self, query: str, data: list[dict[str, Any]]) -> None: ...
-    async def get_standards_index(self, body: str) -> list[dict[str, Any]] | None: ...
-    async def set_standards_index(self, body: str, data: list[dict[str, Any]]) -> None: ...
+# Standards methods
+async def get_standard(self, identifier: str) -> dict[str, Any] | None: ...
+async def set_standard(self, identifier: str, data: dict[str, Any]) -> None: ...
+async def get_standard_alias(self, raw: str) -> str | None: ...
+async def set_standard_alias(self, raw: str, canonical: str) -> None: ...
+async def get_standards_search(self, query: str) -> list[dict[str, Any]] | None: ...
+async def set_standards_search(
+    self, query: str, data: list[dict[str, Any]]
+) -> None: ...
+async def get_standards_index(self, body: str) -> list[dict[str, Any]] | None: ...
+async def set_standards_index(self, body: str, data: list[dict[str, Any]]) -> None: ...
 ```
 
 Also add `StandardRecord` import to `_protocols.py`, actually it is not needed for the protocol methods (they use `dict[str, Any]`). Keep `_protocols.py` imports as-is.
@@ -417,6 +433,7 @@ from scholar_mcp._standards_client import _resolve_identifier_local
 
 # --- Resolver: IETF ---
 
+
 def test_resolve_rfc_with_space() -> None:
     result = _resolve_identifier_local("RFC 9000")
     assert result == ("RFC 9000", "IETF")
@@ -438,6 +455,7 @@ def test_resolve_rfc_tls() -> None:
 
 
 # --- Resolver: NIST SP ---
+
 
 def test_resolve_nist_sp_full() -> None:
     result = _resolve_identifier_local("NIST SP 800-53 Rev. 5")
@@ -476,6 +494,7 @@ def test_resolve_nistir() -> None:
 
 # --- Resolver: W3C ---
 
+
 def test_resolve_wcag_with_prefix() -> None:
     result = _resolve_identifier_local("W3C WCAG 2.1")
     assert result == ("WCAG 2.1", "W3C")
@@ -493,6 +512,7 @@ def test_resolve_wcag_no_space() -> None:
 
 # --- Resolver: ETSI ---
 
+
 def test_resolve_etsi_en_with_spaces() -> None:
     result = _resolve_identifier_local("ETSI EN 303 645")
     assert result == ("ETSI EN 303 645", "ETSI")
@@ -504,6 +524,7 @@ def test_resolve_etsi_en_no_spaces() -> None:
 
 
 # --- Resolver: unrecognised ---
+
 
 def test_resolve_unknown_returns_none() -> None:
     result = _resolve_identifier_local("some random text")
@@ -557,13 +578,9 @@ _NIST_SP_REV_RE = re.compile(
     r"(?i)\b(?:nist\s+)?sp\s*(\d{3,4}(?:-\d+)?[A-Z]?)\s*r(?:ev\.?\s*)?(\d)\b"
 )
 # NIST SP without revision: "NIST SP 800-53", "SP800-53", "nist 800-53"
-_NIST_SP_RE = re.compile(
-    r"(?i)\b(?:nist\s+)?sp\s*(\d{3,4}(?:-\d+)?[A-Z]?)\b"
-)
+_NIST_SP_RE = re.compile(r"(?i)\b(?:nist\s+)?sp\s*(\d{3,4}(?:-\d+)?[A-Z]?)\b")
 # NIST SP shorthand: "nist 800-53 rev 5" (number only after "nist")
-_NIST_NUM_REV_RE = re.compile(
-    r"(?i)\bnist\s+(\d{3,4}(?:-\d+)?)\s+r(?:ev\.?\s*)?(\d)\b"
-)
+_NIST_NUM_REV_RE = re.compile(r"(?i)\bnist\s+(\d{3,4}(?:-\d+)?)\s+r(?:ev\.?\s*)?(\d)\b")
 _NIST_NUM_RE = re.compile(r"(?i)\bnist\s+(\d{3,4}(?:-\d+)?)\b")
 # NIST FIPS: "FIPS 140-3", "FIPS140-3"
 _NIST_FIPS_RE = re.compile(r"(?i)\bfips\s*(\d{2,3}(?:-\d+)?)\b")
@@ -575,7 +592,9 @@ _W3C_WCAG_RE = re.compile(r"(?i)\bwcag\s*(\d+\.\d+)\b")
 _W3C_WEBAUTHN_RE = re.compile(r"(?i)\bwebauthn\s+level\s+(\d+)\b")
 
 # ETSI: "ETSI EN 303 645", "etsi en 303645", "ETSI TS 102 165"
-_ETSI_RE = re.compile(r"(?i)\b(?:etsi\s+)?(EN|TS|TR|ES|EG)\s*(\d{3})\s*[\s-]?\s*(\d{3})\b")
+_ETSI_RE = re.compile(
+    r"(?i)\b(?:etsi\s+)?(EN|TS|TR|ES|EG)\s*(\d{3})\s*[\s-]?\s*(\d{3})\b"
+)
 
 
 def _resolve_identifier_local(raw: str) -> tuple[str, str] | None:
@@ -735,7 +754,9 @@ async def test_ietf_get_rfc(respx_mock: respx.MockRouter) -> None:
 @pytest.mark.respx(base_url=IETF_BASE)
 async def test_ietf_get_not_found(respx_mock: respx.MockRouter) -> None:
     respx_mock.get("/api/v1/doc/document/").mock(
-        return_value=httpx.Response(200, json={"objects": [], "meta": {"total_count": 0}})
+        return_value=httpx.Response(
+            200, json={"objects": [], "meta": {"total_count": 0}}
+        )
     )
     http = httpx.AsyncClient()
     fetcher = _IETFFetcher(http, RateLimiter(delay=0.0))
@@ -867,7 +888,9 @@ def _normalize_ietf(obj: dict) -> StandardRecord:  # type: ignore[type-arg]
         superseded_by=None,
         supersedes=[],
         scope=obj.get("abstract"),
-        committee=obj.get("group", {}).get("acronym") if isinstance(obj.get("group"), dict) else None,
+        committee=obj.get("group", {}).get("acronym")
+        if isinstance(obj.get("group"), dict)
+        else None,
         url=f"{_RFC_EDITOR_BASE}/info/rfc{n}",
         full_text_url=f"{_RFC_EDITOR_BASE}/rfc/rfc{n}.html",
         full_text_available=True,
@@ -1054,7 +1077,8 @@ class _NISTFetcher:
         all_pubs = await self._fetch_all()
         q = query.lower()
         matches = [
-            p for p in all_pubs
+            p
+            for p in all_pubs
             if q in (p.get("docIdentifier") or "").lower()
             or q in (p.get("title") or "").lower()
             or q in (p.get("number") or "").lower()
@@ -1109,7 +1133,13 @@ def _normalize_nist(pub: dict) -> StandardRecord:  # type: ignore[type-arg]
 
     pdf_url: str | None = pub.get("pdfUrl") or pub.get("doiUrl")
     status_raw = (pub.get("status") or "").lower()
-    status = "published" if "final" in status_raw else "draft" if "draft" in status_raw else "published"
+    status = (
+        "published"
+        if "final" in status_raw
+        else "draft"
+        if "draft" in status_raw
+        else "published"
+    )
 
     return StandardRecord(
         identifier=canonical,
@@ -1216,9 +1246,7 @@ async def test_w3c_get(respx_mock: respx.MockRouter) -> None:
 
 @pytest.mark.respx(base_url=W3C_API_BASE)
 async def test_w3c_get_not_found(respx_mock: respx.MockRouter) -> None:
-    respx_mock.get("/specifications/UNKNOWNSPEC").mock(
-        return_value=httpx.Response(404)
-    )
+    respx_mock.get("/specifications/UNKNOWNSPEC").mock(return_value=httpx.Response(404))
     http = httpx.AsyncClient()
     fetcher = _W3CFetcher(http, RateLimiter(delay=0.0))
     record = await fetcher.get("UNKNOWN SPEC 99.9")
@@ -1317,7 +1345,9 @@ class _W3CFetcher:
         if resp.status_code != 200:
             return []
         data = resp.json()
-        specs = (data.get("results") or data.get("_embedded", {}).get("specifications", []))[:limit]
+        specs = (
+            data.get("results") or data.get("_embedded", {}).get("specifications", [])
+        )[:limit]
         return [_normalize_w3c(s) for s in specs]
 
 
@@ -1438,7 +1468,9 @@ async def test_etsi_index_built_on_first_search(respx_mock: respx.MockRouter) ->
 
 
 @pytest.mark.respx(base_url=ETSI_BASE)
-async def test_etsi_search_cached_index_skips_network(respx_mock: respx.MockRouter) -> None:
+async def test_etsi_search_cached_index_skips_network(
+    respx_mock: respx.MockRouter,
+) -> None:
     """Second search with warm index should not call ETSI network."""
     call_count = 0
 
@@ -1549,26 +1581,30 @@ class _ETSIFetcher:
             if not m:
                 continue
             canonical = f"ETSI {m.group(1).upper()} {m.group(2)} {m.group(3)}"
-            records.append(StandardRecord(
-                identifier=canonical,
-                aliases=[raw_id] if raw_id != canonical else [],
-                title=title,
-                body="ETSI",
-                number=f"{m.group(2)} {m.group(3)}",
-                revision=None,
-                status="published",
-                published_date=cells[3].get_text(strip=True) if len(cells) > 3 else None,
-                withdrawn_date=None,
-                superseded_by=None,
-                supersedes=[],
-                scope=None,
-                committee=None,
-                url=f"{_ETSI_BASE}{_ETSI_SEARCH}",
-                full_text_url=pdf_url if pdf_url.endswith(".pdf") else None,
-                full_text_available=pdf_url.endswith(".pdf"),
-                price=None,
-                related=[],
-            ))
+            records.append(
+                StandardRecord(
+                    identifier=canonical,
+                    aliases=[raw_id] if raw_id != canonical else [],
+                    title=title,
+                    body="ETSI",
+                    number=f"{m.group(2)} {m.group(3)}",
+                    revision=None,
+                    status="published",
+                    published_date=cells[3].get_text(strip=True)
+                    if len(cells) > 3
+                    else None,
+                    withdrawn_date=None,
+                    superseded_by=None,
+                    supersedes=[],
+                    scope=None,
+                    committee=None,
+                    url=f"{_ETSI_BASE}{_ETSI_SEARCH}",
+                    full_text_url=pdf_url if pdf_url.endswith(".pdf") else None,
+                    full_text_available=pdf_url.endswith(".pdf"),
+                    price=None,
+                    related=[],
+                )
+            )
 
         logger.info("etsi_catalogue_indexed count=%d", len(records))
         return records
@@ -1589,8 +1625,10 @@ class _ETSIFetcher:
         index = await self._ensure_index()
         q = query.lower().replace(" ", "").replace("-", "")
         matches = [
-            r for r in index
-            if q in (r.get("identifier") or "").lower().replace(" ", "").replace("-", "")
+            r
+            for r in index
+            if q
+            in (r.get("identifier") or "").lower().replace(" ", "").replace("-", "")
             or q in (r.get("title") or "").lower()
         ]
         return matches[:limit]
@@ -1649,7 +1687,9 @@ from scholar_mcp._standards_client import StandardsClient
 
 
 @pytest.mark.respx(base_url=IETF_BASE)
-async def test_standards_client_resolve_ietf_local(respx_mock: respx.MockRouter) -> None:
+async def test_standards_client_resolve_ietf_local(
+    respx_mock: respx.MockRouter,
+) -> None:
     """Local resolution needs no network call."""
     http = httpx.AsyncClient()
     client = StandardsClient(http)
@@ -1662,7 +1702,9 @@ async def test_standards_client_resolve_ietf_local(respx_mock: respx.MockRouter)
 
 
 @pytest.mark.respx(base_url=IETF_BASE)
-async def test_standards_client_search_body_filter(respx_mock: respx.MockRouter) -> None:
+async def test_standards_client_search_body_filter(
+    respx_mock: respx.MockRouter,
+) -> None:
     respx_mock.get("/api/v1/doc/document/").mock(
         return_value=httpx.Response(200, json=SAMPLE_RFC9000_SEARCH)
     )
@@ -1709,7 +1751,9 @@ class StandardsClient:
         w3c_limiter = RateLimiter(delay=_W3C_DELAY)
         etsi_limiter = RateLimiter(delay=_ETSI_DELAY)
         self._http = http
-        self._fetchers: dict[str, _IETFFetcher | _NISTFetcher | _W3CFetcher | _ETSIFetcher] = {
+        self._fetchers: dict[
+            str, _IETFFetcher | _NISTFetcher | _W3CFetcher | _ETSIFetcher
+        ] = {
             "IETF": _IETFFetcher(http, ietf_limiter),
             "NIST": _NISTFetcher(http, nist_limiter),
             "W3C": _W3CFetcher(http, w3c_limiter),
@@ -1741,6 +1785,7 @@ class StandardsClient:
 
         # Search all sources concurrently and merge
         import asyncio
+
         results_per_body = await asyncio.gather(
             *(f.search(query, limit=limit) for f in self._fetchers.values()),
             return_exceptions=True,
@@ -1801,7 +1846,11 @@ class StandardsClient:
                 if record is not None:
                     return [record]
             # Return a stub if fetcher fails
-            return [StandardRecord(identifier=canonical, body=body, title="", full_text_available=False)]
+            return [
+                StandardRecord(
+                    identifier=canonical, body=body, title="", full_text_available=False
+                )
+            ]
 
         # No local resolution, fall back to API search across all bodies
         results = await self.search(raw, limit=5)
@@ -1985,18 +2034,24 @@ async def test_resolve_unambiguous(respx_mock: respx.MockRouter, mcp: FastMCP) -
         return_value=httpx.Response(200, json=SAMPLE_RFC_DOC)
     )
     async with Client(mcp) as client:
-        result = await client.call_tool("resolve_standard_identifier", {"raw": "rfc9000"})
+        result = await client.call_tool(
+            "resolve_standard_identifier", {"raw": "rfc9000"}
+        )
     data = json.loads(result.content[0].text)
     assert data["canonical"] == "RFC 9000"
     assert data["body"] == "IETF"
     assert data["record"] is not None
-    assert data["record"]["title"] == "QUIC: A UDP-Based Multiplexed and Secure Transport"
+    assert (
+        data["record"]["title"] == "QUIC: A UDP-Based Multiplexed and Secure Transport"
+    )
 
 
 async def test_resolve_unknown_returns_null(mcp: FastMCP) -> None:
     """resolve_standard_identifier returns nulls for unknown input."""
     async with Client(mcp) as client:
-        result = await client.call_tool("resolve_standard_identifier", {"raw": "totally unknown xyz"})
+        result = await client.call_tool(
+            "resolve_standard_identifier", {"raw": "totally unknown xyz"}
+        )
     data = json.loads(result.content[0].text)
     assert data["canonical"] is None
     assert data["body"] is None
@@ -2009,10 +2064,18 @@ async def test_resolve_uses_alias_cache(mcp: FastMCP, bundle: ServiceBundle) -> 
     await bundle.cache.set_standard_alias("rfc9000", "RFC 9000")
     await bundle.cache.set_standard(
         "RFC 9000",
-        {"identifier": "RFC 9000", "title": "QUIC", "body": "IETF", "full_text_available": True, "url": "https://rfc-editor.org/info/rfc9000"},
+        {
+            "identifier": "RFC 9000",
+            "title": "QUIC",
+            "body": "IETF",
+            "full_text_available": True,
+            "url": "https://rfc-editor.org/info/rfc9000",
+        },
     )
     async with Client(mcp) as client:
-        result = await client.call_tool("resolve_standard_identifier", {"raw": "rfc9000"})
+        result = await client.call_tool(
+            "resolve_standard_identifier", {"raw": "rfc9000"}
+        )
     data = json.loads(result.content[0].text)
     assert data["canonical"] == "RFC 9000"
     assert data["record"]["title"] == "QUIC"
@@ -2090,7 +2153,11 @@ def register_standards_tools(mcp: FastMCP) -> None:
             cached_record = await bundle.cache.get_standard(cached_canonical)
             if cached_record is not None:
                 return json.dumps(
-                    {"canonical": cached_canonical, "body": cached_record.get("body"), "record": cached_record}
+                    {
+                        "canonical": cached_canonical,
+                        "body": cached_record.get("body"),
+                        "record": cached_record,
+                    }
                 )
 
         # 2. Try local regex
@@ -2102,7 +2169,9 @@ def register_standards_tools(mcp: FastMCP) -> None:
             if record is not None:
                 await bundle.cache.set_standard_alias(raw, canonical)
                 await bundle.cache.set_standard(canonical, record)
-                return json.dumps({"canonical": canonical, "body": body, "record": record})
+                return json.dumps(
+                    {"canonical": canonical, "body": body, "record": record}
+                )
             # Return with stub record when fetch fails
             return json.dumps({"canonical": canonical, "body": body, "record": None})
 
@@ -2173,7 +2242,9 @@ async def test_search_standards_caches_results(
         return_value=httpx.Response(200, json=SAMPLE_RFC_DOC)
     )
     async with Client(mcp) as client:
-        await client.call_tool("search_standards", {"query": "cache test", "body": "IETF"})
+        await client.call_tool(
+            "search_standards", {"query": "cache test", "body": "IETF"}
+        )
 
     cached = await bundle.cache.get_standards_search("q=cache test:body=IETF:limit=10")
     assert cached is not None
@@ -2317,7 +2388,9 @@ async def test_get_standard_not_found(
     respx_mock: respx.MockRouter, mcp: FastMCP
 ) -> None:
     respx_mock.get("/api/v1/doc/document/").mock(
-        return_value=httpx.Response(200, json={"objects": [], "meta": {"total_count": 0}})
+        return_value=httpx.Response(
+            200, json={"objects": [], "meta": {"total_count": 0}}
+        )
     )
     async with Client(mcp) as client:
         result = await client.call_tool("get_standard", {"identifier": "RFC 99999"})
@@ -2555,7 +2628,10 @@ async def _handle_full_text(record: dict, bundle: ServiceBundle) -> str:  # type
         return json.dumps(record)
 
     if bundle.docling is None:
-        logger.debug("full_text_requested_but_docling_not_configured id=%s", record.get("identifier"))
+        logger.debug(
+            "full_text_requested_but_docling_not_configured id=%s",
+            record.get("identifier"),
+        )
         return json.dumps(record)
 
     url = record["full_text_url"]
@@ -2568,12 +2644,12 @@ async def _handle_full_text(record: dict, bundle: ServiceBundle) -> str:  # type
     try:
         return await _convert(retry=False)
     except RateLimitedError:
-        task_id = bundle.tasks.submit(
-            _convert(retry=True), tool="get_standard"
-        )
+        task_id = bundle.tasks.submit(_convert(retry=True), tool="get_standard")
         return json.dumps({"queued": True, "task_id": task_id, "tool": "get_standard"})
     except Exception as exc:
-        logger.warning("full_text_conversion_failed id=%s err=%s", record.get("identifier"), exc)
+        logger.warning(
+            "full_text_conversion_failed id=%s err=%s", record.get("identifier"), exc
+        )
         return json.dumps(record)
 ```
 

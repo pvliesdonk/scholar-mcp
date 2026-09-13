@@ -73,24 +73,33 @@ docs/
 ```python
 @dataclass(frozen=True)
 class RelatonConfig:
-    body: str                  # "ISO" or "IEC"
-    repo: str                  # "relaton/relaton-data-iso"
+    body: str  # "ISO" or "IEC"
+    repo: str  # "relaton/relaton-data-iso"
     branch: str = "main"
+
 
 _RELATON_BODIES: dict[str, RelatonConfig] = {
     "ISO": RelatonConfig(body="ISO", repo="relaton/relaton-data-iso"),
     "IEC": RelatonConfig(body="IEC", repo="relaton/relaton-data-iec"),
 }
 
+
 class RelatonLoader:
     """One instance per body. Conforms to standards_sync.Loader Protocol."""
 
-    def __init__(self, body: str, *, http: httpx.AsyncClient | None = None,
-                 token: str | None = None) -> None: ...
+    def __init__(
+        self,
+        body: str,
+        *,
+        http: httpx.AsyncClient | None = None,
+        token: str | None = None,
+    ) -> None: ...
 
     body: str  # set in __init__
 
-    async def sync(self, cache: CacheProtocol, *, force: bool = False) -> SyncReport: ...
+    async def sync(
+        self, cache: CacheProtocol, *, force: bool = False
+    ) -> SyncReport: ...
 ```
 
 ### Sync algorithm
@@ -211,9 +220,11 @@ In `_standards_client.resolve_identifier_local`, after the existing tier-1 patte
 
 ```python
 # ISO joint with IEC: must check before plain ISO/IEC to claim the joint form first
-_ISO_IEC_JOINT_RE = re.compile(r"(?i)\b(?:iso[/\s]*iec|iec[/\s]*iso)\s*(\d{1,5}(?:-\d+)*)\s*[:\s-]\s*(\d{4})\b")
-_ISO_RE          = re.compile(r"(?i)\biso\s*(\d{1,5}(?:-\d+)*)\s*[:\s-]\s*(\d{4})\b")
-_IEC_RE          = re.compile(r"(?i)\biec\s*(\d{1,5}(?:-\d+)*)\s*[:\s-]\s*(\d{4})\b")
+_ISO_IEC_JOINT_RE = re.compile(
+    r"(?i)\b(?:iso[/\s]*iec|iec[/\s]*iso)\s*(\d{1,5}(?:-\d+)*)\s*[:\s-]\s*(\d{4})\b"
+)
+_ISO_RE = re.compile(r"(?i)\biso\s*(\d{1,5}(?:-\d+)*)\s*[:\s-]\s*(\d{4})\b")
+_IEC_RE = re.compile(r"(?i)\biec\s*(\d{1,5}(?:-\d+)*)\s*[:\s-]\s*(\d{4})\b")
 ```
 
 Returned canonicals: `"ISO/IEC 27001:2022"`, `"ISO 9001:2015"`, `"IEC 62443-3-3:2020"`.

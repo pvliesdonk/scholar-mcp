@@ -231,7 +231,7 @@ class ServiceBundle:
     s2: S2Client
     openalex: OpenAlexClient
     docling: DoclingClient | None
-    epo: EpoClient | None          # NEW
+    epo: EpoClient | None  # NEW
     cache: ScholarCache
     config: ServerConfig
     tasks: TaskQueue

@@ -29,9 +29,9 @@ architecture from day one.
 ```python
 @runtime_checkable
 class Enricher(Protocol):
-    name: str              # such as "openalex", "crossref", "google_books"
-    phase: int             # execution order group (0 = primary, 1 = secondary)
-    tags: frozenset[str]   # such as {"papers"}, {"books"}, {"papers", "books"}
+    name: str  # such as "openalex", "crossref", "google_books"
+    phase: int  # execution order group (0 = primary, 1 = secondary)
+    tags: frozenset[str]  # such as {"papers"}, {"books"}, {"papers", "books"}
 
     def can_enrich(self, record: dict[str, Any]) -> bool:
         """Fast predicate, no I/O. Checks if this enricher applies."""

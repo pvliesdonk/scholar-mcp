@@ -111,16 +111,16 @@ Plain dict with the following keys:
     "authors": list[str],
     "publisher": str | None,
     "year": int | None,
-    "edition": str | None,              # such as "3rd edition"
+    "edition": str | None,  # such as "3rd edition"
     "isbn_10": str | None,
     "isbn_13": str | None,
     "openlibrary_work_id": str | None,
     "openlibrary_edition_id": str | None,
-    "cover_url": str | None,            # Open Library cover image URL
-    "google_books_url": None,            # reserved, always None for now
+    "cover_url": str | None,  # Open Library cover image URL
+    "google_books_url": None,  # reserved, always None for now
     "subjects": list[str],
     "page_count": int | None,
-    "description": str | None,           # short blurb if available
+    "description": str | None,  # short blurb if available
 }
 ```
 

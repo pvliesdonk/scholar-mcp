@@ -29,6 +29,7 @@ Implementation order: typing foundations first (#63, #55), then features
 ```python
 from typing import TypedDict
 
+
 class BookRecord(TypedDict, total=False):
     title: str
     authors: list[str]
@@ -144,9 +145,7 @@ requests only happen on the first lookup per ISBN/work.
 ### New: `OpenLibraryClient.get_subject()`
 
 ```python
-async def get_subject(
-    self, subject: str, *, limit: int = 10
-) -> dict[str, Any] | None:
+async def get_subject(self, subject: str, *, limit: int = 10) -> dict[str, Any] | None:
     """Fetch books for a subject from /subjects/{subject}.json."""
 ```
 

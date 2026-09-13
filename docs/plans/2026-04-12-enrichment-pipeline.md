@@ -329,9 +329,7 @@ class EnrichmentPipeline:
             try:
                 await enricher.enrich(record, bundle)
             except Exception:
-                logger.debug(
-                    "enricher_failed name=%s", enricher.name, exc_info=True
-                )
+                logger.debug("enricher_failed name=%s", enricher.name, exc_info=True)
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
@@ -485,9 +483,7 @@ class OpenAlexEnricher:
         try:
             cached = await bundle.cache.get_openalex(doi)
             oa_data = (
-                cached
-                if cached is not None
-                else await bundle.openalex.get_by_doi(doi)
+                cached if cached is not None else await bundle.openalex.get_by_doi(doi)
             )
             if oa_data is None:
                 return
@@ -647,9 +643,7 @@ class OpenLibraryEnricher:
         try:
             await _enrich_one(record, bundle)
         except RateLimitedError:
-            logger.debug(
-                "openlibrary_rate_limited paper=%s", record.get("paperId")
-            )
+            logger.debug("openlibrary_rate_limited paper=%s", record.get("paperId"))
         except Exception:
             logger.debug(
                 "openlibrary_enrich_failed paper=%s",
@@ -707,10 +701,12 @@ from ._enricher_openlibrary import OpenLibraryEnricher
 
 After the `standards` client creation (after line 131) and before the `bundle = ServiceBundle(` line, add:
 ```python
-    enrichment = EnrichmentPipeline([
+enrichment = EnrichmentPipeline(
+    [
         OpenAlexEnricher(),
         OpenLibraryEnricher(),
-    ])
+    ]
+)
 ```
 
 Add `enrichment=enrichment` to the `ServiceBundle(...)` constructor call.
@@ -726,10 +722,14 @@ from scholar_mcp._enricher_openlibrary import OpenLibraryEnricher
 
 Add to the `ServiceBundle(...)` call in the `bundle` fixture:
 ```python
-        enrichment=EnrichmentPipeline([
+enrichment = (
+    EnrichmentPipeline(
+        [
             OpenAlexEnricher(),
             OpenLibraryEnricher(),
-        ]),
+        ]
+    ),
+)
 ```
 
 - [ ] **Step 4: Replace `enrich_books()` calls in `_tools_search.py`**
@@ -838,7 +838,9 @@ async def test_get_by_doi_returns_none_on_error(client: CrossRefClient) -> None:
     response = MagicMock()
     response.status_code = 500
     response.raise_for_status = MagicMock(
-        side_effect=httpx.HTTPStatusError("error", request=MagicMock(), response=response)
+        side_effect=httpx.HTTPStatusError(
+            "error", request=MagicMock(), response=response
+        )
     )
     client._client.get = AsyncMock(return_value=response)
     result = await client.get_by_doi("10.1234/broken")
@@ -959,37 +961,38 @@ CREATE INDEX IF NOT EXISTS idx_crossref_cached ON crossref(cached_at);
 
 Add cache methods after the book methods section (after `set_book_subject`):
 ```python
-    async def get_crossref(self, doi: str) -> dict[str, Any] | None:
-        """Return cached CrossRef data by DOI or None if missing/stale.
+async def get_crossref(self, doi: str) -> dict[str, Any] | None:
+    """Return cached CrossRef data by DOI or None if missing/stale.
 
-        Args:
-            doi: DOI string.
+    Args:
+        doi: DOI string.
 
-        Returns:
-            CrossRef metadata dict or None.
-        """
-        db = _require_open(self._db)
-        async with db.execute(
-            "SELECT data, cached_at FROM crossref WHERE doi = ?", (doi,)
-        ) as cur:
-            row = await cur.fetchone()
-        if row is None or time.time() - row[1] > _CROSSREF_TTL:
-            return None
-        return json.loads(row[0])
+    Returns:
+        CrossRef metadata dict or None.
+    """
+    db = _require_open(self._db)
+    async with db.execute(
+        "SELECT data, cached_at FROM crossref WHERE doi = ?", (doi,)
+    ) as cur:
+        row = await cur.fetchone()
+    if row is None or time.time() - row[1] > _CROSSREF_TTL:
+        return None
+    return json.loads(row[0])
 
-    async def set_crossref(self, doi: str, data: dict[str, Any]) -> None:
-        """Cache CrossRef data by DOI.
 
-        Args:
-            doi: DOI string.
-            data: CrossRef metadata dict.
-        """
-        db = _require_open(self._db)
-        await db.execute(
-            "INSERT OR REPLACE INTO crossref (doi, data, cached_at) VALUES (?, ?, ?)",
-            (doi, json.dumps(data), time.time()),
-        )
-        await db.commit()
+async def set_crossref(self, doi: str, data: dict[str, Any]) -> None:
+    """Cache CrossRef data by DOI.
+
+    Args:
+        doi: DOI string.
+        data: CrossRef metadata dict.
+    """
+    db = _require_open(self._db)
+    await db.execute(
+        "INSERT OR REPLACE INTO crossref (doi, data, cached_at) VALUES (?, ?, ?)",
+        (doi, json.dumps(data), time.time()),
+    )
+    await db.commit()
 ```
 
 - [ ] **Step 7: Run full test suite**
@@ -1155,9 +1158,7 @@ class CrossRefEnricher:
         try:
             cached = await bundle.cache.get_crossref(doi)
             cr_data = (
-                cached
-                if cached is not None
-                else await bundle.crossref.get_by_doi(doi)
+                cached if cached is not None else await bundle.crossref.get_by_doi(doi)
             )
             if cr_data is None:
                 return
@@ -1217,10 +1218,8 @@ from scholar_mcp._enricher_crossref import CrossRefEnricher
 
 In the `bundle` fixture, create and add:
 ```python
-    crossref_http = httpx.AsyncClient(
-        base_url="https://api.crossref.org", timeout=10.0
-    )
-    crossref = CrossRefClient(crossref_http)
+crossref_http = httpx.AsyncClient(base_url="https://api.crossref.org", timeout=10.0)
+crossref = CrossRefClient(crossref_http)
 ```
 
 Add `crossref=crossref` to `ServiceBundle(...)`.
@@ -1421,9 +1420,7 @@ class GoogleBooksClient:
             Volume dict, or None if not found.
         """
         try:
-            r = await self._client.get(
-                f"/volumes/{volume_id}", params=self._params()
-            )
+            r = await self._client.get(f"/volumes/{volume_id}", params=self._params())
             if r.status_code == 404:
                 return None
             r.raise_for_status()
@@ -1458,7 +1455,7 @@ Add field to `ServerConfig` (after line 40, before `epo_configured` property):
 
 Add to `load_config()` return statement (after `epo_consumer_secret` line):
 ```python
-        google_books_api_key=_str("GOOGLE_BOOKS_API_KEY"),
+google_books_api_key = (_str("GOOGLE_BOOKS_API_KEY"),)
 ```
 
 - [ ] **Step 6: Add Google Books cache protocol, schema, and implementation**
@@ -1489,37 +1486,38 @@ CREATE INDEX IF NOT EXISTS idx_google_books_cached ON google_books(cached_at);
 
 Add cache methods after the CrossRef methods:
 ```python
-    async def get_google_books(self, isbn: str) -> dict[str, Any] | None:
-        """Return cached Google Books data by ISBN or None if missing/stale.
+async def get_google_books(self, isbn: str) -> dict[str, Any] | None:
+    """Return cached Google Books data by ISBN or None if missing/stale.
 
-        Args:
-            isbn: ISBN-13 string.
+    Args:
+        isbn: ISBN-13 string.
 
-        Returns:
-            Google Books volume dict or None.
-        """
-        db = _require_open(self._db)
-        async with db.execute(
-            "SELECT data, cached_at FROM google_books WHERE isbn = ?", (isbn,)
-        ) as cur:
-            row = await cur.fetchone()
-        if row is None or time.time() - row[1] > _GOOGLE_BOOKS_TTL:
-            return None
-        return json.loads(row[0])
+    Returns:
+        Google Books volume dict or None.
+    """
+    db = _require_open(self._db)
+    async with db.execute(
+        "SELECT data, cached_at FROM google_books WHERE isbn = ?", (isbn,)
+    ) as cur:
+        row = await cur.fetchone()
+    if row is None or time.time() - row[1] > _GOOGLE_BOOKS_TTL:
+        return None
+    return json.loads(row[0])
 
-    async def set_google_books(self, isbn: str, data: dict[str, Any]) -> None:
-        """Cache Google Books data by ISBN.
 
-        Args:
-            isbn: ISBN-13 string.
-            data: Google Books volume dict.
-        """
-        db = _require_open(self._db)
-        await db.execute(
-            "INSERT OR REPLACE INTO google_books (isbn, data, cached_at) VALUES (?, ?, ?)",
-            (isbn, json.dumps(data), time.time()),
-        )
-        await db.commit()
+async def set_google_books(self, isbn: str, data: dict[str, Any]) -> None:
+    """Cache Google Books data by ISBN.
+
+    Args:
+        isbn: ISBN-13 string.
+        data: Google Books volume dict.
+    """
+    db = _require_open(self._db)
+    await db.execute(
+        "INSERT OR REPLACE INTO google_books (isbn, data, cached_at) VALUES (?, ?, ?)",
+        (isbn, json.dumps(data), time.time()),
+    )
+    await db.commit()
 ```
 
 - [ ] **Step 7: Run full test suite**
@@ -1704,9 +1702,7 @@ class GoogleBooksEnricher:
             if snippet:
                 record["snippet"] = snippet
         except Exception:
-            logger.debug(
-                "google_books_enrich_failed isbn=%s", isbn, exc_info=True
-            )
+            logger.debug("google_books_enrich_failed isbn=%s", isbn, exc_info=True)
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
@@ -1737,12 +1733,10 @@ Add to `ServiceBundle`:
 
 In `make_service_lifespan()`, after the crossref client setup:
 ```python
-    google_books_http = httpx.AsyncClient(
-        base_url=_GOOGLE_BOOKS_BASE, headers={"User-Agent": ua}, timeout=30.0
-    )
-    google_books = GoogleBooksClient(
-        google_books_http, api_key=config.google_books_api_key
-    )
+google_books_http = httpx.AsyncClient(
+    base_url=_GOOGLE_BOOKS_BASE, headers={"User-Agent": ua}, timeout=30.0
+)
+google_books = GoogleBooksClient(google_books_http, api_key=config.google_books_api_key)
 ```
 
 Add `google_books=google_books` to `ServiceBundle(...)`.
@@ -1756,46 +1750,48 @@ In `finally`, add: `await google_books_http.aclose()`.
 Add the new tool inside `register_book_tools()`, after the existing tools:
 
 ```python
-    @mcp.tool(
-        tags={"write"},
-        annotations={
-            "readOnlyHint": False,
-            "destructiveHint": False,
-            "openWorldHint": True,
-        },
-    )
-    async def get_book_excerpt(
-        isbn: str,
-        bundle: ServiceBundle = Depends(get_bundle),
-    ) -> str:
-        """Get a book excerpt and preview info from Google Books.
+@mcp.tool(
+    tags={"write"},
+    annotations={
+        "readOnlyHint": False,
+        "destructiveHint": False,
+        "openWorldHint": True,
+    },
+)
+async def get_book_excerpt(
+    isbn: str,
+    bundle: ServiceBundle = Depends(get_bundle),
+) -> str:
+    """Get a book excerpt and preview info from Google Books.
 
-        Returns the publisher description, text snippet, and a link to
-        the Google Books preview page.
+    Returns the publisher description, text snippet, and a link to
+    the Google Books preview page.
 
-        Args:
-            isbn: ISBN-10 or ISBN-13.
+    Args:
+        isbn: ISBN-10 or ISBN-13.
 
-        Returns:
-            JSON with excerpt, description, preview availability, and link.
-        """
-        volume = await bundle.google_books.search_by_isbn(isbn)
-        if volume is None:
-            return json.dumps({"error": "not_found", "isbn": isbn})
+    Returns:
+        JSON with excerpt, description, preview availability, and link.
+    """
+    volume = await bundle.google_books.search_by_isbn(isbn)
+    if volume is None:
+        return json.dumps({"error": "not_found", "isbn": isbn})
 
-        vol_info = volume.get("volumeInfo") or {}
-        access_info = volume.get("accessInfo") or {}
-        search_info = volume.get("searchInfo") or {}
-        viewability = access_info.get("viewability", "NO_PAGES")
-        preview_available = viewability in ("PARTIAL", "ALL_PAGES")
+    vol_info = volume.get("volumeInfo") or {}
+    access_info = volume.get("accessInfo") or {}
+    search_info = volume.get("searchInfo") or {}
+    viewability = access_info.get("viewability", "NO_PAGES")
+    preview_available = viewability in ("PARTIAL", "ALL_PAGES")
 
-        return json.dumps({
+    return json.dumps(
+        {
             "excerpt": search_info.get("textSnippet"),
             "description": vol_info.get("description"),
             "source": "google_books",
             "preview_available": preview_available,
             "preview_link": vol_info.get("previewLink"),
-        })
+        }
+    )
 ```
 
 - [ ] **Step 7: Update conftest.py**
@@ -2037,9 +2033,7 @@ def test_in_book_title() -> None:
 
 
 def test_isbn_extraction() -> None:
-    hint = parse_chapter_hint(
-        "Deep Learning, MIT Press, 2016, ISBN 978-0-262-03561-3"
-    )
+    hint = parse_chapter_hint("Deep Learning, MIT Press, 2016, ISBN 978-0-262-03561-3")
     assert hint.isbn == "9780262035613"
 
 
@@ -2108,13 +2102,9 @@ _ISBN13_RE = re.compile(r"\b(97[89][\-\s]?\d[\-\s]?\d{2}[\-\s]?\d{5}[\-\s]?\d)\b
 _ISBN10_RE = re.compile(r"\b(\d[\-\s]?\d{2}[\-\s]?\d{5}[\-\s]?[\dX])\b")
 
 _CHAPTER_RE = re.compile(r"\b(?:Chapter|Ch\.|Chap\.)\s+(\d+)", re.IGNORECASE)
-_PP_RANGE_RE = re.compile(
-    r"\bpp?\.\s*(\d+)\s*[-\u2013\u2014]\s*(\d+)", re.IGNORECASE
-)
+_PP_RANGE_RE = re.compile(r"\bpp?\.\s*(\d+)\s*[-\u2013\u2014]\s*(\d+)", re.IGNORECASE)
 _PP_SINGLE_RE = re.compile(r"\bp\.\s*(\d+)\b", re.IGNORECASE)
-_PAGES_RE = re.compile(
-    r"\bpages?\s+(\d+)\s*[-\u2013\u2014]\s*(\d+)", re.IGNORECASE
-)
+_PAGES_RE = re.compile(r"\bpages?\s+(\d+)\s*[-\u2013\u2014]\s*(\d+)", re.IGNORECASE)
 _IN_TITLE_RE = re.compile(r"\bIn:\s*(.+?)(?:,\s*\d{4}|$)", re.IGNORECASE)
 
 
@@ -2271,15 +2261,19 @@ identifier string for chapter hints. Build a `chapter_info` dict:
 
 ```python
 # After paper resolution, before appending to results:
-if paper and (paper.get("book_metadata") or
-              (paper.get("crossref_metadata") or {}).get("type") == "book-chapter"):
+if paper and (
+    paper.get("book_metadata")
+    or (paper.get("crossref_metadata") or {}).get("type") == "book-chapter"
+):
     cr = paper.get("crossref_metadata") or {}
     if cr.get("type") == "book-chapter" and cr.get("page"):
         # CrossRef is authoritative
         pages = cr["page"].split("-")
         chapter_info = {
             "page_start": int(pages[0]) if pages[0].isdigit() else None,
-            "page_end": int(pages[1]) if len(pages) > 1 and pages[1].isdigit() else None,
+            "page_end": int(pages[1])
+            if len(pages) > 1 and pages[1].isdigit()
+            else None,
             "citation_source": "crossref",
         }
         if cr.get("container-title"):

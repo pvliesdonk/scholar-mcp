@@ -2,6 +2,17 @@
 
 Newest first. One entry per research pass.
 
+## 2026-09-12
+
+### GitHub planning objects
+
+Added [GitHub planning objects](github-planning-objects.md), checked against
+GitHub.com documentation and GitHub CLI 2.97.0. Covered milestone identity,
+pagination, pull request membership, nullable updates, issue hierarchy and
+dependencies, and documented attachment support. The refute pass retained the
+cross-owner REST documentation conflict and marked unreproduced UI and search
+observations explicitly. Next review: 2027-03-12.
+
 ## 2026-09-10
 
 ### Legal-status events
