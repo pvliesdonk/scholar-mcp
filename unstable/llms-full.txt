@@ -257,10 +257,14 @@ Worker tuning stays on the native `FASTMCP_DOCKET_*` variables below. Set the ba
 
 ## Logging
 
-| Variable                      | Default | Description                                                                                                                      |
-| ----------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `FASTMCP_LOG_LEVEL`           | `INFO`  | Log level for FastMCP internals and app loggers (DEBUG / INFO / WARNING / ERROR / CRITICAL). The -v CLI flag overrides to DEBUG. |
-| `FASTMCP_ENABLE_RICH_LOGGING` | `true`  | Set false for plain or structured JSON log output.                                                                               |
+`FASTMCP_ENABLE_RICH_LOGGING` picks the shape of FastMCP's own log output, the request-logging middleware included. Left on, Rich renders each record with color, a time column and the source file that emitted it. Turned off, the middleware emits one JSON object per record and the rest of FastMCP's loggers emit `LEVEL: message`. This server's own `scholar_mcp.*` lines are not affected either way: the CLI attaches its own one-line handler to the root logger.
+
+The container image and the packaged systemd unit both default it to `false`, because neither stream is a terminal. Rich falls back to 80 columns there, and a structured record does not fit in what its own columns leave, so each record wraps across three space-padded lines that neither `docker logs` nor a collector reads back. `docker logs -t` and `journalctl` both carry a timestamp per line, covering the column Rich stops printing. Both are ordinary environment defaults: `.env`, the compose `environment:` block and `/etc/scholar-mcp/env` all override them. Turning Rich back on inside a container wraps the records again unless `COLUMNS` is set too, which is what Rich reads in preference to asking the terminal.
+
+| Variable                      | Default | Description                                                                                                                                                                                                                 |
+| ----------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FASTMCP_LOG_LEVEL`           | `INFO`  | Log level for FastMCP internals and app loggers (DEBUG / INFO / WARNING / ERROR / CRITICAL). The -v CLI flag overrides to DEBUG.                                                                                            |
+| `FASTMCP_ENABLE_RICH_LOGGING` | `true`  | Rich color output for a terminal; false gives one plain or JSON line per record. Off in the container image and the systemd unit, since neither is a terminal and Rich wraps a structured record at its 80-column fallback. |
 
 ## Container runtime
 
@@ -378,7 +382,7 @@ Upgrading from a release that had `get_task_result` and `list_tasks`: those tool
 
 ### EPO throttling
 
-The patent tools wait out an amber or red EPO traffic light rather than failing on it. Each wait is longer than the 60-second lifetime of the cached light, because a shorter one would re-read the same cached colour instead of asking EPO again. Two retries follow the first attempt, so a throttled call can spend roughly three minutes waiting. That is well past `SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S`, so such a call is handed back as a job to poll rather than holding the connection open.
+The patent tools wait out an amber or red EPO traffic light rather than failing on it. Each wait is longer than the 60-second lifetime of the cached light, because a shorter one would re-read the same cached color instead of asking EPO again. Two retries follow the first attempt, so a throttled call can spend roughly three minutes waiting. That is well past `SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S`, so such a call is handed back as a job to poll rather than holding the connection open.
 
 A black light means the daily quota is spent. That does not clear until tomorrow, so it is reported at once with `"retryable": false` instead of costing the caller the full wait for the same answer.
 
@@ -2101,6 +2105,23 @@ curl -s http://localhost:8000/health/ready
 
 `SCHOLAR_MCP_HEALTH_DETAIL` decides how much the bodies say, because anyone who can reach the port can read them. `status` returns the status alone. The default, `standard`, adds the server name and version on `/health` and a verdict per check on `/health/ready`. `full` adds the exception type and a redacted reason for each check that raised, and belongs only where the port is reachable from a trusted network.
 
+### Logs
+
+The image sets `FASTMCP_ENABLE_RICH_LOGGING=false`, so `docker logs` gets one line per record: a JSON object for every MCP request the logging middleware sees, `LEVEL: message` from the rest of FastMCP. Both grep cleanly and both survive a log collector. The server's own loggers print one line either way.
+
+The reason is that a container has no terminal. Rich falls back to 80 columns, its time, level and source columns claim most of them, and a structured record then wraps across three space-padded lines that no reader and no parser puts back together. Rich's time column goes with the setting, and Docker timestamps every line it captures anyway, so `docker logs -t` prints them.
+
+This is an image default like any other, so `.env` or the compose `environment:` block overrides it. Turning Rich back on for a human reading `docker logs` needs `COLUMNS` set as well, since that is what Rich reads in place of asking a terminal it does not have. In `.env`:
+
+```
+FASTMCP_ENABLE_RICH_LOGGING=true
+COLUMNS=200
+```
+
+Records then render one line each, in color, padded out to the full width. The packaged Debian and RPM installs make the same trade for `journalctl`: the systemd unit sets `FASTMCP_ENABLE_RICH_LOGGING=false`, and `/etc/scholar-mcp/env` overrides it.
+
+`FASTMCP_LOG_LEVEL` sets how much is logged; see [Configuration](https://pvliesdonk.github.io/scholar-mcp/unstable/configuration/#logging).
+
 ## Image tags
 
 | Tag          | Contents                                                     | Updated by                                           |
@@ -2126,13 +2147,9 @@ See [Configuration](https://pvliesdonk.github.io/scholar-mcp/unstable/configurat
 
 | Variable                           | Default               | Description                                                                                                   |
 | ---------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `SCHOLAR_MCP_S2_API_KEY`           | n/a                   | Semantic Scholar API key (optional; ~1 req/s without, ~10 req/s with)                                         |
-| `SCHOLAR_MCP_CACHE_DIR`            | `/data/scholar-mcp`   | Cache and PDF storage directory                                                                               |
-| `SCHOLAR_MCP_READ_ONLY`            | `true`                | Set `false` to enable PDF tools                                                                               |
-| `SCHOLAR_MCP_DOCLING_URL`          | n/a                   | docling-serve URL (such as `http://docling-serve:5001`)                                                       |
-| `SCHOLAR_MCP_BEARER_TOKEN`         | n/a                   | Bearer token for HTTP auth                                                                                    |
-| `FASTMCP_LOG_LEVEL`                | `INFO`                | Logging level (use `-v` or set to `DEBUG` for verbose output)                                                 |
-| `FASTMCP_ENABLE_RICH_LOGGING`      | `true`                | Set `false` for structured JSON logging with aggregators                                                      |
+| `SCHOLAR_MCP_BEARER_TOKEN`         | n/a                   | Enable bearer token auth                                                                                      |
+| `FASTMCP_LOG_LEVEL`                | `INFO`                | Log level (`DEBUG` / `INFO` / `WARNING` / `ERROR`)                                                            |
+| `FASTMCP_ENABLE_RICH_LOGGING`      | `false` in the image  | Rich output; off means one plain or JSON line per record (see [Logs](#logs))                                  |
 | `SCHOLAR_MCP_INSTANCE_DESCRIPTION` | n/a                   | Routing context that distinguishes this deployment                                                            |
 | `SCHOLAR_MCP_INSTRUCTIONS_EXTRA`   | n/a                   | Deployment-specific behavioral policy added to the generated MCP instructions                                 |
 | `SCHOLAR_MCP_INSTRUCTIONS`         | (computed at startup) | Legacy full replacement of the generated instructions (deprecated)                                            |

@@ -251,6 +251,11 @@ export function generateSystemd(meta, map) {
     `# Create this user first: sudo useradd --system --no-create-home ${name}`,
     `User=${name}`,
     `ExecStart=/opt/${name}/venv/bin/${name} serve --transport http`,
+    // Same trade the packaged unit makes: journald is not a terminal, so Rich
+    // wraps every structured log record across three lines. Emitted before
+    // `envLines` because systemd lets a later Environment= win, so an operator
+    // who answered this question still gets their answer.
+    "Environment=FASTMCP_ENABLE_RICH_LOGGING=false",
     envLines,
     "Restart=on-failure",
     "",
