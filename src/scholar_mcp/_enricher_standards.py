@@ -3,7 +3,7 @@
 Attaches ``standard_metadata`` (a :class:`StandardRecord` dict) to S2
 citation records whose title is predominantly a standards identifier.
 Uses :func:`resolve_identifier_local` for detection and
-``bundle.standards.get()`` for resolution.
+``service.standards.get()`` for resolution.
 
 Design reference: ``docs/specs/2026-04-16-pr5-standards-enrichment-design.md``.
 """
@@ -66,17 +66,17 @@ class StandardsEnricher:
         canonical, _body = match
         return len(canonical) > 0.5 * len(title)
 
-    async def enrich(self, record: dict[str, Any], bundle: Any) -> None:
+    async def enrich(self, record: dict[str, Any], service: Any) -> None:
         """Resolve the standards identifier and attach metadata.
 
-        Calls ``bundle.standards.get(canonical_identifier)``. If the
+        Calls ``service.standards.get(canonical_identifier)``. If the
         standard is found (cache hit or live-fetch success), sets
         ``record["standard_metadata"]`` to the ``StandardRecord`` dict.
         If not found, does nothing — no error, no stub.
 
         Args:
             record: The paper/citation record dict to enrich in place.
-            bundle: Service bundle providing ``standards`` client.
+            service: Domain service providing ``standards`` client.
         """
         title = record.get("title")
         if not title or not isinstance(title, str):
@@ -95,7 +95,7 @@ class StandardsEnricher:
             title[:60],
         )
         try:
-            standard = await bundle.standards.get(canonical)
+            standard = await service.standards.get(canonical)
             if standard is not None:
                 record["standard_metadata"] = standard
                 logger.debug(

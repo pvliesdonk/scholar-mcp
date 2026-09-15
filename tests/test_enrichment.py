@@ -31,7 +31,7 @@ class StubEnricher:
         """Return the configured predicate value."""
         return self._can
 
-    async def enrich(self, record: dict[str, Any], bundle: Any) -> None:
+    async def enrich(self, record: dict[str, Any], service: Any) -> None:
         """Set a marker key on the record and log the call."""
         self.calls.append(record)
         record[f"enriched_by_{self.name}"] = True
@@ -54,7 +54,7 @@ class FailingEnricher:
         """Always eligible."""
         return True
 
-    async def enrich(self, record: dict[str, Any], bundle: Any) -> None:
+    async def enrich(self, record: dict[str, Any], service: Any) -> None:
         """Always raise."""
         raise RuntimeError("boom")
 
@@ -71,7 +71,7 @@ async def test_pipeline_runs_single_enricher() -> None:
     enricher = StubEnricher(name="alpha")
     pipeline = EnrichmentPipeline([enricher])
     records = [{"title": "Test"}]
-    await pipeline.enrich(records, bundle=None)
+    await pipeline.enrich(records, service=None)
     assert records[0]["enriched_by_alpha"] is True
     assert len(enricher.calls) == 1
 
@@ -82,7 +82,7 @@ async def test_pipeline_skips_when_can_enrich_false() -> None:
     enricher = StubEnricher(name="skip", can=False)
     pipeline = EnrichmentPipeline([enricher])
     records = [{"title": "Test"}]
-    await pipeline.enrich(records, bundle=None)
+    await pipeline.enrich(records, service=None)
     assert "enriched_by_skip" not in records[0]
     assert len(enricher.calls) == 0
 
@@ -94,7 +94,7 @@ async def test_pipeline_filters_by_tags() -> None:
     e2 = StubEnricher(name="b", tags=frozenset({"crossref"}))
     pipeline = EnrichmentPipeline([e1, e2])
     records = [{"title": "Test"}]
-    await pipeline.enrich(records, bundle=None, tags={"openalex"})
+    await pipeline.enrich(records, service=None, tags={"openalex"})
     assert records[0].get("enriched_by_a") is True
     assert "enriched_by_b" not in records[0]
 
@@ -115,7 +115,7 @@ async def test_pipeline_respects_phase_order() -> None:
         def can_enrich(self, record: dict[str, Any]) -> bool:
             return True
 
-        async def enrich(self, record: dict[str, Any], bundle: Any) -> None:
+        async def enrich(self, record: dict[str, Any], service: Any) -> None:
             order.append(self.name)
 
     # Register phase 1 first, phase 0 second
@@ -125,7 +125,7 @@ async def test_pipeline_respects_phase_order() -> None:
             OrderTracker("early", phase=0),
         ]
     )
-    await pipeline.enrich([{"title": "Test"}], bundle=None)
+    await pipeline.enrich([{"title": "Test"}], service=None)
     assert order == ["early", "late"]
 
 
@@ -136,7 +136,7 @@ async def test_pipeline_error_does_not_propagate() -> None:
     good = StubEnricher(name="good")
     pipeline = EnrichmentPipeline([failing, good])
     records = [{"title": "Test"}]
-    await pipeline.enrich(records, bundle=None)
+    await pipeline.enrich(records, service=None)
     assert records[0].get("enriched_by_good") is True
 
 
@@ -146,7 +146,7 @@ async def test_pipeline_multiple_records() -> None:
     enricher = StubEnricher(name="batch")
     pipeline = EnrichmentPipeline([enricher])
     records = [{"id": 1}, {"id": 2}, {"id": 3}]
-    await pipeline.enrich(records, bundle=None)
+    await pipeline.enrich(records, service=None)
     assert all(r.get("enriched_by_batch") is True for r in records)
     assert len(enricher.calls) == 3
 
@@ -169,7 +169,7 @@ async def test_pipeline_concurrency_bounded() -> None:
         def can_enrich(self, record: dict[str, Any]) -> bool:
             return True
 
-        async def enrich(self, record: dict[str, Any], bundle: Any) -> None:
+        async def enrich(self, record: dict[str, Any], service: Any) -> None:
             nonlocal peak, current
             async with lock:
                 current += 1
@@ -182,5 +182,5 @@ async def test_pipeline_concurrency_bounded() -> None:
     enricher = SlowEnricher(name="slow")
     pipeline = EnrichmentPipeline([enricher])
     records = [{"id": i} for i in range(10)]
-    await pipeline.enrich(records, bundle=None, concurrency=3)
+    await pipeline.enrich(records, service=None, concurrency=3)
     assert peak <= 3

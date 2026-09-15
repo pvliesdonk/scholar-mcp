@@ -11,17 +11,17 @@ from scholar_mcp._enricher_openalex import OpenAlexEnricher
 from scholar_mcp._enrichment import Enricher
 
 
-def _make_bundle(
+def _make_service(
     *,
     cache_hit: dict[str, Any] | None = None,
     api_result: dict[str, Any] | None = None,
 ) -> MagicMock:
-    """Create a mock ServiceBundle with configurable cache/API responses."""
-    bundle = MagicMock()
-    bundle.cache.get_openalex = AsyncMock(return_value=cache_hit)
-    bundle.cache.set_openalex = AsyncMock()
-    bundle.openalex.get_by_doi = AsyncMock(return_value=api_result)
-    return bundle
+    """Create a mock Service with configurable cache/API responses."""
+    service = MagicMock()
+    service.cache.get_openalex = AsyncMock(return_value=cache_hit)
+    service.cache.set_openalex = AsyncMock()
+    service.openalex.get_by_doi = AsyncMock(return_value=api_result)
+    return service
 
 
 def _oa_data(venue: str = "Nature") -> dict[str, Any]:
@@ -92,18 +92,18 @@ async def test_enrich_fills_venue_from_cache() -> None:
     """When cache has data, venue is filled and API is not called."""
     enricher = OpenAlexEnricher()
     oa = _oa_data("Science")
-    bundle = _make_bundle(cache_hit=oa)
+    service = _make_service(cache_hit=oa)
     record: dict[str, Any] = {
         "externalIds": {"DOI": "10.1234/cached"},
         "venue": "",
     }
 
-    await enricher.enrich(record, bundle)
+    await enricher.enrich(record, service)
 
     assert record["venue"] == "Science"
-    bundle.cache.get_openalex.assert_awaited_once_with("10.1234/cached")
-    bundle.openalex.get_by_doi.assert_not_awaited()
-    bundle.cache.set_openalex.assert_not_awaited()
+    service.cache.get_openalex.assert_awaited_once_with("10.1234/cached")
+    service.openalex.get_by_doi.assert_not_awaited()
+    service.cache.set_openalex.assert_not_awaited()
 
 
 @pytest.mark.anyio
@@ -111,32 +111,32 @@ async def test_enrich_fills_venue_from_api() -> None:
     """When cache misses, API is called, result cached, and venue filled."""
     enricher = OpenAlexEnricher()
     oa = _oa_data("Nature")
-    bundle = _make_bundle(cache_hit=None, api_result=oa)
+    service = _make_service(cache_hit=None, api_result=oa)
     record: dict[str, Any] = {
         "externalIds": {"DOI": "10.1234/fresh"},
         "venue": "",
     }
 
-    await enricher.enrich(record, bundle)
+    await enricher.enrich(record, service)
 
     assert record["venue"] == "Nature"
-    bundle.cache.get_openalex.assert_awaited_once_with("10.1234/fresh")
-    bundle.openalex.get_by_doi.assert_awaited_once_with("10.1234/fresh")
-    bundle.cache.set_openalex.assert_awaited_once_with("10.1234/fresh", oa)
+    service.cache.get_openalex.assert_awaited_once_with("10.1234/fresh")
+    service.openalex.get_by_doi.assert_awaited_once_with("10.1234/fresh")
+    service.cache.set_openalex.assert_awaited_once_with("10.1234/fresh", oa)
 
 
 @pytest.mark.anyio
 async def test_enrich_handles_error_silently() -> None:
     """Exception during enrichment is swallowed; record stays unchanged."""
     enricher = OpenAlexEnricher()
-    bundle = _make_bundle()
-    bundle.cache.get_openalex = AsyncMock(side_effect=RuntimeError("boom"))
+    service = _make_service()
+    service.cache.get_openalex = AsyncMock(side_effect=RuntimeError("boom"))
     record: dict[str, Any] = {
         "externalIds": {"DOI": "10.1234/err"},
         "venue": "",
     }
 
-    await enricher.enrich(record, bundle)
+    await enricher.enrich(record, service)
 
     assert record["venue"] == ""
 
@@ -145,16 +145,16 @@ async def test_enrich_handles_error_silently() -> None:
 async def test_enrich_no_venue_when_api_returns_none() -> None:
     """When API returns None, record stays unchanged."""
     enricher = OpenAlexEnricher()
-    bundle = _make_bundle(cache_hit=None, api_result=None)
+    service = _make_service(cache_hit=None, api_result=None)
     record: dict[str, Any] = {
         "externalIds": {"DOI": "10.1234/missing"},
         "venue": "",
     }
 
-    await enricher.enrich(record, bundle)
+    await enricher.enrich(record, service)
 
     assert record["venue"] == ""
-    bundle.cache.set_openalex.assert_not_awaited()
+    service.cache.set_openalex.assert_not_awaited()
 
 
 @pytest.mark.anyio
@@ -162,13 +162,13 @@ async def test_enrich_skips_when_no_display_name() -> None:
     """When OpenAlex data has no display_name, venue stays unchanged."""
     enricher = OpenAlexEnricher()
     oa = {"primary_location": {"source": {}}}
-    bundle = _make_bundle(cache_hit=oa)
+    service = _make_service(cache_hit=oa)
     record: dict[str, Any] = {
         "externalIds": {"DOI": "10.1234/nosource"},
         "venue": "",
     }
 
-    await enricher.enrich(record, bundle)
+    await enricher.enrich(record, service)
 
     assert record["venue"] == ""
 
@@ -177,13 +177,13 @@ async def test_enrich_skips_when_no_display_name() -> None:
 async def test_enrich_skips_when_no_doi_in_record() -> None:
     """Defensive guard: enrich returns early when DOI is missing."""
     enricher = OpenAlexEnricher()
-    bundle = _make_bundle()
+    service = _make_service()
     record: dict[str, Any] = {
         "externalIds": {},
         "venue": "",
     }
 
-    await enricher.enrich(record, bundle)
+    await enricher.enrich(record, service)
 
     assert record["venue"] == ""
-    bundle.cache.get_openalex.assert_not_awaited()
+    service.cache.get_openalex.assert_not_awaited()

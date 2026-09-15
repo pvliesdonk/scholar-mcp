@@ -38,7 +38,7 @@ class GoogleBooksEnricher:
             return False
         return bool(record.get("isbn_13") or record.get("isbn_10"))
 
-    async def enrich(self, record: dict[str, Any], bundle: Any) -> None:
+    async def enrich(self, record: dict[str, Any], service: Any) -> None:
         """Fill google_books_url and snippet from Google Books.
 
         Extracts the ISBN from the record, checks the cache, falls back
@@ -50,22 +50,22 @@ class GoogleBooksEnricher:
 
         Args:
             record: The book record dict to enrich in place.
-            bundle: Service bundle providing cache and Google Books client.
+            service: Domain service providing cache and Google Books client.
         """
         isbn = record.get("isbn_13") or record.get("isbn_10")
         if not isbn:
             return
         try:
-            cached = await bundle.cache.get_google_books(isbn)
+            cached = await service.cache.get_google_books(isbn)
             data = (
                 cached
                 if cached is not None
-                else await bundle.google_books.search_by_isbn(isbn)
+                else await service.google_books.search_by_isbn(isbn)
             )
             if data is None:
                 return
             if cached is None:
-                await bundle.cache.set_google_books(isbn, data)
+                await service.cache.set_google_books(isbn, data)
             vol_info = data.get("volumeInfo") or {}
             preview_link = vol_info.get("previewLink")
             if preview_link:

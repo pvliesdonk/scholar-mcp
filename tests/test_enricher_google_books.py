@@ -12,17 +12,17 @@ from scholar_mcp._enricher_google_books import GoogleBooksEnricher
 from scholar_mcp._enrichment import Enricher
 
 
-def _make_bundle(
+def _make_service(
     *,
     cache_hit: dict[str, Any] | None = None,
     api_result: dict[str, Any] | None = None,
 ) -> MagicMock:
-    """Create a mock ServiceBundle with configurable cache/API responses."""
-    bundle = MagicMock()
-    bundle.cache.get_google_books = AsyncMock(return_value=cache_hit)
-    bundle.cache.set_google_books = AsyncMock()
-    bundle.google_books.search_by_isbn = AsyncMock(return_value=api_result)
-    return bundle
+    """Create a mock Service with configurable cache/API responses."""
+    service = MagicMock()
+    service.cache.get_google_books = AsyncMock(return_value=cache_hit)
+    service.cache.set_google_books = AsyncMock()
+    service.google_books.search_by_isbn = AsyncMock(return_value=api_result)
+    return service
 
 
 def _gb_data(
@@ -85,16 +85,16 @@ async def test_enrich_fills_google_books_url() -> None:
     """Cache miss: API called, result cached, fields filled."""
     enricher = GoogleBooksEnricher()
     gb = _gb_data()
-    bundle = _make_bundle(cache_hit=None, api_result=gb)
+    service = _make_service(cache_hit=None, api_result=gb)
     record: dict[str, Any] = {"isbn_13": "9780201633610"}
 
-    await enricher.enrich(record, bundle)
+    await enricher.enrich(record, service)
 
     assert record["google_books_url"] == "https://books.google.com/preview"
     assert record["snippet"] == "A sample snippet"
-    bundle.cache.get_google_books.assert_awaited_once_with("9780201633610")
-    bundle.google_books.search_by_isbn.assert_awaited_once_with("9780201633610")
-    bundle.cache.set_google_books.assert_awaited_once_with("9780201633610", gb)
+    service.cache.get_google_books.assert_awaited_once_with("9780201633610")
+    service.google_books.search_by_isbn.assert_awaited_once_with("9780201633610")
+    service.cache.set_google_books.assert_awaited_once_with("9780201633610", gb)
 
 
 @pytest.mark.anyio
@@ -102,27 +102,27 @@ async def test_enrich_uses_cache() -> None:
     """Cache hit: API not called, fields filled from cached data."""
     enricher = GoogleBooksEnricher()
     gb = _gb_data()
-    bundle = _make_bundle(cache_hit=gb)
+    service = _make_service(cache_hit=gb)
     record: dict[str, Any] = {"isbn_13": "9780201633610"}
 
-    await enricher.enrich(record, bundle)
+    await enricher.enrich(record, service)
 
     assert record["google_books_url"] == "https://books.google.com/preview"
     assert record["snippet"] == "A sample snippet"
-    bundle.cache.get_google_books.assert_awaited_once_with("9780201633610")
-    bundle.google_books.search_by_isbn.assert_not_awaited()
-    bundle.cache.set_google_books.assert_not_awaited()
+    service.cache.get_google_books.assert_awaited_once_with("9780201633610")
+    service.google_books.search_by_isbn.assert_not_awaited()
+    service.cache.set_google_books.assert_not_awaited()
 
 
 @pytest.mark.anyio
 async def test_enrich_handles_error_silently() -> None:
     """Exception during enrichment is swallowed; record stays unchanged."""
     enricher = GoogleBooksEnricher()
-    bundle = _make_bundle()
-    bundle.cache.get_google_books = AsyncMock(side_effect=RuntimeError("boom"))
+    service = _make_service()
+    service.cache.get_google_books = AsyncMock(side_effect=RuntimeError("boom"))
     record: dict[str, Any] = {"isbn_13": "9780201633610"}
 
-    await enricher.enrich(record, bundle)
+    await enricher.enrich(record, service)
 
     assert "google_books_url" not in record
     assert "snippet" not in record
@@ -131,9 +131,9 @@ async def test_enrich_handles_error_silently() -> None:
 async def test_enrich_survives_a_rate_limited_lookup() -> None:
     """The client now raises on a 429; enrichment must still stay silent."""
     enricher = GoogleBooksEnricher()
-    bundle = _make_bundle()
-    bundle.cache.get_google_books = AsyncMock(return_value=None)
-    bundle.google_books.search_by_isbn = AsyncMock(
+    service = _make_service()
+    service.cache.get_google_books = AsyncMock(return_value=None)
+    service.google_books.search_by_isbn = AsyncMock(
         side_effect=httpx.HTTPStatusError(
             "429",
             request=httpx.Request("GET", "https://www.googleapis.com/books/v1/volumes"),
@@ -142,7 +142,7 @@ async def test_enrich_survives_a_rate_limited_lookup() -> None:
     )
     record: dict[str, Any] = {"isbn_13": "9780201633610"}
 
-    await enricher.enrich(record, bundle)
+    await enricher.enrich(record, service)
 
     assert "google_books_url" not in record
     assert "snippet" not in record

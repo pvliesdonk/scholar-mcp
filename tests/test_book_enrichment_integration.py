@@ -12,8 +12,8 @@ from fastmcp import FastMCP
 from fastmcp.client import Client
 from fastmcp_pvl_core import Jobs
 
-from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._tools_search import register_search_tools
+from scholar_mcp.domain import Service
 from tests.conftest import tasks_server
 
 S2_BASE = "https://api.semanticscholar.org/graph/v1"
@@ -40,10 +40,10 @@ OL_EDITION = {
 
 
 @pytest.fixture
-def mcp(bundle: ServiceBundle, slow_jobs: Jobs) -> FastMCP:
+def mcp(service: Service, slow_jobs: Jobs) -> FastMCP:
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
-        yield {"bundle": bundle}
+        yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
     register_search_tools(app, slow_jobs)

@@ -9,7 +9,7 @@ server provides are listed below.
 _None yet._
 <!-- Replace with this server's prompts — one section per prompt with its
      arguments, usage, and example output. Define them with
-     `@mcp.prompt(...)` decorators in src/scholar_mcp/_server_prompts.py
+     `@mcp.prompt(...)` decorators in src/scholar_mcp/prompts.py
      (see https://gofastmcp.com/servers/prompts). Kept across copier
      update. -->
 <!-- DOMAIN-PROMPTS-LIST-END -->

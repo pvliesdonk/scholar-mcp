@@ -12,7 +12,8 @@ from fastmcp_pvl_core import register_long_running_tool
 
 from ._citation_formatter import format_bibtex, format_csl_json, format_ris
 from ._s2_client import FIELD_SETS, s2_error_payload
-from ._server_deps import ServiceBundle, get_bundle
+from ._server_deps import get_service
+from .domain import Service
 
 if TYPE_CHECKING:
     from fastmcp_pvl_core import Jobs
@@ -32,7 +33,7 @@ async def generate_citations(
     paper_ids: list[str],
     citation_format: Literal["bibtex", "csl-json", "ris"] = "bibtex",
     enrich: bool = True,
-    bundle: ServiceBundle = Depends(get_bundle),
+    service: Service = Depends(get_service),
 ) -> dict[str, Any]:
     """Generate formatted citations for one or more papers.
 
@@ -49,7 +50,7 @@ async def generate_citations(
         citation_format: Output format — bibtex, csl-json, or ris.
         enrich: If True, attempt OpenAlex enrichment for missing venue
             data when a DOI is available.
-        bundle: Injected service bundle.
+        service: Injected service.
 
     Returns:
         ``{"format": ..., "output": ...}`` where ``output`` is the formatted
@@ -68,7 +69,9 @@ async def generate_citations(
     try:
         # batch_resolve does not pre-screen the cache (consistent
         # with the batch_resolve tool in _tools_utility.py).
-        s2_results = await bundle.s2.batch_resolve(paper_ids, fields=FIELD_SETS["full"])
+        s2_results = await service.s2.batch_resolve(
+            paper_ids, fields=FIELD_SETS["full"]
+        )
     except httpx.HTTPStatusError as exc:
         return s2_error_payload(exc)
 
@@ -82,7 +85,7 @@ async def generate_citations(
             errors.append({"identifier": raw_id, "reason": "not found"})
 
     if enrich:
-        await bundle.enrichment.enrich(papers, bundle, tags=frozenset({"papers"}))
+        await service.enrichment.enrich(papers, service, tags=frozenset({"papers"}))
 
     if not papers:
         return {

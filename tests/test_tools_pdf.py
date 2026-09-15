@@ -28,8 +28,8 @@ from fastmcp.client import Client
 from fastmcp_pvl_core import Jobs, register_job_tools
 
 from scholar_mcp._docling_client import DoclingClient
-from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._tools_pdf import register_pdf_tools
+from scholar_mcp.domain import Service
 from tests.conftest import PlainClient, tasks_server
 
 # ---------------------------------------------------------------------------
@@ -67,14 +67,14 @@ S2_BASE = "https://api.semanticscholar.org/graph/v1"
 DOCLING_BASE = "http://docling:5001"
 
 
-def pdf_app(bundle: ServiceBundle, jobs: Jobs) -> FastMCP:
+def pdf_app(service: Service, jobs: Jobs) -> FastMCP:
     """Build a FastMCP app exposing the PDF tools and the job poller.
 
     ``register_job_tools`` is registered alongside because a promoted handle
     is only resolvable through it.
 
     Args:
-        bundle: Service bundle yielded from the app's lifespan.
+        service: Domain service yielded from the app's lifespan.
         jobs: Jobs mechanics the PDF tools register against.
 
     Returns:
@@ -83,7 +83,7 @@ def pdf_app(bundle: ServiceBundle, jobs: Jobs) -> FastMCP:
 
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
-        yield {"bundle": bundle}
+        yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
     register_pdf_tools(app, jobs)
@@ -92,7 +92,7 @@ def pdf_app(bundle: ServiceBundle, jobs: Jobs) -> FastMCP:
 
 
 @pytest.fixture
-def bundle_with_docling(bundle: ServiceBundle, tmp_path: Path) -> ServiceBundle:
+def service_with_docling(service: Service, tmp_path: Path) -> Service:
     docling_http = httpx.AsyncClient(base_url=DOCLING_BASE, timeout=30.0)
     docling = DoclingClient(
         http_client=docling_http,
@@ -100,18 +100,18 @@ def bundle_with_docling(bundle: ServiceBundle, tmp_path: Path) -> ServiceBundle:
         vlm_api_key=None,
         vlm_model="gpt-4o",
     )
-    bundle.docling = docling
-    return bundle
+    service.docling = docling
+    return service
 
 
 @pytest.fixture
-def mcp_no_docling(bundle: ServiceBundle, slow_jobs: Jobs) -> FastMCP:
-    return pdf_app(bundle, slow_jobs)
+def mcp_no_docling(service: Service, slow_jobs: Jobs) -> FastMCP:
+    return pdf_app(service, slow_jobs)
 
 
 @pytest.fixture
-def mcp_with_docling(bundle_with_docling: ServiceBundle, slow_jobs: Jobs) -> FastMCP:
-    return pdf_app(bundle_with_docling, slow_jobs)
+def mcp_with_docling(service_with_docling: Service, slow_jobs: Jobs) -> FastMCP:
+    return pdf_app(service_with_docling, slow_jobs)
 
 
 async def _poll_job(
@@ -172,7 +172,7 @@ async def test_fetch_paper_pdf_no_oa(
 
 @pytest.mark.respx(base_url=S2_BASE)
 async def test_fetch_paper_pdf_cache_hit(
-    respx_mock: respx.MockRouter, mcp_no_docling: FastMCP, bundle: ServiceBundle
+    respx_mock: respx.MockRouter, mcp_no_docling: FastMCP, service: Service
 ) -> None:
     """fetch_paper_pdf returns the cached path when the PDF exists on disk."""
     respx_mock.get("/paper/p1").mock(
@@ -185,7 +185,7 @@ async def test_fetch_paper_pdf_cache_hit(
             },
         )
     )
-    pdf_dir = bundle.config.cache_dir / "pdfs"
+    pdf_dir = service.config.cache_dir / "pdfs"
     pdf_dir.mkdir(parents=True, exist_ok=True)
     pdf_path = pdf_dir / "p1.pdf"
     pdf_path.write_bytes(b"%PDF cached")
@@ -200,7 +200,7 @@ async def test_fetch_paper_pdf_cache_hit(
 
 @pytest.mark.respx(assert_all_called=False)
 async def test_fetch_paper_pdf_download_succeeds(
-    bundle: ServiceBundle, slow_jobs: Jobs
+    service: Service, slow_jobs: Jobs
 ) -> None:
     """fetch_paper_pdf downloads the PDF when it is not cached."""
     pdf_url = "https://example.com/paper.pdf"
@@ -217,7 +217,7 @@ async def test_fetch_paper_pdf_download_succeeds(
         router.get(pdf_url).mock(
             return_value=httpx.Response(200, content=b"%PDF-1.4 fake content")
         )
-        async with Client(pdf_app(bundle, slow_jobs)) as client:
+        async with Client(pdf_app(service, slow_jobs)) as client:
             result = await client.call_tool("fetch_paper_pdf", {"identifier": "dl1"})
 
     data = json.loads(result.content[0].text)
@@ -229,7 +229,7 @@ async def test_fetch_paper_pdf_download_succeeds(
 
 @pytest.mark.respx(assert_all_called=False)
 async def test_fetch_paper_pdf_rate_limited_then_succeeds(
-    bundle: ServiceBundle, slow_jobs: Jobs
+    service: Service, slow_jobs: Jobs
 ) -> None:
     """A 429 is absorbed by the client's own backoff, not by a queue hop.
 
@@ -257,7 +257,7 @@ async def test_fetch_paper_pdf_rate_limited_then_succeeds(
         router.get(pdf_url).mock(
             return_value=httpx.Response(200, content=b"%PDF rate limited ok")
         )
-        async with Client(pdf_app(bundle, slow_jobs)) as client:
+        async with Client(pdf_app(service, slow_jobs)) as client:
             result = await client.call_tool("fetch_paper_pdf", {"identifier": "rl1"})
 
     data = json.loads(result.content[0].text)
@@ -268,7 +268,7 @@ async def test_fetch_paper_pdf_rate_limited_then_succeeds(
 
 @pytest.mark.respx(assert_all_called=False)
 async def test_fetch_paper_pdf_arxiv_fallback(
-    bundle: ServiceBundle, slow_jobs: Jobs
+    service: Service, slow_jobs: Jobs
 ) -> None:
     """fetch_paper_pdf falls back to arXiv when openAccessPdf is null."""
     arxiv_pdf_url = "https://arxiv.org/pdf/2301.12345.pdf"
@@ -286,7 +286,7 @@ async def test_fetch_paper_pdf_arxiv_fallback(
         router.get(arxiv_pdf_url).mock(
             return_value=httpx.Response(200, content=b"%PDF arxiv content")
         )
-        async with Client(pdf_app(bundle, slow_jobs)) as client:
+        async with Client(pdf_app(service, slow_jobs)) as client:
             result = await client.call_tool("fetch_paper_pdf", {"identifier": "arx1"})
 
     data = json.loads(result.content[0].text)
@@ -297,7 +297,7 @@ async def test_fetch_paper_pdf_arxiv_fallback(
 
 @pytest.mark.respx(assert_all_called=False)
 async def test_fetch_paper_pdf_rate_limited_arxiv_fallback(
-    bundle: ServiceBundle, slow_jobs: Jobs
+    service: Service, slow_jobs: Jobs
 ) -> None:
     """A retried metadata fetch still reaches the arXiv fallback."""
     arxiv_pdf_url = "https://arxiv.org/pdf/2301.55555.pdf"
@@ -322,7 +322,7 @@ async def test_fetch_paper_pdf_rate_limited_arxiv_fallback(
         router.get(arxiv_pdf_url).mock(
             return_value=httpx.Response(200, content=b"%PDF arxiv rl")
         )
-        async with Client(pdf_app(bundle, slow_jobs)) as client:
+        async with Client(pdf_app(service, slow_jobs)) as client:
             result = await client.call_tool("fetch_paper_pdf", {"identifier": "rl_arx"})
 
     data = json.loads(result.content[0].text)
@@ -385,16 +385,16 @@ async def test_convert_missing_file(mcp_with_docling: FastMCP, tmp_path: Path) -
 
 
 async def test_convert_standard(
-    bundle_with_docling: ServiceBundle, tmp_path: Path, slow_jobs: Jobs
+    service_with_docling: Service, tmp_path: Path, slow_jobs: Jobs
 ) -> None:
     """convert_pdf_to_markdown converts and returns the markdown."""
     pdf = tmp_path / "paper.pdf"
     pdf.write_bytes(b"%PDF fake")
-    bundle_with_docling.docling.convert = AsyncMock(  # type: ignore[union-attr]
+    service_with_docling.docling.convert = AsyncMock(  # type: ignore[union-attr]
         return_value="# Paper\n\nText."
     )
 
-    async with Client(pdf_app(bundle_with_docling, slow_jobs)) as client:
+    async with Client(pdf_app(service_with_docling, slow_jobs)) as client:
         result = await client.call_tool(
             "convert_pdf_to_markdown", {"file_path": str(pdf)}
         )
@@ -406,16 +406,16 @@ async def test_convert_standard(
 
 
 async def test_convert_docling_failure(
-    bundle_with_docling: ServiceBundle, tmp_path: Path, slow_jobs: Jobs
+    service_with_docling: Service, tmp_path: Path, slow_jobs: Jobs
 ) -> None:
     """A docling failure inside the deadline is reported as docling_error."""
     pdf = tmp_path / "paper.pdf"
     pdf.write_bytes(b"%PDF fake")
-    bundle_with_docling.docling.convert = AsyncMock(  # type: ignore[union-attr]
+    service_with_docling.docling.convert = AsyncMock(  # type: ignore[union-attr]
         side_effect=RuntimeError("converter exploded")
     )
 
-    async with Client(pdf_app(bundle_with_docling, slow_jobs)) as client:
+    async with Client(pdf_app(service_with_docling, slow_jobs)) as client:
         result = await client.call_tool(
             "convert_pdf_to_markdown", {"file_path": str(pdf)}
         )
@@ -426,12 +426,12 @@ async def test_convert_docling_failure(
 
 
 async def test_convert_cached_markdown(
-    mcp_with_docling: FastMCP, bundle_with_docling: ServiceBundle, tmp_path: Path
+    mcp_with_docling: FastMCP, service_with_docling: Service, tmp_path: Path
 ) -> None:
     """convert_pdf_to_markdown returns cached markdown without converting."""
     pdf = tmp_path / "paper.pdf"
     pdf.write_bytes(b"%PDF fake")
-    md_dir = bundle_with_docling.config.cache_dir / "md"
+    md_dir = service_with_docling.config.cache_dir / "md"
     md_dir.mkdir(parents=True, exist_ok=True)
     (md_dir / "paper.md").write_text("# Cached\n\nCached text.", encoding="utf-8")
 
@@ -445,12 +445,12 @@ async def test_convert_cached_markdown(
 
 
 async def test_convert_cached_markdown_vlm_not_configured(
-    mcp_with_docling: FastMCP, bundle_with_docling: ServiceBundle, tmp_path: Path
+    mcp_with_docling: FastMCP, service_with_docling: Service, tmp_path: Path
 ) -> None:
     """Cache hit with use_vlm=True but VLM unconfigured reports vlm_skip_reason."""
     pdf = tmp_path / "paper.pdf"
     pdf.write_bytes(b"%PDF fake")
-    md_dir = bundle_with_docling.config.cache_dir / "md"
+    md_dir = service_with_docling.config.cache_dir / "md"
     md_dir.mkdir(parents=True, exist_ok=True)
     # Standard cache path (no _vlm suffix — VLM not available so standard is used)
     (md_dir / "paper.md").write_text("# Cached\n\nCached text.", encoding="utf-8")
@@ -467,12 +467,12 @@ async def test_convert_cached_markdown_vlm_not_configured(
 
 
 async def test_convert_cached_standard_no_vlm_skip_reason(
-    mcp_with_docling: FastMCP, bundle_with_docling: ServiceBundle, tmp_path: Path
+    mcp_with_docling: FastMCP, service_with_docling: Service, tmp_path: Path
 ) -> None:
     """Cache hit with use_vlm=False (default) omits vlm_skip_reason."""
     pdf = tmp_path / "paper.pdf"
     pdf.write_bytes(b"%PDF fake")
-    md_dir = bundle_with_docling.config.cache_dir / "md"
+    md_dir = service_with_docling.config.cache_dir / "md"
     md_dir.mkdir(parents=True, exist_ok=True)
     (md_dir / "paper.md").write_text("# Standard\n\nText.", encoding="utf-8")
 
@@ -486,16 +486,16 @@ async def test_convert_cached_standard_no_vlm_skip_reason(
 
 
 async def test_convert_standard_vlm_not_configured_includes_skip_reason(
-    bundle_with_docling: ServiceBundle, tmp_path: Path, slow_jobs: Jobs
+    service_with_docling: Service, tmp_path: Path, slow_jobs: Jobs
 ) -> None:
     """A fresh conversion with use_vlm=True but VLM unconfigured reports the reason."""
     pdf = tmp_path / "paper.pdf"
     pdf.write_bytes(b"%PDF fake")
-    bundle_with_docling.docling.convert = AsyncMock(  # type: ignore[union-attr]
+    service_with_docling.docling.convert = AsyncMock(  # type: ignore[union-attr]
         return_value="# Paper\n\nText."
     )
 
-    async with Client(pdf_app(bundle_with_docling, slow_jobs)) as client:
+    async with Client(pdf_app(service_with_docling, slow_jobs)) as client:
         result = await client.call_tool(
             "convert_pdf_to_markdown", {"file_path": str(pdf), "use_vlm": True}
         )
@@ -513,7 +513,7 @@ async def test_convert_standard_vlm_not_configured_includes_skip_reason(
 
 @pytest.mark.respx(assert_all_called=False)
 async def test_fetch_and_convert_success(
-    bundle_with_docling: ServiceBundle, slow_jobs: Jobs
+    service_with_docling: Service, slow_jobs: Jobs
 ) -> None:
     """fetch_and_convert resolves, downloads and converts in one call."""
     pdf_url = "https://example.com/fc_paper.pdf"
@@ -522,7 +522,7 @@ async def test_fetch_and_convert_success(
         "openAccessPdf": {"url": pdf_url},
         "title": "Fetch and Convert Test",
     }
-    bundle_with_docling.docling.convert = AsyncMock(  # type: ignore[union-attr]
+    service_with_docling.docling.convert = AsyncMock(  # type: ignore[union-attr]
         return_value="# Converted\n\nMarkdown content."
     )
 
@@ -533,7 +533,7 @@ async def test_fetch_and_convert_success(
         router.get(pdf_url).mock(
             return_value=httpx.Response(200, content=b"%PDF-1.4 fc content")
         )
-        async with Client(pdf_app(bundle_with_docling, slow_jobs)) as client:
+        async with Client(pdf_app(service_with_docling, slow_jobs)) as client:
             result = await client.call_tool("fetch_and_convert", {"identifier": "fc1"})
 
     data = json.loads(result.content[0].text)
@@ -548,7 +548,7 @@ async def test_fetch_and_convert_success(
 
 @pytest.mark.respx(assert_all_called=False)
 async def test_fetch_and_convert_reuses_cached_markdown(
-    bundle_with_docling: ServiceBundle, slow_jobs: Jobs
+    service_with_docling: Service, slow_jobs: Jobs
 ) -> None:
     """A second call reads the cached Markdown instead of converting again.
 
@@ -564,7 +564,7 @@ async def test_fetch_and_convert_reuses_cached_markdown(
         "title": "Cached Markdown Test",
     }
     convert = AsyncMock(return_value="# Converted once")
-    bundle_with_docling.docling.convert = convert  # type: ignore[union-attr]
+    service_with_docling.docling.convert = convert  # type: ignore[union-attr]
 
     with respx.mock(assert_all_called=False) as router:
         router.get(f"{S2_BASE}/paper/fcc_cache").mock(
@@ -573,7 +573,7 @@ async def test_fetch_and_convert_reuses_cached_markdown(
         router.get(pdf_url).mock(
             return_value=httpx.Response(200, content=b"%PDF-1.4 cached content")
         )
-        app = pdf_app(bundle_with_docling, slow_jobs)
+        app = pdf_app(service_with_docling, slow_jobs)
         async with Client(app) as client:
             first = await client.call_tool(
                 "fetch_and_convert", {"identifier": "fcc_cache"}
@@ -598,7 +598,7 @@ async def test_fetch_and_convert_reuses_cached_markdown(
 
 @pytest.mark.respx(assert_all_called=False)
 async def test_fetch_and_convert_vlm_and_standard_cache_separately(
-    bundle_with_docling: ServiceBundle, slow_jobs: Jobs
+    service_with_docling: Service, slow_jobs: Jobs
 ) -> None:
     """Switching ``use_vlm`` converts again rather than serving the other file.
 
@@ -613,14 +613,14 @@ async def test_fetch_and_convert_vlm_and_standard_cache_separately(
     }
     # vlm_available is derived from the credentials, so configure them
     # rather than patching the property.
-    bundle_with_docling.docling = DoclingClient(
+    service_with_docling.docling = DoclingClient(
         http_client=httpx.AsyncClient(base_url=DOCLING_BASE, timeout=30.0),
         vlm_api_url="https://vlm.example.com",
         vlm_api_key="k",
         vlm_model="gpt-4o",
     )
     convert = AsyncMock(return_value="# Converted")
-    bundle_with_docling.docling.convert = convert  # type: ignore[method-assign]
+    service_with_docling.docling.convert = convert  # type: ignore[method-assign]
 
     with respx.mock(assert_all_called=False) as router:
         router.get(f"{S2_BASE}/paper/fcc_vlm").mock(
@@ -629,7 +629,7 @@ async def test_fetch_and_convert_vlm_and_standard_cache_separately(
         router.get(pdf_url).mock(
             return_value=httpx.Response(200, content=b"%PDF-1.4 vlm content")
         )
-        app = pdf_app(bundle_with_docling, slow_jobs)
+        app = pdf_app(service_with_docling, slow_jobs)
         async with Client(app) as client:
             plain = await client.call_tool(
                 "fetch_and_convert", {"identifier": "fcc_vlm"}
@@ -648,7 +648,7 @@ async def test_fetch_and_convert_vlm_and_standard_cache_separately(
 
 @pytest.mark.respx(assert_all_called=False)
 async def test_fetch_and_convert_arxiv_fallback(
-    bundle_with_docling: ServiceBundle, slow_jobs: Jobs
+    service_with_docling: Service, slow_jobs: Jobs
 ) -> None:
     """fetch_and_convert uses the arXiv fallback and reports pdf_source."""
     arxiv_pdf_url = "https://arxiv.org/pdf/2301.99999.pdf"
@@ -658,7 +658,7 @@ async def test_fetch_and_convert_arxiv_fallback(
         "externalIds": {"ArXiv": "2301.99999"},
         "title": "Fetch and Convert ArXiv Test",
     }
-    bundle_with_docling.docling.convert = AsyncMock(  # type: ignore[union-attr]
+    service_with_docling.docling.convert = AsyncMock(  # type: ignore[union-attr]
         return_value="# ArXiv Paper\n\nContent."
     )
 
@@ -669,7 +669,7 @@ async def test_fetch_and_convert_arxiv_fallback(
         router.get(arxiv_pdf_url).mock(
             return_value=httpx.Response(200, content=b"%PDF arxiv fc")
         )
-        async with Client(pdf_app(bundle_with_docling, slow_jobs)) as client:
+        async with Client(pdf_app(service_with_docling, slow_jobs)) as client:
             result = await client.call_tool("fetch_and_convert", {"identifier": "fca1"})
 
     data = json.loads(result.content[0].text)
@@ -679,9 +679,7 @@ async def test_fetch_and_convert_arxiv_fallback(
 
 
 @pytest.mark.respx(assert_all_called=False)
-async def test_fetch_and_convert_no_docling(
-    bundle: ServiceBundle, slow_jobs: Jobs
-) -> None:
+async def test_fetch_and_convert_no_docling(service: Service, slow_jobs: Jobs) -> None:
     """fetch_and_convert still returns metadata and the PDF without docling."""
     pdf_url = "https://example.com/nd_paper.pdf"
     paper_json = {
@@ -695,7 +693,7 @@ async def test_fetch_and_convert_no_docling(
             return_value=httpx.Response(200, json=paper_json)
         )
         router.get(pdf_url).mock(return_value=httpx.Response(200, content=b"%PDF nd"))
-        async with Client(pdf_app(bundle, slow_jobs)) as client:
+        async with Client(pdf_app(service, slow_jobs)) as client:
             result = await client.call_tool("fetch_and_convert", {"identifier": "nd1"})
 
     data = json.loads(result.content[0].text)
@@ -711,11 +709,11 @@ async def test_fetch_and_convert_no_docling(
 
 @pytest.mark.respx(assert_all_called=False)
 async def test_fetch_pdf_by_url_download_and_convert(
-    bundle_with_docling: ServiceBundle, slow_jobs: Jobs
+    service_with_docling: Service, slow_jobs: Jobs
 ) -> None:
     """fetch_pdf_by_url downloads a PDF and converts it to markdown."""
     pdf_url = "https://example.com/custom/paper.pdf"
-    bundle_with_docling.docling.convert = AsyncMock(  # type: ignore[union-attr]
+    service_with_docling.docling.convert = AsyncMock(  # type: ignore[union-attr]
         return_value="# Custom Paper\n\nFrom URL."
     )
 
@@ -723,7 +721,7 @@ async def test_fetch_pdf_by_url_download_and_convert(
         router.get(pdf_url).mock(
             return_value=httpx.Response(200, content=b"%PDF custom")
         )
-        async with Client(pdf_app(bundle_with_docling, slow_jobs)) as client:
+        async with Client(pdf_app(service_with_docling, slow_jobs)) as client:
             result = await client.call_tool(
                 "fetch_pdf_by_url",
                 {"url": pdf_url, "filename": "custom_paper"},
@@ -737,9 +735,7 @@ async def test_fetch_pdf_by_url_download_and_convert(
 
 
 @pytest.mark.respx(assert_all_called=False)
-async def test_fetch_pdf_by_url_no_docling(
-    bundle: ServiceBundle, slow_jobs: Jobs
-) -> None:
+async def test_fetch_pdf_by_url_no_docling(service: Service, slow_jobs: Jobs) -> None:
     """fetch_pdf_by_url without docling returns just the pdf_path."""
     pdf_url = "https://example.com/nodocling.pdf"
 
@@ -747,7 +743,7 @@ async def test_fetch_pdf_by_url_no_docling(
         router.get(pdf_url).mock(
             return_value=httpx.Response(200, content=b"%PDF no docling")
         )
-        async with Client(pdf_app(bundle, slow_jobs)) as client:
+        async with Client(pdf_app(service, slow_jobs)) as client:
             result = await client.call_tool("fetch_pdf_by_url", {"url": pdf_url})
 
     data = json.loads(result.content[0].text)
@@ -756,14 +752,14 @@ async def test_fetch_pdf_by_url_no_docling(
     assert "markdown" not in data
 
 
-async def test_fetch_pdf_by_url_cached(bundle: ServiceBundle, slow_jobs: Jobs) -> None:
+async def test_fetch_pdf_by_url_cached(service: Service, slow_jobs: Jobs) -> None:
     """fetch_pdf_by_url returns the cached path without re-downloading."""
-    pdf_dir = bundle.config.cache_dir / "pdfs"
+    pdf_dir = service.config.cache_dir / "pdfs"
     pdf_dir.mkdir(parents=True, exist_ok=True)
     cached = pdf_dir / "cached_paper.pdf"
     cached.write_bytes(b"%PDF cached")
 
-    async with Client(pdf_app(bundle, slow_jobs)) as client:
+    async with Client(pdf_app(service, slow_jobs)) as client:
         result = await client.call_tool(
             "fetch_pdf_by_url",
             {"url": "https://example.com/cached_paper.pdf", "filename": "cached_paper"},
@@ -796,7 +792,7 @@ async def test_fetch_pdf_by_url_intercepts_epo_url(mcp_no_docling: FastMCP) -> N
 
 
 async def test_slow_conversion_is_promoted_and_polled(
-    bundle_with_docling: ServiceBundle, tmp_path: Path, jobs: Jobs
+    service_with_docling: Service, tmp_path: Path, jobs: Jobs
 ) -> None:
     """Work past the deadline returns a handle whose result arrives by polling."""
     pdf = tmp_path / "slow.pdf"
@@ -806,9 +802,9 @@ async def test_slow_conversion_is_promoted_and_polled(
         await asyncio.sleep(0.2)
         return "# Slow\n\nConverted late."
 
-    bundle_with_docling.docling.convert = slow_convert  # type: ignore[union-attr,assignment]
+    service_with_docling.docling.convert = slow_convert  # type: ignore[union-attr,assignment]
 
-    async with PlainClient(pdf_app(bundle_with_docling, jobs)) as client:
+    async with PlainClient(pdf_app(service_with_docling, jobs)) as client:
         result = await client.call_tool(
             "convert_pdf_to_markdown", {"file_path": str(pdf)}
         )
@@ -825,7 +821,9 @@ async def test_slow_conversion_is_promoted_and_polled(
 
 
 async def test_cache_hit_answers_inline_even_under_a_short_deadline(
-    mcp_no_docling: FastMCP, bundle: ServiceBundle, jobs: Jobs
+    mcp_no_docling: FastMCP,
+    service: Service,
+    jobs: Jobs,
 ) -> None:
     """A cache hit mints no job: there is nothing slow to promote.
 
@@ -833,12 +831,12 @@ async def test_cache_hit_answers_inline_even_under_a_short_deadline(
     fast path is fast because it finishes, not because the tool special-cases
     it.
     """
-    pdf_dir = bundle.config.cache_dir / "pdfs"
+    pdf_dir = service.config.cache_dir / "pdfs"
     pdf_dir.mkdir(parents=True, exist_ok=True)
     cached = pdf_dir / "quick.pdf"
     cached.write_bytes(b"%PDF cached")
 
-    async with Client(pdf_app(bundle, jobs)) as client:
+    async with Client(pdf_app(service, jobs)) as client:
         result = await client.call_tool(
             "fetch_pdf_by_url",
             {"url": "https://example.com/quick.pdf", "filename": "quick"},
@@ -864,7 +862,7 @@ async def test_unknown_job_id_is_an_error(mcp_no_docling: FastMCP) -> None:
 
 @pytest.mark.respx(assert_all_called=False)
 async def test_fetch_paper_pdf_download_failure(
-    bundle: ServiceBundle, slow_jobs: Jobs
+    service: Service, slow_jobs: Jobs
 ) -> None:
     """A failed download is reported rather than raised."""
     pdf_url = "https://example.com/broken.pdf"
@@ -879,7 +877,7 @@ async def test_fetch_paper_pdf_download_failure(
             return_value=httpx.Response(200, json=paper_json)
         )
         router.get(pdf_url).mock(return_value=httpx.Response(503))
-        async with Client(pdf_app(bundle, slow_jobs)) as client:
+        async with Client(pdf_app(service, slow_jobs)) as client:
             result = await client.call_tool("fetch_paper_pdf", {"identifier": "brk1"})
 
     data = json.loads(result.content[0].text)
@@ -889,7 +887,7 @@ async def test_fetch_paper_pdf_download_failure(
 
 @pytest.mark.respx(assert_all_called=False)
 async def test_fetch_and_convert_download_failure(
-    bundle_with_docling: ServiceBundle, slow_jobs: Jobs
+    service_with_docling: Service, slow_jobs: Jobs
 ) -> None:
     """fetch_and_convert still returns metadata when the download fails."""
     pdf_url = "https://example.com/fc_broken.pdf"
@@ -904,7 +902,7 @@ async def test_fetch_and_convert_download_failure(
             return_value=httpx.Response(200, json=paper_json)
         )
         router.get(pdf_url).mock(return_value=httpx.Response(503))
-        async with Client(pdf_app(bundle_with_docling, slow_jobs)) as client:
+        async with Client(pdf_app(service_with_docling, slow_jobs)) as client:
             result = await client.call_tool("fetch_and_convert", {"identifier": "fcb1"})
 
     data = json.loads(result.content[0].text)
@@ -915,7 +913,7 @@ async def test_fetch_and_convert_download_failure(
 
 @pytest.mark.respx(assert_all_called=False)
 async def test_fetch_and_convert_conversion_failure(
-    bundle_with_docling: ServiceBundle, slow_jobs: Jobs
+    service_with_docling: Service, slow_jobs: Jobs
 ) -> None:
     """A docling failure leaves the downloaded PDF reachable."""
     pdf_url = "https://example.com/fc_conv.pdf"
@@ -924,7 +922,7 @@ async def test_fetch_and_convert_conversion_failure(
         "openAccessPdf": {"url": pdf_url},
         "title": "FC Conv",
     }
-    bundle_with_docling.docling.convert = AsyncMock(  # type: ignore[union-attr]
+    service_with_docling.docling.convert = AsyncMock(  # type: ignore[union-attr]
         side_effect=RuntimeError("boom")
     )
 
@@ -933,7 +931,7 @@ async def test_fetch_and_convert_conversion_failure(
             return_value=httpx.Response(200, json=paper_json)
         )
         router.get(pdf_url).mock(return_value=httpx.Response(200, content=b"%PDF conv"))
-        async with Client(pdf_app(bundle_with_docling, slow_jobs)) as client:
+        async with Client(pdf_app(service_with_docling, slow_jobs)) as client:
             result = await client.call_tool("fetch_and_convert", {"identifier": "fcc1"})
 
     data = json.loads(result.content[0].text)
@@ -943,7 +941,7 @@ async def test_fetch_and_convert_conversion_failure(
 
 @pytest.mark.respx(assert_all_called=False)
 async def test_fetch_and_convert_no_oa_pdf(
-    bundle_with_docling: ServiceBundle, slow_jobs: Jobs
+    service_with_docling: Service, slow_jobs: Jobs
 ) -> None:
     """fetch_and_convert reports no_oa_pdf alongside the metadata it did get."""
     paper_json = {"paperId": "noa1", "openAccessPdf": None, "externalIds": {}}
@@ -952,7 +950,7 @@ async def test_fetch_and_convert_no_oa_pdf(
         router.get(f"{S2_BASE}/paper/noa1").mock(
             return_value=httpx.Response(200, json=paper_json)
         )
-        async with Client(pdf_app(bundle_with_docling, slow_jobs)) as client:
+        async with Client(pdf_app(service_with_docling, slow_jobs)) as client:
             result = await client.call_tool("fetch_and_convert", {"identifier": "noa1"})
 
     data = json.loads(result.content[0].text)
@@ -962,14 +960,14 @@ async def test_fetch_and_convert_no_oa_pdf(
 
 @pytest.mark.respx(assert_all_called=False)
 async def test_fetch_pdf_by_url_download_failure(
-    bundle: ServiceBundle, slow_jobs: Jobs
+    service: Service, slow_jobs: Jobs
 ) -> None:
     """fetch_pdf_by_url reports a failed download."""
     pdf_url = "https://example.com/url_broken.pdf"
 
     with respx.mock(assert_all_called=False) as router:
         router.get(pdf_url).mock(return_value=httpx.Response(404))
-        async with Client(pdf_app(bundle, slow_jobs)) as client:
+        async with Client(pdf_app(service, slow_jobs)) as client:
             result = await client.call_tool("fetch_pdf_by_url", {"url": pdf_url})
 
     data = json.loads(result.content[0].text)
@@ -978,17 +976,17 @@ async def test_fetch_pdf_by_url_download_failure(
 
 @pytest.mark.respx(assert_all_called=False)
 async def test_fetch_pdf_by_url_conversion_failure(
-    bundle_with_docling: ServiceBundle, slow_jobs: Jobs
+    service_with_docling: Service, slow_jobs: Jobs
 ) -> None:
     """fetch_pdf_by_url reports a conversion failure but keeps the PDF path."""
     pdf_url = "https://example.com/url_conv.pdf"
-    bundle_with_docling.docling.convert = AsyncMock(  # type: ignore[union-attr]
+    service_with_docling.docling.convert = AsyncMock(  # type: ignore[union-attr]
         side_effect=RuntimeError("boom")
     )
 
     with respx.mock(assert_all_called=False) as router:
         router.get(pdf_url).mock(return_value=httpx.Response(200, content=b"%PDF conv"))
-        async with Client(pdf_app(bundle_with_docling, slow_jobs)) as client:
+        async with Client(pdf_app(service_with_docling, slow_jobs)) as client:
             result = await client.call_tool(
                 "fetch_pdf_by_url", {"url": pdf_url, "filename": "url_conv"}
             )
@@ -999,7 +997,7 @@ async def test_fetch_pdf_by_url_conversion_failure(
 
 
 async def test_fetch_pdf_by_url_derives_stem_from_url(
-    bundle: ServiceBundle, slow_jobs: Jobs
+    service: Service, slow_jobs: Jobs
 ) -> None:
     """Without an explicit filename the stem is derived and hash-suffixed."""
     pdf_url = "https://example.com/deep/path/report.pdf"
@@ -1008,7 +1006,7 @@ async def test_fetch_pdf_by_url_derives_stem_from_url(
         router.get(pdf_url).mock(
             return_value=httpx.Response(200, content=b"%PDF derived")
         )
-        async with Client(pdf_app(bundle, slow_jobs)) as client:
+        async with Client(pdf_app(service, slow_jobs)) as client:
             result = await client.call_tool("fetch_pdf_by_url", {"url": pdf_url})
 
     data = json.loads(result.content[0].text)

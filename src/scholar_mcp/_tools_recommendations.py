@@ -11,7 +11,8 @@ from fastmcp.dependencies import Depends
 from fastmcp_pvl_core import register_long_running_tool
 
 from ._s2_client import FIELD_SETS, s2_error_payload
-from ._server_deps import ServiceBundle, get_bundle
+from ._server_deps import get_service
+from .domain import Service
 
 if TYPE_CHECKING:
     from fastmcp_pvl_core import Jobs
@@ -24,7 +25,7 @@ async def recommend_papers(
     negative_ids: list[str] | None = None,
     limit: int = 10,
     fields: Literal["compact", "standard", "full"] = "standard",
-    bundle: ServiceBundle = Depends(get_bundle),
+    service: Service = Depends(get_service),
 ) -> dict[str, Any]:
     """Recommend papers based on positive (and optionally negative) examples.
 
@@ -36,7 +37,7 @@ async def recommend_papers(
         negative_ids: Optional S2 paper IDs to steer away from.
         limit: Number of recommendations to return.
         fields: Field set preset for returned records.
-        bundle: Injected service bundle.
+        service: Injected service.
 
     Returns:
         ``{"recommendations": [...]}``, or an error mapping.
@@ -48,7 +49,7 @@ async def recommend_papers(
         }
 
     try:
-        recommendations = await bundle.s2.recommend(
+        recommendations = await service.s2.recommend(
             positive_ids[:5],
             negative_ids=negative_ids,
             limit=limit,

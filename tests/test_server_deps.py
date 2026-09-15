@@ -1,4 +1,4 @@
-"""Tests for _server_deps module."""
+"""Tests for the service lifespan and the domain ``Service``."""
 
 import asyncio
 from pathlib import Path
@@ -7,13 +7,14 @@ import pytest
 
 from scholar_mcp._enrichment import EnrichmentPipeline
 from scholar_mcp._s2_client import KeepaliveStatus, S2Client
-from scholar_mcp._server_deps import (
+from scholar_mcp._server_deps import server_lifespan
+from scholar_mcp.config import ProjectConfig
+from scholar_mcp.domain import (
+    Service,
     _build_docling,
     _build_enrichment_pipeline,
     _start_s2_keepalive,
-    server_lifespan,
 )
-from scholar_mcp.config import ProjectConfig
 from tests.conftest import tasks_server
 
 
@@ -52,10 +53,9 @@ async def test_lifespan_starts_and_cancels_keepalive_with_key(
     monkeypatch.setenv("SCHOLAR_MCP_CACHE_DIR", str(tmp_path))
     app = tasks_server(name="test")
 
-    with caplog.at_level("INFO", logger="scholar_mcp._server_deps"):
+    with caplog.at_level("INFO", logger="scholar_mcp.domain"):
         async with server_lifespan(app) as ctx:
-            bundle = ctx["bundle"]
-            assert bundle.s2 is not None
+            assert ctx["service"].s2 is not None
             tasks_while_open = {
                 t
                 for t in asyncio.all_tasks()
@@ -79,9 +79,9 @@ async def test_lifespan_does_not_start_keepalive_without_key(
     monkeypatch.setenv("SCHOLAR_MCP_CACHE_DIR", str(tmp_path))
     app = tasks_server(name="test")
 
-    with caplog.at_level("INFO", logger="scholar_mcp._server_deps"):
+    with caplog.at_level("INFO", logger="scholar_mcp.domain"):
         async with server_lifespan(app) as ctx:
-            assert ctx["bundle"].s2 is not None
+            assert ctx["service"].s2 is not None
             tasks_while_open = {
                 t
                 for t in asyncio.all_tasks()
@@ -95,7 +95,7 @@ async def test_lifespan_does_not_start_keepalive_without_key(
 async def test_lifespan_builds_and_closes_docling_when_configured(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """A configured docling URL reaches the bundle and its HTTP client is
+    """A configured docling URL reaches the service and its HTTP client is
     closed on teardown."""
     monkeypatch.setenv("SCHOLAR_MCP_CACHE_DIR", str(tmp_path))
     monkeypatch.setenv("SCHOLAR_MCP_DOCLING_URL", "http://docling.invalid")
@@ -104,9 +104,9 @@ async def test_lifespan_builds_and_closes_docling_when_configured(
     monkeypatch.setenv("SCHOLAR_MCP_VLM_MODEL", "gpt-4o")
     app = tasks_server(name="test")
 
-    with caplog.at_level("INFO", logger="scholar_mcp._server_deps"):
+    with caplog.at_level("INFO", logger="scholar_mcp.domain"):
         async with server_lifespan(app) as ctx:
-            docling = ctx["bundle"].docling
+            docling = ctx["service"].docling
             assert docling is not None
             assert docling.vlm_available is True
             http = docling.http_client
@@ -122,8 +122,42 @@ async def test_build_docling_returns_none_pair_when_unconfigured(
     """No docling URL yields no client pair and says so in the log."""
     monkeypatch.delenv("SCHOLAR_MCP_DOCLING_URL", raising=False)
 
-    with caplog.at_level("INFO", logger="scholar_mcp._server_deps"):
+    with caplog.at_level("INFO", logger="scholar_mcp.domain"):
         http, docling = _build_docling(ProjectConfig.from_env())
 
     assert (http, docling) == (None, None)
     assert "docling_not_configured pdf_tools_disabled" in caplog.text
+
+
+async def test_start_failure_closes_what_was_already_built(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failure part-way through startup unwinds the clients built before it.
+
+    The cache opens after every HTTP client exists, so failing it proves the
+    exit stack closes earlier resources instead of stranding them (#230).
+    """
+    monkeypatch.setenv("SCHOLAR_MCP_CACHE_DIR", str(tmp_path))
+    service = Service()
+
+    async def boom(self: object) -> None:
+        raise RuntimeError("cache unavailable")
+
+    monkeypatch.setattr("scholar_mcp.domain.ScholarCache.open", boom)
+
+    with pytest.raises(RuntimeError, match="cache unavailable"):
+        await service.start()
+
+    assert service.openalex._client.is_closed
+    assert service.crossref._client.is_closed
+
+
+async def test_stop_is_idempotent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A second ``stop`` after a clean shutdown is a no-op."""
+    monkeypatch.setenv("SCHOLAR_MCP_CACHE_DIR", str(tmp_path))
+    service = Service()
+    await service.start()
+    await service.stop()
+    await service.stop()

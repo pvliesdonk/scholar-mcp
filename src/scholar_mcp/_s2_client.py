@@ -144,7 +144,7 @@ S2_KEEPALIVE_STATUS = KeepaliveStatus()
 
 A module singleton because there is exactly one keepalive per process, and
 because ``get_server_info``'s provider is a zero-argument callable registered
-in ``make_server`` -- long before the lifespan builds the service bundle, so
+in ``make_server`` -- long before the lifespan builds the service, so
 there is nothing else for it to read.
 """
 

@@ -11,7 +11,8 @@ from fastmcp.dependencies import Depends
 from fastmcp_pvl_core import register_long_running_tool
 
 from ._s2_client import FIELD_SETS, s2_error_payload
-from ._server_deps import ServiceBundle, get_bundle
+from ._server_deps import get_service
+from .domain import Service
 
 if TYPE_CHECKING:
     from fastmcp_pvl_core import Jobs
@@ -30,7 +31,7 @@ async def search_papers(
     venue: str | None = None,
     min_citations: int | None = None,
     sort: Literal["relevance", "citations", "year"] = "relevance",
-    bundle: ServiceBundle = Depends(get_bundle),
+    service: Service = Depends(get_service),
 ) -> dict[str, Any]:
     """Search Semantic Scholar for papers matching a query.
 
@@ -50,7 +51,7 @@ async def search_papers(
         venue: Filter by venue name.
         min_citations: Minimum citation count.
         sort: Sort order — relevance, citations, or year.
-        bundle: Injected service bundle.
+        service: Injected service.
 
     Returns:
         A mapping with ``data`` (list of papers) and ``total``.
@@ -71,7 +72,7 @@ async def search_papers(
     fos = ",".join(fields_of_study) if fields_of_study else None
 
     try:
-        return await bundle.s2.search_papers(
+        return await service.s2.search_papers(
             query,
             fields=FIELD_SETS[fields],
             limit=limit,
@@ -90,7 +91,7 @@ async def search_papers(
 
 async def get_paper(
     identifier: str,
-    bundle: ServiceBundle = Depends(get_bundle),
+    service: Service = Depends(get_service),
 ) -> dict[str, Any]:
     """Fetch full metadata for a single paper.
 
@@ -102,21 +103,21 @@ async def get_paper(
         identifier: Paper identifier — DOI, S2 paper ID, arXiv ID
             (prefix with ``ARXIV:``), ACM ID (``ACM:``), or PubMed ID
             (``PMID:``).
-        bundle: Injected service bundle.
+        service: Injected service.
 
     Returns:
         A mapping with full paper metadata, or
         ``{"error": "not_found", "identifier": "..."}`` if not found.
     """
-    cached_id = await bundle.cache.get_alias(identifier) or identifier
-    data = await bundle.cache.get_paper(cached_id)
+    cached_id = await service.cache.get_alias(identifier) or identifier
+    data = await service.cache.get_paper(cached_id)
     if data:
         logger.debug("cache_hit identifier=%s", identifier)
-        await bundle.enrichment.enrich([data], bundle, tags=frozenset({"papers"}))
+        await service.enrichment.enrich([data], service, tags=frozenset({"papers"}))
         return dict(data)
 
     try:
-        fetched = await bundle.s2.get_paper(identifier)
+        fetched = await service.s2.get_paper(identifier)
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 404:
             return {"error": "not_found", "identifier": identifier}
@@ -124,11 +125,11 @@ async def get_paper(
 
     paper_id: str = fetched.get("paperId") or ""
     if paper_id:
-        await bundle.cache.set_paper(paper_id, fetched)
+        await service.cache.set_paper(paper_id, fetched)
         if identifier != paper_id:
-            await bundle.cache.set_alias(identifier, paper_id)
+            await service.cache.set_alias(identifier, paper_id)
 
-    await bundle.enrichment.enrich([fetched], bundle, tags=frozenset({"papers"}))
+    await service.enrichment.enrich([fetched], service, tags=frozenset({"papers"}))
     return dict(fetched)
 
 
@@ -136,7 +137,7 @@ async def get_author(
     identifier: str,
     limit: int = 20,
     offset: int = 0,
-    bundle: ServiceBundle = Depends(get_bundle),
+    service: Service = Depends(get_service),
 ) -> dict[str, Any]:
     """Fetch author profile and publications, or search by name.
 
@@ -151,7 +152,7 @@ async def get_author(
         identifier: S2 author ID (numeric string) or free-text author name.
         limit: Publications per page (only used for direct ID lookup).
         offset: Publication page offset (only used for direct ID lookup).
-        bundle: Injected service bundle.
+        service: Injected service.
 
     Returns:
         A mapping with author data and a paginated ``papers`` list, or
@@ -159,22 +160,22 @@ async def get_author(
     """
     if identifier.isdigit():
         if offset == 0:
-            cached = await bundle.cache.get_author(identifier)
+            cached = await service.cache.get_author(identifier)
             if cached:
                 return dict(cached)
         try:
-            data = await bundle.s2.get_author(identifier, limit=limit, offset=offset)
+            data = await service.s2.get_author(identifier, limit=limit, offset=offset)
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 404:
                 return {"error": "not_found", "identifier": identifier}
             return s2_error_payload(exc)
         if offset == 0:
-            await bundle.cache.set_author(identifier, data)
+            await service.cache.set_author(identifier, data)
         return dict(data)
 
     # Name search — return candidates for disambiguation
     try:
-        candidates = await bundle.s2.search_authors(identifier, limit=5)
+        candidates = await service.s2.search_authors(identifier, limit=5)
     except httpx.HTTPStatusError as exc:
         return s2_error_payload(exc)
     return {"candidates": candidates}

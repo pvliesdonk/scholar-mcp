@@ -14,8 +14,8 @@ from fastmcp import FastMCP
 from fastmcp.client import Client
 from fastmcp_pvl_core import Jobs, register_job_tools
 
-from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._tools_books import register_book_tools
+from scholar_mcp.domain import Service
 from tests.conftest import PlainClient, tasks_server
 
 OL_BASE = "https://openlibrary.org"
@@ -87,10 +87,10 @@ SAMPLE_SUBJECT_RESPONSE = {
 
 
 @pytest.fixture
-def mcp(bundle: ServiceBundle, slow_jobs: Jobs) -> FastMCP:
+def mcp(service: Service, slow_jobs: Jobs) -> FastMCP:
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
-        yield {"bundle": bundle}
+        yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
     register_book_tools(app, slow_jobs)
@@ -114,7 +114,7 @@ async def test_search_books_returns_results(
 
 @pytest.mark.respx(base_url=OL_BASE)
 async def test_search_books_caches_results(
-    respx_mock: respx.MockRouter, mcp: FastMCP, bundle: ServiceBundle
+    respx_mock: respx.MockRouter, mcp: FastMCP, service: Service
 ) -> None:
     respx_mock.get("/search.json").mock(
         return_value=httpx.Response(200, json=SAMPLE_SEARCH_RESPONSE)
@@ -122,7 +122,7 @@ async def test_search_books_caches_results(
     async with Client(mcp) as client:
         await client.call_tool("search_books", {"query": "design patterns"})
     # Second call should hit cache, not API
-    cached = await bundle.cache.get_book_search(
+    cached = await service.cache.get_book_search(
         "q='design patterns':t=None:a=None:limit=10"
     )
     assert cached is not None
@@ -131,7 +131,9 @@ async def test_search_books_caches_results(
 
 @pytest.mark.respx(base_url=OL_BASE)
 async def test_search_books_uses_cache(
-    respx_mock: respx.MockRouter, mcp: FastMCP, bundle: ServiceBundle
+    respx_mock: respx.MockRouter,
+    mcp: FastMCP,
+    service: Service,
 ) -> None:
     """Second search_books call for same query returns cached results."""
     respx_mock.get("/search.json").mock(
@@ -148,7 +150,9 @@ async def test_search_books_uses_cache(
 
 @pytest.mark.respx(base_url=OL_BASE)
 async def test_get_book_isbn_cache_hit(
-    respx_mock: respx.MockRouter, mcp: FastMCP, bundle: ServiceBundle
+    respx_mock: respx.MockRouter,
+    mcp: FastMCP,
+    service: Service,
 ) -> None:
     """get_book returns cached result on second call for same ISBN."""
     respx_mock.get("/isbn/9780201633610.json").mock(
@@ -501,14 +505,14 @@ async def test_recommend_books_returns_results(
 
 @pytest.mark.respx(base_url=OL_BASE)
 async def test_recommend_books_caches_results(
-    respx_mock: respx.MockRouter, mcp: FastMCP, bundle: ServiceBundle
+    respx_mock: respx.MockRouter, mcp: FastMCP, service: Service
 ) -> None:
     respx_mock.get("/subjects/algorithms.json").mock(
         return_value=httpx.Response(200, json=SAMPLE_SUBJECT_RESPONSE)
     )
     async with Client(mcp) as client:
         await client.call_tool("recommend_books", {"subject": "algorithms"})
-    cached = await bundle.cache.get_book_subject("algorithms")
+    cached = await service.cache.get_book_subject("algorithms")
     assert cached is not None
     assert len(cached) == 2
 
@@ -535,12 +539,12 @@ COVERS_BASE = "https://covers.openlibrary.org"
 async def test_get_book_download_cover_saves_file(
     respx_mock: respx.MockRouter,
     mcp: FastMCP,
-    bundle: ServiceBundle,
+    service: Service,
 ) -> None:
     """download_cover=True downloads the cover image and returns cover_path."""
     from unittest.mock import AsyncMock, patch
 
-    bundle.config = replace(bundle.config, read_only=False)
+    service.config = replace(service.config, read_only=False)
     respx_mock.get("/isbn/9780201633610.json").mock(
         return_value=httpx.Response(200, json=SAMPLE_EDITION_RESPONSE)
     )
@@ -584,10 +588,10 @@ async def test_get_book_download_cover_saves_file(
 async def test_get_book_download_cover_uses_cache(
     respx_mock: respx.MockRouter,
     mcp: FastMCP,
-    bundle: ServiceBundle,
+    service: Service,
 ) -> None:
     """When cover file already exists on disk, no HTTP download is made."""
-    bundle.config = replace(bundle.config, read_only=False)
+    service.config = replace(service.config, read_only=False)
     respx_mock.get("/isbn/9780201633610.json").mock(
         return_value=httpx.Response(200, json=SAMPLE_EDITION_RESPONSE)
     )
@@ -601,7 +605,7 @@ async def test_get_book_download_cover_uses_cache(
         return_value=httpx.Response(200, json=SAMPLE_AUTHOR_HELM)
     )
     # Pre-create the cover file
-    covers_dir = bundle.config.cache_dir / "covers"
+    covers_dir = service.config.cache_dir / "covers"
     covers_dir.mkdir(parents=True, exist_ok=True)
     cover_file = covers_dir / "9780201633610_M.jpg"
     cover_file.write_bytes(b"CACHED_IMAGE")
@@ -621,10 +625,10 @@ async def test_get_book_download_cover_uses_cache(
 async def test_get_book_download_cover_read_only(
     respx_mock: respx.MockRouter,
     mcp: FastMCP,
-    bundle: ServiceBundle,
+    service: Service,
 ) -> None:
     """In read-only mode, download_cover returns cover_error instead."""
-    bundle.config = replace(bundle.config, read_only=True)
+    service.config = replace(service.config, read_only=True)
     respx_mock.get("/isbn/9780201633610.json").mock(
         return_value=httpx.Response(200, json=SAMPLE_EDITION_RESPONSE)
     )
@@ -767,18 +771,16 @@ async def test_get_book_excerpt_reports_transport_error_not_absence(
 
 @pytest.mark.respx(base_url=GB_BASE)
 async def test_get_book_excerpt_does_not_cache_a_failed_lookup(
-    respx_mock: respx.MockRouter, mcp: FastMCP, bundle: ServiceBundle
+    respx_mock: respx.MockRouter, mcp: FastMCP, service: Service
 ) -> None:
     """A refused request must not poison the cache for the retry it invites."""
     respx_mock.get("/volumes").mock(return_value=httpx.Response(429))
     async with Client(mcp) as client:
         await client.call_tool("get_book_excerpt", {"isbn": "9780201633610"})
-    assert await bundle.cache.get_google_books("9780201633610") is None
+    assert await service.cache.get_google_books("9780201633610") is None
 
 
-async def test_search_books_promotes_when_slow(
-    bundle: ServiceBundle, jobs: Jobs
-) -> None:
+async def test_search_books_promotes_when_slow(service: Service, jobs: Jobs) -> None:
     """A slow Open Library answers with a handle, resolved by polling.
 
     Open Library serialises calls behind a politeness delay, so this is the
@@ -790,11 +792,11 @@ async def test_search_books_promotes_when_slow(
         await asyncio.sleep(0.2)
         return [{"key": "/works/OL1W", "title": "Slow Book"}]
 
-    bundle.openlibrary.search = AsyncMock(side_effect=slow_search)  # type: ignore[method-assign]
+    service.openlibrary.search = AsyncMock(side_effect=slow_search)  # type: ignore[method-assign]
 
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
-        yield {"bundle": bundle}
+        yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
     register_book_tools(app, jobs)

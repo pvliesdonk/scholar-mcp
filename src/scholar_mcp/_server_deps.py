@@ -1,291 +1,49 @@
-"""Service bundle lifespan and dependency injection for Scholar MCP Server."""
+"""Service lifespan + dependency injection for Scholar MCP."""
 
 from __future__ import annotations
 
-import asyncio
-import contextlib
 import logging
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import Any, TypedDict
 
-import httpx
-from fastmcp import FastMCP
 from fastmcp.dependencies import CurrentContext
 from fastmcp.server.context import Context
 
-from ._cache import ScholarCache
-from ._crossref_client import CrossRefClient
-from ._docling_client import DoclingClient
-from ._enricher_crossref import CrossRefEnricher
-from ._enricher_openalex import OpenAlexEnricher
-from ._enrichment import EnrichmentPipeline
-from ._epo_client import EpoClient
-from ._google_books_client import GoogleBooksClient
-from ._openalex_client import OpenAlexClient
-from ._openlibrary_client import OpenLibraryClient
-from ._rate_limiter import RateLimiter
-from ._s2_client import (
-    KEEPALIVE_INTERVAL_SECONDS,
-    S2_KEEPALIVE_STATUS,
-    KeepaliveStatus,
-    S2Client,
-    run_keepalive,
-)
-from ._standards_client import StandardsClient
-from .config import ProjectConfig
-
-if TYPE_CHECKING:
-    from ._protocols import CacheProtocol
+from scholar_mcp.domain import Service
 
 logger = logging.getLogger(__name__)
 
-_CROSSREF_BASE = "https://api.crossref.org"
-_GOOGLE_BOOKS_BASE = "https://www.googleapis.com/books/v1"
-_OPENALEX_BASE = "https://api.openalex.org"
-_OPENLIBRARY_BASE = "https://openlibrary.org"
-_OPENLIBRARY_DELAY = 0.6  # ~100 req/min politeness
 
+class LifespanState(TypedDict):
+    """Shape of the lifespan context yielded to request handlers."""
 
-@dataclass
-class ServiceBundle:
-    """All shared services passed to tools via FastMCP dependency injection.
-
-    Attributes:
-        s2: Semantic Scholar API client.
-        openalex: OpenAlex API client (httpx.AsyncClient pointed at OpenAlex).
-        crossref: CrossRef API client for DOI metadata enrichment.
-        google_books: Google Books API client for book excerpts and previews.
-        docling: docling-serve httpx client, or None if not configured.
-        epo: EPO OPS API client, or None if not configured.
-        openlibrary: Open Library API client (keyless, always available).
-        cache: SQLite cache.
-        config: Server configuration.
-    """
-
-    s2: S2Client
-    openalex: OpenAlexClient
-    crossref: CrossRefClient
-    google_books: GoogleBooksClient
-    docling: DoclingClient | None
-    epo: EpoClient | None
-    openlibrary: OpenLibraryClient
-    cache: CacheProtocol
-    config: ProjectConfig
-    standards: StandardsClient
-    enrichment: EnrichmentPipeline
-
-
-def _build_enrichment_pipeline() -> EnrichmentPipeline:
-    """Build the enrichment pipeline with all registered enrichers.
-
-    OpenLibraryEnricher is imported here (not at module level) to avoid
-    a circular import: _enricher_openlibrary -> _book_enrichment -> _server_deps.
-
-    Returns:
-        Configured :class:`EnrichmentPipeline` instance.
-    """
-    from ._enricher_google_books import GoogleBooksEnricher
-    from ._enricher_openlibrary import OpenLibraryEnricher
-    from ._enricher_standards import StandardsEnricher
-
-    return EnrichmentPipeline(
-        [
-            OpenAlexEnricher(),
-            CrossRefEnricher(),
-            StandardsEnricher(),
-            OpenLibraryEnricher(),
-            GoogleBooksEnricher(),
-        ]
-    )
-
-
-def _start_s2_keepalive(
-    client: S2Client, *, api_key: str | None, status: KeepaliveStatus
-) -> asyncio.Task[None] | None:
-    """Start the S2 keepalive background task if an API key is configured.
-
-    Args:
-        client: The S2 client to keep alive.
-        api_key: The configured S2 API key, or None.
-        status: The shared record ``get_server_info`` reads. Marked
-            not-configured when no key is set, so the absence reports itself
-            rather than looking like a key that has never been pinged (#229).
-
-    Returns:
-        The created task, or None if no API key is configured.
-    """
-    if not api_key:
-        logger.info("s2_keepalive_not_started reason=no_api_key")
-        status.mark_not_configured()
-        return None
-    logger.info(
-        "s2_keepalive_started interval_days=%s", KEEPALIVE_INTERVAL_SECONDS // 86400
-    )
-    return asyncio.create_task(run_keepalive(client, status=status))
-
-
-def _build_docling(
-    config: ProjectConfig,
-) -> tuple[httpx.AsyncClient | None, DoclingClient | None]:
-    """Build the optional docling-serve client pair.
-
-    Args:
-        config: Loaded project configuration.
-
-    Returns:
-        The ``(http_client, docling_client)`` pair, or ``(None, None)`` when
-        ``SCHOLAR_MCP_DOCLING_URL`` is unset.  The raw HTTP client is
-        returned alongside so the lifespan can close it on teardown.
-    """
-    if not config.docling_url:
-        logger.info("docling_not_configured pdf_tools_disabled")
-        return None, None
-
-    http = httpx.AsyncClient(base_url=config.docling_url, timeout=300.0)
-    docling = DoclingClient(
-        http_client=http,
-        vlm_api_url=config.vlm_api_url,
-        vlm_api_key=config.vlm_api_key,
-        vlm_model=config.vlm_model,
-    )
-    logger.info(
-        "docling_configured url=%s vlm_available=%s vlm_model=%s",
-        config.docling_url,
-        docling.vlm_available,
-        config.vlm_model if docling.vlm_available else "(n/a)",
-    )
-    return http, docling
-
-
-def _build_epo(config: ProjectConfig) -> EpoClient | None:
-    """Build the optional EPO OPS client.
-
-    Patent tools are only registered when the OPS credentials are present, so
-    an unconfigured deployment yields ``None`` rather than a client that fails
-    at call time.
-
-    Args:
-        config: Loaded project configuration.
-
-    Returns:
-        The configured :class:`EpoClient`, or ``None``.
-    """
-    if not config.epo_configured:
-        logger.info("epo_ops status=not_configured")
-        return None
-
-    epo = EpoClient(
-        consumer_key=config.epo_consumer_key,  # type: ignore[arg-type]
-        consumer_secret=config.epo_consumer_secret,  # type: ignore[arg-type]
-    )
-    logger.info("epo_ops status=configured")
-    return epo
+    service: Service
 
 
 @asynccontextmanager
-async def server_lifespan(
-    app: FastMCP,
-) -> AsyncGenerator[dict[str, ServiceBundle], None]:
-    """FastMCP lifespan: create all clients, open cache, yield bundle.
-
-    Args:
-        app: The FastMCP application instance (unused but required by protocol).
-
-    Yields:
-        Dict mapping ``"bundle"`` to the :class:`ServiceBundle`.
-    """
-    config = ProjectConfig.from_env()
-    config.cache_dir.mkdir(parents=True, exist_ok=True)
-
-    s2 = S2Client(api_key=config.s2_api_key)
-    ua = "scholar-mcp/0.1"
-    if config.contact_email:
-        ua = f"{ua} (mailto:{config.contact_email})"
-    openalex_http = httpx.AsyncClient(
-        base_url=_OPENALEX_BASE,
-        headers={"User-Agent": ua},
-        timeout=30.0,
-    )
-    openalex = OpenAlexClient(openalex_http)
-    crossref_http = httpx.AsyncClient(
-        base_url=_CROSSREF_BASE,
-        headers={"User-Agent": ua},
-        timeout=30.0,
-    )
-    crossref = CrossRefClient(crossref_http)
-    google_books_http = httpx.AsyncClient(
-        base_url=_GOOGLE_BOOKS_BASE,
-        headers={"User-Agent": ua},
-        timeout=30.0,
-    )
-    google_books = GoogleBooksClient(
-        google_books_http, api_key=config.google_books_api_key
-    )
-    openlibrary_http = httpx.AsyncClient(
-        base_url=_OPENLIBRARY_BASE,
-        headers={"User-Agent": ua},
-        timeout=30.0,
-        follow_redirects=True,
-    )
-    openlibrary_limiter = RateLimiter(delay=_OPENLIBRARY_DELAY)
-    openlibrary = OpenLibraryClient(openlibrary_http, openlibrary_limiter)
-    docling_http, docling = _build_docling(config)
-    epo = _build_epo(config)
-
-    cache = ScholarCache(config.cache_dir / "cache.db")
-    await cache.open()
-
-    standards_http = httpx.AsyncClient(timeout=30.0)
-    standards = StandardsClient(standards_http, cache_dir=config.cache_dir, cache=cache)
-
-    enrichment = _build_enrichment_pipeline()
-
-    s2_keepalive_task = _start_s2_keepalive(
-        s2, api_key=config.s2_api_key, status=S2_KEEPALIVE_STATUS
-    )
-
-    bundle = ServiceBundle(
-        s2=s2,
-        openalex=openalex,
-        crossref=crossref,
-        google_books=google_books,
-        docling=docling,
-        epo=epo,
-        openlibrary=openlibrary,
-        cache=cache,
-        config=config,
-        standards=standards,
-        enrichment=enrichment,
-    )
+async def server_lifespan(_mcp: object) -> AsyncIterator[dict[str, Any]]:
+    """Start the service on startup; stop it on shutdown."""
+    service = Service()
+    await service.start()
+    logger.info("Service started")
     try:
-        yield {"bundle": bundle}
+        yield {"service": service}
     finally:
-        if s2_keepalive_task is not None:
-            s2_keepalive_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await s2_keepalive_task
-        await s2.aclose()
-        await openalex_http.aclose()
-        await crossref_http.aclose()
-        await google_books_http.aclose()
-        await openlibrary.aclose()
-        if docling_http:
-            await docling_http.aclose()
-        if epo is not None:
-            await epo.aclose()
-        await standards.aclose()
-        await cache.close()
+        await service.stop()
+        logger.info("Service stopped")
 
 
-def get_bundle(ctx: Context = CurrentContext()) -> ServiceBundle:
-    """FastMCP dependency: extract ServiceBundle from lifespan context.
+def get_service(ctx: Context = CurrentContext()) -> Service:
+    """Resolve the running :class:`Service` from the request context.
 
-    Args:
-        ctx: FastMCP request context (injected automatically).
+    Use as a ``Depends`` default in tool/resource/prompt handlers.
 
-    Returns:
-        The :class:`ServiceBundle` created during lifespan.
+    Raises:
+        RuntimeError: If the server lifespan has not run.
     """
-    return ctx.lifespan_context["bundle"]  # type: ignore[no-any-return]
+    service: Service | None = ctx.lifespan_context.get("service")
+    if service is None:
+        msg = "Service not initialised — server lifespan has not run"
+        raise RuntimeError(msg)
+    return service

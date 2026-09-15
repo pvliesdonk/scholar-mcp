@@ -29,7 +29,8 @@ from ._patent_numbers import DocdbNumber, normalize
 from ._protocols import CacheProtocol
 from ._rate_limiter import RateLimitedError
 from ._s2_client import FIELD_SETS, S2Client
-from ._server_deps import ServiceBundle, get_bundle
+from ._server_deps import get_service
+from .domain import Service
 
 logger = logging.getLogger(__name__)
 
@@ -172,7 +173,7 @@ async def search_patents(
     jurisdiction: str | None = None,
     limit: int = 10,
     offset: int = 0,
-    bundle: ServiceBundle = Depends(get_bundle),
+    service: Service = Depends(get_service),
 ) -> dict[str, Any]:
     """Search for patents in the European Patent Office database.
 
@@ -203,7 +204,7 @@ async def search_patents(
             ``"EP"``, ``"WO"``, or ``"US"``.
         limit: Maximum results to return (default 10).
         offset: Pagination offset (0-based).
-        bundle: Injected service bundle.
+        service: Injected service.
 
     Returns:
         A mapping with ``total_count`` and a ``references`` list, or an
@@ -217,7 +218,7 @@ async def search_patents(
         "retryable": false}``. Do not manage or reason about EPO throttle
         states directly.
     """
-    epo = bundle.epo
+    epo = service.epo
     if epo is None:
         return dict(_EPO_NOT_CONFIGURED)
 
@@ -238,7 +239,7 @@ async def search_patents(
     range_end = offset + limit
     cache_key = f"{cql}|{range_begin}-{range_end}"
 
-    cached = await bundle.cache.get_patent_search(cache_key)
+    cached = await service.cache.get_patent_search(cache_key)
     if cached is not None:
         logger.debug("patent_search_cache_hit cql=%s", cql)
         return cached
@@ -248,7 +249,7 @@ async def search_patents(
     )
     if "error" in result:
         return result
-    await bundle.cache.set_patent_search(cache_key, result)
+    await service.cache.set_patent_search(cache_key, result)
     return result
 
 
@@ -258,7 +259,7 @@ async def get_patent(
         list[Literal["biblio", "claims", "description", "family", "legal", "citations"]]
         | None
     ) = None,
-    bundle: ServiceBundle = Depends(get_bundle),
+    service: Service = Depends(get_service),
 ) -> dict[str, Any]:
     """Get detailed information about a single patent.
 
@@ -283,7 +284,7 @@ async def get_patent(
             description, family, legal, citations.  When citations
             is included, NPL references are resolved via Semantic
             Scholar on a best-effort basis.
-        bundle: Injected service bundle.
+        service: Injected service.
 
     Returns:
         A mapping with ``patent_number`` (normalised DOCDB format) and the
@@ -297,7 +298,7 @@ async def get_patent(
         "retryable": false}``. Do not manage or reason about EPO throttle
         states directly.
     """
-    epo = bundle.epo
+    epo = service.epo
     if epo is None:
         return dict(_EPO_NOT_CONFIGURED)
 
@@ -315,8 +316,8 @@ async def get_patent(
             doc=doc,
             sections=effective_sections,
             epo=epo,
-            cache=bundle.cache,
-            s2=bundle.s2,
+            cache=service.cache,
+            s2=service.s2,
         )
     )
 
@@ -324,7 +325,7 @@ async def get_patent(
 async def get_citing_patents(
     paper_id: str,
     limit: int = 10,
-    bundle: ServiceBundle = Depends(get_bundle),
+    service: Service = Depends(get_service),
 ) -> dict[str, Any]:
     """Find patents that cite a given academic paper.
 
@@ -343,7 +344,7 @@ async def get_citing_patents(
             title keywords).
         limit: Maximum number of citing patents to return
             (default 10, max 25).
-        bundle: Injected service bundle.
+        service: Injected service.
 
     Returns:
         A mapping with ``paper_id``, a ``patents`` list (each with biblio
@@ -358,7 +359,7 @@ async def get_citing_patents(
         "retryable": false}``. Do not manage or reason about EPO throttle
         states directly.
     """
-    epo = bundle.epo
+    epo = service.epo
     if epo is None:
         return dict(_EPO_NOT_CONFIGURED)
 
@@ -405,7 +406,7 @@ async def _download_patent_pdf(
 async def fetch_patent_pdf(
     patent_number: str,
     use_vlm: bool = False,
-    bundle: ServiceBundle = Depends(get_bundle),
+    service: Service = Depends(get_service),
 ) -> dict[str, Any]:
     """Download a patent PDF via authenticated EPO OPS and convert to Markdown.
 
@@ -439,7 +440,7 @@ async def fetch_patent_pdf(
     import hashlib
     import re
 
-    epo = bundle.epo
+    epo = service.epo
     if epo is None:
         return dict(_EPO_NOT_CONFIGURED)
 
@@ -455,7 +456,7 @@ async def fetch_patent_pdf(
     url_hash = hashlib.sha256(patent_number.encode()).hexdigest()[:8]
     stem = f"patent_{stem}_{url_hash}"
 
-    pdf_dir = bundle.config.cache_dir / "pdfs"
+    pdf_dir = service.config.cache_dir / "pdfs"
     pdf_dir.mkdir(parents=True, exist_ok=True)
     pdf_path = pdf_dir / f"{stem}.pdf"
 
@@ -464,12 +465,12 @@ async def fetch_patent_pdf(
         return error
 
     result: dict[str, Any] = {"pdf_path": str(pdf_path)}
-    docling = bundle.docling
+    docling = service.docling
     if docling is None:
         return result
 
     vlm_suffix = "_vlm" if use_vlm and docling.vlm_available else ""
-    md_dir = bundle.config.cache_dir / "md"
+    md_dir = service.config.cache_dir / "md"
     md_dir.mkdir(parents=True, exist_ok=True)
     md_path = md_dir / f"{stem}{vlm_suffix}.md"
 

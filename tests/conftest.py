@@ -27,9 +27,9 @@ from scholar_mcp._openalex_client import OpenAlexClient
 from scholar_mcp._openlibrary_client import OpenLibraryClient
 from scholar_mcp._rate_limiter import RateLimiter
 from scholar_mcp._s2_client import S2Client
-from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._standards_client import StandardsClient
 from scholar_mcp.config import _ENV_PREFIX, ProjectConfig
+from scholar_mcp.domain import Service
 from scholar_mcp.server import make_server
 
 _JOBS_TEST_DEADLINE_S = 0.05
@@ -107,6 +107,16 @@ class PlainClient(Client[Any]):
 
 
 @pytest.fixture
+def config_contract_env() -> dict[str, str]:
+    """Env vars the template's `test_config_contract.py` presets before it
+    constructs the config via an otherwise env-less ``ProjectConfig.from_env()``.
+
+    Scholar's ``from_env`` hard-requires nothing, so there is nothing to preset.
+    """
+    return {}
+
+
+@pytest.fixture
 def server(
     request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> FastMCP:
@@ -163,8 +173,8 @@ def test_config(tmp_path: Path) -> ProjectConfig:
 
 
 @pytest.fixture
-async def bundle(cache: ScholarCache, test_config: ProjectConfig) -> ServiceBundle:
-    """Provide a ServiceBundle wired to in-memory/temp test services."""
+async def service(cache: ScholarCache, test_config: ProjectConfig) -> Service:
+    """Provide a Service wired to in-memory/temp test services."""
     s2 = S2Client(api_key=None, delay=0.0)
     openalex_http = httpx.AsyncClient(base_url="https://api.openalex.org")
     openalex = OpenAlexClient(openalex_http)
@@ -181,7 +191,7 @@ async def bundle(cache: ScholarCache, test_config: ProjectConfig) -> ServiceBund
     standards_http = httpx.AsyncClient(timeout=10.0)
     standards = StandardsClient(standards_http)
     # Import enrichers here to avoid circular import
-    # (_enricher_openlibrary -> _book_enrichment -> _server_deps)
+    # (_enricher_openlibrary -> _book_enrichment -> domain)
     from scholar_mcp._enricher_crossref import CrossRefEnricher
     from scholar_mcp._enricher_google_books import GoogleBooksEnricher
     from scholar_mcp._enricher_openalex import OpenAlexEnricher
@@ -195,19 +205,18 @@ async def bundle(cache: ScholarCache, test_config: ProjectConfig) -> ServiceBund
             GoogleBooksEnricher(),
         ]
     )
-    yield ServiceBundle(
-        s2=s2,
-        openalex=openalex,
-        crossref=crossref,
-        google_books=google_books,
-        docling=None,
-        epo=None,
-        openlibrary=openlibrary,
-        cache=cache,
-        config=test_config,
-        standards=standards,
-        enrichment=enrichment,
-    )
+    service = Service(test_config)
+    service.s2 = s2
+    service.openalex = openalex
+    service.crossref = crossref
+    service.google_books = google_books
+    service.docling = None
+    service.epo = None
+    service.openlibrary = openlibrary
+    service.cache = cache
+    service.standards = standards
+    service.enrichment = enrichment
+    yield service
     await crossref_http.aclose()
     await google_books_http.aclose()
     await openlibrary_http.aclose()

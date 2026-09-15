@@ -13,8 +13,8 @@ from fastmcp import FastMCP
 from fastmcp.client import Client
 from fastmcp_pvl_core import Jobs, register_job_tools
 
-from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._tools_citation import register_citation_tools
+from scholar_mcp.domain import Service
 from tests.conftest import PlainClient, tasks_server
 
 S2_BASE = "https://api.semanticscholar.org/graph/v1"
@@ -37,10 +37,10 @@ SAMPLE_PAPER = {
 
 
 @pytest.fixture
-def mcp(bundle: ServiceBundle, slow_jobs: Jobs) -> FastMCP:
+def mcp(service: Service, slow_jobs: Jobs) -> FastMCP:
     @asynccontextmanager
     async def lifespan(app: FastMCP):
-        yield {"bundle": bundle}
+        yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
     register_citation_tools(app, slow_jobs)
@@ -204,7 +204,7 @@ async def test_all_papers_unresolved(mcp: FastMCP) -> None:
     assert set(data["failed"]) == {"bad1", "bad2"}
 
 
-async def test_retries_on_429(bundle: ServiceBundle, slow_jobs: Jobs) -> None:
+async def test_retries_on_429(service: Service, slow_jobs: Jobs) -> None:
     call_count = 0
 
     def _side_effect(request: httpx.Request) -> httpx.Response:
@@ -219,7 +219,7 @@ async def test_retries_on_429(bundle: ServiceBundle, slow_jobs: Jobs) -> None:
 
         @asynccontextmanager
         async def lifespan(app: FastMCP):
-            yield {"bundle": bundle}
+            yield {"service": service}
 
         app = tasks_server("test", lifespan=lifespan)
         register_citation_tools(app, slow_jobs)
@@ -234,7 +234,7 @@ async def test_retries_on_429(bundle: ServiceBundle, slow_jobs: Jobs) -> None:
 
 
 async def test_generate_citations_promotes_when_slow(
-    bundle: ServiceBundle, jobs: Jobs
+    service: Service, jobs: Jobs
 ) -> None:
     """Slow resolution is promoted, and the formatted text survives polling.
 
@@ -255,7 +255,7 @@ async def test_generate_citations_promotes_when_slow(
 
         @asynccontextmanager
         async def lifespan(app: FastMCP):  # type: ignore[type-arg]
-            yield {"bundle": bundle}
+            yield {"service": service}
 
         app = tasks_server("test", lifespan=lifespan)
         register_citation_tools(app, jobs)

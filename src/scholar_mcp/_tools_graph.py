@@ -13,7 +13,8 @@ from fastmcp.dependencies import Depends
 from fastmcp_pvl_core import register_long_running_tool
 
 from ._s2_client import FIELD_SETS, log_s2_error, s2_error_payload
-from ._server_deps import ServiceBundle, get_bundle
+from ._server_deps import get_service
+from .domain import Service
 
 if TYPE_CHECKING:
     from fastmcp_pvl_core import Jobs
@@ -151,7 +152,7 @@ def _with_partial(
 
 
 async def _scan_citations_for_threshold(
-    bundle: ServiceBundle,
+    service: Service,
     identifier: str,
     *,
     fields: str,
@@ -168,7 +169,7 @@ async def _scan_citations_for_threshold(
     them.
 
     Args:
-        bundle: Injected service bundle.
+        service: Injected service.
         identifier: The cited paper.
         fields: Comma-separated S2 field set.
         year: Optional year-range filter.
@@ -184,7 +185,7 @@ async def _scan_citations_for_threshold(
     while len(items) < needed and scanned < _MAX_UPSTREAM_SCAN:
         batch = min(_S2_PAGE_SIZE, _MAX_UPSTREAM_SCAN - scanned)
         try:
-            page = await bundle.s2.get_citations(
+            page = await service.s2.get_citations(
                 identifier,
                 fields=fields,
                 limit=batch,
@@ -221,7 +222,7 @@ async def get_citations(
     year_end: int | None = None,
     fields_of_study: list[str] | None = None,
     min_citations: int | None = None,
-    bundle: ServiceBundle = Depends(get_bundle),
+    service: Service = Depends(get_service),
 ) -> dict[str, Any]:
     """Fetch papers that cite the given paper (forward citations).
 
@@ -269,7 +270,7 @@ async def get_citations(
     async def _execute() -> dict[str, Any]:
         if min_citations is not None:
             scan = await _scan_citations_for_threshold(
-                bundle,
+                service,
                 identifier,
                 fields=FIELD_SETS[fields],
                 year=year,
@@ -298,11 +299,11 @@ async def get_citations(
                 for item in page_items
                 if item.get("citingPaper")
             ]
-            await bundle.enrichment.enrich(papers, bundle, tags=frozenset({"papers"}))
+            await service.enrichment.enrich(papers, service, tags=frozenset({"papers"}))
             return result
 
         try:
-            result = await bundle.s2.get_citations(
+            result = await service.s2.get_citations(
                 identifier,
                 fields=FIELD_SETS[fields],
                 limit=limit,
@@ -318,8 +319,8 @@ async def get_citations(
         citing_papers = [
             item.get("citingPaper", {}) for item in data_list if item.get("citingPaper")
         ]
-        await bundle.enrichment.enrich(
-            citing_papers, bundle, tags=frozenset({"papers"})
+        await service.enrichment.enrich(
+            citing_papers, service, tags=frozenset({"papers"})
         )
         return result
 
@@ -331,7 +332,7 @@ async def get_references(
     fields: Literal["compact", "standard", "full"] = "compact",
     limit: int = 50,
     offset: int = 0,
-    bundle: ServiceBundle = Depends(get_bundle),
+    service: Service = Depends(get_service),
 ) -> dict[str, Any]:
     """Fetch papers referenced by the given paper (backward references).
 
@@ -350,7 +351,7 @@ async def get_references(
 
     async def _execute() -> dict[str, Any]:
         try:
-            result = await bundle.s2.get_references(
+            result = await service.s2.get_references(
                 identifier,
                 fields=FIELD_SETS[fields],
                 limit=limit,
@@ -365,7 +366,7 @@ async def get_references(
             for item in result.get("data") or []
             if item.get("citedPaper")
         ]
-        await bundle.enrichment.enrich(papers, bundle, tags=frozenset({"papers"}))
+        await service.enrichment.enrich(papers, service, tags=frozenset({"papers"}))
         return result
 
     return await _execute()
@@ -416,7 +417,7 @@ def _node_from(paper: dict[str, Any]) -> dict[str, object]:
 
 
 async def _seed_nodes(
-    bundle: ServiceBundle, seed_batch: list[str]
+    service: Service, seed_batch: list[str]
 ) -> tuple[dict[str, dict[str, object]], _UpstreamFailure | None]:
     """Resolve seed metadata so seed nodes carry titles and years.
 
@@ -424,7 +425,7 @@ async def _seed_nodes(
     so the seeds keep null metadata and the failure is reported alongside.
 
     Args:
-        bundle: Injected service bundle.
+        service: Injected service.
         seed_batch: Seed identifiers, already capped.
 
     Returns:
@@ -433,7 +434,7 @@ async def _seed_nodes(
     """
     failure: _UpstreamFailure | None = None
     try:
-        resolved = await bundle.s2.batch_resolve(
+        resolved = await service.s2.batch_resolve(
             seed_batch, fields=FIELD_SETS["compact"]
         )
     except httpx.HTTPError as exc:
@@ -457,7 +458,7 @@ async def _seed_nodes(
 
 
 async def _expand_citations(
-    bundle: ServiceBundle, paper_id: str, filters: _GraphFilters, room: int
+    service: Service, paper_id: str, filters: _GraphFilters, room: int
 ) -> tuple[list[_Triple], _UpstreamFailure | None]:
     """Collect papers citing *paper_id*, newest-first, honouring the threshold.
 
@@ -467,7 +468,7 @@ async def _expand_citations(
     the walk, and are reported so the caller can tell a gap from an absence.
 
     Args:
-        bundle: Injected service bundle.
+        service: Injected service.
         paper_id: The node being expanded.
         filters: Active filters and page size.
         room: How many more nodes the graph can still hold.
@@ -485,7 +486,7 @@ async def _expand_citations(
             batch = min(
                 _S2_PAGE_SIZE if deep else filters.fetch_limit, scan_cap - offset
             )
-            result = await bundle.s2.get_citations(
+            result = await service.s2.get_citations(
                 paper_id,
                 fields=filters.fields,
                 limit=batch,
@@ -546,7 +547,7 @@ def _passes_reference_filters(paper: dict[str, Any], filters: _GraphFilters) -> 
 
 
 async def _expand_references(
-    bundle: ServiceBundle, paper_id: str, filters: _GraphFilters
+    service: Service, paper_id: str, filters: _GraphFilters
 ) -> tuple[list[_Triple], _UpstreamFailure | None]:
     """Collect the papers *paper_id* references.
 
@@ -554,7 +555,7 @@ async def _expand_references(
     is reported so the caller can tell a gap from an absence.
 
     Args:
-        bundle: Injected service bundle.
+        service: Injected service.
         paper_id: The node being expanded.
         filters: Active filters and page size.
 
@@ -564,7 +565,7 @@ async def _expand_references(
     """
     found: list[_Triple] = []
     try:
-        result = await bundle.s2.get_references(
+        result = await service.s2.get_references(
             paper_id, fields=filters.fields, limit=filters.fetch_limit, offset=0
         )
     except httpx.HTTPError as exc:
@@ -604,7 +605,7 @@ class _Walk:
 
 
 async def _walk_graph(
-    bundle: ServiceBundle,
+    service: Service,
     seeds: dict[str, dict[str, object]],
     *,
     direction: str,
@@ -615,7 +616,7 @@ async def _walk_graph(
     """Expand outward from *seeds* until depth or the node budget runs out.
 
     Args:
-        bundle: Injected service bundle.
+        service: Injected service.
         seeds: Seed nodes, keyed by paper id.
         direction: ``citations``, ``references`` or ``both``.
         depth: Maximum hops to expand.
@@ -641,13 +642,13 @@ async def _walk_graph(
         found: list[_Triple] = []
         if direction in ("citations", "both"):
             citing, failure = await _expand_citations(
-                bundle, paper_id, filters, max_nodes - len(nodes)
+                service, paper_id, filters, max_nodes - len(nodes)
             )
             found += citing
             if failure:
                 failures.append(failure)
         if direction in ("references", "both"):
-            cited, failure = await _expand_references(bundle, paper_id, filters)
+            cited, failure = await _expand_references(service, paper_id, filters)
             found += cited
             if failure:
                 failures.append(failure)
@@ -675,7 +676,7 @@ async def get_citation_graph(
     year_end: int | None = None,
     fields_of_study: list[str] | None = None,
     min_citations: int | None = None,
-    bundle: ServiceBundle = Depends(get_bundle),
+    service: Service = Depends(get_service),
 ) -> dict[str, Any]:
     """Traverse the citation graph from one or more seed papers.
 
@@ -738,9 +739,9 @@ async def get_citation_graph(
         has_client_filters = (
             min_citations is not None or year is not None or fos is not None
         )
-        seeds, seed_failure = await _seed_nodes(bundle, seed_batch)
+        seeds, seed_failure = await _seed_nodes(service, seed_batch)
         walk = await _walk_graph(
-            bundle,
+            service,
             seeds,
             direction=direction,
             depth=clamped_depth,
@@ -762,7 +763,7 @@ async def get_citation_graph(
             e for e in walk.edges if e["source"] in node_ids and e["target"] in node_ids
         ]
 
-        await bundle.enrichment.enrich(node_list, bundle, tags=frozenset({"papers"}))
+        await service.enrichment.enrich(node_list, service, tags=frozenset({"papers"}))
         failures = ([seed_failure] if seed_failure else []) + walk.failures
         # The completeness fields sit in stats beside truncated, which answers
         # the neighbouring question; the warning stays top-level, matching the
@@ -786,12 +787,12 @@ async def get_citation_graph(
 
 
 async def _cached_neighbour_ids(
-    bundle: ServiceBundle, paper_id: str, *, kind: str
+    service: Service, paper_id: str, *, kind: str
 ) -> tuple[list[str], _UpstreamFailure | None]:
     """Return one direction's neighbour ids, reading through the cache.
 
     Args:
-        bundle: Injected service bundle.
+        service: Injected service.
         paper_id: The paper whose neighbours are wanted.
         kind: ``"references"`` or ``"citations"``.
 
@@ -801,18 +802,18 @@ async def _cached_neighbour_ids(
         paper genuinely has no neighbours in that direction.
     """
     if kind == "references":
-        cached = await bundle.cache.get_references(paper_id)
+        cached = await service.cache.get_references(paper_id)
         fetch, item_key, store = (
-            bundle.s2.get_references,
+            service.s2.get_references,
             "citedPaper",
-            bundle.cache.set_references,
+            service.cache.set_references,
         )
     else:
-        cached = await bundle.cache.get_citations(paper_id)
+        cached = await service.cache.get_citations(paper_id)
         fetch, item_key, store = (
-            bundle.s2.get_citations,
+            service.s2.get_citations,
             "citingPaper",
-            bundle.cache.set_citations,
+            service.cache.set_citations,
         )
     if cached is not None:
         return list(cached), None
@@ -830,12 +831,12 @@ async def _cached_neighbour_ids(
 
 
 async def _neighbours(
-    bundle: ServiceBundle, paper_id: str, direction: str
+    service: Service, paper_id: str, direction: str
 ) -> tuple[list[str], list[_UpstreamFailure]]:
     """Return neighbour ids in the requested direction(s).
 
     Args:
-        bundle: Injected service bundle.
+        service: Injected service.
         paper_id: The paper whose neighbours are wanted.
         direction: ``references``, ``citations`` or ``both``.
 
@@ -847,18 +848,18 @@ async def _neighbours(
     failures: list[_UpstreamFailure] = []
     kinds = ("references", "citations") if direction == "both" else (direction,)
     for kind in kinds:
-        ids, failure = await _cached_neighbour_ids(bundle, paper_id, kind=kind)
+        ids, failure = await _cached_neighbour_ids(service, paper_id, kind=kind)
         found += ids
         if failure:
             failures.append(failure)
     return found, failures
 
 
-async def _path_records(bundle: ServiceBundle, path: list[str]) -> list[dict[str, Any]]:
+async def _path_records(service: Service, path: list[str]) -> list[dict[str, Any]]:
     """Turn a list of paper ids into records, falling back to bare ids.
 
     Args:
-        bundle: Injected service bundle.
+        service: Injected service.
         path: Paper ids in path order.
 
     Returns:
@@ -866,7 +867,7 @@ async def _path_records(bundle: ServiceBundle, path: list[str]) -> list[dict[str
     """
     records: list[dict[str, Any]] = []
     for pid in path:
-        cached = await bundle.cache.get_paper(pid)
+        cached = await service.cache.get_paper(pid)
         records.append(dict(cached) if cached else {"paperId": pid})
     return records
 
@@ -876,7 +877,7 @@ async def find_bridge_papers(
     target_id: str,
     max_depth: int = 4,
     direction: Literal["citations", "references", "both"] = "both",
-    bundle: ServiceBundle = Depends(get_bundle),
+    service: Service = Depends(get_service),
 ) -> dict[str, Any]:
     """Find the shortest citation path between two papers.
 
@@ -915,14 +916,14 @@ async def find_bridge_papers(
             if len(path) > max_depth + 1:
                 continue
 
-            neighbours, hop_failures = await _neighbours(bundle, current_id, direction)
+            neighbours, hop_failures = await _neighbours(service, current_id, direction)
             failures += hop_failures
             for neighbour_id in neighbours:
                 if neighbour_id == target_id:
                     return _with_partial(
                         {
                             "found": True,
-                            "path": await _path_records(bundle, [*path, target_id]),
+                            "path": await _path_records(service, [*path, target_id]),
                         },
                         failures,
                     )

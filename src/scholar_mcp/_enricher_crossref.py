@@ -39,7 +39,7 @@ class CrossRefEnricher:
         doi = (record.get("externalIds") or {}).get("DOI")
         return bool(doi)
 
-    async def enrich(self, record: dict[str, Any], bundle: Any) -> None:
+    async def enrich(self, record: dict[str, Any], service: Any) -> None:
         """Fill crossref_metadata from CrossRef, using cache when available.
 
         Extracts the DOI from ``record["externalIds"]["DOI"]``, checks
@@ -51,20 +51,20 @@ class CrossRefEnricher:
 
         Args:
             record: The paper record dict to enrich in place.
-            bundle: Service bundle providing cache and CrossRef client.
+            service: Domain service providing cache and CrossRef client.
         """
         doi = (record.get("externalIds") or {}).get("DOI")
         if not doi:
             return
         try:
-            cached = await bundle.cache.get_crossref(doi)
+            cached = await service.cache.get_crossref(doi)
             cr_data = (
-                cached if cached is not None else await bundle.crossref.get_by_doi(doi)
+                cached if cached is not None else await service.crossref.get_by_doi(doi)
             )
             if cr_data is None:
                 return
             if cached is None:
-                await bundle.cache.set_crossref(doi, cr_data)
+                await service.cache.set_crossref(doi, cr_data)
             record["crossref_metadata"] = cr_data
         except Exception:
             logger.debug("crossref_enrich_failed doi=%s", doi, exc_info=True)

@@ -13,18 +13,18 @@ from fastmcp import FastMCP
 from fastmcp.client import Client
 from fastmcp_pvl_core import Jobs, register_job_tools
 
-from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._tools_graph import register_graph_tools
+from scholar_mcp.domain import Service
 from tests.conftest import PlainClient, tasks_server
 
 S2_BASE = "https://api.semanticscholar.org/graph/v1"
 
 
 @pytest.fixture
-def mcp(bundle: ServiceBundle, slow_jobs: Jobs) -> FastMCP:
+def mcp(service: Service, slow_jobs: Jobs) -> FastMCP:
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
-        yield {"bundle": bundle}
+        yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
     register_graph_tools(app, slow_jobs)
@@ -722,11 +722,11 @@ async def test_find_bridge_papers_http_error_in_citations(
 
 @pytest.mark.respx(base_url=S2_BASE)
 async def test_find_bridge_papers_multi_hop_with_cached_paper(
-    respx_mock: respx.MockRouter, mcp: FastMCP, bundle: ServiceBundle
+    respx_mock: respx.MockRouter, mcp: FastMCP, service: Service
 ) -> None:
     """find_bridge_papers finds a 2-hop path; intermediate paper uses cache."""
     # Pre-cache paper "mid" so line 417 (cached_paper branch) is hit
-    await bundle.cache.set_paper(
+    await service.cache.set_paper(
         "mid", {"paperId": "mid", "title": "Middle Paper", "year": 2021}
     )
     # p1 references -> mid (intermediate node, not target)
@@ -1951,7 +1951,7 @@ async def _settle(client: Client, job_id: str, attempts: int = 40) -> dict:
 
 @pytest.mark.respx(base_url=S2_BASE)
 async def test_get_citations_promotes_when_slow(
-    respx_mock: respx.MockRouter, bundle: ServiceBundle, jobs: Jobs
+    respx_mock: respx.MockRouter, service: Service, jobs: Jobs
 ) -> None:
     """Work past the soft deadline returns a handle, resolved by polling.
 
@@ -1971,7 +1971,7 @@ async def test_get_citations_promotes_when_slow(
 
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
-        yield {"bundle": bundle}
+        yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
     register_graph_tools(app, jobs)
@@ -2254,10 +2254,10 @@ async def test_get_citation_graph_malformed_seed_response_is_not_partial(
 
 @pytest.mark.respx(base_url=S2_BASE)
 async def test_find_bridge_papers_cached_neighbours_report_no_failure(
-    respx_mock: respx.MockRouter, mcp: FastMCP, bundle: ServiceBundle
+    respx_mock: respx.MockRouter, mcp: FastMCP, service: Service
 ) -> None:
     """A cached neighbour list makes no upstream call and no partiality claim."""
-    await bundle.cache.set_references("p1", ["p2"])
+    await service.cache.set_references("p1", ["p2"])
     async with Client(mcp) as client:
         result = await client.call_tool(
             "find_bridge_papers",

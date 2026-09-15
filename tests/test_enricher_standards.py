@@ -95,7 +95,7 @@ def test_can_enrich_no_match() -> None:
 
 @pytest.mark.asyncio
 async def test_enrich_attaches_standard_metadata() -> None:
-    """When bundle.standards.get() returns a record, it's attached."""
+    """When service.standards.get() returns a record, it's attached."""
     from scholar_mcp._enricher_standards import StandardsEnricher
 
     standard_record = {
@@ -106,30 +106,30 @@ async def test_enrich_attaches_standard_metadata() -> None:
         "full_text_available": True,
     }
 
-    bundle = MagicMock()
-    bundle.standards = AsyncMock()
-    bundle.standards.get = AsyncMock(return_value=standard_record)
+    service = MagicMock()
+    service.standards = AsyncMock()
+    service.standards.get = AsyncMock(return_value=standard_record)
 
     enricher = StandardsEnricher()
     record = _make_record("RFC 9000")
-    await enricher.enrich(record, bundle)
+    await enricher.enrich(record, service)
 
     assert record["standard_metadata"] == standard_record
-    bundle.standards.get.assert_awaited_once_with("RFC 9000")
+    service.standards.get.assert_awaited_once_with("RFC 9000")
 
 
 @pytest.mark.asyncio
 async def test_enrich_cache_miss_no_metadata() -> None:
-    """When bundle.standards.get() returns None, no field is attached."""
+    """When service.standards.get() returns None, no field is attached."""
     from scholar_mcp._enricher_standards import StandardsEnricher
 
-    bundle = MagicMock()
-    bundle.standards = AsyncMock()
-    bundle.standards.get = AsyncMock(return_value=None)
+    service = MagicMock()
+    service.standards = AsyncMock()
+    service.standards.get = AsyncMock(return_value=None)
 
     enricher = StandardsEnricher()
     record = _make_record("ISO 99999:2099")
-    await enricher.enrich(record, bundle)
+    await enricher.enrich(record, service)
 
     assert "standard_metadata" not in record
 
@@ -139,15 +139,15 @@ async def test_enrich_skips_when_no_match() -> None:
     """Title without standards pattern → no side effects."""
     from scholar_mcp._enricher_standards import StandardsEnricher
 
-    bundle = MagicMock()
-    bundle.standards = AsyncMock()
+    service = MagicMock()
+    service.standards = AsyncMock()
 
     enricher = StandardsEnricher()
     record = _make_record("Deep learning for image recognition")
-    await enricher.enrich(record, bundle)
+    await enricher.enrich(record, service)
 
     assert "standard_metadata" not in record
-    bundle.standards.get.assert_not_awaited()
+    service.standards.get.assert_not_awaited()
 
 
 def test_enricher_conforms_to_protocol() -> None:
@@ -167,9 +167,9 @@ def test_enricher_registered_in_pipeline() -> None:
 
     NOTE: accesses private ``_phases`` — fragile if EnrichmentPipeline
     internals change. Acceptable for a registration smoke-test; a full
-    end-to-end test would require a mock ServiceBundle.
+    end-to-end test would require a mock Service.
     """
-    from scholar_mcp._server_deps import _build_enrichment_pipeline
+    from scholar_mcp.domain import _build_enrichment_pipeline
 
     pipeline = _build_enrichment_pipeline()
     phase_0_names = [e.name for e in pipeline._phases.get(0, [])]
@@ -178,16 +178,16 @@ def test_enricher_registered_in_pipeline() -> None:
 
 @pytest.mark.asyncio
 async def test_enrich_exception_is_caught() -> None:
-    """Exception from bundle.standards.get() is caught; no propagation."""
+    """Exception from service.standards.get() is caught; no propagation."""
     from scholar_mcp._enricher_standards import StandardsEnricher
 
-    bundle = MagicMock()
-    bundle.standards = AsyncMock()
-    bundle.standards.get = AsyncMock(side_effect=Exception("simulated timeout"))
+    service = MagicMock()
+    service.standards = AsyncMock()
+    service.standards.get = AsyncMock(side_effect=Exception("simulated timeout"))
 
     enricher = StandardsEnricher()
     record = _make_record("RFC 9000")
-    await enricher.enrich(record, bundle)  # must not raise
+    await enricher.enrich(record, service)  # must not raise
 
     assert "standard_metadata" not in record
 
@@ -197,12 +197,12 @@ async def test_enrich_coverage_guard_skips_partial_match() -> None:
     """enrich() skips titles where identifier coverage is <=50%."""
     from scholar_mcp._enricher_standards import StandardsEnricher
 
-    bundle = MagicMock()
-    bundle.standards = AsyncMock()
+    service = MagicMock()
+    service.standards = AsyncMock()
 
     enricher = StandardsEnricher()
     record = _make_record("Implementing ISO 27001 in healthcare: a systematic review")
-    await enricher.enrich(record, bundle)
+    await enricher.enrich(record, service)
 
     assert "standard_metadata" not in record
-    bundle.standards.get.assert_not_awaited()
+    service.standards.get.assert_not_awaited()

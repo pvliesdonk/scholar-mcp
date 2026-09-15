@@ -1,20 +1,10 @@
-"""Command-line interface for scholar-mcp.
-
-Provides ``serve``, ``sync-standards``, and ``cache`` subcommands.  The
-entry point is :func:`main`, registered as ``scholar-mcp`` in
-``pyproject.toml``.
-"""
+"""Command-line interface for Scholar MCP."""
 
 from __future__ import annotations
 
-import asyncio
 import logging
-import os
-from enum import StrEnum
-from pathlib import Path
-from typing import TYPE_CHECKING, Literal, cast
+from typing import Literal
 
-import httpx
 import typer
 from fastmcp_pvl_core import (
     build_event_store,
@@ -25,17 +15,11 @@ from fastmcp_pvl_core import (
 
 from scholar_mcp.config import _ENV_PREFIX, ProjectConfig
 
-if TYPE_CHECKING:
-    from scholar_mcp._standards_sync import Loader
-
-logger = logging.getLogger(__name__)
-
 app = typer.Typer(
     name="scholar-mcp",
-    help="Scholar MCP — academic literature server.",
+    help="FastMCP server for scholarly papers, patents, books and standards with docling PDF conversion",
     no_args_is_help=True,
     add_completion=False,
-    rich_markup_mode=None,
 )
 
 Transport = Literal["stdio", "http", "sse"]
@@ -47,10 +31,24 @@ def _root(
         False, "-v", "--verbose", help="Enable debug logging."
     ),
 ) -> None:
-    """Root callback — bootstraps logging for every subcommand."""
+    """Root callback — bootstraps logging for every subcommand.
+
+    ``configure_logging_from_env`` sets the root logger *level* and
+    configures FastMCP's own logger tree, but does NOT attach a handler
+    to the root logger — so ``scholar_mcp.*`` loggers would have
+    no output.  Attach one here.  Kept idempotent via the
+    ``if not root.handlers`` guard so repeated calls (e.g. from
+    ``make_server()`` on the same process) are safe.
+    """
     configure_logging_from_env(verbose=verbose)
+    root = logging.getLogger()
+    if not root.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter("%(levelname)s %(name)s: %(message)s"))
+        root.addHandler(handler)
     if verbose:
-        # httpx is noisy at DEBUG; keep it at WARNING.
+        # httpx/httpcore are noisy at DEBUG; keep them quiet.  Core doesn't
+        # own these deps, so the silencing stays domain-local.
         logging.getLogger("httpx").setLevel(logging.WARNING)
         logging.getLogger("httpcore").setLevel(logging.WARNING)
 
@@ -74,16 +72,9 @@ def serve(
     ),
 ) -> None:
     """Run the MCP server."""
-    try:
-        from scholar_mcp.server import make_server
-    except ImportError as exc:
-        logger.error(
-            "FastMCP is not installed. Install with: "
-            "pip install pvliesdonk-scholar-mcp[mcp]"
-        )
-        raise typer.Exit(code=1) from exc
+    import os
 
-    from fastmcp_pvl_core import ConfigurationError
+    from scholar_mcp.server import make_server
 
     # Optional remote-debugger listener — placed in ``serve`` (not the
     # typer root callback) so non-server commands like ``--help``,
@@ -97,64 +88,50 @@ def serve(
     # formatter rather than Python's lastResort.
     maybe_start_debugpy(_ENV_PREFIX)
 
-    try:
-        # Config loading is inside the guard: ``ServerConfig.from_env``
-        # raises ``ConfigurationError`` on a malformed value (e.g. a
-        # non-integer SCHOLAR_MCP_PORT) just like the auth builders do on
-        # real auth misconfig (OIDC discovery failure, missing httpx,
-        # incomplete discovery doc). The exception message is
-        # operator-actionable on its own; don't bury it under a
-        # multi-screen rich traceback. Print to stderr via ``typer.echo``
-        # rather than ``logger.error`` so the message is visible even if
-        # the operator runs with ``FASTMCP_LOG_LEVEL=CRITICAL`` or another
-        # level that filters ERROR. Operators who want the full chain can
-        # re-run with ``-v`` (FASTMCP_LOG_LEVEL=DEBUG) — the DEBUG line
-        # below renders the traceback when the level allows it.
-        config = ProjectConfig.from_env()
-        # Resolved once, ahead of ``make_server``: the health routes it
-        # registers derive their prefix from the mount path, so the value
-        # handed to ``http_app(path=...)`` below and the one the server saw
-        # must be the same object, not two reads that could drift.
-        path = normalise_http_path(
-            http_path or os.environ.get(f"{_ENV_PREFIX}_HTTP_PATH")
-        )
-        server = make_server(transport=transport, config=config, http_path=path)
-    except ConfigurationError as exc:
-        typer.echo(f"ERROR: configuration error: {exc}", err=True)
-        logger.debug("configuration_error_traceback", exc_info=True)
-        raise typer.Exit(code=1) from exc
-
-    if transport != "http" and (
-        host is not None or port is not None or http_path is not None
-    ):
-        logger.warning("--host, --port and --path are only used with --transport http")
+    config = ProjectConfig.from_env()
+    # Resolved once, ahead of ``make_server``: the health routes it registers
+    # derive their prefix from the mount path, so the value handed to
+    # ``http_app(path=...)`` below and the one the server saw must be the
+    # same object, not two reads that could drift.
+    path = normalise_http_path(http_path or os.environ.get(f"{_ENV_PREFIX}_HTTP_PATH"))
+    server = make_server(transport=transport, config=config, http_path=path)
 
     if transport == "http":
-        try:
-            import uvicorn
-        except ImportError as exc:
-            logger.error(
-                "HTTP transport requires uvicorn. Install with: "
-                "pip install 'pvliesdonk-scholar-mcp[mcp]'"
-            )
-            raise typer.Exit(code=1) from exc
+        import uvicorn
 
         event_store = build_event_store(_ENV_PREFIX, config.server)
-        # lifespan="on" is essential: FastMCP's lifespan (startup/shutdown
-        # hooks, including service init) runs through the ASGI lifespan
-        # protocol.
+        # lifespan="on" is essential: FastMCP's server_lifespan (startup/shutdown
+        # hooks, including service init) runs through the ASGI lifespan protocol.
+        # timeout_graceful_shutdown=3 lets SIGTERM drain requests within 3s so
+        # containers (Docker/k8s) stop cleanly.
         uvicorn.run(
             server.http_app(path=path, event_store=event_store),
             host=host if host is not None else config.server.host,
             port=port if port is not None else config.server.port,
             lifespan="on",
-            timeout_graceful_shutdown=0,
+            timeout_graceful_shutdown=3,
         )
     else:
         server.run(transport=transport)
 
 
 # DOMAIN-COMMANDS-START — add domain @app.command()s (and their helpers) below; kept across copier update
+# Domain CLI subcommands live here so the rest of this file stays byte-identical
+# to the template and applies cleanly on copier update. Use function-local
+# imports for domain modules (as ``serve`` does) to keep the top-level import
+# surface template-owned. Module-level names typer resolves from annotations
+# (``Path``, ``StrEnum``) and ``TYPE_CHECKING`` guards are imported here.
+
+import asyncio  # noqa: E402
+from enum import StrEnum  # noqa: E402
+from pathlib import Path  # noqa: E402
+from typing import TYPE_CHECKING  # noqa: E402
+
+if TYPE_CHECKING:
+    import httpx
+
+    from scholar_mcp._standards_sync import Loader
+
 cache_app = typer.Typer(
     name="cache",
     help="Manage the Scholar MCP local cache.",
@@ -199,6 +176,8 @@ def sync_standards(
         1 — hard failure (no body synced)
         3 — partial failure (some bodies succeeded, some did not)
     """
+    import httpx
+
     from scholar_mcp._cache import ScholarCache
     from scholar_mcp._standards_sync import format_reports, run_sync
 
@@ -305,6 +284,8 @@ def _select_loaders(
     All loaders share the passed-in ``httpx.AsyncClient``; the caller is
     responsible for closing it.
     """
+    from typing import cast
+
     from scholar_mcp._sync_cc import CCLoader
     from scholar_mcp._sync_cen import CENLoader
     from scholar_mcp._sync_relaton import RelatonLoader
