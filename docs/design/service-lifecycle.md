@@ -40,3 +40,6 @@ assign its collaborators directly (`tests/conftest.py`, `service` fixture).
   downstream caller of the old shapes breaks. This is why the adoption ships
   as a breaking release rather than carrying a compatibility layer the
   template does not have.
+- The packaged systemd unit sets no bind host and `packaging/env.example` is
+  fully commented; `docs/deployment/systemd.md` tells the operator to set
+  `SCHOLAR_MCP_CACHE_DIR` and `SCHOLAR_MCP_HOST` in `/etc/scholar-mcp/env`.

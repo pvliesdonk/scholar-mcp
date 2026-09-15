@@ -35,7 +35,7 @@
       "command": "uvx",
       "args": [
         "--from",
-        "pvliesdonk-scholar-mcp[mcp]==${VERSION}",
+        "pvliesdonk-scholar-mcp[all]==${VERSION}",
         "scholar-mcp",
         "serve"
       ],

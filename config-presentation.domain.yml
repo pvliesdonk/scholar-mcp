@@ -105,12 +105,11 @@ files:
         id: cache_dir
         title: "Cache directory"
         type: directory
-        # No default on purpose.  The config default (/data/scholar-mcp) is a
-        # container path, wrong for a local plugin install, and the mcpb
-        # screen's ${DOCUMENTS} is an mcpb variable this surface is not known
-        # to expand.  `null` omits the key, leaving the user to pick a
-        # directory -- which is what the plugin channel did before it had a
-        # userConfig at all.
+        # Required, like every sibling's directory picker: the config default
+        # (/data/scholar-mcp) is the container path, so a plugin install must
+        # choose where the cache lives.  The explicit null keeps the generator
+        # from falling back to that default.
+        required: true
         default: null
       "{PREFIX}_CONTACT_EMAIL":
         id: contact_email

@@ -40,7 +40,7 @@ Add to your shell profile:
 |---|---|---|
 | `SCHOLAR_MCP_READ_ONLY` | `true` | Hide write tools (PDF download/conversion). |
 | `SCHOLAR_MCP_CONTACT_EMAIL` | _(none)_ | OpenAlex polite pool + Unpaywall PDF lookups. |
-| `SCHOLAR_MCP_CACHE_DIR` | `/data/scholar-mcp` | SQLite cache and PDF storage. Set a writable local path (such as `~/Documents/scholar-mcp`), the default is for Docker. |
+| `SCHOLAR_MCP_CACHE_DIR` | (required) | SQLite cache and PDF storage. The install screen asks for a writable local path (such as `~/Documents/scholar-mcp`); the server's own default is the Docker path. |
 | `SCHOLAR_MCP_DOCLING_URL` | _(none)_ | [docling-serve](https://github.com/DS4SD/docling-serve) URL for PDF-to-Markdown. |
 | `SCHOLAR_MCP_VLM_API_URL` | _(none)_ | OpenAI-compatible VLM endpoint for formula/figure enrichment. |
 | `SCHOLAR_MCP_VLM_API_KEY` | _(none)_ | API key for the VLM endpoint. |

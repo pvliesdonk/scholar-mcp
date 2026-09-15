@@ -484,23 +484,35 @@ files:
       - {title: "Remote debugger (development only)", tags: [debug]}
       - {title: Domain, tags: [domain], note: "Populated from your ProjectConfig CONFIG-FIELDS block."}
 
-  # LOCAL DEVIATION (scholar-mcp#252): packaging/env.example is deliberately
-  # NOT generated. It is an nfpm `config|noreplace` EnvironmentFile whose role
-  # is to carry the systemd install's deliberate overrides (cache dir under
-  # /var/lib per FHS, reachable bind host) — generating it emitted one value
-  # per var across all artifacts and turned the override file into a defaults
-  # listing.
-  #
-  # The exit condition this block used to name has been met: template v7.0.2
-  # generates the file fully commented (fastmcp-server-template#290), and the
-  # template's own entry now carries the same reasoning this comment does.
-  # Retiring the deviation is still a decision rather than a formality —
-  # `commented: true` turns the systemd install's two live overrides into
-  # comments, so a packaged install would get its cache dir and bind host by
-  # operator edit rather than by default. That question is scholar-mcp#345 and
-  # is deliberately not answered by this template hop. Keep the deviation
-  # until #345 decides; restore the template's `packaging/env.example:` entry
-  # then.
+  packaging/env.example:
+    kind: env
+    header: |
+      {HUMAN_NAME} environment configuration
+
+      Installed to /etc/{PROJECT_NAME}/env.example.
+      Copy to /etc/{PROJECT_NAME}/env and edit for your deployment; the systemd
+      unit (/usr/lib/systemd/system/{PROJECT_NAME}.service) sources
+      /etc/{PROJECT_NAME}/env via EnvironmentFile=.
+    # Commented, like .env.example and unlike the two `examples/` files (#290).
+    # The copy an operator makes of this becomes the unit's EnvironmentFile,
+    # whose role is to carry DEVIATIONS from the defaults — so emitting every
+    # default as a live assignment overwrote the handful of deliberate
+    # overrides a systemd install needs. A consumer migrating to generated
+    # artifacts lost a `/var/lib/...` cache path that way and got a service
+    # writing into a directory `ProtectSystem=strict` makes read-only.
+    # The header above already describes a template to copy and edit; the
+    # active form was the half that contradicted it.
+    commented: true
+    sections:
+      - {title: Logging, tags: [observability]}
+      - title: Domain
+        tags: [domain]
+        note: |
+          All domain env vars use the {PREFIX}_ prefix.
+          See the README and `{PROJECT_NAME} serve --help` for the full list.
+
+          Example:
+          {PREFIX}_EXAMPLE_VAR=value
 
   examples/bearer-auth.env:
     kind: env

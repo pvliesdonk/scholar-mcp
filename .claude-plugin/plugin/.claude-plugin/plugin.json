@@ -36,7 +36,7 @@
       "type": "directory",
       "title": "Cache directory",
       "description": "Directory for the SQLite cache database (cache.db) and downloaded PDFs (pdfs/, md/).",
-      "required": false
+      "required": true
     },
     "contact_email": {
       "type": "string",
