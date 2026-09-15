@@ -5,7 +5,7 @@ citation records whose title is predominantly a standards identifier.
 Uses :func:`resolve_identifier_local` for detection and
 ``service.standards.get()`` for resolution.
 
-Design reference: ``docs/specs/2026-04-16-pr5-standards-enrichment-design.md``.
+Design reference: ``docs/design/history/specs/2026-04-16-pr5-standards-enrichment-design.md``.
 """
 
 from __future__ import annotations
