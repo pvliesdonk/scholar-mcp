@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from click import unstyle
 from typer.testing import CliRunner
 
 from scholar_mcp.cli import app
@@ -103,7 +104,9 @@ def test_serve_help() -> None:
     runner = CliRunner()
     result = runner.invoke(app, ["serve", "--help"])
     assert result.exit_code == 0
-    assert "--transport" in result.output
+    # Rich styles option names when it detects CI or FORCE_COLOR, splitting
+    # "--transport" across escape sequences; compare the unstyled text.
+    assert "--transport" in unstyle(result.output)
 
 
 def test_serve_stdio_invokes_make_server() -> None:

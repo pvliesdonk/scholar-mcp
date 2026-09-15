@@ -8,6 +8,7 @@ from typing import Any
 
 import httpx
 import pytest
+from click import unstyle
 from typer.testing import CliRunner
 
 from scholar_mcp import cli as cli_mod
@@ -59,8 +60,10 @@ def test_sync_standards_help() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["sync-standards", "--help"])
     assert result.exit_code == 0
-    assert "--body" in result.output
-    assert "--force" in result.output
+    # Rich styles option names under CI or FORCE_COLOR; compare unstyled text.
+    output = unstyle(result.output)
+    assert "--body" in output
+    assert "--force" in output
 
 
 def test_sync_standards_no_loaders_registered(
