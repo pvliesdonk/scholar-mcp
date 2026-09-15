@@ -271,7 +271,10 @@ async def test_run_keepalive_network_error_logs_and_continues(
 
 @pytest.mark.respx(base_url=S2_BASE)
 async def test_run_keepalive_retries_soon_after_a_refused_ping(
-    respx_mock, client, caplog, monkeypatch
+    respx_mock,
+    client,
+    caplog,  # noqa: ARG001
+    monkeypatch,
 ):
     """A 429 sleeps the short retry interval, not the full 7-day cycle."""
     respx_mock.get(f"/paper/{KEEPALIVE_PAPER_ID}").mock(
@@ -296,7 +299,10 @@ async def test_run_keepalive_retries_soon_after_a_refused_ping(
 
 @pytest.mark.respx(base_url=S2_BASE)
 async def test_run_keepalive_returns_to_full_interval_after_recovery(
-    respx_mock, client, caplog, monkeypatch
+    respx_mock,
+    client,
+    caplog,  # noqa: ARG001
+    monkeypatch,
 ):
     """Once a ping lands, the loop goes back to the full cycle."""
     respx_mock.get(f"/paper/{KEEPALIVE_PAPER_ID}").mock(

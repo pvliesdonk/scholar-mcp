@@ -1264,7 +1264,7 @@ async def test_get_pdf_second_throttle_check_raises(
 
     call_count = 0
 
-    def throttled_on_second_call(service: str) -> bool:
+    def throttled_on_second_call(service: str) -> bool:  # noqa: ARG001
         nonlocal call_count
         call_count += 1
         if call_count > 1:
@@ -1292,7 +1292,7 @@ async def test_get_pdf_second_throttle_check_black_raises_runtime_error(
 
     call_count = 0
 
-    def black_on_second_call(service: str) -> bool:
+    def black_on_second_call(service: str) -> bool:  # noqa: ARG001
         nonlocal call_count
         call_count += 1
         if call_count > 1:

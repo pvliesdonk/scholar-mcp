@@ -91,7 +91,8 @@ dependencies = [
     # to it.
     "fastmcp-pvl-core>=7.1.0,<8",
     "typer>=0.12",
-    # PROJECT-DEPS-START — domain dependencies; kept across copier update
+
+    # PROJECT-DEPS-START — add domain dependencies below; kept across copier update
     "httpx",
     "aiosqlite",
     "python-epo-ops-client>=4.2",
@@ -104,7 +105,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# PROJECT-EXTRAS-START — domain optional-dependency groups; kept across copier update
+# PROJECT-EXTRAS-START — add domain-specific optional-dependency groups below; kept across copier update
 mcp = ["fastmcp[tasks]>=4,<5"]
 # Pulls debugpy transitively via fastmcp-pvl-core's [debug] extra.  The
 # version range is inherited from the [project] dependency on
@@ -121,12 +122,13 @@ all = ["fastmcp[tasks]>=4,<5"]
 # so it never ships to PyPI consumers and never lands in the security-audit input.
 [dependency-groups]
 dev = [
-    "pytest>=7.0",
-    "pytest-asyncio>=0.21",
-    "pytest-cov>=4.0",
-    "diff-cover>=9.0",
-    "ruff>=0.1",
-    "mypy>=1.0",
+    "pytest>=8",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=5",
+    "diff-cover>=9",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "pre-commit>=3",
     "pip-audit>=2.7",
     "respx>=0.20",
     "jsonschema>=4.18",
@@ -140,6 +142,7 @@ dev = [
     # is an untyped import that fails `mypy src/ tests/` without these stubs.
     "types-PyYAML>=6",
 ]
+
 docs = [
     "mike>=2",
     "mkdocs-material>=9.7.6",
@@ -158,6 +161,7 @@ scholar-mcp = "scholar_mcp.cli:main"
 Repository = "https://github.com/pvliesdonk/scholar-mcp"
 Documentation = "https://pvliesdonk.github.io/scholar-mcp/"
 Issues = "https://github.com/pvliesdonk/scholar-mcp/issues"
+Changelog = "https://github.com/pvliesdonk/scholar-mcp/blob/main/CHANGELOG.md"
 
 [build-system]
 # Bounded on purpose, at the minor.  hatchling emits the newest core-metadata
@@ -202,7 +206,7 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = [
-    "E", "W", "F", "I", "B", "C4", "UP", "ARG", "SIM", "TC", "PTH", "RUF",
+    "E", "W", "F", "I", "B", "C4", "UP", "ARG", "SIM", "TCH", "PTH", "RUF",
 ]
 ignore = ["E501"]
 
@@ -221,10 +225,7 @@ ignore = ["E501"]
 # module; all three are safe in test code. No-op for the base whole-repo select
 # (which excludes S). If your project needs its own tests/** ignores, EXTEND
 # this list in place — do not add a second "tests/**" key (duplicate TOML key).
-# S104 extends the shipped list (extend in place per the note above): the
-# CLI bind-resolution tests assert on the literal "0.0.0.0" the systemd
-# packaging relies on (#250) — flagging a test's expected value is noise.
-"tests/**" = ["S101", "S603", "S607", "S104"]
+"tests/**" = ["S101", "S603", "S607"]
 # The config-surface generator's bootstrap re-execs itself under `uv run`
 # (os.execvpe with a `shutil.which`-resolved absolute path — see
 # ensure_core_available). S606 flags any no-shell process start for review;
@@ -294,7 +295,7 @@ ignore = ["E501"]
 "src/scholar_mcp/resources.py" = ["B008", "TC001", "TC002", "PLR0913"]
 "src/scholar_mcp/prompts.py" = ["B008", "TC002", "PLR0913"]
 # pytest fixtures need runtime imports; Path used in signatures needs to be importable at runtime.
-"tests/*.py" = ["ARG001", "ARG002", "TC001", "TC002", "TC003"]
+"tests/*.py" = ["TC001", "TC002", "TC003"]
 # PROJECT-RUFF-IGNORES-END
 
 [tool.ruff.lint.isort]
@@ -321,7 +322,7 @@ max-statements = 50
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = ["--strict-markers", "-ra", "-m", "not live"]
+addopts = ["--strict-markers", "-ra"]
 asyncio_mode = "auto"
 log_level = "WARNING"
 markers = [
@@ -335,6 +336,7 @@ source = ["src/scholar_mcp"]
 branch = true
 
 [tool.coverage.report]
+fail_under = 80
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",
@@ -355,6 +357,10 @@ disallow_untyped_defs = true
 disallow_incomplete_defs = true
 check_untyped_defs = true
 no_implicit_optional = true
+
+[[tool.mypy.overrides]]
+module = ["fastmcp_pvl_core", "fastmcp_pvl_core.*"]
+ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["fastmcp", "fastmcp.*"]

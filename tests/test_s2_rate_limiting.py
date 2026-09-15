@@ -74,7 +74,7 @@ async def test_search_papers_retries_on_429(
     """A 429 is retried in-client; the caller still gets the result."""
     call_count = 0
 
-    def _side_effect(request: httpx.Request) -> httpx.Response:
+    def _side_effect(request: httpx.Request) -> httpx.Response:  # noqa: ARG001
         nonlocal call_count
         call_count += 1
         if call_count == 1:
@@ -84,7 +84,7 @@ async def test_search_papers_retries_on_429(
     respx_mock.get("/paper/search").mock(side_effect=_side_effect)
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -110,7 +110,7 @@ async def test_search_papers_direct_on_success(
     )
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -132,7 +132,7 @@ async def test_get_paper_retries_on_429(
     """A 429 is retried in-client; the caller still gets the record."""
     call_count = 0
 
-    def _side_effect(request: httpx.Request) -> httpx.Response:
+    def _side_effect(request: httpx.Request) -> httpx.Response:  # noqa: ARG001
         nonlocal call_count
         call_count += 1
         if call_count == 1:
@@ -142,7 +142,7 @@ async def test_get_paper_retries_on_429(
     respx_mock.get("/paper/x1").mock(side_effect=_side_effect)
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -156,7 +156,7 @@ async def test_get_paper_retries_on_429(
 
 @pytest.mark.respx(base_url=S2_BASE)
 async def test_get_paper_cached_returns_direct(
-    respx_mock: respx.MockRouter,
+    respx_mock: respx.MockRouter,  # noqa: ARG001
     service: Service,
     slow_jobs: Jobs,
 ) -> None:
@@ -164,7 +164,7 @@ async def test_get_paper_cached_returns_direct(
     await service.cache.set_paper("abc123", {"paperId": "abc123", "title": "Cached"})
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)

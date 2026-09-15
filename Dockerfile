@@ -1,8 +1,9 @@
 FROM python:3.14-slim
 
 # DOCKERFILE-APT-DEPS-START — add domain apt packages below; kept across copier update
-RUN apt-get update && apt-get install -y --no-install-recommends git gosu \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends git git-lfs gosu \
+    && rm -rf /var/lib/apt/lists/* \
+    && git lfs install --system
 # DOCKERFILE-APT-DEPS-END
 
 COPY --from=ghcr.io/astral-sh/uv:0.12 /uv /uvx /bin/

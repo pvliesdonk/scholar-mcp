@@ -75,7 +75,7 @@ This section configures oidc-proxy mode. Remote mode needs no client registratio
 identity_providers:
   oidc:
     clients:
-      - client_id: my-scholar-mcp
+      - client_id: my-mcp-server
         client_secret: '$pbkdf2-sha512$...'   # authelia crypto hash generate
         redirect_uris:
           - https://mcp.example.com/auth/callback
@@ -90,7 +90,7 @@ identity_providers:
 ```bash
 SCHOLAR_MCP_BASE_URL=https://mcp.example.com
 SCHOLAR_MCP_OIDC_CONFIG_URL=https://auth.example.com/.well-known/openid-configuration
-SCHOLAR_MCP_OIDC_CLIENT_ID=my-scholar-mcp
+SCHOLAR_MCP_OIDC_CLIENT_ID=my-mcp-server
 SCHOLAR_MCP_OIDC_CLIENT_SECRET=your-client-secret
 SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY=$(openssl rand -hex 32)
 ```
@@ -180,7 +180,7 @@ With the corresponding `.env`:
 ```bash
 SCHOLAR_MCP_BASE_URL=https://mcp.example.com
 SCHOLAR_MCP_OIDC_CONFIG_URL=https://auth.example.com/.well-known/openid-configuration
-SCHOLAR_MCP_OIDC_CLIENT_ID=my-scholar-mcp
+SCHOLAR_MCP_OIDC_CLIENT_ID=my-mcp-server
 SCHOLAR_MCP_OIDC_CLIENT_SECRET=your-client-secret
 SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY=your-stable-hex-key
 ```

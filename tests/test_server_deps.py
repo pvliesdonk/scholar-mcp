@@ -141,7 +141,7 @@ async def test_start_failure_closes_what_was_already_built(
     monkeypatch.setenv("SCHOLAR_MCP_CACHE_DIR", str(tmp_path))
     service = Service()
 
-    async def boom(self: object) -> None:
+    async def boom(self: object) -> None:  # noqa: ARG001
         raise RuntimeError("cache unavailable")
 
     monkeypatch.setattr("scholar_mcp.domain.ScholarCache.open", boom)

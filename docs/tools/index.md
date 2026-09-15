@@ -1,8 +1,10 @@
 # Tools
 
-Scholar MCP provides 29 tools organised by scholarly source type: **Papers**, **Patents**, **Books**, and **Standards** are peer source domains; the remaining sections (Cross-source Utility, PDF Conversion, Job Polling) are cross-cutting. All tools return JSON.
+The tools registered in this server are listed below.
 
 <!-- DOMAIN-TOOLS-LIST-START -->
+
+Scholar MCP provides 29 tools organised by scholarly source type: **Papers**, **Patents**, **Books**, and **Standards** are peer source domains; the remaining sections (Cross-source Utility, PDF Conversion, Job Polling) are cross-cutting. All tools return JSON.
 
 
 !!! info "Coverage by domain"

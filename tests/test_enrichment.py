@@ -27,11 +27,11 @@ class StubEnricher:
         self._can = can
         self.calls: list[dict[str, Any]] = []
 
-    def can_enrich(self, record: dict[str, Any]) -> bool:
+    def can_enrich(self, record: dict[str, Any]) -> bool:  # noqa: ARG002
         """Return the configured predicate value."""
         return self._can
 
-    async def enrich(self, record: dict[str, Any], service: Any) -> None:
+    async def enrich(self, record: dict[str, Any], service: Any) -> None:  # noqa: ARG002
         """Set a marker key on the record and log the call."""
         self.calls.append(record)
         record[f"enriched_by_{self.name}"] = True
@@ -50,11 +50,11 @@ class FailingEnricher:
         self.phase = phase
         self.tags = tags
 
-    def can_enrich(self, record: dict[str, Any]) -> bool:
+    def can_enrich(self, record: dict[str, Any]) -> bool:  # noqa: ARG002
         """Always eligible."""
         return True
 
-    async def enrich(self, record: dict[str, Any], service: Any) -> None:
+    async def enrich(self, record: dict[str, Any], service: Any) -> None:  # noqa: ARG002
         """Always raise."""
         raise RuntimeError("boom")
 
@@ -112,10 +112,10 @@ async def test_pipeline_respects_phase_order() -> None:
             self.phase = phase
             self.tags: frozenset[str] = frozenset()
 
-        def can_enrich(self, record: dict[str, Any]) -> bool:
+        def can_enrich(self, record: dict[str, Any]) -> bool:  # noqa: ARG002
             return True
 
-        async def enrich(self, record: dict[str, Any], service: Any) -> None:
+        async def enrich(self, record: dict[str, Any], service: Any) -> None:  # noqa: ARG002
             order.append(self.name)
 
     # Register phase 1 first, phase 0 second
@@ -166,10 +166,10 @@ async def test_pipeline_concurrency_bounded() -> None:
             self.phase = 0
             self.tags: frozenset[str] = frozenset()
 
-        def can_enrich(self, record: dict[str, Any]) -> bool:
+        def can_enrich(self, record: dict[str, Any]) -> bool:  # noqa: ARG002
             return True
 
-        async def enrich(self, record: dict[str, Any], service: Any) -> None:
+        async def enrich(self, record: dict[str, Any], service: Any) -> None:  # noqa: ARG002
             nonlocal peak, current
             async with lock:
                 current += 1

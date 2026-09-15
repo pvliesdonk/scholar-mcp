@@ -42,7 +42,7 @@ OL_EDITION = {
 @pytest.fixture
 def mcp(service: Service, slow_jobs: Jobs) -> FastMCP:
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)

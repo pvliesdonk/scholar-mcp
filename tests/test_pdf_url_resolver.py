@@ -62,7 +62,7 @@ async def test_try_unpaywall_success(respx_mock: respx.MockRouter) -> None:
 
 
 @pytest.mark.respx(base_url=_UNPAYWALL_BASE)
-async def test_try_unpaywall_no_doi(respx_mock: respx.MockRouter) -> None:
+async def test_try_unpaywall_no_doi(respx_mock: respx.MockRouter) -> None:  # noqa: ARG001
     result = await _try_unpaywall({"externalIds": {}}, "test@example.com")
     assert result is None
 

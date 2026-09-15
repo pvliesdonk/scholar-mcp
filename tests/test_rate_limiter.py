@@ -15,7 +15,7 @@ async def test_delay_between_requests():
     assert elapsed >= 0.04  # at least one delay cycle
 
 
-async def test_retry_on_429(respx_mock):
+async def test_retry_on_429(respx_mock):  # noqa: ARG001
     limiter = RateLimiter(delay=0.0)
     call_count = 0
 

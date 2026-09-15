@@ -29,6 +29,12 @@ htmlcov/
 # MkDocs build output
 site/
 
+# Vale-synced style packages (downloaded by `vale sync`). Custom config
+# (vocabularies, ini overrides) under .vale/styles/config/ stays
+# versioned — sync never touches that subtree.
+.vale/styles/*
+!.vale/styles/config/
+
 # Local environment
 .env
 .env.local
@@ -36,38 +42,32 @@ site/
 # --- Development / ecosystem ignores (don't ship)
 .mcpregistry_*
 .worktrees/
-# Everything under .claude/ is local EXCEPT skills/ — that subtree ships the
-# contributor-facing authoring skill(s), template-owned and re-rendered on
-# copier update.  .claude/CLAUDE.md is project-owned and tracked, so it needs
-# its own negation.
-# Provider-neutral contributor skills are tracked under .agents/; everything
-# else under .agents/ is local.
+docs/superpowers/
+# Provider-neutral contributor skills are tracked under .agents/.
 .agents/*
 !.agents/skills/
+# Everything under .claude/ is local EXCEPT skills/ — that subtree holds
+# symlinks into .agents/skills/, template-owned on copier update.
 .claude/*
 !.claude/skills/
-!.claude/CLAUDE.md
-docs/superpowers/
-.repowise/
-
-# Vale-synced style packages (downloaded by `vale sync`). Custom config
-# (vocabularies, ini overrides) under .vale/styles/config/ stays
-# versioned — sync never touches that subtree. A glob rather than a list of
-# pack names, so adding a pack to .vale.ini's `Packages` cannot leak it
-# into git.
-.vale/styles/*
-!.vale/styles/config/
-
-# Editor-local config. Deliberately just this one — several tools (repowise
-# among them) write into it unprompted, so it reappears in `git status` for
-# contributors who never opted in. A team that does want to share workspace
-# settings can track a specific file with `git add -f .vscode/settings.json`.
-.vscode/
-
-# --- Scholar-specific local artifacts
-*.npy
-*.npz
-.playwright-mcp/
 # No trailing slash: `.mcp.json/` would match a *directory* of that name and
 # leave the actual file tracked.
 .mcp.json
+.repowise/
+
+# Editor-local config. Deliberately just this one — a contributor's choice of
+# editor is theirs, and this list is not meant to grow into a catalogue of
+# every IDE. `.vscode/` earns its place because it is the common case and
+# because several tools (repowise among them) write into it unprompted, so it
+# reappears in `git status` for contributors who never opted in. A team that
+# does want to share workspace settings can track a specific file with
+# `git add -f .vscode/settings.json`.
+.vscode/
+
+# --- Scholar-specific local artifacts
+# .claude/CLAUDE.md is project-owned and tracked (the .claude/* rule above
+# would otherwise hide it).
+!.claude/CLAUDE.md
+*.npy
+*.npz
+.playwright-mcp/

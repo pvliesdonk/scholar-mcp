@@ -1,8 +1,15 @@
-# Scholar MCP Server
+# Scholar MCP
 
-A [FastMCP](https://github.com/jlowin/fastmcp) server for the scholarly citation landscape (**papers**, **patents**, **books**, and **standards**), giving LLMs a unified way to search, cross-reference, and retrieve prior art across all four source types via [Semantic Scholar](https://www.semanticscholar.org/), [EPO Open Patent Services](https://www.epo.org/en/searching-for-patents/data/web-services/ops), [Open Library](https://openlibrary.org/), and standards bodies, with [OpenAlex](https://openalex.org/) enrichment and optional [docling-serve](https://github.com/DS4SD/docling-serve) PDF/full-text conversion.
+FastMCP server for scholarly papers, patents, books and standards with docling PDF conversion
 
-## What it does
+## Getting started
+
+- [Installation](installation.md)
+- [Configuration](configuration.md)
+- [Tools](tools/index.md)
+
+<!-- DOMAIN-INDEX-FEATURES-START -->
+## Features
 
 Scholar MCP exposes 29 tools that let LLM-powered applications search, cross-reference, and retrieve scholarly sources across four peer domains:
 
@@ -18,40 +25,6 @@ Results are cached in a local SQLite database with per-table TTLs to reduce API 
 
 !!! info "Coverage by domain"
     Per-domain depth varies: papers have the richest tool surface and standards the least. That reflects public data availability, not a value hierarchy: writing a paper typically needs all four source types for citations and prior art. Parity work is tracked in [GitHub issues](https://github.com/pvliesdonk/scholar-mcp/issues) and [milestones](https://github.com/pvliesdonk/scholar-mcp/milestones), the roadmap shows intent, not a completeness commitment.
-
-## Quick start
-
-=== "Claude Code plugin"
-
-    ```bash
-    /plugin marketplace add pvliesdonk/claude-plugins
-    /plugin install scholar-mcp@pvliesdonk
-    ```
-
-=== "uvx (recommended)"
-
-    ```bash
-    uvx --from pvliesdonk-scholar-mcp scholar-mcp serve
-    ```
-
-=== "pip"
-
-    ```bash
-    pip install 'pvliesdonk-scholar-mcp[mcp]'
-    scholar-mcp serve
-    ```
-
-=== "Docker"
-
-    ```bash
-    docker run -v scholar-mcp-data:/data/scholar-mcp \
-               ghcr.io/pvliesdonk/scholar-mcp:latest
-    ```
-
-!!! tip "API key optional but recommended"
-    The server works without a Semantic Scholar API key, but unauthenticated requests are limited to ~1 req/s and will hit 429 throttles quickly during multi-step operations like citation graph traversal. [Request a free key](https://www.semanticscholar.org/product/api#api-key-form) to get ~10 req/s. Pass it via `SCHOLAR_MCP_S2_API_KEY=your-key`.
-
-See [Installation](installation.md) for all methods including Linux packages.
 
 ## Architecture
 
@@ -83,25 +56,14 @@ See [Installation](installation.md) for all methods including Linux packages.
   │        │ │         │ │     │ │       │ │  ETSI  │ │       │
   └────────┘ └─────────┘ └─────┘ └───────┘ └────────┘ └───────┘
 ```
-
-## Next steps
-
-- [Installation](installation.md): all installation methods
-- [Configuration](configuration.md): environment variable reference
-- [Tools](tools/index.md): full tool reference with parameters
-- [Claude Code plugin](guides/claude-code-plugin.md): install as a Claude Code plugin
-- [Claude Desktop setup](guides/claude-desktop.md): get started with Claude Desktop
-- [Docker deployment](deployment/docker.md): production Docker Compose setup
-
-<!-- DOMAIN-INDEX-FEATURES-START -->
-<!-- Future template-managed features section; kept across copier update.
-     Scholar's feature list is already documented in the "What it does"
-     body above (Papers / Patents / Books / Standards / Cross-source
-     Utility / PDF conversion / Async task queue). -->
 <!-- DOMAIN-INDEX-FEATURES-END -->
 
 <!-- DOMAIN-INDEX-USE-CASES-START -->
-<!-- Future template-managed use-cases section; kept across copier update.
-     Scholar's use cases are covered in the README "What you can do with it"
-     section and the Guides index. -->
+## What you can do
+
+- **Survey a field**: "Find the 20 most-cited papers on graph neural networks from 2020 to 2024 and draft a literature review outline." Composes `search_papers` + `get_citations` + `enrich_paper`.
+- **Trace a citation path**: "What's the shortest citation path from 'Attention is All You Need' to 'RLHF for dialogue agents'?" Uses `find_bridge_papers` + `get_citation_graph`.
+- **Cross-reference prior art**: "For this patent family, list academic papers it cites and any books or standards that show up in the description." Composes `get_patent` + `batch_resolve` + standards/book enrichment.
+- **Generate a bibliography**: "Emit BibTeX for these 30 DOIs with OpenAlex venue data." Uses `generate_citations`.
+- **Look up a standard**: "What's the latest status of RFC 9000, and fetch the Markdown full text." Uses `resolve_standard_identifier` + `get_standard`.
 <!-- DOMAIN-INDEX-USE-CASES-END -->

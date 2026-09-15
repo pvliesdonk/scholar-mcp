@@ -8,13 +8,15 @@
 
 [![CI](https://github.com/pvliesdonk/scholar-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/pvliesdonk/scholar-mcp/actions/workflows/ci.yml) [![codecov](https://codecov.io/gh/pvliesdonk/scholar-mcp/graph/badge.svg)](https://codecov.io/gh/pvliesdonk/scholar-mcp) [![repowise](https://api.repowise.dev/badge/wiki/pvliesdonk/scholar-mcp.svg)](https://repowise.dev/repo/pvliesdonk/scholar-mcp) [![Code health](https://api.repowise.dev/badge/health/pvliesdonk/scholar-mcp.svg)](https://repowise.dev/repo/pvliesdonk/scholar-mcp) [![PyPI](https://img.shields.io/pypi/v/pvliesdonk-scholar-mcp)](https://pypi.org/project/pvliesdonk-scholar-mcp/) [![Python](https://img.shields.io/pypi/pyversions/pvliesdonk-scholar-mcp)](https://pypi.org/project/pvliesdonk-scholar-mcp/) [![License](https://img.shields.io/github/license/pvliesdonk/scholar-mcp)](LICENSE) [![Docker](https://img.shields.io/github/v/release/pvliesdonk/scholar-mcp?label=ghcr.io&logo=docker)](https://github.com/pvliesdonk/scholar-mcp/pkgs/container/scholar-mcp) [![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://pvliesdonk.github.io/scholar-mcp/) [![llms.txt](https://img.shields.io/badge/llms.txt-available-brightgreen)](https://pvliesdonk.github.io/scholar-mcp/latest/llms.txt) [![Template](https://img.shields.io/badge/dynamic/yaml?url=https://raw.githubusercontent.com/pvliesdonk/scholar-mcp/main/.copier-answers.yml&query=%24._commit&label=template)](https://github.com/pvliesdonk/fastmcp-server-template)
 
-A [FastMCP](https://github.com/jlowin/fastmcp) server for the scholarly citation landscape (**papers**, **patents**, **books**, and **standards**), giving LLMs a unified way to search, cross-reference, and retrieve prior art across all four source types via [Semantic Scholar](https://www.semanticscholar.org/), [EPO Open Patent Services](https://www.epo.org/en/searching-for-patents/data/web-services/ops), [Open Library](https://openlibrary.org/), and standards bodies (NIST, IETF, W3C, ETSI), with [OpenAlex](https://openalex.org/) enrichment and optional [docling-serve](https://github.com/DS4SD/docling-serve) PDF/full-text conversion.
+FastMCP server for scholarly papers, patents, books and standards with docling PDF conversion
 
 **[Documentation](https://pvliesdonk.github.io/scholar-mcp/)** | **[Config wizard](https://pvliesdonk.github.io/scholar-mcp/latest/configuration-generator/)** | **[PyPI](https://pypi.org/project/pvliesdonk-scholar-mcp/)** | **[Docker](https://github.com/pvliesdonk/scholar-mcp/pkgs/container/scholar-mcp)**
 
 ## Features
 
 <!-- DOMAIN-START -->
+
+29 tools, organised by scholarly source type.
 
 ### Source domains
 
@@ -64,20 +66,10 @@ If you add optional extras via the `PROJECT-EXTRAS-START` / `PROJECT-EXTRAS-END`
 
 <!-- DOMAIN-START -->
 
-Scholar-mcp ships two optional-dependency groups:
+- **`[all]`**: every production feature in one extra; the Linux packages and the Claude Desktop bundle install it.
+- **`[debug]`**: adds the remote debugger (`debugpy`); see [Remote debugging](docs/deployment/docker.md#remote-debugging).
 
-- **`[mcp]`**: installs FastMCP; required to run `scholar-mcp serve` and expose tools over stdio/HTTP.
-- **`[all]`**: currently identical to `[mcp]`; reserved for future optional backends.
-
-For MCP-server usage:
-
-```bash
-pip install 'pvliesdonk-scholar-mcp[mcp]'
-# or, without installing into the environment:
-uvx --from pvliesdonk-scholar-mcp scholar-mcp serve
-```
-
-Installing the bare `pvliesdonk-scholar-mcp` package is enough for library use (`from scholar_mcp import ...`) but the `scholar-mcp serve` CLI requires `[mcp]`.
+The base package already carries FastMCP through `fastmcp-pvl-core`, so `pip install pvliesdonk-scholar-mcp` is enough to run `scholar-mcp serve`. The older `[mcp]` extra is kept so existing install commands keep working; it adds nothing beyond the base package.
 <!-- DOMAIN-END -->
 
 ### From source
@@ -139,37 +131,15 @@ scholar-mcp serve                                # stdio transport
 scholar-mcp serve --transport http --port 8000   # streamable HTTP
 ```
 
-For library usage (embedding the domain logic without the MCP transport), import from the `scholar_mcp` package directly. Backend clients live under `src/scholar_mcp/_s2_client.py`, `_epo_client.py`, `_openlibrary_client.py`, and `_standards_client.py`.
+For library usage (embedding the domain logic without the MCP transport), import from the `scholar_mcp` package directly. See the project's domain modules under `src/scholar_mcp/` for entry points.
 
 ### Server info
 
-The server registers a built-in `get_server_info` tool (via `fastmcp_pvl_core.register_server_info_tool`) so operators can confirm the deployed version with a single MCP call. The default response carries `server_name`, `server_version`, and `core_version`. Servers that talk to a remote upstream wire upstream reporting inside the `DOMAIN-UPSTREAM-START` / `DOMAIN-UPSTREAM-END` sentinel in `src/scholar_mcp/server.py`; see [`tool-registration`](.agents/skills/tool-registration/SKILL.md#server-info-tool-get_server_info) for the wiring pattern.
-
-Scholar uses that slot for **Semantic Scholar key health**, under a `semantic_scholar` key:
-
-```json
-{
-  "server_name": "pvliesdonk-scholar-mcp",
-  "server_version": "2.0.0",
-  "core_version": "7.1.0",
-  "semantic_scholar": {
-    "key_configured": true,
-    "key_status": "degraded",
-    "consecutive_failures": 26,
-    "last_success": "2026-09-03T12:00:00+00:00",
-    "last_failure": "2026-09-10T18:00:00+00:00",
-    "last_failure_kind": "rate_limited"
-  }
-}
-```
-
-`key_status` is one of `not_configured` (no key set, so the anonymous tier serves), `unknown` (configured, not yet pinged), `ok`, `failing` (refused, but not for long enough to mean more than throttling), or `degraded`. The `degraded` threshold is the same one the keepalive escalates at, so this field and the `s2_keepalive_degraded` log line never disagree.
-
-This is reported here rather than as a `/health/ready` check on purpose. A revoked key breaks the Semantic Scholar tools, while OpenAlex, Crossref, EPO, Open Library and the standards sources keep serving. Failing readiness answers `503` for the whole server, which drops it from rotation wherever something polls that route, such as a load balancer or a Kubernetes `readinessProbe`, over a condition that removal from rotation does not repair. The shipped `compose.yml` probes `/health` rather than `/health/ready` and reports the verdict without restarting anything, so it is unaffected either way.
+The server registers a built-in `get_server_info` tool (via `fastmcp_pvl_core.register_server_info_tool`) so operators can confirm the deployed version with a single MCP call. The default response carries `server_name`, `server_version`, and `core_version`. Servers that talk to a remote upstream wire upstream version reporting inside the `DOMAIN-UPSTREAM-START` / `DOMAIN-UPSTREAM-END` sentinel in `src/scholar_mcp/server.py`; see [`tool-registration`](.agents/skills/tool-registration/SKILL.md#server-info-tool-get_server_info) for the wiring pattern.
 
 ### Health
 
-The server serves `/health` (liveness, a static `200`) and `/health/ready` (readiness, `503` when a backing store or a domain check fails) outside the MCP mount and outside auth, via `fastmcp_pvl_core.register_health_routes`. `compose.yml` probes the first. Domain readiness checks go in the `health_checks` dict in `src/scholar_mcp/server.py`, deliberately empty here, because scholar's one candidate signal is a partial degradation better reported through `get_server_info` (above) than gated on; see [Docker deployment](docs/deployment/docker.md#health) for the routes, the mount-path rule, and `SCHOLAR_MCP_HEALTH_DETAIL`.
+The server serves `/health` (liveness, a static `200`) and `/health/ready` (readiness, `503` when a backing store or a domain check fails) outside the MCP mount and outside auth, via `fastmcp_pvl_core.register_health_routes`. `compose.yml` probes the first. Domain readiness checks go in the `health_checks` dict in `src/scholar_mcp/server.py`; see [Docker deployment](docs/deployment/docker.md#health) for the routes, the mount-path rule, and `SCHOLAR_MCP_HEALTH_DETAIL`.
 
 ## Configuration
 
@@ -188,32 +158,6 @@ This table and the one under [Domain configuration](#domain-configuration)
 are curated subsets. The complete generated reference, with every variable
 the server reads, is the [configuration reference](docs/configuration.md);
 `.env.example` lists the same surface in copy-paste form.
-
-## Authorization (opt-in)
-
-This server inherits opt-in per-subject authorization from `fastmcp-pvl-core`. The default posture is **off**: every authenticated caller can use every tool, resource, and prompt. Turn it on by pointing `SCHOLAR_MCP_ACL_PATH` at a TOML ACL file; the middleware is installed only when the path is set, and individual tools opt in by declaring `meta={"required_scope": "<scope>"}` at registration. A tool without `required_scope` is unrestricted regardless of caller.
-
-Wire it in by uncommenting the `acl_path` field in `src/scholar_mcp/config.py` and the `AuthorizationMiddleware` stanza in `src/scholar_mcp/server.py`; both ship as commented stubs in the scaffold.
-
-### ACL TOML schema
-
-```toml
-[subjects]
-"user:alice@example.com" = ["read", "write"]
-"user:admin@example.com" = ["*"]              # wildcard — any required scope passes
-"service:ci-bot"         = ["read"]
-"local"                  = ["*"]              # auth-disabled subject (no bearer / OIDC vars set)
-```
-
-- **Subject strings are opaque.** The `<kind>:<id>` convention is documentation only; the library treats each subject as a literal string.
-- **`*` is the only library-treated special scope**: it grants every required scope. Subject-side wildcards (`*` as an ACL key) are rejected at load time.
-- **Scope vocabulary is domain-defined.** Per-project or per-folder gating is encoded into the scope string itself, such as `read:project-foo` or `write:vault/personal`; `fastmcp-pvl-core` treats every scope except `*` as opaque.
-
-### Subject ↔ bearer-token alignment
-
-The subject string used as a *value* in the bearer-tokens TOML (`SCHOLAR_MCP_BEARER_TOKENS_FILE`) is the same string used as a *key* in the ACL TOML. Same string, opposite roles, so keep the two files consistent when adding or removing a principal. See [Mapped bearer tokens](docs/guides/authentication.md#mapped-bearer-tokens-multi-subject) in the authentication guide for the bearer-tokens TOML schema.
-
-In single-token mode (`SCHOLAR_MCP_BEARER_TOKEN`) every authenticated caller shares one subject, the library's default (currently `"bearer-anon"`); override it with `SCHOLAR_MCP_BEARER_DEFAULT_SUBJECT`; reference *that* string as the ACL key. When no auth is configured (no `SCHOLAR_MCP_BEARER_TOKEN`, `SCHOLAR_MCP_BEARER_TOKENS_FILE`, or OIDC env vars set, which is common in stdio dev rigs but also possible on HTTP), every request resolves to the literal subject `"local"`. Reference that string as the ACL key for un-authenticated local sessions.
 
 ## Authentication
 
@@ -332,23 +276,6 @@ This is a curated subset: a field appears here when its `tags` metadata includes
 
 Domain-config fields are composed inside `src/scholar_mcp/config.py` between the `CONFIG-FIELDS-START` / `CONFIG-FIELDS-END` sentinels; env reads go through `fastmcp_pvl_core.env(_ENV_PREFIX, "SUFFIX", default)` so naming stays consistent, and field invariants go in `__post_init__` between the `CONFIG-VALIDATE-START` / `CONFIG-VALIDATE-END` sentinels. Each field's `metadata` `help`, `tags`, and `wizard` group generate the reference tables directly, so keep them accurate and complete.
 
-Scholar-mcp pings Semantic Scholar once on startup and every 7 days
-thereafter to keep the configured key from being removed for inactivity
-(Semantic Scholar may remove keys unused for 60+ days). A ping S2 refuses
-is retried in an hour rather than waiting out the full cycle, so one bad
-moment does not cost a week of key activity.
-
-To tell a dead key from a transient upstream issue, grep the server logs
-for `s2_keepalive_degraded`. The keepalive logs it at `ERROR`, once, after
-a day of consecutive refusals, and follows it with
-`s2_keepalive_recovered` if a later ping lands. It keys on persistence
-rather than on a status code, because a key that has stopped conferring
-quota was observed returning `429` indefinitely and never `403`.
-
-A `403 Forbidden` remains the cheaper signal when S2 does send one:
-`s2_key_forbidden` on real tool calls, `s2_keepalive_key_forbidden` from
-the keepalive. Do not rely on it alone.
-
 ## Key design decisions
 
 <!-- DOMAIN-START -->
@@ -361,191 +288,3 @@ the keepalive. Do not rely on it alone.
 - **EPO throttling is waited out, not queued.** The traffic light is consulted before every request and cached for a minute, so a retry sooner than that would re-read the cache rather than ask again. Each backoff outlasts the cache; an exhausted daily quota is reported immediately instead, since it will not clear today.
 - **Tier 2 standards sync out-of-band.** ISO/IEC/IEEE/CC/CEN catalogues come from community Relaton dumps via `scholar-mcp sync-standards`, not live at runtime, which avoids paywalled-HTML scraping and keeps tool calls fast.
 <!-- DOMAIN-END -->
-
-## Quick Start details
-
-### stdio transport (Claude Desktop / MCP clients)
-
-```bash
-uvx --from pvliesdonk-scholar-mcp scholar-mcp serve
-```
-
-> **API key optional but recommended:** The server works without a Semantic Scholar API key, but unauthenticated requests are limited to ~1 req/s and will hit 429 throttles quickly during multi-step operations like citation graph traversal. [Request a free key](https://www.semanticscholar.org/product/api#api-key-form) to get ~10 req/s.
-
-Claude Desktop configuration (`claude_desktop_config.json`):
-
-```json
-{
-  "mcpServers": {
-    "scholar": {
-      "command": "uvx",
-      "args": ["--from", "pvliesdonk-scholar-mcp", "scholar-mcp", "serve"],
-      "env": {
-        "SCHOLAR_MCP_S2_API_KEY": "your-key"
-      }
-    }
-  }
-}
-```
-
-### HTTP transport
-
-```bash
-uvx --from pvliesdonk-scholar-mcp scholar-mcp serve --transport http --port 8000
-```
-
-### Claude Code plugin
-
-```bash
-/plugin marketplace add pvliesdonk/claude-plugins
-/plugin install scholar-mcp@pvliesdonk
-```
-
-### Syncing Tier 2 standards catalogues
-
-Tier 2 bodies (ISO, IEC, IEEE, CC, CEN) are populated from community-curated bulk dumps rather than live-scraped at MCP-server runtime. Run the sync on first install and periodically thereafter:
-
-```bash
-scholar-mcp sync-standards            # all registered bodies
-scholar-mcp sync-standards --body ISO # only ISO
-scholar-mcp sync-standards --body IEEE # only IEEE
-scholar-mcp sync-standards --body CC   # only Common Criteria
-scholar-mcp sync-standards --body CEN # only CEN/CENELEC
-scholar-mcp sync-standards --force    # re-sync even if upstream SHA is unchanged
-```
-
-Schedule via cron, launchd, or a systemd timer. Weekly is sufficient; standards change slowly. First sync can take several minutes; subsequent runs that find no upstream changes exit within seconds.
-
-## MCP Tools
-
-29 tools, organised by scholarly source type.
-
-### Papers
-
-#### Search & retrieval
-
-| Tool | Description |
-|---|---|
-| `search_papers` | Full-text search with year, venue, field-of-study, and citation-count filters. Returns up to 100 results with pagination. |
-| `get_paper` | Fetch full metadata for a single paper by DOI, S2 ID, arXiv ID, ACM ID, or PubMed ID. |
-| `get_author` | Fetch author profile with publications, or search by name. |
-
-#### Citation graph
-
-| Tool | Description |
-|---|---|
-| `get_citations` | Forward citations (papers that cite a given paper) with optional filters. |
-| `get_references` | Backward references (papers cited by a given paper). |
-| `get_citation_graph` | BFS traversal from seed papers, returning nodes + edges up to configurable depth. |
-| `find_bridge_papers` | Shortest citation path between two papers. |
-
-> Both traversal tools carry on when an upstream request fails rather than aborting the walk. Every response states its completeness as `partial` and `failed_requests` (in `stats` for `get_citation_graph`, at the top level for `find_bridge_papers`); when something did fail, a `warning` names the statuses involved. A partial result says what was found, not what exists. See the [Citation Graphs guide](https://pvliesdonk.github.io/scholar-mcp/latest/guides/citation-graphs/).
-
-#### Recommendations & citation generation
-
-| Tool | Description |
-|---|---|
-| `recommend_papers` | Paper recommendations from 1 to 5 positive examples and optional negative examples. |
-| `generate_citations` | Generate BibTeX, CSL-JSON, or RIS citations for up to 100 papers, with automatic entry type inference and optional OpenAlex venue enrichment. |
-| `enrich_paper` | Augment Semantic Scholar metadata with OpenAlex fields (affiliations, funders, OA status, concepts). |
-
-### Patents
-
-| Tool | Description |
-|---|---|
-| `search_patents` | Search patents across 100+ patent offices via EPO OPS with CPC / applicant / inventor / jurisdiction / date filters. |
-| `get_patent` | Fetch bibliographic / claims / description / family / legal / citations sections for a single patent by publication number. Citations include NPL-to-paper resolution via Semantic Scholar. |
-| `get_citing_patents` | Find patents that cite a given academic paper (best-effort; EPO OPS citation search coverage is incomplete). |
-| `fetch_patent_pdf` | Download a patent PDF via authenticated EPO OPS and optionally convert to Markdown. |
-
-> Patent tools are hidden when `SCHOLAR_MCP_EPO_CONSUMER_KEY` and `SCHOLAR_MCP_EPO_CONSUMER_SECRET` are not set. `fetch_patent_pdf` is also write-tagged and hidden when `SCHOLAR_MCP_READ_ONLY=true`.
-
-### Books
-
-| Tool | Description |
-|---|---|
-| `search_books` | Search for books by title, author, ISBN, or keywords via Open Library. Returns up to 50 results. |
-| `get_book` | Fetch book metadata by ISBN-10, ISBN-13, Open Library work ID, or edition ID. Optionally download and cache the cover image locally. |
-| `get_book_excerpt` | Fetch a book excerpt and description from Google Books by ISBN. Shows preview availability and link. Reports a refused lookup as `rate_limited` or `upstream_error`, distinct from `not_found`. |
-| `recommend_books` | Recommend books for a subject via Open Library, sorted by popularity. |
-
-> Papers with an ISBN in their `externalIds` are automatically enriched with `book_metadata` (publisher, edition, cover URL, subjects, and more) from Open Library when fetched via `get_paper`, `get_citations`, `get_references`, or `get_citation_graph`. Book records also include `worldcat_url` (when ISBN-13 is present), `google_books_url`, and `snippet` from Google Books enrichment. Cover images can be downloaded and cached locally via `get_book`.
-
-### Standards
-
-| Tool | Description |
-|---|---|
-| `resolve_standard_identifier` | Normalise a messy citation string such as `"rfc9000"` or `"nist 800-53"` to canonical form and body. |
-| `search_standards` | Search standards by identifier, title, or free text, optionally filtered to one body (`NIST`, `IETF`, `W3C`, `ETSI`). |
-| `get_standard` | Retrieve a standard by canonical or fuzzy identifier, optionally fetching and converting the full text via docling. |
-
-> Tier-1 bodies (NIST, IETF, W3C, ETSI) are supported with full metadata and optional full-text conversion. Tier-2 bodies (ISO, IEC, IEEE, CC, CEN/CENELEC) are populated locally via `scholar-mcp sync-standards`.
-
-### Cross-source Utility
-
-| Tool | Description |
-|---|---|
-| `batch_resolve` | Resolve up to 100 mixed identifiers (paper DOIs, patent numbers, ISBNs) to full metadata in one call, routing each to the right backend with OpenAlex fallback. |
-
-### PDF Conversion (requires docling-serve)
-
-| Tool | Description |
-|---|---|
-| `fetch_paper_pdf` | Download PDF for a paper (S2 open-access, then ArXiv/PMC/Unpaywall fallback). |
-| `convert_pdf_to_markdown` | Convert a local PDF to Markdown via docling-serve. |
-| `fetch_and_convert` | Full pipeline: fetches the PDF with fallback sources, then converts it to Markdown and returns both. |
-| `fetch_pdf_by_url` | Download a PDF from any URL and optionally convert to Markdown. |
-
-> PDF tools are write-tagged and hidden when `SCHOLAR_MCP_READ_ONLY=true` (the default). `fetch_patent_pdf` (above) and the `get_standard` full-text mode cover the patent and standards equivalents.
-
-### Job Polling
-
-| Tool | Description |
-|---|---|
-| `get_job_result` | Retrieve the outcome of a background job by ID. |
-
-> Tools answer directly when the work is quick, including on a cache hit. A slower call returns `{"status": "working", "job_id": "...", "poll_with": "get_job_result"}`; poll with the tool the handle names until the status is terminal.
-
-## Docker Compose
-
-```yaml
-services:
-  scholar-mcp:
-    image: ghcr.io/pvliesdonk/scholar-mcp:latest
-    restart: unless-stopped
-    environment:
-      SCHOLAR_MCP_S2_API_KEY: "${SCHOLAR_MCP_S2_API_KEY}"
-      SCHOLAR_MCP_DOCLING_URL: "http://docling-serve:5001"
-      SCHOLAR_MCP_VLM_API_URL: "${VLM_API_URL:-}"
-      SCHOLAR_MCP_VLM_API_KEY: "${VLM_API_KEY:-}"
-      SCHOLAR_MCP_CACHE_DIR: "/data/scholar-mcp"
-      SCHOLAR_MCP_READ_ONLY: "false"
-    volumes:
-      - scholar-mcp-data:/data/scholar-mcp
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.scholar-mcp.rule=Host(`scholar-mcp.yourdomain.com`)"
-
-  docling-serve:
-    image: ghcr.io/ds4sd/docling-serve:latest
-    restart: unless-stopped
-
-volumes:
-  scholar-mcp-data:
-```
-
-## Cache Management
-
-```bash
-# Show cache statistics (row counts, database size)
-scholar-mcp cache stats
-
-# Clear all cached data (preserves identifier aliases)
-scholar-mcp cache clear
-
-# Remove entries older than 30 days
-scholar-mcp cache clear --older-than 30
-
-# Override cache directory
-scholar-mcp cache stats --cache-dir /path/to/cache
-```

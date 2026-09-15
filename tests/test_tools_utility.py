@@ -55,7 +55,7 @@ def _make_epo_client(
 @pytest.fixture
 def mcp(service: Service, slow_jobs: Jobs) -> FastMCP:
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -69,7 +69,7 @@ def mcp_with_epo(service: Service, slow_jobs: Jobs) -> FastMCP:
     service.epo = _make_epo_client()
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -184,7 +184,7 @@ async def test_batch_resolve_retries_on_429(
     """A rate limit is retried in-client rather than queued."""
     call_count = 0
 
-    def _side_effect(request: httpx.Request) -> httpx.Response:
+    def _side_effect(request: httpx.Request) -> httpx.Response:  # noqa: ARG001
         nonlocal call_count
         call_count += 1
         if call_count == 1:
@@ -195,7 +195,7 @@ async def test_batch_resolve_retries_on_429(
         respx.post(f"{S2_BASE}/paper/batch").mock(side_effect=_side_effect)
 
         @asynccontextmanager
-        async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
             yield {"service": service}
 
         app = tasks_server("test", lifespan=lifespan)
@@ -343,7 +343,7 @@ async def test_enrich_paper_retries_on_429(
     """A rate limit is retried in-client rather than queued."""
     call_count = 0
 
-    def _side_effect(request: httpx.Request) -> httpx.Response:
+    def _side_effect(request: httpx.Request) -> httpx.Response:  # noqa: ARG001
         nonlocal call_count
         call_count += 1
         if call_count == 1:
@@ -368,7 +368,7 @@ async def test_enrich_paper_retries_on_429(
         )
 
         @asynccontextmanager
-        async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
             yield {"service": service}
 
         app = tasks_server("test", lifespan=lifespan)
@@ -460,7 +460,7 @@ async def test_batch_resolve_patent_resolve_failed(
     service.epo = _make_epo_client(raise_on_biblio=RuntimeError("EPO down"))
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -485,7 +485,7 @@ async def test_batch_resolve_patent_not_found_empty_biblio(
     service.epo = _make_epo_client(biblio_result={"title": "", "applicants": []})
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -547,7 +547,7 @@ async def test_batch_resolve_patent_throttled_degrades_that_entry(
     service.epo = _make_epo_client(raise_on_biblio=EpoRateLimitedError("red"))
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -727,14 +727,14 @@ async def test_batch_resolve_promotes_when_slow(
 ) -> None:
     """A slow batch is promoted and the ordered results arrive by polling."""
 
-    async def slow(request: httpx.Request) -> httpx.Response:
+    async def slow(request: httpx.Request) -> httpx.Response:  # noqa: ARG001
         await asyncio.sleep(0.2)
         return httpx.Response(200, json=[{"paperId": "b1", "title": "Batched"}])
 
     respx_mock.post("/paper/batch").mock(side_effect=slow)
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -783,7 +783,7 @@ async def test_batch_resolve_reports_quota_exhaustion_per_entry(
         )
 
         @asynccontextmanager
-        async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
             yield {"service": service}
 
         app = tasks_server("test", lifespan=lifespan)
@@ -813,7 +813,7 @@ async def test_enrich_paper_reports_a_sustained_rate_limit_as_retryable(
         respx.get(f"{S2_BASE}/paper/p1").mock(return_value=httpx.Response(429))
 
         @asynccontextmanager
-        async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
             yield {"service": service}
 
         app = tasks_server("test", lifespan=lifespan)

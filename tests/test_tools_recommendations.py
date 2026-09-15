@@ -23,7 +23,7 @@ S2_REC = "https://api.semanticscholar.org/recommendations/v1"
 @pytest.fixture
 def mcp(service: Service, slow_jobs: Jobs) -> FastMCP:
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -111,7 +111,7 @@ async def test_recommend_papers_retries_on_429(
     """A rate limit is retried in-client rather than queued."""
     call_count = 0
 
-    def _side_effect(request: httpx.Request) -> httpx.Response:
+    def _side_effect(request: httpx.Request) -> httpx.Response:  # noqa: ARG001
         nonlocal call_count
         call_count += 1
         if call_count == 1:
@@ -127,7 +127,7 @@ async def test_recommend_papers_retries_on_429(
         respx.post(f"{S2_REC}/papers").mock(side_effect=_side_effect)
 
         @asynccontextmanager
-        async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
             yield {"service": service}
 
         app = tasks_server("test", lifespan=lifespan)
@@ -146,7 +146,7 @@ async def test_recommend_papers_promotes_when_slow(
 ) -> None:
     """A slow upstream is promoted and the result arrives by polling."""
 
-    async def slow(request: httpx.Request) -> httpx.Response:
+    async def slow(request: httpx.Request) -> httpx.Response:  # noqa: ARG001
         await asyncio.sleep(0.2)
         return httpx.Response(200, json={"recommendedPapers": [{"paperId": "r9"}]})
 
@@ -154,7 +154,7 @@ async def test_recommend_papers_promotes_when_slow(
         respx.post(f"{S2_REC}/papers").mock(side_effect=slow)
 
         @asynccontextmanager
-        async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
             yield {"service": service}
 
         app = tasks_server("test", lifespan=lifespan)

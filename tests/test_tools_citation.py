@@ -39,7 +39,7 @@ SAMPLE_PAPER = {
 @pytest.fixture
 def mcp(service: Service, slow_jobs: Jobs) -> FastMCP:
     @asynccontextmanager
-    async def lifespan(app: FastMCP):
+    async def lifespan(app: FastMCP):  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -207,7 +207,7 @@ async def test_all_papers_unresolved(mcp: FastMCP) -> None:
 async def test_retries_on_429(service: Service, slow_jobs: Jobs) -> None:
     call_count = 0
 
-    def _side_effect(request: httpx.Request) -> httpx.Response:
+    def _side_effect(request: httpx.Request) -> httpx.Response:  # noqa: ARG001
         nonlocal call_count
         call_count += 1
         if call_count == 1:
@@ -218,7 +218,7 @@ async def test_retries_on_429(service: Service, slow_jobs: Jobs) -> None:
         respx.post(f"{S2_BASE}/paper/batch").mock(side_effect=_side_effect)
 
         @asynccontextmanager
-        async def lifespan(app: FastMCP):
+        async def lifespan(app: FastMCP):  # noqa: ARG001
             yield {"service": service}
 
         app = tasks_server("test", lifespan=lifespan)
@@ -243,7 +243,7 @@ async def test_generate_citations_promotes_when_slow(
     than only on the inline path.
     """
 
-    async def slow(request: httpx.Request) -> httpx.Response:
+    async def slow(request: httpx.Request) -> httpx.Response:  # noqa: ARG001
         await asyncio.sleep(0.2)
         return httpx.Response(
             200,
@@ -254,7 +254,7 @@ async def test_generate_citations_promotes_when_slow(
         respx.post(f"{S2_BASE}/paper/batch").mock(side_effect=slow)
 
         @asynccontextmanager
-        async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+        async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
             yield {"service": service}
 
         app = tasks_server("test", lifespan=lifespan)
