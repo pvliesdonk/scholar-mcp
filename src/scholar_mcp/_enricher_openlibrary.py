@@ -39,7 +39,7 @@ class OpenLibraryEnricher:
         """
         return bool((record.get("externalIds") or {}).get("ISBN"))
 
-    async def enrich(self, record: dict[str, Any], bundle: Any) -> None:
+    async def enrich(self, record: dict[str, Any], service: Any) -> None:
         """Enrich record in-place with book metadata from Open Library.
 
         Delegates to :func:`_enrich_one` and catches all exceptions
@@ -47,10 +47,10 @@ class OpenLibraryEnricher:
 
         Args:
             record: The paper record dict to enrich in place.
-            bundle: Service bundle providing cache and Open Library client.
+            service: Domain service providing cache and Open Library client.
         """
         try:
-            await _enrich_one(record, bundle)
+            await _enrich_one(record, service)
         except RateLimitedError:
             logger.debug(
                 "openlibrary_rate_limited paper=%s",

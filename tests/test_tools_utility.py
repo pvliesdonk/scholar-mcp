@@ -15,8 +15,8 @@ from fastmcp.client import Client
 from fastmcp_pvl_core import Jobs, register_job_tools
 
 from scholar_mcp._epo_client import EpoClient
-from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._tools_utility import register_utility_tools
+from scholar_mcp.domain import Service
 from tests.conftest import PlainClient, tasks_server
 
 S2_BASE = "https://api.semanticscholar.org/graph/v1"
@@ -53,10 +53,10 @@ def _make_epo_client(
 
 
 @pytest.fixture
-def mcp(bundle: ServiceBundle, slow_jobs: Jobs) -> FastMCP:
+def mcp(service: Service, slow_jobs: Jobs) -> FastMCP:
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
-        yield {"bundle": bundle}
+        yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
     register_utility_tools(app, slow_jobs)
@@ -64,13 +64,13 @@ def mcp(bundle: ServiceBundle, slow_jobs: Jobs) -> FastMCP:
 
 
 @pytest.fixture
-def mcp_with_epo(bundle: ServiceBundle, slow_jobs: Jobs) -> FastMCP:
+def mcp_with_epo(service: Service, slow_jobs: Jobs) -> FastMCP:
     """FastMCP instance with utility tools and a mock EpoClient wired in."""
-    bundle.epo = _make_epo_client()
+    service.epo = _make_epo_client()
 
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
-        yield {"bundle": bundle}
+        yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
     register_utility_tools(app, slow_jobs)
@@ -178,7 +178,7 @@ async def test_batch_resolve_not_found_no_doi(mcp: FastMCP) -> None:
 
 
 async def test_batch_resolve_retries_on_429(
-    bundle: ServiceBundle,
+    service: Service,
     slow_jobs: Jobs,
 ) -> None:
     """A rate limit is retried in-client rather than queued."""
@@ -196,7 +196,7 @@ async def test_batch_resolve_retries_on_429(
 
         @asynccontextmanager
         async def lifespan(app: FastMCP):  # type: ignore[type-arg]
-            yield {"bundle": bundle}
+            yield {"service": service}
 
         app = tasks_server("test", lifespan=lifespan)
         register_utility_tools(app, slow_jobs)
@@ -337,7 +337,7 @@ async def test_enrich_paper_affiliations_and_concepts(mcp: FastMCP) -> None:
 
 
 async def test_enrich_paper_retries_on_429(
-    bundle: ServiceBundle,
+    service: Service,
     slow_jobs: Jobs,
 ) -> None:
     """A rate limit is retried in-client rather than queued."""
@@ -369,7 +369,7 @@ async def test_enrich_paper_retries_on_429(
 
         @asynccontextmanager
         async def lifespan(app: FastMCP):  # type: ignore[type-arg]
-            yield {"bundle": bundle}
+            yield {"service": service}
 
         app = tasks_server("test", lifespan=lifespan)
         register_utility_tools(app, slow_jobs)
@@ -453,15 +453,15 @@ async def test_batch_resolve_patent_epo_not_configured(
 
 
 async def test_batch_resolve_patent_resolve_failed(
-    bundle: ServiceBundle,
+    service: Service,
     slow_jobs: Jobs,
 ) -> None:
     """batch_resolve returns resolve_failed when EPO raises an exception."""
-    bundle.epo = _make_epo_client(raise_on_biblio=RuntimeError("EPO down"))
+    service.epo = _make_epo_client(raise_on_biblio=RuntimeError("EPO down"))
 
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
-        yield {"bundle": bundle}
+        yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
     register_utility_tools(app, slow_jobs)
@@ -478,15 +478,15 @@ async def test_batch_resolve_patent_resolve_failed(
 
 
 async def test_batch_resolve_patent_not_found_empty_biblio(
-    bundle: ServiceBundle,
+    service: Service,
     slow_jobs: Jobs,
 ) -> None:
     """batch_resolve returns not_found when biblio has no title or applicants."""
-    bundle.epo = _make_epo_client(biblio_result={"title": "", "applicants": []})
+    service.epo = _make_epo_client(biblio_result={"title": "", "applicants": []})
 
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
-        yield {"bundle": bundle}
+        yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
     register_utility_tools(app, slow_jobs)
@@ -538,17 +538,17 @@ async def test_batch_resolve_preserves_order_with_patents(
 
 
 async def test_batch_resolve_patent_throttled_degrades_that_entry(
-    bundle: ServiceBundle,
+    service: Service,
     slow_jobs: Jobs,
 ) -> None:
     """An EPO throttle degrades that entry rather than queueing the batch."""
     from scholar_mcp._epo_client import EpoRateLimitedError
 
-    bundle.epo = _make_epo_client(raise_on_biblio=EpoRateLimitedError("red"))
+    service.epo = _make_epo_client(raise_on_biblio=EpoRateLimitedError("red"))
 
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
-        yield {"bundle": bundle}
+        yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
     register_utility_tools(app, slow_jobs)
@@ -723,7 +723,7 @@ async def test_batch_resolve_no_chapter_info(mcp: FastMCP) -> None:
 
 @pytest.mark.respx(base_url=S2_BASE)
 async def test_batch_resolve_promotes_when_slow(
-    respx_mock: respx.MockRouter, bundle: ServiceBundle, jobs: Jobs
+    respx_mock: respx.MockRouter, service: Service, jobs: Jobs
 ) -> None:
     """A slow batch is promoted and the ordered results arrive by polling."""
 
@@ -735,7 +735,7 @@ async def test_batch_resolve_promotes_when_slow(
 
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
-        yield {"bundle": bundle}
+        yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
     register_utility_tools(app, jobs)
@@ -761,7 +761,7 @@ async def test_batch_resolve_promotes_when_slow(
 
 
 async def test_batch_resolve_reports_quota_exhaustion_per_entry(
-    bundle: ServiceBundle, slow_jobs: Jobs
+    service: Service, slow_jobs: Jobs
 ) -> None:
     """An exhausted EPO quota names itself in that entry, and only that entry.
 
@@ -775,7 +775,7 @@ async def test_batch_resolve_reports_quota_exhaustion_per_entry(
 
     epo = MagicMock(spec=EpoClient)
     epo.get_biblio = AsyncMock(side_effect=EpoQuotaExhaustedError)
-    bundle.epo = epo
+    service.epo = epo
 
     with respx.mock:
         respx.post(f"{S2_BASE}/paper/batch").mock(
@@ -784,7 +784,7 @@ async def test_batch_resolve_reports_quota_exhaustion_per_entry(
 
         @asynccontextmanager
         async def lifespan(app: FastMCP):  # type: ignore[type-arg]
-            yield {"bundle": bundle}
+            yield {"service": service}
 
         app = tasks_server("test", lifespan=lifespan)
         register_utility_tools(app, slow_jobs)
@@ -801,7 +801,7 @@ async def test_batch_resolve_reports_quota_exhaustion_per_entry(
 
 
 async def test_enrich_paper_reports_a_sustained_rate_limit_as_retryable(
-    bundle: ServiceBundle, slow_jobs: Jobs
+    service: Service, slow_jobs: Jobs
 ) -> None:
     """An exhausted 429 says so, rather than claiming the paper is missing.
 
@@ -814,7 +814,7 @@ async def test_enrich_paper_reports_a_sustained_rate_limit_as_retryable(
 
         @asynccontextmanager
         async def lifespan(app: FastMCP):  # type: ignore[type-arg]
-            yield {"bundle": bundle}
+            yield {"service": service}
 
         app = tasks_server("test", lifespan=lifespan)
         register_utility_tools(app, slow_jobs)

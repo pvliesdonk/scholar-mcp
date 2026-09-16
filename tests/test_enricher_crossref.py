@@ -11,17 +11,17 @@ from scholar_mcp._enricher_crossref import CrossRefEnricher
 from scholar_mcp._enrichment import Enricher
 
 
-def _make_bundle(
+def _make_service(
     *,
     cache_hit: dict[str, Any] | None = None,
     api_result: dict[str, Any] | None = None,
 ) -> MagicMock:
-    """Create a mock ServiceBundle with configurable cache/API responses."""
-    bundle = MagicMock()
-    bundle.cache.get_crossref = AsyncMock(return_value=cache_hit)
-    bundle.cache.set_crossref = AsyncMock()
-    bundle.crossref.get_by_doi = AsyncMock(return_value=api_result)
-    return bundle
+    """Create a mock Service with configurable cache/API responses."""
+    service = MagicMock()
+    service.cache.get_crossref = AsyncMock(return_value=cache_hit)
+    service.cache.set_crossref = AsyncMock()
+    service.crossref.get_by_doi = AsyncMock(return_value=api_result)
+    return service
 
 
 def _cr_data() -> dict[str, Any]:
@@ -76,17 +76,17 @@ async def test_enrich_fills_crossref_metadata_from_cache() -> None:
     """When cache has data, crossref_metadata is filled and API is not called."""
     enricher = CrossRefEnricher()
     cr = _cr_data()
-    bundle = _make_bundle(cache_hit=cr)
+    service = _make_service(cache_hit=cr)
     record: dict[str, Any] = {
         "externalIds": {"DOI": "10.1234/cached"},
     }
 
-    await enricher.enrich(record, bundle)
+    await enricher.enrich(record, service)
 
     assert record["crossref_metadata"] == cr
-    bundle.cache.get_crossref.assert_awaited_once_with("10.1234/cached")
-    bundle.crossref.get_by_doi.assert_not_awaited()
-    bundle.cache.set_crossref.assert_not_awaited()
+    service.cache.get_crossref.assert_awaited_once_with("10.1234/cached")
+    service.crossref.get_by_doi.assert_not_awaited()
+    service.cache.set_crossref.assert_not_awaited()
 
 
 @pytest.mark.anyio
@@ -94,29 +94,29 @@ async def test_enrich_fills_crossref_metadata_from_api() -> None:
     """When cache misses, API is called, result cached, and metadata filled."""
     enricher = CrossRefEnricher()
     cr = _cr_data()
-    bundle = _make_bundle(cache_hit=None, api_result=cr)
+    service = _make_service(cache_hit=None, api_result=cr)
     record: dict[str, Any] = {
         "externalIds": {"DOI": "10.1234/fresh"},
     }
 
-    await enricher.enrich(record, bundle)
+    await enricher.enrich(record, service)
 
     assert record["crossref_metadata"] == cr
-    bundle.cache.get_crossref.assert_awaited_once_with("10.1234/fresh")
-    bundle.crossref.get_by_doi.assert_awaited_once_with("10.1234/fresh")
-    bundle.cache.set_crossref.assert_awaited_once_with("10.1234/fresh", cr)
+    service.cache.get_crossref.assert_awaited_once_with("10.1234/fresh")
+    service.crossref.get_by_doi.assert_awaited_once_with("10.1234/fresh")
+    service.cache.set_crossref.assert_awaited_once_with("10.1234/fresh", cr)
 
 
 @pytest.mark.anyio
 async def test_enrich_handles_error_silently() -> None:
     """Exception during enrichment is swallowed; record stays unchanged."""
     enricher = CrossRefEnricher()
-    bundle = _make_bundle()
-    bundle.cache.get_crossref = AsyncMock(side_effect=RuntimeError("boom"))
+    service = _make_service()
+    service.cache.get_crossref = AsyncMock(side_effect=RuntimeError("boom"))
     record: dict[str, Any] = {
         "externalIds": {"DOI": "10.1234/err"},
     }
 
-    await enricher.enrich(record, bundle)
+    await enricher.enrich(record, service)
 
     assert "crossref_metadata" not in record

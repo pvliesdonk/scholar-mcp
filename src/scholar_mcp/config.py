@@ -67,7 +67,7 @@ class ProjectConfig:
     # CONFIG-FIELDS-START — add domain fields below; kept across copier update
     # Composed, not inherited — same rule as `server` above.  It lives inside
     # the domain block because the template does not wire jobs; scholar does
-    # (see `_server_tools.register_tools`).  Holding it here is also what
+    # (see `tools.register_tools`).  Holding it here is also what
     # puts the SCHOLAR_MCP_JOBS_* vars in front of the config-surface
     # generator: `server_config_surface()` covers ServerConfig only.
     jobs: JobsConfig = field(default_factory=JobsConfig)

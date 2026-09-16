@@ -12,7 +12,7 @@ from scholar_mcp._book_enrichment import (
     enrich_books,
 )
 from scholar_mcp._rate_limiter import RateLimitedError
-from scholar_mcp._server_deps import ServiceBundle
+from scholar_mcp.domain import Service
 
 OL_BASE = "https://openlibrary.org"
 
@@ -50,13 +50,13 @@ def _make_paper(
 
 @pytest.mark.respx(base_url=OL_BASE)
 async def test_enrichment_triggered_by_isbn(
-    respx_mock: respx.MockRouter, bundle: ServiceBundle
+    respx_mock: respx.MockRouter, service: Service
 ) -> None:
     respx_mock.get("/isbn/9780201633610.json").mock(
         return_value=httpx.Response(200, json=SAMPLE_EDITION)
     )
     paper = _make_paper(isbn="9780201633610")
-    await enrich_books([paper], bundle)
+    await enrich_books([paper], service)
     assert "book_metadata" in paper
     assert paper["book_metadata"]["publisher"] == "Addison-Wesley"
     assert paper["book_metadata"]["isbn_13"] == "9780201633610"
@@ -64,65 +64,67 @@ async def test_enrichment_triggered_by_isbn(
 
 @pytest.mark.respx(base_url=OL_BASE)
 async def test_enrichment_triggered_by_publication_type_with_isbn(
-    respx_mock: respx.MockRouter, bundle: ServiceBundle
+    respx_mock: respx.MockRouter, service: Service
 ) -> None:
     respx_mock.get("/isbn/9780201633610.json").mock(
         return_value=httpx.Response(200, json=SAMPLE_EDITION)
     )
     paper = _make_paper(publication_types=["Book"], isbn="9780201633610")
-    await enrich_books([paper], bundle)
+    await enrich_books([paper], service)
     assert "book_metadata" in paper
 
 
 @pytest.mark.respx(base_url=OL_BASE)
 async def test_enrichment_skipped_for_book_type_without_isbn(
-    respx_mock: respx.MockRouter, bundle: ServiceBundle
+    respx_mock: respx.MockRouter,
+    service: Service,
 ) -> None:
     paper = _make_paper(publication_types=["Book"])
-    await enrich_books([paper], bundle)
+    await enrich_books([paper], service)
     assert "book_metadata" not in paper
 
 
 @pytest.mark.respx(base_url=OL_BASE)
 async def test_enrichment_skipped_for_regular_paper(
-    respx_mock: respx.MockRouter, bundle: ServiceBundle
+    respx_mock: respx.MockRouter,
+    service: Service,
 ) -> None:
     paper = _make_paper()
-    await enrich_books([paper], bundle)
+    await enrich_books([paper], service)
     assert "book_metadata" not in paper
 
 
 @pytest.mark.respx(base_url=OL_BASE)
 async def test_enrichment_failure_leaves_paper_unchanged(
-    respx_mock: respx.MockRouter, bundle: ServiceBundle
+    respx_mock: respx.MockRouter, service: Service
 ) -> None:
     respx_mock.get("/isbn/9780201633610.json").mock(return_value=httpx.Response(500))
     paper = _make_paper(isbn="9780201633610")
-    await enrich_books([paper], bundle)
+    await enrich_books([paper], service)
     assert "book_metadata" not in paper
 
 
 @pytest.mark.respx(base_url=OL_BASE)
 async def test_enrichment_uses_cache_on_second_call(
-    respx_mock: respx.MockRouter, bundle: ServiceBundle
+    respx_mock: respx.MockRouter, service: Service
 ) -> None:
     respx_mock.get("/isbn/9780201633610.json").mock(
         return_value=httpx.Response(200, json=SAMPLE_EDITION)
     )
     paper1 = _make_paper(isbn="9780201633610")
-    await enrich_books([paper1], bundle)
+    await enrich_books([paper1], service)
     assert "book_metadata" in paper1
 
     # Second call — API should not be hit (cache)
     paper2 = _make_paper(isbn="9780201633610")
-    await enrich_books([paper2], bundle)
+    await enrich_books([paper2], service)
     assert "book_metadata" in paper2
     assert paper2["book_metadata"]["publisher"] == "Addison-Wesley"
 
 
 @pytest.mark.respx(base_url=OL_BASE)
 async def test_enrichment_edition_without_work_id(
-    respx_mock: respx.MockRouter, bundle: ServiceBundle
+    respx_mock: respx.MockRouter, service: Service
 ) -> None:
     """Edition without a works key skips the work-cache write."""
     edition_no_work = {
@@ -135,7 +137,7 @@ async def test_enrichment_edition_without_work_id(
         return_value=httpx.Response(200, json=edition_no_work)
     )
     paper = _make_paper(isbn="9781111111111")
-    await enrich_books([paper], bundle)
+    await enrich_books([paper], service)
     assert "book_metadata" in paper
     assert paper["book_metadata"]["isbn_13"] == "9781111111111"
     assert paper["book_metadata"]["openlibrary_work_id"] is None
@@ -143,7 +145,7 @@ async def test_enrichment_edition_without_work_id(
 
 @pytest.mark.respx(base_url=OL_BASE)
 async def test_enrichment_batch_multiple_papers(
-    respx_mock: respx.MockRouter, bundle: ServiceBundle
+    respx_mock: respx.MockRouter, service: Service
 ) -> None:
     respx_mock.get("/isbn/9780201633610.json").mock(
         return_value=httpx.Response(200, json=SAMPLE_EDITION)
@@ -153,7 +155,7 @@ async def test_enrichment_batch_multiple_papers(
         _make_paper(paper_id="p2"),  # no ISBN, should be skipped
         _make_paper(paper_id="p3", isbn="9780201633610"),  # same ISBN, cache hit
     ]
-    await enrich_books(papers, bundle)
+    await enrich_books(papers, service)
     assert "book_metadata" in papers[0]
     assert "book_metadata" not in papers[1]
     assert "book_metadata" in papers[2]
@@ -216,42 +218,42 @@ def test_extract_author_keys_happy_path() -> None:
 
 @pytest.mark.respx(base_url=OL_BASE)
 async def test_enrich_authors_already_populated(
-    respx_mock: respx.MockRouter, bundle: ServiceBundle
+    respx_mock: respx.MockRouter, service: Service
 ) -> None:
     """Early-returns without fetching when authors already set."""
     book: dict = {"authors": ["Already Here"], "openlibrary_work_id": "OL1W"}
-    await enrich_authors_from_work(book, bundle)
+    await enrich_authors_from_work(book, service)
     assert book["authors"] == ["Already Here"]
     assert not respx_mock.calls
 
 
 @pytest.mark.respx(base_url=OL_BASE)
 async def test_enrich_authors_work_returns_none(
-    respx_mock: respx.MockRouter, bundle: ServiceBundle
+    respx_mock: respx.MockRouter, service: Service
 ) -> None:
     """No-ops when the work endpoint returns 404."""
     respx_mock.get("/works/OL999W.json").mock(return_value=httpx.Response(404))
     book: dict = {"authors": [], "openlibrary_work_id": "OL999W"}
-    await enrich_authors_from_work(book, bundle)
+    await enrich_authors_from_work(book, service)
     assert book["authors"] == []
 
 
 @pytest.mark.respx(base_url=OL_BASE)
 async def test_enrich_authors_work_has_no_author_keys(
-    respx_mock: respx.MockRouter, bundle: ServiceBundle
+    respx_mock: respx.MockRouter, service: Service
 ) -> None:
     """No-ops when the work has no recognisable author entries."""
     respx_mock.get("/works/OL1W.json").mock(
         return_value=httpx.Response(200, json={"title": "Anon", "authors": []})
     )
     book: dict = {"authors": [], "openlibrary_work_id": "OL1W"}
-    await enrich_authors_from_work(book, bundle)
+    await enrich_authors_from_work(book, service)
     assert book["authors"] == []
 
 
 @pytest.mark.respx(base_url=OL_BASE)
 async def test_enrich_authors_all_author_fetches_return_none(
-    respx_mock: respx.MockRouter, bundle: ServiceBundle
+    respx_mock: respx.MockRouter, service: Service
 ) -> None:
     """No-ops when every get_author call returns None (404)."""
     respx_mock.get("/works/OL1W.json").mock(
@@ -264,7 +266,7 @@ async def test_enrich_authors_all_author_fetches_return_none(
     )
     respx_mock.get("/authors/OL999A.json").mock(return_value=httpx.Response(404))
     book: dict = {"authors": [], "openlibrary_work_id": "OL1W"}
-    await enrich_authors_from_work(book, bundle)
+    await enrich_authors_from_work(book, service)
     assert book["authors"] == []
 
 
@@ -273,7 +275,7 @@ async def test_enrich_authors_all_author_fetches_return_none(
 
 @pytest.mark.respx(base_url=OL_BASE)
 async def test_enrichment_rate_limited_error_propagates(
-    respx_mock: respx.MockRouter, bundle: ServiceBundle
+    respx_mock: respx.MockRouter, service: Service
 ) -> None:
     """RateLimitedError is re-raised, not swallowed."""
     respx_mock.get("/isbn/9780201633610.json").mock(
@@ -281,4 +283,4 @@ async def test_enrichment_rate_limited_error_propagates(
     )
     paper = _make_paper(isbn="9780201633610")
     with pytest.raises(RateLimitedError):
-        await enrich_books([paper], bundle)
+        await enrich_books([paper], service)

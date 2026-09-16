@@ -1,8 +1,9 @@
 """Scholar MCP — FastMCP server entry point.
 
-Composes the primitives from ``fastmcp-pvl-core`` into scholar's
-``make_server()``.  See https://gofastmcp.com/servers for the FastMCP
-server surface and the fastmcp-pvl-core README for the helpers used here.
+Composes the primitives from ``fastmcp-pvl-core`` into a
+project-specific ``make_server()``.  See
+https://gofastmcp.com/servers for the FastMCP server surface and
+``fastmcp-pvl-core``'s README for the composable helpers used below.
 """
 
 from __future__ import annotations
@@ -12,18 +13,13 @@ from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _pkg_version
 
 from fastmcp import FastMCP
-from fastmcp.server.event_store import EventStore
 from fastmcp_pvl_core import (
     HealthCheck,
-    InstructionRole,
-    # The template scaffold suppresses F401 on this import because it only
-    # re-exports ServerConfig.  scholar-mcp uses it directly
-    # (_load_server_config, build_event_store), so the suppression would
-    # itself be unused and RUF100 would fail.
-    ServerConfig,
+    ServerConfig,  # noqa: F401  — re-exported for downstream projects' convenience
     apply_tool_visibility,
     build_auth,
-    build_jobs,
+    build_event_store,  # noqa: F401  — re-exported for downstream projects' convenience
+    build_kv_store,  # noqa: F401  — re-exported for downstream projects' convenience
     configure_logging_from_env,
     configure_task_backend,
     env,  # also used by DOMAIN-WIRING additions, so no new import is needed there
@@ -32,97 +28,21 @@ from fastmcp_pvl_core import (
     normalise_http_path,
     register_health_routes,
     register_server_info_tool,
+    resolve_auth_mode,
     wire_middleware_stack,
-)
-from fastmcp_pvl_core import (
-    build_event_store as _core_build_event_store,
-)
-from fastmcp_pvl_core import (
-    build_kv_store as build_kv_store,  # re-exported for downstream projects' convenience
-)
-from fastmcp_pvl_core import (
-    resolve_auth_mode as _core_resolve_auth_mode,
 )
 
 from scholar_mcp._s2_client import S2_KEEPALIVE_STATUS
+from scholar_mcp._server_apps import register_apps
 from scholar_mcp._server_deps import server_lifespan
-from scholar_mcp._server_prompts import register_prompts
-from scholar_mcp._server_resources import register_resources
-from scholar_mcp._server_tools import register_tools
-from scholar_mcp.config import _ENV_PREFIX, ProjectConfig
+from scholar_mcp.config import ProjectConfig
+from scholar_mcp.prompts import register_prompts
+from scholar_mcp.resources import register_resources
+from scholar_mcp.tools import register_tools
 
 logger = logging.getLogger(__name__)
 
-
-def _load_server_config() -> ServerConfig:
-    """Compat helper — load ServerConfig slice from scholar env vars.
-
-    Used by backward-compat wrappers ``_resolve_auth_mode`` / ``_build_*_auth``
-    that preserve their historical zero-arg call shape for existing tests.
-    """
-    return ServerConfig.from_env(env_prefix=_ENV_PREFIX)
-
-
-def _resolve_auth_mode() -> str | None:
-    """Backward-compat wrapper — returns ``None`` when core returns ``"none"``."""
-    mode = _core_resolve_auth_mode(_load_server_config())
-    return None if mode == "none" else mode
-
-
-def _build_remote_auth() -> object | None:
-    """Backward-compat wrapper around ``fastmcp_pvl_core.build_remote_auth``.
-
-    Raises:
-        ConfigurationError: The underlying builder raises on OIDC discovery
-            failure / missing ``httpx`` / incomplete discovery document
-            instead of returning ``None``. ``None`` is still returned when
-            no remote-auth config is present at all.
-    """
-    from fastmcp_pvl_core import build_remote_auth
-
-    return build_remote_auth(_load_server_config())
-
-
-def _build_bearer_auth() -> object | None:
-    """Backward-compat wrapper around ``fastmcp_pvl_core.build_bearer_auth``.
-
-    Raises:
-        ConfigurationError: The underlying builder raises when
-            ``SCHOLAR_MCP_BEARER_TOKENS_FILE`` is set but the file is
-            missing, unparseable, or schema-invalid.
-    """
-    from fastmcp_pvl_core import build_bearer_auth
-
-    return build_bearer_auth(_load_server_config())
-
-
-def _build_oidc_auth() -> object | None:
-    """Backward-compat wrapper around ``fastmcp_pvl_core.build_oidc_proxy_auth``.
-
-    Note that pvl-core's ``build_oidc_proxy_auth`` itself does not raise
-    ``ConfigurationError`` — but it calls ``OIDCProxy(...)``, whose
-    ``__init__`` performs OIDC discovery against the configured
-    ``oidc_config_url``. Discovery failures raise raw ``httpx.HTTPError``
-    (network/HTTP) or ``pydantic.ValidationError`` (malformed discovery
-    doc) which propagate unchanged through this wrapper. Upstream issue
-    to normalise these to ``ConfigurationError`` for symmetry with the
-    remote-auth path is tracked separately.
-    """
-    from fastmcp_pvl_core import build_oidc_proxy_auth
-
-    return build_oidc_proxy_auth(_load_server_config())
-
-
-def build_event_store(url: str | None = None) -> EventStore:
-    """Build an ``EventStore`` — thin shim over core's helper.
-
-    Preserves the legacy zero-arg call shape used by cli.py.  When ``url``
-    is ``None`` we load ``ServerConfig`` from env so ``SCHOLAR_MCP_EVENT_STORE_URL``
-    is honored; when ``url`` is provided explicitly it overrides the env.
-    """
-    if url is None:
-        return _core_build_event_store(_ENV_PREFIX, _load_server_config())
-    return _core_build_event_store(_ENV_PREFIX, ServerConfig(event_store_url=url))
+_ENV_PREFIX = "SCHOLAR_MCP"
 
 
 def make_server(
@@ -167,40 +87,12 @@ def make_server(
     server_name = config.server_name
 
     auth = build_auth(config.server)
-    auth_mode = _core_resolve_auth_mode(config.server)
-    # Belt-and-braces invariant: build_auth returns None iff
-    # resolve_auth_mode returns "none", and raises ConfigurationError on real
-    # misconfig (no silent downgrade). A mismatch would indicate a pvl-core
-    # regression that silently degraded a configured auth mode to None.
-    # Explicit raise rather than ``assert`` so the guard survives
-    # ``python -O`` / ``PYTHONOPTIMIZE=1``.
-    if (auth is None) != (auth_mode == "none"):
-        raise RuntimeError(
-            f"pvl-core auth/mode invariant violation: auth={auth!r} "
-            f"mode={auth_mode!r} — refusing to start an unauthenticated "
-            "server while resolve_auth_mode reports a configured mode"
-        )
+    auth_mode = resolve_auth_mode(config.server) if auth is not None else "none"
     if auth_mode == "none":
         logger.warning(
             "No auth configured — server accepts unauthenticated connections"
         )
-    elif transport == "stdio":
-        # FastMCP's stdio transport skips auth enforcement on incoming
-        # messages (stdio has no Authorization header), so a configured
-        # verifier is built but never consulted. Log this as a WARNING
-        # rather than the misleading "Auth enabled: mode=X" so operators
-        # don't trust startup logs that promise enforcement they won't get.
-        logger.warning(
-            "auth_configured_but_stdio_skips_enforcement mode=%s — "
-            "FastMCP's stdio transport bypasses all auth providers; "
-            "switch to --transport http to actually exercise auth",
-            auth_mode,
-        )
     else:
-        # Unified shape across all non-"none" modes (bearer-single,
-        # bearer-mapped, oidc-proxy, remote, multi). Sub-builders emit their
-        # own DEBUG lines if operators need the bearer/OIDC sub-mode for
-        # multi-auth deployments.
         logger.info("Auth enabled: mode=%s", auth_mode)
 
     try:
@@ -209,13 +101,11 @@ def make_server(
         pkg_ver = "unknown"
 
     logger.info(
-        "Server config: version=%s name=%s transport=%s auth=%s mode=%s cache_dir=%s",
+        "Server config: version=%s name=%s transport=%s auth=%s",
         pkg_ver,
         server_name,
         transport,
         auth_mode,
-        "read-only" if config.read_only else "read-write",
-        config.cache_dir,
     )
 
     mcp = FastMCP(
@@ -253,10 +143,7 @@ def make_server(
     # ``finalize_instructions`` renders them once, after tool visibility.
     instructions_for(mcp).identity(
         server_name,
-        "Scholar MCP — academic literature server: Semantic Scholar + "
-        "OpenAlex + Crossref + OpenLibrary + Google Books + EPO (patents) "
-        "+ standards (ISO/IEC/IEEE/CEN/CC) enrichment and docling PDF "
-        "conversion.",
+        "FastMCP server for scholarly papers, patents, books and standards with docling PDF conversion",
     )
     # The docs site publishes llms.txt per version (mkdocs-llmstxt, mike);
     # `/latest/` resolves once the first release has published the site.
@@ -264,33 +151,17 @@ def make_server(
         "https://pvliesdonk.github.io/scholar-mcp/latest/llms.txt"
     )
 
-    # `jobs` is passed explicitly rather than left to register_tools' own
-    # env fallback, so an explicitly-supplied `config` governs the jobs
-    # subsystem exactly as it already governs the Docket backend above.
-    # Without it the two would read from different sources for one config
-    # object. NOTE: this line is template-owned and a `copier update` will
-    # revert it to the bare `register_tools(mcp)`; a config passthrough is
-    # requested upstream as pvliesdonk/fastmcp-server-template#534.
-    # Reverting degrades rather than breaks: register_tools still falls
-    # back to reading the environment.
-    register_tools(mcp, jobs=build_jobs(config.server, config.jobs))
+    register_tools(mcp)
     register_resources(mcp)
     register_prompts(mcp)
-
-    if config.read_only:
-        mcp.disable(tags={"write"})
-    if not config.epo_configured:
-        # Hide patent-related tools when the EPO OPS credentials aren't set —
-        # otherwise the model sees ``search_patents``/etc. in its tool list and
-        # fails at call time with an auth error.
-        mcp.disable(tags={"patent"})
+    register_apps(mcp)
 
     register_server_info_tool(
         mcp,
         server_name=server_name,
         server_version=pkg_ver,
-        # DOMAIN-UPSTREAM-START — wire upstream reporting for servers that
-        # talk to a single remote service. Scholar consumes many upstreams
+        # DOMAIN-UPSTREAM-START — wire upstream version reporting for servers
+        # that talks to a single remote service. Scholar consumes many upstreams
         # (S2/OpenAlex/EPO/OpenLibrary/...) with no canonical "the upstream",
         # so this slot reports the one piece of upstream state an operator
         # cannot otherwise see: whether the configured Semantic Scholar key
@@ -300,11 +171,7 @@ def make_server(
         # readiness failure answers 503 for the whole server, dropping it from
         # rotation wherever something polls that route, and that does not
         # revive a revoked key -- while OpenAlex, Crossref, EPO, OpenLibrary
-        # and the standards sources carry on serving. The shipped compose
-        # probe reads /health, so it is unaffected either way. A partial
-        # degradation you would rather report than be dropped from rotation
-        # for belongs in get_server_info; README's "Server info" section
-        # records the reasoning for an operator.
+        # and the standards sources carry on serving.
         upstream_version=S2_KEEPALIVE_STATUS.as_dict,
         upstream_label="semantic_scholar",
         # DOMAIN-UPSTREAM-END
@@ -331,16 +198,20 @@ def make_server(
     # transforms, mode toggles, alternative middleware, additional registrations);
     # kept across copier update. Leave empty for projects that don't customise
     # make_server() beyond the standard scaffold.
-    #
-    # The pre-v6 ``domain_line`` also stated that read-only tools are always
-    # available while write-tagged ones are hidden in read-only mode. That is
-    # workflow prose, not identity, so the v6 hop deferred it to here, where
-    # pvl-core 6's role form exists to carry it (#339, #341).
-    #
-    # ``requires_tools`` is what makes it honest rather than a claim the model
-    # cannot check: pvl-core drops a snippet whose required tools are hidden,
-    # so a read-only deployment — where these four are disabled by tag — never
-    # sees a sentence about tools it does not have.
+
+    if config.read_only:
+        mcp.disable(tags={"write"})
+    if not config.epo_configured:
+        # Hide patent-related tools when the EPO OPS credentials aren't set --
+        # otherwise the model sees ``search_patents``/etc. in its tool list and
+        # fails at call time with an auth error.
+        mcp.disable(tags={"patent"})
+
+    # ``requires_tools`` keeps this honest: pvl-core drops a snippet whose
+    # required tools are hidden, so a read-only deployment -- where these four
+    # are disabled by tag -- never sees a sentence about tools it does not have.
+    from fastmcp_pvl_core import InstructionRole
+
     instructions_for(mcp).add(
         "This instance is in read-write mode: alongside the read-only tools, "
         "it exposes write-tagged tools that populate the local cache by "
@@ -356,7 +227,6 @@ def make_server(
         ),
     )
 
-    #
     # -- Transfer subsystem (capability-link upload + download) ----------------
     #
     # Wiring the /transfer/{token} route needs HTTP transport (the route cannot

@@ -2,15 +2,21 @@
 
 from __future__ import annotations
 
-import pytest
+import asyncio
+import json
+from pathlib import Path
+from typing import Any
 
+import pytest
+from fastmcp import Client
+
+from scholar_mcp._server_apps import register_apps
 from scholar_mcp.server import make_server
 
 # pvl-core 6 shapes identity as "<server-name>: <product description>".
 _IDENTITY = (
-    "scholar-mcp: Scholar MCP — academic literature server: Semantic Scholar "
-    "+ OpenAlex + Crossref + OpenLibrary + Google Books + EPO (patents) + "
-    "standards (ISO/IEC/IEEE/CEN/CC) enrichment and docling PDF conversion."
+    "scholar-mcp: FastMCP server for scholarly papers, patents, books and standards "
+    "with docling PDF conversion"
 )
 _LLMS_TXT = "https://pvliesdonk.github.io/scholar-mcp/latest/llms.txt"
 _WRITE_MODE_SNIPPET = "This instance is in read-write mode"
@@ -116,3 +122,130 @@ def test_blank_instructions_falls_back_to_the_composed_text(
     """
     monkeypatch.setenv("SCHOLAR_MCP_INSTRUCTIONS", "   ")
     assert (make_server().instructions or "").startswith(_IDENTITY)
+
+
+def test_register_apps_logs_when_app_domain_set(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """register_apps logs the configured app domain when the env var is set.
+
+    Covers the ``if app_domain:`` branch of ``_server_apps.register_apps``,
+    which the default smoke tests miss because no ``SCHOLAR_MCP_APP_DOMAIN``
+    is set in the test env.  Pass a real ``FastMCP`` instance so the test
+    keeps working if a downstream maintainer adds real registrations to the
+    branch (the scaffold's no-op branch ignores the argument today).
+    """
+    monkeypatch.setenv("SCHOLAR_MCP_APP_DOMAIN", "example.com")
+    with caplog.at_level("INFO", logger="scholar_mcp._server_apps"):
+        register_apps(make_server())
+    # Assert on the structured log argument by exact equality rather than a
+    # substring test of the formatted message.  ``"example.com" in r.message``
+    # trips CodeQL's ``py/incomplete-url-substring-sanitization`` rule on the
+    # host-shaped literal, even though this is a log assertion and not URL
+    # sanitization; ``==`` is not a substring-membership pattern, so it does
+    # not.  The branch logs the configured domain as its sole ``%s`` arg.
+    assert any(r.args == ("example.com",) for r in caplog.records)
+
+
+def test_server_name_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``SCHOLAR_MCP_SERVER_NAME`` overrides the FastMCP server name.
+
+    Unset, the name defaults to ``scholar-mcp`` (locked by the
+    ``get_server_info`` test above). Set, ``make_server()`` must honor it so an
+    operator can rename an instance without editing template-owned code.
+    """
+    monkeypatch.setenv("SCHOLAR_MCP_SERVER_NAME", "renamed-instance")
+    server = make_server()
+    assert server.name == "renamed-instance"
+    assert (server.instructions or "").startswith(
+        "renamed-instance: FastMCP server for scholarly papers, patents, books and standards with docling PDF conversion"
+    )
+
+
+def test_server_name_env_override_reaches_server_info(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The overridden name also flows through to ``get_server_info``.
+
+    ``register_server_info_tool`` is wired separately from the FastMCP ``name``,
+    so this pins that both surfaces honor the same resolved name.
+    """
+    monkeypatch.setenv("SCHOLAR_MCP_SERVER_NAME", "renamed-instance")
+    monkeypatch.setenv("SCHOLAR_MCP_CACHE_DIR", str(tmp_path / "cache"))
+    server = make_server()
+
+    async def _call_server_info() -> Any:
+        async with Client(server) as smoke_client:
+            return await smoke_client.call_tool("get_server_info", {})
+
+    result = asyncio.run(_call_server_info())
+    first = result.content[0]
+    assert hasattr(first, "text"), (
+        f"expected text tool content, got {type(first).__name__}"
+    )
+    assert json.loads(first.text)["server_name"] == "renamed-instance"
+
+
+def test_instructions_env_override(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Legacy ``SCHOLAR_MCP_INSTRUCTIONS`` replaces all generated text and
+    warns that both additive operator variables are ignored."""
+    monkeypatch.setenv("SCHOLAR_MCP_INSTRUCTIONS", "Custom operator text.")
+    monkeypatch.setenv("SCHOLAR_MCP_INSTANCE_DESCRIPTION", "Demo material.")
+    monkeypatch.setenv("SCHOLAR_MCP_INSTRUCTIONS_EXTRA", "House rule: be brief.")
+    # Scope to core's logger: make_server() re-applies FASTMCP_LOG_LEVEL to the
+    # root logger, which would otherwise drop the record under a stricter env.
+    monkeypatch.delenv("FASTMCP_LOG_LEVEL", raising=False)
+    with caplog.at_level("WARNING", logger="fastmcp_pvl_core"):
+        server = make_server()
+    assert server.instructions == "Custom operator text."
+    warning = next(
+        rec.getMessage()
+        for rec in caplog.records
+        if "SCHOLAR_MCP_INSTRUCTIONS" in rec.getMessage()
+    )
+    assert "SCHOLAR_MCP_INSTANCE_DESCRIPTION" in warning
+    assert "SCHOLAR_MCP_INSTRUCTIONS_EXTRA" in warning
+
+
+def test_instructions_compose_semantic_operator_roles(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Operator routing and policy retain their semantic positions."""
+    monkeypatch.delenv("SCHOLAR_MCP_INSTRUCTIONS", raising=False)
+    monkeypatch.setenv("SCHOLAR_MCP_INSTANCE_DESCRIPTION", "Demo material.")
+    monkeypatch.setenv("SCHOLAR_MCP_INSTRUCTIONS_EXTRA", "House rule: be brief.")
+    parts = (make_server().instructions or "").split("\n\n")
+    # Scholar's own workflow snippets (job polling) sit between policy and the
+    # documentation pointer, so pin the roles' positions, not the full list.
+    assert parts[:3] == [
+        "scholar-mcp: FastMCP server for scholarly papers, patents, books and standards with docling PDF conversion",
+        "Demo material.",
+        "House rule: be brief.",
+    ]
+    assert parts[-1] == (
+        "Full documentation for this server: "
+        "https://pvliesdonk.github.io/scholar-mcp/latest/llms.txt"
+    )
+
+
+def test_blank_overrides_fall_back_to_defaults(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Whitespace-only overrides fall back, honoring the "unset/empty" contract.
+
+    ``env`` strips and treats a blank value as unset, so a blank SERVER_NAME
+    must revert to ``scholar-mcp`` rather than rename the instance to
+    whitespace, and a blank INSTRUCTIONS must leave the composed text in place.
+    Guards against a future refactor (e.g. raw ``os.environ.get``) that would
+    pass the blank value through.
+    """
+    monkeypatch.setenv("SCHOLAR_MCP_SERVER_NAME", "   ")
+    monkeypatch.setenv("SCHOLAR_MCP_INSTRUCTIONS", "   ")
+    server = make_server()
+    assert server.name == "scholar-mcp"
+    assert (server.instructions or "").startswith(
+        "scholar-mcp: FastMCP server for scholarly papers, patents, books and standards with docling PDF conversion",
+    )

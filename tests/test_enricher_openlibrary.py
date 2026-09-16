@@ -11,19 +11,19 @@ from scholar_mcp._enricher_openlibrary import OpenLibraryEnricher
 from scholar_mcp._enrichment import Enricher
 
 
-def _make_bundle(
+def _make_service(
     *,
     cache_hit: dict[str, Any] | None = None,
 ) -> MagicMock:
-    """Create a mock ServiceBundle with configurable cache response."""
-    bundle = MagicMock()
-    bundle.cache.get_book_by_isbn = AsyncMock(return_value=cache_hit)
-    bundle.cache.set_book_by_isbn = AsyncMock()
-    bundle.cache.set_book_by_work = AsyncMock()
-    bundle.openlibrary.get_by_isbn = AsyncMock(return_value=None)
-    bundle.openlibrary.get_work = AsyncMock(return_value=None)
-    bundle.openlibrary.get_author = AsyncMock(return_value=None)
-    return bundle
+    """Create a mock Service with configurable cache response."""
+    service = MagicMock()
+    service.cache.get_book_by_isbn = AsyncMock(return_value=cache_hit)
+    service.cache.set_book_by_isbn = AsyncMock()
+    service.cache.set_book_by_work = AsyncMock()
+    service.openlibrary.get_by_isbn = AsyncMock(return_value=None)
+    service.openlibrary.get_work = AsyncMock(return_value=None)
+    service.openlibrary.get_author = AsyncMock(return_value=None)
+    return service
 
 
 def _book_cache_data() -> dict[str, Any]:
@@ -81,18 +81,18 @@ async def test_enrich_uses_cache() -> None:
     """When cache has book data, book_metadata is populated and API not called."""
     enricher = OpenLibraryEnricher()
     cached = _book_cache_data()
-    bundle = _make_bundle(cache_hit=cached)
+    service = _make_service(cache_hit=cached)
     record: dict[str, Any] = {
         "paperId": "p1",
         "externalIds": {"ISBN": "9780201633610"},
     }
 
-    await enricher.enrich(record, bundle)
+    await enricher.enrich(record, service)
 
     assert "book_metadata" in record
     assert record["book_metadata"]["publisher"] == "Addison-Wesley"
-    bundle.cache.get_book_by_isbn.assert_awaited_once()
-    bundle.openlibrary.get_by_isbn.assert_not_awaited()
+    service.cache.get_book_by_isbn.assert_awaited_once()
+    service.openlibrary.get_by_isbn.assert_not_awaited()
 
 
 @pytest.mark.anyio
@@ -101,7 +101,7 @@ async def test_enrich_handles_rate_limit_silently() -> None:
     from scholar_mcp._rate_limiter import RateLimitedError
 
     enricher = OpenLibraryEnricher()
-    bundle = _make_bundle()
+    service = _make_service()
     record: dict[str, Any] = {
         "paperId": "p1",
         "externalIds": {"ISBN": "9780201633610"},
@@ -112,7 +112,7 @@ async def test_enrich_handles_rate_limit_silently() -> None:
         new_callable=AsyncMock,
         side_effect=RateLimitedError("rate limited"),
     ):
-        await enricher.enrich(record, bundle)
+        await enricher.enrich(record, service)
 
     assert "book_metadata" not in record
 
@@ -121,7 +121,7 @@ async def test_enrich_handles_rate_limit_silently() -> None:
 async def test_enrich_handles_error_silently() -> None:
     """Exception during enrichment is swallowed; record stays unchanged."""
     enricher = OpenLibraryEnricher()
-    bundle = _make_bundle()
+    service = _make_service()
     record: dict[str, Any] = {
         "paperId": "p1",
         "externalIds": {"ISBN": "9780201633610"},
@@ -132,6 +132,6 @@ async def test_enrich_handles_error_silently() -> None:
         new_callable=AsyncMock,
         side_effect=RuntimeError("boom"),
     ):
-        await enricher.enrich(record, bundle)
+        await enricher.enrich(record, service)
 
     assert "book_metadata" not in record

@@ -13,18 +13,18 @@ from fastmcp import FastMCP
 from fastmcp.client import Client
 from fastmcp_pvl_core import Jobs, register_job_tools
 
-from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._tools_recommendations import register_recommendation_tools
+from scholar_mcp.domain import Service
 from tests.conftest import PlainClient, tasks_server
 
 S2_REC = "https://api.semanticscholar.org/recommendations/v1"
 
 
 @pytest.fixture
-def mcp(bundle: ServiceBundle, slow_jobs: Jobs) -> FastMCP:
+def mcp(service: Service, slow_jobs: Jobs) -> FastMCP:
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
-        yield {"bundle": bundle}
+        yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
     register_recommendation_tools(app, slow_jobs)
@@ -105,7 +105,7 @@ async def test_recommend_papers_upstream_error(mcp: FastMCP) -> None:
 
 
 async def test_recommend_papers_retries_on_429(
-    bundle: ServiceBundle,
+    service: Service,
     slow_jobs: Jobs,
 ) -> None:
     """A rate limit is retried in-client rather than queued."""
@@ -128,7 +128,7 @@ async def test_recommend_papers_retries_on_429(
 
         @asynccontextmanager
         async def lifespan(app: FastMCP):  # type: ignore[type-arg]
-            yield {"bundle": bundle}
+            yield {"service": service}
 
         app = tasks_server("test", lifespan=lifespan)
         register_recommendation_tools(app, slow_jobs)
@@ -142,7 +142,7 @@ async def test_recommend_papers_retries_on_429(
 
 
 async def test_recommend_papers_promotes_when_slow(
-    bundle: ServiceBundle, jobs: Jobs
+    service: Service, jobs: Jobs
 ) -> None:
     """A slow upstream is promoted and the result arrives by polling."""
 
@@ -155,7 +155,7 @@ async def test_recommend_papers_promotes_when_slow(
 
         @asynccontextmanager
         async def lifespan(app: FastMCP):  # type: ignore[type-arg]
-            yield {"bundle": bundle}
+            yield {"service": service}
 
         app = tasks_server("test", lifespan=lifespan)
         register_recommendation_tools(app, jobs)

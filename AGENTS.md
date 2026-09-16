@@ -15,10 +15,11 @@ src/scholar_mcp/
   server.py            -- FastMCP server factory (make_server) + auth wiring
   config.py            -- env var loading; add domain config fields here
   cli.py               -- CLI entry point (serve command)
-  _server_deps.py      -- lifespan + Depends() DI; ServiceBundle holds all services
-  _server_tools.py     -- MCP tools; dispatches to category modules
-  _server_resources.py -- MCP resources; add domain resources here
-  _server_prompts.py   -- MCP prompts; add domain prompts here
+  _server_deps.py      -- template lifespan + get_service() DI (template-owned)
+  domain.py            -- Service: every upstream client, the cache, enrichment
+  tools.py             -- MCP tools; dispatches to the _tools_* category modules
+  resources.py         -- MCP resources; add domain resources here
+  prompts.py           -- MCP prompts; add domain prompts here
   _rate_limiter.py     -- Rate limiter, retry, try-once + RateLimitedError
 ```
 <!-- DOMAIN-END -->
@@ -255,7 +256,8 @@ If a conflict marker appears in a copier-update bot PR, the conflict itself ofte
 - Library is sync; MCP layer uses `asyncio.to_thread()` for blocking calls
 - Write tools tagged `tags={"write"}`, hidden via `mcp.disable(tags={"write"})` in read-only mode
 - All tools have MCP annotations (`readOnlyHint`, `destructiveHint`, `openWorldHint`)
-- Auth: `build_auth(config.server)` resolved in `make_server()` (MultiAuth when both bearer and OIDC are configured); `_build_bearer_auth()` / `_build_oidc_auth()` are retained backward-compat wrappers used only by tests
+- Auth: `build_auth(config.server)` resolved in the template's `make_server()` (MultiAuth when both bearer and OIDC are configured)
+- **Template shape is leading.** `server.py`, `cli.py` and `_server_deps.py` stay byte-identical to the render outside their sentinel blocks; scholar's wiring lives in `DOMAIN-WIRING` / `DOMAIN-UPSTREAM` / `DOMAIN-COMMANDS`, and its lifecycle in `domain.Service`, whose `start()` registers each resource's cleanup on an `AsyncExitStack`.
 - `_ENV_PREFIX` in `config.py` controls all env var names — change once, affects everything
 - **Background work runs on pvl-core Jobs.** There is one polling contract, `get_job_result`; the bespoke `TaskQueue` is gone (#264).
 - **Jobs**: every tool whose work can run long registers via `register_long_running_tool(mcp, jobs, ...)` and **must** return `dict[str, Any]` — a `-> str` annotation makes the promoted `JobHandle` fail the client's output-schema check. The exceptions are tools that cannot run long (`get_sync_status`, `get_book_excerpt`, `recommend_books`), registered as plain `@mcp.tool`. One `Jobs` per server is built in `register_tools` and passed to each category module; `register_job_tools` registers the single `get_job_result` poller. Promotion is decided by elapsed time (`SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S`), so a tool never branches on whether to go background, and a cache hit needs no special case.

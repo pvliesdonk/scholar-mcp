@@ -19,8 +19,8 @@ from fastmcp.client import Client
 from fastmcp_pvl_core import Jobs
 
 from scholar_mcp._rate_limiter import RateLimitedError, RateLimiter, with_s2_try_once
-from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._tools_search import register_search_tools
+from scholar_mcp.domain import Service
 from tests.conftest import tasks_server
 
 S2_BASE = "https://api.semanticscholar.org/graph/v1"
@@ -69,7 +69,7 @@ async def test_try_once_propagates_other_errors() -> None:
 
 @pytest.mark.respx(base_url=S2_BASE)
 async def test_search_papers_retries_on_429(
-    respx_mock: respx.MockRouter, bundle: ServiceBundle, slow_jobs: Jobs
+    respx_mock: respx.MockRouter, service: Service, slow_jobs: Jobs
 ) -> None:
     """A 429 is retried in-client; the caller still gets the result."""
     call_count = 0
@@ -85,7 +85,7 @@ async def test_search_papers_retries_on_429(
 
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
-        yield {"bundle": bundle}
+        yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
     register_search_tools(app, slow_jobs)
@@ -100,7 +100,7 @@ async def test_search_papers_retries_on_429(
 
 @pytest.mark.respx(base_url=S2_BASE)
 async def test_search_papers_direct_on_success(
-    respx_mock: respx.MockRouter, bundle: ServiceBundle, slow_jobs: Jobs
+    respx_mock: respx.MockRouter, service: Service, slow_jobs: Jobs
 ) -> None:
     """search_papers returns direct result when no rate limiting."""
     respx_mock.get("/paper/search").mock(
@@ -111,7 +111,7 @@ async def test_search_papers_direct_on_success(
 
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
-        yield {"bundle": bundle}
+        yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
     register_search_tools(app, slow_jobs)
@@ -127,7 +127,7 @@ async def test_search_papers_direct_on_success(
 
 @pytest.mark.respx(base_url=S2_BASE)
 async def test_get_paper_retries_on_429(
-    respx_mock: respx.MockRouter, bundle: ServiceBundle, slow_jobs: Jobs
+    respx_mock: respx.MockRouter, service: Service, slow_jobs: Jobs
 ) -> None:
     """A 429 is retried in-client; the caller still gets the record."""
     call_count = 0
@@ -143,7 +143,7 @@ async def test_get_paper_retries_on_429(
 
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
-        yield {"bundle": bundle}
+        yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
     register_search_tools(app, slow_jobs)
@@ -156,14 +156,16 @@ async def test_get_paper_retries_on_429(
 
 @pytest.mark.respx(base_url=S2_BASE)
 async def test_get_paper_cached_returns_direct(
-    respx_mock: respx.MockRouter, bundle: ServiceBundle, slow_jobs: Jobs
+    respx_mock: respx.MockRouter,
+    service: Service,
+    slow_jobs: Jobs,
 ) -> None:
     """A cached paper answers from cache without touching the network."""
-    await bundle.cache.set_paper("abc123", {"paperId": "abc123", "title": "Cached"})
+    await service.cache.set_paper("abc123", {"paperId": "abc123", "title": "Cached"})
 
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
-        yield {"bundle": bundle}
+        yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
     register_search_tools(app, slow_jobs)

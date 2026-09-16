@@ -10,26 +10,26 @@ from ._cache import normalize_isbn
 from ._openlibrary_client import normalize_book
 from ._rate_limiter import RateLimitedError
 from ._record_types import BookRecord
-from ._server_deps import ServiceBundle
+from .domain import Service
 
 logger = logging.getLogger(__name__)
 
 
-async def _resolve_author_keys(
-    author_keys: list[str], bundle: ServiceBundle
-) -> list[str]:
+async def _resolve_author_keys(author_keys: list[str], service: Service) -> list[str]:
     """Resolve Open Library author keys to author names.
 
     Args:
         author_keys: List of Open Library author keys (e.g. ``/authors/OL239963A``).
-        bundle: Service bundle with openlibrary client.
+        service: Domain service with openlibrary client.
 
     Returns:
         List of resolved author name strings.
     """
     # Strip path prefix — get_author expects short IDs like "OL239963A"
     ids = [k.rsplit("/", 1)[-1] for k in author_keys]
-    results = await asyncio.gather(*(bundle.openlibrary.get_author(aid) for aid in ids))
+    results = await asyncio.gather(
+        *(service.openlibrary.get_author(aid) for aid in ids)
+    )
     return [a["name"] for a in results if a and a.get("name")]
 
 
@@ -51,14 +51,14 @@ def _extract_author_keys(work: dict[str, Any]) -> list[str]:
     return keys
 
 
-async def enrich_authors_from_work(book: BookRecord, bundle: ServiceBundle) -> None:
+async def enrich_authors_from_work(book: BookRecord, service: Service) -> None:
     """Enrich book in-place with authors from its work record.
 
     Best-effort: failures are logged and silently skipped.
 
     Args:
         book: Book record to enrich in-place.
-        bundle: Service bundle with openlibrary client.
+        service: Domain service with openlibrary client.
     """
     if book.get("authors"):
         return
@@ -66,12 +66,12 @@ async def enrich_authors_from_work(book: BookRecord, bundle: ServiceBundle) -> N
     if not work_id:
         return
     try:
-        work = await bundle.openlibrary.get_work(work_id)
+        work = await service.openlibrary.get_work(work_id)
         if work is None:
             return
         author_keys = _extract_author_keys(work)
         if author_keys:
-            names = await _resolve_author_keys(author_keys, bundle)
+            names = await _resolve_author_keys(author_keys, service)
             if names:
                 book["authors"] = names
     except Exception:
@@ -107,33 +107,33 @@ def _extract_isbn(paper: dict[str, Any]) -> str | None:
     return None
 
 
-async def _enrich_one(paper: dict[str, Any], bundle: ServiceBundle) -> None:
+async def _enrich_one(paper: dict[str, Any], service: Service) -> None:
     """Enrich a single paper dict in-place with book metadata.
 
     Args:
         paper: S2 paper dict (mutated in-place).
-        bundle: Service bundle for API/cache access.
+        service: Domain service for API/cache access.
     """
     isbn = _extract_isbn(paper)
     if isbn is None:
         return
 
     try:
-        cached = await bundle.cache.get_book_by_isbn(isbn)
+        cached = await service.cache.get_book_by_isbn(isbn)
         if cached is not None:
             paper["book_metadata"] = _to_enrichment_dict(cached)
             return
 
-        edition = await bundle.openlibrary.get_by_isbn(isbn)
+        edition = await service.openlibrary.get_by_isbn(isbn)
         if edition is None:
             return
 
         book: BookRecord = normalize_book(edition, source="edition")
-        await enrich_authors_from_work(book, bundle)
-        await bundle.cache.set_book_by_isbn(isbn, book)
+        await enrich_authors_from_work(book, service)
+        await service.cache.set_book_by_isbn(isbn, book)
         work_id = book.get("openlibrary_work_id")
         if work_id:
-            await bundle.cache.set_book_by_work(work_id, book)
+            await service.cache.set_book_by_work(work_id, book)
         paper["book_metadata"] = _to_enrichment_dict(book)
     except RateLimitedError:
         raise
@@ -170,7 +170,7 @@ def _to_enrichment_dict(book: BookRecord) -> dict[str, Any]:
 
 async def enrich_books(
     papers: list[dict[str, Any]],
-    bundle: ServiceBundle,
+    service: Service,
     *,
     concurrency: int = 5,
 ) -> None:
@@ -181,7 +181,7 @@ async def enrich_books(
 
     Args:
         papers: List of S2 paper dicts (mutated in-place).
-        bundle: Service bundle for API/cache access.
+        service: Domain service for API/cache access.
         concurrency: Max parallel Open Library requests.
     """
     candidates = [p for p in papers if _needs_book_enrichment(p)]
@@ -192,6 +192,6 @@ async def enrich_books(
 
     async def _bounded(paper: dict[str, Any]) -> None:
         async with sem:
-            await _enrich_one(paper, bundle)
+            await _enrich_one(paper, service)
 
     await asyncio.gather(*(_bounded(p) for p in candidates))

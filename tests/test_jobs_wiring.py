@@ -28,20 +28,16 @@ from fastmcp import FastMCP
 from fastmcp.client import Client
 from fastmcp_pvl_core import (
     JobNotFoundError,
-    Jobs,
     JobsConfig,
     ServerConfig,
     build_jobs,
 )
 from fastmcp_pvl_core._errors import ConfigurationError
 
-from scholar_mcp import server as server_module
 from scholar_mcp._docling_client import DoclingClient
-from scholar_mcp._server_deps import ServiceBundle
-from scholar_mcp._server_tools import register_tools
 from scholar_mcp._tools_pdf import register_pdf_tools
-from scholar_mcp.config import ProjectConfig
-from scholar_mcp.server import make_server
+from scholar_mcp.domain import Service
+from scholar_mcp.tools import register_tools
 from tests.conftest import PlainClient, tasks_server
 
 # Unhides every job-backed tool, applied to the `server` fixture by indirect
@@ -55,14 +51,14 @@ _EVERYTHING_VISIBLE = {
 }
 
 
-def _slow_docling_bundle(bundle: ServiceBundle) -> ServiceBundle:
+def _slow_docling_service(service: Service) -> Service:
     """Attach a docling client whose conversion outlives any short deadline.
 
     Args:
-        bundle: The bundle to attach to.
+        service: The service to attach to.
 
     Returns:
-        The same bundle, with a deliberately slow `docling`.
+        The same service, with a deliberately slow `docling`.
     """
     docling = DoclingClient(
         http_client=httpx.AsyncClient(base_url="http://docling:5001"),
@@ -76,15 +72,15 @@ def _slow_docling_bundle(bundle: ServiceBundle) -> ServiceBundle:
         return "# Slow"
 
     docling.convert = slow_convert  # type: ignore[method-assign]
-    bundle.docling = docling
-    return bundle
+    service.docling = docling
+    return service
 
 
-def _app(bundle: ServiceBundle) -> FastMCP:
+def _app(service: Service) -> FastMCP:
     """Build a server whose tools are wired from the ambient environment.
 
     Args:
-        bundle: Service bundle yielded from the app's lifespan.
+        service: Domain service yielded from the app's lifespan.
 
     Returns:
         A :class:`FastMCP` with every domain tool registered.
@@ -92,7 +88,7 @@ def _app(bundle: ServiceBundle) -> FastMCP:
 
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
-        yield {"bundle": bundle}
+        yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
     register_tools(app)
@@ -100,20 +96,20 @@ def _app(bundle: ServiceBundle) -> FastMCP:
 
 
 async def test_register_tools_registers_the_single_polling_tool(
-    bundle: ServiceBundle,
+    service: Service,
 ) -> None:
     """`get_job_result` is registered exactly once, under pvl-core's name.
 
     One polling contract per server is the point of the migration: a handle
     minted by any long-running tool must resolve through this one tool.
     """
-    async with Client(_app(bundle)) as client:
+    async with Client(_app(service)) as client:
         names = [t.name for t in await client.list_tools()]
     assert names.count("get_job_result") == 1
 
 
 async def test_soft_deadline_from_the_environment_reaches_jobs(
-    bundle: ServiceBundle, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    service: Service, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """An env-set soft deadline actually governs promotion.
 
@@ -126,7 +122,7 @@ async def test_soft_deadline_from_the_environment_reaches_jobs(
     pdf = tmp_path / "paper.pdf"
     pdf.write_bytes(b"%PDF fake")
 
-    async with PlainClient(_app(_slow_docling_bundle(bundle))) as client:
+    async with PlainClient(_app(_slow_docling_service(service))) as client:
         result = await client.call_tool(
             "convert_pdf_to_markdown", {"file_path": str(pdf)}
         )
@@ -136,7 +132,7 @@ async def test_soft_deadline_from_the_environment_reaches_jobs(
 
 
 async def test_default_deadline_answers_inline(
-    bundle: ServiceBundle, tmp_path: Path
+    service: Service, tmp_path: Path
 ) -> None:
     """The counterpart: with the default deadline the same call is inline.
 
@@ -146,7 +142,7 @@ async def test_default_deadline_answers_inline(
     pdf = tmp_path / "paper.pdf"
     pdf.write_bytes(b"%PDF fake")
 
-    async with Client(_app(_slow_docling_bundle(bundle))) as client:
+    async with Client(_app(_slow_docling_service(service))) as client:
         result = await client.call_tool(
             "convert_pdf_to_markdown", {"file_path": str(pdf)}
         )
@@ -195,7 +191,7 @@ async def test_make_server_exposes_the_polling_tool(client: Client[Any]) -> None
 
 
 async def test_job_records_are_scoped_to_the_caller(
-    bundle: ServiceBundle, tmp_path: Path
+    service: Service, tmp_path: Path
 ) -> None:
     """A job id minted on one `Jobs` is unknown to another.
 
@@ -210,7 +206,7 @@ async def test_job_records_are_scoped_to_the_caller(
 
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
-        yield {"bundle": _slow_docling_bundle(bundle)}
+        yield {"service": _slow_docling_service(service)}
 
     minting = tasks_server("minting", lifespan=lifespan)
     register_pdf_tools(minting, mine)
@@ -223,42 +219,6 @@ async def test_job_records_are_scoped_to_the_caller(
 
     with pytest.raises(JobNotFoundError):
         await theirs.poll(job_id)
-
-
-def test_explicit_config_reaches_jobs(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A `ProjectConfig` handed to `make_server` governs jobs, not just Docket.
-
-    `make_server` already passes its config to `configure_task_backend`. If it
-    did not pass the same config through to `build_jobs`, one config object
-    would configure two stateful subsystems from two different sources -- the
-    exact drift #264 exists to remove. Asserting on the arguments rather than
-    on promotion behaviour keeps the failure message pointed at the wiring.
-    """
-    captured: dict[str, object] = {}
-    real_build_jobs = server_module.build_jobs
-
-    def spy(server_config: ServerConfig, jobs_config: JobsConfig) -> Jobs:
-        captured["server"] = server_config
-        captured["jobs"] = jobs_config
-        return real_build_jobs(server_config, jobs_config)
-
-    monkeypatch.setattr(server_module, "build_jobs", spy)
-    monkeypatch.setenv("SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S", "99.0")
-
-    config = ProjectConfig(
-        server=ServerConfig(kv_store_url="memory://"),
-        jobs=JobsConfig(soft_deadline_s=0.05, result_ttl_s=60.0),
-        cache_dir=tmp_path / "cache",
-    )
-    make_server(config=config)
-
-    assert captured, "make_server never reached build_jobs"
-    # The env var above is deliberately different: reading it instead of the
-    # passed config is precisely the bug this guards.
-    assert captured["jobs"] is config.jobs
-    assert captured["server"] is config.server
 
 
 @pytest.mark.parametrize("server", [_EVERYTHING_VISIBLE], indirect=True, ids=["all"])

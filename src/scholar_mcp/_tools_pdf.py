@@ -18,7 +18,8 @@ from fastmcp_pvl_core import register_long_running_tool
 from ._docling_client import DoclingClient
 from ._pdf_url_resolver import ResolvedPdf, resolve_alternative_pdf
 from ._s2_client import s2_error_payload
-from ._server_deps import ServiceBundle, get_bundle
+from ._server_deps import get_service
+from .domain import Service
 
 if TYPE_CHECKING:
     from fastmcp_pvl_core import Jobs
@@ -48,7 +49,7 @@ def _vlm_extras(docling: DoclingClient, use_vlm: bool) -> dict[str, Any]:
 
 
 async def _ensure_paper_pdf(
-    bundle: ServiceBundle, paper: PaperRecord, identifier: str
+    service: Service, paper: PaperRecord, identifier: str
 ) -> tuple[Path, str] | dict[str, Any]:
     """Resolve a paper's PDF URL and make sure the file is on disk.
 
@@ -56,7 +57,7 @@ async def _ensure_paper_pdf(
     download identically and differ only in what they do afterwards.
 
     Args:
-        bundle: Service bundle, for the cache directory and contact email.
+        service: Domain service, for the cache directory and contact email.
         paper: The resolved Semantic Scholar paper record.
         identifier: The caller's identifier, used to name the file when the
             record carries no ``paperId``.
@@ -70,7 +71,7 @@ async def _ensure_paper_pdf(
     source = "s2_oa"
     if not url:
         alt: ResolvedPdf | None = await resolve_alternative_pdf(
-            paper, contact_email=bundle.config.contact_email
+            paper, contact_email=service.config.contact_email
         )
         if alt:
             url, source = alt.url, alt.source
@@ -82,7 +83,7 @@ async def _ensure_paper_pdf(
         }
 
     pid = paper.get("paperId", identifier.replace("/", "_"))
-    pdf_dir = bundle.config.cache_dir / "pdfs"
+    pdf_dir = service.config.cache_dir / "pdfs"
     pdf_dir.mkdir(parents=True, exist_ok=True)
     path = pdf_dir / f"{pid}.pdf"
     if path.exists():
@@ -108,7 +109,7 @@ async def _ensure_paper_pdf(
 
 async def fetch_paper_pdf(
     identifier: str,
-    bundle: ServiceBundle = Depends(get_bundle),
+    service: Service = Depends(get_service),
 ) -> dict[str, Any]:
     """Download the PDF of a paper.
 
@@ -130,13 +131,13 @@ async def fetch_paper_pdf(
         PDF was obtained (``s2_oa``, ``arxiv``, ``pmc``, ``unpaywall``).
     """
     try:
-        paper = await bundle.s2.get_paper(identifier, fields=_PDF_FIELDS)
+        paper = await service.s2.get_paper(identifier, fields=_PDF_FIELDS)
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 404:
             return {"error": "not_found", "identifier": identifier}
         return s2_error_payload(exc)
 
-    fetched = await _ensure_paper_pdf(bundle, paper, identifier)
+    fetched = await _ensure_paper_pdf(service, paper, identifier)
     if isinstance(fetched, dict):
         return fetched
     path, source = fetched
@@ -146,7 +147,7 @@ async def fetch_paper_pdf(
 async def convert_pdf_to_markdown(
     file_path: str,
     use_vlm: bool = False,
-    bundle: ServiceBundle = Depends(get_bundle),
+    service: Service = Depends(get_service),
 ) -> dict[str, Any]:
     """Convert a local PDF to Markdown using docling-serve.
 
@@ -175,7 +176,7 @@ async def convert_pdf_to_markdown(
     Returns:
         ``{"markdown": "...", "path": "...", "vlm_used": bool}``.
     """
-    docling = bundle.docling
+    docling = service.docling
     if docling is None:
         return {"error": "docling_not_configured"}
 
@@ -184,7 +185,7 @@ async def convert_pdf_to_markdown(
         return {"error": "file_not_found", "path": file_path}
 
     # VLM and standard conversions use separate cache files.
-    md_dir = bundle.config.cache_dir / "md"
+    md_dir = service.config.cache_dir / "md"
     vlm_suffix = "_vlm" if use_vlm and docling.vlm_available else ""
     md_path = md_dir / f"{path.stem}{vlm_suffix}.md"
     if md_path.exists():
@@ -216,7 +217,7 @@ async def convert_pdf_to_markdown(
 async def fetch_and_convert(
     identifier: str,
     use_vlm: bool = False,
-    bundle: ServiceBundle = Depends(get_bundle),
+    service: Service = Depends(get_service),
 ) -> dict[str, Any]:
     """Resolve a paper, download its PDF, and convert to Markdown.
 
@@ -248,18 +249,18 @@ async def fetch_and_convert(
         plus an ``error`` key if a stage fails.
     """
     try:
-        paper = await bundle.s2.get_paper(identifier)
+        paper = await service.s2.get_paper(identifier)
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 404:
             return {"error": "not_found", "identifier": identifier}
         return s2_error_payload(exc)
 
-    fetched = await _ensure_paper_pdf(bundle, paper, identifier)
+    fetched = await _ensure_paper_pdf(service, paper, identifier)
     if isinstance(fetched, dict):
         return {"metadata": paper, **fetched}
     pdf_path, pdf_source = fetched
 
-    docling = bundle.docling
+    docling = service.docling
     if docling is None:
         return {
             "metadata": paper,
@@ -268,7 +269,7 @@ async def fetch_and_convert(
         }
 
     vlm_used = use_vlm and docling.vlm_available
-    md_dir = bundle.config.cache_dir / "md"
+    md_dir = service.config.cache_dir / "md"
     md_dir.mkdir(parents=True, exist_ok=True)
     # The PDF is named for the paper id, so its stem is that id.
     md_path = md_dir / f"{pdf_path.stem}{'_vlm' if vlm_used else ''}.md"
@@ -307,7 +308,7 @@ async def fetch_pdf_by_url(
     url: str,
     filename: str | None = None,
     use_vlm: bool = False,
-    bundle: ServiceBundle = Depends(get_bundle),
+    service: Service = Depends(get_service),
 ) -> dict[str, Any]:
     """Download a PDF from a URL and optionally convert to Markdown.
 
@@ -351,7 +352,7 @@ async def fetch_pdf_by_url(
         base = re.sub(r"[^\w\-]", "_", Path(path_part).stem or "download")
         stem = f"{base}_{hashlib.sha256(url.encode()).hexdigest()[:8]}"
 
-    pdf_dir = bundle.config.cache_dir / "pdfs"
+    pdf_dir = service.config.cache_dir / "pdfs"
     pdf_dir.mkdir(parents=True, exist_ok=True)
     pdf_path = pdf_dir / f"{stem}.pdf"
 
@@ -367,12 +368,12 @@ async def fetch_pdf_by_url(
     else:
         logger.info("pdf_by_url_cached path=%s", pdf_path)
 
-    docling = bundle.docling
+    docling = service.docling
     if docling is None:
         return {"pdf_path": str(pdf_path)}
 
     vlm_suffix = "_vlm" if use_vlm and docling.vlm_available else ""
-    md_dir = bundle.config.cache_dir / "md"
+    md_dir = service.config.cache_dir / "md"
     md_dir.mkdir(parents=True, exist_ok=True)
     md_path = md_dir / f"{stem}{vlm_suffix}.md"
 

@@ -44,7 +44,7 @@ def register_tools(
 
     # Category modules are imported here to avoid circular imports.
     # Each module registers its tools onto `mcp` and accesses the
-    # ServiceBundle via Depends(get_bundle).
+    # Service via Depends(get_service).
     from ._tools_search import register_search_tools
 
     register_search_tools(mcp, jobs)

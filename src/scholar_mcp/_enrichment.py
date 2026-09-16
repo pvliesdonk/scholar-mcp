@@ -48,12 +48,12 @@ class Enricher(Protocol):
         """
         ...
 
-    async def enrich(self, record: dict[str, Any], bundle: Any) -> None:
+    async def enrich(self, record: dict[str, Any], service: Any) -> None:
         """Mutate *record* in place with enriched data.
 
         Args:
             record: The record dict to enrich.
-            bundle: Service bundle providing API clients, cache, etc.
+            service: Domain service providing API clients, cache, etc.
         """
         ...
 
@@ -77,7 +77,7 @@ class EnrichmentPipeline:
     async def enrich(
         self,
         records: Sequence[EnrichableRecord],
-        bundle: Any,
+        service: Any,
         *,
         tags: frozenset[str] | None = None,
         concurrency: int = 10,
@@ -93,7 +93,7 @@ class EnrichmentPipeline:
 
         Args:
             records: Sequence of record dicts to enrich in place.
-            bundle: Service bundle for API clients, cache, etc.
+            service: Domain service for API clients, cache, etc.
             tags: If provided, only enrichers whose tags overlap run.
             concurrency: Maximum concurrent enrichment calls per phase.
         """
@@ -109,7 +109,7 @@ class EnrichmentPipeline:
                     if not enricher.can_enrich(record_dict):
                         continue
                     task = asyncio.create_task(
-                        self._run_one(sem, enricher, record_dict, bundle)
+                        self._run_one(sem, enricher, record_dict, service)
                     )
                     tasks.append(task)
             if tasks:
@@ -120,7 +120,7 @@ class EnrichmentPipeline:
         sem: asyncio.Semaphore,
         enricher: Enricher,
         record: dict[str, Any],
-        bundle: Any,
+        service: Any,
     ) -> None:
         """Run a single enricher on a single record, guarded by *sem*.
 
@@ -130,11 +130,11 @@ class EnrichmentPipeline:
             sem: Semaphore bounding concurrency.
             enricher: The enricher to execute.
             record: The record to enrich.
-            bundle: Service bundle.
+            service: Domain service.
         """
         async with sem:
             try:
-                await enricher.enrich(record, bundle)
+                await enricher.enrich(record, service)
             except Exception:
                 logger.debug(
                     "enricher_failed enricher=%s",

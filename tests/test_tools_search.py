@@ -13,18 +13,18 @@ from fastmcp import FastMCP
 from fastmcp.client import Client
 from fastmcp_pvl_core import Jobs, register_job_tools
 
-from scholar_mcp._server_deps import ServiceBundle
 from scholar_mcp._tools_search import register_search_tools
+from scholar_mcp.domain import Service
 from tests.conftest import PlainClient, tasks_server
 
 S2_BASE = "https://api.semanticscholar.org/graph/v1"
 
 
 @pytest.fixture
-def mcp(bundle: ServiceBundle, slow_jobs: Jobs) -> FastMCP:
+def mcp(service: Service, slow_jobs: Jobs) -> FastMCP:
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
-        yield {"bundle": bundle}
+        yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
     register_search_tools(app, slow_jobs)
@@ -153,7 +153,7 @@ async def test_get_author_by_name_returns_candidates(
 
 @pytest.mark.respx(base_url=S2_BASE)
 async def test_get_paper_alias_caching(
-    respx_mock: respx.MockRouter, mcp: FastMCP, bundle: ServiceBundle
+    respx_mock: respx.MockRouter, mcp: FastMCP, service: Service
 ) -> None:
     """get_paper stores alias when identifier differs from paperId."""
     respx_mock.get("/paper/ARXIV:2401.00001").mock(
@@ -164,17 +164,19 @@ async def test_get_paper_alias_caching(
     )
     async with Client(mcp) as client:
         await client.call_tool("get_paper", {"identifier": "ARXIV:2401.00001"})
-    resolved = await bundle.cache.get_alias("ARXIV:2401.00001")
+    resolved = await service.cache.get_alias("ARXIV:2401.00001")
     assert resolved == "abc123"
 
 
 @pytest.mark.respx(base_url=S2_BASE)
 async def test_get_paper_cache_hit(
-    respx_mock: respx.MockRouter, mcp: FastMCP, bundle: ServiceBundle
+    respx_mock: respx.MockRouter,
+    mcp: FastMCP,
+    service: Service,
 ) -> None:
     """get_paper returns cached data without a network call."""
     cached_data = {"paperId": "cached123", "title": "Cached Paper", "year": 2023}
-    await bundle.cache.set_paper("cached123", cached_data)
+    await service.cache.set_paper("cached123", cached_data)
     # No mock registered — if a network call is made, respx will raise
     async with Client(mcp) as client:
         result = await client.call_tool("get_paper", {"identifier": "cached123"})
@@ -252,7 +254,7 @@ async def test_get_author_by_id_upstream_error(
 
 @pytest.mark.respx(base_url=S2_BASE)
 async def test_get_author_by_id_retries_on_429(
-    respx_mock: respx.MockRouter, bundle: ServiceBundle, slow_jobs: Jobs
+    respx_mock: respx.MockRouter, service: Service, slow_jobs: Jobs
 ) -> None:
     """A 429 on the by-ID path is retried in-client; the caller gets the author."""
     call_count = 0
@@ -277,7 +279,7 @@ async def test_get_author_by_id_retries_on_429(
 
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
-        yield {"bundle": bundle}
+        yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
     register_search_tools(app, slow_jobs)
@@ -303,7 +305,7 @@ async def test_get_author_name_search_upstream_error(
 
 @pytest.mark.respx(base_url=S2_BASE)
 async def test_get_author_name_search_retries_on_429(
-    respx_mock: respx.MockRouter, bundle: ServiceBundle, slow_jobs: Jobs
+    respx_mock: respx.MockRouter, service: Service, slow_jobs: Jobs
 ) -> None:
     """A 429 on the name-search path is retried in-client; candidates come back."""
     call_count = 0
@@ -322,7 +324,7 @@ async def test_get_author_name_search_retries_on_429(
 
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
-        yield {"bundle": bundle}
+        yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
     register_search_tools(app, slow_jobs)
@@ -363,7 +365,7 @@ async def _poll_job(client: Client, job_id: str, attempts: int = 40) -> dict:
 
 @pytest.mark.respx(base_url=S2_BASE)
 async def test_search_papers_promotes_when_slow(
-    respx_mock: respx.MockRouter, bundle: ServiceBundle, jobs: Jobs
+    respx_mock: respx.MockRouter, service: Service, jobs: Jobs
 ) -> None:
     """Work past the soft deadline hands back a handle, and polling resolves it.
 
@@ -381,7 +383,7 @@ async def test_search_papers_promotes_when_slow(
 
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]
-        yield {"bundle": bundle}
+        yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
     register_search_tools(app, jobs)

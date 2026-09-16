@@ -11,8 +11,9 @@ from fastmcp.dependencies import Depends
 from fastmcp_pvl_core import register_long_running_tool
 
 from ._record_types import StandardRecord
-from ._server_deps import ServiceBundle, get_bundle
+from ._server_deps import get_service
 from ._standards_client import resolve_identifier_local
+from .domain import Service
 
 if TYPE_CHECKING:
     from fastmcp_pvl_core import Jobs
@@ -22,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 async def resolve_standard_identifier(
     raw: str,
-    bundle: ServiceBundle = Depends(get_bundle),
+    service: Service = Depends(get_service),
 ) -> dict[str, Any]:
     """Normalise a messy standard citation string to its canonical form.
 
@@ -52,9 +53,9 @@ async def resolve_standard_identifier(
     raw = raw.strip()
 
     # 1. Check alias cache first
-    cached_canonical = await bundle.cache.get_standard_alias(raw)
+    cached_canonical = await service.cache.get_standard_alias(raw)
     if cached_canonical is not None:
-        cached_record = await bundle.cache.get_standard(cached_canonical)
+        cached_record = await service.cache.get_standard(cached_canonical)
         if cached_record is not None:
             return {
                 "canonical": cached_canonical,
@@ -66,23 +67,23 @@ async def resolve_standard_identifier(
     resolved = resolve_identifier_local(raw)
     if resolved is not None:
         canonical, body = resolved
-        record = await bundle.standards.get(canonical)
+        record = await service.standards.get(canonical)
         if record is not None:
-            await bundle.cache.set_standard_alias(raw, canonical)
-            await bundle.cache.set_standard(canonical, record)
+            await service.cache.set_standard_alias(raw, canonical)
+            await service.cache.set_standard(canonical, record)
             return {"canonical": canonical, "body": body, "record": record}
         return {"canonical": canonical, "body": body, "record": None}
 
     # 3. API fallback — search all sources
-    candidates = await bundle.standards.resolve(raw)
+    candidates = await service.standards.resolve(raw)
     if not candidates:
         return {"canonical": None, "body": None, "record": None}
     if len(candidates) == 1:
         record = candidates[0]
         canonical = record.get("identifier", "")
         body = record.get("body", "")
-        await bundle.cache.set_standard_alias(raw, canonical)
-        await bundle.cache.set_standard(canonical, record)
+        await service.cache.set_standard_alias(raw, canonical)
+        await service.cache.set_standard(canonical, record)
         return {"canonical": canonical, "body": body, "record": record}
 
     return {"ambiguous": True, "candidates": candidates}
@@ -92,7 +93,7 @@ async def search_standards(
     query: str,
     body: str | None = None,
     limit: int = 10,
-    bundle: ServiceBundle = Depends(get_bundle),
+    service: Service = Depends(get_service),
 ) -> dict[str, Any]:
     """Search technical standards by identifier, title, or free text.
 
@@ -121,20 +122,20 @@ async def search_standards(
     limit = max(1, min(limit, 50))
     cache_key = hashlib.sha256(f"{query}:{body}:{limit}".encode()).hexdigest()
 
-    cached = await bundle.cache.get_standards_search(cache_key)
+    cached = await service.cache.get_standards_search(cache_key)
     if cached is not None:
         logger.debug("standards_search_cache_hit key=%s", cache_key[:16])
         return {"results": cached}
 
-    results = await bundle.standards.search(query, body=body, limit=limit)
-    await bundle.cache.set_standards_search(cache_key, results)
+    results = await service.standards.search(query, body=body, limit=limit)
+    await service.cache.set_standards_search(cache_key, results)
     return {"results": results}
 
 
 async def get_standard(
     identifier: str,
     fetch_full_text: bool = False,
-    bundle: ServiceBundle = Depends(get_bundle),
+    service: Service = Depends(get_service),
 ) -> dict[str, Any]:
     """Retrieve a standard by identifier (canonical or fuzzy).
 
@@ -171,7 +172,7 @@ async def get_standard(
     identifier = identifier.strip()
 
     # 1. Resolve identifier to canonical form (alias cache → regex → passthrough)
-    cached_canonical = await bundle.cache.get_standard_alias(identifier)
+    cached_canonical = await service.cache.get_standard_alias(identifier)
     if cached_canonical is not None:
         canonical = cached_canonical
     else:
@@ -179,30 +180,30 @@ async def get_standard(
         canonical = resolved[0] if resolved else identifier
 
     # 2. Check cache
-    cached = await bundle.cache.get_standard(canonical)
+    cached = await service.cache.get_standard(canonical)
     if cached is not None:
         logger.debug("standard_cache_hit identifier=%s", canonical)
         if fetch_full_text:
-            return await _handle_full_text(cached, bundle)
+            return await _handle_full_text(cached, service)
         return dict(cached)
 
     # 3. Fetch from source
-    record = await bundle.standards.get(canonical)
+    record = await service.standards.get(canonical)
     if record is None:
         return {"error": "not_found", "identifier": identifier}
 
     # 4. Cache result
-    await bundle.cache.set_standard(canonical, record)
+    await service.cache.set_standard(canonical, record)
     if cached_canonical is None:
-        await bundle.cache.set_standard_alias(identifier, canonical)
+        await service.cache.set_standard_alias(identifier, canonical)
 
     if fetch_full_text:
-        return await _handle_full_text(record, bundle)
+        return await _handle_full_text(record, service)
     return dict(record)
 
 
 async def get_sync_status(
-    bundle: ServiceBundle = Depends(get_bundle),
+    service: Service = Depends(get_service),
 ) -> dict[str, Any]:
     """Report the last sync run for each standards body.
 
@@ -215,7 +216,7 @@ async def get_sync_status(
         unchanged, withdrawn, errors, started_at, finished_at}, ...]}``.
         Empty ``runs`` list when no sync has been run yet.
     """
-    runs = await bundle.cache.list_sync_runs()
+    runs = await service.cache.list_sync_runs()
     return {"runs": runs}
 
 
@@ -273,7 +274,7 @@ def register_standards_tools(mcp: FastMCP, jobs: Jobs) -> None:
 
 async def _handle_full_text(
     record: StandardRecord,
-    bundle: ServiceBundle,
+    service: Service,
 ) -> dict[str, Any]:
     """Download and convert full text via docling if available.
 
@@ -283,7 +284,7 @@ async def _handle_full_text(
 
     Args:
         record: StandardRecord dict.
-        bundle: Service bundle with an optional docling client.
+        service: Domain service with an optional docling client.
 
     Returns:
         The StandardRecord, with ``full_text`` populated when the conversion
@@ -299,7 +300,7 @@ async def _handle_full_text(
     ):
         return dict(record)
 
-    if bundle.docling is None:
+    if service.docling is None:
         logger.debug(
             "full_text_requested_but_docling_not_configured id=%s",
             record.get("identifier"),
@@ -310,8 +311,8 @@ async def _handle_full_text(
     filename = url.rsplit("/", 1)[-1] or "standard.pdf"
 
     try:
-        content = await bundle.standards.download(url)
-        markdown = await bundle.docling.convert(content, filename)
+        content = await service.standards.download(url)
+        markdown = await service.docling.convert(content, filename)
     except Exception as exc:
         logger.warning(
             "full_text_conversion_failed id=%s err=%s", record.get("identifier"), exc
@@ -325,7 +326,7 @@ async def _handle_full_text(
     identifier = enriched.get("identifier")
     if identifier:
         try:
-            await bundle.cache.set_standard(identifier, enriched)  # type: ignore[arg-type]
+            await service.cache.set_standard(identifier, enriched)  # type: ignore[arg-type]
         except Exception as exc:
             # The conversion succeeded and the markdown is in hand; a cache
             # write that fails must not throw it away.

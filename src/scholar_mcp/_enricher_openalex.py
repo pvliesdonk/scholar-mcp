@@ -38,7 +38,7 @@ class OpenAlexEnricher:
             return False
         return not record.get("venue")
 
-    async def enrich(self, record: dict[str, Any], bundle: Any) -> None:
+    async def enrich(self, record: dict[str, Any], service: Any) -> None:
         """Fill venue from OpenAlex, using cache when available.
 
         Extracts the DOI from ``record["externalIds"]["DOI"]``, checks
@@ -50,20 +50,20 @@ class OpenAlexEnricher:
 
         Args:
             record: The paper record dict to enrich in place.
-            bundle: Service bundle providing cache and OpenAlex client.
+            service: Domain service providing cache and OpenAlex client.
         """
         doi = (record.get("externalIds") or {}).get("DOI")
         if not doi:
             return
         try:
-            cached = await bundle.cache.get_openalex(doi)
+            cached = await service.cache.get_openalex(doi)
             oa_data = (
-                cached if cached is not None else await bundle.openalex.get_by_doi(doi)
+                cached if cached is not None else await service.openalex.get_by_doi(doi)
             )
             if oa_data is None:
                 return
             if cached is None:
-                await bundle.cache.set_openalex(doi, oa_data)
+                await service.cache.set_openalex(doi, oa_data)
             loc = oa_data.get("primary_location") or {}
             source = loc.get("source") or {}
             venue = source.get("display_name")

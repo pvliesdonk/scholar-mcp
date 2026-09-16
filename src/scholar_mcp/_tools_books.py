@@ -21,7 +21,8 @@ from ._openlibrary_client import (
     normalize_subject_work,
 )
 from ._record_types import BookRecord
-from ._server_deps import ServiceBundle, get_bundle
+from ._server_deps import get_service
+from .domain import Service
 
 if TYPE_CHECKING:
     from fastmcp_pvl_core import Jobs
@@ -38,7 +39,7 @@ async def search_books(
     title: str | None = None,
     author: str | None = None,
     limit: int = 10,
-    bundle: ServiceBundle = Depends(get_bundle),
+    service: Service = Depends(get_service),
 ) -> dict[str, Any]:
     """Search for books by title, author, or free text.
 
@@ -71,7 +72,7 @@ async def search_books(
     limit = max(1, min(limit, 50))
 
     cache_key = f"q={query!r}:t={title!r}:a={author!r}:limit={limit}"
-    cached = await bundle.cache.get_book_search(cache_key)
+    cached = await service.cache.get_book_search(cache_key)
     if cached is not None:
         logger.debug("book_search_cache_hit key=%s", cache_key[:60])
         return {"books": cached}
@@ -86,7 +87,7 @@ async def search_books(
         effective_title = query
         effective_query = None
 
-    docs = await bundle.openlibrary.search(
+    docs = await service.openlibrary.search(
         effective_query,
         title=effective_title,
         author=author,
@@ -102,7 +103,7 @@ async def search_books(
         seen_keys = {d.get("key") for d in docs}
         extras = await asyncio.gather(
             *(
-                bundle.openlibrary.search(
+                service.openlibrary.search(
                     effective_query,
                     title=effective_title,
                     author=token,
@@ -121,9 +122,9 @@ async def search_books(
 
     if not docs and effective_query != query:
         # Title search returned nothing; fall back to free-text.
-        docs = await bundle.openlibrary.search(query, limit=limit)
+        docs = await service.openlibrary.search(query, limit=limit)
     books = [normalize_book(doc, source="search") for doc in docs]
-    await bundle.cache.set_book_search(cache_key, books)
+    await service.cache.set_book_search(cache_key, books)
     return {"books": books}
 
 
@@ -131,7 +132,7 @@ async def get_book(
     identifier: str,
     download_cover: bool = False,
     cover_size: str = "M",
-    bundle: ServiceBundle = Depends(get_bundle),
+    service: Service = Depends(get_service),
 ) -> dict[str, Any]:
     """Fetch book metadata by ISBN or Open Library ID.
 
@@ -156,22 +157,22 @@ async def get_book(
     async def _execute() -> dict[str, Any]:
         # Detect identifier type
         if _OL_WORK_RE.match(cleaned):
-            return await _resolve_work(cleaned, bundle)
+            return await _resolve_work(cleaned, service)
         if _OL_EDITION_RE.match(cleaned):
-            return await _resolve_edition(cleaned, bundle)
+            return await _resolve_edition(cleaned, service)
         # Assume ISBN
         isbn = normalize_isbn(cleaned)
-        return await _resolve_isbn(isbn, bundle)
+        return await _resolve_isbn(isbn, service)
 
     result = await _execute()
 
     if download_cover and result.get("cover_url") and result.get("isbn_13"):
-        if bundle.config.read_only:
+        if service.config.read_only:
             result["cover_error"] = "read_only_mode"
         else:
             isbn = result["isbn_13"]
             size = cover_size.upper() if cover_size.upper() in ("S", "M", "L") else "M"
-            covers_dir = bundle.config.cache_dir / "covers"
+            covers_dir = service.config.cache_dir / "covers"
             covers_dir.mkdir(parents=True, exist_ok=True)
             local_path = covers_dir / f"{isbn}_{size}.jpg"
             if local_path.exists():
@@ -219,7 +220,7 @@ def _google_books_error(exc: httpx.HTTPError, isbn: str) -> dict[str, Any]:
 
 async def get_book_excerpt(
     isbn: str,
-    bundle: ServiceBundle = Depends(get_bundle),
+    service: Service = Depends(get_service),
 ) -> str:
     """Get a book excerpt and preview info from Google Books.
 
@@ -244,15 +245,15 @@ async def get_book_excerpt(
         {"excerpt": "...", "description": "...", "source": "google_books",
          "preview_available": true, "preview_link": "https://..."}
     """
-    volume = await bundle.cache.get_google_books(isbn)
+    volume = await service.cache.get_google_books(isbn)
     if volume is None:
         try:
-            volume = await bundle.google_books.search_by_isbn(isbn)
+            volume = await service.google_books.search_by_isbn(isbn)
         except httpx.HTTPError as exc:
             return json.dumps(_google_books_error(exc, isbn))
         if volume is None:
             return json.dumps({"error": "not_found", "isbn": isbn})
-        await bundle.cache.set_google_books(isbn, volume)
+        await service.cache.set_google_books(isbn, volume)
 
     vol_info = volume.get("volumeInfo") or {}
     access_info = volume.get("accessInfo") or {}
@@ -274,7 +275,7 @@ async def get_book_excerpt(
 async def recommend_books(
     subject: str,
     limit: int = 10,
-    bundle: ServiceBundle = Depends(get_bundle),
+    service: Service = Depends(get_service),
 ) -> str:
     """Recommend books for a subject via Open Library.
 
@@ -292,7 +293,7 @@ async def recommend_books(
     limit = max(1, min(limit, 50))
     slug = normalize_subject(subject)
 
-    cached = await bundle.cache.get_book_subject(slug)
+    cached = await service.cache.get_book_subject(slug)
     if cached is not None:
         logger.debug("book_subject_cache_hit subject=%s", slug)
         return json.dumps(cached[:limit])
@@ -300,13 +301,13 @@ async def recommend_books(
     # Fetch a fixed pool of 50 so the popularity sort covers more candidates
     # than the caller's limit, and any future request for this subject is
     # served from cache with just a slice.
-    subject_data = await bundle.openlibrary.get_subject(slug, limit=50)
+    subject_data = await service.openlibrary.get_subject(slug, limit=50)
     if subject_data is None:
         return json.dumps([])
     works = subject_data.get("works") or []
     works.sort(key=lambda w: w.get("edition_count", 0), reverse=True)
     books = [normalize_subject_work(w) for w in works]
-    await bundle.cache.set_book_subject(slug, books)
+    await service.cache.set_book_subject(slug, books)
     return json.dumps(books[:limit])
 
 
@@ -357,35 +358,35 @@ def register_book_tools(mcp: FastMCP, jobs: Jobs) -> None:
     )(recommend_books)
 
 
-async def _resolve_isbn(isbn: str, bundle: ServiceBundle) -> dict[str, Any]:
+async def _resolve_isbn(isbn: str, service: Service) -> dict[str, Any]:
     """Resolve a book by ISBN, checking cache first.
 
     Args:
         isbn: Normalized ISBN-13 string.
-        bundle: Service bundle with cache and openlibrary client.
+        service: Domain service with cache and openlibrary client.
 
     Returns:
         The book record, or ``{"error": "not_found"}`` if not found.
     """
-    cached = await bundle.cache.get_book_by_isbn(isbn)
+    cached = await service.cache.get_book_by_isbn(isbn)
     if cached is not None:
         return dict(cached)
 
-    edition = await bundle.openlibrary.get_by_isbn(isbn)
+    edition = await service.openlibrary.get_by_isbn(isbn)
     if edition is None:
         return {"error": "not_found", "identifier": isbn}
 
     book: BookRecord = normalize_book(edition, source="edition")
-    await enrich_authors_from_work(book, bundle)
-    await bundle.enrichment.enrich([book], bundle, tags=frozenset({"books"}))
-    await bundle.cache.set_book_by_isbn(isbn, book)
+    await enrich_authors_from_work(book, service)
+    await service.enrichment.enrich([book], service, tags=frozenset({"books"}))
+    await service.cache.set_book_by_isbn(isbn, book)
     work_id = book.get("openlibrary_work_id")
     if work_id:
-        await bundle.cache.set_book_by_work(work_id, book)
+        await service.cache.set_book_by_work(work_id, book)
     return dict(book)
 
 
-async def _resolve_work(work_id: str, bundle: ServiceBundle) -> dict[str, Any]:
+async def _resolve_work(work_id: str, service: Service) -> dict[str, Any]:
     """Resolve a book by Open Library work ID, checking cache first.
 
     Fetches the work, resolves author names from author references, and
@@ -393,16 +394,16 @@ async def _resolve_work(work_id: str, bundle: ServiceBundle) -> dict[str, Any]:
 
     Args:
         work_id: Open Library work ID (e.g. ``OL1168083W``).
-        bundle: Service bundle with cache and openlibrary client.
+        service: Domain service with cache and openlibrary client.
 
     Returns:
         The book record, or ``{"error": "not_found"}`` if not found.
     """
-    cached = await bundle.cache.get_book_by_work(work_id)
+    cached = await service.cache.get_book_by_work(work_id)
     if cached is not None:
         return dict(cached)
 
-    work = await bundle.openlibrary.get_work(work_id)
+    work = await service.openlibrary.get_work(work_id)
     if work is None:
         return {"error": "not_found", "identifier": work_id}
 
@@ -424,13 +425,13 @@ async def _resolve_work(work_id: str, bundle: ServiceBundle) -> dict[str, Any]:
     if author_keys:
         author_results, editions = await asyncio.gather(
             asyncio.gather(
-                *(bundle.openlibrary.get_author(aid) for aid in author_keys)
+                *(service.openlibrary.get_author(aid) for aid in author_keys)
             ),
-            bundle.openlibrary.get_work_editions(work_id, limit=1),
+            service.openlibrary.get_work_editions(work_id, limit=1),
         )
         author_names = [a["name"] for a in author_results if a and a.get("name")]
     else:
-        editions = await bundle.openlibrary.get_work_editions(work_id, limit=1)
+        editions = await service.openlibrary.get_work_editions(work_id, limit=1)
 
     edition: BookRecord = (
         normalize_book(editions[0], source="edition") if editions else {}
@@ -463,34 +464,34 @@ async def _resolve_work(work_id: str, bundle: ServiceBundle) -> dict[str, Any]:
         "page_count": edition.get("page_count"),
         "description": description if isinstance(description, str) else None,
     }
-    await bundle.enrichment.enrich([book], bundle, tags=frozenset({"books"}))
-    await bundle.cache.set_book_by_work(work_id, book)
+    await service.enrichment.enrich([book], service, tags=frozenset({"books"}))
+    await service.cache.set_book_by_work(work_id, book)
     if isbn_13:
-        await bundle.cache.set_book_by_isbn(isbn_13, book)
+        await service.cache.set_book_by_isbn(isbn_13, book)
     return dict(book)
 
 
-async def _resolve_edition(edition_id: str, bundle: ServiceBundle) -> dict[str, Any]:
+async def _resolve_edition(edition_id: str, service: Service) -> dict[str, Any]:
     """Resolve a book by Open Library edition ID, checking cache first.
 
     Args:
         edition_id: Open Library edition ID (e.g. ``OL1429049M``).
-        bundle: Service bundle with cache and openlibrary client.
+        service: Domain service with cache and openlibrary client.
 
     Returns:
         The book record, or ``{"error": "not_found"}`` if not found.
     """
-    edition = await bundle.openlibrary.get_edition(edition_id)
+    edition = await service.openlibrary.get_edition(edition_id)
     if edition is None:
         return {"error": "not_found", "identifier": edition_id}
 
     book: BookRecord = normalize_book(edition, source="edition")
-    await enrich_authors_from_work(book, bundle)
-    await bundle.enrichment.enrich([book], bundle, tags=frozenset({"books"}))
+    await enrich_authors_from_work(book, service)
+    await service.enrichment.enrich([book], service, tags=frozenset({"books"}))
     isbn_13 = book.get("isbn_13")
     if isbn_13:
-        await bundle.cache.set_book_by_isbn(isbn_13, book)
+        await service.cache.set_book_by_isbn(isbn_13, book)
     work_id = book.get("openlibrary_work_id")
     if work_id:
-        await bundle.cache.set_book_by_work(work_id, book)
+        await service.cache.set_book_by_work(work_id, book)
     return dict(book)

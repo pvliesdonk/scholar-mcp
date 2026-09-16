@@ -18,7 +18,8 @@ from ._epo_client import EPO_REPORTED_ERRORS, epo_error_payload, with_epo_retry
 from ._openlibrary_client import normalize_book
 from ._patent_numbers import is_patent_number, normalize
 from ._s2_client import FIELD_SETS, log_s2_error, s2_error_payload
-from ._server_deps import ServiceBundle, get_bundle
+from ._server_deps import get_service
+from .domain import Service
 
 if TYPE_CHECKING:
     from fastmcp_pvl_core import Jobs
@@ -102,7 +103,7 @@ async def _resolve_paper(
     raw: str,
     s2_data: PaperRecord | None,
     doi_map: dict[int, str],
-    bundle: ServiceBundle,
+    service: Service,
 ) -> tuple[int, dict[str, Any]]:
     """Build the result entry for one paper identifier.
 
@@ -111,7 +112,7 @@ async def _resolve_paper(
         raw: The raw identifier.
         s2_data: What the S2 batch endpoint returned, or None.
         doi_map: Index to DOI, for the OpenAlex fallback.
-        bundle: Injected service bundle.
+        service: Injected service.
 
     Returns:
         ``(idx, entry)`` so the caller can restore the original order.
@@ -121,7 +122,7 @@ async def _resolve_paper(
         _attach_chapter_info(paper_result, raw)
         return idx, paper_result
     if idx in doi_map:
-        oa = await bundle.openalex.get_by_doi(doi_map[idx])
+        oa = await service.openalex.get_by_doi(doi_map[idx])
         if oa:
             paper_result = {"identifier": raw, "paper": oa, "source": "openalex"}
             _attach_chapter_info(paper_result, raw)
@@ -130,7 +131,7 @@ async def _resolve_paper(
 
 
 async def _resolve_patent(
-    idx: int, raw: str, bundle: ServiceBundle
+    idx: int, raw: str, service: Service
 ) -> tuple[int, dict[str, Any]]:
     """Build the result entry for one patent number.
 
@@ -141,12 +142,12 @@ async def _resolve_patent(
     Args:
         idx: Position in the caller's original list.
         raw: The raw patent number.
-        bundle: Injected service bundle.
+        service: Injected service.
 
     Returns:
         ``(idx, entry)`` so the caller can restore the original order.
     """
-    epo = bundle.epo
+    epo = service.epo
     if epo is None:
         return idx, {
             "identifier": raw,
@@ -185,24 +186,24 @@ async def _resolve_patent(
 
 
 async def _resolve_isbn(
-    idx: int, raw_isbn: str, bundle: ServiceBundle
+    idx: int, raw_isbn: str, service: Service
 ) -> tuple[int, dict[str, Any]]:
     """Build the result entry for one ISBN.
 
     Args:
         idx: Position in the caller's original list.
         raw_isbn: The ISBN with its ``ISBN:`` prefix already stripped.
-        bundle: Injected service bundle.
+        service: Injected service.
 
     Returns:
         ``(idx, entry)`` so the caller can restore the original order.
     """
     identifier = f"ISBN:{raw_isbn}"
     isbn = normalize_isbn(raw_isbn)
-    cached = await bundle.cache.get_book_by_isbn(isbn)
+    cached = await service.cache.get_book_by_isbn(isbn)
     if cached is not None:
         return idx, {"identifier": identifier, "book": cached, "source_type": "book"}
-    edition = await bundle.openlibrary.get_by_isbn(isbn)
+    edition = await service.openlibrary.get_by_isbn(isbn)
     if edition is None:
         return idx, {
             "identifier": identifier,
@@ -210,14 +211,14 @@ async def _resolve_isbn(
             "source_type": "book",
         }
     book = normalize_book(edition, source="edition")
-    await bundle.cache.set_book_by_isbn(isbn, book)
+    await service.cache.set_book_by_isbn(isbn, book)
     return idx, {"identifier": identifier, "book": book, "source_type": "book"}
 
 
 async def batch_resolve(
     identifiers: list[str],
     fields: Literal["compact", "standard", "full"] = "standard",
-    bundle: ServiceBundle = Depends(get_bundle),
+    service: Service = Depends(get_service),
 ) -> dict[str, Any]:
     """Resolve a list of paper, patent, or book identifiers to full records.
 
@@ -235,7 +236,7 @@ async def batch_resolve(
             patent numbers (e.g. ``EP1234567A1``, ``US11234567B2``),
             or ISBNs (prefixed ``ISBN:``, e.g. ``ISBN:9780201633610``).
         fields: Field set preset (applies to paper results only).
-        bundle: Injected service bundle.
+        service: Injected service.
 
     Returns:
         ``{"results": [...]}`` in the caller's original order. Paper entries
@@ -248,7 +249,7 @@ async def batch_resolve(
     s2_results: list[PaperRecord | None] = []
     if groups.paper_ids:
         try:
-            s2_results = await bundle.s2.batch_resolve(
+            s2_results = await service.s2.batch_resolve(
                 groups.paper_ids, fields=FIELD_SETS[fields]
             )
         except httpx.HTTPStatusError as exc:
@@ -261,16 +262,16 @@ async def batch_resolve(
                 groups.paper_ids[j],
                 data,
                 groups.doi_map,
-                bundle,
+                service,
             )
             for j, data in enumerate(s2_results)
         ),
         *(
-            _resolve_patent(groups.patent_indices[j], raw, bundle)
+            _resolve_patent(groups.patent_indices[j], raw, service)
             for j, raw in enumerate(groups.patent_raws)
         ),
         *(
-            _resolve_isbn(groups.isbn_indices[j], raw, bundle)
+            _resolve_isbn(groups.isbn_indices[j], raw, service)
             for j, raw in enumerate(groups.isbn_raws)
         ),
     )
@@ -317,7 +318,7 @@ def _select_enrichment_fields(
 async def enrich_paper(
     identifier: str,
     fields: list[Literal["affiliations", "funders", "oa_status", "concepts"]],
-    bundle: ServiceBundle = Depends(get_bundle),
+    service: Service = Depends(get_service),
 ) -> dict[str, Any]:
     """Fetch OpenAlex metadata to supplement Semantic Scholar data.
 
@@ -331,7 +332,7 @@ async def enrich_paper(
     Args:
         identifier: S2 paper ID or DOI (prefix ``DOI:``).
         fields: One or more of: affiliations, funders, oa_status, concepts.
-        bundle: Injected service bundle.
+        service: Injected service.
 
     Returns:
         A mapping with the requested fields plus ``doi``, or an error mapping.
@@ -340,7 +341,7 @@ async def enrich_paper(
         doi: str | None = identifier[4:]
     else:
         try:
-            paper = await bundle.s2.get_paper(identifier, fields="externalIds,paperId")
+            paper = await service.s2.get_paper(identifier, fields="externalIds,paperId")
         except httpx.HTTPStatusError as exc:
             # A rate limit that outlived the client's own retries reaches here
             # too, and reporting it as "not_found" would tell the caller to
@@ -359,12 +360,12 @@ async def enrich_paper(
     if not doi:
         return {"error": "no_doi", "identifier": identifier}
 
-    oa_data = await bundle.cache.get_openalex(doi)
+    oa_data = await service.cache.get_openalex(doi)
     if oa_data is None:
-        oa_data = await bundle.openalex.get_by_doi(doi)
+        oa_data = await service.openalex.get_by_doi(doi)
         if oa_data is None:
             return {"error": "not_found_in_openalex", "doi": doi}
-        await bundle.cache.set_openalex(doi, oa_data)
+        await service.cache.set_openalex(doi, oa_data)
 
     return {"doi": doi, **_select_enrichment_fields(oa_data, list(fields))}
 
