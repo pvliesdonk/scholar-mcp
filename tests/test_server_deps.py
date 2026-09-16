@@ -181,7 +181,7 @@ async def test_start_failure_closes_a_partially_opened_cache(
             super().__init__(db_path)
             opened.append(self)
 
-    async def failing_migrations(db: object) -> None:
+    async def failing_migrations(_db: object) -> None:
         raise RuntimeError("migration failed")
 
     monkeypatch.setattr("scholar_mcp.domain.ScholarCache", RecordingCache)
