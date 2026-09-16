@@ -20,6 +20,47 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _covers_author_page(cached: dict[str, Any], limit: int) -> bool:
+    """Return whether a cached author record can answer a request for *limit*.
+
+    A record is authoritative when it carries at least as many publications as
+    the caller asked for, or when it already holds every publication the author
+    has. The second case matters because a cached record shorter than *limit*
+    is not necessarily incomplete — the author may simply have fewer papers.
+
+    Args:
+        cached: The cached author record.
+        limit: Publications the caller asked for.
+
+    Returns:
+        True when the record can be served without a live request.
+    """
+    papers = cached.get("papers") or []
+    total = cached.get("paperCount")
+    wanted = min(limit, total) if isinstance(total, int) else limit
+    return len(papers) >= wanted
+
+
+def _author_page(data: dict[str, Any], limit: int) -> dict[str, Any]:
+    """Return a copy of *data* whose ``papers`` list is cut to *limit*.
+
+    A negative *limit* is treated as zero, so it yields no publications
+    rather than trimming that many from the end of the list.
+
+    Args:
+        data: An author record, cached or freshly fetched.
+        limit: Publications per page.
+
+    Returns:
+        A copy of *data* holding at most *limit* publications.
+    """
+    page = dict(data)
+    papers = page.get("papers")
+    if isinstance(papers, list):
+        page["papers"] = papers[: max(0, limit)]
+    return page
+
+
 async def search_papers(
     query: str,
     fields: Literal["compact", "standard", "full"] = "compact",
@@ -161,8 +202,8 @@ async def get_author(
     if identifier.isdigit():
         if offset == 0:
             cached = await service.cache.get_author(identifier)
-            if cached:
-                return dict(cached)
+            if cached is not None and _covers_author_page(cached, limit):
+                return _author_page(cached, limit)
         try:
             data = await service.s2.get_author(identifier, limit=limit, offset=offset)
         except httpx.HTTPStatusError as exc:
@@ -171,7 +212,7 @@ async def get_author(
             return s2_error_payload(exc)
         if offset == 0:
             await service.cache.set_author(identifier, data)
-        return dict(data)
+        return _author_page(data, limit)
 
     # Name search — return candidates for disambiguation
     try:

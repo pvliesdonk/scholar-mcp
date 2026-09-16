@@ -89,6 +89,10 @@ Fetch an author profile or search by name.
 - **Direct lookup** (numeric ID): author profile with paginated publications list
 - **Name search** (text): `{"candidates": [...]}` with up to 5 matching authors
 
+`limit` applies to cached and freshly fetched results alike. A cached author
+record holding fewer publications than `limit` is fetched again, unless it
+already holds every publication the author has.
+
 ---
 
 ## Papers, Citation Graph
