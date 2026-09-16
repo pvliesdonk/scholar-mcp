@@ -3583,6 +3583,7 @@ An empty <code>runs</code> list means no sync has been run yet.</p>
 <li><code>{"error": "download_failed"}</code>: HTTP error downloading the PDF</li>
 </ul>
 <p>The <code>source</code> field indicates where the PDF was obtained: <code>s2_oa</code>, <code>arxiv</code>, <code>pmc</code>, or <code>unpaywall</code>.</p>
+<p>Paper metadata is read from the same 30-day cache <code>get_paper</code> uses, and a freshly resolved record is written back to it. A repeat call for the same paper needs no Semantic Scholar request.</p>
 <hr />
 <h3 id="convert_pdf_to_markdown"><code>convert_pdf_to_markdown</code><a class="headerlink" href="#convert_pdf_to_markdown" title="Permanent link">&para;</a></h3>
 <p>Convert a local PDF file to Markdown via docling-serve.</p>
@@ -3656,6 +3657,7 @@ An empty <code>runs</code> list means no sync has been run yet.</p>
 <span class="p">}</span>
 </code></pre></div>
 <p>Partial results are returned if a later stage fails (such as metadata + error if no OA PDF is available). The <code>pdf_source</code> field indicates the download source. When VLM is requested but not configured, the response includes <code>vlm_skip_reason</code>.</p>
+<p>The <code>metadata</code> block is read from the same 30-day cache <code>get_paper</code> uses, and a freshly resolved record is written back to it. A call whose PDF and Markdown are both already on disk makes no Semantic Scholar request at all.</p>
 <div class="admonition tip">
 <p class="admonition-title">Start without VLM</p>
 <p>Same advice as <code>convert_pdf_to_markdown</code>, try standard first, add VLM only if formulas or figures are missing. VLM and standard conversions are cached separately (<code>&lt;id&gt;.md</code> vs <code>&lt;id&gt;_vlm.md</code>).</p>
