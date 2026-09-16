@@ -27,7 +27,7 @@
     
     
       
-        <title>systemd - Scholar MCP Server</title>
+        <title>systemd - scholar-mcp</title>
       
     
     
@@ -100,7 +100,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="Scholar MCP Server" class="md-header__button md-logo" aria-label="Scholar MCP Server" data-md-component="logo">
+    <a href="../.." title="scholar-mcp" class="md-header__button md-logo" aria-label="scholar-mcp" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -114,7 +114,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            Scholar MCP Server
+            scholar-mcp
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -369,13 +369,13 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="Scholar MCP Server" class="md-nav__button md-logo" aria-label="Scholar MCP Server" data-md-component="logo">
+    <a href="../.." title="scholar-mcp" class="md-nav__button md-logo" aria-label="scholar-mcp" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
 
     </a>
-    Scholar MCP Server
+    scholar-mcp
   </label>
   
     <div class="md-nav__source">
@@ -1507,11 +1507,11 @@
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Debian / Ubuntu</label><label for="__tabbed_1_2">RHEL / Fedora</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>sudo<span class="w"> </span>dpkg<span class="w"> </span>-i<span class="w"> </span>scholar-mcp_*.deb
+<div class="highlight"><pre><span></span><code>sudo<span class="w"> </span>dpkg<span class="w"> </span>-i<span class="w"> </span>scholar-mcp_*.deb
 </code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>sudo<span class="w"> </span>rpm<span class="w"> </span>-i<span class="w"> </span>scholar-mcp-*.rpm
+<div class="highlight"><pre><span></span><code>sudo<span class="w"> </span>rpm<span class="w"> </span>-i<span class="w"> </span>scholar-mcp-*.rpm
 </code></pre></div>
 </div>
 </div>
@@ -1546,31 +1546,36 @@
 <p>A dedicated <code>scholar-mcp</code> system user and group are created automatically.</p>
 <h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
 <p>Copy the example config and edit it:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>sudo<span class="w"> </span>cp<span class="w"> </span>/etc/scholar-mcp/env.example<span class="w"> </span>/etc/scholar-mcp/env
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>sudo<span class="w"> </span>chmod<span class="w"> </span><span class="m">600</span><span class="w"> </span>/etc/scholar-mcp/env
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>sudo<span class="w"> </span>nano<span class="w"> </span>/etc/scholar-mcp/env
+<div class="highlight"><pre><span></span><code>sudo<span class="w"> </span>cp<span class="w"> </span>/etc/scholar-mcp/env.example<span class="w"> </span>/etc/scholar-mcp/env
+sudo<span class="w"> </span>chmod<span class="w"> </span><span class="m">600</span><span class="w"> </span>/etc/scholar-mcp/env
+sudo<span class="w"> </span>nano<span class="w"> </span>/etc/scholar-mcp/env
 </code></pre></div>
-<p>Set the cache directory and (optionally) your Semantic Scholar API key:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nv">SCHOLAR_MCP_CACHE_DIR</span><span class="o">=</span>/var/lib/scholar-mcp
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="c1"># Optional but recommended, without a key, requests are limited to ~1 req/s</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="nv">SCHOLAR_MCP_S2_API_KEY</span><span class="o">=</span>your-key-here
+<p>Set the cache directory, the bind address if other hosts should reach the
+server, and (optionally) your Semantic Scholar API key. The cache directory is
+required: its default, <code>/data/scholar-mcp</code>, is the container path, and the
+unit's <code>ProtectSystem=strict</code> leaves only <code>/var/lib/scholar-mcp</code> writable.</p>
+<div class="highlight"><pre><span></span><code><span class="nv">SCHOLAR_MCP_CACHE_DIR</span><span class="o">=</span>/var/lib/scholar-mcp
+<span class="c1"># Listen on every interface; the default is 127.0.0.1 (loopback only)</span>
+<span class="nv">SCHOLAR_MCP_HOST</span><span class="o">=</span><span class="m">0</span>.0.0.0
+<span class="c1"># Optional but recommended, without a key, requests are limited to ~1 req/s</span>
+<span class="nv">SCHOLAR_MCP_S2_API_KEY</span><span class="o">=</span>your-key-here
 </code></pre></div>
 <p>See <a href="../../configuration/">Configuration</a> for all available variables.</p>
 <h2 id="starting-the-service">Starting the service<a class="headerlink" href="#starting-the-service" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Start the service</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>sudo<span class="w"> </span>systemctl<span class="w"> </span>start<span class="w"> </span>scholar-mcp
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># Enable start on boot</span>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>sudo<span class="w"> </span>systemctl<span class="w"> </span><span class="nb">enable</span><span class="w"> </span>scholar-mcp
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>
-<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="c1"># Check status</span>
-<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>sudo<span class="w"> </span>systemctl<span class="w"> </span>status<span class="w"> </span>scholar-mcp
-<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>
-<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="c1"># View logs</span>
-<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>sudo<span class="w"> </span>journalctl<span class="w"> </span>-u<span class="w"> </span>scholar-mcp<span class="w"> </span>-f
+<div class="highlight"><pre><span></span><code><span class="c1"># Start the service</span>
+sudo<span class="w"> </span>systemctl<span class="w"> </span>start<span class="w"> </span>scholar-mcp
+
+<span class="c1"># Enable start on boot</span>
+sudo<span class="w"> </span>systemctl<span class="w"> </span><span class="nb">enable</span><span class="w"> </span>scholar-mcp
+
+<span class="c1"># Check status</span>
+sudo<span class="w"> </span>systemctl<span class="w"> </span>status<span class="w"> </span>scholar-mcp
+
+<span class="c1"># View logs</span>
+sudo<span class="w"> </span>journalctl<span class="w"> </span>-u<span class="w"> </span>scholar-mcp<span class="w"> </span>-f
 </code></pre></div>
 <p>The service runs in HTTP mode on port 8000 by default.</p>
-<p>The unit binds <code>0.0.0.0</code> (all interfaces) via <code>Environment=SCHOLAR_MCP_HOST=0.0.0.0</code> so the packaged server is reachable from other hosts. The bare CLI falls back to <code>127.0.0.1</code> (loopback only). To restrict the packaged service to loopback (typical behind a same-host reverse proxy), set <code>SCHOLAR_MCP_HOST=127.0.0.1</code> in <code>/etc/scholar-mcp/env</code>; that file overrides the unit default.</p>
+<p>The server binds <code>127.0.0.1</code> unless <code>/etc/scholar-mcp/env</code> sets <code>SCHOLAR_MCP_HOST</code>, so a fresh install is reachable only from the same host, as behind a same-host reverse proxy, until you widen it.</p>
 <h2 id="security-hardening">Security hardening<a class="headerlink" href="#security-hardening" title="Permanent link">&para;</a></h2>
 <p>The systemd unit includes detailed security directives:</p>
 <table>
@@ -1628,11 +1633,11 @@
 <div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Debian / Ubuntu</label><label for="__tabbed_2_2">RHEL / Fedora</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>sudo<span class="w"> </span>dpkg<span class="w"> </span>-i<span class="w"> </span>scholar-mcp_*.deb
+<div class="highlight"><pre><span></span><code>sudo<span class="w"> </span>dpkg<span class="w"> </span>-i<span class="w"> </span>scholar-mcp_*.deb
 </code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>sudo<span class="w"> </span>rpm<span class="w"> </span>-U<span class="w"> </span>scholar-mcp-*.rpm
+<div class="highlight"><pre><span></span><code>sudo<span class="w"> </span>rpm<span class="w"> </span>-U<span class="w"> </span>scholar-mcp-*.rpm
 </code></pre></div>
 </div>
 </div>
@@ -1645,19 +1650,27 @@
 <li>Restarts the service if it was running</li>
 </ol>
 <p>Your configuration in <code>/etc/scholar-mcp/env</code> is preserved.</p>
+<div class="admonition warning">
+<p class="admonition-title">Check the bind address after upgrading from 2.0.0 or earlier</p>
+<p>The unit file is replaced on every upgrade, and earlier versions set
+<code>SCHOLAR_MCP_HOST=0.0.0.0</code> in it. The unit no longer sets a bind address,
+so a service that was reachable from other hosts without naming the
+variable in <code>/etc/scholar-mcp/env</code> binds loopback after the post-install
+restart. Add <code>SCHOLAR_MCP_HOST=0.0.0.0</code> to that file to keep it reachable.</p>
+</div>
 <h2 id="uninstalling">Uninstalling<a class="headerlink" href="#uninstalling" title="Permanent link">&para;</a></h2>
 <div class="tabbed-set tabbed-alternate" data-tabs="3:2"><input checked="checked" id="__tabbed_3_1" name="__tabbed_3" type="radio" /><input id="__tabbed_3_2" name="__tabbed_3" type="radio" /><div class="tabbed-labels"><label for="__tabbed_3_1">Debian / Ubuntu</label><label for="__tabbed_3_2">RHEL / Fedora</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Remove package (keeps config and data)</span>
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>sudo<span class="w"> </span>apt<span class="w"> </span>remove<span class="w"> </span>scholar-mcp
-<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
-<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="c1"># Remove everything including config</span>
-<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>sudo<span class="w"> </span>apt<span class="w"> </span>purge<span class="w"> </span>scholar-mcp
+<div class="highlight"><pre><span></span><code><span class="c1"># Remove package (keeps config and data)</span>
+sudo<span class="w"> </span>apt<span class="w"> </span>remove<span class="w"> </span>scholar-mcp
+
+<span class="c1"># Remove everything including config</span>
+sudo<span class="w"> </span>apt<span class="w"> </span>purge<span class="w"> </span>scholar-mcp
 </code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>sudo<span class="w"> </span>rpm<span class="w"> </span>-e<span class="w"> </span>scholar-mcp
+<div class="highlight"><pre><span></span><code>sudo<span class="w"> </span>rpm<span class="w"> </span>-e<span class="w"> </span>scholar-mcp
 </code></pre></div>
 </div>
 </div>
@@ -1666,7 +1679,7 @@
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="service-fails-to-start">Service fails to start<a class="headerlink" href="#service-fails-to-start" title="Permanent link">&para;</a></h3>
 <p>Check the logs:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>sudo<span class="w"> </span>journalctl<span class="w"> </span>-u<span class="w"> </span>scholar-mcp<span class="w"> </span>--no-pager<span class="w"> </span>-n<span class="w"> </span><span class="m">50</span>
+<div class="highlight"><pre><span></span><code>sudo<span class="w"> </span>journalctl<span class="w"> </span>-u<span class="w"> </span>scholar-mcp<span class="w"> </span>--no-pager<span class="w"> </span>-n<span class="w"> </span><span class="m">50</span>
 </code></pre></div>
 <p>Common causes:</p>
 <ul>
@@ -1676,8 +1689,8 @@
 </ul>
 <h3 id="fastmcp-not-installed">FastMCP not installed<a class="headerlink" href="#fastmcp-not-installed" title="Permanent link">&para;</a></h3>
 <p>If the post-install script failed (such as no internet during package install):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>sudo<span class="w"> </span>/opt/scholar-mcp/venv/bin/pip<span class="w"> </span>install<span class="w"> </span><span class="s1">&#39;pvliesdonk-scholar-mcp[mcp]&#39;</span>
-<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>sudo<span class="w"> </span>systemctl<span class="w"> </span>restart<span class="w"> </span>scholar-mcp
+<div class="highlight"><pre><span></span><code>sudo<span class="w"> </span>/opt/scholar-mcp/venv/bin/pip<span class="w"> </span>install<span class="w"> </span><span class="s1">&#39;pvliesdonk-scholar-mcp[all]&#39;</span>
+sudo<span class="w"> </span>systemctl<span class="w"> </span>restart<span class="w"> </span>scholar-mcp
 </code></pre></div>
 
 

@@ -23,7 +23,7 @@
     
     
       
-        <title>2.0 - Scholar MCP Server</title>
+        <title>2.0 - scholar-mcp</title>
       
     
     
@@ -96,7 +96,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="Scholar MCP Server" class="md-header__button md-logo" aria-label="Scholar MCP Server" data-md-component="logo">
+    <a href="../.." title="scholar-mcp" class="md-header__button md-logo" aria-label="scholar-mcp" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -110,7 +110,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            Scholar MCP Server
+            scholar-mcp
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -363,13 +363,13 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="Scholar MCP Server" class="md-nav__button md-logo" aria-label="Scholar MCP Server" data-md-component="logo">
+    <a href="../.." title="scholar-mcp" class="md-nav__button md-logo" aria-label="scholar-mcp" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
 
     </a>
-    Scholar MCP Server
+    scholar-mcp
   </label>
   
     <div class="md-nav__source">
@@ -1550,14 +1550,14 @@ ERROR, once, and logs <code>s2_keepalive_recovered</code> when a ping lands
 (<a href="https://github.com/pvliesdonk/scholar-mcp/pull/378">#378</a>).</p>
 <p><strong><code>get_server_info</code> reports the verdict</strong>, so a caller can read it instead of
 hunting through the log (<a href="https://github.com/pvliesdonk/scholar-mcp/pull/393">#393</a>):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">&quot;semantic_scholar&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">&quot;key_configured&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">&quot;key_status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;degraded&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">&quot;consecutive_failures&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">26</span><span class="p">,</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="nt">&quot;last_success&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2026-09-03T12:00:00+00:00&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">  </span><span class="nt">&quot;last_failure&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2026-09-10T18:00:00+00:00&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">  </span><span class="nt">&quot;last_failure_kind&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;rate_limited&quot;</span>
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="p">}</span>
+<div class="highlight"><pre><span></span><code><span class="nt">&quot;semantic_scholar&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;key_configured&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;key_status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;degraded&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;consecutive_failures&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">26</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;last_success&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2026-09-03T12:00:00+00:00&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;last_failure&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2026-09-10T18:00:00+00:00&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;last_failure_kind&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;rate_limited&quot;</span>
+<span class="p">}</span>
 </code></pre></div>
 <p><code>key_status</code> is <code>not_configured</code> (no key, and the anonymous tier still serves),
 <code>unknown</code> (configured, not yet pinged), <code>ok</code>, <code>failing</code>, or <code>degraded</code>. The

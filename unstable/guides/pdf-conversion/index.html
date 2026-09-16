@@ -27,7 +27,7 @@
     
     
       
-        <title>PDF Conversion - Scholar MCP Server</title>
+        <title>PDF Conversion - scholar-mcp</title>
       
     
     
@@ -100,7 +100,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="Scholar MCP Server" class="md-header__button md-logo" aria-label="Scholar MCP Server" data-md-component="logo">
+    <a href="../.." title="scholar-mcp" class="md-header__button md-logo" aria-label="scholar-mcp" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -114,7 +114,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            Scholar MCP Server
+            scholar-mcp
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -369,13 +369,13 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="Scholar MCP Server" class="md-nav__button md-logo" aria-label="Scholar MCP Server" data-md-component="logo">
+    <a href="../.." title="scholar-mcp" class="md-nav__button md-logo" aria-label="scholar-mcp" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
 
     </a>
-    Scholar MCP Server
+    scholar-mcp
   </label>
   
     <div class="md-nav__source">
@@ -1588,16 +1588,16 @@
 <h2 id="setup">Setup<a class="headerlink" href="#setup" title="Permanent link">&para;</a></h2>
 <h3 id="1-start-docling-serve">1. Start docling-serve<a class="headerlink" href="#1-start-docling-serve" title="Permanent link">&para;</a></h3>
 <p>The simplest way is Docker:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>docker<span class="w"> </span>run<span class="w"> </span>-p<span class="w"> </span><span class="m">5001</span>:5001<span class="w"> </span>ghcr.io/ds4sd/docling-serve:latest
+<div class="highlight"><pre><span></span><code>docker<span class="w"> </span>run<span class="w"> </span>-p<span class="w"> </span><span class="m">5001</span>:5001<span class="w"> </span>ghcr.io/ds4sd/docling-serve:latest
 </code></pre></div>
 <h3 id="2-configure-scholar-mcp">2. Configure scholar-mcp<a class="headerlink" href="#2-configure-scholar-mcp" title="Permanent link">&para;</a></h3>
 <p>Set the docling URL and disable read-only mode:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">SCHOLAR_MCP_DOCLING_URL</span><span class="o">=</span>http://localhost:5001
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">SCHOLAR_MCP_READ_ONLY</span><span class="o">=</span><span class="nb">false</span>
+<div class="highlight"><pre><span></span><code><span class="nb">export</span><span class="w"> </span><span class="nv">SCHOLAR_MCP_DOCLING_URL</span><span class="o">=</span>http://localhost:5001
+<span class="nb">export</span><span class="w"> </span><span class="nv">SCHOLAR_MCP_READ_ONLY</span><span class="o">=</span><span class="nb">false</span>
 </code></pre></div>
 <h3 id="3-verify">3. Verify<a class="headerlink" href="#3-verify" title="Permanent link">&para;</a></h3>
 <p>Start the server and check the logs. You should see:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>INFO scholar_mcp._server_deps: docling_configured url=http://localhost:5001
+<div class="highlight"><pre><span></span><code>INFO scholar_mcp.domain: docling_configured url=http://localhost:5001
 </code></pre></div>
 <h2 id="tools">Tools<a class="headerlink" href="#tools" title="Permanent link">&para;</a></h2>
 <p>Four tools are available once configured:</p>
@@ -1630,9 +1630,9 @@
 <p>PDFs are stored in <code>$SCHOLAR_MCP_CACHE_DIR/pdfs/</code> and Markdown files in <code>$SCHOLAR_MCP_CACHE_DIR/md/</code>.</p>
 <h2 id="vlm-enrichment">VLM enrichment<a class="headerlink" href="#vlm-enrichment" title="Permanent link">&para;</a></h2>
 <p>Standard conversion uses OCR only. For papers with complex formulas or figures, you can enable VLM (Vision-Language Model) enrichment:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">SCHOLAR_MCP_VLM_API_URL</span><span class="o">=</span>https://api.openai.com/v1
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">SCHOLAR_MCP_VLM_API_KEY</span><span class="o">=</span>sk-...
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="nb">export</span><span class="w"> </span><span class="nv">SCHOLAR_MCP_VLM_MODEL</span><span class="o">=</span>gpt-4o
+<div class="highlight"><pre><span></span><code><span class="nb">export</span><span class="w"> </span><span class="nv">SCHOLAR_MCP_VLM_API_URL</span><span class="o">=</span>https://api.openai.com/v1
+<span class="nb">export</span><span class="w"> </span><span class="nv">SCHOLAR_MCP_VLM_API_KEY</span><span class="o">=</span>sk-...
+<span class="nb">export</span><span class="w"> </span><span class="nv">SCHOLAR_MCP_VLM_MODEL</span><span class="o">=</span>gpt-4o
 </code></pre></div>
 <p>When VLM is configured, tools accept a <code>use_vlm=true</code> parameter that:</p>
 <ul>
@@ -1657,31 +1657,31 @@
 </ul>
 <p>Switching between modes never overwrites a previous conversion. When VLM is requested but not configured, the response includes a <code>vlm_skip_reason</code> field explaining why (such as <code>"vlm_api_url_not_configured"</code>).</p>
 <h2 id="docker-compose-with-docling-serve">Docker Compose with docling-serve<a class="headerlink" href="#docker-compose-with-docling-serve" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">services</span><span class="p">:</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">scholar-mcp</span><span class="p">:</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ghcr.io/pvliesdonk/scholar-mcp:latest</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">    </span><span class="nt">restart</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">unless-stopped</span>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">      </span><span class="nt">SCHOLAR_MCP_S2_API_KEY</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;${SCHOLAR_MCP_S2_API_KEY}&quot;</span>
-<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">      </span><span class="nt">SCHOLAR_MCP_DOCLING_URL</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;http://docling-serve:5001&quot;</span>
-<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">      </span><span class="nt">SCHOLAR_MCP_READ_ONLY</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;false&quot;</span>
-<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">      </span><span class="nt">SCHOLAR_MCP_CACHE_DIR</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;/data/scholar-mcp&quot;</span>
-<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">    </span><span class="nt">volumes</span><span class="p">:</span>
-<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">scholar-mcp-data:/data/scholar-mcp</span>
-<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>
-<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="w">  </span><span class="nt">docling-serve</span><span class="p">:</span>
-<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ghcr.io/ds4sd/docling-serve:latest</span>
-<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="w">    </span><span class="nt">restart</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">unless-stopped</span>
-<a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>
-<a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="nt">volumes</span><span class="p">:</span>
-<a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a><span class="w">  </span><span class="nt">scholar-mcp-data</span><span class="p">:</span>
+<div class="highlight"><pre><span></span><code><span class="nt">services</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">scholar-mcp</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ghcr.io/pvliesdonk/scholar-mcp:latest</span>
+<span class="w">    </span><span class="nt">restart</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">unless-stopped</span>
+<span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">SCHOLAR_MCP_S2_API_KEY</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;${SCHOLAR_MCP_S2_API_KEY}&quot;</span>
+<span class="w">      </span><span class="nt">SCHOLAR_MCP_DOCLING_URL</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;http://docling-serve:5001&quot;</span>
+<span class="w">      </span><span class="nt">SCHOLAR_MCP_READ_ONLY</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;false&quot;</span>
+<span class="w">      </span><span class="nt">SCHOLAR_MCP_CACHE_DIR</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;/data/scholar-mcp&quot;</span>
+<span class="w">    </span><span class="nt">volumes</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">scholar-mcp-data:/data/scholar-mcp</span>
+
+<span class="w">  </span><span class="nt">docling-serve</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ghcr.io/ds4sd/docling-serve:latest</span>
+<span class="w">    </span><span class="nt">restart</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">unless-stopped</span>
+
+<span class="nt">volumes</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">scholar-mcp-data</span><span class="p">:</span>
 </code></pre></div>
 <h2 id="background-jobs">Background jobs<a class="headerlink" href="#background-jobs" title="Permanent link">&para;</a></h2>
 <p>PDF tools answer directly when they can. A download or conversion that takes
 longer than <code>SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S</code> (25 seconds by default)
 continues in the background, and the call returns a handle right away:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="p">{</span><span class="nt">&quot;status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;working&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;job_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;hwex4wg6taLmasPZWPM7gQ&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;poll_with&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;get_job_result&quot;</span><span class="p">,</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w"> </span><span class="nt">&quot;retry_after_s&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">5.0</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;message&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">}</span>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">&quot;status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;working&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;job_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;hwex4wg6taLmasPZWPM7gQ&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;poll_with&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;get_job_result&quot;</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">&quot;retry_after_s&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">5.0</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;message&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">}</span>
 </code></pre></div>
 <p>Use <code>get_job_result</code> with the <code>job_id</code> to poll for completion. Job records are
 retained for <code>SCHOLAR_MCP_JOBS_RESULT_TTL_S</code>, one hour by default.</p>

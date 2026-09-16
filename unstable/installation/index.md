@@ -1,5 +1,27 @@
 # Installation
 
+## From PyPI
+
+```
+pip install pvliesdonk-scholar-mcp
+```
+
+## From Docker
+
+```
+docker pull ghcr.io/pvliesdonk/scholar-mcp:latest
+```
+
+The `latest` tag is the newest stable release. The rolling `edge` tag tracks every merge to `main` and carries no version identity; see [Image tags](https://pvliesdonk.github.io/scholar-mcp/unstable/deployment/docker/#image-tags) for the full list.
+
+## From source
+
+```
+git clone https://github.com/pvliesdonk/scholar-mcp
+cd scholar-mcp
+uv sync --all-extras --all-groups
+```
+
 ## As a Claude Code plugin
 
 ```
@@ -20,31 +42,6 @@ uvx --from pvliesdonk-scholar-mcp scholar-mcp serve
 Package name vs. command
 
 The PyPI package is `pvliesdonk-scholar-mcp`. The CLI command installed is `scholar-mcp`. The `--from` flag is needed because the package and command names differ.
-
-## With `pip`
-
-```
-pip install 'pvliesdonk-scholar-mcp[mcp]'
-scholar-mcp serve
-```
-
-The `[mcp]` extra installs FastMCP and uvicorn. Without it, you get only the library (API clients and cache) without the MCP server.
-
-## With Docker
-
-```
-docker run -v scholar-mcp-data:/data/scholar-mcp \
-           ghcr.io/pvliesdonk/scholar-mcp:latest
-```
-
-The image is available for `linux/amd64` and `linux/arm64`. See [Docker deployment](https://pvliesdonk.github.io/scholar-mcp/unstable/deployment/docker/index.md) for Docker Compose with docling-serve.
-
-The `latest` tag is the newest stable release. The rolling `edge` tag tracks every merge to `main` and carries no version identity; see [Image tags](https://pvliesdonk.github.io/scholar-mcp/unstable/deployment/docker/#image-tags) for the full list.
-
-```
-docker run -v scholar-mcp-data:/data/scholar-mcp \
-           ghcr.io/pvliesdonk/scholar-mcp:edge
-```
 
 ## Linux packages
 
@@ -68,12 +65,3 @@ The package installs:
 - A dedicated `scholar-mcp` system user
 
 See [systemd deployment](https://pvliesdonk.github.io/scholar-mcp/unstable/deployment/systemd/index.md) for configuration details.
-
-## From source
-
-```
-git clone https://github.com/pvliesdonk/scholar-mcp.git
-cd scholar-mcp
-uv sync --extra dev --extra mcp
-uv run scholar-mcp serve
-```

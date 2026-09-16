@@ -27,7 +27,7 @@
     
     
       
-        <title>Citation Graphs - Scholar MCP Server</title>
+        <title>Citation Graphs - scholar-mcp</title>
       
     
     
@@ -100,7 +100,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="Scholar MCP Server" class="md-header__button md-logo" aria-label="Scholar MCP Server" data-md-component="logo">
+    <a href="../.." title="scholar-mcp" class="md-header__button md-logo" aria-label="scholar-mcp" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -114,7 +114,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            Scholar MCP Server
+            scholar-mcp
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -369,13 +369,13 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="Scholar MCP Server" class="md-nav__button md-logo" aria-label="Scholar MCP Server" data-md-component="logo">
+    <a href="../.." title="scholar-mcp" class="md-nav__button md-logo" aria-label="scholar-mcp" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
 
     </a>
-    Scholar MCP Server
+    scholar-mcp
   </label>
   
     <div class="md-nav__source">
@@ -1666,39 +1666,39 @@
 <h2 id="basic-exploration">Basic exploration<a class="headerlink" href="#basic-exploration" title="Permanent link">&para;</a></h2>
 <h3 id="forward-citations">Forward citations<a class="headerlink" href="#forward-citations" title="Permanent link">&para;</a></h3>
 <p>Find papers that cite a known paper:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>get_citations(&quot;DOI:10.48550/arXiv.2005.11401&quot;, limit=20)
+<div class="highlight"><pre><span></span><code>get_citations(&quot;DOI:10.48550/arXiv.2005.11401&quot;, limit=20)
 </code></pre></div>
 <p>Use filters to narrow results:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>get_citations(
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    &quot;DOI:10.48550/arXiv.2005.11401&quot;,
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    year_start=2023,
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    min_citations=10,
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    fields_of_study=[&quot;Computer Science&quot;]
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>)
+<div class="highlight"><pre><span></span><code>get_citations(
+    &quot;DOI:10.48550/arXiv.2005.11401&quot;,
+    year_start=2023,
+    min_citations=10,
+    fields_of_study=[&quot;Computer Science&quot;]
+)
 </code></pre></div>
 <h3 id="backward-references">Backward references<a class="headerlink" href="#backward-references" title="Permanent link">&para;</a></h3>
 <p>Find papers cited by a given paper (its bibliography):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>get_references(&quot;DOI:10.48550/arXiv.2005.11401&quot;, limit=50)
+<div class="highlight"><pre><span></span><code>get_references(&quot;DOI:10.48550/arXiv.2005.11401&quot;, limit=50)
 </code></pre></div>
 <h2 id="graph-traversal">Graph traversal<a class="headerlink" href="#graph-traversal" title="Permanent link">&para;</a></h2>
 <p><code>get_citation_graph</code> performs a BFS (breadth-first search) from seed papers, collecting nodes and edges.</p>
 <h3 id="single-seed-graph">Single-seed graph<a class="headerlink" href="#single-seed-graph" title="Permanent link">&para;</a></h3>
 <p>Start from one paper, explore its citation neighborhood:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>get_citation_graph(
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    seed_ids=[&quot;CorpusId:218971783&quot;],
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    direction=&quot;both&quot;,
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    depth=1,
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    max_nodes=50
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>)
+<div class="highlight"><pre><span></span><code>get_citation_graph(
+    seed_ids=[&quot;CorpusId:218971783&quot;],
+    direction=&quot;both&quot;,
+    depth=1,
+    max_nodes=50
+)
 </code></pre></div>
 <h3 id="multi-seed-graph">Multi-seed graph<a class="headerlink" href="#multi-seed-graph" title="Permanent link">&para;</a></h3>
 <p>Start from multiple papers to map a research area:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>get_citation_graph(
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>    seed_ids=[&quot;CorpusId:218971783&quot;, &quot;CorpusId:237491837&quot;],
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>    direction=&quot;citations&quot;,
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    depth=2,
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    max_nodes=100
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>)
+<div class="highlight"><pre><span></span><code>get_citation_graph(
+    seed_ids=[&quot;CorpusId:218971783&quot;, &quot;CorpusId:237491837&quot;],
+    direction=&quot;citations&quot;,
+    depth=2,
+    max_nodes=100
+)
 </code></pre></div>
 <h3 id="direction-strategies">Direction strategies<a class="headerlink" href="#direction-strategies" title="Permanent link">&para;</a></h3>
 <table>
@@ -1729,29 +1729,29 @@
 <p>Begin with <code>depth=1</code> and <code>max_nodes=50</code>. Citation graphs grow exponentially with depth; a popular paper at <code>depth=2, direction=both</code> can easily hit 10,000+ nodes.</p>
 </div>
 <p>The <code>max_nodes</code> parameter is a hard cap. Once reached, the BFS stops and <code>stats.truncated</code> is set to <code>true</code>. Filters help focus the graph:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>get_citation_graph(
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>    seed_ids=[&quot;CorpusId:218971783&quot;],
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>    direction=&quot;both&quot;,
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>    depth=2,
-<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>    max_nodes=100,
-<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>    year_start=2020,
-<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>    min_citations=5
-<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>)
+<div class="highlight"><pre><span></span><code>get_citation_graph(
+    seed_ids=[&quot;CorpusId:218971783&quot;],
+    direction=&quot;both&quot;,
+    depth=2,
+    max_nodes=100,
+    year_start=2020,
+    min_citations=5
+)
 </code></pre></div>
 <h3 id="reading-the-results">Reading the results<a class="headerlink" href="#reading-the-results" title="Permanent link">&para;</a></h3>
 <p>The response contains:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="p">{</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">&quot;nodes&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;year&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2024</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;citationCount&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">42</span><span class="p">}],</span>
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span><span class="nt">&quot;edges&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="nt">&quot;source&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;id1&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;target&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;id2&quot;</span><span class="p">}],</span>
-<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span><span class="nt">&quot;stats&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">    </span><span class="nt">&quot;total_nodes&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">42</span><span class="p">,</span>
-<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">    </span><span class="nt">&quot;total_edges&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">67</span><span class="p">,</span>
-<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">    </span><span class="nt">&quot;depth_reached&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span>
-<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">    </span><span class="nt">&quot;truncated&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
-<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">    </span><span class="nt">&quot;partial&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
-<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">    </span><span class="nt">&quot;failed_requests&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span>
-<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">  </span><span class="p">}</span>
-<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="p">}</span>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;nodes&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;year&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2024</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;citationCount&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">42</span><span class="p">}],</span>
+<span class="w">  </span><span class="nt">&quot;edges&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="nt">&quot;source&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;id1&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;target&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;id2&quot;</span><span class="p">}],</span>
+<span class="w">  </span><span class="nt">&quot;stats&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;total_nodes&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">42</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;total_edges&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">67</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;depth_reached&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;truncated&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;partial&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;failed_requests&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
 </code></pre></div>
 <ul>
 <li><strong>nodes</strong>: full paper metadata for each paper in the graph</li>
@@ -1769,22 +1769,22 @@
 <li>Finding seminal papers that bridge fields</li>
 <li>Understanding intellectual lineage between works</li>
 </ul>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>find_bridge_papers(
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>    source_id=&quot;CorpusId:218971783&quot;,
-<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>    target_id=&quot;CorpusId:237491837&quot;,
-<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>    max_depth=4,
-<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>    direction=&quot;citations&quot;
-<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>)
+<div class="highlight"><pre><span></span><code>find_bridge_papers(
+    source_id=&quot;CorpusId:218971783&quot;,
+    target_id=&quot;CorpusId:237491837&quot;,
+    max_depth=4,
+    direction=&quot;citations&quot;
+)
 </code></pre></div>
 <p>The response includes the full path with metadata for each paper:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="p">{</span>
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="nt">&quot;found&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span><span class="nt">&quot;path&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
-<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span><span class="p">{</span><span class="nt">&quot;paperId&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;source&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Attention Is All You Need&quot;</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">},</span>
-<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">    </span><span class="p">{</span><span class="nt">&quot;paperId&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;bridge&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;BERT: Pre-training of...&quot;</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">},</span>
-<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">    </span><span class="p">{</span><span class="nt">&quot;paperId&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;target&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;GPT-4 Technical Report&quot;</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">}</span>
-<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">  </span><span class="p">]</span>
-<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="p">}</span>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;found&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;path&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="p">{</span><span class="nt">&quot;paperId&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;source&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Attention Is All You Need&quot;</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">},</span>
+<span class="w">    </span><span class="p">{</span><span class="nt">&quot;paperId&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;bridge&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;BERT: Pre-training of...&quot;</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">},</span>
+<span class="w">    </span><span class="p">{</span><span class="nt">&quot;paperId&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;target&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;GPT-4 Technical Report&quot;</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">}</span>
+<span class="w">  </span><span class="p">]</span>
+<span class="p">}</span>
 </code></pre></div>
 <p>Every response also carries <code>"partial"</code> and <code>"failed_requests"</code>. When an upstream request fails, <code>partial</code> is <code>true</code> and a <code>warning</code> key names the statuses involved. A partial <code>{"found": false}</code> is not evidence that no path exists, and a partial <code>{"found": true}</code> path is not guaranteed to be the shortest one.</p>
 <h3 id="tips">Tips<a class="headerlink" href="#tips" title="Permanent link">&para;</a></h3>

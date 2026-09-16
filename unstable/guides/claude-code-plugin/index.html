@@ -27,7 +27,7 @@
     
     
       
-        <title>Claude Code Plugin - Scholar MCP Server</title>
+        <title>Claude Code Plugin - scholar-mcp</title>
       
     
     
@@ -100,7 +100,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="Scholar MCP Server" class="md-header__button md-logo" aria-label="Scholar MCP Server" data-md-component="logo">
+    <a href="../.." title="scholar-mcp" class="md-header__button md-logo" aria-label="scholar-mcp" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -114,7 +114,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            Scholar MCP Server
+            scholar-mcp
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -369,13 +369,13 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="Scholar MCP Server" class="md-nav__button md-logo" aria-label="Scholar MCP Server" data-md-component="logo">
+    <a href="../.." title="scholar-mcp" class="md-nav__button md-logo" aria-label="scholar-mcp" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
 
     </a>
-    Scholar MCP Server
+    scholar-mcp
   </label>
   
     <div class="md-nav__source">
@@ -1463,8 +1463,8 @@
 <li><a href="https://docs.astral.sh/uv/"><code>uv</code></a> installed. The plugin launches the server via <code>uvx</code>, which ships with <code>uv</code>.</li>
 </ul>
 <h2 id="install">Install<a class="headerlink" href="#install" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>/plugin<span class="w"> </span>marketplace<span class="w"> </span>add<span class="w"> </span>pvliesdonk/claude-plugins
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>/plugin<span class="w"> </span>install<span class="w"> </span>scholar-mcp@pvliesdonk
+<div class="highlight"><pre><span></span><code>/plugin<span class="w"> </span>marketplace<span class="w"> </span>add<span class="w"> </span>pvliesdonk/claude-plugins
+/plugin<span class="w"> </span>install<span class="w"> </span>scholar-mcp@pvliesdonk
 </code></pre></div>
 <h2 id="configure">Configure<a class="headerlink" href="#configure" title="Permanent link">&para;</a></h2>
 <p>The only recommended configuration is a Semantic Scholar API key. The server works without one, but unauthenticated requests are limited to ~1 req/s and will hit 429 throttles during multi-step operations. <a href="https://www.semanticscholar.org/product/api#api-key-form">Request a free key</a> to get ~10 req/s.</p>
@@ -1472,14 +1472,14 @@
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">macOS / Linux</label><label for="__tabbed_1_2">Windows PowerShell</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nb">echo</span><span class="w"> </span><span class="s1">&#39;export SCHOLAR_MCP_S2_API_KEY=your-key&#39;</span><span class="w"> </span>&gt;&gt;<span class="w"> </span>~/.zshrc
+<div class="highlight"><pre><span></span><code><span class="nb">echo</span><span class="w"> </span><span class="s1">&#39;export SCHOLAR_MCP_S2_API_KEY=your-key&#39;</span><span class="w"> </span>&gt;&gt;<span class="w"> </span>~/.zshrc
 </code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="no">[Environment]</span><span class="p">::</span><span class="n">SetEnvironmentVariable</span><span class="p">(</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="s2">&quot;SCHOLAR_MCP_S2_API_KEY&quot;</span><span class="p">,</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="s2">&quot;your-key&quot;</span><span class="p">,</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="s2">&quot;User&quot;</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><span class="no">[Environment]</span><span class="p">::</span><span class="n">SetEnvironmentVariable</span><span class="p">(</span>
+    <span class="s2">&quot;SCHOLAR_MCP_S2_API_KEY&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;your-key&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;User&quot;</span><span class="p">)</span>
 </code></pre></div>
 </div>
 </div>
@@ -1506,8 +1506,8 @@
 </tr>
 <tr>
 <td><code>SCHOLAR_MCP_CACHE_DIR</code></td>
-<td><code>/data/scholar-mcp</code></td>
-<td>SQLite cache and PDF storage. Set a writable local path (such as <code>~/Documents/scholar-mcp</code>), the default is for Docker.</td>
+<td>(required)</td>
+<td>SQLite cache and PDF storage. The install screen asks for a writable local path (such as <code>~/Documents/scholar-mcp</code>); the server's own default is the Docker path.</td>
 </tr>
 <tr>
 <td><code>SCHOLAR_MCP_DOCLING_URL</code></td>
@@ -1557,10 +1557,10 @@
 <li><strong>PDF conversion</strong>: download and convert to Markdown via docling-serve, with optional VLM enrichment for formulas and figures.</li>
 </ul>
 <h2 id="update">Update<a class="headerlink" href="#update" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>/plugin<span class="w"> </span>update<span class="w"> </span>scholar-mcp@pvliesdonk
+<div class="highlight"><pre><span></span><code>/plugin<span class="w"> </span>update<span class="w"> </span>scholar-mcp@pvliesdonk
 </code></pre></div>
 <h2 id="uninstall">Uninstall<a class="headerlink" href="#uninstall" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>/plugin<span class="w"> </span>uninstall<span class="w"> </span>scholar-mcp@pvliesdonk
+<div class="highlight"><pre><span></span><code>/plugin<span class="w"> </span>uninstall<span class="w"> </span>scholar-mcp@pvliesdonk
 </code></pre></div>
 
 

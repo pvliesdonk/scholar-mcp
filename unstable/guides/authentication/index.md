@@ -10,17 +10,15 @@ Authentication only works with HTTP transport (`--transport http` or `sse`). It 
 
 The server supports five authentication modes:
 
-| Mode             | When to use                                                                              | Configuration                                                                                       |
-| ---------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| **Multi-auth**   | Mixed clients, such as Claude web (OIDC) + Claude Code (bearer token) on the same server | Set `SCHOLAR_MCP_BEARER_TOKEN` + OIDC vars (either remote or oidc-proxy)                            |
-| **Remote**       | Behind a reverse proxy that handles OAuth (such as Traefik + Authelia)                   | Set `SCHOLAR_MCP_BASE_URL` + `SCHOLAR_MCP_OIDC_CONFIG_URL` only                                     |
-| **OIDC proxy**   | Production with user identity, SSO, multi-user access, server handles OAuth directly     | Set all four OIDC variables (`BASE_URL`, `OIDC_CONFIG_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`) |
-| **Bearer token** | Simple deployments behind a VPN, Docker compose stacks, development                      | Set `SCHOLAR_MCP_BEARER_TOKEN` only                                                                 |
-| **No auth**      | Local stdio usage, trusted networks                                                      | Default (nothing to configure)                                                                      |
+| Mode                  | When to use                                                                                                      | Configuration                                                                                       |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| **Multi-auth**        | Mixed clients, such as Claude web (OIDC) + Claude Code (bearer token) on the same server                         | Set both `SCHOLAR_MCP_BEARER_TOKEN` and the OIDC variables                                          |
+| **Bearer token**      | Simple deployments behind a VPN, Docker compose stacks, development                                              | Set `SCHOLAR_MCP_BEARER_TOKEN` only                                                                 |
+| **OIDC (remote)**     | Production with user identity, SSO, multi-user access; local JWKS validation, no confidential client to register | Set `SCHOLAR_MCP_BASE_URL` + `SCHOLAR_MCP_OIDC_CONFIG_URL` only                                     |
+| **OIDC (oidc-proxy)** | The same, where the server should run the OAuth flow itself and manage sessions                                  | Set all four OIDC variables (`BASE_URL`, `OIDC_CONFIG_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`) |
+| **No auth**           | Local stdio usage, trusted networks                                                                              | Default (nothing to configure)                                                                      |
 
-The OIDC mode is auto-detected from environment variables: `oidc-proxy` when all four OIDC vars are present, `remote` when only `BASE_URL` + `OIDC_CONFIG_URL` are set. Override with `SCHOLAR_MCP_AUTH_MODE=remote` or `SCHOLAR_MCP_AUTH_MODE=oidc-proxy`.
-
-When both bearer token and OIDC (either mode) are configured, the server accepts **either** credential: a valid bearer token or a valid OIDC session. This is useful when different clients require different authentication flows against the same server instance.
+When both bearer token and OIDC are configured, the server accepts **either** credential: a valid bearer token or a valid OIDC session. This is useful when different clients require different authentication flows against the same server instance.
 
 ______________________________________________________________________
 
@@ -76,50 +74,11 @@ The bearer-token mode above shares one subject across every authenticated caller
 
 Each token resolves to a distinct subject string for downstream attribution. Subject strings are opaque: the `<kind>:<id>` convention (`user:`, `service:`, `token:`) is documentation only. When `BEARER_TOKENS_FILE` is set it overrides `BEARER_TOKEN` (a `WARNING` is logged if both are present). A missing or malformed file aborts startup with `ConfigurationError` rather than silently denying every request.
 
-For the per-tool authorization that consumes these subjects, see the **Authorization (opt-in)** section of the project [README](https://github.com/pvliesdonk/scholar-mcp#authorization-opt-in).
-
 ______________________________________________________________________
 
-## Remote auth
+## OIDC
 
-Use this when your server sits behind a reverse proxy (such as Traefik + Authelia) that handles the full OAuth/OIDC flow. The MCP server validates JWTs locally using the OIDC provider's JWKS endpoint, no client credentials needed.
-
-### How it works
-
-```
-Client → Reverse proxy (Authelia) → scholar-mcp (JWT validation only)
-```
-
-1. Client connects to the server
-1. The reverse proxy's auth middleware (Authelia) handles the OAuth flow
-1. Authelia issues a JWT and forwards the request with the token
-1. Scholar-mcp validates the JWT locally via the provider's JWKS keys
-
-### Required variables
-
-| Variable                      | Description                                                                                   |
-| ----------------------------- | --------------------------------------------------------------------------------------------- |
-| `SCHOLAR_MCP_BASE_URL`        | Public base URL (such as `https://mcp.example.com`)                                           |
-| `SCHOLAR_MCP_OIDC_CONFIG_URL` | OIDC discovery endpoint (such as `https://auth.example.com/.well-known/openid-configuration`) |
-
-### Optional variables
-
-| Variable                           | Default  | Description                     |
-| ---------------------------------- | -------- | ------------------------------- |
-| `SCHOLAR_MCP_OIDC_AUDIENCE`        | *(none)* | Expected JWT audience claim     |
-| `SCHOLAR_MCP_OIDC_REQUIRED_SCOPES` | `openid` | Comma-separated required scopes |
-
-### When to use remote auth
-
-- Deployments behind Traefik + Authelia, Caddy + Authentik, or similar reverse-proxy auth stacks
-- When the OIDC provider issues opaque access tokens (such as Authelia), the proxy handles the token exchange
-- When you don't want to register the MCP server as an OIDC client
-
-______________________________________________________________________
-
-## OIDC proxy
-
-Full OAuth 2.1 authentication using an external identity provider. The MCP server itself acts as an OAuth proxy, supports user login flows, SSO, and multi-user access control without an external auth reverse proxy. Which of the two OIDC modes runs follows from which variables are set; `SCHOLAR_MCP_AUTH_MODE` states the choice instead of leaving it to be inferred.
+Full OAuth 2.1 authentication using an external identity provider. Supports user login flows, SSO, and multi-user access control. Which of the two OIDC modes runs follows from which variables are set; `SCHOLAR_MCP_AUTH_MODE` states the choice instead of leaving it to be inferred.
 
 ### How remote mode works
 
@@ -137,7 +96,7 @@ No redirect passes through the server and no code exchange happens, so the provi
 The server proxies OIDC itself, with no external auth sidecar to deploy:
 
 ```
-Client → scholar-mcp (OIDCProxy) → OIDC Provider
+Client → scholar-mcp → OIDC Provider
 ```
 
 1. Client connects to the server
@@ -203,16 +162,7 @@ openssl rand -hex 32
 
 ### Auth has no effect
 
-FastMCP's stdio transport doesn't enforce auth on incoming messages (stdio messages have no `Authorization` header), but auth provider construction still runs at startup regardless of transport, and the server logs a `WARNING: auth_configured_but_stdio_skips_enforcement` line when this happens so you don't mis-read startup logs as proof of enforcement.
-
-Per-mode behaviour on `--transport stdio`:
-
-- **bearer-single / bearer-mapped**: the verifier is built but never consulted. Safe to set, just inert.
-- **`remote` mode** (`SCHOLAR_MCP_BASE_URL` + `SCHOLAR_MCP_OIDC_CONFIG_URL`, no client id/secret): OIDC discovery fires against the configured URL inside pvl-core's `build_remote_auth`. Discovery failure raises `ConfigurationError: OIDC discovery failed at …` and the server refuses to start (pvl-core ≥ 2.0 fail-loud).
-- **`oidc-proxy` mode** (all four OIDC env vars set: `BASE_URL` + `OIDC_CONFIG_URL` + `OIDC_CLIENT_ID` + `OIDC_CLIENT_SECRET`): discovery fires inside FastMCP's `OIDCProxy.__init__` and currently propagates raw `httpx.HTTPError` / `pydantic.ValidationError` rather than `ConfigurationError` (asymmetry between pvl-core layers; tracked upstream). The CLI does not currently catch these, operators see the raw traceback.
-- **`multi` mode** (bearer + OIDC together): inherits the OIDC failure mode of whichever sub-mode applies (`remote` or `oidc-proxy`) per above.
-
-Recommendation: leave OIDC env vars unset on stdio deployments. Switch to `--transport http` to actually exercise auth.
+Authentication only works with HTTP transport. If you're using `--transport stdio`, auth is silently ignored. Switch to `--transport http`.
 
 ### Bearer token not working
 

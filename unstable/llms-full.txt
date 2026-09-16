@@ -1,14 +1,20 @@
-# Scholar MCP Server
+# scholar-mcp
 
 > FastMCP server for scholarly papers, patents, books and standards with docling PDF conversion
 
 # Getting Started
 
-# Scholar MCP Server
+# Scholar MCP
 
-A [FastMCP](https://github.com/jlowin/fastmcp) server for the scholarly citation landscape (**papers**, **patents**, **books**, and **standards**), giving LLMs a unified way to search, cross-reference, and retrieve prior art across all four source types via [Semantic Scholar](https://www.semanticscholar.org/), [EPO Open Patent Services](https://www.epo.org/en/searching-for-patents/data/web-services/ops), [Open Library](https://openlibrary.org/), and standards bodies, with [OpenAlex](https://openalex.org/) enrichment and optional [docling-serve](https://github.com/DS4SD/docling-serve) PDF/full-text conversion.
+FastMCP server for scholarly papers, patents, books and standards with docling PDF conversion
 
-## What it does
+## Getting started
+
+- [Installation](https://pvliesdonk.github.io/scholar-mcp/unstable/installation/index.md)
+- [Configuration](https://pvliesdonk.github.io/scholar-mcp/unstable/configuration/index.md)
+- [Tools](https://pvliesdonk.github.io/scholar-mcp/unstable/tools/index.md)
+
+## Features
 
 Scholar MCP exposes 29 tools that let LLM-powered applications search, cross-reference, and retrieve scholarly sources across four peer domains:
 
@@ -25,33 +31,6 @@ Results are cached in a local SQLite database with per-table TTLs to reduce API 
 Coverage by domain
 
 Per-domain depth varies: papers have the richest tool surface and standards the least. That reflects public data availability, not a value hierarchy: writing a paper typically needs all four source types for citations and prior art. Parity work is tracked in [GitHub issues](https://github.com/pvliesdonk/scholar-mcp/issues) and [milestones](https://github.com/pvliesdonk/scholar-mcp/milestones), the roadmap shows intent, not a completeness commitment.
-
-## Quick start
-
-```
-/plugin marketplace add pvliesdonk/claude-plugins
-/plugin install scholar-mcp@pvliesdonk
-```
-
-```
-uvx --from pvliesdonk-scholar-mcp scholar-mcp serve
-```
-
-```
-pip install 'pvliesdonk-scholar-mcp[mcp]'
-scholar-mcp serve
-```
-
-```
-docker run -v scholar-mcp-data:/data/scholar-mcp \
-           ghcr.io/pvliesdonk/scholar-mcp:latest
-```
-
-API key optional but recommended
-
-The server works without a Semantic Scholar API key, but unauthenticated requests are limited to ~1 req/s and will hit 429 throttles quickly during multi-step operations like citation graph traversal. [Request a free key](https://www.semanticscholar.org/product/api#api-key-form) to get ~10 req/s. Pass it via `SCHOLAR_MCP_S2_API_KEY=your-key`.
-
-See [Installation](https://pvliesdonk.github.io/scholar-mcp/unstable/installation/index.md) for all methods including Linux packages.
 
 ## Architecture
 
@@ -84,16 +63,37 @@ See [Installation](https://pvliesdonk.github.io/scholar-mcp/unstable/installatio
   └────────┘ └─────────┘ └─────┘ └───────┘ └────────┘ └───────┘
 ```
 
-## Next steps
+## What you can do
 
-- [Installation](https://pvliesdonk.github.io/scholar-mcp/unstable/installation/index.md): all installation methods
-- [Configuration](https://pvliesdonk.github.io/scholar-mcp/unstable/configuration/index.md): environment variable reference
-- [Tools](https://pvliesdonk.github.io/scholar-mcp/unstable/tools/index.md): full tool reference with parameters
-- [Claude Code plugin](https://pvliesdonk.github.io/scholar-mcp/unstable/guides/claude-code-plugin/index.md): install as a Claude Code plugin
-- [Claude Desktop setup](https://pvliesdonk.github.io/scholar-mcp/unstable/guides/claude-desktop/index.md): get started with Claude Desktop
-- [Docker deployment](https://pvliesdonk.github.io/scholar-mcp/unstable/deployment/docker/index.md): production Docker Compose setup
+- **Survey a field**: "Find the 20 most-cited papers on graph neural networks from 2020 to 2024 and draft a literature review outline." Composes `search_papers` + `get_citations` + `enrich_paper`.
+- **Trace a citation path**: "What's the shortest citation path from 'Attention is All You Need' to 'RLHF for dialogue agents'?" Uses `find_bridge_papers` + `get_citation_graph`.
+- **Cross-reference prior art**: "For this patent family, list academic papers it cites and any books or standards that show up in the description." Composes `get_patent` + `batch_resolve` + standards/book enrichment.
+- **Generate a bibliography**: "Emit BibTeX for these 30 DOIs with OpenAlex venue data." Uses `generate_citations`.
+- **Look up a standard**: "What's the latest status of RFC 9000, and fetch the Markdown full text." Uses `resolve_standard_identifier` + `get_standard`.
 
 # Installation
+
+## From PyPI
+
+```
+pip install pvliesdonk-scholar-mcp
+```
+
+## From Docker
+
+```
+docker pull ghcr.io/pvliesdonk/scholar-mcp:latest
+```
+
+The `latest` tag is the newest stable release. The rolling `edge` tag tracks every merge to `main` and carries no version identity; see [Image tags](https://pvliesdonk.github.io/scholar-mcp/unstable/deployment/docker/#image-tags) for the full list.
+
+## From source
+
+```
+git clone https://github.com/pvliesdonk/scholar-mcp
+cd scholar-mcp
+uv sync --all-extras --all-groups
+```
 
 ## As a Claude Code plugin
 
@@ -115,31 +115,6 @@ uvx --from pvliesdonk-scholar-mcp scholar-mcp serve
 Package name vs. command
 
 The PyPI package is `pvliesdonk-scholar-mcp`. The CLI command installed is `scholar-mcp`. The `--from` flag is needed because the package and command names differ.
-
-## With `pip`
-
-```
-pip install 'pvliesdonk-scholar-mcp[mcp]'
-scholar-mcp serve
-```
-
-The `[mcp]` extra installs FastMCP and uvicorn. Without it, you get only the library (API clients and cache) without the MCP server.
-
-## With Docker
-
-```
-docker run -v scholar-mcp-data:/data/scholar-mcp \
-           ghcr.io/pvliesdonk/scholar-mcp:latest
-```
-
-The image is available for `linux/amd64` and `linux/arm64`. See [Docker deployment](https://pvliesdonk.github.io/scholar-mcp/unstable/deployment/docker/index.md) for Docker Compose with docling-serve.
-
-The `latest` tag is the newest stable release. The rolling `edge` tag tracks every merge to `main` and carries no version identity; see [Image tags](https://pvliesdonk.github.io/scholar-mcp/unstable/deployment/docker/#image-tags) for the full list.
-
-```
-docker run -v scholar-mcp-data:/data/scholar-mcp \
-           ghcr.io/pvliesdonk/scholar-mcp:edge
-```
 
 ## Linux packages
 
@@ -163,15 +138,6 @@ The package installs:
 - A dedicated `scholar-mcp` system user
 
 See [systemd deployment](https://pvliesdonk.github.io/scholar-mcp/unstable/deployment/systemd/index.md) for configuration details.
-
-## From source
-
-```
-git clone https://github.com/pvliesdonk/scholar-mcp.git
-cd scholar-mcp
-uv sync --extra dev --extra mcp
-uv run scholar-mcp serve
-```
 
 # Configuration
 
@@ -373,7 +339,7 @@ Calling `get_job_result` with that `job_id` returns `working` until the work set
 
 Two operational notes:
 
-- **Job records live in the KV backend**, so `SCHOLAR_MCP_KV_STORE_URL` covers them along with every other stateful subsystem. That is a different variable from `SCHOLAR_MCP_TASKS_URL`, which selects the native SEP-1686 Docket backend described under [Background tasks](#background-tasks).
+- **Job records live in the KV backend**, so `SCHOLAR_MCP_KV_STORE_URL` covers them along with every other stateful subsystem. That is a different variable from `SCHOLAR_MCP_TASKS_URL`, which selects the native SEP-2663 Docket backend described under [Background tasks](#background-tasks).
 - **A restart does not resume promoted work.** The job stops running with the process, while its record survives, so a poll after a restart reports `working` with a growing `running_for_s` until the retention period removes the record. That is deliberate, because a result is never invented. It does mean a job still reported as `working` long past its expected duration may be orphaned rather than slow. For work that must survive a restart, use the native task path with a `redis://` backend.
 
 If you restrict the tool surface with `SCHOLAR_MCP_TOOLS_ALLOW`, **include `get_job_result`**. The allowlist matches on tool name, so leaving it out makes every job handle unresolvable.
@@ -385,6 +351,36 @@ Upgrading from a release that had `get_task_result` and `list_tasks`: those tool
 The patent tools wait out an amber or red EPO traffic light rather than failing on it. Each wait is longer than the 60-second lifetime of the cached light, because a shorter one would re-read the same cached color instead of asking EPO again. Two retries follow the first attempt, so a throttled call can spend roughly three minutes waiting. That is well past `SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S`, so such a call is handed back as a job to poll rather than holding the connection open.
 
 A black light means the daily quota is spent. That does not clear until tomorrow, so it is reported at once with `"retryable": false` instead of costing the caller the full wait for the same answer.
+
+### Semantic Scholar key health
+
+`get_server_info` reports the one piece of upstream state an operator cannot otherwise see. It carries **Semantic Scholar key health**, under a `semantic_scholar` key:
+
+```
+{
+  "server_name": "pvliesdonk-scholar-mcp",
+  "server_version": "2.0.0",
+  "core_version": "7.1.0",
+  "semantic_scholar": {
+    "key_configured": true,
+    "key_status": "degraded",
+    "consecutive_failures": 26,
+    "last_success": "2026-09-03T12:00:00+00:00",
+    "last_failure": "2026-09-10T18:00:00+00:00",
+    "last_failure_kind": "rate_limited"
+  }
+}
+```
+
+`key_status` is one of `not_configured` (no key set, so the anonymous tier serves), `unknown` (configured, not yet pinged), `ok`, `failing` (refused, but not for long enough to mean more than throttling), or `degraded`. The `degraded` threshold is the same one the keepalive escalates at, so this field and the `s2_keepalive_degraded` log line never disagree.
+
+This is reported here rather than as a `/health/ready` check on purpose. A revoked key breaks the Semantic Scholar tools, while OpenAlex, Crossref, EPO, Open Library and the standards sources keep serving. Failing readiness answers `503` for the whole server, which drops it from rotation wherever something polls that route, such as a load balancer or a Kubernetes `readinessProbe`, over a condition that removal from rotation does not repair. The shipped `compose.yml` probes `/health` rather than `/health/ready` and reports the verdict without restarting anything, so it is unaffected either way.
+
+The server pings Semantic Scholar once on startup and every 7 days thereafter to keep the configured key from being removed for inactivity (Semantic Scholar may remove keys unused for 60+ days). A ping S2 refuses is retried in an hour rather than waiting out the full cycle, so one bad moment does not cost a week of key activity.
+
+To tell a dead key from a transient upstream issue, grep the server logs for `s2_keepalive_degraded`. The keepalive logs it at `ERROR`, once, after a day of consecutive refusals, and follows it with `s2_keepalive_recovered` if a later ping lands. It keys on persistence rather than on a status code, because a key that has stopped conferring quota was observed returning `429` indefinitely and never `403`.
+
+A `403 Forbidden` remains the cheaper signal when S2 does send one: `s2_key_forbidden` on real tool calls, `s2_keepalive_key_forbidden` from the keepalive. Do not rely on it alone.
 
 | Variable                    | Default             | Required | Description                                                                                                                                                                             |
 | --------------------------- | ------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -588,17 +584,15 @@ Authentication only works with HTTP transport (`--transport http` or `sse`). It 
 
 The server supports five authentication modes:
 
-| Mode             | When to use                                                                              | Configuration                                                                                       |
-| ---------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| **Multi-auth**   | Mixed clients, such as Claude web (OIDC) + Claude Code (bearer token) on the same server | Set `SCHOLAR_MCP_BEARER_TOKEN` + OIDC vars (either remote or oidc-proxy)                            |
-| **Remote**       | Behind a reverse proxy that handles OAuth (such as Traefik + Authelia)                   | Set `SCHOLAR_MCP_BASE_URL` + `SCHOLAR_MCP_OIDC_CONFIG_URL` only                                     |
-| **OIDC proxy**   | Production with user identity, SSO, multi-user access, server handles OAuth directly     | Set all four OIDC variables (`BASE_URL`, `OIDC_CONFIG_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`) |
-| **Bearer token** | Simple deployments behind a VPN, Docker compose stacks, development                      | Set `SCHOLAR_MCP_BEARER_TOKEN` only                                                                 |
-| **No auth**      | Local stdio usage, trusted networks                                                      | Default (nothing to configure)                                                                      |
+| Mode                  | When to use                                                                                                      | Configuration                                                                                       |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| **Multi-auth**        | Mixed clients, such as Claude web (OIDC) + Claude Code (bearer token) on the same server                         | Set both `SCHOLAR_MCP_BEARER_TOKEN` and the OIDC variables                                          |
+| **Bearer token**      | Simple deployments behind a VPN, Docker compose stacks, development                                              | Set `SCHOLAR_MCP_BEARER_TOKEN` only                                                                 |
+| **OIDC (remote)**     | Production with user identity, SSO, multi-user access; local JWKS validation, no confidential client to register | Set `SCHOLAR_MCP_BASE_URL` + `SCHOLAR_MCP_OIDC_CONFIG_URL` only                                     |
+| **OIDC (oidc-proxy)** | The same, where the server should run the OAuth flow itself and manage sessions                                  | Set all four OIDC variables (`BASE_URL`, `OIDC_CONFIG_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`) |
+| **No auth**           | Local stdio usage, trusted networks                                                                              | Default (nothing to configure)                                                                      |
 
-The OIDC mode is auto-detected from environment variables: `oidc-proxy` when all four OIDC vars are present, `remote` when only `BASE_URL` + `OIDC_CONFIG_URL` are set. Override with `SCHOLAR_MCP_AUTH_MODE=remote` or `SCHOLAR_MCP_AUTH_MODE=oidc-proxy`.
-
-When both bearer token and OIDC (either mode) are configured, the server accepts **either** credential: a valid bearer token or a valid OIDC session. This is useful when different clients require different authentication flows against the same server instance.
+When both bearer token and OIDC are configured, the server accepts **either** credential: a valid bearer token or a valid OIDC session. This is useful when different clients require different authentication flows against the same server instance.
 
 ______________________________________________________________________
 
@@ -654,50 +648,11 @@ The bearer-token mode above shares one subject across every authenticated caller
 
 Each token resolves to a distinct subject string for downstream attribution. Subject strings are opaque: the `<kind>:<id>` convention (`user:`, `service:`, `token:`) is documentation only. When `BEARER_TOKENS_FILE` is set it overrides `BEARER_TOKEN` (a `WARNING` is logged if both are present). A missing or malformed file aborts startup with `ConfigurationError` rather than silently denying every request.
 
-For the per-tool authorization that consumes these subjects, see the **Authorization (opt-in)** section of the project [README](https://github.com/pvliesdonk/scholar-mcp#authorization-opt-in).
-
 ______________________________________________________________________
 
-## Remote auth
+## OIDC
 
-Use this when your server sits behind a reverse proxy (such as Traefik + Authelia) that handles the full OAuth/OIDC flow. The MCP server validates JWTs locally using the OIDC provider's JWKS endpoint, no client credentials needed.
-
-### How it works
-
-```
-Client → Reverse proxy (Authelia) → scholar-mcp (JWT validation only)
-```
-
-1. Client connects to the server
-1. The reverse proxy's auth middleware (Authelia) handles the OAuth flow
-1. Authelia issues a JWT and forwards the request with the token
-1. Scholar-mcp validates the JWT locally via the provider's JWKS keys
-
-### Required variables
-
-| Variable                      | Description                                                                                   |
-| ----------------------------- | --------------------------------------------------------------------------------------------- |
-| `SCHOLAR_MCP_BASE_URL`        | Public base URL (such as `https://mcp.example.com`)                                           |
-| `SCHOLAR_MCP_OIDC_CONFIG_URL` | OIDC discovery endpoint (such as `https://auth.example.com/.well-known/openid-configuration`) |
-
-### Optional variables
-
-| Variable                           | Default  | Description                     |
-| ---------------------------------- | -------- | ------------------------------- |
-| `SCHOLAR_MCP_OIDC_AUDIENCE`        | *(none)* | Expected JWT audience claim     |
-| `SCHOLAR_MCP_OIDC_REQUIRED_SCOPES` | `openid` | Comma-separated required scopes |
-
-### When to use remote auth
-
-- Deployments behind Traefik + Authelia, Caddy + Authentik, or similar reverse-proxy auth stacks
-- When the OIDC provider issues opaque access tokens (such as Authelia), the proxy handles the token exchange
-- When you don't want to register the MCP server as an OIDC client
-
-______________________________________________________________________
-
-## OIDC proxy
-
-Full OAuth 2.1 authentication using an external identity provider. The MCP server itself acts as an OAuth proxy, supports user login flows, SSO, and multi-user access control without an external auth reverse proxy. Which of the two OIDC modes runs follows from which variables are set; `SCHOLAR_MCP_AUTH_MODE` states the choice instead of leaving it to be inferred.
+Full OAuth 2.1 authentication using an external identity provider. Supports user login flows, SSO, and multi-user access control. Which of the two OIDC modes runs follows from which variables are set; `SCHOLAR_MCP_AUTH_MODE` states the choice instead of leaving it to be inferred.
 
 ### How remote mode works
 
@@ -715,7 +670,7 @@ No redirect passes through the server and no code exchange happens, so the provi
 The server proxies OIDC itself, with no external auth sidecar to deploy:
 
 ```
-Client → scholar-mcp (OIDCProxy) → OIDC Provider
+Client → scholar-mcp → OIDC Provider
 ```
 
 1. Client connects to the server
@@ -781,16 +736,7 @@ openssl rand -hex 32
 
 ### Auth has no effect
 
-FastMCP's stdio transport doesn't enforce auth on incoming messages (stdio messages have no `Authorization` header), but auth provider construction still runs at startup regardless of transport, and the server logs a `WARNING: auth_configured_but_stdio_skips_enforcement` line when this happens so you don't mis-read startup logs as proof of enforcement.
-
-Per-mode behaviour on `--transport stdio`:
-
-- **bearer-single / bearer-mapped**: the verifier is built but never consulted. Safe to set, just inert.
-- **`remote` mode** (`SCHOLAR_MCP_BASE_URL` + `SCHOLAR_MCP_OIDC_CONFIG_URL`, no client id/secret): OIDC discovery fires against the configured URL inside pvl-core's `build_remote_auth`. Discovery failure raises `ConfigurationError: OIDC discovery failed at …` and the server refuses to start (pvl-core ≥ 2.0 fail-loud).
-- **`oidc-proxy` mode** (all four OIDC env vars set: `BASE_URL` + `OIDC_CONFIG_URL` + `OIDC_CLIENT_ID` + `OIDC_CLIENT_SECRET`): discovery fires inside FastMCP's `OIDCProxy.__init__` and currently propagates raw `httpx.HTTPError` / `pydantic.ValidationError` rather than `ConfigurationError` (asymmetry between pvl-core layers; tracked upstream). The CLI does not currently catch these, operators see the raw traceback.
-- **`multi` mode** (bearer + OIDC together): inherits the OIDC failure mode of whichever sub-mode applies (`remote` or `oidc-proxy`) per above.
-
-Recommendation: leave OIDC env vars unset on stdio deployments. Switch to `--transport http` to actually exercise auth.
+Authentication only works with HTTP transport. If you're using `--transport stdio`, auth is silently ignored. Switch to `--transport http`.
 
 ### Bearer token not working
 
@@ -908,7 +854,7 @@ export SCHOLAR_MCP_READ_ONLY=false
 Start the server and check the logs. You should see:
 
 ```
-INFO scholar_mcp._server_deps: docling_configured url=http://localhost:5001
+INFO scholar_mcp.domain: docling_configured url=http://localhost:5001
 ```
 
 ## Tools
@@ -1197,6 +1143,8 @@ The cache cuts API calls for repeated exploration in the same area. A `get_citat
 # Tools
 
 # Tools
+
+The tools registered in this server are listed below.
 
 Scholar MCP provides 29 tools organised by scholarly source type: **Papers**, **Patents**, **Books**, and **Standards** are peer source domains; the remaining sections (Cross-source Utility, PDF Conversion, Job Polling) are cross-cutting. All tools return JSON.
 
@@ -2143,8 +2091,6 @@ docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.revis
 
 ## Environment variables
 
-See [Configuration](https://pvliesdonk.github.io/scholar-mcp/unstable/configuration/index.md) for the full reference. Key variables for Docker:
-
 | Variable                           | Default               | Description                                                                                                   |
 | ---------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------- |
 | `SCHOLAR_MCP_BEARER_TOKEN`         | n/a                   | Enable bearer token auth                                                                                      |
@@ -2156,37 +2102,20 @@ See [Configuration](https://pvliesdonk.github.io/scholar-mcp/unstable/configurat
 | `SCHOLAR_MCP_DEBUG_PORT`           | n/a                   | Remote-debugger TCP port (see [Remote debugging](#remote-debugging); requires `--build-arg DEBUG=true` image) |
 | `SCHOLAR_MCP_DEBUG_WAIT`           | `false`               | Block startup until IDE attaches (see [Remote debugging](#remote-debugging))                                  |
 
-For OIDC authentication, see [OIDC deployment](https://pvliesdonk.github.io/scholar-mcp/unstable/deployment/oidc/index.md).
+For OIDC auth variables, see [Authentication](https://pvliesdonk.github.io/scholar-mcp/unstable/guides/authentication/index.md).
 
 Running behind a reverse proxy on a path prefix (`https://mcp.example.com/myservice/mcp`) rather than its own hostname needs two routing rules, one of which sits outside the prefix: see [Subpath Deployments](https://pvliesdonk.github.io/scholar-mcp/unstable/deployment/oidc/#subpath-deployments).
 
 ## Volumes
 
-| Container path      | Purpose                                                    |
-| ------------------- | ---------------------------------------------------------- |
-| `/data/scholar-mcp` | SQLite cache database, downloaded PDFs, converted Markdown |
-| `/data/state`       | FastMCP OIDC state (only needed with OIDC auth)            |
-
-Use named volumes (shown above) for persistence. Bind mounts also work:
-
-```
-volumes:
-  - ./data/scholar-mcp:/data/scholar-mcp
-```
+| Path            | Purpose                                        |
+| --------------- | ---------------------------------------------- |
+| `/data/service` | Your service data (bind-mount or named volume) |
+| `/data/state`   | State files (FastMCP OIDC state, etc.)         |
 
 ## UID/GID
 
-The image runs as a non-root user with UID/GID 1000 by default. To match your host user for bind mounts, set build args:
-
-```
-services:
-  scholar-mcp:
-    build:
-      context: .
-      args:
-        APP_UID: 1000
-        APP_GID: 1000
-```
+Set `PUID` and `PGID` in your `.env` file to match the owner of bind-mounted directories (default 1000/1000).
 
 ## Remote debugging
 
@@ -2293,10 +2222,12 @@ sudo chmod 600 /etc/scholar-mcp/env
 sudo nano /etc/scholar-mcp/env
 ```
 
-Set the cache directory and (optionally) your Semantic Scholar API key:
+Set the cache directory, the bind address if other hosts should reach the server, and (optionally) your Semantic Scholar API key. The cache directory is required: its default, `/data/scholar-mcp`, is the container path, and the unit's `ProtectSystem=strict` leaves only `/var/lib/scholar-mcp` writable.
 
 ```
 SCHOLAR_MCP_CACHE_DIR=/var/lib/scholar-mcp
+# Listen on every interface; the default is 127.0.0.1 (loopback only)
+SCHOLAR_MCP_HOST=0.0.0.0
 # Optional but recommended, without a key, requests are limited to ~1 req/s
 SCHOLAR_MCP_S2_API_KEY=your-key-here
 ```
@@ -2321,7 +2252,7 @@ sudo journalctl -u scholar-mcp -f
 
 The service runs in HTTP mode on port 8000 by default.
 
-The unit binds `0.0.0.0` (all interfaces) via `Environment=SCHOLAR_MCP_HOST=0.0.0.0` so the packaged server is reachable from other hosts. The bare CLI falls back to `127.0.0.1` (loopback only). To restrict the packaged service to loopback (typical behind a same-host reverse proxy), set `SCHOLAR_MCP_HOST=127.0.0.1` in `/etc/scholar-mcp/env`; that file overrides the unit default.
+The server binds `127.0.0.1` unless `/etc/scholar-mcp/env` sets `SCHOLAR_MCP_HOST`, so a fresh install is reachable only from the same host, as behind a same-host reverse proxy, until you widen it.
 
 ## Security hardening
 
@@ -2361,6 +2292,10 @@ The post-install script automatically:
 
 Your configuration in `/etc/scholar-mcp/env` is preserved.
 
+Check the bind address after upgrading from 2.0.0 or earlier
+
+The unit file is replaced on every upgrade, and earlier versions set `SCHOLAR_MCP_HOST=0.0.0.0` in it. The unit no longer sets a bind address, so a service that was reachable from other hosts without naming the variable in `/etc/scholar-mcp/env` binds loopback after the post-install restart. Add `SCHOLAR_MCP_HOST=0.0.0.0` to that file to keep it reachable.
+
 ## Uninstalling
 
 ```
@@ -2398,7 +2333,7 @@ Common causes:
 If the post-install script failed (such as no internet during package install):
 
 ```
-sudo /opt/scholar-mcp/venv/bin/pip install 'pvliesdonk-scholar-mcp[mcp]'
+sudo /opt/scholar-mcp/venv/bin/pip install 'pvliesdonk-scholar-mcp[all]'
 sudo systemctl restart scholar-mcp
 ```
 
@@ -2478,7 +2413,7 @@ Authelia issues opaque (non-JWT) access tokens. This is handled automatically: t
 identity_providers:
   oidc:
     clients:
-      - client_id: my-scholar-mcp
+      - client_id: my-mcp-server
         client_secret: '$pbkdf2-sha512$...'   # authelia crypto hash generate
         redirect_uris:
           - https://mcp.example.com/auth/callback
@@ -2493,7 +2428,7 @@ identity_providers:
 ```
 SCHOLAR_MCP_BASE_URL=https://mcp.example.com
 SCHOLAR_MCP_OIDC_CONFIG_URL=https://auth.example.com/.well-known/openid-configuration
-SCHOLAR_MCP_OIDC_CLIENT_ID=my-scholar-mcp
+SCHOLAR_MCP_OIDC_CLIENT_ID=my-mcp-server
 SCHOLAR_MCP_OIDC_CLIENT_SECRET=your-client-secret
 SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY=$(openssl rand -hex 32)
 ```
@@ -2583,7 +2518,7 @@ With the corresponding `.env`:
 ```
 SCHOLAR_MCP_BASE_URL=https://mcp.example.com
 SCHOLAR_MCP_OIDC_CONFIG_URL=https://auth.example.com/.well-known/openid-configuration
-SCHOLAR_MCP_OIDC_CLIENT_ID=my-scholar-mcp
+SCHOLAR_MCP_OIDC_CLIENT_ID=my-mcp-server
 SCHOLAR_MCP_OIDC_CLIENT_SECRET=your-client-secret
 SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY=your-stable-hex-key
 ```

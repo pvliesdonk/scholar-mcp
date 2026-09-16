@@ -27,7 +27,7 @@
     
     
       
-        <title>Repository Protection - Scholar MCP Server</title>
+        <title>Repository Protection - scholar-mcp</title>
       
     
     
@@ -100,7 +100,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="Scholar MCP Server" class="md-header__button md-logo" aria-label="Scholar MCP Server" data-md-component="logo">
+    <a href="../.." title="scholar-mcp" class="md-header__button md-logo" aria-label="scholar-mcp" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -114,7 +114,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            Scholar MCP Server
+            scholar-mcp
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -369,13 +369,13 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="Scholar MCP Server" class="md-nav__button md-logo" aria-label="Scholar MCP Server" data-md-component="logo">
+    <a href="../.." title="scholar-mcp" class="md-nav__button md-logo" aria-label="scholar-mcp" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
 
     </a>
-    Scholar MCP Server
+    scholar-mcp
   </label>
   
     <div class="md-nav__source">
@@ -1569,9 +1569,9 @@ job in its own <code>needs:</code>, so a domain workflow the project added itsel
 cannot join the aggregate: it runs, it shows red on the pull request, and
 nothing stops the merge.</p>
 <p>List its context in the <code>extra_required_checks</code> copier answer instead:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># .copier-answers.yml</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nt">extra_required_checks</span><span class="p">:</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SPA sources</span>
+<div class="highlight"><pre><span></span><code><span class="c1"># .copier-answers.yml</span>
+<span class="nt">extra_required_checks</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SPA sources</span>
 </code></pre></div>
 <p>Each name renders into the <code>required_status_checks</code> array of both branch
 rulesets, alongside <code>CI Success</code>, and applies to <code>main</code> and <code>release/*</code>
@@ -1621,8 +1621,8 @@ Coverage Status</strong> workflow's runs rather than the CI run: the status come
 from there.</p>
 <h2 id="applying-by-hand">Applying by hand<a class="headerlink" href="#applying-by-hand" title="Permanent link">&para;</a></h2>
 <p>Without the bootstrap workflow (or when importing into another repository):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>gh<span class="w"> </span>api<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span><span class="s2">&quot;repos/OWNER/REPO/rulesets&quot;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>--input<span class="w"> </span>.github/rulesets/protect-main.json
+<div class="highlight"><pre><span></span><code>gh<span class="w"> </span>api<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span><span class="s2">&quot;repos/OWNER/REPO/rulesets&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--input<span class="w"> </span>.github/rulesets/protect-main.json
 </code></pre></div>
 <p>or import each file in the UI under <strong>Settings → Rules → Rulesets →
 New ruleset → Import a ruleset</strong>. The JSON files use the same schema the

@@ -150,8 +150,6 @@ docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.revis
 
 ## Environment variables
 
-See [Configuration](https://pvliesdonk.github.io/scholar-mcp/unstable/configuration/index.md) for the full reference. Key variables for Docker:
-
 | Variable                           | Default               | Description                                                                                                   |
 | ---------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------- |
 | `SCHOLAR_MCP_BEARER_TOKEN`         | n/a                   | Enable bearer token auth                                                                                      |
@@ -163,37 +161,20 @@ See [Configuration](https://pvliesdonk.github.io/scholar-mcp/unstable/configurat
 | `SCHOLAR_MCP_DEBUG_PORT`           | n/a                   | Remote-debugger TCP port (see [Remote debugging](#remote-debugging); requires `--build-arg DEBUG=true` image) |
 | `SCHOLAR_MCP_DEBUG_WAIT`           | `false`               | Block startup until IDE attaches (see [Remote debugging](#remote-debugging))                                  |
 
-For OIDC authentication, see [OIDC deployment](https://pvliesdonk.github.io/scholar-mcp/unstable/deployment/oidc/index.md).
+For OIDC auth variables, see [Authentication](https://pvliesdonk.github.io/scholar-mcp/unstable/guides/authentication/index.md).
 
 Running behind a reverse proxy on a path prefix (`https://mcp.example.com/myservice/mcp`) rather than its own hostname needs two routing rules, one of which sits outside the prefix: see [Subpath Deployments](https://pvliesdonk.github.io/scholar-mcp/unstable/deployment/oidc/#subpath-deployments).
 
 ## Volumes
 
-| Container path      | Purpose                                                    |
-| ------------------- | ---------------------------------------------------------- |
-| `/data/scholar-mcp` | SQLite cache database, downloaded PDFs, converted Markdown |
-| `/data/state`       | FastMCP OIDC state (only needed with OIDC auth)            |
-
-Use named volumes (shown above) for persistence. Bind mounts also work:
-
-```
-volumes:
-  - ./data/scholar-mcp:/data/scholar-mcp
-```
+| Path            | Purpose                                        |
+| --------------- | ---------------------------------------------- |
+| `/data/service` | Your service data (bind-mount or named volume) |
+| `/data/state`   | State files (FastMCP OIDC state, etc.)         |
 
 ## UID/GID
 
-The image runs as a non-root user with UID/GID 1000 by default. To match your host user for bind mounts, set build args:
-
-```
-services:
-  scholar-mcp:
-    build:
-      context: .
-      args:
-        APP_UID: 1000
-        APP_GID: 1000
-```
+Set `PUID` and `PGID` in your `.env` file to match the owner of bind-mounted directories (default 1000/1000).
 
 ## Remote debugging
 

@@ -27,7 +27,7 @@
     
     
       
-        <title>Tools - Scholar MCP Server</title>
+        <title>Tools - scholar-mcp</title>
       
     
     
@@ -100,7 +100,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href=".." title="Scholar MCP Server" class="md-header__button md-logo" aria-label="Scholar MCP Server" data-md-component="logo">
+    <a href=".." title="scholar-mcp" class="md-header__button md-logo" aria-label="scholar-mcp" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -114,7 +114,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            Scholar MCP Server
+            scholar-mcp
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -369,13 +369,13 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href=".." title="Scholar MCP Server" class="md-nav__button md-logo" aria-label="Scholar MCP Server" data-md-component="logo">
+    <a href=".." title="scholar-mcp" class="md-nav__button md-logo" aria-label="scholar-mcp" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
 
     </a>
-    Scholar MCP Server
+    scholar-mcp
   </label>
   
     <div class="md-nav__source">
@@ -2325,9 +2325,10 @@
 
 
 <h1 id="tools">Tools<a class="headerlink" href="#tools" title="Permanent link">&para;</a></h1>
-<p>Scholar MCP provides 29 tools organised by scholarly source type: <strong>Papers</strong>, <strong>Patents</strong>, <strong>Books</strong>, and <strong>Standards</strong> are peer source domains; the remaining sections (Cross-source Utility, PDF Conversion, Job Polling) are cross-cutting. All tools return JSON.</p>
+<p>The tools registered in this server are listed below.</p>
 <!-- DOMAIN-TOOLS-LIST-START -->
 
+<p>Scholar MCP provides 29 tools organised by scholarly source type: <strong>Papers</strong>, <strong>Patents</strong>, <strong>Books</strong>, and <strong>Standards</strong> are peer source domains; the remaining sections (Cross-source Utility, PDF Conversion, Job Polling) are cross-cutting. All tools return JSON.</p>
 <div class="admonition info">
 <p class="admonition-title">Coverage by domain</p>
 <p>Per-domain depth is uneven, papers currently have the richest tool surface (citation graph, recommendations, cross-referencing to all three other domains); standards are the leanest. That reflects public data availability, not a value hierarchy. Parity work is tracked in <a href="https://github.com/pvliesdonk/scholar-mcp/issues">GitHub issues</a> and <a href="https://github.com/pvliesdonk/scholar-mcp/milestones">milestones</a>.</p>
@@ -2341,8 +2342,8 @@
 <h2 id="background-jobs">Background Jobs<a class="headerlink" href="#background-jobs" title="Permanent link">&para;</a></h2>
 <p>Long-running operations return a job handle instead of blocking. A cached result is returned directly instead, which includes an already-converted Markdown file.</p>
 <p>A tool that exceeds <code>SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S</code> (25 seconds by default) returns:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="p">{</span><span class="nt">&quot;status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;working&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;job_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;hwex4wg6taLmasPZWPM7gQ&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;poll_with&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;get_job_result&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w"> </span><span class="nt">&quot;retry_after_s&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">5.0</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;message&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">}</span>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">&quot;status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;working&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;job_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;hwex4wg6taLmasPZWPM7gQ&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;poll_with&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;get_job_result&quot;</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">&quot;retry_after_s&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">5.0</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;message&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">}</span>
 </code></pre></div>
 <p>Poll with <code>get_job_result</code>. Job records expire after <code>SCHOLAR_MCP_JOBS_RESULT_TTL_S</code> (1 hour by default), measured from when the record was created. Settling a job does not extend it.</p>
 <p>The patent tools are worth calling out. When EPO reports its traffic light amber or red they wait for it to clear, which is what makes them long-running, so they return a <code>job_id</code>. If it has not cleared by the time the retries are spent they answer with <code>{"error": "rate_limited", "retryable": true}</code> and a hint, rather than failing opaquely.</p>
@@ -2658,18 +2659,18 @@
 </tbody>
 </table>
 <p><strong>Returns:</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="p">{</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">&quot;nodes&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;year&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2024</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;citationCount&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">42</span><span class="p">},</span><span class="w"> </span><span class="err">...</span><span class="p">],</span>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nt">&quot;edges&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="nt">&quot;source&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;id1&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;target&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;id2&quot;</span><span class="p">},</span><span class="w"> </span><span class="err">...</span><span class="p">],</span>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nt">&quot;stats&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">    </span><span class="nt">&quot;total_nodes&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">42</span><span class="p">,</span>
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">    </span><span class="nt">&quot;total_edges&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">67</span><span class="p">,</span>
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">    </span><span class="nt">&quot;depth_reached&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span>
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">    </span><span class="nt">&quot;truncated&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">    </span><span class="nt">&quot;partial&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
-<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">    </span><span class="nt">&quot;failed_requests&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span>
-<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">  </span><span class="p">}</span>
-<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="p">}</span>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;nodes&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;year&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2024</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;citationCount&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">42</span><span class="p">},</span><span class="w"> </span><span class="err">...</span><span class="p">],</span>
+<span class="w">  </span><span class="nt">&quot;edges&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="nt">&quot;source&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;id1&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;target&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;id2&quot;</span><span class="p">},</span><span class="w"> </span><span class="err">...</span><span class="p">],</span>
+<span class="w">  </span><span class="nt">&quot;stats&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;total_nodes&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">42</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;total_edges&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">67</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;depth_reached&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;truncated&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;partial&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;failed_requests&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
 </code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">Partial graphs</p>
@@ -2721,14 +2722,14 @@
 </tbody>
 </table>
 <p><strong>Returns:</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="p">{</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">&quot;found&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="nt">&quot;path&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span><span class="p">{</span><span class="nt">&quot;paperId&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;source&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">},</span>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">    </span><span class="p">{</span><span class="nt">&quot;paperId&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;bridge&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">},</span>
-<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">    </span><span class="p">{</span><span class="nt">&quot;paperId&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;target&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">}</span>
-<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">  </span><span class="p">]</span>
-<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="p">}</span>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;found&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;path&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="p">{</span><span class="nt">&quot;paperId&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;source&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">},</span>
+<span class="w">    </span><span class="p">{</span><span class="nt">&quot;paperId&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;bridge&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">},</span>
+<span class="w">    </span><span class="p">{</span><span class="nt">&quot;paperId&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;target&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">}</span>
+<span class="w">  </span><span class="p">]</span>
+<span class="p">}</span>
 </code></pre></div>
 <p>If no path exists within <code>max_depth</code>, <code>found</code> is <code>false</code> and <code>path</code> is absent. Every response also carries <code>"partial"</code> and <code>"failed_requests"</code>.</p>
 <div class="admonition warning">
@@ -2924,36 +2925,36 @@
 <p>At least one of <code>query</code>, <code>title</code>, or <code>author</code> must be provided.</p>
 <p>When only <code>query</code> is given, it is first tried as a title search (better relevance) and falls back to free-text if no results are found. When <code>author</code> is given with multiple tokens (such as "Frank Duffy") and initial results are thin, a broadened search is automatically attempted to catch name variants (such as Frank → Francis).</p>
 <p><strong>Returns:</strong> <code>{"books": [...]}</code>. Each record contains:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="p">{</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="nt">&quot;books&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="p">{</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">      </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Deep Learning&quot;</span><span class="p">,</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">      </span><span class="nt">&quot;authors&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">        </span><span class="s2">&quot;Ian Goodfellow&quot;</span><span class="p">,</span>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">        </span><span class="s2">&quot;Yoshua Bengio&quot;</span><span class="p">,</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">        </span><span class="s2">&quot;Aaron Courville&quot;</span>
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">      </span><span class="p">],</span>
-<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">      </span><span class="nt">&quot;publisher&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;MIT Press&quot;</span><span class="p">,</span>
-<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">      </span><span class="nt">&quot;year&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2016</span><span class="p">,</span>
-<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">      </span><span class="nt">&quot;edition&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
-<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="w">      </span><span class="nt">&quot;isbn_10&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;0262035618&quot;</span><span class="p">,</span>
-<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="w">      </span><span class="nt">&quot;isbn_13&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;9780262035613&quot;</span><span class="p">,</span>
-<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="w">      </span><span class="nt">&quot;openlibrary_work_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;OL17953442W&quot;</span><span class="p">,</span>
-<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="w">      </span><span class="nt">&quot;openlibrary_edition_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;OL26423929M&quot;</span><span class="p">,</span>
-<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="w">      </span><span class="nt">&quot;cover_url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://covers.openlibrary.org/b/isbn/9780262035613-M.jpg&quot;</span><span class="p">,</span>
-<a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="w">      </span><span class="nt">&quot;google_books_url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://books.google.com/books?id=Np9SDQAAQBAJ&quot;</span><span class="p">,</span>
-<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="w">      </span><span class="nt">&quot;worldcat_url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://www.worldcat.org/isbn/9780262035613&quot;</span><span class="p">,</span>
-<a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a><span class="w">      </span><span class="nt">&quot;snippet&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;An introduction to a broad range of topics in deep learning...&quot;</span><span class="p">,</span>
-<a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a><span class="w">      </span><span class="nt">&quot;cover_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
-<a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a><span class="w">      </span><span class="nt">&quot;subjects&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
-<a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a><span class="w">        </span><span class="s2">&quot;Machine learning&quot;</span><span class="p">,</span>
-<a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a><span class="w">        </span><span class="s2">&quot;Artificial intelligence&quot;</span>
-<a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a><span class="w">      </span><span class="p">],</span>
-<a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a><span class="w">      </span><span class="nt">&quot;page_count&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">800</span><span class="p">,</span>
-<a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a><span class="w">      </span><span class="nt">&quot;description&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span>
-<a id="__codelineno-3-28" name="__codelineno-3-28" href="#__codelineno-3-28"></a><span class="w">    </span><span class="p">}</span>
-<a id="__codelineno-3-29" name="__codelineno-3-29" href="#__codelineno-3-29"></a><span class="w">  </span><span class="p">]</span>
-<a id="__codelineno-3-30" name="__codelineno-3-30" href="#__codelineno-3-30"></a><span class="p">}</span>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;books&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Deep Learning&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;authors&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">        </span><span class="s2">&quot;Ian Goodfellow&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="s2">&quot;Yoshua Bengio&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="s2">&quot;Aaron Courville&quot;</span>
+<span class="w">      </span><span class="p">],</span>
+<span class="w">      </span><span class="nt">&quot;publisher&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;MIT Press&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;year&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2016</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;edition&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;isbn_10&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;0262035618&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;isbn_13&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;9780262035613&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;openlibrary_work_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;OL17953442W&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;openlibrary_edition_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;OL26423929M&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;cover_url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://covers.openlibrary.org/b/isbn/9780262035613-M.jpg&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;google_books_url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://books.google.com/books?id=Np9SDQAAQBAJ&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;worldcat_url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://www.worldcat.org/isbn/9780262035613&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;snippet&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;An introduction to a broad range of topics in deep learning...&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;cover_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;subjects&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">        </span><span class="s2">&quot;Machine learning&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="s2">&quot;Artificial intelligence&quot;</span>
+<span class="w">      </span><span class="p">],</span>
+<span class="w">      </span><span class="nt">&quot;page_count&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">800</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;description&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">]</span>
+<span class="p">}</span>
 </code></pre></div>
 <hr />
 <h3 id="get_book"><code>get_book</code><a class="headerlink" href="#get_book" title="Permanent link">&para;</a></h3>
@@ -3043,14 +3044,14 @@
 </tbody>
 </table>
 <p><strong>Returns:</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="p">{</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Deep Learning&quot;</span><span class="p">,</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="nt">&quot;authors&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;Ian Goodfellow&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;Yoshua Bengio&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;Aaron Courville&quot;</span><span class="p">],</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span><span class="nt">&quot;description&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;An introduction to a broad range of topics in deep learning...&quot;</span><span class="p">,</span>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span><span class="nt">&quot;snippet&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Deep learning is a form of machine learning that enables...&quot;</span><span class="p">,</span>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">  </span><span class="nt">&quot;preview_link&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://books.google.com/books?id=Np9SDQAAQBAJ&amp;printsec=frontcover&quot;</span><span class="p">,</span>
-<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">  </span><span class="nt">&quot;preview_available&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
-<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="p">}</span>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Deep Learning&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;authors&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;Ian Goodfellow&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;Yoshua Bengio&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;Aaron Courville&quot;</span><span class="p">],</span>
+<span class="w">  </span><span class="nt">&quot;description&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;An introduction to a broad range of topics in deep learning...&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;snippet&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Deep learning is a form of machine learning that enables...&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;preview_link&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://books.google.com/books?id=Np9SDQAAQBAJ&amp;printsec=frontcover&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;preview_available&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
+<span class="p">}</span>
 </code></pre></div>
 <p>Or <code>{"error": "not_found", "isbn": "..."}</code> if Google Books answered and has no matching volume.</p>
 <div class="admonition warning">
@@ -3341,38 +3342,38 @@
 </table>
 <p>Sections are fetched concurrently where possible (cache lookups run in parallel; EPO API calls are serialised by the client). Each section is cached independently with appropriate TTLs.</p>
 <p><strong>Returns:</strong> A JSON object with keys matching the requested sections:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="p">{</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">&quot;patent_number&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;EP.1234567.A1&quot;</span><span class="p">,</span>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span><span class="nt">&quot;biblio&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">    </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span>
-<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">    </span><span class="nt">&quot;abstract&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span>
-<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">    </span><span class="nt">&quot;applicants&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;...&quot;</span><span class="p">],</span>
-<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">    </span><span class="nt">&quot;inventors&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;...&quot;</span><span class="p">],</span>
-<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">    </span><span class="nt">&quot;publication_number&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;EP.1234567.A1&quot;</span><span class="p">,</span>
-<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">    </span><span class="nt">&quot;publication_date&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2020-01-15&quot;</span><span class="p">,</span>
-<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">    </span><span class="nt">&quot;filing_date&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2019-06-01&quot;</span><span class="p">,</span>
-<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">    </span><span class="nt">&quot;priority_date&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2019-01-15&quot;</span><span class="p">,</span>
-<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">    </span><span class="nt">&quot;family_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;12345678&quot;</span><span class="p">,</span>
-<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="w">    </span><span class="nt">&quot;classifications&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;H04L29/06&quot;</span><span class="p">],</span>
-<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="w">    </span><span class="nt">&quot;url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://worldwide.espacenet.com/...&quot;</span>
-<a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="w">  </span><span class="p">},</span>
-<a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="w">  </span><span class="nt">&quot;claims&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;1. A method for...\n\n2. The method of claim 1...&quot;</span><span class="p">,</span>
-<a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="w">  </span><span class="nt">&quot;family&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
-<a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="w">    </span><span class="p">{</span><span class="nt">&quot;country&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;US&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;number&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;11234567&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;kind&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;B2&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;date&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2021-03-01&quot;</span><span class="p">}</span>
-<a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="w">  </span><span class="p">],</span>
-<a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="w">  </span><span class="nt">&quot;legal&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
-<a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="w">    </span><span class="p">{</span><span class="nt">&quot;date&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2019-05-01&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;code&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;APPLICATION&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;description&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Application filed&quot;</span><span class="p">}</span>
-<a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a><span class="w">  </span><span class="p">],</span>
-<a id="__codelineno-5-23" name="__codelineno-5-23" href="#__codelineno-5-23"></a><span class="w">  </span><span class="nt">&quot;citations&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-5-24" name="__codelineno-5-24" href="#__codelineno-5-24"></a><span class="w">    </span><span class="nt">&quot;patent_refs&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
-<a id="__codelineno-5-25" name="__codelineno-5-25" href="#__codelineno-5-25"></a><span class="w">      </span><span class="p">{</span><span class="nt">&quot;country&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;US&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;number&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;9876543&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;kind&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;B2&quot;</span><span class="p">}</span>
-<a id="__codelineno-5-26" name="__codelineno-5-26" href="#__codelineno-5-26"></a><span class="w">    </span><span class="p">],</span>
-<a id="__codelineno-5-27" name="__codelineno-5-27" href="#__codelineno-5-27"></a><span class="w">    </span><span class="nt">&quot;npl_refs&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
-<a id="__codelineno-5-28" name="__codelineno-5-28" href="#__codelineno-5-28"></a><span class="w">      </span><span class="p">{</span><span class="nt">&quot;raw&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Smith et al., \&quot;Widget Processing\&quot;, 2018, doi:10.1234/test&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;paper&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;paperId&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;abc123&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Widget Processing&quot;</span><span class="p">},</span><span class="w"> </span><span class="nt">&quot;confidence&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;high&quot;</span><span class="p">},</span>
-<a id="__codelineno-5-29" name="__codelineno-5-29" href="#__codelineno-5-29"></a><span class="w">      </span><span class="p">{</span><span class="nt">&quot;raw&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Doe, \&quot;Advanced Widgets\&quot;, Ch. 5, pp. 112-130, 2019&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;confidence&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;chapter_info&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;citation_source&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;parsed&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;chapter_number&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">5</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;page_start&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">112</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;page_end&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">130</span><span class="p">}}</span>
-<a id="__codelineno-5-30" name="__codelineno-5-30" href="#__codelineno-5-30"></a><span class="w">    </span><span class="p">]</span>
-<a id="__codelineno-5-31" name="__codelineno-5-31" href="#__codelineno-5-31"></a><span class="w">  </span><span class="p">}</span>
-<a id="__codelineno-5-32" name="__codelineno-5-32" href="#__codelineno-5-32"></a><span class="p">}</span>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;patent_number&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;EP.1234567.A1&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;biblio&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;abstract&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;applicants&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;...&quot;</span><span class="p">],</span>
+<span class="w">    </span><span class="nt">&quot;inventors&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;...&quot;</span><span class="p">],</span>
+<span class="w">    </span><span class="nt">&quot;publication_number&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;EP.1234567.A1&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;publication_date&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2020-01-15&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;filing_date&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2019-06-01&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;priority_date&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2019-01-15&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;family_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;12345678&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;classifications&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;H04L29/06&quot;</span><span class="p">],</span>
+<span class="w">    </span><span class="nt">&quot;url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://worldwide.espacenet.com/...&quot;</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;claims&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;1. A method for...\n\n2. The method of claim 1...&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;family&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="p">{</span><span class="nt">&quot;country&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;US&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;number&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;11234567&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;kind&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;B2&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;date&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2021-03-01&quot;</span><span class="p">}</span>
+<span class="w">  </span><span class="p">],</span>
+<span class="w">  </span><span class="nt">&quot;legal&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="p">{</span><span class="nt">&quot;date&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2019-05-01&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;code&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;APPLICATION&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;description&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Application filed&quot;</span><span class="p">}</span>
+<span class="w">  </span><span class="p">],</span>
+<span class="w">  </span><span class="nt">&quot;citations&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;patent_refs&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">      </span><span class="p">{</span><span class="nt">&quot;country&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;US&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;number&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;9876543&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;kind&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;B2&quot;</span><span class="p">}</span>
+<span class="w">    </span><span class="p">],</span>
+<span class="w">    </span><span class="nt">&quot;npl_refs&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">      </span><span class="p">{</span><span class="nt">&quot;raw&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Smith et al., \&quot;Widget Processing\&quot;, 2018, doi:10.1234/test&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;paper&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;paperId&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;abc123&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Widget Processing&quot;</span><span class="p">},</span><span class="w"> </span><span class="nt">&quot;confidence&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;high&quot;</span><span class="p">},</span>
+<span class="w">      </span><span class="p">{</span><span class="nt">&quot;raw&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Doe, \&quot;Advanced Widgets\&quot;, Ch. 5, pp. 112-130, 2019&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;confidence&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;chapter_info&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;citation_source&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;parsed&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;chapter_number&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">5</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;page_start&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">112</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;page_end&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">130</span><span class="p">}}</span>
+<span class="w">    </span><span class="p">]</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
 </code></pre></div>
 <p>When <code>citations</code> is requested, non-patent literature (NPL) references are resolved against Semantic Scholar on a best-effort basis. References with a DOI are resolved with <code>"confidence": "high"</code>. References without a DOI or that fail to resolve have <code>"confidence": null</code>. When citation strings contain chapter patterns (such as "Ch. 5" or "pp. 112-130"), a <code>chapter_info</code> dict is included with parsed chapter and page information.</p>
 <hr />
@@ -3403,14 +3404,14 @@
 </tbody>
 </table>
 <p><strong>Returns:</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="p">{</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">&quot;paper_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;10.1234/test&quot;</span><span class="p">,</span>
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span><span class="nt">&quot;patents&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
-<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">    </span><span class="p">{</span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;publication_number&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;EP.9999999.A1&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;match_source&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;epo_search&quot;</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">}</span>
-<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">  </span><span class="p">],</span>
-<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">  </span><span class="nt">&quot;total_count&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
-<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">  </span><span class="nt">&quot;note&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Coverage is incomplete. Results come from EPO OPS citation search...&quot;</span>
-<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="p">}</span>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;paper_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;10.1234/test&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;patents&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="p">{</span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;publication_number&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;EP.9999999.A1&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;match_source&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;epo_search&quot;</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">}</span>
+<span class="w">  </span><span class="p">],</span>
+<span class="w">  </span><span class="nt">&quot;total_count&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;note&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Coverage is incomplete. Results come from EPO OPS citation search...&quot;</span>
+<span class="p">}</span>
 </code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">Incomplete coverage</p>
@@ -3641,14 +3642,14 @@ An empty <code>runs</code> list means no sync has been run yet.</p>
 </tbody>
 </table>
 <p><strong>Returns:</strong> On full success:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="p">{</span>
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">&quot;metadata&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;paperId&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">},</span>
-<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span><span class="nt">&quot;markdown&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;# Paper Title\n...&quot;</span><span class="p">,</span>
-<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">  </span><span class="nt">&quot;pdf_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/data/scholar-mcp/pdfs/&lt;id&gt;.pdf&quot;</span><span class="p">,</span>
-<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">  </span><span class="nt">&quot;md_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/data/scholar-mcp/md/&lt;id&gt;.md&quot;</span><span class="p">,</span>
-<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">  </span><span class="nt">&quot;pdf_source&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;s2_oa&quot;</span><span class="p">,</span>
-<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">  </span><span class="nt">&quot;vlm_used&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span>
-<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="p">}</span>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;metadata&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;paperId&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;markdown&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;# Paper Title\n...&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;pdf_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/data/scholar-mcp/pdfs/&lt;id&gt;.pdf&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;md_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/data/scholar-mcp/md/&lt;id&gt;.md&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;pdf_source&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;s2_oa&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;vlm_used&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span>
+<span class="p">}</span>
 </code></pre></div>
 <p>Partial results are returned if a later stage fails (such as metadata + error if no OA PDF is available). The <code>pdf_source</code> field indicates the download source. When VLM is requested but not configured, the response includes <code>vlm_skip_reason</code>.</p>
 <div class="admonition tip">
@@ -3690,12 +3691,12 @@ An empty <code>runs</code> list means no sync has been run yet.</p>
 </tbody>
 </table>
 <p><strong>Returns:</strong> On success (with docling configured):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="p">{</span>
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="nt">&quot;pdf_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/data/scholar-mcp/pdfs/&lt;filename&gt;.pdf&quot;</span><span class="p">,</span>
-<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span><span class="nt">&quot;markdown&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;# Paper Title\n...&quot;</span><span class="p">,</span>
-<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">  </span><span class="nt">&quot;md_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/data/scholar-mcp/md/&lt;filename&gt;.md&quot;</span><span class="p">,</span>
-<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">  </span><span class="nt">&quot;vlm_used&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span>
-<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="p">}</span>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;pdf_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/data/scholar-mcp/pdfs/&lt;filename&gt;.pdf&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;markdown&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;# Paper Title\n...&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;md_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/data/scholar-mcp/md/&lt;filename&gt;.md&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;vlm_used&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span>
+<span class="p">}</span>
 </code></pre></div>
 <p>Without docling, only <code>pdf_path</code> is returned. The PDF is cached by filename, so subsequent calls with the same filename return immediately.</p>
 <hr />
@@ -3722,18 +3723,18 @@ An empty <code>runs</code> list means no sync has been run yet.</p>
 </tbody>
 </table>
 <p><strong>Returns:</strong> while the work is still running,</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="p">{</span>
-<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span><span class="nt">&quot;job_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;hwex4wg6taLmasPZWPM7gQ&quot;</span><span class="p">,</span>
-<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span><span class="nt">&quot;status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;working&quot;</span><span class="p">,</span>
-<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">  </span><span class="nt">&quot;result&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
-<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">  </span><span class="nt">&quot;error&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
-<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">  </span><span class="nt">&quot;running_for_s&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">41.3</span><span class="p">,</span>
-<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">  </span><span class="nt">&quot;retry_after_s&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">5.0</span><span class="p">,</span>
-<a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="w">  </span><span class="nt">&quot;message&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Still running. Poll again with the same job_id in a few seconds.&quot;</span>
-<a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="p">}</span>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;job_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;hwex4wg6taLmasPZWPM7gQ&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;working&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;result&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;error&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;running_for_s&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">41.3</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;retry_after_s&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">5.0</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;message&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Still running. Poll again with the same job_id in a few seconds.&quot;</span>
+<span class="p">}</span>
 </code></pre></div>
 <p>and once it settles,</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="p">{</span><span class="nt">&quot;job_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;hwex4wg6taLmasPZWPM7gQ&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;completed&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;result&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;markdown&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">},</span><span class="w"> </span><span class="nt">&quot;error&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">}</span>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">&quot;job_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;hwex4wg6taLmasPZWPM7gQ&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;completed&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;result&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;markdown&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">},</span><span class="w"> </span><span class="nt">&quot;error&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">}</span>
 </code></pre></div>
 <p>Status values: <code>working</code>, <code>completed</code>, <code>failed</code>, <code>cancelled</code>. <code>result</code> is a
 JSON object, so no second decode is needed.</p>

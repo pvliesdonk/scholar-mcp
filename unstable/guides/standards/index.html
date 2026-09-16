@@ -23,7 +23,7 @@
     
     
       
-        <title>Tier 2 standards sync: ISO, IEC & IEEE - Scholar MCP Server</title>
+        <title>Tier 2 standards sync: ISO, IEC & IEEE - scholar-mcp</title>
       
     
     
@@ -96,7 +96,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="Scholar MCP Server" class="md-header__button md-logo" aria-label="Scholar MCP Server" data-md-component="logo">
+    <a href="../.." title="scholar-mcp" class="md-header__button md-logo" aria-label="scholar-mcp" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -110,7 +110,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            Scholar MCP Server
+            scholar-mcp
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -363,13 +363,13 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="Scholar MCP Server" class="md-nav__button md-logo" aria-label="Scholar MCP Server" data-md-component="logo">
+    <a href="../.." title="scholar-mcp" class="md-nav__button md-logo" aria-label="scholar-mcp" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
 
     </a>
-    Scholar MCP Server
+    scholar-mcp
   </label>
   
     <div class="md-nav__source">
@@ -1568,10 +1568,10 @@ is the community-maintained Relaton YAML dumps at
 <a href="https://github.com/relaton/relaton-data-iec"><code>relaton/relaton-data-iec</code></a>, and
 <a href="https://github.com/relaton/relaton-data-ieee"><code>relaton/relaton-data-ieee</code></a>.</p>
 <h2 id="running-a-sync">Running a sync<a class="headerlink" href="#running-a-sync" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>scholar-mcp sync-standards            # all registered bodies
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>scholar-mcp sync-standards --body ISO # only ISO
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>scholar-mcp sync-standards --body IEEE # only IEEE
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>scholar-mcp sync-standards --force    # re-sync even if upstream SHA is unchanged
+<div class="highlight"><pre><span></span><code>scholar-mcp sync-standards            # all registered bodies
+scholar-mcp sync-standards --body ISO # only ISO
+scholar-mcp sync-standards --body IEEE # only IEEE
+scholar-mcp sync-standards --force    # re-sync even if upstream SHA is unchanged
 </code></pre></div>
 <p>Exit codes: <code>0</code> on success (or no-op), <code>1</code> on hard failure, <code>3</code> on partial failure
 (some bodies succeeded, some did not).</p>
@@ -1579,48 +1579,48 @@ is the community-maintained Relaton YAML dumps at
 <p>The <code>scholar-mcp</code> binary is on <code>PATH</code> inside the container, so no <code>bash -c</code> or
 <code>uv run</code> wrapper is needed.</p>
 <p><strong>Exec into a running container</strong> (uses the existing container's open DB and env):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>docker<span class="w"> </span>compose<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-u<span class="w"> </span>appuser<span class="w"> </span>scholar-mcp<span class="w"> </span>scholar-mcp<span class="w"> </span>sync-standards
+<div class="highlight"><pre><span></span><code>docker<span class="w"> </span>compose<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-u<span class="w"> </span>appuser<span class="w"> </span>scholar-mcp<span class="w"> </span>scholar-mcp<span class="w"> </span>sync-standards
 </code></pre></div>
 <p>The <code>-u appuser</code> flag is required because the container's default user is <code>root</code>
 (the entrypoint uses <code>gosu</code> to drop privileges for the main process, but <code>exec</code>
 bypasses the entrypoint). Running without it would create root-owned files in the
 shared volume.</p>
 <p><strong>One-off via Docker Compose</strong> (goes through the entrypoint → drops to <code>appuser</code>):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>docker<span class="w"> </span>compose<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>scholar-mcp<span class="w"> </span>scholar-mcp<span class="w"> </span>sync-standards
+<div class="highlight"><pre><span></span><code>docker<span class="w"> </span>compose<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>scholar-mcp<span class="w"> </span>scholar-mcp<span class="w"> </span>sync-standards
 </code></pre></div>
 <p>The <code>docker compose run</code> form is preferred when running outside of an already-running
 stack, it picks up the correct UID/GID from the entrypoint and inherits all env vars
 from the <code>environment:</code> / <code>env_file:</code> declarations in <code>compose.yml</code>.</p>
 <p>To sync only a specific body:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>docker<span class="w"> </span>compose<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-u<span class="w"> </span>appuser<span class="w"> </span>scholar-mcp<span class="w"> </span>scholar-mcp<span class="w"> </span>sync-standards<span class="w"> </span>--body<span class="w"> </span>ISO
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>docker<span class="w"> </span>compose<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>scholar-mcp<span class="w"> </span>scholar-mcp<span class="w"> </span>sync-standards<span class="w"> </span>--body<span class="w"> </span>ISO
+<div class="highlight"><pre><span></span><code>docker<span class="w"> </span>compose<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-u<span class="w"> </span>appuser<span class="w"> </span>scholar-mcp<span class="w"> </span>scholar-mcp<span class="w"> </span>sync-standards<span class="w"> </span>--body<span class="w"> </span>ISO
+docker<span class="w"> </span>compose<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>scholar-mcp<span class="w"> </span>scholar-mcp<span class="w"> </span>sync-standards<span class="w"> </span>--body<span class="w"> </span>ISO
 </code></pre></div>
 <h2 id="cron-systemd-scheduling">Cron / systemd scheduling<a class="headerlink" href="#cron-systemd-scheduling" title="Permanent link">&para;</a></h2>
 <p>Daily resync is plenty; Relaton dumps move slowly and the SHA check skips the
 tarball fetch when nothing has changed.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>0 3 * * *  /usr/local/bin/scholar-mcp sync-standards &gt;&gt; /var/log/scholar-mcp-sync.log 2&gt;&amp;1
+<div class="highlight"><pre><span></span><code>0 3 * * *  /usr/local/bin/scholar-mcp sync-standards &gt;&gt; /var/log/scholar-mcp-sync.log 2&gt;&amp;1
 </code></pre></div>
 <p>Or with systemd:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a># /etc/systemd/system/scholar-mcp-sync.service
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>[Unit]
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>Description=Sync scholar-mcp Tier 2 standards
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>[Service]
-<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>Type=oneshot
-<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>ExecStart=/usr/local/bin/scholar-mcp sync-standards
+<div class="highlight"><pre><span></span><code># /etc/systemd/system/scholar-mcp-sync.service
+[Unit]
+Description=Sync scholar-mcp Tier 2 standards
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/scholar-mcp sync-standards
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a># /etc/systemd/system/scholar-mcp-sync.timer
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>[Timer]
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>OnCalendar=daily
-<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>Persistent=true
-<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>[Install]
-<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>WantedBy=timers.target
+<div class="highlight"><pre><span></span><code># /etc/systemd/system/scholar-mcp-sync.timer
+[Timer]
+OnCalendar=daily
+Persistent=true
+[Install]
+WantedBy=timers.target
 </code></pre></div>
 <h2 id="github-rate-limiting">GitHub rate limiting<a class="headerlink" href="#github-rate-limiting" title="Permanent link">&para;</a></h2>
 <p>The sync makes 2 GitHub API calls per body (<code>/commits/{branch}</code> and <code>/tarball/{sha}</code>).
 Unauthenticated clients get 60 requests per hour per IP, more than enough for daily
 cron. For repeated <code>--force</code> testing, set <code>SCHOLAR_GITHUB_TOKEN</code> to a personal access
 token (no scopes required for public-repo reads) to lift the limit to 5,000 req/hr:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>export SCHOLAR_GITHUB_TOKEN=ghp_...
+<div class="highlight"><pre><span></span><code>export SCHOLAR_GITHUB_TOKEN=ghp_...
 </code></pre></div>
 <h2 id="live-fetch-fallback">Live-fetch fallback<a class="headerlink" href="#live-fetch-fallback" title="Permanent link">&para;</a></h2>
 <p>A <code>get_standard("ISO 9001:2015")</code> call on an unsynced cache triggers a single-file
@@ -1643,16 +1643,16 @@ wait an hour.</p>
 <h3 id="inspecting-last-sync">Inspecting last sync<a class="headerlink" href="#inspecting-last-sync" title="Permanent link">&para;</a></h3>
 <p>Open the SQLite cache database (default <code>$SCHOLAR_MCP_CACHE_DIR/scholar.db</code>) and query
 the <code>standards_sync_runs</code> table:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">body</span><span class="p">,</span><span class="w"> </span><span class="n">upstream_ref</span><span class="p">,</span><span class="w"> </span><span class="n">added</span><span class="p">,</span><span class="w"> </span><span class="n">updated</span><span class="p">,</span><span class="w"> </span><span class="n">unchanged</span><span class="p">,</span><span class="w"> </span><span class="n">withdrawn</span><span class="p">,</span><span class="w"> </span><span class="n">errors</span><span class="p">,</span>
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">       </span><span class="n">datetime</span><span class="p">(</span><span class="n">started_at</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;unixepoch&#39;</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">started</span><span class="p">,</span>
-<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">       </span><span class="n">datetime</span><span class="p">(</span><span class="n">finished_at</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;unixepoch&#39;</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">finished</span>
-<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="k">FROM</span><span class="w"> </span><span class="n">standards_sync_runs</span><span class="p">;</span>
+<div class="highlight"><pre><span></span><code><span class="k">SELECT</span><span class="w"> </span><span class="n">body</span><span class="p">,</span><span class="w"> </span><span class="n">upstream_ref</span><span class="p">,</span><span class="w"> </span><span class="n">added</span><span class="p">,</span><span class="w"> </span><span class="n">updated</span><span class="p">,</span><span class="w"> </span><span class="n">unchanged</span><span class="p">,</span><span class="w"> </span><span class="n">withdrawn</span><span class="p">,</span><span class="w"> </span><span class="n">errors</span><span class="p">,</span>
+<span class="w">       </span><span class="n">datetime</span><span class="p">(</span><span class="n">started_at</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;unixepoch&#39;</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">started</span><span class="p">,</span>
+<span class="w">       </span><span class="n">datetime</span><span class="p">(</span><span class="n">finished_at</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;unixepoch&#39;</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">finished</span>
+<span class="k">FROM</span><span class="w"> </span><span class="n">standards_sync_runs</span><span class="p">;</span>
 </code></pre></div>
 <p>To see how many standards are cached per body:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="k">SELECT</span><span class="w"> </span><span class="k">source</span><span class="p">,</span><span class="w"> </span><span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="k">count</span><span class="p">,</span><span class="w"> </span><span class="n">datetime</span><span class="p">(</span><span class="k">MAX</span><span class="p">(</span><span class="n">synced_at</span><span class="p">),</span><span class="w"> </span><span class="s1">&#39;unixepoch&#39;</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">last_synced</span>
-<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="k">FROM</span><span class="w"> </span><span class="n">standards</span>
-<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="k">WHERE</span><span class="w"> </span><span class="k">source</span><span class="w"> </span><span class="k">IS</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span>
-<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="k">GROUP</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="k">source</span><span class="p">;</span>
+<div class="highlight"><pre><span></span><code><span class="k">SELECT</span><span class="w"> </span><span class="k">source</span><span class="p">,</span><span class="w"> </span><span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="k">count</span><span class="p">,</span><span class="w"> </span><span class="n">datetime</span><span class="p">(</span><span class="k">MAX</span><span class="p">(</span><span class="n">synced_at</span><span class="p">),</span><span class="w"> </span><span class="s1">&#39;unixepoch&#39;</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">last_synced</span>
+<span class="k">FROM</span><span class="w"> </span><span class="n">standards</span>
+<span class="k">WHERE</span><span class="w"> </span><span class="k">source</span><span class="w"> </span><span class="k">IS</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span>
+<span class="k">GROUP</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="k">source</span><span class="p">;</span>
 </code></pre></div>
 <h2 id="ieee">IEEE<a class="headerlink" href="#ieee" title="Permanent link">&para;</a></h2>
 <p>IEEE metadata comes from the <a href="https://github.com/relaton/relaton-data-ieee"><code>relaton/relaton-data-ieee</code></a> repository.</p>
@@ -1674,7 +1674,7 @@ the <code>standards_sync_runs</code> table:</p>
 </ul>
 <h2 id="common-criteria">Common Criteria<a class="headerlink" href="#common-criteria" title="Permanent link">&para;</a></h2>
 <p>Common Criteria metadata is sync-only, there's no live API for the CC portal. Run:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>scholar-mcp<span class="w"> </span>sync-standards<span class="w"> </span>--body<span class="w"> </span>CC
+<div class="highlight"><pre><span></span><code>scholar-mcp<span class="w"> </span>sync-standards<span class="w"> </span>--body<span class="w"> </span>CC
 </code></pre></div>
 <p>to populate the local cache. Two record categories load:</p>
 <h3 id="core-cc-documents-15-records">Core CC documents (~15 records)<a class="headerlink" href="#core-cc-documents-15-records" title="Permanent link">&para;</a></h3>
@@ -1742,7 +1742,7 @@ the <code>standards_sync_runs</code> table:</p>
 </ul>
 <h2 id="cencenelec-european-norms">CEN/CENELEC (European Norms)<a class="headerlink" href="#cencenelec-european-norms" title="Permanent link">&para;</a></h2>
 <p>CEN/CENELEC harmonised standards metadata is sync-only. Run:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>scholar-mcp<span class="w"> </span>sync-standards<span class="w"> </span>--body<span class="w"> </span>CEN
+<div class="highlight"><pre><span></span><code>scholar-mcp<span class="w"> </span>sync-standards<span class="w"> </span>--body<span class="w"> </span>CEN
 </code></pre></div>
 <p>to populate the local cache. Unlike ISO/IEC/IEEE (which sync from upstream Relaton repositories), CEN standards load from a curated hard-coded table covering the most-cited harmonised standards from the major EU directives.</p>
 <h3 id="covered-directives">Covered directives<a class="headerlink" href="#covered-directives" title="Permanent link">&para;</a></h3>

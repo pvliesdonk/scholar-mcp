@@ -27,7 +27,7 @@
     
     
       
-        <title>OIDC Authentication - Scholar MCP Server</title>
+        <title>OIDC Authentication - scholar-mcp</title>
       
     
     
@@ -100,7 +100,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="Scholar MCP Server" class="md-header__button md-logo" aria-label="Scholar MCP Server" data-md-component="logo">
+    <a href="../.." title="scholar-mcp" class="md-header__button md-logo" aria-label="scholar-mcp" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -114,7 +114,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            Scholar MCP Server
+            scholar-mcp
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -369,13 +369,13 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="Scholar MCP Server" class="md-nav__button md-logo" aria-label="Scholar MCP Server" data-md-component="logo">
+    <a href="../.." title="scholar-mcp" class="md-nav__button md-logo" aria-label="scholar-mcp" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
 
     </a>
-    Scholar MCP Server
+    scholar-mcp
   </label>
   
     <div class="md-nav__source">
@@ -1867,8 +1867,8 @@
 <h2 id="jwt-signing-key">JWT Signing Key<a class="headerlink" href="#jwt-signing-key" title="Permanent link">&para;</a></h2>
 <p>The signing key applies to oidc-proxy mode; remote mode does not use it. When <code>SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY</code> is unset, FastMCP derives the signing key from the OIDC client secret using deterministic key derivation, so the key stays the same across restarts and tokens keep validating.</p>
 <p>The real reason to set an explicit key is secret rotation: because the default key is derived from the client secret, rotating that secret changes the derived key and invalidates every token issued under the old one. Setting an explicit signing key decouples token validity from client-secret rotation:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Generate once, store in your .env file</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>openssl<span class="w"> </span>rand<span class="w"> </span>-hex<span class="w"> </span><span class="m">32</span>
+<div class="highlight"><pre><span></span><code><span class="c1"># Generate once, store in your .env file</span>
+openssl<span class="w"> </span>rand<span class="w"> </span>-hex<span class="w"> </span><span class="m">32</span>
 </code></pre></div>
 <h2 id="setup-with-authelia">Setup with Authelia<a class="headerlink" href="#setup-with-authelia" title="Permanent link">&para;</a></h2>
 <p>This section configures oidc-proxy mode. Remote mode needs no client registration, since the client authenticates with the provider itself.</p>
@@ -1881,33 +1881,33 @@
 <p>Authelia issues opaque (non-JWT) access tokens. This is handled automatically: the server verifies the <code>id_token</code> (always a standard JWT) instead. No extra configuration is needed.</p>
 </div>
 <h3 id="1-register-the-client-in-authelia">1. Register the client in Authelia<a class="headerlink" href="#1-register-the-client-in-authelia" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">identity_providers</span><span class="p">:</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">oidc</span><span class="p">:</span>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="nt">clients</span><span class="p">:</span>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">client_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-scholar-mcp</span>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">        </span><span class="nt">client_secret</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;$pbkdf2-sha512$...&#39;</span><span class="w">   </span><span class="c1"># authelia crypto hash generate</span>
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">        </span><span class="nt">redirect_uris</span><span class="p">:</span>
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://mcp.example.com/auth/callback</span>
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">        </span><span class="nt">grant_types</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">authorization_code</span><span class="p p-Indicator">]</span>
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">        </span><span class="nt">response_types</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">code</span><span class="p p-Indicator">]</span>
-<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">        </span><span class="nt">pkce_challenge_method</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">S256</span>
-<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">        </span><span class="nt">scopes</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">openid</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">profile</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">email</span><span class="p p-Indicator">]</span>
+<div class="highlight"><pre><span></span><code><span class="nt">identity_providers</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">oidc</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">clients</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">client_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-mcp-server</span>
+<span class="w">        </span><span class="nt">client_secret</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;$pbkdf2-sha512$...&#39;</span><span class="w">   </span><span class="c1"># authelia crypto hash generate</span>
+<span class="w">        </span><span class="nt">redirect_uris</span><span class="p">:</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://mcp.example.com/auth/callback</span>
+<span class="w">        </span><span class="nt">grant_types</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">authorization_code</span><span class="p p-Indicator">]</span>
+<span class="w">        </span><span class="nt">response_types</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">code</span><span class="p p-Indicator">]</span>
+<span class="w">        </span><span class="nt">pkce_challenge_method</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">S256</span>
+<span class="w">        </span><span class="nt">scopes</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">openid</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">profile</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">email</span><span class="p p-Indicator">]</span>
 </code></pre></div>
 <h3 id="2-set-environment-variables">2. Set environment variables<a class="headerlink" href="#2-set-environment-variables" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nv">SCHOLAR_MCP_BASE_URL</span><span class="o">=</span>https://mcp.example.com
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nv">SCHOLAR_MCP_OIDC_CONFIG_URL</span><span class="o">=</span>https://auth.example.com/.well-known/openid-configuration
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="nv">SCHOLAR_MCP_OIDC_CLIENT_ID</span><span class="o">=</span>my-scholar-mcp
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="nv">SCHOLAR_MCP_OIDC_CLIENT_SECRET</span><span class="o">=</span>your-client-secret
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="nv">SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY</span><span class="o">=</span><span class="k">$(</span>openssl<span class="w"> </span>rand<span class="w"> </span>-hex<span class="w"> </span><span class="m">32</span><span class="k">)</span>
+<div class="highlight"><pre><span></span><code><span class="nv">SCHOLAR_MCP_BASE_URL</span><span class="o">=</span>https://mcp.example.com
+<span class="nv">SCHOLAR_MCP_OIDC_CONFIG_URL</span><span class="o">=</span>https://auth.example.com/.well-known/openid-configuration
+<span class="nv">SCHOLAR_MCP_OIDC_CLIENT_ID</span><span class="o">=</span>my-mcp-server
+<span class="nv">SCHOLAR_MCP_OIDC_CLIENT_SECRET</span><span class="o">=</span>your-client-secret
+<span class="nv">SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY</span><span class="o">=</span><span class="k">$(</span>openssl<span class="w"> </span>rand<span class="w"> </span>-hex<span class="w"> </span><span class="m">32</span><span class="k">)</span>
 </code></pre></div>
 <h3 id="3-start-with-http-transport">3. Start with HTTP transport<a class="headerlink" href="#3-start-with-http-transport" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>scholar-mcp<span class="w"> </span>serve<span class="w"> </span>--transport<span class="w"> </span>http<span class="w"> </span>--port<span class="w"> </span><span class="m">8000</span>
+<div class="highlight"><pre><span></span><code>scholar-mcp<span class="w"> </span>serve<span class="w"> </span>--transport<span class="w"> </span>http<span class="w"> </span>--port<span class="w"> </span><span class="m">8000</span>
 </code></pre></div>
 <h2 id="architecture">Architecture<a class="headerlink" href="#architecture" title="Permanent link">&para;</a></h2>
 <h3 id="remote-mode">Remote mode<a class="headerlink" href="#remote-mode" title="Permanent link">&para;</a></h3>
 <p>The server validates tokens locally using JWKS, with no upstream token calls after startup:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>Client → IdP (authenticate + get JWT)
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>Client → scholar-mcp (present JWT → validate via JWKS)
+<div class="highlight"><pre><span></span><code>Client → IdP (authenticate + get JWT)
+Client → scholar-mcp (present JWT → validate via JWKS)
 </code></pre></div>
 <ol>
 <li>Client authenticates directly with the OIDC provider</li>
@@ -1917,7 +1917,7 @@
 </ol>
 <h3 id="oidcproxy-mode">OIDCProxy mode<a class="headerlink" href="#oidcproxy-mode" title="Permanent link">&para;</a></h3>
 <p>The server uses FastMCP's built-in <code>OIDCProxy</code> auth provider (not the external <code>mcp-auth-proxy</code> sidecar). The authentication flow:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>Client → scholar-mcp (with OIDCProxy) → OIDC Provider (Authelia/Keycloak)
+<div class="highlight"><pre><span></span><code>Client → scholar-mcp (with OIDCProxy) → OIDC Provider (Authelia/Keycloak)
 </code></pre></div>
 <ol>
 <li>Client connects to the MCP server</li>
@@ -1928,50 +1928,50 @@
 </ol>
 <h2 id="docker-compose-with-oidc">Docker Compose with OIDC<a class="headerlink" href="#docker-compose-with-oidc" title="Permanent link">&para;</a></h2>
 <p>This is the shipped <code>compose.yml</code> with a reverse proxy added. The service joins an external <code>traefik</code> network and carries router labels. It publishes no host port, because the proxy reaches it over that network instead. See <a href="../docker/">Docker</a> for the base file and the same overlay without OIDC.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">services</span><span class="p">:</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">scholar-mcp</span><span class="p">:</span>
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ghcr.io/pvliesdonk/scholar-mcp:latest</span>
-<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">    </span><span class="nt">restart</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">unless-stopped</span>
-<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">    </span><span class="nt">env_file</span><span class="p">:</span>
-<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">.env</span>
-<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">        </span><span class="nt">required</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
-<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">    </span><span class="nt">volumes</span><span class="p">:</span>
-<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">service-data:/data/service</span>
-<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">state-data:/data/state</span>
-<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
-<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="w">      </span><span class="nt">FASTMCP_HOME</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/data/state/fastmcp</span>
-<a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">    </span><span class="nt">healthcheck</span><span class="p">:</span>
-<a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="w">      </span><span class="nt">test</span><span class="p">:</span>
-<a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">CMD</span>
-<a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">python</span>
-<a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">-c</span>
-<a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;import</span><span class="nv"> </span><span class="s">urllib.request;</span><span class="nv"> </span><span class="s">urllib.request.urlopen(&#39;http://127.0.0.1:8000/health&#39;,</span><span class="nv"> </span><span class="s">timeout=2).close()&quot;</span>
-<a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="w">      </span><span class="nt">interval</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30s</span>
-<a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a><span class="w">      </span><span class="nt">timeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5s</span>
-<a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a><span class="w">      </span><span class="nt">retries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span>
-<a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a><span class="w">      </span><span class="nt">start_period</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10s</span>
-<a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a><span class="w">    </span><span class="nt">labels</span><span class="p">:</span>
-<a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;traefik.enable=true&quot;</span>
-<a id="__codelineno-6-25" name="__codelineno-6-25" href="#__codelineno-6-25"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;traefik.http.routers.scholar-mcp.rule=Host(`mcp.example.com`)&quot;</span>
-<a id="__codelineno-6-26" name="__codelineno-6-26" href="#__codelineno-6-26"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;traefik.http.routers.scholar-mcp.tls.certresolver=letsencrypt&quot;</span>
-<a id="__codelineno-6-27" name="__codelineno-6-27" href="#__codelineno-6-27"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;traefik.http.services.scholar-mcp.loadbalancer.server.port=8000&quot;</span>
-<a id="__codelineno-6-28" name="__codelineno-6-28" href="#__codelineno-6-28"></a><span class="w">    </span><span class="nt">networks</span><span class="p">:</span>
-<a id="__codelineno-6-29" name="__codelineno-6-29" href="#__codelineno-6-29"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">traefik</span>
-<a id="__codelineno-6-30" name="__codelineno-6-30" href="#__codelineno-6-30"></a>
-<a id="__codelineno-6-31" name="__codelineno-6-31" href="#__codelineno-6-31"></a><span class="nt">volumes</span><span class="p">:</span>
-<a id="__codelineno-6-32" name="__codelineno-6-32" href="#__codelineno-6-32"></a><span class="w">  </span><span class="nt">service-data</span><span class="p">:</span>
-<a id="__codelineno-6-33" name="__codelineno-6-33" href="#__codelineno-6-33"></a><span class="w">  </span><span class="nt">state-data</span><span class="p">:</span>
-<a id="__codelineno-6-34" name="__codelineno-6-34" href="#__codelineno-6-34"></a>
-<a id="__codelineno-6-35" name="__codelineno-6-35" href="#__codelineno-6-35"></a><span class="nt">networks</span><span class="p">:</span>
-<a id="__codelineno-6-36" name="__codelineno-6-36" href="#__codelineno-6-36"></a><span class="w">  </span><span class="nt">traefik</span><span class="p">:</span>
-<a id="__codelineno-6-37" name="__codelineno-6-37" href="#__codelineno-6-37"></a><span class="w">    </span><span class="nt">external</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<div class="highlight"><pre><span></span><code><span class="nt">services</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">scholar-mcp</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ghcr.io/pvliesdonk/scholar-mcp:latest</span>
+<span class="w">    </span><span class="nt">restart</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">unless-stopped</span>
+<span class="w">    </span><span class="nt">env_file</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">.env</span>
+<span class="w">        </span><span class="nt">required</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">    </span><span class="nt">volumes</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">service-data:/data/service</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">state-data:/data/state</span>
+<span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">FASTMCP_HOME</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/data/state/fastmcp</span>
+<span class="w">    </span><span class="nt">healthcheck</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">test</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">CMD</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">python</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">-c</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;import</span><span class="nv"> </span><span class="s">urllib.request;</span><span class="nv"> </span><span class="s">urllib.request.urlopen(&#39;http://127.0.0.1:8000/health&#39;,</span><span class="nv"> </span><span class="s">timeout=2).close()&quot;</span>
+<span class="w">      </span><span class="nt">interval</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30s</span>
+<span class="w">      </span><span class="nt">timeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5s</span>
+<span class="w">      </span><span class="nt">retries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span>
+<span class="w">      </span><span class="nt">start_period</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10s</span>
+<span class="w">    </span><span class="nt">labels</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;traefik.enable=true&quot;</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;traefik.http.routers.scholar-mcp.rule=Host(`mcp.example.com`)&quot;</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;traefik.http.routers.scholar-mcp.tls.certresolver=letsencrypt&quot;</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;traefik.http.services.scholar-mcp.loadbalancer.server.port=8000&quot;</span>
+<span class="w">    </span><span class="nt">networks</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">traefik</span>
+
+<span class="nt">volumes</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">service-data</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">state-data</span><span class="p">:</span>
+
+<span class="nt">networks</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">traefik</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">external</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </code></pre></div>
 <p>With the corresponding <code>.env</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nv">SCHOLAR_MCP_BASE_URL</span><span class="o">=</span>https://mcp.example.com
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="nv">SCHOLAR_MCP_OIDC_CONFIG_URL</span><span class="o">=</span>https://auth.example.com/.well-known/openid-configuration
-<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="nv">SCHOLAR_MCP_OIDC_CLIENT_ID</span><span class="o">=</span>my-scholar-mcp
-<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="nv">SCHOLAR_MCP_OIDC_CLIENT_SECRET</span><span class="o">=</span>your-client-secret
-<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="nv">SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY</span><span class="o">=</span>your-stable-hex-key
+<div class="highlight"><pre><span></span><code><span class="nv">SCHOLAR_MCP_BASE_URL</span><span class="o">=</span>https://mcp.example.com
+<span class="nv">SCHOLAR_MCP_OIDC_CONFIG_URL</span><span class="o">=</span>https://auth.example.com/.well-known/openid-configuration
+<span class="nv">SCHOLAR_MCP_OIDC_CLIENT_ID</span><span class="o">=</span>my-mcp-server
+<span class="nv">SCHOLAR_MCP_OIDC_CLIENT_SECRET</span><span class="o">=</span>your-client-secret
+<span class="nv">SCHOLAR_MCP_OIDC_JWT_SIGNING_KEY</span><span class="o">=</span>your-stable-hex-key
 </code></pre></div>
 <p>For a prefixed deployment (such as <code>https://mcp.example.com/myservice/mcp</code>), see <a href="#subpath-deployments">Subpath Deployments</a> below.</p>
 <h2 id="subpath-deployments">Subpath Deployments<a class="headerlink" href="#subpath-deployments" title="Permanent link">&para;</a></h2>
@@ -2004,11 +2004,11 @@
 </div>
 <h3 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h3>
 <p>Environment variables:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nv">SCHOLAR_MCP_BASE_URL</span><span class="o">=</span>https://mcp.example.com/myservice
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="nv">SCHOLAR_MCP_HTTP_PATH</span><span class="o">=</span>/mcp
+<div class="highlight"><pre><span></span><code><span class="nv">SCHOLAR_MCP_BASE_URL</span><span class="o">=</span>https://mcp.example.com/myservice
+<span class="nv">SCHOLAR_MCP_HTTP_PATH</span><span class="o">=</span>/mcp
 </code></pre></div>
 <p>Register this callback URI in your OIDC provider:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>https://mcp.example.com/myservice/auth/callback
+<div class="highlight"><pre><span></span><code>https://mcp.example.com/myservice/auth/callback
 </code></pre></div>
 <h3 id="what-the-server-serves-and-where">What the server serves, and where<a class="headerlink" href="#what-the-server-serves-and-where" title="Permanent link">&para;</a></h3>
 <p>The MCP endpoint and the OAuth discovery documents sit on opposite sides of the prefix, which is what makes subpath routing more than one strip rule. With <code>BASE_URL=https://mcp.example.com/myservice</code> and <code>HTTP_PATH=/mcp</code>:</p>
@@ -2055,15 +2055,15 @@
 <li><strong>Operational routes</strong> match the prefix and strip it: <code>/myservice/mcp</code> and, in proxy mode, the OAuth endpoints.</li>
 <li><strong>Discovery routes</strong> match their own well-known paths and pass through untouched. Their URLs do not begin with <code>/myservice</code>, so a <code>PathPrefix(/myservice)</code> rule never sees them.</li>
 </ol>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nt">labels</span><span class="p">:</span>
-<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="c1"># Operational routes: strip the /myservice prefix before forwarding</span>
-<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;traefik.http.routers.mcp-app.rule=Host(`mcp.example.com`)</span><span class="nv"> </span><span class="s">&amp;&amp;</span><span class="nv"> </span><span class="s">PathPrefix(`/myservice`)&quot;</span>
-<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;traefik.http.middlewares.strip-myservice.stripprefix.prefixes=/myservice&quot;</span>
-<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;traefik.http.routers.mcp-app.middlewares=strip-myservice&quot;</span>
-<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;traefik.http.services.mcp-app.loadbalancer.server.port=8000&quot;</span>
-<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">  </span><span class="c1"># Discovery routes: same service, no strip middleware</span>
-<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;traefik.http.routers.mcp-wellknown.rule=Host(`mcp.example.com`)</span><span class="nv"> </span><span class="s">&amp;&amp;</span><span class="nv"> </span><span class="s">(PathPrefix(`/.well-known/oauth-protected-resource/myservice/mcp`)</span><span class="nv"> </span><span class="s">||</span><span class="nv"> </span><span class="s">PathPrefix(`/.well-known/oauth-authorization-server`))&quot;</span>
-<a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;traefik.http.routers.mcp-wellknown.service=mcp-app&quot;</span>
+<div class="highlight"><pre><span></span><code><span class="nt">labels</span><span class="p">:</span>
+<span class="w">  </span><span class="c1"># Operational routes: strip the /myservice prefix before forwarding</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;traefik.http.routers.mcp-app.rule=Host(`mcp.example.com`)</span><span class="nv"> </span><span class="s">&amp;&amp;</span><span class="nv"> </span><span class="s">PathPrefix(`/myservice`)&quot;</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;traefik.http.middlewares.strip-myservice.stripprefix.prefixes=/myservice&quot;</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;traefik.http.routers.mcp-app.middlewares=strip-myservice&quot;</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;traefik.http.services.mcp-app.loadbalancer.server.port=8000&quot;</span>
+<span class="w">  </span><span class="c1"># Discovery routes: same service, no strip middleware</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;traefik.http.routers.mcp-wellknown.rule=Host(`mcp.example.com`)</span><span class="nv"> </span><span class="s">&amp;&amp;</span><span class="nv"> </span><span class="s">(PathPrefix(`/.well-known/oauth-protected-resource/myservice/mcp`)</span><span class="nv"> </span><span class="s">||</span><span class="nv"> </span><span class="s">PathPrefix(`/.well-known/oauth-authorization-server`))&quot;</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;traefik.http.routers.mcp-wellknown.service=mcp-app&quot;</span>
 </code></pre></div>
 <p>Drop the <code>oauth-authorization-server</code> clause when the server holds no client ID and secret. That path returns 404 in such a configuration, and claiming it on a shared hostname takes the document away from whichever service does answer.</p>
 <p>Two routers rather than one is deliberate. A single router carrying the strip rule would apply it to the discovery request as well. Nothing here relies on how a given proxy treats a strip prefix that fails to match: separate routers state the untouched route outright, in any proxy that has the concept.</p>
@@ -2079,15 +2079,15 @@
 </div>
 <h3 id="verifying-the-routing">Verifying the routing<a class="headerlink" href="#verifying-the-routing" title="Permanent link">&para;</a></h3>
 <p>Probe the container first, to separate what the server serves from what the proxy does with it. The image ships no HTTP client, so borrow one. Passing <code>--network container:</code> puts the throwaway container inside the server's network namespace, which makes <code>localhost:8000</code> the server itself:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nv">NS</span><span class="o">=</span><span class="s2">&quot;container:</span><span class="k">$(</span>docker<span class="w"> </span>compose<span class="w"> </span>ps<span class="w"> </span>-q<span class="w"> </span>scholar-mcp<span class="k">)</span><span class="s2">&quot;</span>
-<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>--network<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$NS</span><span class="s2">&quot;</span><span class="w"> </span>curlimages/curl<span class="w"> </span>-s<span class="w"> </span>-o<span class="w"> </span>/dev/null<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">  </span>-w<span class="w"> </span><span class="s1">&#39;%{http_code}\n&#39;</span><span class="w"> </span>localhost:8000/mcp
-<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>--network<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$NS</span><span class="s2">&quot;</span><span class="w"> </span>curlimages/curl<span class="w"> </span>-s<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">  </span>localhost:8000/.well-known/oauth-protected-resource/myservice/mcp
+<div class="highlight"><pre><span></span><code><span class="nv">NS</span><span class="o">=</span><span class="s2">&quot;container:</span><span class="k">$(</span>docker<span class="w"> </span>compose<span class="w"> </span>ps<span class="w"> </span>-q<span class="w"> </span>scholar-mcp<span class="k">)</span><span class="s2">&quot;</span>
+docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>--network<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$NS</span><span class="s2">&quot;</span><span class="w"> </span>curlimages/curl<span class="w"> </span>-s<span class="w"> </span>-o<span class="w"> </span>/dev/null<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-w<span class="w"> </span><span class="s1">&#39;%{http_code}\n&#39;</span><span class="w"> </span>localhost:8000/mcp
+docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>--network<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$NS</span><span class="s2">&quot;</span><span class="w"> </span>curlimages/curl<span class="w"> </span>-s<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>localhost:8000/.well-known/oauth-protected-resource/myservice/mcp
 </code></pre></div>
 <p>Expect <code>401</code> for the first, meaning the endpoint is there and authentication is on, and the metadata JSON for the second. A <code>404</code> instead of the <code>401</code> means <code>HTTP_PATH</code> carries the prefix it should not. Then repeat from outside, through the proxy:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>curl<span class="w"> </span>-s<span class="w"> </span>-o<span class="w"> </span>/dev/null<span class="w"> </span>-w<span class="w"> </span><span class="s1">&#39;%{http_code}\n&#39;</span><span class="w"> </span>https://mcp.example.com/myservice/mcp
-<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>curl<span class="w"> </span>-s<span class="w"> </span>https://mcp.example.com/.well-known/oauth-protected-resource/myservice/mcp
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-s<span class="w"> </span>-o<span class="w"> </span>/dev/null<span class="w"> </span>-w<span class="w"> </span><span class="s1">&#39;%{http_code}\n&#39;</span><span class="w"> </span>https://mcp.example.com/myservice/mcp
+curl<span class="w"> </span>-s<span class="w"> </span>https://mcp.example.com/.well-known/oauth-protected-resource/myservice/mcp
 </code></pre></div>
 <p>Both must reach this server, and the <code>resource</code> field in the JSON must read <code>https://mcp.example.com/myservice/mcp</code>. A <code>resource</code> naming a different service is the shared-hostname problem above, not an incorrect <code>BASE_URL</code>.</p>
 <!-- DOMAIN-OIDC-EXTRA-START -->

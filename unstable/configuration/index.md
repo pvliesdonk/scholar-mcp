@@ -198,7 +198,7 @@ Calling `get_job_result` with that `job_id` returns `working` until the work set
 
 Two operational notes:
 
-- **Job records live in the KV backend**, so `SCHOLAR_MCP_KV_STORE_URL` covers them along with every other stateful subsystem. That is a different variable from `SCHOLAR_MCP_TASKS_URL`, which selects the native SEP-1686 Docket backend described under [Background tasks](#background-tasks).
+- **Job records live in the KV backend**, so `SCHOLAR_MCP_KV_STORE_URL` covers them along with every other stateful subsystem. That is a different variable from `SCHOLAR_MCP_TASKS_URL`, which selects the native SEP-2663 Docket backend described under [Background tasks](#background-tasks).
 - **A restart does not resume promoted work.** The job stops running with the process, while its record survives, so a poll after a restart reports `working` with a growing `running_for_s` until the retention period removes the record. That is deliberate, because a result is never invented. It does mean a job still reported as `working` long past its expected duration may be orphaned rather than slow. For work that must survive a restart, use the native task path with a `redis://` backend.
 
 If you restrict the tool surface with `SCHOLAR_MCP_TOOLS_ALLOW`, **include `get_job_result`**. The allowlist matches on tool name, so leaving it out makes every job handle unresolvable.
@@ -210,6 +210,36 @@ Upgrading from a release that had `get_task_result` and `list_tasks`: those tool
 The patent tools wait out an amber or red EPO traffic light rather than failing on it. Each wait is longer than the 60-second lifetime of the cached light, because a shorter one would re-read the same cached color instead of asking EPO again. Two retries follow the first attempt, so a throttled call can spend roughly three minutes waiting. That is well past `SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S`, so such a call is handed back as a job to poll rather than holding the connection open.
 
 A black light means the daily quota is spent. That does not clear until tomorrow, so it is reported at once with `"retryable": false` instead of costing the caller the full wait for the same answer.
+
+### Semantic Scholar key health
+
+`get_server_info` reports the one piece of upstream state an operator cannot otherwise see. It carries **Semantic Scholar key health**, under a `semantic_scholar` key:
+
+```
+{
+  "server_name": "pvliesdonk-scholar-mcp",
+  "server_version": "2.0.0",
+  "core_version": "7.1.0",
+  "semantic_scholar": {
+    "key_configured": true,
+    "key_status": "degraded",
+    "consecutive_failures": 26,
+    "last_success": "2026-09-03T12:00:00+00:00",
+    "last_failure": "2026-09-10T18:00:00+00:00",
+    "last_failure_kind": "rate_limited"
+  }
+}
+```
+
+`key_status` is one of `not_configured` (no key set, so the anonymous tier serves), `unknown` (configured, not yet pinged), `ok`, `failing` (refused, but not for long enough to mean more than throttling), or `degraded`. The `degraded` threshold is the same one the keepalive escalates at, so this field and the `s2_keepalive_degraded` log line never disagree.
+
+This is reported here rather than as a `/health/ready` check on purpose. A revoked key breaks the Semantic Scholar tools, while OpenAlex, Crossref, EPO, Open Library and the standards sources keep serving. Failing readiness answers `503` for the whole server, which drops it from rotation wherever something polls that route, such as a load balancer or a Kubernetes `readinessProbe`, over a condition that removal from rotation does not repair. The shipped `compose.yml` probes `/health` rather than `/health/ready` and reports the verdict without restarting anything, so it is unaffected either way.
+
+The server pings Semantic Scholar once on startup and every 7 days thereafter to keep the configured key from being removed for inactivity (Semantic Scholar may remove keys unused for 60+ days). A ping S2 refuses is retried in an hour rather than waiting out the full cycle, so one bad moment does not cost a week of key activity.
+
+To tell a dead key from a transient upstream issue, grep the server logs for `s2_keepalive_degraded`. The keepalive logs it at `ERROR`, once, after a day of consecutive refusals, and follows it with `s2_keepalive_recovered` if a later ping lands. It keys on persistence rather than on a status code, because a key that has stopped conferring quota was observed returning `429` indefinitely and never `403`.
+
+A `403 Forbidden` remains the cheaper signal when S2 does send one: `s2_key_forbidden` on real tool calls, `s2_keepalive_key_forbidden` from the keepalive. Do not rely on it alone.
 
 | Variable                    | Default             | Required | Description                                                                                                                                                                             |
 | --------------------------- | ------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

@@ -27,7 +27,7 @@
     
     
       
-        <title>Release Process - Scholar MCP Server</title>
+        <title>Release Process - scholar-mcp</title>
       
     
     
@@ -100,7 +100,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="Scholar MCP Server" class="md-header__button md-logo" aria-label="Scholar MCP Server" data-md-component="logo">
+    <a href="../.." title="scholar-mcp" class="md-header__button md-logo" aria-label="scholar-mcp" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -114,7 +114,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            Scholar MCP Server
+            scholar-mcp
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -369,13 +369,13 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="Scholar MCP Server" class="md-nav__button md-logo" aria-label="Scholar MCP Server" data-md-component="logo">
+    <a href="../.." title="scholar-mcp" class="md-nav__button md-logo" aria-label="scholar-mcp" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
 
     </a>
-    Scholar MCP Server
+    scholar-mcp
   </label>
   
     <div class="md-nav__source">
@@ -1581,7 +1581,7 @@ ordinary installers. A PEP 440 resolver skips pre-releases unless the
 requirement pins one or you pass <code>--pre</code>, so <code>pip install pvliesdonk-scholar-mcp</code>
 and <code>uv add pvliesdonk-scholar-mcp</code> still resolve to the newest stable. Ask for a
 candidate by name to get one:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pip<span class="w"> </span>install<span class="w"> </span>pvliesdonk-scholar-mcp<span class="o">==</span>X.Y.ZrcN
+<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>pvliesdonk-scholar-mcp<span class="o">==</span>X.Y.ZrcN
 </code></pre></div>
 <p>Note the spelling. Tags and the changelog use SemVer (<code>vX.Y.Z-rc.N</code>);
 PyPI uses the PEP 440 canonical form (<code>X.Y.ZrcN</code>).</p>
@@ -1604,12 +1604,12 @@ ordering again inside its own publish job. See
 <p>Every release attaches <code>scholar-mcp-plugin-&lt;version&gt;.zip</code>, and every
 merge to <code>main</code> produces the same archive as the <code>plugin-zip-edge</code> workflow
 artifact. Load one without installing anything:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>claude<span class="w"> </span>--plugin-url<span class="w"> </span>https://github.com/pvliesdonk/scholar-mcp/releases/download/vX.Y.Z-rc.N/scholar-mcp-plugin-X.Y.Z-rc.N.zip
+<div class="highlight"><pre><span></span><code>claude<span class="w"> </span>--plugin-url<span class="w"> </span>https://github.com/pvliesdonk/scholar-mcp/releases/download/vX.Y.Z-rc.N/scholar-mcp-plugin-X.Y.Z-rc.N.zip
 </code></pre></div>
 <p>The plugin loads for that session only and leaves no install record, so this
 is the way to try a candidate without disturbing the installed copy. Check it
 came up with <code>/plugin</code>, or from the shell:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>claude<span class="w"> </span>--plugin-url<span class="w"> </span>&lt;url&gt;<span class="w"> </span>plugin<span class="w"> </span>details<span class="w"> </span>scholar-mcp
+<div class="highlight"><pre><span></span><code>claude<span class="w"> </span>--plugin-url<span class="w"> </span>&lt;url&gt;<span class="w"> </span>plugin<span class="w"> </span>details<span class="w"> </span>scholar-mcp
 </code></pre></div>
 <p>The zip carries its own wheel and launches it from <code>${CLAUDE_PLUGIN_ROOT}</code>,
 so it works at versions no index serves: every candidate, and the <code>edge</code>
