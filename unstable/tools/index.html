@@ -2490,6 +2490,9 @@
 <li><strong>Direct lookup</strong> (numeric ID): author profile with paginated publications list</li>
 <li><strong>Name search</strong> (text): <code>{"candidates": [...]}</code> with up to 5 matching authors</li>
 </ul>
+<p><code>limit</code> applies to cached and freshly fetched results alike. A cached author
+record holding fewer publications than <code>limit</code> is fetched again, unless it
+already holds every publication the author has.</p>
 <hr />
 <h2 id="papers-citation-graph">Papers, Citation Graph<a class="headerlink" href="#papers-citation-graph" title="Permanent link">&para;</a></h2>
 <h3 id="get_citations"><code>get_citations</code><a class="headerlink" href="#get_citations" title="Permanent link">&para;</a></h3>
@@ -2873,6 +2876,7 @@
 </tbody>
 </table>
 <p><strong>BibTeX output</strong> includes entry type inference (<code>@article</code>, <code>@inproceedings</code>, <code>@misc</code>, <code>@book</code>), proper author formatting (<code>{Last}, First</code>), title casing preservation, DOI, arXiv eprint fields, and special character escaping. Papers with <code>book_metadata</code> (ISBN or publisher) are emitted as <code>@book</code> entries with <code>publisher</code>, <code>edition</code>, and <code>isbn</code> fields.</p>
+<p>A paper is emitted as <code>@inproceedings</code> when Semantic Scholar reports it as a conference paper, and otherwise when its venue name contains conference, proceedings, workshop, or symposium. The first rule matters because venue names such as "Neural Information Processing Systems" and "Computer Vision and Pattern Recognition" contain none of those words. The same inference drives the CSL-JSON <code>paper-conference</code> type and the RIS <code>CONF</code> tag.</p>
 <p><strong>Returns:</strong> <code>{"format": ..., "output": ...}</code>, where <code>output</code> is the formatted text for the chosen format. The key is <code>output</code> rather than <code>citations</code> because the CSL-JSON formatter emits its own <code>citations</code> key, which would collide.</p>
 <p><strong>CSL-JSON output</strong> puts a JSON document in <code>output</code>, so reaching the entries means parsing that string: it is <code>{"citations": [...], "errors": [...]}</code>, whose citations array contains standard CSL-JSON objects compatible with Zotero, Mendeley, Pandoc, and other CSL processors. Book entries use <code>type: "book"</code> with <code>publisher</code> and <code>ISBN</code> fields.</p>
 <p><strong>RIS output</strong> uses standard RIS tags (<code>TY</code>, <code>AU</code>, <code>TI</code>, <code>PY</code>, <code>JO</code>/<code>BT</code>, <code>DO</code>, <code>UR</code>, <code>AB</code>, <code>ER</code>). Book entries use <code>TY - BOOK</code> with <code>PB</code> (publisher) and <code>SN</code> (ISBN) tags.</p>

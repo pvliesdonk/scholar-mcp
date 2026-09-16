@@ -1231,6 +1231,8 @@ Fetch an author profile or search by name.
 - **Direct lookup** (numeric ID): author profile with paginated publications list
 - **Name search** (text): `{"candidates": [...]}` with up to 5 matching authors
 
+`limit` applies to cached and freshly fetched results alike. A cached author record holding fewer publications than `limit` is fetched again, unless it already holds every publication the author has.
+
 ______________________________________________________________________
 
 ## Papers, Citation Graph
@@ -1407,6 +1409,8 @@ Generate formatted citations for one or more papers. Output formats: BibTeX, CSL
 | `enrich`          | boolean      | `true`       | Attempt OpenAlex enrichment for missing venue data          |
 
 **BibTeX output** includes entry type inference (`@article`, `@inproceedings`, `@misc`, `@book`), proper author formatting (`{Last}, First`), title casing preservation, DOI, arXiv eprint fields, and special character escaping. Papers with `book_metadata` (ISBN or publisher) are emitted as `@book` entries with `publisher`, `edition`, and `isbn` fields.
+
+A paper is emitted as `@inproceedings` when Semantic Scholar reports it as a conference paper, and otherwise when its venue name contains conference, proceedings, workshop, or symposium. The first rule matters because venue names such as "Neural Information Processing Systems" and "Computer Vision and Pattern Recognition" contain none of those words. The same inference drives the CSL-JSON `paper-conference` type and the RIS `CONF` tag.
 
 **Returns:** `{"format": ..., "output": ...}`, where `output` is the formatted text for the chosen format. The key is `output` rather than `citations` because the CSL-JSON formatter emits its own `citations` key, which would collide.
 
