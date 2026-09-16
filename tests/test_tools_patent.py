@@ -249,7 +249,7 @@ def mcp_with_epo(service: Service, epo_client: EpoClient, slow_jobs: Jobs) -> Fa
     service.epo = epo_client
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -296,7 +296,7 @@ async def test_search_patents_uses_cache(
     service.epo = epo_client
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -343,7 +343,7 @@ async def test_search_patents_retries_when_throttled(
     """A throttled search is retried rather than handed back as an error."""
     call_count = 0
 
-    async def _flaky_search(*args, **kwargs):  # type: ignore[no-untyped-def]
+    async def _flaky_search(*args, **kwargs):  # type: ignore[no-untyped-def]  # noqa: ARG001
         nonlocal call_count
         call_count += 1
         if call_count == 1:
@@ -355,7 +355,7 @@ async def test_search_patents_retries_when_throttled(
     service.epo = epo
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -376,7 +376,7 @@ async def test_search_patents_with_filters(
     service.epo = epo_client
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -410,7 +410,7 @@ async def test_search_patents_range_from_limit_offset(
     service.epo = epo_client
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -448,7 +448,7 @@ async def test_get_patent_caches_result(
     service.epo = epo_client
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -476,7 +476,7 @@ async def test_get_patent_cache_hit_skips_api(
     service.epo = epo_client
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -507,7 +507,7 @@ async def test_get_patent_default_sections_biblio_only(
     service.epo = epo_client
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -588,7 +588,7 @@ async def test_get_patent_empty_biblio_returns_error(
     service.epo = epo
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -626,7 +626,7 @@ async def test_get_patent_not_found_without_biblio_section(
     service.epo = epo
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -648,7 +648,7 @@ async def test_get_patent_retries_when_throttled(
     """A throttled get_patent is retried, not queued; the record comes back."""
     call_count = 0
 
-    async def _flaky_biblio(*args, **kwargs):  # type: ignore[no-untyped-def]
+    async def _flaky_biblio(*args, **kwargs):  # type: ignore[no-untyped-def]  # noqa: ARG001
         nonlocal call_count
         call_count += 1
         if call_count == 1:
@@ -660,7 +660,7 @@ async def test_get_patent_retries_when_throttled(
     service.epo = epo
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -682,7 +682,7 @@ async def test_get_patent_no_epo_client_returns_error(
     service.epo = None
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -702,7 +702,7 @@ async def test_search_patents_no_epo_client_returns_error(
     service.epo = None
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -783,7 +783,7 @@ async def test_get_patent_all_sections_via_tool(
     service.epo = epo
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -826,7 +826,7 @@ async def test_get_patent_citations_section(
     service.epo = epo
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -866,7 +866,7 @@ async def test_citations_npl_resolution_with_s2(
     )
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -906,7 +906,7 @@ async def test_get_citing_patents_returns_results(
     service.epo = epo
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -936,7 +936,7 @@ async def test_get_citing_patents_empty_results(
     service.epo = epo
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -960,7 +960,7 @@ async def test_get_citing_patents_no_epo_returns_error(
     service.epo = None
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -984,7 +984,7 @@ async def test_get_citing_patents_throttle_survives_retries(
     service.epo = epo
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -1023,7 +1023,7 @@ async def test_npl_chapter_info_parsed(
     service.epo = epo
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -1061,7 +1061,7 @@ async def test_npl_no_chapter_info(
     service.epo = epo
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -1101,7 +1101,7 @@ async def test_npl_chapter_info_with_s2_resolution(
     )
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -1193,7 +1193,7 @@ def test_fetch_patent_pdf_no_epo_client(service: Service, slow_jobs: Jobs) -> No
     """Returns error when EPO is not configured."""
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -1216,7 +1216,7 @@ def test_fetch_patent_pdf_invalid_number(service: Service, slow_jobs: Jobs) -> N
     service.epo = _make_epo_client()
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -1237,7 +1237,7 @@ def test_fetch_patent_pdf_promotes_when_slow(service: Service, jobs: Jobs) -> No
     """A slow EPO download is promoted, and the result arrives by polling."""
     epo = _make_epo_client()
 
-    async def slow_get_pdf(*args: object, **kwargs: object) -> bytes:
+    async def slow_get_pdf(*args: object, **kwargs: object) -> bytes:  # noqa: ARG001
         await asyncio.sleep(0.2)
         return b"%PDF-1.4 fake pdf content"
 
@@ -1245,7 +1245,7 @@ def test_fetch_patent_pdf_promotes_when_slow(service: Service, jobs: Jobs) -> No
     service.epo = epo
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -1289,7 +1289,7 @@ def test_fetch_patent_pdf_cache_hit_returns_pdf_path(
     pdf_dir.mkdir(parents=True, exist_ok=True)
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -1331,7 +1331,7 @@ def test_fetch_patent_pdf_execute_downloads_pdf(
     service.epo = epo
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -1358,7 +1358,7 @@ def test_fetch_patent_pdf_execute_pdf_not_available(
     service.epo = epo
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -1403,7 +1403,7 @@ def test_fetch_patent_pdf_cache_hit_with_docling_and_cached_md(
     md_dir.mkdir(parents=True, exist_ok=True)
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -1450,7 +1450,7 @@ def test_fetch_patent_pdf_execute_with_docling_converts_to_markdown(
     service.docling = _make_mock_docling(convert_result="# Patent Markdown")  # type: ignore[assignment]
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -1484,7 +1484,7 @@ def test_fetch_patent_pdf_cache_hit_docling_no_md_converts(
     pdf_dir.mkdir(parents=True, exist_ok=True)
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -1535,7 +1535,7 @@ def test_fetch_patent_pdf_cache_hit_with_vlm_skip_reason(
     md_dir.mkdir(parents=True, exist_ok=True)
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -1579,7 +1579,7 @@ def test_fetch_patent_pdf_execute_docling_convert_exception(
     service.docling = mock_docling  # type: ignore[assignment]
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -1611,7 +1611,7 @@ def test_fetch_patent_pdf_execute_with_vlm_skip_reason(
     service.docling = mock_docling  # type: ignore[assignment]
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -1640,7 +1640,7 @@ def test_fetch_patent_pdf_execute_with_docling_cached_md(
     service.docling = _make_mock_docling()  # type: ignore[assignment]
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -1689,7 +1689,7 @@ def test_fetch_patent_pdf_throttled_returns_retryable_guidance(
     service.epo = epo
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -1721,7 +1721,7 @@ def test_fetch_patent_pdf_quota_exhausted_is_not_retryable(
     service.epo = epo
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -1754,7 +1754,7 @@ def _citing_app(service: Service, jobs: Jobs, epo: EpoClient) -> FastMCP:
     service.epo = epo
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)

@@ -23,7 +23,7 @@ S2_BASE = "https://api.semanticscholar.org/graph/v1"
 @pytest.fixture
 def mcp(service: Service, slow_jobs: Jobs) -> FastMCP:
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -281,7 +281,7 @@ async def test_get_citations_retries_on_429(
     """A 429 is retried in-client; the caller still gets the citations."""
     call_count = 0
 
-    def _side_effect(request: httpx.Request) -> httpx.Response:
+    def _side_effect(request: httpx.Request) -> httpx.Response:  # noqa: ARG001
         nonlocal call_count
         call_count += 1
         if call_count == 1:
@@ -346,7 +346,7 @@ async def test_get_references_retries_on_429(
     """A rate limit is retried in-client rather than queued."""
     call_count = 0
 
-    def _side_effect(request: httpx.Request) -> httpx.Response:
+    def _side_effect(request: httpx.Request) -> httpx.Response:  # noqa: ARG001
         nonlocal call_count
         call_count += 1
         if call_count == 1:
@@ -512,7 +512,7 @@ async def test_get_citation_graph_retries_on_429(
     """A 429 is retried in-client; the graph still comes back."""
     batch_call_count = 0
 
-    def _batch_side_effect(request: httpx.Request) -> httpx.Response:
+    def _batch_side_effect(request: httpx.Request) -> httpx.Response:  # noqa: ARG001
         nonlocal batch_call_count
         batch_call_count += 1
         if batch_call_count == 1:
@@ -638,7 +638,7 @@ async def test_find_bridge_papers_retries_on_429(
     """A 429 is retried in-client; the path still comes back."""
     call_count = 0
 
-    def _side_effect(request: httpx.Request) -> httpx.Response:
+    def _side_effect(request: httpx.Request) -> httpx.Response:  # noqa: ARG001
         nonlocal call_count
         call_count += 1
         if call_count == 1:
@@ -1961,7 +1961,7 @@ async def test_get_citations_promotes_when_slow(
     would surface as a handle failing the tool's own output schema.
     """
 
-    async def slow(request: httpx.Request) -> httpx.Response:
+    async def slow(request: httpx.Request) -> httpx.Response:  # noqa: ARG001
         await asyncio.sleep(0.2)
         return httpx.Response(
             200, json={"data": [{"citingPaper": {"paperId": "c1", "title": "Citing"}}]}
@@ -1970,7 +1970,7 @@ async def test_get_citations_promotes_when_slow(
     respx_mock.get("/paper/p1/citations").mock(side_effect=slow)
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)

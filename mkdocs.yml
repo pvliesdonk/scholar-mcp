@@ -1,4 +1,4 @@
-site_name: Scholar MCP Server
+site_name: scholar-mcp
 site_url: https://pvliesdonk.github.io/scholar-mcp/
 site_description: "FastMCP server for scholarly papers, patents, books and standards with docling PDF conversion"
 repo_url: https://github.com/pvliesdonk/scholar-mcp
@@ -61,6 +61,8 @@ plugins:
   # Generates llms.txt + llms-full.txt for the README badge.
   # Sections mirror `nav:` below — keep them aligned when customising
   # (both blocks are sentinel-protected so customise both as a unit).
+  # `guides/*.md` and `deployment/*.md` use globs deliberately so new pages
+  # in those directories are auto-indexed without a sections-list update.
   - llmstxt:
       full_output: llms-full.txt
       sections:
@@ -93,7 +95,7 @@ plugins:
         python:
           paths: [src]
           options:
-            show_source: true
+            show_source: false
             show_bases: true
             show_root_heading: true
             show_root_full_path: false
@@ -108,7 +110,7 @@ markdown_extensions:
   - pymdownx.details
   - pymdownx.superfences
   - pymdownx.highlight:
-      anchor_linenums: true
+      anchor_linenums: false
   - pymdownx.inlinehilite
   - pymdownx.tabbed:
       alternate_style: true
@@ -118,7 +120,6 @@ markdown_extensions:
       permalink: true
   - attr_list
   - md_in_html
-
 
 nav:
   # PROJECT-NAV-START — replace with your real navigation; kept across copier

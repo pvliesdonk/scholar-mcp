@@ -41,6 +41,23 @@ milliseconds.
 """
 
 
+def pytest_collection_modifyitems(
+    config: pytest.Config, items: list[pytest.Item]
+) -> None:
+    """Deselect ``live`` tests unless the ``-m`` expression names ``live``.
+
+    Live tests hit real upstream services, so a plain ``pytest`` run -- or one
+    filtered on any other marker, such as ``-m 'not browser'`` -- leaves them
+    out; ``pytest -m live`` opts in.
+    """
+    if "live" in (config.getoption("markexpr") or ""):
+        return
+    live = [item for item in items if item.get_closest_marker("live")]
+    if live:
+        config.hook.pytest_deselected(items=live)
+        items[:] = [item for item in items if not item.get_closest_marker("live")]
+
+
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Remove all SCHOLAR_MCP_* env vars, then pin the KV backend.

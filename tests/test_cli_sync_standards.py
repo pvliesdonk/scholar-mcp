@@ -22,7 +22,7 @@ class _GoodLoader:
     def __init__(self, body: str) -> None:
         self.body = body
 
-    async def sync(self, cache: Any, *, force: bool = False) -> SyncReport:
+    async def sync(self, cache: Any, *, force: bool = False) -> SyncReport:  # noqa: ARG002
         return SyncReport(
             body=self.body,
             added=1,
@@ -44,7 +44,7 @@ class _BadLoader:
     def __init__(self, body: str) -> None:
         self.body = body
 
-    async def sync(self, cache: Any, *, force: bool = False) -> SyncReport:
+    async def sync(self, cache: Any, *, force: bool = False) -> SyncReport:  # noqa: ARG002
         raise RuntimeError("upstream is down")
 
 

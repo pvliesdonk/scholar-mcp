@@ -82,7 +82,7 @@ def pdf_app(service: Service, jobs: Jobs) -> FastMCP:
     """
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -92,7 +92,7 @@ def pdf_app(service: Service, jobs: Jobs) -> FastMCP:
 
 
 @pytest.fixture
-def service_with_docling(service: Service, tmp_path: Path) -> Service:
+def service_with_docling(service: Service, tmp_path: Path) -> Service:  # noqa: ARG001
     docling_http = httpx.AsyncClient(base_url=DOCLING_BASE, timeout=30.0)
     docling = DoclingClient(
         http_client=docling_http,
@@ -245,7 +245,7 @@ async def test_fetch_paper_pdf_rate_limited_then_succeeds(
 
     call_count = 0
 
-    def s2_side_effect(request: httpx.Request) -> httpx.Response:
+    def s2_side_effect(request: httpx.Request) -> httpx.Response:  # noqa: ARG001
         nonlocal call_count
         call_count += 1
         if call_count == 1:
@@ -310,7 +310,7 @@ async def test_fetch_paper_pdf_rate_limited_arxiv_fallback(
 
     call_count = 0
 
-    def s2_side_effect(request: httpx.Request) -> httpx.Response:
+    def s2_side_effect(request: httpx.Request) -> httpx.Response:  # noqa: ARG001
         nonlocal call_count
         call_count += 1
         if call_count == 1:
@@ -798,7 +798,7 @@ async def test_slow_conversion_is_promoted_and_polled(
     pdf = tmp_path / "slow.pdf"
     pdf.write_bytes(b"%PDF fake")
 
-    async def slow_convert(*args: object, **kwargs: object) -> str:
+    async def slow_convert(*args: object, **kwargs: object) -> str:  # noqa: ARG001
         await asyncio.sleep(0.2)
         return "# Slow\n\nConverted late."
 
@@ -821,7 +821,7 @@ async def test_slow_conversion_is_promoted_and_polled(
 
 
 async def test_cache_hit_answers_inline_even_under_a_short_deadline(
-    mcp_no_docling: FastMCP,
+    mcp_no_docling: FastMCP,  # noqa: ARG001
     service: Service,
     jobs: Jobs,
 ) -> None:

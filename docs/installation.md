@@ -1,5 +1,28 @@
 # Installation
 
+## From PyPI
+
+```bash
+pip install pvliesdonk-scholar-mcp
+```
+
+## From Docker
+
+```bash
+docker pull ghcr.io/pvliesdonk/scholar-mcp:latest
+```
+
+The `latest` tag is the newest stable release. The rolling `edge` tag tracks every merge to `main` and carries no version identity; see [Image tags](deployment/docker.md#image-tags) for the full list.
+
+## From source
+
+```bash
+git clone https://github.com/pvliesdonk/scholar-mcp
+cd scholar-mcp
+uv sync --all-extras --all-groups
+```
+
+<!-- DOMAIN-INSTALL-EXTRA-START -->
 ## As a Claude Code plugin
 
 ```bash
@@ -20,32 +43,6 @@ uvx --from pvliesdonk-scholar-mcp scholar-mcp serve
 !!! note "Package name vs. command"
     The PyPI package is `pvliesdonk-scholar-mcp`. The CLI command installed is `scholar-mcp`.
     The `--from` flag is needed because the package and command names differ.
-
-## With `pip`
-
-```bash
-pip install 'pvliesdonk-scholar-mcp[mcp]'
-scholar-mcp serve
-```
-
-
-The `[mcp]` extra installs FastMCP and uvicorn. Without it, you get only the library (API clients and cache) without the MCP server.
-
-## With Docker
-
-```bash
-docker run -v scholar-mcp-data:/data/scholar-mcp \
-           ghcr.io/pvliesdonk/scholar-mcp:latest
-```
-
-The image is available for `linux/amd64` and `linux/arm64`. See [Docker deployment](deployment/docker.md) for Docker Compose with docling-serve.
-
-The `latest` tag is the newest stable release. The rolling `edge` tag tracks every merge to `main` and carries no version identity; see [Image tags](deployment/docker.md#image-tags) for the full list.
-
-```bash
-docker run -v scholar-mcp-data:/data/scholar-mcp \
-           ghcr.io/pvliesdonk/scholar-mcp:edge
-```
 
 ## Linux packages
 
@@ -73,20 +70,4 @@ The package installs:
 - A dedicated `scholar-mcp` system user
 
 See [systemd deployment](deployment/systemd.md) for configuration details.
-
-## From source
-
-```bash
-git clone https://github.com/pvliesdonk/scholar-mcp.git
-cd scholar-mcp
-uv sync --extra dev --extra mcp
-uv run scholar-mcp serve
-```
-
-<!-- DOMAIN-INSTALL-EXTRA-START -->
-<!-- Future template-managed install-extras section; kept across copier
-     update. Scholar's install steps are already documented in the
-     per-method sections above (uvx / pip / Docker / Linux packages /
-     from source). -->
-
 <!-- DOMAIN-INSTALL-EXTRA-END -->

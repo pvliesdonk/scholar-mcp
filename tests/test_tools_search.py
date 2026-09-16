@@ -23,7 +23,7 @@ S2_BASE = "https://api.semanticscholar.org/graph/v1"
 @pytest.fixture
 def mcp(service: Service, slow_jobs: Jobs) -> FastMCP:
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -170,7 +170,7 @@ async def test_get_paper_alias_caching(
 
 @pytest.mark.respx(base_url=S2_BASE)
 async def test_get_paper_cache_hit(
-    respx_mock: respx.MockRouter,
+    respx_mock: respx.MockRouter,  # noqa: ARG001
     mcp: FastMCP,
     service: Service,
 ) -> None:
@@ -259,7 +259,7 @@ async def test_get_author_by_id_retries_on_429(
     """A 429 on the by-ID path is retried in-client; the caller gets the author."""
     call_count = 0
 
-    def _side_effect(request: httpx.Request) -> httpx.Response:
+    def _side_effect(request: httpx.Request) -> httpx.Response:  # noqa: ARG001
         nonlocal call_count
         call_count += 1
         if call_count == 1:
@@ -278,7 +278,7 @@ async def test_get_author_by_id_retries_on_429(
     respx_mock.get("/author/12345").mock(side_effect=_side_effect)
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -310,7 +310,7 @@ async def test_get_author_name_search_retries_on_429(
     """A 429 on the name-search path is retried in-client; candidates come back."""
     call_count = 0
 
-    def _side_effect(request: httpx.Request) -> httpx.Response:
+    def _side_effect(request: httpx.Request) -> httpx.Response:  # noqa: ARG001
         nonlocal call_count
         call_count += 1
         if call_count == 1:
@@ -323,7 +323,7 @@ async def test_get_author_name_search_retries_on_429(
     respx_mock.get("/author/search").mock(side_effect=_side_effect)
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -375,14 +375,14 @@ async def test_search_papers_promotes_when_slow(
     a `JobHandle` failing the tool's own output schema.
     """
 
-    async def slow_response(request: httpx.Request) -> httpx.Response:
+    async def slow_response(request: httpx.Request) -> httpx.Response:  # noqa: ARG001
         await asyncio.sleep(0.2)
         return httpx.Response(200, json={"data": [{"paperId": "s1"}], "total": 1})
 
     respx_mock.get("/paper/search").mock(side_effect=slow_response)
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)

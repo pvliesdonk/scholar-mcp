@@ -194,12 +194,6 @@ class ProjectConfig:
     # is invisible to the domain env-var scan, so the var is declared in
     # config-presentation.domain.yml instead of via field metadata.
     github_token: str | None = None
-    # Opt-in per-subject authorization: uncomment to enable. See pvl-core's
-    # README "Authorization" section + scholar's README "Authorization
-    # (opt-in)" section for the wire-in story. Also requires uncommenting
-    # the matching AuthorizationMiddleware stanza in ``server.py`` and the
-    # env-load in ``from_env`` below.
-    # acl_path: Path | None = None
 
     @property
     def epo_configured(self) -> bool:
@@ -254,7 +248,5 @@ class ProjectConfig:
             google_books_api_key=env(_ENV_PREFIX, "GOOGLE_BOOKS_API_KEY"),
             # SCHOLAR_GITHUB_TOKEN — see the github_token field comment above.
             github_token=os.environ.get("SCHOLAR_GITHUB_TOKEN") or None,
-            # Opt-in authorization (see CONFIG-FIELDS-START comment above):
-            # acl_path=Path(_p) if (_p := env(_ENV_PREFIX, "ACL_PATH")) else None,
             # CONFIG-FROM-ENV-END
         )

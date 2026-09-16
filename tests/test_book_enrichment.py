@@ -76,7 +76,7 @@ async def test_enrichment_triggered_by_publication_type_with_isbn(
 
 @pytest.mark.respx(base_url=OL_BASE)
 async def test_enrichment_skipped_for_book_type_without_isbn(
-    respx_mock: respx.MockRouter,
+    respx_mock: respx.MockRouter,  # noqa: ARG001
     service: Service,
 ) -> None:
     paper = _make_paper(publication_types=["Book"])
@@ -86,7 +86,7 @@ async def test_enrichment_skipped_for_book_type_without_isbn(
 
 @pytest.mark.respx(base_url=OL_BASE)
 async def test_enrichment_skipped_for_regular_paper(
-    respx_mock: respx.MockRouter,
+    respx_mock: respx.MockRouter,  # noqa: ARG001
     service: Service,
 ) -> None:
     paper = _make_paper()

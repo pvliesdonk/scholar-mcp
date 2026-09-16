@@ -89,7 +89,7 @@ SAMPLE_SUBJECT_RESPONSE = {
 @pytest.fixture
 def mcp(service: Service, slow_jobs: Jobs) -> FastMCP:
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -133,7 +133,7 @@ async def test_search_books_caches_results(
 async def test_search_books_uses_cache(
     respx_mock: respx.MockRouter,
     mcp: FastMCP,
-    service: Service,
+    service: Service,  # noqa: ARG001
 ) -> None:
     """Second search_books call for same query returns cached results."""
     respx_mock.get("/search.json").mock(
@@ -152,7 +152,7 @@ async def test_search_books_uses_cache(
 async def test_get_book_isbn_cache_hit(
     respx_mock: respx.MockRouter,
     mcp: FastMCP,
-    service: Service,
+    service: Service,  # noqa: ARG001
 ) -> None:
     """get_book returns cached result on second call for same ISBN."""
     respx_mock.get("/isbn/9780201633610.json").mock(
@@ -788,14 +788,14 @@ async def test_search_books_promotes_when_slow(service: Service, jobs: Jobs) -> 
     """
     from unittest.mock import AsyncMock
 
-    async def slow_search(*args: object, **kwargs: object) -> list[dict]:
+    async def slow_search(*args: object, **kwargs: object) -> list[dict]:  # noqa: ARG001
         await asyncio.sleep(0.2)
         return [{"key": "/works/OL1W", "title": "Slow Book"}]
 
     service.openlibrary.search = AsyncMock(side_effect=slow_search)  # type: ignore[method-assign]
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)

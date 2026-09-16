@@ -37,7 +37,7 @@ async def test_loader_protocol_accepts_conforming_class(
     class _Stub:
         body = "STUB"
 
-        async def sync(self, cache: Any, *, force: bool = False) -> SyncReport:
+        async def sync(self, cache: Any, *, force: bool = False) -> SyncReport:  # noqa: ARG002
             return SyncReport(
                 body="STUB",
                 added=1,
@@ -88,7 +88,7 @@ class _FakeLoader:
         self._raises = raises
         self.calls = 0
 
-    async def sync(self, cache: Any, *, force: bool = False) -> SyncReport:
+    async def sync(self, cache: Any, *, force: bool = False) -> SyncReport:  # noqa: ARG002
         self.calls += 1
         if self._raises is not None:
             raise self._raises
@@ -151,7 +151,7 @@ async def test_run_sync_force_propagates(cache: ScholarCache) -> None:
         def __init__(self) -> None:
             self.force_seen: bool | None = None
 
-        async def sync(self, cache: Any, *, force: bool = False) -> SyncReport:
+        async def sync(self, cache: Any, *, force: bool = False) -> SyncReport:  # noqa: ARG002
             self.force_seen = force
             return _report("FS")
 

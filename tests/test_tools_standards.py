@@ -38,7 +38,7 @@ SAMPLE_RFC_DOC = {
 @pytest.fixture
 def mcp(service: Service, slow_jobs: Jobs) -> FastMCP:
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -154,12 +154,12 @@ async def test_search_standards_caches_results(
 async def test_search_standards_cache_hit_skips_network(
     respx_mock: respx.MockRouter,
     mcp: FastMCP,
-    service: Service,
+    service: Service,  # noqa: ARG001
 ) -> None:
     """Second search for same query uses cache, not API."""
     call_count = 0
 
-    def side_effect(request):  # type: ignore[no-untyped-def]
+    def side_effect(request):  # type: ignore[no-untyped-def]  # noqa: ARG001
         nonlocal call_count
         call_count += 1
         return httpx.Response(200, json=SAMPLE_RFC_DOC)
@@ -647,7 +647,7 @@ async def test_handle_full_text_survives_a_cache_write_failure(
     original_set = service.cache.set_standard
     calls = {"n": 0}
 
-    async def failing_set(*args: object, **kwargs: object) -> None:
+    async def failing_set(*args: object, **kwargs: object) -> None:  # noqa: ARG001
         calls["n"] += 1
         raise RuntimeError("database is locked")
 

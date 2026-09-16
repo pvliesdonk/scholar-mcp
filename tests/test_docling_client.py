@@ -77,7 +77,7 @@ async def test_convert_polls_until_success(
     )
     call_count = 0
 
-    def _status_side_effect(request: httpx.Request) -> httpx.Response:
+    def _status_side_effect(request: httpx.Request) -> httpx.Response:  # noqa: ARG001
         nonlocal call_count
         call_count += 1
         if call_count < 3:

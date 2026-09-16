@@ -639,7 +639,7 @@ async def test_nist_disk_cache_used_on_second_call(
     """Second fetcher instance loads from disk cache, no network call."""
     call_count = 0
 
-    def side_effect(request):
+    def side_effect(request):  # noqa: ARG001
         nonlocal call_count
         call_count += 1
         return httpx.Response(200, content=SAMPLE_MODS_XML)
@@ -671,7 +671,7 @@ async def test_nist_in_memory_cache_used_on_second_search(
     """Second search on same fetcher uses in-memory cache, no extra network call."""
     call_count = 0
 
-    def side_effect(request):
+    def side_effect(request):  # noqa: ARG001
         nonlocal call_count
         call_count += 1
         return httpx.Response(200, content=SAMPLE_MODS_XML)
@@ -905,7 +905,7 @@ async def test_w3c_search_stubs_cached_on_second_call(
     """Stubs are fetched only once; second search reuses in-memory cache."""
     page_call_count = 0
 
-    def page_side_effect(req):  # type: ignore[no-untyped-def]
+    def page_side_effect(req):  # type: ignore[no-untyped-def]  # noqa: ARG001
         nonlocal page_call_count
         page_call_count += 1
         # Return a single-page response so the loop terminates after 1 request

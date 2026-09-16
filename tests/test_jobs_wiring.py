@@ -67,7 +67,7 @@ def _slow_docling_service(service: Service) -> Service:
         vlm_model="gpt-4o",
     )
 
-    async def slow_convert(*args: object, **kwargs: object) -> str:
+    async def slow_convert(*args: object, **kwargs: object) -> str:  # noqa: ARG001
         await asyncio.sleep(0.2)
         return "# Slow"
 
@@ -87,7 +87,7 @@ def _app(service: Service) -> FastMCP:
     """
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
@@ -205,7 +205,7 @@ async def test_job_records_are_scoped_to_the_caller(
     theirs = build_jobs(ServerConfig(kv_store_url="memory://"), short)
 
     @asynccontextmanager
-    async def lifespan(app: FastMCP):  # type: ignore[type-arg]
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
         yield {"service": _slow_docling_service(service)}
 
     minting = tasks_server("minting", lifespan=lifespan)
