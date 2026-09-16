@@ -83,29 +83,3 @@ class GoogleBooksClient:
         if not items:
             return None
         return items[0]  # type: ignore[no-any-return]
-
-    async def get_volume(self, volume_id: str) -> dict[str, Any] | None:
-        """Fetch a specific volume by its Google Books ID.
-
-        Args:
-            volume_id: Google Books volume identifier.
-
-        Returns:
-            Volume dict, or None on 404 or error.
-        """
-        try:
-            r = await self._client.get(
-                f"/volumes/{volume_id}",
-                params=self._params(),
-            )
-            if r.status_code == 404:
-                return None
-            r.raise_for_status()
-            return r.json()  # type: ignore[no-any-return]
-        except (httpx.HTTPStatusError, httpx.RequestError):
-            logger.warning(
-                "google_books_volume_error volume_id=%s",
-                volume_id,
-                exc_info=True,
-            )
-            return None
