@@ -104,6 +104,42 @@ class TestInferEntryType:
         }
         assert infer_entry_type(paper) == "article"
 
+    def test_conference_publication_type_without_keyword_venue(self) -> None:
+        """S2 marks NeurIPS a conference though its venue has no keyword."""
+        paper = {
+            "venue": "Neural Information Processing Systems",
+            "publicationTypes": ["JournalArticle", "Conference"],
+        }
+        assert infer_entry_type(paper) == "inproceedings"
+
+    def test_journal_publication_type_stays_an_article(self) -> None:
+        """Membership of Conference is the test, not merely having types."""
+        paper = {"venue": "Nature", "publicationTypes": ["JournalArticle"]}
+        assert infer_entry_type(paper) == "article"
+
+    def test_venue_keywords_still_apply_without_publication_types(self) -> None:
+        """A record with no publicationTypes still falls back to the venue."""
+        paper = {"venue": "ICML Workshop", "publicationTypes": None}
+        assert infer_entry_type(paper) == "inproceedings"
+
+    def test_conference_type_wins_over_arxiv_preprint(self) -> None:
+        """A conference paper with an arXiv id is not a misc preprint."""
+        paper = {
+            "venue": "",
+            "externalIds": {"ArXiv": "2401.00001"},
+            "publicationTypes": ["Conference"],
+        }
+        assert infer_entry_type(paper) == "inproceedings"
+
+    def test_book_metadata_still_wins_over_conference_type(self) -> None:
+        """book_metadata keeps precedence over the publication type."""
+        paper = {
+            "book_metadata": {"publisher": "MIT Press"},
+            "venue": "Neural Information Processing Systems",
+            "publicationTypes": ["Conference"],
+        }
+        assert infer_entry_type(paper) == "book"
+
 
 class TestEscapeBibtex:
     def test_special_chars(self) -> None:

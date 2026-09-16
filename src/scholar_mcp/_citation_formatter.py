@@ -41,6 +41,11 @@ _UNICODE_TO_LATEX: dict[str, str] = {
 # Conference keywords for entry type inference.
 _CONFERENCE_KEYWORDS = ("conference", "proceedings", "workshop", "symposium")
 
+# S2 reports a conference paper in ``publicationTypes``, which is authoritative
+# where the venue name is not: "Neural Information Processing Systems" and
+# "Computer Vision and Pattern Recognition" carry none of the keywords above.
+_CONFERENCE_TYPE = "Conference"
+
 
 def escape_bibtex(text: str) -> str:
     """Escape special characters and convert Unicode to LaTeX commands.
@@ -132,6 +137,12 @@ def generate_bibtex_key(paper: PaperRecord, seen_keys: set[str]) -> str:
 def infer_entry_type(paper: PaperRecord) -> str:
     """Infer BibTeX entry type from paper metadata.
 
+    A paper counts as a conference paper when S2 says so in
+    ``publicationTypes``, or, for a record without that field, when its venue
+    name carries one of :data:`_CONFERENCE_KEYWORDS`. Both are checked ahead
+    of the arXiv fallback, so a conference paper that also has a preprint is
+    not reported as ``misc``.
+
     Args:
         paper: Paper metadata dict.
 
@@ -142,7 +153,10 @@ def infer_entry_type(paper: PaperRecord) -> str:
     if book_meta and (book_meta.get("isbn_13") or book_meta.get("publisher")):
         return "book"
     venue = (paper.get("venue") or "").lower()
-    if any(kw in venue for kw in _CONFERENCE_KEYWORDS):
+    publication_types = paper.get("publicationTypes") or []
+    if _CONFERENCE_TYPE in publication_types or any(
+        kw in venue for kw in _CONFERENCE_KEYWORDS
+    ):
         return "inproceedings"
     external_ids = paper.get("externalIds") or {}
     if external_ids.get("ArXiv") and not venue:

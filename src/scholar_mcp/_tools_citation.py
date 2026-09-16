@@ -69,8 +69,12 @@ async def generate_citations(
     try:
         # batch_resolve does not pre-screen the cache (consistent
         # with the batch_resolve tool in _tools_utility.py).
+        #
+        # publicationTypes is requested on top of the preset because entry-type
+        # inference is the only consumer; widening FIELD_SETS["full"] would
+        # change what get_paper and every fields="full" caller return.
         s2_results = await service.s2.batch_resolve(
-            paper_ids, fields=FIELD_SETS["full"]
+            paper_ids, fields=FIELD_SETS["full"] + ",publicationTypes"
         )
     except httpx.HTTPStatusError as exc:
         return s2_error_payload(exc)
