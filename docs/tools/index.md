@@ -266,6 +266,8 @@ Generate formatted citations for one or more papers. Output formats: BibTeX, CSL
 
 **BibTeX output** includes entry type inference (`@article`, `@inproceedings`, `@misc`, `@book`), proper author formatting (`{Last}, First`), title casing preservation, DOI, arXiv eprint fields, and special character escaping. Papers with `book_metadata` (ISBN or publisher) are emitted as `@book` entries with `publisher`, `edition`, and `isbn` fields.
 
+A paper is emitted as `@inproceedings` when Semantic Scholar reports it as a conference paper, and otherwise when its venue name contains conference, proceedings, workshop, or symposium. The first rule matters because venue names such as "Neural Information Processing Systems" and "Computer Vision and Pattern Recognition" contain none of those words. The same inference drives the CSL-JSON `paper-conference` type and the RIS `CONF` tag.
+
 **Returns:** `{"format": ..., "output": ...}`, where `output` is the formatted text for the chosen format. The key is `output` rather than `citations` because the CSL-JSON formatter emits its own `citations` key, which would collide.
 
 **CSL-JSON output** puts a JSON document in `output`, so reaching the entries means parsing that string: it is `{"citations": [...], "errors": [...]}`, whose citations array contains standard CSL-JSON objects compatible with Zotero, Mendeley, Pandoc, and other CSL processors. Book entries use `type: "book"` with `publisher` and `ISBN` fields.

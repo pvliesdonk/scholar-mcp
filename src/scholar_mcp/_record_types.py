@@ -74,6 +74,7 @@ class PaperRecord(TypedDict, total=False):
     fieldsOfStudy: list[str] | None
     tldr: S2Tldr | None
     openAccessPdf: S2OpenAccessPdf | None
+    publicationTypes: list[str] | None
 
     # Enrichment-added fields (populated by enrichers, not by S2).
     book_metadata: dict[str, Any]
