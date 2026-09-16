@@ -116,6 +116,13 @@ The post-install script automatically:
 
 Your configuration in `/etc/scholar-mcp/env` is preserved.
 
+!!! warning "Check the bind address after upgrading from 2.0.0 or earlier"
+    The unit file is replaced on every upgrade, and earlier versions set
+    `SCHOLAR_MCP_HOST=0.0.0.0` in it. The unit no longer sets a bind address,
+    so a service that was reachable from other hosts without naming the
+    variable in `/etc/scholar-mcp/env` binds loopback after the post-install
+    restart. Add `SCHOLAR_MCP_HOST=0.0.0.0` to that file to keep it reachable.
+
 ## Uninstalling
 
 === "Debian / Ubuntu"
