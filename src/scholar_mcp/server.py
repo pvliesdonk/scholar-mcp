@@ -32,7 +32,6 @@ from fastmcp_pvl_core import (
     wire_middleware_stack,
 )
 
-from scholar_mcp._s2_client import S2_KEEPALIVE_STATUS
 from scholar_mcp._server_apps import register_apps
 from scholar_mcp._server_deps import server_lifespan
 from scholar_mcp.config import ProjectConfig
@@ -171,7 +170,14 @@ def make_server(
         # rotation wherever something polls that route, and that does not
         # revive a revoked key -- while OpenAlex, Crossref, EPO, OpenLibrary
         # and the standards sources carry on serving.
-        upstream_version=S2_KEEPALIVE_STATUS.as_dict,
+        #
+        # ``_s2_keepalive`` is bound in the DOMAIN-WIRING block below, which
+        # runs after this call. The lambda defers the lookup to call time, by
+        # which point the name exists. That late binding is what keeps the
+        # import inside a sentinel instead of the template-owned import block
+        # above (#438); the provider is only ever called by get_server_info,
+        # long after make_server has returned.
+        upstream_version=lambda: _s2_keepalive.as_dict(),
         upstream_label="semantic_scholar",
         # DOMAIN-UPSTREAM-END
     )
@@ -197,6 +203,14 @@ def make_server(
     # transforms, mode toggles, alternative middleware, additional registrations);
     # kept across copier update. Leave empty for projects that don't customise
     # make_server() beyond the standard scaffold.
+    #
+    # -- get_server_info's Semantic Scholar key-health block -------------------
+    #
+    # Bound here rather than imported at module scope because this is the first
+    # place a statement may run: the DOMAIN-UPSTREAM sentinel sits inside a
+    # call's keyword list. Keeping the import local is what leaves server.py
+    # identical to the template render outside its sentinels (#438).
+    from scholar_mcp._s2_client import S2_KEEPALIVE_STATUS as _s2_keepalive
 
     if config.read_only:
         mcp.disable(tags={"write"})
