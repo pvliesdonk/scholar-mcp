@@ -142,8 +142,7 @@ def make_server(
     # shaped identity, operator routing/policy, and documentation roles.
     # ``finalize_instructions`` renders them once, after tool visibility.
     instructions_for(mcp).identity(
-        server_name,
-        "FastMCP server for scholarly papers, patents, books and standards with docling PDF conversion",
+        server_name, "Scholarly papers, patents, books, standards and PDF conversion"
     )
     # The docs site publishes llms.txt per version (mkdocs-llmstxt, mike);
     # `/latest/` resolves once the first release has published the site.

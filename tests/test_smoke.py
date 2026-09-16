@@ -15,8 +15,7 @@ from scholar_mcp.server import make_server
 
 # pvl-core 6 shapes identity as "<server-name>: <product description>".
 _IDENTITY = (
-    "scholar-mcp: FastMCP server for scholarly papers, patents, books and standards "
-    "with docling PDF conversion"
+    "scholar-mcp: Scholarly papers, patents, books, standards and PDF conversion"
 )
 _LLMS_TXT = "https://pvliesdonk.github.io/scholar-mcp/latest/llms.txt"
 _WRITE_MODE_SNIPPET = "This instance is in read-write mode"
@@ -159,7 +158,7 @@ def test_server_name_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
     server = make_server()
     assert server.name == "renamed-instance"
     assert (server.instructions or "").startswith(
-        "renamed-instance: FastMCP server for scholarly papers, patents, books and standards with docling PDF conversion"
+        "renamed-instance: Scholarly papers, patents, books, standards and PDF conversion"
     )
 
 
@@ -221,7 +220,7 @@ def test_instructions_compose_semantic_operator_roles(
     # Scholar's own workflow snippets (job polling) sit between policy and the
     # documentation pointer, so pin the roles' positions, not the full list.
     assert parts[:3] == [
-        "scholar-mcp: FastMCP server for scholarly papers, patents, books and standards with docling PDF conversion",
+        "scholar-mcp: Scholarly papers, patents, books, standards and PDF conversion",
         "Demo material.",
         "House rule: be brief.",
     ]
@@ -247,5 +246,5 @@ def test_blank_overrides_fall_back_to_defaults(
     server = make_server()
     assert server.name == "scholar-mcp"
     assert (server.instructions or "").startswith(
-        "scholar-mcp: FastMCP server for scholarly papers, patents, books and standards with docling PDF conversion",
+        "scholar-mcp: Scholarly papers, patents, books, standards and PDF conversion",
     )
