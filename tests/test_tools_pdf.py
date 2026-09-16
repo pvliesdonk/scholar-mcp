@@ -1013,3 +1013,158 @@ async def test_fetch_pdf_by_url_derives_stem_from_url(
     stem = Path(data["pdf_path"]).stem
     assert stem.startswith("report_")
     assert len(stem) == len("report_") + 8
+
+
+# ---------------------------------------------------------------------------
+# Paper-metadata cache reuse (#373)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.respx(assert_all_called=False)
+async def test_fetch_and_convert_reads_metadata_from_the_paper_cache(
+    service_with_docling: Service, slow_jobs: Jobs
+) -> None:
+    """A cached paper record answers without a live S2 request (#373)."""
+    pdf_url = "https://example.com/fcm_cached.pdf"
+    await service_with_docling.cache.set_paper(
+        "fcm1",
+        {
+            "paperId": "fcm1",
+            "title": "Cached Metadata",
+            "openAccessPdf": {"url": pdf_url},
+        },
+    )
+    service_with_docling.docling.convert = AsyncMock(  # type: ignore[union-attr]
+        return_value="# From cache"
+    )
+
+    with respx.mock(assert_all_called=False) as router:
+        s2 = router.get(f"{S2_BASE}/paper/fcm1").mock(return_value=httpx.Response(500))
+        router.get(pdf_url).mock(
+            return_value=httpx.Response(200, content=b"%PDF-1.4 cached meta")
+        )
+        async with Client(pdf_app(service_with_docling, slow_jobs)) as client:
+            result = await client.call_tool("fetch_and_convert", {"identifier": "fcm1"})
+
+    data = json.loads(result.content[0].text)
+    _assert_inline(data)
+    assert data["metadata"]["paperId"] == "fcm1"
+    assert not s2.called
+
+
+@pytest.mark.respx(assert_all_called=False)
+async def test_fetch_and_convert_caches_the_resolved_paper(
+    service_with_docling: Service, slow_jobs: Jobs
+) -> None:
+    """A resolved record is written to the cache so the next call reuses it."""
+    pdf_url = "https://example.com/fcp_store.pdf"
+    paper_json = {
+        "paperId": "fcp1",
+        "title": "Stored Metadata",
+        "openAccessPdf": {"url": pdf_url},
+    }
+    service_with_docling.docling.convert = AsyncMock(  # type: ignore[union-attr]
+        return_value="# Stored"
+    )
+
+    with respx.mock(assert_all_called=False) as router:
+        router.get(f"{S2_BASE}/paper/fcp1").mock(
+            return_value=httpx.Response(200, json=paper_json)
+        )
+        router.get(pdf_url).mock(
+            return_value=httpx.Response(200, content=b"%PDF-1.4 stored")
+        )
+        async with Client(pdf_app(service_with_docling, slow_jobs)) as client:
+            await client.call_tool("fetch_and_convert", {"identifier": "fcp1"})
+
+    assert await service_with_docling.cache.get_paper("fcp1") is not None
+
+
+@pytest.mark.respx(assert_all_called=False)
+async def test_fetch_and_convert_stores_an_alias_for_a_doi_identifier(
+    service_with_docling: Service, slow_jobs: Jobs
+) -> None:
+    """A DOI lookup records its alias, so a repeat call skips S2 (#373)."""
+    pdf_url = "https://example.com/fcd_alias.pdf"
+    paper_json = {
+        "paperId": "fcd1",
+        "title": "Aliased Paper",
+        "openAccessPdf": {"url": pdf_url},
+    }
+    service_with_docling.docling.convert = AsyncMock(  # type: ignore[union-attr]
+        return_value="# Aliased"
+    )
+
+    with respx.mock(assert_all_called=False) as router:
+        s2 = router.get(f"{S2_BASE}/paper/DOI:10.1/xyz").mock(
+            return_value=httpx.Response(200, json=paper_json)
+        )
+        router.get(pdf_url).mock(
+            return_value=httpx.Response(200, content=b"%PDF-1.4 aliased")
+        )
+        app = pdf_app(service_with_docling, slow_jobs)
+        async with Client(app) as client:
+            await client.call_tool("fetch_and_convert", {"identifier": "DOI:10.1/xyz"})
+            first_calls = s2.call_count
+            await client.call_tool("fetch_and_convert", {"identifier": "DOI:10.1/xyz"})
+
+    assert await service_with_docling.cache.get_alias("DOI:10.1/xyz") == "fcd1"
+    assert s2.call_count == first_calls
+
+
+@pytest.mark.respx(assert_all_called=False)
+async def test_fetch_paper_pdf_reads_metadata_from_the_paper_cache(
+    service: Service, slow_jobs: Jobs
+) -> None:
+    """The sibling entry point reuses the same cached record (#373)."""
+    pdf_url = "https://example.com/fpp_cached.pdf"
+    await service.cache.set_paper(
+        "fpp1",
+        {
+            "paperId": "fpp1",
+            "title": "Cached For Pdf",
+            "openAccessPdf": {"url": pdf_url},
+        },
+    )
+
+    with respx.mock(assert_all_called=False) as router:
+        s2 = router.get(f"{S2_BASE}/paper/fpp1").mock(return_value=httpx.Response(500))
+        router.get(pdf_url).mock(
+            return_value=httpx.Response(200, content=b"%PDF-1.4 sibling")
+        )
+        async with Client(pdf_app(service, slow_jobs)) as client:
+            result = await client.call_tool("fetch_paper_pdf", {"identifier": "fpp1"})
+
+    data = json.loads(result.content[0].text)
+    _assert_inline(data)
+    assert data["path"].endswith("fpp1.pdf")
+    assert not s2.called
+
+
+@pytest.mark.respx(assert_all_called=False)
+async def test_fetch_paper_pdf_does_not_cache_a_record_without_a_paper_id(
+    service: Service, slow_jobs: Jobs
+) -> None:
+    """A record S2 returns with no paperId is used but not cached (#373).
+
+    Caching it would key the row on the caller's identifier, so a later
+    lookup by the real paper id would miss while this row lingered.
+    """
+    pdf_url = "https://example.com/noid.pdf"
+
+    with respx.mock(assert_all_called=False) as router:
+        router.get(f"{S2_BASE}/paper/noid1").mock(
+            return_value=httpx.Response(
+                200, json={"title": "No Id", "openAccessPdf": {"url": pdf_url}}
+            )
+        )
+        router.get(pdf_url).mock(
+            return_value=httpx.Response(200, content=b"%PDF-1.4 noid")
+        )
+        async with Client(pdf_app(service, slow_jobs)) as client:
+            result = await client.call_tool("fetch_paper_pdf", {"identifier": "noid1"})
+
+    data = json.loads(result.content[0].text)
+    _assert_inline(data)
+    assert data["path"].endswith("noid1.pdf")
+    assert await service.cache.get_paper("noid1") is None

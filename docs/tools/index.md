@@ -676,6 +676,8 @@ Download the PDF for a paper. Tries the Semantic Scholar open-access URL first, 
 
 The `source` field indicates where the PDF was obtained: `s2_oa`, `arxiv`, `pmc`, or `unpaywall`.
 
+Paper metadata is read from the same 30-day cache `get_paper` uses, and a freshly resolved record is written back to it. A repeat call for the same paper needs no Semantic Scholar request.
+
 ---
 
 ### `convert_pdf_to_markdown`
@@ -723,6 +725,8 @@ Full paper-to-Markdown pipeline: downloads and converts the PDF, using the same 
 ```
 
 Partial results are returned if a later stage fails (such as metadata + error if no OA PDF is available). The `pdf_source` field indicates the download source. When VLM is requested but not configured, the response includes `vlm_skip_reason`.
+
+The `metadata` block is read from the same 30-day cache `get_paper` uses, and a freshly resolved record is written back to it. A call whose PDF and Markdown are both already on disk makes no Semantic Scholar request at all.
 
 !!! tip "Start without VLM"
     Same advice as `convert_pdf_to_markdown`, try standard first, add VLM only if formulas or figures are missing. VLM and standard conversions are cached separately (`<id>.md` vs `<id>_vlm.md`).
