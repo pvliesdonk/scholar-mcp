@@ -3,7 +3,7 @@
 Shared between the ISO and IEC sync loaders; the joint-standard detection
 logic lives in :func:`_canonical_identifier_and_body`.
 
-Design reference: ``docs/specs/2026-04-13-pr2-iso-iec-relaton-design.md``.
+Design reference: ``docs/design/history/specs/2026-04-13-pr2-iso-iec-relaton-design.md``.
 """
 
 from __future__ import annotations
@@ -446,7 +446,7 @@ class RelatonLoader:
     """One instance per body (ISO, IEC, or IEEE). Conforms to the Loader protocol.
 
     The full sync algorithm is documented in
-    ``docs/specs/2026-04-13-pr2-iso-iec-relaton-design.md``.
+    ``docs/design/history/specs/2026-04-13-pr2-iso-iec-relaton-design.md``.
     """
 
     def __init__(

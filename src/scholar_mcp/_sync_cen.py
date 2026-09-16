@@ -11,7 +11,7 @@ published by CEN or CENELEC — the distinction adds no value for LLM
 citation resolution. EN ISO / EN IEC adoptions are stored under their
 ``EN`` prefix; no cross-linking to the ISO/IEC records.
 
-Design reference: ``docs/specs/2026-04-16-pr4b-cen-loader-design.md``.
+Design reference: ``docs/design/history/specs/2026-04-16-pr4b-cen-loader-design.md``.
 """
 
 from __future__ import annotations
