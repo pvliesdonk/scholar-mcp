@@ -419,3 +419,153 @@ async def test_search_papers_answers_inline_when_fast(
     data = json.loads(result.content[0].text)
     assert "job_id" not in data
     assert data["data"][0]["paperId"] == "f1"
+
+
+def _author_record(paper_count: int, papers: int) -> dict[str, object]:
+    """Build an author record carrying *papers* entries out of *paper_count*."""
+    return {
+        "authorId": "12345",
+        "name": "Ada Lovelace",
+        "paperCount": paper_count,
+        "papers": [
+            {"paperId": f"p{i}", "title": f"Paper {i}", "year": 2020}
+            for i in range(papers)
+        ],
+    }
+
+
+@pytest.mark.respx(base_url=S2_BASE, assert_all_called=False)
+async def test_get_author_applies_limit_to_cached_papers(
+    respx_mock: respx.MockRouter, mcp: FastMCP, service: Service
+) -> None:
+    """A cached author record is cut to the caller's limit (#367)."""
+    route = respx_mock.get("/author/12345").mock(return_value=httpx.Response(500))
+    await service.cache.set_author("12345", _author_record(5, 5))
+
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_author", {"identifier": "12345", "limit": 3}
+        )
+
+    data = json.loads(result.content[0].text)
+    assert len(data["papers"]) == 3
+    assert not route.called
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_author_refetches_when_cached_window_is_narrower_than_limit(
+    respx_mock: respx.MockRouter, mcp: FastMCP, service: Service
+) -> None:
+    """A cache holding fewer papers than asked for goes live (#367)."""
+    route = respx_mock.get("/author/12345").mock(
+        return_value=httpx.Response(200, json=_author_record(35, 10))
+    )
+    await service.cache.set_author("12345", _author_record(35, 3))
+
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_author", {"identifier": "12345", "limit": 10}
+        )
+
+    data = json.loads(result.content[0].text)
+    assert len(data["papers"]) == 10
+    assert route.called
+
+
+@pytest.mark.respx(base_url=S2_BASE, assert_all_called=False)
+async def test_get_author_serves_cache_when_author_has_fewer_papers_than_limit(
+    respx_mock: respx.MockRouter, mcp: FastMCP, service: Service
+) -> None:
+    """A short cache is authoritative when the author has no more papers (#367)."""
+    route = respx_mock.get("/author/12345").mock(return_value=httpx.Response(500))
+    await service.cache.set_author("12345", _author_record(3, 3))
+
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_author", {"identifier": "12345", "limit": 10}
+        )
+
+    data = json.loads(result.content[0].text)
+    assert len(data["papers"]) == 3
+    assert not route.called
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_author_handles_a_record_without_a_papers_list(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """An author record carrying no papers list survives pagination (#367)."""
+    respx_mock.get("/author/12345").mock(
+        return_value=httpx.Response(
+            200, json={"authorId": "12345", "name": "Ada Lovelace", "paperCount": 0}
+        )
+    )
+
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_author", {"identifier": "12345", "limit": 3}
+        )
+
+    data = json.loads(result.content[0].text)
+    assert data["name"] == "Ada Lovelace"
+    assert "papers" not in data
+
+
+@pytest.mark.respx(base_url=S2_BASE, assert_all_called=False)
+async def test_get_author_cuts_a_cached_record_that_has_no_paper_count(
+    respx_mock: respx.MockRouter, mcp: FastMCP, service: Service
+) -> None:
+    """A cached record lacking paperCount is still cut to limit (#367)."""
+    route = respx_mock.get("/author/12345").mock(return_value=httpx.Response(500))
+    record = _author_record(5, 5)
+    del record["paperCount"]
+    await service.cache.set_author("12345", record)
+
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_author", {"identifier": "12345", "limit": 3}
+        )
+
+    data = json.loads(result.content[0].text)
+    assert len(data["papers"]) == 3
+    assert not route.called
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_author_with_an_offset_goes_live_and_keeps_the_cached_page(
+    respx_mock: respx.MockRouter, mcp: FastMCP, service: Service
+) -> None:
+    """A non-zero offset is answered live without clobbering the cache (#367)."""
+    route = respx_mock.get("/author/12345").mock(
+        return_value=httpx.Response(200, json=_author_record(35, 5))
+    )
+    await service.cache.set_author("12345", _author_record(35, 35))
+
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_author", {"identifier": "12345", "limit": 5, "offset": 10}
+        )
+
+    data = json.loads(result.content[0].text)
+    assert len(data["papers"]) == 5
+    assert route.called
+    cached = await service.cache.get_author("12345")
+    assert cached is not None
+    assert len(cached["papers"]) == 35
+
+
+@pytest.mark.respx(base_url=S2_BASE, assert_all_called=False)
+async def test_get_author_does_not_truncate_from_the_end_for_a_negative_limit(
+    respx_mock: respx.MockRouter, mcp: FastMCP, service: Service
+) -> None:
+    """A negative limit yields nothing rather than dropping the last papers."""
+    respx_mock.get("/author/12345").mock(return_value=httpx.Response(500))
+    await service.cache.set_author("12345", _author_record(5, 5))
+
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_author", {"identifier": "12345", "limit": -2}
+        )
+
+    data = json.loads(result.content[0].text)
+    assert data["papers"] == []
