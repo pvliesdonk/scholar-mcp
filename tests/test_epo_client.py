@@ -37,10 +37,10 @@ _BIBLIO_XML = b"""<?xml version="1.0" encoding="UTF-8"?>
           </document-id>
         </publication-reference>
         <invention-title lang="en">Test Patent</invention-title>
-        <abstract lang="en"><p>Test abstract.</p></abstract>
         <parties><applicants><applicant data-format="docdb" sequence="1"><applicant-name><name>TEST CORP</name></applicant-name></applicant></applicants><inventors/></parties>
         <patent-classifications/>
       </bibliographic-data>
+      <abstract lang="en"><p>Test abstract.</p></abstract>
     </exchange-document>
   </exchange-documents>
 </ops:world-patent-data>"""

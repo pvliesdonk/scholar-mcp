@@ -77,12 +77,6 @@ BIBLIO_XML_FULL = b"""<?xml version="1.0" encoding="UTF-8"?>
         </parties>
         <invention-title lang="en">A Method for Testing XML Parsers</invention-title>
         <invention-title lang="de">Ein Verfahren zum Testen von XML-Parsern</invention-title>
-        <abstract lang="en">
-          <p>This is the English abstract describing the invention in detail.</p>
-        </abstract>
-        <abstract lang="de">
-          <p>Dies ist die deutsche Zusammenfassung der Erfindung.</p>
-        </abstract>
         <patent-classifications>
           <patent-classification sequence="1" scheme="CPCI">
             <section>H</section>
@@ -102,6 +96,12 @@ BIBLIO_XML_FULL = b"""<?xml version="1.0" encoding="UTF-8"?>
           </patent-classification>
         </patent-classifications>
       </bibliographic-data>
+      <abstract lang="en">
+        <p>This is the English abstract describing the invention in detail.</p>
+      </abstract>
+      <abstract lang="de">
+        <p>Dies ist die deutsche Zusammenfassung der Erfindung.</p>
+      </abstract>
     </exchange-document>
   </exchange-documents>
 </ops:world-patent-data>
@@ -157,11 +157,11 @@ BIBLIO_XML_NON_ENGLISH_ONLY = b"""<?xml version="1.0" encoding="UTF-8"?>
           </inventors>
         </parties>
         <invention-title lang="de">Nur Deutsches Patent</invention-title>
-        <abstract lang="de">
-          <p>Nur eine deutsche Zusammenfassung.</p>
-        </abstract>
         <patent-classifications/>
       </bibliographic-data>
+      <abstract lang="de">
+        <p>Nur eine deutsche Zusammenfassung.</p>
+      </abstract>
     </exchange-document>
   </exchange-documents>
 </ops:world-patent-data>
@@ -717,6 +717,30 @@ class TestParseLegalXml:
             assert event["code"]
             assert event["description"]
             assert event["date"]
+
+    def test_country_comes_from_the_ref_country_code(self) -> None:
+        """`L501EP` names the state an event concerns (#405).
+
+        Without it, the 37 `PG25` "LAPSED IN A CONTRACTING STATE" events on a
+        real patent differ only by date, so the section cannot answer the
+        question those events exist to answer. See
+        docs/design/reference/epo-ops-legal-events.md.
+        """
+        events = parse_legal_xml(REAL_LEGAL_XML)
+        first_pg25 = next(e for e in events if e["code"] == "PG25")
+        assert first_pg25["country"] == "CH"
+
+    def test_container_child_varies_by_event(self) -> None:
+        """`L500EP` is a container, so not every event carries a state.
+
+        The `17Q` event holds an `L525EP` "Effective DATE" in that same
+        container rather than an `L501EP`, which is why the parser reads the
+        child and not the container.
+        """
+        events = parse_legal_xml(REAL_LEGAL_XML)
+        assert events[0]["code"] == "17Q"
+        assert events[0]["country"] == ""
+        assert sum(1 for e in events if e["country"]) == 28
 
     def test_empty_xml(self) -> None:
         empty = b'<?xml version="1.0"?><ops:world-patent-data xmlns:ops="http://ops.epo.org"></ops:world-patent-data>'

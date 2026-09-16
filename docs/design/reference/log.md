@@ -2,6 +2,37 @@
 
 Newest first. One entry per research pass.
 
+## 2026-09-16
+
+### Biblio element placement, and what `L500EP` actually holds
+
+Subject: where OPS puts `abstract` in a biblio response, and what the `L500EP`
+element contains. Prompted by #399 (every patent record came back with
+`"abstract": ""`) and #405 (37 `PG25` events indistinguishable apart from their
+dates).
+
+Added [EPO OPS bibliographic responses](epo-ops-biblio.md) as `status: draft`.
+`abstract` is a *sibling* of `bibliographic-data`, not a child of it, so the
+direct-children helper the parser used never saw it. The page is draft rather
+than stable because no fixture could be vendored: the fixing session had no EPO
+credentials reachable, so its evidence is the raw response quoted verbatim in
+#399 rather than a capture under `tests/fixtures/epo/`. Promote it to stable
+when the document can be re-captured.
+
+Corrected a falsified claim on [legal-status events](epo-ops-legal-events.md).
+The 2026-09-10 pass recorded that `L500EP` "appeared empty in every observed
+event. [unverified]". It is not empty — it is a container whose child varies by
+event. The fixture that pass already vendored carries `L501EP` "Ref Country
+Code" on 28 of its 50 events across 19 states, and an `L525EP` "Effective DATE"
+on the `17Q` event. The claim is now `[observed:]` and pinned to tests.
+
+That makes two claims from the 2026-09-10 pass that its own vendored fixture
+refutes. Both were the `[unverified]` ones, and both were falsifiable in seconds
+against bytes already in the repository — an argument for spending the refute
+pass on the evidence already in hand before reaching for a new source.
+
+Next review: 2027-09-10 (unchanged).
+
 ## 2026-09-12
 
 ### GitHub planning objects

@@ -250,6 +250,49 @@ async def test_repair_runs_once_and_is_recorded(tmp_path, monkeypatch):
     assert row[0] == 1
 
 
+async def test_registered_repairs_drop_what_their_bugs_cached(tmp_path):
+    """The #399 and #405 predicates fire on a database written before the fix.
+
+    A fresh database records both repairs on its first open with nothing to
+    delete, so the upgrade path is what needs asserting: clear the ledger to
+    stand in for a cache written by an older build, then reopen.
+    """
+    import aiosqlite
+
+    db_path = tmp_path / "upgrade.db"
+    old = ScholarCache(db_path)
+    await old.open()
+    await old.set_patent("EP1.A1", {"title": "broken", "abstract": ""})
+    await old.set_patent("EP2.A1", {"title": "fine", "abstract": "real text"})
+    await old.set_patent_legal(
+        "EP1.A1", [{"date": "2021-07-30", "code": "PG25", "description": "LAPSED"}]
+    )
+    await old.close()
+
+    async with aiosqlite.connect(db_path) as db:
+        await db.execute("DELETE FROM repairs")
+        await db.commit()
+
+    upgraded = ScholarCache(db_path)
+    await upgraded.open()
+    try:
+        assert await upgraded.get_patent("EP1.A1") is None
+        assert await upgraded.get_patent("EP2.A1") is not None
+        assert await upgraded.get_patent_legal("EP1.A1") is None
+    finally:
+        await upgraded.close()
+
+
+async def test_every_registered_repair_is_valid_sql(cache):
+    """A malformed statement would otherwise only surface on a user's upgrade."""
+    assert set(_REPAIRS) == {
+        "399_empty_patent_abstract",
+        "405_legal_events_without_country",
+    }
+    for statement in _REPAIRS.values():
+        await cache._db.execute(f"EXPLAIN {statement}")
+
+
 async def test_open_provisions_the_repairs_ledger(cache):
     """With no repairs registered, open() still provisions the ledger."""
     async with cache._db.execute(

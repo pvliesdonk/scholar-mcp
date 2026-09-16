@@ -283,7 +283,19 @@ CREATE TABLE IF NOT EXISTS standards_sync_runs (
 # Empty is a valid state. A repair belongs in the same release as the fix
 # whose output it corrects — dropping rows while the old code still runs
 # just re-caches the same wrong data.
-_REPAIRS: dict[str, str] = {}
+_REPAIRS: dict[str, str] = {
+    # #399: the biblio parser read `abstract` from the wrong element, so every
+    # patent cached before that fix holds `abstract: ""`. Rows that legitimately
+    # have no abstract (a B1 publication carries none) are re-fetched and
+    # re-cached identically, so dropping them costs one request and no accuracy.
+    # `json_extract` needs SQLite's JSON1, built in since 3.38.
+    "399_empty_patent_abstract": (
+        "DELETE FROM patents WHERE json_extract(data, '$.abstract') = ''"
+    ),
+    # #405: legal events were cached without the state each one concerns. No
+    # predicate narrows this -- every cached row predates the new field.
+    "405_legal_events_without_country": "DELETE FROM patent_legal",
+}
 
 
 async def _apply_repairs(db: aiosqlite.Connection) -> None:
