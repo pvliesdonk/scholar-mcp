@@ -2,7 +2,7 @@ import time
 
 import pytest
 
-from scholar_mcp._cache import ScholarCache
+from scholar_mcp._cache import _REPAIRS, ScholarCache
 
 
 @pytest.fixture
@@ -187,3 +187,72 @@ class TestCrossRefCache:
             )
             await db.commit()
         assert await cache.get_crossref("10.1234/old") is None
+
+
+# ---------------------------------------------------------------------
+# One-shot row repairs (#440)
+# ---------------------------------------------------------------------
+
+_TEST_REPAIR = "DELETE FROM patents WHERE json_extract(data, '$.abstract') = ''"
+
+
+async def test_repair_deletes_only_matching_rows(tmp_path, monkeypatch):
+    """A registered repair runs at open() and spares rows it does not match."""
+    db_path = tmp_path / "repair.db"
+    seed = ScholarCache(db_path)
+    await seed.open()
+    await seed.set_patent("EP1.A1", {"title": "broken", "abstract": ""})
+    await seed.set_patent("EP2.A1", {"title": "fine", "abstract": "real text"})
+    await seed.close()
+
+    monkeypatch.setitem(_REPAIRS, "test_empty_abstract", _TEST_REPAIR)
+    cache = ScholarCache(db_path)
+    await cache.open()
+    try:
+        assert await cache.get_patent("EP1.A1") is None
+        assert await cache.get_patent("EP2.A1") is not None
+    finally:
+        await cache.close()
+
+
+async def test_repair_runs_once_and_is_recorded(tmp_path, monkeypatch):
+    """A repair is one-shot: rows cached after it ran are left alone."""
+    import aiosqlite
+
+    db_path = tmp_path / "once.db"
+    monkeypatch.setitem(_REPAIRS, "test_empty_abstract", _TEST_REPAIR)
+
+    first = ScholarCache(db_path)
+    await first.open()
+    await first.close()
+
+    second = ScholarCache(db_path)
+    await second.open()
+    await second.set_patent("EP3.A1", {"title": "new", "abstract": ""})
+    await second.close()
+
+    third = ScholarCache(db_path)
+    await third.open()
+    try:
+        # The repair already ran, so it must not act as a standing filter.
+        assert await third.get_patent("EP3.A1") is not None
+    finally:
+        await third.close()
+
+    async with (
+        aiosqlite.connect(db_path) as db,
+        db.execute(
+            "SELECT count(*) FROM repairs WHERE name = ?", ("test_empty_abstract",)
+        ) as cur,
+    ):
+        row = await cur.fetchone()
+    assert row is not None
+    assert row[0] == 1
+
+
+async def test_open_provisions_the_repairs_ledger(cache):
+    """With no repairs registered, open() still provisions the ledger."""
+    async with cache._db.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='repairs'"
+    ) as cur:
+        assert await cur.fetchone() is not None
