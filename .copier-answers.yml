@@ -4,8 +4,7 @@ _src_path: https://github.com/pvliesdonk/fastmcp-server-template
 author_email: pvliesdonk@users.noreply.github.com
 author_name: Peter van Liesdonk
 docker_registry: ghcr.io/pvliesdonk
-domain_description: FastMCP server for scholarly papers, patents, books and standards
-    with docling PDF conversion
+domain_description: Scholarly papers, patents, books, standards and PDF conversion
 enable_authorization: false
 enable_automatic_claude_review: false
 enable_structural_gate: true

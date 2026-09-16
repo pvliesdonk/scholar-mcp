@@ -1,6 +1,6 @@
 # Scholar MCP
 
-FastMCP server for scholarly papers, patents, books and standards with docling PDF conversion
+Scholarly papers, patents, books, standards and PDF conversion
 
 ## Design
 <!-- DOMAIN-START -->

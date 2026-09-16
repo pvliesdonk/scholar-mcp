@@ -17,7 +17,7 @@ from scholar_mcp.config import _ENV_PREFIX, ProjectConfig
 
 app = typer.Typer(
     name="scholar-mcp",
-    help="FastMCP server for scholarly papers, patents, books and standards with docling PDF conversion",
+    help="Scholarly papers, patents, books, standards and PDF conversion",
     no_args_is_help=True,
     add_completion=False,
 )
