@@ -1,5 +1,5 @@
 #!/bin/bash
-# Post-install script: create venv and install pvliesdonk-scholar-mcp from PyPI.
+# Post-install script: create venv and install scholar-mcp from PyPI.
 set -eu
 
 INSTALL_DIR="/opt/scholar-mcp"

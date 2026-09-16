@@ -75,7 +75,7 @@ def test_mcpb_manifest_template_valid_and_complete() -> None:
         from_idx = mcp_config["args"].index("--from")
         assert mcp_config["args"][from_idx + 1] != ".", (
             "mcp_config.args must not use '--from .' (local source); "
-            "use '--from pvliesdonk-scholar-mcp[mcp]==${VERSION}' instead"
+            "use '--from pvliesdonk-scholar-mcp[all]==${VERSION}' instead"
         )
 
     env = server["mcp_config"]["env"]
@@ -91,11 +91,11 @@ def test_mcpb_manifest_template_valid_and_complete() -> None:
 
 
 def test_mcpb_pyproject_template_pins_versioned_package() -> None:
-    """The bundle pyproject must pin pvliesdonk-scholar-mcp[mcp] to VERSION."""
+    """The bundle pyproject must pin pvliesdonk-scholar-mcp[all] to VERSION."""
     template = (MCPB_DIR / "pyproject.toml.in").read_text(encoding="utf-8")
     assert "${VERSION}" in template, "template must use ${VERSION} placeholder"
-    # The dep line should pin [mcp] extras to the same version.
-    assert "pvliesdonk-scholar-mcp[mcp]==${VERSION}" in template
+    # The dep line should pin [all] extras to the same version.
+    assert "pvliesdonk-scholar-mcp[all]==${VERSION}" in template
     assert 'requires-python = ">=3.11"' in template
 
 

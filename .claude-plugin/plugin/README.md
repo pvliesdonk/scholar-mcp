@@ -33,7 +33,7 @@ Optional environment variables:
 | `SCHOLAR_MCP_S2_API_KEY` | -- | [Free API key](https://www.semanticscholar.org/product/api#api-key-form) for ~10 req/s (vs ~1 without). |
 | `SCHOLAR_MCP_READ_ONLY` | `true` | Hide write tools (PDF download/conversion). |
 | `SCHOLAR_MCP_CONTACT_EMAIL` | -- | OpenAlex polite pool + Unpaywall access. |
-| `SCHOLAR_MCP_CACHE_DIR` | `/data/scholar-mcp` | SQLite cache and PDF storage. Set a writable local path (e.g. `~/Documents/scholar-mcp`) — the default is for Docker. |
+| `SCHOLAR_MCP_CACHE_DIR` | (required) | SQLite cache and PDF storage. The install screen asks for a writable local path (e.g. `~/Documents/scholar-mcp`); the server's own default is the Docker path. |
 | `SCHOLAR_MCP_DOCLING_URL` | -- | docling-serve URL for PDF-to-Markdown. |
 | `SCHOLAR_MCP_VLM_API_URL` | -- | OpenAI-compatible VLM endpoint for formula/figure enrichment. |
 | `SCHOLAR_MCP_VLM_API_KEY` | -- | API key for the VLM endpoint. |

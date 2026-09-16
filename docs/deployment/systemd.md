@@ -39,10 +39,15 @@ sudo chmod 600 /etc/scholar-mcp/env
 sudo nano /etc/scholar-mcp/env
 ```
 
-Set the cache directory and (optionally) your Semantic Scholar API key:
+Set the cache directory, the bind address if other hosts should reach the
+server, and (optionally) your Semantic Scholar API key. The cache directory is
+required: its default, `/data/scholar-mcp`, is the container path, and the
+unit's `ProtectSystem=strict` leaves only `/var/lib/scholar-mcp` writable.
 
 ```bash
 SCHOLAR_MCP_CACHE_DIR=/var/lib/scholar-mcp
+# Listen on every interface; the default is 127.0.0.1 (loopback only)
+SCHOLAR_MCP_HOST=0.0.0.0
 # Optional but recommended, without a key, requests are limited to ~1 req/s
 SCHOLAR_MCP_S2_API_KEY=your-key-here
 ```
@@ -67,7 +72,7 @@ sudo journalctl -u scholar-mcp -f
 
 The service runs in HTTP mode on port 8000 by default.
 
-The unit binds `0.0.0.0` (all interfaces) via `Environment=SCHOLAR_MCP_HOST=0.0.0.0` so the packaged server is reachable from other hosts. The bare CLI falls back to `127.0.0.1` (loopback only). To restrict the packaged service to loopback (typical behind a same-host reverse proxy), set `SCHOLAR_MCP_HOST=127.0.0.1` in `/etc/scholar-mcp/env`; that file overrides the unit default.
+The server binds `127.0.0.1` unless `/etc/scholar-mcp/env` sets `SCHOLAR_MCP_HOST`, so a fresh install is reachable only from the same host, as behind a same-host reverse proxy, until you widen it.
 
 ## Security hardening
 
@@ -111,6 +116,13 @@ The post-install script automatically:
 
 Your configuration in `/etc/scholar-mcp/env` is preserved.
 
+!!! warning "Check the bind address after upgrading from 2.0.0 or earlier"
+    The unit file is replaced on every upgrade, and earlier versions set
+    `SCHOLAR_MCP_HOST=0.0.0.0` in it. The unit no longer sets a bind address,
+    so a service that was reachable from other hosts without naming the
+    variable in `/etc/scholar-mcp/env` binds loopback after the post-install
+    restart. Add `SCHOLAR_MCP_HOST=0.0.0.0` to that file to keep it reachable.
+
 ## Uninstalling
 
 === "Debian / Ubuntu"
@@ -152,6 +164,6 @@ Common causes:
 If the post-install script failed (such as no internet during package install):
 
 ```bash
-sudo /opt/scholar-mcp/venv/bin/pip install 'pvliesdonk-scholar-mcp[mcp]'
+sudo /opt/scholar-mcp/venv/bin/pip install 'pvliesdonk-scholar-mcp[all]'
 sudo systemctl restart scholar-mcp
 ```
