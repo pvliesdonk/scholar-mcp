@@ -33,3 +33,10 @@ assign its collaborators directly (`tests/conftest.py`, `service` fixture).
   pvliesdonk/fastmcp-server-template#534.
 - The CLI's `serve` is the template's: a `ConfigurationError` at startup
   surfaces as a traceback rather than a one-line message.
+- `scholar_mcp.server.build_event_store` is pvl-core's helper, re-exported
+  under the same name: its signature is `(env_prefix, config)`, not this
+  project's former zero-argument wrapper. That wrapper and the
+  `_resolve_auth_mode` / `_build_*_auth` compat shims are gone, so a
+  downstream caller of the old shapes breaks. This is why the adoption ships
+  as a breaking release rather than carrying a compatibility layer the
+  template does not have.
