@@ -104,8 +104,12 @@ class Service:
             self._open_clients(stack)
 
             cache = ScholarCache(config.cache_dir / "cache.db")
-            await cache.open()
+            # Registered before ``open()``, not after: ``open()`` assigns a
+            # live connection and only then applies the schema and the
+            # migrations, so a failure in either would strand it. ``close()``
+            # is a no-op when no connection was assigned.
             stack.push_async_callback(cache.close)
+            await cache.open()
             self.cache = cache
 
             self.standards = StandardsClient(

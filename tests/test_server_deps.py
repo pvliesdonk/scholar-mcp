@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from scholar_mcp._cache import ScholarCache
 from scholar_mcp._enrichment import EnrichmentPipeline
 from scholar_mcp._s2_client import KeepaliveStatus, S2Client
 from scholar_mcp._server_deps import server_lifespan
@@ -161,3 +162,34 @@ async def test_stop_is_idempotent(
     await service.start()
     await service.stop()
     await service.stop()
+
+
+async def test_start_failure_closes_a_partially_opened_cache(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A cache that fails after connecting is closed rather than stranded.
+
+    ``ScholarCache.open`` assigns a live aiosqlite connection before applying
+    the schema and the migrations, so the cleanup has to be registered before
+    the await, not after it.
+    """
+    monkeypatch.setenv("SCHOLAR_MCP_CACHE_DIR", str(tmp_path))
+    opened: list[ScholarCache] = []
+
+    class RecordingCache(ScholarCache):
+        def __init__(self, db_path: Path) -> None:
+            super().__init__(db_path)
+            opened.append(self)
+
+    async def failing_migrations(db: object) -> None:
+        raise RuntimeError("migration failed")
+
+    monkeypatch.setattr("scholar_mcp.domain.ScholarCache", RecordingCache)
+    monkeypatch.setattr("scholar_mcp._cache._apply_migrations", failing_migrations)
+
+    service = Service()
+    with pytest.raises(RuntimeError, match="migration failed"):
+        await service.start()
+
+    assert opened, "the service never constructed a cache"
+    assert opened[0]._db is None, "the partially opened cache was not closed"
