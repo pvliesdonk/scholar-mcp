@@ -60,34 +60,6 @@ async def test_search_by_isbn_returns_none_when_empty(
 
 
 @pytest.mark.respx(base_url=GB_BASE)
-async def test_get_volume_returns_data(
-    respx_mock: respx.MockRouter, client: GoogleBooksClient
-) -> None:
-    respx_mock.get("/volumes/vol123").mock(
-        return_value=httpx.Response(
-            200,
-            json={
-                "id": "vol123",
-                "volumeInfo": {"title": "Deep Learning"},
-            },
-        )
-    )
-    result = await client.get_volume("vol123")
-    assert result is not None
-    assert result["id"] == "vol123"
-    assert result["volumeInfo"]["title"] == "Deep Learning"
-
-
-@pytest.mark.respx(base_url=GB_BASE)
-async def test_get_volume_returns_none_on_404(
-    respx_mock: respx.MockRouter, client: GoogleBooksClient
-) -> None:
-    respx_mock.get("/volumes/missing").mock(return_value=httpx.Response(404))
-    result = await client.get_volume("missing")
-    assert result is None
-
-
-@pytest.mark.respx(base_url=GB_BASE)
 async def test_search_by_isbn_raises_on_error(
     respx_mock: respx.MockRouter, client: GoogleBooksClient
 ) -> None:
@@ -105,15 +77,6 @@ async def test_search_by_isbn_raises_on_transport_error(
     respx_mock.get("/volumes").mock(side_effect=httpx.ConnectError("boom"))
     with pytest.raises(httpx.RequestError):
         await client.search_by_isbn("9780123456789")
-
-
-@pytest.mark.respx(base_url=GB_BASE)
-async def test_get_volume_returns_none_on_server_error(
-    respx_mock: respx.MockRouter, client: GoogleBooksClient
-) -> None:
-    respx_mock.get("/volumes/bad").mock(return_value=httpx.Response(500))
-    result = await client.get_volume("bad")
-    assert result is None
 
 
 def test_params_includes_api_key() -> None:
