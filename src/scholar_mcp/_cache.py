@@ -90,6 +90,11 @@ _SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY);
 INSERT OR IGNORE INTO schema_version VALUES (2);
 
+CREATE TABLE IF NOT EXISTS repairs (
+    name       TEXT PRIMARY KEY,
+    applied_at REAL NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS papers (
     paper_id  TEXT PRIMARY KEY,
     data      TEXT NOT NULL,
@@ -266,11 +271,50 @@ CREATE TABLE IF NOT EXISTS standards_sync_runs (
 );
 """
 
+# One-shot repairs of rows a fix invalidates, keyed by a stable name.
+#
+# A bug that cached wrong data is only half fixed by correcting the code: the
+# rows already written keep being served until their TTL expires, and
+# ``scholar-mcp cache clear`` has no per-table selectivity, so the alternative
+# is telling an operator to discard the whole cache. A fix that leaves such
+# rows behind registers a DELETE here; it runs once per database and is then
+# recorded, so a row cached afterwards is never touched again.
+#
+# Empty is a valid state. A repair belongs in the same release as the fix
+# whose output it corrects — dropping rows while the old code still runs
+# just re-caches the same wrong data.
+_REPAIRS: dict[str, str] = {}
+
+
+async def _apply_repairs(db: aiosqlite.Connection) -> None:
+    """Run each registered repair this database has not seen yet.
+
+    Args:
+        db: Open connection, with the schema already applied.
+    """
+    async with db.execute("SELECT name FROM repairs") as cur:
+        applied = {row[0] for row in await cur.fetchall()}
+    for name, statement in _REPAIRS.items():
+        if name in applied:
+            continue
+        cursor = await db.execute(statement)
+        await db.execute(
+            # OR IGNORE for the same reason as the schema_version line above:
+            # two processes may open the cache at once (a server starting while
+            # `scholar-mcp cache clear` runs), and a duplicate ledger row must
+            # not raise out of open().
+            "INSERT OR IGNORE INTO repairs (name, applied_at) VALUES (?, ?)",
+            (name, time.time()),
+        )
+        logger.info("cache_repair_applied name=%s rows=%s", name, cursor.rowcount)
+
 
 async def _apply_migrations(db: aiosqlite.Connection) -> None:
-    """Apply column migrations not covered by CREATE TABLE IF NOT EXISTS.
+    """Bring an open database up to date: column migrations, then row repairs.
 
-    Idempotent — safe to run on fresh or already-migrated DBs.
+    Idempotent — safe to run on a fresh, an already-migrated or an
+    already-repaired database, which is what makes it the hook ``open()``
+    can call unconditionally.
     """
     async with db.execute("PRAGMA table_info(standards)") as cur:
         cols = {row[1] for row in await cur.fetchall()}
@@ -282,6 +326,7 @@ async def _apply_migrations(db: aiosqlite.Connection) -> None:
         "CREATE INDEX IF NOT EXISTS idx_standards_source ON standards(source)"
     )
     await db.execute("INSERT OR IGNORE INTO schema_version VALUES (2)")
+    await _apply_repairs(db)
     await db.commit()
 
 
