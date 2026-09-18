@@ -13,7 +13,7 @@ from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
 from fastmcp_pvl_core import register_long_running_tool
 
-from ._book_enrichment import enrich_authors_from_work
+from ._book_enrichment import cache_book_record, enrich_authors_from_work
 from ._cache import normalize_isbn
 from ._openlibrary_client import (
     normalize_book,
@@ -379,10 +379,7 @@ async def _resolve_isbn(isbn: str, service: Service) -> dict[str, Any]:
     book: BookRecord = normalize_book(edition, source="edition")
     await enrich_authors_from_work(book, service)
     await service.enrichment.enrich([book], service, tags=frozenset({"books"}))
-    await service.cache.set_book_by_isbn(isbn, book)
-    work_id = book.get("openlibrary_work_id")
-    if work_id:
-        await service.cache.set_book_by_work(work_id, book)
+    await cache_book_record(book, service, isbn=isbn)
     return dict(book)
 
 
@@ -472,7 +469,7 @@ async def _resolve_work(work_id: str, service: Service) -> dict[str, Any]:
 
 
 async def _resolve_edition(edition_id: str, service: Service) -> dict[str, Any]:
-    """Resolve a book by Open Library edition ID, checking cache first.
+    """Resolve a book by Open Library edition ID.
 
     Args:
         edition_id: Open Library edition ID (e.g. ``OL1429049M``).
@@ -488,10 +485,5 @@ async def _resolve_edition(edition_id: str, service: Service) -> dict[str, Any]:
     book: BookRecord = normalize_book(edition, source="edition")
     await enrich_authors_from_work(book, service)
     await service.enrichment.enrich([book], service, tags=frozenset({"books"}))
-    isbn_13 = book.get("isbn_13")
-    if isbn_13:
-        await service.cache.set_book_by_isbn(isbn_13, book)
-    work_id = book.get("openlibrary_work_id")
-    if work_id:
-        await service.cache.set_book_by_work(work_id, book)
+    await cache_book_record(book, service, isbn=book.get("isbn_13"))
     return dict(book)

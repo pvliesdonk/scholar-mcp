@@ -267,6 +267,13 @@ async def test_registered_repairs_drop_what_their_bugs_cached(tmp_path):
     await old.set_patent_legal(
         "EP1.A1", [{"date": "2021-07-30", "code": "PG25", "description": "LAPSED"}]
     )
+    # #403: an empty author list is what a failed enrichment cached.
+    await old.set_book_by_isbn("9780201633610", {"title": "DP", "authors": []})
+    await old.set_book_by_isbn(
+        "9780262046305", {"title": "CLRS", "authors": ["Cormen"]}
+    )
+    await old.set_book_by_work("OL6030812W", {"title": "DP", "authors": []})
+    await old.set_book_by_work("OL1W", {"title": "CLRS", "authors": ["Cormen"]})
     await old.close()
 
     async with aiosqlite.connect(db_path) as db:
@@ -279,6 +286,11 @@ async def test_registered_repairs_drop_what_their_bugs_cached(tmp_path):
         assert await upgraded.get_patent("EP1.A1") is None
         assert await upgraded.get_patent("EP2.A1") is not None
         assert await upgraded.get_patent_legal("EP1.A1") is None
+        # #403: empty-author rows go from both book tables; populated ones stay.
+        assert await upgraded.get_book_by_isbn("9780201633610") is None
+        assert await upgraded.get_book_by_isbn("9780262046305") is not None
+        assert await upgraded.get_book_by_work("OL6030812W") is None
+        assert await upgraded.get_book_by_work("OL1W") is not None
     finally:
         await upgraded.close()
 
@@ -288,6 +300,8 @@ async def test_every_registered_repair_is_valid_sql(cache):
     assert set(_REPAIRS) == {
         "399_empty_patent_abstract",
         "405_legal_events_without_country",
+        "403_book_isbn_empty_authors",
+        "403_book_work_empty_authors",
     }
     for statement in _REPAIRS.values():
         await cache._db.execute(f"EXPLAIN {statement}")

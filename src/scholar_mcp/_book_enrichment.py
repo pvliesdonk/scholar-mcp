@@ -1,4 +1,4 @@
-"""Centralized book enrichment for paper records."""
+"""Book enrichment and caching helpers for the book tools and paper pipeline."""
 
 from __future__ import annotations
 
@@ -51,6 +51,67 @@ def _extract_author_keys(work: dict[str, Any]) -> list[str]:
     return keys
 
 
+async def fill_authors_from_cache(book: BookRecord, service: Service) -> None:
+    """Fill *book*'s authors from the cached work record, without any network.
+
+    The work record is the richer of the two book rows: ``_resolve_work``
+    resolves author names properly, while the edition-based paths start from
+    ``normalize_book(..., source="edition")``, which cannot carry names at all
+    and leaves ``authors`` empty for enrichment to fill.
+
+    This is the whole fix for ``batch_resolve``, which resolves its ISBNs
+    concurrently: enriching there over the network would fan out one work
+    fetch per ISBN against a rate-limited API, which is the leading candidate
+    for what emptied the authors to begin with (#403).
+
+    Args:
+        book: Book record to fill in-place.
+        service: Domain service with the cache.
+    """
+    if book.get("authors"):
+        return
+    work_id = book.get("openlibrary_work_id")
+    if not work_id:
+        return
+    cached = await service.cache.get_book_by_work(work_id)
+    if cached and cached.get("authors"):
+        book["authors"] = list(cached["authors"])
+
+
+async def cache_book_record(
+    book: BookRecord, service: Service, *, isbn: str | None = None
+) -> None:
+    """Cache *book* under its ISBN and work ID, without losing known authors.
+
+    ``set_book_by_work`` is INSERT OR REPLACE, so a resolver whose enrichment
+    came back empty used to overwrite a work row whose authors ``_resolve_work``
+    had already resolved. The work row is therefore only written when this
+    record has authors of its own, or when nothing is cached for that work yet
+    (#403). The ISBN row is always written: it is this call's own answer.
+
+    ``_resolve_work`` deliberately does not go through here. It is the
+    authority on authors, so it writes both rows directly.
+
+    Args:
+        book: Record to cache.
+        service: Domain service with the cache.
+        isbn: ISBN-13 to key the ISBN row on, when the caller has one.
+    """
+    if isbn:
+        await service.cache.set_book_by_isbn(isbn, book)
+    work_id = book.get("openlibrary_work_id")
+    if not work_id:
+        return
+    if book.get("authors"):
+        await service.cache.set_book_by_work(work_id, book)
+        return
+    # A stale row reads as absent here, because get_book_by_work applies the
+    # 30-day TTL. Overwriting it is the accepted trade: stale is stale, and the
+    # record re-fetches once rather than us bypassing the TTL to keep it.
+    if await service.cache.get_book_by_work(work_id) is None:
+        await service.cache.set_book_by_work(work_id, book)
+
+
 async def enrich_authors_from_work(book: BookRecord, service: Service) -> None:
     """Enrich book in-place with authors from its work record.
 
@@ -64,6 +125,11 @@ async def enrich_authors_from_work(book: BookRecord, service: Service) -> None:
         return
     work_id = book.get("openlibrary_work_id")
     if not work_id:
+        return
+    # The answer is often already cached: a concurrent lookup for the same work
+    # may have resolved it, and asking the cache first costs nothing (#403).
+    await fill_authors_from_cache(book, service)
+    if book.get("authors"):
         return
     try:
         work = await service.openlibrary.get_work(work_id)
@@ -130,10 +196,7 @@ async def _enrich_one(paper: dict[str, Any], service: Service) -> None:
 
         book: BookRecord = normalize_book(edition, source="edition")
         await enrich_authors_from_work(book, service)
-        await service.cache.set_book_by_isbn(isbn, book)
-        work_id = book.get("openlibrary_work_id")
-        if work_id:
-            await service.cache.set_book_by_work(work_id, book)
+        await cache_book_record(book, service, isbn=isbn)
         paper["book_metadata"] = _to_enrichment_dict(book)
     except RateLimitedError:
         raise
