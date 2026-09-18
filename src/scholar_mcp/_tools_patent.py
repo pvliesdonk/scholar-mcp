@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio as _asyncio
 import logging
+import re
 from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
@@ -403,6 +404,25 @@ async def _download_patent_pdf(
     return None
 
 
+def _patent_pdf_stem(doc: DocdbNumber) -> str:
+    """Return the cache filename stem for a patent's PDF and Markdown.
+
+    The normalised DOCDB triple is already unique per publication, so the stem
+    needs no hash suffix. The suffix it used to carry hashed the *raw* caller
+    string, which split one patent across spellings: ``EP 3491801 B1`` and
+    ``EP3491801B1`` produced different filenames, so the second call
+    re-downloaded every page and re-ran the conversion (#402).
+
+    Args:
+        doc: Normalised patent number.
+
+    Returns:
+        Filename stem, for example ``patent_EP3491801B1``.
+    """
+    readable = re.sub(r"[^\w\-]", "_", f"{doc.country}{doc.number}{doc.kind or ''}")
+    return f"patent_{readable}"
+
+
 async def fetch_patent_pdf(
     patent_number: str,
     use_vlm: bool = False,
@@ -437,9 +457,6 @@ async def fetch_patent_pdf(
     Returns:
         ``pdf_path`` and optionally ``markdown`` / ``md_path``.
     """
-    import hashlib
-    import re
-
     epo = service.epo
     if epo is None:
         return dict(_EPO_NOT_CONFIGURED)
@@ -452,9 +469,7 @@ async def fetch_patent_pdf(
             "detail": f"Could not parse patent number: {patent_number!r}",
         }
 
-    stem = re.sub(r"[^\w\-]", "_", f"{doc.country}{doc.number}{doc.kind or ''}")
-    url_hash = hashlib.sha256(patent_number.encode()).hexdigest()[:8]
-    stem = f"patent_{stem}_{url_hash}"
+    stem = _patent_pdf_stem(doc)
 
     pdf_dir = service.config.cache_dir / "pdfs"
     pdf_dir.mkdir(parents=True, exist_ok=True)

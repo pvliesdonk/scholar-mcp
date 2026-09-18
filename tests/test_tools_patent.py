@@ -1296,17 +1296,10 @@ def test_fetch_patent_pdf_cache_hit_returns_pdf_path(
     register_patent_tools(app, slow_jobs)
 
     async def run() -> dict:
-        # Compute the stem the same way the tool does
-        import hashlib
-        import re
-
-        patent_number = "EP3491801B1"
-        from scholar_mcp._patent_numbers import normalize
-
-        doc = normalize(patent_number)
-        stem = re.sub(r"[^\w\-]", "_", f"{doc.country}{doc.number}{doc.kind or ''}")
-        url_hash = hashlib.sha256(patent_number.encode()).hexdigest()[:8]
-        stem = f"patent_{stem}_{url_hash}"
+        # #402: the file was cached under one spelling; ask for it by
+        # another the tool advertises. Both must reach the same stem.
+        patent_number = "EP 3491801 B1"
+        stem = "patent_EP3491801B1"
         (pdf_dir / f"{stem}.pdf").write_bytes(b"%PDF-1.4 cached")
 
         async with Client(app) as client:
@@ -1410,16 +1403,8 @@ def test_fetch_patent_pdf_cache_hit_with_docling_and_cached_md(
     register_patent_tools(app, slow_jobs)
 
     async def run() -> dict:
-        import hashlib
-        import re
-
         patent_number = "EP3491801B1"
-        from scholar_mcp._patent_numbers import normalize
-
-        doc = normalize(patent_number)
-        stem = re.sub(r"[^\w\-]", "_", f"{doc.country}{doc.number}{doc.kind or ''}")
-        url_hash = hashlib.sha256(patent_number.encode()).hexdigest()[:8]
-        stem = f"patent_{stem}_{url_hash}"
+        stem = "patent_EP3491801B1"
 
         (pdf_dir / f"{stem}.pdf").write_bytes(b"%PDF-1.4 cached")
         (md_dir / f"{stem}.md").write_text("# Cached Markdown", encoding="utf-8")
@@ -1491,16 +1476,8 @@ def test_fetch_patent_pdf_cache_hit_docling_no_md_converts(
     register_patent_tools(app, slow_jobs)
 
     async def run() -> dict:
-        import hashlib
-        import re
-
         patent_number = "EP3491801B1"
-        from scholar_mcp._patent_numbers import normalize
-
-        doc = normalize(patent_number)
-        stem = re.sub(r"[^\w\-]", "_", f"{doc.country}{doc.number}{doc.kind or ''}")
-        url_hash = hashlib.sha256(patent_number.encode()).hexdigest()[:8]
-        stem = f"patent_{stem}_{url_hash}"
+        stem = "patent_EP3491801B1"
 
         # PDF exists, but no md file — so it falls through to queue
         (pdf_dir / f"{stem}.pdf").write_bytes(b"%PDF-1.4 cached")
@@ -1542,16 +1519,8 @@ def test_fetch_patent_pdf_cache_hit_with_vlm_skip_reason(
     register_patent_tools(app, slow_jobs)
 
     async def run() -> dict:
-        import hashlib
-        import re
-
         patent_number = "EP3491801B1"
-        from scholar_mcp._patent_numbers import normalize
-
-        doc = normalize(patent_number)
-        stem = re.sub(r"[^\w\-]", "_", f"{doc.country}{doc.number}{doc.kind or ''}")
-        url_hash = hashlib.sha256(patent_number.encode()).hexdigest()[:8]
-        stem = f"patent_{stem}_{url_hash}"
+        stem = "patent_EP3491801B1"
 
         (pdf_dir / f"{stem}.pdf").write_bytes(b"%PDF-1.4")
         (md_dir / f"{stem}.md").write_text("# Cached", encoding="utf-8")
@@ -1647,16 +1616,8 @@ def test_fetch_patent_pdf_execute_with_docling_cached_md(
     register_patent_tools(app, slow_jobs)
 
     async def run() -> dict:
-        import hashlib
-        import re
-
         patent_number = "EP3491801B1"
-        from scholar_mcp._patent_numbers import normalize
-
-        doc = normalize(patent_number)
-        stem = re.sub(r"[^\w\-]", "_", f"{doc.country}{doc.number}{doc.kind or ''}")
-        url_hash = hashlib.sha256(patent_number.encode()).hexdigest()[:8]
-        stem = f"patent_{stem}_{url_hash}"
+        stem = "patent_EP3491801B1"
 
         md_dir = service.config.cache_dir / "md"
         md_dir.mkdir(parents=True, exist_ok=True)
@@ -1853,3 +1814,18 @@ async def test_get_patent_reports_quota_exhaustion(
     data = json.loads(result.content[0].text)
     assert data["error"] == "epo_unavailable"
     assert data["retryable"] is False
+
+
+def test_patent_pdf_stem_collapses_every_accepted_spelling() -> None:
+    """One publication, one filename, whatever spelling the caller used (#402).
+
+    The tool advertises three formats in its own ``patent_number`` description;
+    all three have to reach the same cached file, or a differently-spelled
+    second call re-downloads every page and re-runs the conversion.
+    """
+    from scholar_mcp._patent_numbers import normalize
+    from scholar_mcp._tools_patent import _patent_pdf_stem
+
+    assert _patent_pdf_stem(normalize("EP3491801B1")) == "patent_EP3491801B1"
+    assert _patent_pdf_stem(normalize("EP 3491801 B1")) == "patent_EP3491801B1"
+    assert _patent_pdf_stem(normalize("US10123456B2")) == "patent_US10123456B2"
