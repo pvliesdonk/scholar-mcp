@@ -295,6 +295,54 @@ async def test_registered_repairs_drop_what_their_bugs_cached(tmp_path):
         await upgraded.close()
 
 
+async def test_repair_drops_nist_standards_cached_under_a_foreign_identity(tmp_path):
+    """#400: a NIST row whose stored record is a different publication goes.
+
+    The substring matcher returned whichever catalogue entry shared a prefix
+    with the request, so a row keyed "NIST SP 800-92" holds a record that calls
+    itself something else. Rows that agree with their key stay. The predicate is
+    scoped to NIST because other bodies legitimately store a record whose
+    identifier is spelled unlike the canonical key it was cached under.
+    """
+    import aiosqlite
+
+    db_path = tmp_path / "standards.db"
+    old = ScholarCache(db_path)
+    await old.open()
+    await old.set_standard(
+        "NIST SP 800-92",
+        {"identifier": "NIST SP ", "body": "NIST", "title": "SATE IV"},
+    )
+    await old.set_standard(
+        "NISTIR 8259",
+        {"identifier": "NISTIR 8259PT", "body": "NIST", "title": "IoT baseline"},
+    )
+    await old.set_standard(
+        "NIST SP 800-53 Rev. 5",
+        {"identifier": "NIST SP 800-53 Rev. 5", "body": "NIST", "title": "Controls"},
+    )
+    await old.set_standard(
+        "ISO/IEC 27001",
+        {"identifier": "ISO/IEC 27001:2022", "body": "ISO/IEC", "title": "ISMS"},
+    )
+    await old.close()
+
+    async with aiosqlite.connect(db_path) as db:
+        await db.execute("DELETE FROM repairs")
+        await db.commit()
+
+    upgraded = ScholarCache(db_path)
+    await upgraded.open()
+    try:
+        assert await upgraded.get_standard("NIST SP 800-92") is None
+        assert await upgraded.get_standard("NISTIR 8259") is None
+        assert await upgraded.get_standard("NIST SP 800-53 Rev. 5") is not None
+        # A non-NIST body is out of scope even though key and identity differ.
+        assert await upgraded.get_standard("ISO/IEC 27001") is not None
+    finally:
+        await upgraded.close()
+
+
 async def test_every_registered_repair_is_valid_sql(cache):
     """A malformed statement would otherwise only surface on a user's upgrade."""
     assert set(_REPAIRS) == {
@@ -302,6 +350,7 @@ async def test_every_registered_repair_is_valid_sql(cache):
         "405_legal_events_without_country",
         "403_book_isbn_empty_authors",
         "403_book_work_empty_authors",
+        "400_nist_standard_under_foreign_identity",
     }
     for statement in _REPAIRS.values():
         await cache._db.execute(f"EXPLAIN {statement}")

@@ -650,6 +650,8 @@ full text via docling.
 
 With `fetch_full_text=true`, a conversion that fails still returns the record, with the reason in `full_text_error`. Absent both `full_text` and `full_text_error`, no full text was on offer or docling is not configured; neither is worth retrying.
 
+NIST SP and NISTIR publications are catalogued per revision. An identifier with no revision, such as `NIST SP 800-53`, can return `not_found` even though the publication exists; `search_standards` lists the revisions that are published.
+
 ---
 
 ### `get_sync_status`

@@ -153,6 +153,11 @@ async def get_standard(
     ``full_text`` and no ``full_text_error`` means none was on offer, or
     docling is not configured — neither is worth retrying.
 
+    NIST SP and NISTIR publications are catalogued per revision, so an
+    identifier with no revision, such as ``NIST SP 800-53``, can come back
+    ``not_found`` even though the publication exists. ``search_standards``
+    lists the revisions that are published.
+
     Examples:
         get_standard("RFC 9000")
         get_standard("NIST SP 800-53 Rev. 5")
