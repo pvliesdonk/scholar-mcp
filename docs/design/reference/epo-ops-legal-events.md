@@ -12,6 +12,8 @@ status: stable
 verified:
   - by: process:researching-references
     at: 2026-09-10
+  - by: process:researching-references
+    at: 2026-09-16
 sources:
   - id: ops-legal-xsd
     title: OPS legal-status schema (vendored at sources/epo-ops/ops_legal.xsd)
@@ -81,6 +83,17 @@ that so nobody goes looking for the dictionary again.
   [observed: the same fixture]
 - `ops:pre` repeats the event as the raw fixed-width line INPADOC delivers,
   which is redundant with the parsed fields. [observed: the same fixture]
+- `L500EP` is a **container**, not a field of its own: it holds one of the
+  `L501EP`…`L533EP` children, each naming itself in its own `desc`, and which
+  child appears varies by event — `L501EP` "Ref Country Code" on `REG`, `PG25`
+  and `PGFP`; `L525EP` "Effective DATE" on `17Q`. A consumer must therefore read
+  the child, not the container.
+  [observed: the same fixture — 28 of its 50 events carry an `L501EP` naming 19
+  states (AT BE CH CY DE DK ES FI FR GB GR IE IT LI LU MC NL PT SE); the first
+  `PG25` carries `CH`, while `17Q` carries an `L525EP` instead]
+  [observed: scholar-mcp#405, where the `EP.3491801.B1` legal response has all 37
+  of its `PG25` events carrying a non-empty `L501EP` across 36 states]
+  [pins: tests/test_epo_xml.py::TestParseLegalXml::test_country_comes_from_the_ref_country_code, tests/test_epo_xml.py::TestParseLegalXml::test_container_child_varies_by_event]
 
 ### Dates
 
@@ -95,9 +108,15 @@ that so nobody goes looking for the dictionary again.
 
 ## Where this project departs from the subject
 
-Nowhere deliberately, now that #390 is fixed. `parse_legal_xml` reads
-`ops:legal/@code` and `@desc` for the event and `L007EP` for the date, exactly
-as recorded above.
+Nowhere deliberately, now that #390 and #405 are fixed. `parse_legal_xml` reads
+`ops:legal/@code` and `@desc` for the event, `L007EP` for the date, and the
+`L500EP` container's `L501EP` for the state the event concerns, exactly as
+recorded above.
+
+It surfaces only `L501EP` from that container, which *is* a deliberate
+narrowing: `L525EP` "Effective DATE" is read by no caller, and exposing every
+`L###EP` child as a generic field map would publish a shape nothing consumes
+(#405).
 
 This page was written *before* that fix, which is what the
 `researching-references` skill directs: the fix followed the recorded
@@ -109,7 +128,8 @@ contains.
 ## Not covered
 
 - The full `L###EP` vocabulary. The schema declares up to `L533EP`; only
-  `L001`–`L005`, `L007`, `L008`, `L018`, `L019` and `L500` appear in the one
+  `L001`–`L005`, `L007`, `L008`, `L018`, `L019`, `L500`, `L501` and `L525`
+  appear in the one
   patent observed. What the rest carry, and which events use them, would need a
   wider survey. Each is self-describing when it does appear, so this is a
   completeness gap rather than a comprehension one. [unverified]
@@ -117,5 +137,3 @@ contains.
   to — an event's effect on the patent's force. The schema requires the
   attribute but does not document its values. Settling it needs EPO
   documentation this pass did not find. [unverified]
-- `L500EP` nests a further `L501EP`…`L533EP` choice per the schema, but appeared
-  empty in every observed event. [unverified]

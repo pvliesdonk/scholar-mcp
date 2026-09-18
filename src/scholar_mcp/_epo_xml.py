@@ -15,12 +15,13 @@ traversal.  All helper functions are module-private; the public
 ``parse_*`` functions are the module's interface.
 
 How OPS shapes these responses is recorded with its evidence under
-``docs/design/reference/`` -- see ``epo-ops-legal-events.md`` for the legal
-service and ``epo-ops-images.md`` for the image inquiry. Read the relevant
-page before changing a parser here: both parsers in this module that were
-written from an assumed shape turned out to match nothing EPO sends (#371,
-#390), and their fixtures encoded the same assumption, so the suite stayed
-green.
+``docs/design/reference/`` -- see ``epo-ops-biblio.md`` for where a biblio
+response puts its elements, ``epo-ops-legal-events.md`` for the legal service
+and ``epo-ops-images.md`` for the image inquiry. Read the relevant
+page before changing a parser here: each time a parser in this module was
+written from an assumed shape it read something EPO does not send (#371, #390,
+#399, #405), and the hand-written fixtures encoded the same assumption, so the
+suite stayed green over the gap.
 
 """
 
@@ -251,7 +252,11 @@ def parse_biblio_xml(xml_bytes: bytes) -> PatentRecord:
     title = _pick_lang(biblio, f"{{{_EXCH}}}invention-title", text_only=True)
 
     # --- Abstract (prefer English) ---
-    abstract = _pick_lang(biblio, f"{{{_EXCH}}}abstract", text_only=False)
+    # OPS parents `abstract` to `exchange-document`, as a sibling of
+    # `bibliographic-data` rather than a child of it, and `_pick_lang` scans
+    # direct children only -- so reading it from `biblio` returned "" for every
+    # patent (#399). See docs/design/reference/epo-ops-biblio.md.
+    abstract = _pick_lang(exchange_doc, f"{{{_EXCH}}}abstract", text_only=False)
 
     # --- Classifications ---
     classifications: list[str] = []
@@ -450,8 +455,10 @@ def parse_legal_xml(xml_data: bytes) -> list[dict[str, str]]:
         xml_data: Raw XML bytes from the legal endpoint.
 
     Returns:
-        List of dicts with ``date``, ``code``, ``description`` for each
-        legal event, in document order.
+        List of dicts with ``date``, ``code``, ``description`` and ``country``
+        for each legal event, in document order. ``country`` is the state the
+        event concerns, from the ``L500EP`` container's ``L501EP`` child, and is
+        empty on events that carry a different child (#405).
     """
     root = etree.fromstring(xml_data)
     events: list[dict[str, str]] = []
@@ -460,11 +467,16 @@ def parse_legal_xml(xml_data: bytes) -> list[dict[str, str]]:
         # EPO pads the code to four characters ("17Q ", "AK  ").
         code = (event.get("code") or "").strip()
         description = (event.get("desc") or "").strip()
+        # `L500EP` is a container, not a field, and which child it holds varies
+        # by event: `L501EP` "Ref Country Code" on REG/PG25/PGFP, `L525EP`
+        # "Effective DATE" on 17Q. Read the child, and leave `country` empty on
+        # events that carry a different one.
         events.append(
             {
                 "date": _date_fmt(_text(event.find("ops:L007EP", _NS))),
                 "code": code,
                 "description": description,
+                "country": _text(event.find(".//ops:L501EP", _NS)),
             }
         )
 
