@@ -284,3 +284,135 @@ async def test_enrichment_rate_limited_error_propagates(
     paper = _make_paper(isbn="9780201633610")
     with pytest.raises(RateLimitedError):
         await enrich_books([paper], service)
+
+
+# --- #403: a failed author lookup must not be cached as "no authors" ---
+
+
+@pytest.mark.respx(base_url=OL_BASE)
+async def test_fill_authors_from_cache_uses_the_work_row(
+    respx_mock: respx.MockRouter, service: Service
+) -> None:
+    """The cached work record answers without touching the network (#403).
+
+    `batch_resolve` resolves ISBNs concurrently, so enriching there over the
+    network would fan out one work fetch per ISBN against a rate-limited API --
+    plausibly the condition that emptied the authors in the first place. The
+    cache-only path costs nothing.
+    """
+    from scholar_mcp._book_enrichment import fill_authors_from_cache
+
+    await service.cache.set_book_by_work(
+        "OL6030812W", {"title": "Design Patterns", "authors": ["Erich Gamma"]}
+    )
+    book: dict = {"authors": [], "openlibrary_work_id": "OL6030812W"}
+
+    await fill_authors_from_cache(book, service)
+
+    assert book["authors"] == ["Erich Gamma"]
+    assert not respx_mock.calls
+
+
+@pytest.mark.respx(base_url=OL_BASE)
+async def test_enrich_authors_uses_the_cache_without_touching_the_network(
+    respx_mock: respx.MockRouter, service: Service
+) -> None:
+    """#403's own scenario: the work row already held the authors.
+
+    Open Library refusing the request is what left ``authors: []`` cached for
+    30 days while the work record for the same book sat in the cache with
+    every author present. No route is registered here, so reaching for the
+    network at all fails the test -- which is the assertion.
+    """
+    from scholar_mcp._book_enrichment import enrich_authors_from_work
+
+    await service.cache.set_book_by_work(
+        "OL6030812W",
+        {"title": "Design Patterns", "authors": ["Erich Gamma", "Richard Helm"]},
+    )
+    book: dict = {"authors": [], "openlibrary_work_id": "OL6030812W"}
+
+    await enrich_authors_from_work(book, service)
+
+    assert book["authors"] == ["Erich Gamma", "Richard Helm"]
+    assert not respx_mock.calls
+
+
+async def test_cache_book_record_will_not_clobber_a_richer_work_row(
+    service: Service,
+) -> None:
+    """An empty author list must not overwrite a work row that has authors.
+
+    `set_book_by_work` is INSERT OR REPLACE, so before #403 a weak resolver
+    could destroy authors that `_resolve_work` had already resolved correctly.
+    """
+    from scholar_mcp._book_enrichment import cache_book_record
+
+    await service.cache.set_book_by_work(
+        "OL6030812W", {"title": "Design Patterns", "authors": ["Erich Gamma"]}
+    )
+    thin: dict = {
+        "title": "Design Patterns",
+        "authors": [],
+        "openlibrary_work_id": "OL6030812W",
+    }
+
+    await cache_book_record(thin, service, isbn="9780201633610")
+
+    kept = await service.cache.get_book_by_work("OL6030812W")
+    assert kept is not None
+    assert kept["authors"] == ["Erich Gamma"]
+
+
+async def test_cache_book_record_writes_the_work_row_when_none_exists(
+    service: Service,
+) -> None:
+    """With nothing cached, the record is written even with no authors.
+
+    Refusing to cache would make a genuinely author-less book re-fetch on
+    every request.
+    """
+    from scholar_mcp._book_enrichment import cache_book_record
+
+    thin: dict = {"title": "Anon", "authors": [], "openlibrary_work_id": "OL999W"}
+
+    await cache_book_record(thin, service, isbn="9780000000000")
+
+    written = await service.cache.get_book_by_work("OL999W")
+    assert written is not None
+    assert written["authors"] == []
+    by_isbn = await service.cache.get_book_by_isbn("9780000000000")
+    assert by_isbn is not None
+
+
+async def test_fill_authors_from_cache_leaves_existing_authors_alone(
+    service: Service,
+) -> None:
+    """A record that already has authors is never second-guessed by the cache.
+
+    The cached work row can be staler than what this call just resolved, so
+    the guard has to come before the lookup.
+    """
+    from scholar_mcp._book_enrichment import fill_authors_from_cache
+
+    await service.cache.set_book_by_work(
+        "OL6030812W", {"title": "Design Patterns", "authors": ["Stale Name"]}
+    )
+    book: dict = {"authors": ["Erich Gamma"], "openlibrary_work_id": "OL6030812W"}
+
+    await fill_authors_from_cache(book, service)
+
+    assert book["authors"] == ["Erich Gamma"]
+
+
+async def test_fill_authors_from_cache_no_ops_without_a_work_id(
+    service: Service,
+) -> None:
+    """With no work ID there is no key to look the authors up under."""
+    from scholar_mcp._book_enrichment import fill_authors_from_cache
+
+    book: dict = {"authors": []}
+
+    await fill_authors_from_cache(book, service)
+
+    assert book["authors"] == []

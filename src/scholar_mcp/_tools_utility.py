@@ -12,6 +12,7 @@ from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
 from fastmcp_pvl_core import register_long_running_tool
 
+from ._book_enrichment import fill_authors_from_cache
 from ._cache import normalize_isbn
 from ._chapter_parser import hint_to_dict, parse_chapter_hint
 from ._epo_client import EPO_REPORTED_ERRORS, epo_error_payload, with_epo_retry
@@ -211,6 +212,11 @@ async def _resolve_isbn(
             "source_type": "book",
         }
     book = normalize_book(edition, source="edition")
+    # Cache-only: this path fans out concurrently, so it must not add a network
+    # round-trip per ISBN (#403). It writes no work row either -- it never has,
+    # and an edition-derived record would be a thin answer for get_book(work_id)
+    # to serve for that row's 30-day TTL.
+    await fill_authors_from_cache(book, service)
     await service.cache.set_book_by_isbn(isbn, book)
     return idx, {"identifier": identifier, "book": book, "source_type": "book"}
 

@@ -295,6 +295,17 @@ _REPAIRS: dict[str, str] = {
     # #405: legal events were cached without the state each one concerns. No
     # predicate narrows this -- every cached row predates the new field.
     "405_legal_events_without_country": "DELETE FROM patent_legal",
+    # #403: a failed author lookup was cached as "no authors" and served for the
+    # 30-day TTL. Records that genuinely have no authors match too and are
+    # re-fetched once, which is the same trade as the empty-abstract repair.
+    "403_book_isbn_empty_authors": (
+        "DELETE FROM books_isbn "
+        "WHERE json_array_length(json_extract(data, '$.authors')) = 0"
+    ),
+    "403_book_work_empty_authors": (
+        "DELETE FROM books_openlibrary "
+        "WHERE json_array_length(json_extract(data, '$.authors')) = 0"
+    ),
 }
 
 
