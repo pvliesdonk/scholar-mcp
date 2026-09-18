@@ -515,8 +515,10 @@ Fetch detailed information for a single patent by its publication number.
 | `claims`      | Patent claims text (English preferred)                                                  | Available |
 | `description` | Full patent description text (English preferred)                                        | Available |
 | `family`      | Patent family members across jurisdictions (country, number, kind, date)                | Available |
-| `legal`       | Legal status events (date, code, description)                                           | Available |
+| `legal`       | Legal status events (date, code, description, country)                                  | Available |
 | `citations`   | Patent and non-patent literature citations, with Semantic Scholar resolution for NPL    | Available |
+
+`country` is the contracting state a legal event concerns. EPO sends it only on the event types that name one, such as `PG25` (lapsed in a state), `REG` and `PGFP`, so it is an empty string on the rest. It is what distinguishes the otherwise identical `PG25` events a patent accumulates as it lapses state by state.
 
 Sections are fetched concurrently where possible (cache lookups run in parallel; EPO API calls are serialised by the client). Each section is cached independently with appropriate TTLs.
 
@@ -543,7 +545,7 @@ Sections are fetched concurrently where possible (cache lookups run in parallel;
     {"country": "US", "number": "11234567", "kind": "B2", "date": "2021-03-01"}
   ],
   "legal": [
-    {"date": "2019-05-01", "code": "APPLICATION", "description": "Application filed"}
+    {"date": "2021-07-30", "code": "PG25", "description": "LAPSED IN A CONTRACTING STATE [...]", "country": "BG"}
   ],
   "citations": {
     "patent_refs": [

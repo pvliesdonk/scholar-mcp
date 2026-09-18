@@ -3334,7 +3334,7 @@ already holds every publication the author has.</p>
 </tr>
 <tr>
 <td><code>legal</code></td>
-<td>Legal status events (date, code, description)</td>
+<td>Legal status events (date, code, description, country)</td>
 <td>Available</td>
 </tr>
 <tr>
@@ -3344,6 +3344,11 @@ already holds every publication the author has.</p>
 </tr>
 </tbody>
 </table>
+<p><code>country</code> is the contracting state a legal event concerns. EPO sends it only on
+the event types that name one, such as <code>PG25</code> (lapsed in a state), <code>REG</code> and
+<code>PGFP</code>, so it is an empty string on the rest. It is what distinguishes the
+otherwise identical <code>PG25</code> events a patent accumulates as it lapses state by
+state.</p>
 <p>Sections are fetched concurrently where possible (cache lookups run in parallel; EPO API calls are serialised by the client). Each section is cached independently with appropriate TTLs.</p>
 <p><strong>Returns:</strong> A JSON object with keys matching the requested sections:</p>
 <div class="highlight"><pre><span></span><code><span class="p">{</span>
@@ -3366,7 +3371,7 @@ already holds every publication the author has.</p>
 <span class="w">    </span><span class="p">{</span><span class="nt">&quot;country&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;US&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;number&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;11234567&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;kind&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;B2&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;date&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2021-03-01&quot;</span><span class="p">}</span>
 <span class="w">  </span><span class="p">],</span>
 <span class="w">  </span><span class="nt">&quot;legal&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
-<span class="w">    </span><span class="p">{</span><span class="nt">&quot;date&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2019-05-01&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;code&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;APPLICATION&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;description&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Application filed&quot;</span><span class="p">}</span>
+<span class="w">    </span><span class="p">{</span><span class="nt">&quot;date&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2021-07-30&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;code&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;PG25&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;description&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;LAPSED IN A CONTRACTING STATE [...]&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;country&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;BG&quot;</span><span class="p">}</span>
 <span class="w">  </span><span class="p">],</span>
 <span class="w">  </span><span class="nt">&quot;citations&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="nt">&quot;patent_refs&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
