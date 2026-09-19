@@ -624,6 +624,9 @@ Normalise a messy citation string to its canonical form and body.
 |-----------|------|---------|-------------|
 | `raw` | string |, | Messy citation string (such as `"rfc9000"`, `"nist 800-53"`) |
 
+!!! warning "A null record is not always an absence"
+    A `warning` beside a null `record` means the source never answered, so the standard may well exist and the canonical form is still usable. A null `record` with no `warning` means the sources looked and found nothing.
+
 ---
 
 ### `search_standards`
@@ -635,6 +638,13 @@ Search standards by identifier, title, or free text.
 | `query` | string |, | Identifier, title, or free text |
 | `body` | string | null | Filter to one body: `NIST`, `IETF`, `W3C`, `ETSI` |
 | `limit` | integer | 10 | Max results (max 50) |
+
+!!! warning "Every answer states its own completeness"
+    `partial` is always present. When it is true, `failed_bodies` names each source that did not answer, and `warning` explains what went wrong.
+
+    This is not an `error`. A caller matching on `error` would discard the records that other sources returned.
+
+    Partial answers are never cached. A later call reaches the failing source again.
 
 ---
 
@@ -651,6 +661,11 @@ full text via docling.
 With `fetch_full_text=true`, a conversion that fails still returns the record, with the reason in `full_text_error`. Absent both `full_text` and `full_text_error`, no full text was on offer or docling is not configured; neither is worth retrying.
 
 NIST SP and NISTIR publications are catalogued per revision. An identifier with no revision, such as `NIST SP 800-53`, can return `not_found` even though the publication exists; `search_standards` lists the revisions that are published.
+
+!!! warning "A refused lookup is not a missing standard"
+    `not_found` means the source answered and holds no such standard, so stop asking about that identifier. A lookup that never got an answer reports itself separately: `{"error": "rate_limited", "retryable": true}` for a 429, or `{"error": "upstream_error", "status": <code or null>, "detail": "..."}` for anything else. Both invite a retry, because the standard may well exist.
+
+    Nothing is cached on either path, so the retry is not served the failed answer.
 
 ---
 
