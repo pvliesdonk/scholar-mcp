@@ -501,6 +501,24 @@ SAMPLE_MODS_XML = b"""<?xml version="1.0" encoding="UTF-8"?>
 <modsCollection xmlns="http://www.loc.gov/mods/v3">
   <mods version="3.7">
     <titleInfo>
+      <title>Report on the static analysis tool exposition (SATE) IV</title>
+    </titleInfo>
+    <originInfo eventType="publisher">
+      <dateIssued>2013.</dateIssued>
+    </originInfo>
+    <location>
+      <url displayLabel="electronic resource" usage="primary display">https://doi.org/10.6028/NIST.SP.500-297</url>
+    </location>
+    <relatedItem type="series">
+      <titleInfo>
+        <title>NIST special publication; NIST special pub; NIST SP</title>
+        <partNumber></partNumber>
+      </titleInfo>
+    </relatedItem>
+    <identifier type="doi">10.6028/NIST.SP.500-297</identifier>
+  </mods>
+  <mods version="3.7">
+    <titleInfo>
       <title>Security and Privacy Controls for Information Systems and Organizations</title>
     </titleInfo>
     <abstract displayLabel="Abstract">A catalog of security and privacy controls.</abstract>
@@ -628,6 +646,73 @@ async def test_nist_get_not_found(respx_mock: respx.MockRouter, tmp_path) -> Non
     http = httpx.AsyncClient(base_url=GITHUB_RELEASES_URL)
     fetcher = _NISTFetcher(http, RateLimiter(delay=0.0), cache_dir=tmp_path)
     record = await fetcher.get("NIST SP 999-99")
+    await http.aclose()
+    assert record is None
+
+
+@pytest.mark.respx(base_url=GITHUB_RELEASES_URL)
+async def test_nist_get_ignores_malformed_catalogue_entry(
+    respx_mock: respx.MockRouter, tmp_path
+) -> None:
+    """A catalogue entry carrying no part number never stands in for a real one.
+
+    NIST publishes records whose series partNumber is empty; they normalise to
+    the bare identifier "NIST SP ", which is a prefix of every other SP
+    identifier. Matching on substrings therefore returned that one entry for
+    thousands of requests (#400).
+    """
+    respx_mock.get("/repos/usnistgov/NIST-Tech-Pubs/releases/latest").mock(
+        return_value=httpx.Response(200, json=SAMPLE_GITHUB_RELEASE)
+    )
+    respx_mock.get(re.compile(r".*allrecords-MODS\.xml.*")).mock(
+        return_value=httpx.Response(200, content=SAMPLE_MODS_XML)
+    )
+    http = httpx.AsyncClient(base_url=GITHUB_RELEASES_URL)
+    fetcher = _NISTFetcher(http, RateLimiter(delay=0.0), cache_dir=tmp_path)
+    record = await fetcher.get("NIST SP 800-53 Rev. 5")
+    await http.aclose()
+    assert record is not None
+    assert record["identifier"] == "NIST SP 800-53 Rev. 5"
+
+
+@pytest.mark.respx(base_url=GITHUB_RELEASES_URL)
+async def test_nist_get_absent_identifier_does_not_match_a_prefix(
+    respx_mock: respx.MockRouter, tmp_path
+) -> None:
+    """An identifier absent from the catalogue resolves to nothing."""
+    respx_mock.get("/repos/usnistgov/NIST-Tech-Pubs/releases/latest").mock(
+        return_value=httpx.Response(200, json=SAMPLE_GITHUB_RELEASE)
+    )
+    respx_mock.get(re.compile(r".*allrecords-MODS\.xml.*")).mock(
+        return_value=httpx.Response(200, content=SAMPLE_MODS_XML)
+    )
+    http = httpx.AsyncClient(base_url=GITHUB_RELEASES_URL)
+    fetcher = _NISTFetcher(http, RateLimiter(delay=0.0), cache_dir=tmp_path)
+    record = await fetcher.get("NIST SP 800-92")
+    await http.aclose()
+    assert record is None
+
+
+@pytest.mark.respx(base_url=GITHUB_RELEASES_URL)
+async def test_nist_get_does_not_widen_to_a_longer_identifier(
+    respx_mock: respx.MockRouter, tmp_path
+) -> None:
+    """get() never substitutes a longer identifier for the one asked for.
+
+    "NIST SP 800-53" is a real publication line but not a catalogue entry; the
+    entries are per-revision. Returning Rev. 5 for it picked whichever revision
+    came first in document order rather than the current one, so the honest
+    answer is that the canonical identifier asked for is not in the catalogue.
+    """
+    respx_mock.get("/repos/usnistgov/NIST-Tech-Pubs/releases/latest").mock(
+        return_value=httpx.Response(200, json=SAMPLE_GITHUB_RELEASE)
+    )
+    respx_mock.get(re.compile(r".*allrecords-MODS\.xml.*")).mock(
+        return_value=httpx.Response(200, content=SAMPLE_MODS_XML)
+    )
+    http = httpx.AsyncClient(base_url=GITHUB_RELEASES_URL)
+    fetcher = _NISTFetcher(http, RateLimiter(delay=0.0), cache_dir=tmp_path)
+    record = await fetcher.get("NIST SP 800-53")
     await http.aclose()
     assert record is None
 

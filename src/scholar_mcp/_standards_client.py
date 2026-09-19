@@ -622,6 +622,19 @@ class _NISTFetcher:
     async def get(self, identifier: str) -> StandardRecord | None:
         """Fetch a single NIST publication by canonical identifier.
 
+        The match is exact, case-insensitively. It used to also accept either
+        string containing the other, which made the catalogue's malformed
+        entries contagious: a record whose series partNumber is empty
+        normalises to "NIST SP ", a prefix of every other SP identifier, so it
+        answered for thousands of unrelated requests (#400). Containment also
+        widened a request to a different document -- "NISTIR 8259" to
+        "NISTIR 8259PT" -- picking by document order rather than by relevance.
+
+        Callers reach this with an already-canonical identifier from
+        ``resolve_identifier_local``, which emits exactly the spelling this
+        catalogue uses, so tolerant matching bought nothing. ``search`` is
+        where substring matching belongs and still does it.
+
         Args:
             identifier: Canonical NIST identifier (e.g. "NIST SP 800-53 Rev. 5").
 
@@ -631,8 +644,7 @@ class _NISTFetcher:
         all_pubs = await self._fetch_all()
         id_lower = identifier.lower()
         for pub in all_pubs:
-            pub_id = (pub.get("identifier") or "").lower()
-            if pub_id == id_lower or id_lower in pub_id or pub_id in id_lower:
+            if (pub.get("identifier") or "").lower() == id_lower:
                 return pub  # type: ignore[no-any-return]
         return None
 

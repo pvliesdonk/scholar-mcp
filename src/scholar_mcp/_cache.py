@@ -306,6 +306,19 @@ _REPAIRS: dict[str, str] = {
         "DELETE FROM books_openlibrary "
         "WHERE json_array_length(json_extract(data, '$.authors')) = 0"
     ),
+    # #400: the NIST fetcher matched on substrings, so a request was answered
+    # with whichever catalogue entry happened to share a prefix with it and
+    # that wrong record was cached under the identifier asked for. Such a row
+    # gives itself away: the record names a different publication than the key
+    # it sits under. Scoped to NIST bodies deliberately -- other fetchers
+    # legitimately return a record whose identifier is spelled unlike the
+    # canonical key (an ISO record answers "ISO/IEC 27001" as
+    # "ISO/IEC 27001:2022"), and those rows are correct.
+    "400_nist_standard_under_foreign_identity": (
+        "DELETE FROM standards "
+        "WHERE json_extract(data, '$.body') = 'NIST' "
+        "AND json_extract(data, '$.identifier') != identifier"
+    ),
 }
 
 
