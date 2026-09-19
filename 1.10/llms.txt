@@ -32,4 +32,5 @@
 - [Release Notes](https://pvliesdonk.github.io/scholar-mcp/1.10/releases/index.md)
 - [1.10](https://pvliesdonk.github.io/scholar-mcp/1.10/releases/1.10/index.md)
 - [1.9](https://pvliesdonk.github.io/scholar-mcp/1.10/releases/1.9/index.md)
+- [2.0](https://pvliesdonk.github.io/scholar-mcp/1.10/releases/2.0/index.md)
 
