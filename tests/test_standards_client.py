@@ -11,6 +11,7 @@ import respx
 from scholar_mcp._rate_limiter import RateLimiter
 from scholar_mcp._standards_client import (
     StandardsClient,
+    StandardsUpstreamError,
     _ETSIFetcher,
     _IETFFetcher,
     _NISTFetcher,
@@ -1118,14 +1119,85 @@ async def test_etsi_search(respx_mock: respx.MockRouter) -> None:
 
 
 @pytest.mark.respx(base_url=ETSI_BASE)
-async def test_etsi_search_non200_returns_empty(respx_mock: respx.MockRouter) -> None:
-    """search() returns [] on non-200."""
+async def test_etsi_search_non200_raises(respx_mock: respx.MockRouter) -> None:
+    """A refused request is not an empty result set (#401).
+
+    This assertion is the inverse of the one it replaces. Returning ``[]`` here
+    is what made an outage indistinguishable from "ETSI publishes no such
+    standard", which is the opposite of what a 403 means.
+    """
     respx_mock.get("/").mock(return_value=httpx.Response(403))
     http = httpx.AsyncClient(base_url=ETSI_BASE)
     fetcher = _ETSIFetcher(http, RateLimiter(delay=0.0))
-    results = await fetcher.search("303 645", limit=5)
+    with pytest.raises(StandardsUpstreamError) as excinfo:
+        await fetcher.search("303 645", limit=5)
     await http.aclose()
-    assert results == []
+    assert excinfo.value.body == "ETSI"
+    assert excinfo.value.status == 403
+
+
+@pytest.mark.respx(base_url=ETSI_BASE)
+async def test_etsi_search_html_body_raises(respx_mock: respx.MockRouter) -> None:
+    """The reported failure: 200 carrying the ETSI homepage instead of JSON.
+
+    [observed 2026-09-19] The live endpoint answers 200 with
+    ``content-type: text/html`` and a body opening ``<!doctype html>``. The
+    status alone reads as success, so the detail has to carry the reason.
+    """
+    respx_mock.get("/").mock(
+        return_value=httpx.Response(
+            200,
+            headers={"content-type": "text/html; charset=UTF-8"},
+            text="<!doctype html><html><head><title>ETSI</title></head></html>",
+        )
+    )
+    http = httpx.AsyncClient(base_url=ETSI_BASE)
+    fetcher = _ETSIFetcher(http, RateLimiter(delay=0.0))
+    with pytest.raises(StandardsUpstreamError) as excinfo:
+        await fetcher.search("303 645", limit=5)
+    await http.aclose()
+    assert excinfo.value.status == 200
+    assert excinfo.value.detail
+
+
+@pytest.mark.respx(base_url=ETSI_BASE)
+async def test_etsi_search_transport_error_raises(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """A request that never reached ETSI carries no status."""
+    respx_mock.get("/").mock(side_effect=httpx.ConnectError("no route to host"))
+    http = httpx.AsyncClient(base_url=ETSI_BASE)
+    fetcher = _ETSIFetcher(http, RateLimiter(delay=0.0))
+    with pytest.raises(StandardsUpstreamError) as excinfo:
+        await fetcher.search("303 645", limit=5)
+    await http.aclose()
+    assert excinfo.value.status is None
+
+
+@pytest.mark.respx(base_url=ETSI_BASE)
+async def test_etsi_search_non_list_json_raises(respx_mock: respx.MockRouter) -> None:
+    """Valid JSON of the wrong shape is still an answer this client cannot read."""
+    respx_mock.get("/").mock(
+        return_value=httpx.Response(200, json={"error": "unavailable"})
+    )
+    http = httpx.AsyncClient(base_url=ETSI_BASE)
+    fetcher = _ETSIFetcher(http, RateLimiter(delay=0.0))
+    with pytest.raises(StandardsUpstreamError):
+        await fetcher.search("303 645", limit=5)
+    await http.aclose()
+
+
+@pytest.mark.respx(base_url=ETSI_BASE)
+async def test_etsi_get_propagates_upstream_error(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """get() must not turn a refused request into None, which reads as absent."""
+    respx_mock.get("/").mock(return_value=httpx.Response(403))
+    http = httpx.AsyncClient(base_url=ETSI_BASE)
+    fetcher = _ETSIFetcher(http, RateLimiter(delay=0.0))
+    with pytest.raises(StandardsUpstreamError):
+        await fetcher.get("ETSI EN 303 645")
+    await http.aclose()
 
 
 @pytest.mark.respx(base_url=ETSI_BASE)
@@ -1217,19 +1289,6 @@ async def test_standards_client_search_unknown_body() -> None:
 # ---------------------------------------------------------------------------
 # ETSI additional paths
 # ---------------------------------------------------------------------------
-
-
-@pytest.mark.respx(base_url=ETSI_BASE)
-async def test_etsi_search_unexpected_response_type(
-    respx_mock: respx.MockRouter,
-) -> None:
-    """search() returns [] when API returns a non-list JSON body."""
-    respx_mock.get("/").mock(return_value=httpx.Response(200, json={"error": "bad"}))
-    http = httpx.AsyncClient(base_url=ETSI_BASE)
-    fetcher = _ETSIFetcher(http, RateLimiter(delay=0.0))
-    results = await fetcher.search("303 645", limit=5)
-    await http.aclose()
-    assert results == []
 
 
 # ---------------------------------------------------------------------------
@@ -1383,6 +1442,139 @@ async def test_standards_client_get_fallback_to_fetchers() -> None:
         result = await client.get("some-unknown-standard-xyz")
         await http.aclose()
     assert result is None
+
+
+@pytest.mark.respx(base_url=ETSI_BASE)
+async def test_search_with_failures_reports_a_refused_body(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """A body that refused the request is reported, not returned as empty."""
+    respx_mock.get("/").mock(return_value=httpx.Response(403))
+    http = httpx.AsyncClient()
+    client = StandardsClient(http)
+    records, failures = await client.search_with_failures("QUIC", body="ETSI", limit=5)
+    await http.aclose()
+    assert records == []
+    assert [f.body for f in failures] == ["ETSI"]
+    assert failures[0].status == 403
+
+
+async def test_search_all_bodies_keeps_results_and_reports_failures() -> None:
+    """A failing body must not be silently dropped from an all-bodies search.
+
+    The reported symptom: an unfiltered search returned IETF results with no
+    sign that ETSI had failed, so the answer read as complete (#401).
+    """
+    with respx.mock(assert_all_called=False) as mock:
+        mock.get(url__regex=r"datatracker\.ietf\.org").mock(
+            return_value=httpx.Response(200, json=SAMPLE_RFC9000_SEARCH)
+        )
+        mock.get(url__regex=r"api\.github\.com").mock(return_value=httpx.Response(503))
+        mock.get(url__regex=r"api\.w3\.org").mock(
+            return_value=httpx.Response(200, json={"results": []})
+        )
+        mock.get(url__regex=r"www\.etsi\.org").mock(return_value=httpx.Response(403))
+        http = httpx.AsyncClient()
+        client = StandardsClient(http)
+        records, failures = await client.search_with_failures("QUIC", limit=5)
+        await http.aclose()
+    # The working bodies still answer ...
+    assert any(r.get("body") == "IETF" for r in records)
+    # ... and the failing one is named rather than dropped.
+    assert [f.body for f in failures] == ["ETSI"]
+
+
+@pytest.mark.respx(base_url=ETSI_BASE)
+async def test_get_with_failures_reports_instead_of_reading_as_absent(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """A resolved body that failed yields no record *and* a failure."""
+    respx_mock.get("/").mock(return_value=httpx.Response(403))
+    http = httpx.AsyncClient()
+    client = StandardsClient(http)
+    record, failures = await client.get_with_failures("ETSI EN 303 645")
+    await http.aclose()
+    assert record is None
+    assert [f.body for f in failures] == ["ETSI"]
+
+
+async def test_get_fallback_continues_past_a_failing_fetcher() -> None:
+    """One failing fetcher must not end the fallback walk.
+
+    ETSI sits fourth in fetcher order, so a raise there would leave the
+    Relaton, CC and CEN fetchers never tried.
+    """
+    with respx.mock(assert_all_called=False) as mock:
+        mock.get(url__regex=r"datatracker\.ietf\.org").mock(
+            return_value=httpx.Response(
+                200, json={"objects": [], "meta": {"total_count": 0}}
+            )
+        )
+        mock.get(url__regex=r"api\.github\.com").mock(return_value=httpx.Response(503))
+        mock.get(url__regex=r"api\.w3\.org").mock(return_value=httpx.Response(404))
+        mock.get(url__regex=r"www\.etsi\.org").mock(return_value=httpx.Response(403))
+        http = httpx.AsyncClient()
+        client = StandardsClient(http)
+        record, failures = await client.get_with_failures("some-unknown-standard-xyz")
+        await http.aclose()
+    assert record is None
+    assert [f.body for f in failures] == ["ETSI"]
+
+
+async def test_search_keeps_its_plain_signature() -> None:
+    """search() still returns records only, so existing callers are unaffected."""
+    with respx.mock(assert_all_called=False) as mock:
+        mock.get(url__regex=r"www\.etsi\.org").mock(return_value=httpx.Response(403))
+        http = httpx.AsyncClient()
+        client = StandardsClient(http)
+        results = await client.search("QUIC", body="ETSI", limit=5)
+        await http.aclose()
+    assert results == []
+
+
+async def test_get_with_failures_returns_a_record_found_after_a_failure() -> None:
+    """A later fetcher's record survives an earlier fetcher's failure.
+
+    The walk continuing is only half the contract: what it found afterwards
+    has to come back, with the failure recorded beside it.
+    """
+    from unittest.mock import AsyncMock, patch
+
+    failing = AsyncMock()
+    failing.get = AsyncMock(
+        side_effect=StandardsUpstreamError("ETSI", status=403, detail="refused")
+    )
+    working = AsyncMock()
+    working.get = AsyncMock(return_value={"identifier": "X 1", "body": "CEN"})
+
+    http = httpx.AsyncClient()
+    client = StandardsClient(http)
+    with patch.object(client, "_one_fetcher_per_type", return_value=[failing, working]):
+        record, failures = await client.get_with_failures("some-unknown-standard-xyz")
+    await http.aclose()
+    assert record == {"identifier": "X 1", "body": "CEN"}
+    assert [f.body for f in failures] == ["ETSI"]
+
+
+@pytest.mark.respx(base_url=ETSI_BASE)
+async def test_resolve_returns_the_stub_when_the_source_failed(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """resolve() keeps its stub behaviour when a source never answered.
+
+    A failure now reaches the same branch a ``None`` already did, so the
+    caller still gets the canonical form rather than an exception. Reporting
+    the failure properly is resolve()'s own change to make; #401 deliberately
+    left that shape alone.
+    """
+    respx_mock.get("/").mock(return_value=httpx.Response(403))
+    http = httpx.AsyncClient()
+    client = StandardsClient(http)
+    records = await client.resolve("ETSI EN 303 645")
+    await http.aclose()
+    assert len(records) == 1
+    assert records[0]["identifier"] == "ETSI EN 303 645"
+    assert records[0]["title"] == ""
 
 
 @pytest.mark.asyncio

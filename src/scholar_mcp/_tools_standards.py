@@ -12,8 +12,72 @@ from fastmcp_pvl_core import register_long_running_tool
 
 from ._record_types import StandardRecord
 from ._server_deps import get_service
-from ._standards_client import resolve_identifier_local
+from ._standards_client import StandardsUpstreamError, resolve_identifier_local
 from .domain import Service
+
+
+def _upstream_error_payload(
+    failures: list[StandardsUpstreamError], identifier: str
+) -> dict[str, Any]:
+    """Map sources that never answered to a payload distinct from not_found.
+
+    ``not_found`` tells an LLM caller to stop asking about this identifier. A
+    request that was refused has to say the opposite, so a 429 is reported as
+    ``rate_limited`` with ``retryable``, the shape ``get_book_excerpt`` and the
+    EPO tools already emit.
+
+    ``status`` and ``detail`` describe the first failure, which is the only
+    one a resolved identifier can produce. The fallback walk can collect
+    several, so ``failed_bodies`` names them all and shares its vocabulary
+    with ``search_standards``. Today only ETSI raises; #453 is what makes the
+    list grow.
+
+    Args:
+        failures: The upstream failures gathered for this lookup.
+        identifier: The identifier that was being looked up.
+
+    Returns:
+        The caller-facing error mapping.
+    """
+    first = failures[0]
+    bodies = [f.body for f in failures]
+    if first.status == 429:
+        return {
+            "error": "rate_limited",
+            "identifier": identifier,
+            "body": first.body,
+            "failed_bodies": bodies,
+            "retryable": True,
+        }
+    return {
+        "error": "upstream_error",
+        "identifier": identifier,
+        "body": first.body,
+        "failed_bodies": bodies,
+        "status": first.status,
+        "detail": first.detail,
+    }
+
+
+def _failure_warning(failures: list[StandardsUpstreamError]) -> str:
+    """Name the sources that did not answer, for a partial result.
+
+    Deliberately a ``warning`` rather than an ``error``: a caller
+    pattern-matching on ``error`` would throw away the results that did
+    arrive.
+
+    Args:
+        failures: The failures gathered during the search.
+
+    Returns:
+        One sentence naming each source and its status.
+    """
+    named = ", ".join(f"{f.body} ({f.status or 'no response'})" for f in failures)
+    return (
+        f"Incomplete: no answer from {named}. Results from the other sources "
+        "are unaffected, and the missing ones may still hold matches."
+    )
+
 
 if TYPE_CHECKING:
     from fastmcp_pvl_core import Jobs
@@ -35,6 +99,11 @@ async def resolve_standard_identifier(
     a cleared cache downloads and parses each body's index, which runs well
     past the soft deadline. Such a call returns a job handle to poll with
     ``get_job_result`` rather than the result itself.
+
+    A ``warning`` beside a null ``record`` means the source never answered, so
+    the standard may well exist and the canonical form is still usable. Only a
+    null ``record`` with no ``warning`` means the sources looked and found
+    nothing.
 
     Examples:
         resolve_standard_identifier("rfc9000")
@@ -67,11 +136,20 @@ async def resolve_standard_identifier(
     resolved = resolve_identifier_local(raw)
     if resolved is not None:
         canonical, body = resolved
-        record = await service.standards.get(canonical)
+        record, failures = await service.standards.get_with_failures(canonical)
         if record is not None:
             await service.cache.set_standard_alias(raw, canonical)
             await service.cache.set_standard(canonical, record)
             return {"canonical": canonical, "body": body, "record": record}
+        if failures:
+            # The identifier resolved, but nobody could say whether it exists.
+            # A bare null record here reads as "no such standard".
+            return {
+                "canonical": canonical,
+                "body": body,
+                "record": None,
+                "warning": _failure_warning(failures),
+            }
         return {"canonical": canonical, "body": body, "record": None}
 
     # 3. API fallback — search all sources
@@ -105,6 +183,12 @@ async def search_standards(
     past the soft deadline. Such a call returns a job handle to poll with
     ``get_job_result`` rather than the result itself.
 
+    Every answer states its own completeness. ``partial`` is always present,
+    and when it is true ``failed_bodies`` names each source that did not
+    answer and ``warning`` describes it. A partial answer is deliberately not
+    an ``error``: the results that did arrive are usable, and the named bodies
+    may still hold matches worth asking for again.
+
     Examples:
         search_standards("TLS 1.3")
         search_standards("800-53", body="NIST")
@@ -125,11 +209,31 @@ async def search_standards(
     cached = await service.cache.get_standards_search(cache_key)
     if cached is not None:
         logger.debug("standards_search_cache_hit key=%s", cache_key[:16])
-        return {"results": cached}
+        # Only complete answers are cached, so a hit is complete by
+        # construction. The keys are still stated: a caller can rely on them
+        # being present rather than inferring completeness from their absence.
+        return {"results": cached, "partial": False, "failed_bodies": []}
 
-    results = await service.standards.search(query, body=body, limit=limit)
-    await service.cache.set_standards_search(cache_key, results)
-    return {"results": results}
+    results, failures = await service.standards.search_with_failures(
+        query, body=body, limit=limit
+    )
+    if not failures:
+        await service.cache.set_standards_search(cache_key, results)
+        return {"results": results, "partial": False, "failed_bodies": []}
+
+    # A partial result is never cached: stored without its flag, the next call
+    # would read it as a complete answer.
+    logger.warning(
+        "standards_search_partial query=%s bodies=%s",
+        query,
+        [f.body for f in failures],
+    )
+    return {
+        "results": results,
+        "partial": True,
+        "failed_bodies": [f.body for f in failures],
+        "warning": _failure_warning(failures),
+    }
 
 
 async def get_standard(
@@ -157,6 +261,12 @@ async def get_standard(
     identifier with no revision, such as ``NIST SP 800-53``, can come back
     ``not_found`` even though the publication exists. ``search_standards``
     lists the revisions that are published.
+
+    ``not_found`` means the source answered and holds no such standard: stop
+    asking about that identifier. A lookup that never got an answer says so
+    instead, as ``rate_limited`` (with ``retryable``) or ``upstream_error``
+    with the status and what went wrong. Both are worth retrying -- the
+    standard may well exist.
 
     Examples:
         get_standard("RFC 9000")
@@ -193,8 +303,12 @@ async def get_standard(
         return dict(cached)
 
     # 3. Fetch from source
-    record = await service.standards.get(canonical)
+    record, failures = await service.standards.get_with_failures(canonical)
     if record is None:
+        # Nothing is cached on this path, so the retry the payload invites is
+        # not served a poisoned entry.
+        if failures:
+            return _upstream_error_payload(failures, identifier)
         return {"error": "not_found", "identifier": identifier}
 
     # 4. Cache result

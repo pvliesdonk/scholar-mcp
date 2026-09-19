@@ -285,6 +285,32 @@ def resolve_identifier_local(raw: str) -> tuple[str, str] | None:
 # ---------------------------------------------------------------------------
 
 
+class StandardsUpstreamError(Exception):
+    """Raised when a standards source never gave a usable answer.
+
+    ``None`` from ``get`` and ``[]`` from ``search`` mean the source answered
+    and holds no such standard. A request that was refused, never arrived, or
+    came back in a shape this client cannot read means the opposite, and
+    collapsing the two leaves a caller unable to tell "no such standard" from
+    "ask again later" (#401).
+
+    Attributes:
+        body: The source body that failed, e.g. ``"ETSI"``.
+        status: The upstream HTTP status, or ``None`` when the request never
+            produced a response.
+        detail: What was wrong, phrased for the caller-facing payload. A 200
+            carrying HTML needs this: the status alone reads as success.
+    """
+
+    def __init__(
+        self, body: str, *, status: int | None = None, detail: str = ""
+    ) -> None:
+        self.body = body
+        self.status = status
+        self.detail = detail
+        super().__init__(f"{body} upstream error: {detail or status}")
+
+
 @runtime_checkable
 class _StandardsFetcher(Protocol):
     """Structural type shared by all body fetchers in StandardsClient.
@@ -292,6 +318,13 @@ class _StandardsFetcher(Protocol):
     Every fetcher registered in ``_fetchers`` must expose both ``.get()``
     and ``.search()``. The Protocol is ``runtime_checkable`` so tests can
     use ``isinstance`` to verify conformance.
+
+    ``None`` from ``get`` and ``[]`` from ``search`` mean the source answered
+    and holds no such standard. A fetcher *may* instead raise
+    :class:`StandardsUpstreamError` when it never got a usable answer, and
+    :class:`StandardsClient` handles both: a failing source is reported
+    alongside whatever the others returned, never as an absence. The fetchers
+    that still swallow their own upstream failures are tracked in #453.
     """
 
     async def get(self, identifier: str) -> StandardRecord | None: ...
@@ -1020,7 +1053,23 @@ class _ETSIFetcher:
 
     Calls ``https://www.etsi.org/?option=com_standardssearch&view=data&format=json``
     which is the server-side AJAX endpoint backing the ETSI standards search page.
-    This endpoint is not behind Cloudflare bot protection.
+
+    [observed 2026-09-19] That request now returns ``200`` with
+    ``content-type: text/html``. The cause is this client, not ETSI being
+    down: ``option=com_standardssearch`` is a Joomla component, and
+    ``www.etsi.org`` is served by WordPress today (``wp-admin/admin-ajax.php``,
+    ``wp-content``, ``wp-json``). The query string routes nowhere, so the site
+    answers with a page. The live standards-search page mentions neither
+    ``com_standardssearch`` nor ``format=json``.
+
+    Five request shapes were tried -- plain, ``Accept: application/json``,
+    ``X-Requested-With: XMLHttpRequest``, ``Referer``, and a browser
+    ``User-Agent`` -- and every one returned the same page, so this is not a
+    header or bot-protection problem.
+
+    Which interface replaced it is unestablished: #454. Until then every such
+    answer is reported as an upstream failure, which is what it is, rather
+    than as an absent standard.
 
     Args:
         http: Shared httpx async client.
@@ -1034,45 +1083,80 @@ class _ETSIFetcher:
     async def search(self, query: str, *, limit: int = 10) -> list[StandardRecord]:
         """Search ETSI standards by keyword.
 
+        An empty list means ETSI answered and publishes no such standard. Every
+        other outcome raises, because a caller that cannot tell those apart
+        reports an outage as an absence (#401).
+
         Args:
             query: Search string (e.g. "303 645", "IoT security").
             limit: Maximum results.
 
         Returns:
             List of matching StandardRecord dicts.
+
+        Raises:
+            StandardsUpstreamError: ETSI refused the request, never received
+                it, or answered in a shape this client cannot read.
         """
         await self._limiter.acquire()
         params = {**_ETSI_JOOMLA_PARAMS, "search": query, "page": 1}
+        # Each failure keeps logging where the detail is in hand, then raises,
+        # so operators see what they saw before and callers get a decision.
         try:
             resp = await self._http.get(f"{_ETSI_BASE}/", params=params)
         except httpx.HTTPError as exc:
             logger.warning("etsi_api_request_failed error=%s", exc)
-            return []
+            raise StandardsUpstreamError(
+                "ETSI", detail=f"request never reached ETSI: {exc}"
+            ) from exc
         if resp.status_code != 200:
             logger.warning(
                 "etsi_api_error status=%d url=%s", resp.status_code, str(resp.url)
             )
-            return []
+            raise StandardsUpstreamError(
+                "ETSI", status=resp.status_code, detail="ETSI refused the request"
+            )
         try:
             items: list[dict] = resp.json()  # type: ignore[type-arg]
         except json.JSONDecodeError as exc:
             logger.warning(
                 "etsi_api_json_decode_error url=%s err=%s", str(resp.url), exc
             )
-            return []
+            # The observed failure is a 200 carrying the ETSI homepage, so the
+            # status says "success" and only the content type explains itself.
+            raise StandardsUpstreamError(
+                "ETSI",
+                status=resp.status_code,
+                detail=(
+                    "answered with a non-JSON body (content-type: "
+                    f"{resp.headers.get('content-type', 'unknown')})"
+                ),
+            ) from exc
         if not isinstance(items, list):
             logger.warning("etsi_api_unexpected_response type=%s", type(items).__name__)
-            return []
+            raise StandardsUpstreamError(
+                "ETSI",
+                status=resp.status_code,
+                detail=f"expected a JSON array, got {type(items).__name__}",
+            )
         return [_normalize_etsi(item) for item in items[:limit]]
 
     async def get(self, identifier: str) -> StandardRecord | None:
         """Fetch a single ETSI standard by canonical identifier.
 
+        ``None`` means ETSI answered and holds no such standard. A failure
+        propagates from :meth:`search` rather than collapsing into ``None``,
+        which would tell the caller to stop asking about a standard that may
+        well exist (#401).
+
         Args:
             identifier: Canonical identifier (e.g. "ETSI EN 303 645").
 
         Returns:
-            Populated StandardRecord or None if not found.
+            Populated StandardRecord, or None when ETSI reports no match.
+
+        Raises:
+            StandardsUpstreamError: propagated from :meth:`search`.
         """
         results = await self.search(identifier, limit=1)
         return results[0] if results else None
@@ -1229,6 +1313,43 @@ class _CENFetcher:
 # ---------------------------------------------------------------------------
 
 
+def _collect_search(
+    outcomes: list[Any],
+    limit: int,
+) -> tuple[list[StandardRecord], list[StandardsUpstreamError]]:
+    """Split gathered search outcomes into records and reportable failures.
+
+    Merging only the lists is what let an all-bodies search read as complete
+    while one body was down (#401), so a source that failed is named here
+    rather than dropped.
+
+    Anything that is not a :class:`StandardsUpstreamError` is logged and
+    skipped, which is what this loop did silently with every exception before.
+
+    Args:
+        outcomes: Results of ``asyncio.gather(..., return_exceptions=True)``.
+        limit: Maximum records to return.
+
+    Returns:
+        The merged records, capped at ``limit``, and the failures to report.
+    """
+    merged: list[StandardRecord] = []
+    failures: list[StandardsUpstreamError] = []
+    for outcome in outcomes:
+        if isinstance(outcome, StandardsUpstreamError):
+            failures.append(outcome)
+        elif isinstance(outcome, BaseException):
+            logger.warning(
+                "standards_search_fetcher_crashed err=%r", outcome, exc_info=outcome
+            )
+        elif isinstance(outcome, list):
+            # The list check is the one this loop already had. The Protocol
+            # and mypy make anything else unreachable, but extending on a
+            # non-list would splice a string apart rather than skip it.
+            merged.extend(outcome)
+    return merged[:limit], failures
+
+
 class StandardsClient:
     """Unified client for Tier 1 standards sources.
 
@@ -1290,11 +1411,39 @@ class StandardsClient:
         Returns:
             List of StandardRecord dicts.
         """
+        records, _ = await self.search_with_failures(query, body=body, limit=limit)
+        return records
+
+    async def search_with_failures(
+        self,
+        query: str,
+        *,
+        body: str | None = None,
+        limit: int = 10,
+    ) -> tuple[list[StandardRecord], list[StandardsUpstreamError]]:
+        """Search standards, naming any source that never answered.
+
+        :meth:`search` drops the failures for callers that cannot act on
+        them. Callers that report to a user take them, because an empty
+        result and a source that was down are different answers (#401).
+
+        Args:
+            query: Identifier, title, or free text.
+            body: Optional body filter, as for :meth:`search`.
+            limit: Maximum results.
+
+        Returns:
+            The matching records, and the failures gathered while finding
+            them. A failing body never removes another body's results.
+        """
         if body is not None:
             fetcher = self._fetchers.get(body.upper())
             if fetcher is None:
-                return []
-            return await fetcher.search(query, limit=limit)
+                return [], []
+            try:
+                return await fetcher.search(query, limit=limit), []
+            except StandardsUpstreamError as exc:
+                return [], [exc]
 
         # Search all sources concurrently, one call per fetcher type. For
         # RelatonLiveFetcher specifically, the ISO/IEC variant (source=None)
@@ -1304,15 +1453,11 @@ class StandardsClient:
         # a second instance of any non-Relaton type is ever registered, the
         # earlier one will be silently skipped.
         one_per_type = self._one_fetcher_per_type()
-        results_per_body = await asyncio.gather(
+        outcomes = await asyncio.gather(
             *(f.search(query, limit=limit) for f in one_per_type),
             return_exceptions=True,
         )
-        merged: list[StandardRecord] = []
-        for r in results_per_body:
-            if isinstance(r, list):
-                merged.extend(r)
-        return merged[:limit]
+        return _collect_search(list(outcomes), limit)
 
     async def get(self, identifier: str) -> StandardRecord | None:
         """Resolve and fetch a single standard by identifier.
@@ -1326,20 +1471,48 @@ class StandardsClient:
         Returns:
             Populated StandardRecord or None.
         """
+        record, _ = await self.get_with_failures(identifier)
+        return record
+
+    async def get_with_failures(
+        self, identifier: str
+    ) -> tuple[StandardRecord | None, list[StandardsUpstreamError]]:
+        """Fetch one standard, naming any source that never answered.
+
+        ``(None, [])`` means the sources answered and hold no such standard.
+        ``(None, [failure])`` means nobody could say, which a caller must not
+        report as an absence (#401).
+
+        Args:
+            identifier: Canonical or fuzzy identifier.
+
+        Returns:
+            The record if one was found, and the failures gathered on the way.
+        """
+        failures: list[StandardsUpstreamError] = []
         resolved = resolve_identifier_local(identifier)
         if resolved is not None:
             canonical, body = resolved
             fetcher = self._fetchers.get(body)
             if fetcher is not None:
-                return await fetcher.get(canonical)
+                try:
+                    return await fetcher.get(canonical), failures
+                except StandardsUpstreamError as exc:
+                    return None, [exc]
 
         # No local resolution — try one fetcher per type. See
-        # :meth:`_one_fetcher_per_type` for the dedup contract.
+        # :meth:`_one_fetcher_per_type` for the dedup contract. A source that
+        # fails is recorded and the walk continues: ETSI sits fourth, so
+        # stopping here would leave Relaton, CC and CEN never tried.
         for fetcher in self._one_fetcher_per_type():
-            result = await fetcher.get(identifier)
+            try:
+                result = await fetcher.get(identifier)
+            except StandardsUpstreamError as exc:
+                failures.append(exc)
+                continue
             if result is not None:
-                return result
-        return None
+                return result, failures
+        return None, failures
 
     def _one_fetcher_per_type(self) -> list[_StandardsFetcher]:
         """Return one fetcher per concrete fetcher class.
@@ -1382,7 +1555,14 @@ class StandardsClient:
             canonical, body = resolved
             fetcher = self._fetchers.get(body)
             if fetcher:
-                record = await fetcher.get(canonical)
+                try:
+                    record = await fetcher.get(canonical)
+                except StandardsUpstreamError:
+                    # Falls through to the stub below, which is what a failed
+                    # fetch already produced here. Reporting this failure to
+                    # the caller is resolve()'s own change to make, not this
+                    # one's; the stub's shortcomings are pre-existing.
+                    record = None
                 if record is not None:
                     return [record]
             # Identifier resolved locally but source fetch failed — return minimal stub

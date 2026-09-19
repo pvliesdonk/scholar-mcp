@@ -193,6 +193,34 @@ async def test_enrich_exception_is_caught() -> None:
 
 
 @pytest.mark.asyncio
+async def test_enrich_absorbs_an_upstream_failure() -> None:
+    """The enricher's silence is load-bearing for the client's contract.
+
+    A fetcher now raises StandardsUpstreamError rather than answering None
+    when a source never replied (#401). Enrichment is best-effort and absorbs
+    that, leaving the record alone. The test above covers it through a bare
+    Exception; this one names the type, so the contract cannot be narrowed
+    later without something failing here.
+    """
+    from scholar_mcp._enricher_standards import StandardsEnricher
+    from scholar_mcp._standards_client import StandardsUpstreamError
+
+    service = MagicMock()
+    service.standards = AsyncMock()
+    service.standards.get = AsyncMock(
+        side_effect=StandardsUpstreamError(
+            "IETF", status=503, detail="refused the request"
+        )
+    )
+
+    enricher = StandardsEnricher()
+    record = _make_record("RFC 9000")
+    await enricher.enrich(record, service)  # must not raise
+
+    assert "standard_metadata" not in record
+
+
+@pytest.mark.asyncio
 async def test_enrich_coverage_guard_skips_partial_match() -> None:
     """enrich() skips titles where identifier coverage is <=50%."""
     from scholar_mcp._enricher_standards import StandardsEnricher

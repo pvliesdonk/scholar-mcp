@@ -20,6 +20,7 @@ from scholar_mcp.domain import Service
 from tests.conftest import tasks_server
 
 IETF_BASE = "https://datatracker.ietf.org"
+ETSI_BASE = "https://www.etsi.org"
 
 SAMPLE_RFC_DOC = {
     "objects": [
@@ -221,6 +222,125 @@ async def test_get_standard_not_found(
     assert "error" in data
 
 
+@pytest.mark.respx(base_url=ETSI_BASE)
+async def test_get_standard_reports_upstream_failure_not_absence(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """A refused lookup must not read as "ETSI publishes no such standard".
+
+    ``not_found`` tells an LLM caller to stop asking about an identifier that
+    exists, which is the opposite of what a refusal means (#401).
+    """
+    respx_mock.get("/").mock(return_value=httpx.Response(403))
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_standard", {"identifier": "ETSI EN 303 645"}
+        )
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "upstream_error"
+    assert data["status"] == 403
+    assert data["body"] == "ETSI"
+    assert data["detail"]
+    # Same vocabulary as search_standards, and the list #453 will grow.
+    assert data["failed_bodies"] == ["ETSI"]
+
+
+@pytest.mark.respx(base_url=ETSI_BASE)
+async def test_get_standard_reports_a_throttle_as_retryable(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """A 429 is worth retrying, and says so, matching get_book_excerpt."""
+    respx_mock.get("/").mock(return_value=httpx.Response(429))
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_standard", {"identifier": "ETSI EN 303 645"}
+        )
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "rate_limited"
+    assert data["retryable"] is True
+
+
+@pytest.mark.respx(base_url=ETSI_BASE)
+async def test_get_standard_does_not_cache_a_failed_lookup(
+    respx_mock: respx.MockRouter, mcp: FastMCP, service: Service
+) -> None:
+    """The retry the payload invites must not be served a poisoned entry."""
+    respx_mock.get("/").mock(return_value=httpx.Response(403))
+    async with Client(mcp) as client:
+        await client.call_tool("get_standard", {"identifier": "ETSI EN 303 645"})
+    assert await service.cache.get_standard("ETSI EN 303 645") is None
+
+
+@pytest.mark.respx(base_url=ETSI_BASE)
+async def test_search_standards_reports_a_failing_body(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """A body that never answered is named, and the answer says it is partial."""
+    respx_mock.get("/").mock(return_value=httpx.Response(403))
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "search_standards", {"query": "IoT security", "body": "ETSI"}
+        )
+    data = json.loads(result.content[0].text)
+    assert data["partial"] is True
+    assert data["failed_bodies"] == ["ETSI"]
+    assert data["warning"]
+    # Deliberately not `error`: a caller matching on `error` would throw away
+    # the results that did arrive (#375's reasoning).
+    assert "error" not in data
+
+
+@pytest.mark.respx(base_url=IETF_BASE)
+async def test_search_standards_states_completeness_when_nothing_failed(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """``partial`` is present even when false.
+
+    Only an affirmative "this answer is complete" lets a caller tell a gap
+    from an absence.
+    """
+    respx_mock.get("/api/v1/doc/document/").mock(
+        return_value=httpx.Response(200, json=SAMPLE_RFC_DOC)
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "search_standards", {"query": "QUIC transport", "body": "IETF"}
+        )
+    data = json.loads(result.content[0].text)
+    assert data["partial"] is False
+    assert data["failed_bodies"] == []
+
+
+@pytest.mark.respx(base_url=ETSI_BASE)
+async def test_search_standards_does_not_cache_a_partial_result(
+    respx_mock: respx.MockRouter, mcp: FastMCP, service: Service
+) -> None:
+    """A partial result cached without its flag reads as complete next call."""
+    respx_mock.get("/").mock(return_value=httpx.Response(403))
+    async with Client(mcp) as client:
+        await client.call_tool(
+            "search_standards", {"query": "IoT security", "body": "ETSI"}
+        )
+    cache_key = hashlib.sha256(b"IoT security:ETSI:10").hexdigest()
+    assert await service.cache.get_standards_search(cache_key) is None
+
+
+@pytest.mark.respx(base_url=ETSI_BASE)
+async def test_resolve_standard_identifier_warns_when_the_source_failed(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """A null record must not be presented as fact when nobody could answer."""
+    respx_mock.get("/").mock(return_value=httpx.Response(403))
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "resolve_standard_identifier", {"raw": "ETSI EN 303 645"}
+        )
+    data = json.loads(result.content[0].text)
+    assert data["canonical"] == "ETSI EN 303 645"
+    assert data["record"] is None
+    assert data["warning"]
+
+
 async def test_get_standard_cache_hit_skips_network(
     mcp: FastMCP, service: Service
 ) -> None:
@@ -291,7 +411,7 @@ async def test_resolve_locally_resolved_but_not_found(
             "scholar_mcp._tools_standards.resolve_identifier_local",
             return_value=("RFC 99998", "IETF"),
         ),
-        patch.object(service.standards, "get", return_value=None),
+        patch.object(service.standards, "get_with_failures", return_value=(None, [])),
     ):
         async with Client(mcp) as client:
             result = await client.call_tool(
@@ -471,7 +591,7 @@ async def test_resolve_alias_cache_hit_but_record_cache_miss(
     await service.cache.set_standard_alias("rfc9000", "RFC 9000")
     # No record stored — the alias-cache branch falls through at line 63
 
-    with patch.object(service.standards, "get", return_value=None):
+    with patch.object(service.standards, "get_with_failures", return_value=(None, [])):
         async with Client(mcp) as client:
             result = await client.call_tool(
                 "resolve_standard_identifier", {"raw": "rfc9000"}
