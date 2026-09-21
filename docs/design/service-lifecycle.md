@@ -16,6 +16,11 @@ template's `server_lifespan` constructs it with no arguments, awaits
 `start()`, yields it under the `"service"` key, and awaits `stop()` on
 shutdown. Tools resolve it with `Depends(get_service)`.
 
+The keepalive and S2 request pacing depend on the external behaviour recorded
+in [the Semantic Scholar API reference](reference/semantic-scholar-api.md).
+The Google Books enrichment client depends on
+[the Google Books volume-search reference](reference/google-books-api.md).
+
 `start()` builds each resource inside a `contextlib.AsyncExitStack` and
 registers that resource's cleanup immediately after constructing it, then
 detaches the stack with `pop_all()` as its last statement. A failure part-way

@@ -1,4 +1,7 @@
-"""Semantic Scholar API client."""
+"""Semantic Scholar API client.
+
+External behaviour: ``docs/design/reference/semantic-scholar-api.md``.
+"""
 
 from __future__ import annotations
 

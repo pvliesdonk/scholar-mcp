@@ -2,6 +2,25 @@
 
 Newest first. One entry per research pass.
 
+## 2026-09-21
+
+### Semantic Scholar and Google Books
+
+Added [Semantic Scholar API behaviour](semantic-scholar-api.md) and
+[Google Books volume search](google-books-api.md) as draft references for #389.
+Checked the published API pages for the keyed S2 rate (one request per second
+across endpoints), shared unauthenticated traffic, citation endpoint parameters,
+Google Books ISBN search, and its volume-list response. A single anonymous
+Google Books request today returned 429 with a daily `Queries` quota message;
+it established neither the quota number nor the keyed error shape.
+
+The older maintainer observations in #389, #406 and #366 are recorded with
+their links and marked `[unverified]`: the issue comments preserve conclusions
+but not enough raw request and response evidence to independently confirm them.
+This pass made no live Semantic Scholar requests. Citation ordering, keyed
+Google Books quota behavior, and whether a 429 counts as S2 key activity remain
+open. Review both pages by 2027-03-21.
+
 ## 2026-09-16
 
 ### Biblio element placement, and what `L500EP` actually holds

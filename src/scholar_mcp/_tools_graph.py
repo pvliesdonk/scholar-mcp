@@ -1,4 +1,7 @@
-"""Citation graph MCP tools."""
+"""Citation graph MCP tools.
+
+S2 endpoint reference: ``docs/design/reference/semantic-scholar-api.md``.
+"""
 
 from __future__ import annotations
 
@@ -22,8 +25,8 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Pagination limits for client-side min_citations filtering.
-# S2 returns citations newest-first; high-citation papers are typically
-# older, so we must paginate deeply to reach them.
+# Citation order is not verified. A matching paper may occur beyond the
+# first page, so the client-side threshold needs a bounded deep scan.
 _S2_PAGE_SIZE = 1000
 _MAX_UPSTREAM_SCAN = 10_000  # get_citations tool
 _MAX_PER_NODE_SCAN = 5_000  # get_citation_graph BFS per node
