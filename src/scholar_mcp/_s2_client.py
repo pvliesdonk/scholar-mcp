@@ -224,14 +224,14 @@ class S2Client:
 
     Args:
         api_key: Optional S2 API key. Enables higher rate limits.
-        delay: Inter-request delay in seconds. Defaults based on api_key
-            presence: 1.1s without key, 0.1s with key.
+        delay: Inter-request delay in seconds. Defaults to 1.1s with or
+            without a key.
     """
 
     def __init__(self, api_key: str | None, delay: float | None = None) -> None:
         self._api_key = api_key
         if delay is None:
-            delay = 0.1 if api_key else 1.1
+            delay = 1.1
         self._limiter = RateLimiter(delay=delay)
         headers: dict[str, str] = {"User-Agent": "scholar-mcp/0.1"}
         if api_key:

@@ -5,6 +5,8 @@ import logging
 import httpx
 import pytest
 
+from scholar_mcp import _rate_limiter
+from scholar_mcp._rate_limiter import RateLimitedError
 from scholar_mcp._s2_client import (
     FIELD_SETS,
     KEEPALIVE_DEGRADED_AFTER_FAILURES,
@@ -22,8 +24,43 @@ S2_BASE = "https://api.semanticscholar.org/graph/v1"
 
 
 @pytest.fixture
-def client():
+def client(monkeypatch: pytest.MonkeyPatch) -> S2Client:
+    # Keepalive tests replace asyncio.sleep without advancing the loop clock.
+    # Cooldown timing is covered in test_rate_limiter.py instead.
+    monkeypatch.setattr(_rate_limiter, "_S2_BASE_DELAY_S", 0.0)
     return S2Client(api_key=None, delay=0.0)
+
+
+async def test_default_spacing_is_same_with_and_without_key() -> None:
+    keyed = S2Client(api_key="test-key")
+    anonymous = S2Client(api_key=None)
+    try:
+        assert keyed.limiter.delay == 1.1
+        assert anonymous.limiter.delay == 1.1
+    finally:
+        await keyed.aclose()
+        await anonymous.aclose()
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_graph_429_cools_recommendations_endpoint(
+    respx_mock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(_rate_limiter, "_S2_BASE_DELAY_S", 0.04)
+    client = S2Client(api_key="test-key", delay=0.0)
+    respx_mock.get("/paper/abc123").mock(return_value=httpx.Response(429))
+    respx_mock.post("https://api.semanticscholar.org/recommendations/v1/papers").mock(
+        return_value=httpx.Response(200, json={"recommendedPapers": []})
+    )
+    try:
+        with pytest.raises(RateLimitedError):
+            await client.get_paper("abc123", retry=False)
+
+        started = asyncio.get_running_loop().time()
+        assert await client.recommend(["abc123"], fields="title", retry=False) == []
+        assert asyncio.get_running_loop().time() - started >= 0.03
+    finally:
+        await client.aclose()
 
 
 @pytest.mark.respx(base_url=S2_BASE)

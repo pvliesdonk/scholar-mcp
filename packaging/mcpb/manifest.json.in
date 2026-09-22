@@ -79,7 +79,7 @@
     "s2_api_key": {
       "type": "string",
       "title": "Semantic Scholar API key",
-      "description": "Semantic Scholar API key. Optional but strongly recommended: unauthenticated requests are limited to ~1 req/s. Request one at https://www.semanticscholar.org/product/api#api-key-form.",
+      "description": "Semantic Scholar API key. Optional but strongly recommended: a key has an introductory 1 req/s allowance; anonymous users share capacity and may be throttled. Request one at https://www.semanticscholar.org/product/api#api-key-form.",
       "required": false,
       "sensitive": true
     },

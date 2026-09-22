@@ -18,6 +18,10 @@ shutdown. Tools resolve it with `Depends(get_service)`.
 
 The keepalive and S2 request pacing depend on the external behaviour recorded
 in [the Semantic Scholar API reference](reference/semantic-scholar-api.md).
+One limiter on the service's `S2Client` spaces Graph and Recommendations
+requests 1.1 seconds apart. Any 429 extends that limiter's cooldown, so
+requests from other tools wait as well. This gate is process-local; separate
+server processes do not coordinate their key usage.
 The Google Books enrichment client depends on
 [the Google Books volume-search reference](reference/google-books-api.md).
 

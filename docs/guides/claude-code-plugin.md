@@ -15,7 +15,11 @@ Install Scholar MCP as a Claude Code plugin for automatic tool and skill availab
 
 ## Configure
 
-The only recommended configuration is a Semantic Scholar API key. The server works without one, but unauthenticated requests are limited to ~1 req/s and will hit 429 throttles during multi-step operations. [Request a free key](https://www.semanticscholar.org/product/api#api-key-form) to get ~10 req/s.
+The only recommended configuration is a Semantic Scholar API key. The server
+spaces requests at least 1.1 seconds apart with or without one. Unauthenticated
+requests share upstream capacity and may be throttled. [Request a free
+key](https://www.semanticscholar.org/product/api#api-key-form) for an
+introductory allowance of 1 request per second across endpoints.
 
 Add to your shell profile:
 

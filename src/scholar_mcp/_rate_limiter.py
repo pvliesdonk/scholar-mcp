@@ -19,13 +19,13 @@ logger = logging.getLogger(__name__)
 class RateLimitedError(Exception):
     """Raised on HTTP 429 in try-once mode.
 
-    Signals the caller to queue the operation for background retry.
+    Callers use it to distinguish throttling from other upstream failures.
     """
 
 
 @dataclass
 class RateLimiter:
-    """Inter-request delay enforcer.
+    """Inter-request delay enforcer with a shared cooldown.
 
     Args:
         delay: Minimum seconds between requests.
@@ -33,16 +33,29 @@ class RateLimiter:
 
     delay: float
     _last: float = field(default=0.0, init=False)
+    _cooldown_until: float = field(default=0.0, init=False)
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False)
 
     async def acquire(self) -> None:
-        """Wait until the minimum inter-request delay has elapsed."""
-        async with self._lock:
-            now = asyncio.get_running_loop().time()
-            wait = self._last + self.delay - now
-            if wait > 0:
-                await asyncio.sleep(wait)
-            self._last = asyncio.get_running_loop().time()
+        """Wait for both spacing and the latest shared cooldown."""
+        loop = asyncio.get_running_loop()
+        while True:
+            async with self._lock:
+                now = loop.time()
+                wait = max(self._last + self.delay, self._cooldown_until) - now
+                if wait <= 0:
+                    self._last = now
+                    return
+            await asyncio.sleep(wait)
+
+    def cooldown(self, seconds: float) -> None:
+        """Hold later requests after a throttle, without shortening an active hold.
+
+        Args:
+            seconds: Minimum wait from now before another request can start.
+        """
+        until = asyncio.get_running_loop().time() + seconds
+        self._cooldown_until = max(self._cooldown_until, until)
 
 
 _S2_MAX_RETRIES = 3
@@ -59,7 +72,7 @@ async def with_s2_retry(
     max_retries: int | None = None,
     base_delay: float | None = None,
 ) -> Any:
-    """Call an async function with exponential backoff on HTTP 429.
+    """Call an async function with a shared exponential cooldown on HTTP 429.
 
     Args:
         coro_func: Zero-argument async callable to invoke.
@@ -83,17 +96,18 @@ async def with_s2_retry(
         try:
             return await coro_func()
         except httpx.HTTPStatusError as exc:
-            if exc.response.status_code == 429 and attempt < retries:
-                wait = delay_base * (2**attempt)
-                logger.warning(
-                    "s2_rate_limited attempt=%d/%d waiting=%.1fs",
-                    attempt + 1,
-                    retries + 1,
-                    wait,
-                )
-                await asyncio.sleep(wait)
-            else:
+            if exc.response.status_code != 429:
                 raise
+            wait = delay_base * (2**attempt)
+            limiter.cooldown(wait)
+            if attempt == retries:
+                raise
+            logger.warning(
+                "s2_rate_limited attempt=%d/%d waiting=%.1fs",
+                attempt + 1,
+                retries + 1,
+                wait,
+            )
     raise RuntimeError("unreachable")  # pragma: no cover
 
 
@@ -103,9 +117,8 @@ async def with_s2_try_once(
 ) -> Any:
     """Call an async function once; raise :class:`RateLimitedError` on 429.
 
-    Unlike :func:`with_s2_retry`, this does **not** retry.  It is used
-    for the initial optimistic attempt before falling back to background
-    queueing.
+    Unlike :func:`with_s2_retry`, this does not retry. The keepalive uses it
+    for a single probe. A 429 still delays later requests through the limiter.
 
     Args:
         coro_func: Zero-argument async callable to invoke.
@@ -123,5 +136,6 @@ async def with_s2_try_once(
         return await coro_func()
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 429:
+            limiter.cooldown(_S2_BASE_DELAY_S)
             raise RateLimitedError() from exc
         raise

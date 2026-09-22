@@ -464,7 +464,7 @@
       "label": "S2 Api Key",
       "type": "text",
       "var": "SCHOLAR_MCP_S2_API_KEY",
-      "help": "Semantic Scholar API key. Optional but strongly recommended: unauthenticated requests are limited to ~1 req/s. Request one at https://www.semanticscholar.org/product/api#api-key-form."
+      "help": "Semantic Scholar API key. Optional but strongly recommended: a key has an introductory 1 req/s allowance; anonymous users share capacity and may be throttled. Request one at https://www.semanticscholar.org/product/api#api-key-form."
     },
     {
       "id": "docling_url",

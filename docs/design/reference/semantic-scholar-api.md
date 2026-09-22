@@ -59,6 +59,8 @@ throttle policy.
 - The introductory keyed limit is **one request per second across all
   endpoints**; an individual key may receive a higher rate after review.
   [source: product] [source: tutorial]
+  [pins: tests/test_s2_client.py::test_default_spacing_is_same_with_and_without_key,
+  tests/test_s2_client.py::test_graph_429_cools_recommendations_endpoint]
 - Most endpoints admit unauthenticated requests. Their published allowance is
   1,000 requests per second **shared among all unauthenticated users**, with
   possible further throttling during heavy use; this is no per-client guarantee.
@@ -133,10 +135,11 @@ throttle policy.
 
 ## Where this project departs from the subject
 
-The current keyed `S2Client` sends requests 0.1 seconds apart, faster than the
-published one-request-per-second introductory rate. #408 owns the correction.
-The current retry ladder can still end with a 429; #409 owns deferral of that
-call. The keepalive's 60-day assumption is not established by the sources
+`S2Client` spaces requests 1.1 seconds apart, including keyed requests. A 429
+sets a cooldown on that server's shared S2 gate. This follows the published
+introductory keyed rate without assuming the vendor always admits one request
+per second. The retry ladder can still end with a 429; #409 owns deferral of
+that call. The keepalive's 60-day assumption is not established by the sources
 above and should not be treated as a vendor guarantee.
 
 ## Not covered

@@ -86,8 +86,9 @@ class ProjectConfig:
         metadata={
             "help": (
                 "Semantic Scholar API key. Optional but strongly recommended: "
-                "unauthenticated requests are limited to ~1 req/s. Request one "
-                "at https://www.semanticscholar.org/product/api#api-key-form."
+                "a key has an introductory 1 req/s allowance; anonymous users "
+                "share capacity and may be throttled. Request one at "
+                "https://www.semanticscholar.org/product/api#api-key-form."
             ),
             "tags": ("s2", "readme"),
             # No wizard group: this is an entry-point variable, and ungrouped
