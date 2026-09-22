@@ -319,6 +319,28 @@ _REPAIRS: dict[str, str] = {
         "WHERE json_extract(data, '$.body') = 'NIST' "
         "AND json_extract(data, '$.identifier') != identifier"
     ),
+    # #444: patent-number normalisation preserved a lowercase kind code. Every
+    # section cache therefore could hold the same publication under both
+    # ``EP.3491801.B1`` and ``EP.3491801.b1``. The corrected normaliser only
+    # reads the uppercase key, so discard lowercase-kind rows for one refetch.
+    "444_patent_biblio_lowercase_kind": (
+        "DELETE FROM patents WHERE patent_id GLOB '*.[a-z]*'"
+    ),
+    "444_patent_claims_lowercase_kind": (
+        "DELETE FROM patent_claims WHERE patent_id GLOB '*.[a-z]*'"
+    ),
+    "444_patent_descriptions_lowercase_kind": (
+        "DELETE FROM patent_descriptions WHERE patent_id GLOB '*.[a-z]*'"
+    ),
+    "444_patent_families_lowercase_kind": (
+        "DELETE FROM patent_families WHERE patent_id GLOB '*.[a-z]*'"
+    ),
+    "444_patent_legal_lowercase_kind": (
+        "DELETE FROM patent_legal WHERE patent_id GLOB '*.[a-z]*'"
+    ),
+    "444_patent_citations_lowercase_kind": (
+        "DELETE FROM patent_citations WHERE patent_id GLOB '*.[a-z]*'"
+    ),
 }
 
 

@@ -53,6 +53,9 @@ class TestNormalize:
     def test_lowercase_country(self) -> None:
         assert normalize("ep1234567A1") == DocdbNumber("EP", "1234567", "A1")
 
+    def test_lowercase_kind(self) -> None:
+        assert normalize("ep3491801b1") == DocdbNumber("EP", "3491801", "B1")
+
     def test_invalid_no_country(self) -> None:
         with pytest.raises(ValueError, match="Cannot parse"):
             normalize("1234567")

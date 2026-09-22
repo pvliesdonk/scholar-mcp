@@ -1832,4 +1832,5 @@ def test_patent_pdf_stem_collapses_every_accepted_spelling() -> None:
 
     assert _patent_pdf_stem(normalize("EP3491801B1")) == "patent_EP3491801B1"
     assert _patent_pdf_stem(normalize("EP 3491801 B1")) == "patent_EP3491801B1"
+    assert _patent_pdf_stem(normalize("ep3491801b1")) == "patent_EP3491801B1"
     assert _patent_pdf_stem(normalize("US10123456B2")) == "patent_US10123456B2"
