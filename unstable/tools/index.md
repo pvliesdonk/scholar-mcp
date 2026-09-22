@@ -504,10 +504,10 @@ ______________________________________________________________________
 
 Fetch detailed information for a single patent by its publication number.
 
-| Parameter       | Type         | Default      | Description                                                                            |
-| --------------- | ------------ | ------------ | -------------------------------------------------------------------------------------- |
-| `patent_number` | string       | *(required)* | Patent number in any format (such as `EP1234567A1`, `WO2024/123456`, `US11,234,567B2`) |
-| `sections`      | list[string] | `["biblio"]` | Sections to retrieve                                                                   |
+| Parameter       | Type         | Default      | Description                                                                                                          |
+| --------------- | ------------ | ------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `patent_number` | string       | *(required)* | Patent number in any format or letter case (such as `EP1234567A1`, `ep1234567a1`, `WO2024/123456`, `US11,234,567B2`) |
+| `sections`      | list[string] | `["biblio"]` | Sections to retrieve                                                                                                 |
 
 **Available sections:**
 
@@ -597,10 +597,10 @@ ______________________________________________________________________
 
 Download a patent PDF via authenticated EPO OPS and optionally convert to Markdown.
 
-| Parameter       | Type   | Default      | Description                                                                          |
-| --------------- | ------ | ------------ | ------------------------------------------------------------------------------------ |
-| `patent_number` | string | *(required)* | Patent number in any format (such as `EP3491801B1`, `US10123456B2`, `WO2024/123456`) |
-| `use_vlm`       | bool   | `false`      | Enable VLM enrichment for formulas and figures                                       |
+| Parameter       | Type   | Default      | Description                                                                                                        |
+| --------------- | ------ | ------------ | ------------------------------------------------------------------------------------------------------------------ |
+| `patent_number` | string | *(required)* | Patent number in any format or letter case (such as `EP3491801B1`, `ep3491801b1`, `US10123456B2`, `WO2024/123456`) |
+| `use_vlm`       | bool   | `false`      | Enable VLM enrichment for formulas and figures                                                                     |
 
 **Returns:** `{"pdf_path": "/data/scholar-mcp/pdfs/<stem>.pdf", "markdown": "...", "md_path": "/data/scholar-mcp/md/<stem>.md"}` when docling is configured, or just `{"pdf_path": "..."}` without it.
 
