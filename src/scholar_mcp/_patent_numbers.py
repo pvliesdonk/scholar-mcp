@@ -104,7 +104,7 @@ def normalize(raw: str) -> DocdbNumber:
         - ``EP.1234567.A1`` — DOCDB dot-separated (pass-through)
         - ``WO2024/123456A1`` — WO slash notation (slash is stripped)
         - ``US11,234,567B2`` — US comma-grouped number (commas stripped)
-        - ``ep1234567A1`` — lowercase country code (uppercased)
+        - ``ep1234567a1`` — lowercase country and kind codes (uppercased)
         - ``EP1234567`` — no kind code
 
     Args:
@@ -126,7 +126,7 @@ def normalize(raw: str) -> DocdbNumber:
     number = m.group("number").replace(",", "").replace("/", "")
     if not number:
         raise ValueError(f"Patent number has no numeric portion: {raw!r}")
-    kind = m.group("kind") or ""
+    kind = (m.group("kind") or "").upper()
     return DocdbNumber(country=country, number=number, kind=kind)
 
 

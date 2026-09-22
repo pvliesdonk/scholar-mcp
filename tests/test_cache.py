@@ -343,6 +343,52 @@ async def test_repair_drops_nist_standards_cached_under_a_foreign_identity(tmp_p
         await upgraded.close()
 
 
+async def test_repair_drops_every_patent_section_with_a_lowercase_kind(tmp_path):
+    """#444: all section caches discard keys the normaliser no longer emits."""
+    import aiosqlite
+
+    db_path = tmp_path / "lowercase-kind.db"
+    canonical = "EP.3491801.B1"
+    duplicate = "EP.3491801.b1"
+    old = ScholarCache(db_path)
+    await old.open()
+    for patent_id in (canonical, duplicate):
+        await old.set_patent(
+            patent_id, {"title": "Patent", "abstract": "Patent abstract"}
+        )
+        await old.set_patent_claims(patent_id, "Claim 1")
+        await old.set_patent_description(patent_id, "Description")
+        await old.set_patent_family(patent_id, [{"docdb": patent_id}])
+        await old.set_patent_legal(patent_id, [{"code": "EVENT"}])
+        await old.set_patent_citations(patent_id, {"patent_refs": [], "npl_refs": []})
+    await old.close()
+
+    repair_names = [name for name in _REPAIRS if name.startswith("444_patent_")]
+    async with aiosqlite.connect(db_path) as db:
+        await db.executemany(
+            "DELETE FROM repairs WHERE name = ?",
+            [(name,) for name in repair_names],
+        )
+        await db.commit()
+
+    upgraded = ScholarCache(db_path)
+    await upgraded.open()
+    try:
+        getters = (
+            upgraded.get_patent,
+            upgraded.get_patent_claims,
+            upgraded.get_patent_description,
+            upgraded.get_patent_family,
+            upgraded.get_patent_legal,
+            upgraded.get_patent_citations,
+        )
+        for getter in getters:
+            assert await getter(duplicate) is None
+            assert await getter(canonical) is not None
+    finally:
+        await upgraded.close()
+
+
 async def test_every_registered_repair_is_valid_sql(cache):
     """A malformed statement would otherwise only surface on a user's upgrade."""
     assert set(_REPAIRS) == {
@@ -351,6 +397,12 @@ async def test_every_registered_repair_is_valid_sql(cache):
         "403_book_isbn_empty_authors",
         "403_book_work_empty_authors",
         "400_nist_standard_under_foreign_identity",
+        "444_patent_biblio_lowercase_kind",
+        "444_patent_claims_lowercase_kind",
+        "444_patent_descriptions_lowercase_kind",
+        "444_patent_families_lowercase_kind",
+        "444_patent_legal_lowercase_kind",
+        "444_patent_citations_lowercase_kind",
     }
     for statement in _REPAIRS.values():
         await cache._db.execute(f"EXPLAIN {statement}")
