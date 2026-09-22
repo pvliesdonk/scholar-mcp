@@ -486,10 +486,18 @@ async def test_handle_full_text_already_present(mcp: FastMCP, service: Service) 
 
     async with Client(mcp) as client:
         result = await client.call_tool(
-            "get_standard", {"identifier": "RFC 9000", "fetch_full_text": True}
+            "get_standard",
+            {
+                "identifier": "RFC 9000",
+                "fetch_full_text": True,
+                "text_offset": 2,
+                "max_chars": 7,
+            },
         )
     data = json.loads(result.content[0].text)
-    assert data["full_text"] == "# already converted"
+    assert data["full_text"] == "already"
+    assert data["text_total_chars"] == 19
+    assert data["next_offset"] == 9
     mock_docling.convert.assert_not_called()
 
 

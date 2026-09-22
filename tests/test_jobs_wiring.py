@@ -287,3 +287,25 @@ async def test_job_backed_tools_advertise_the_polling_contract(
         "these tools point the caller at the legacy queue poller, which does "
         f"not know their job ids: {stale}"
     )
+
+
+@pytest.mark.parametrize("server", [_EVERYTHING_VISIBLE], indirect=True, ids=["all"])
+async def test_document_tools_advertise_and_expose_text_paging(
+    client: Client[Any],
+) -> None:
+    """Models receive paging guidance and the parameters needed to follow it."""
+    document_tools = {
+        "convert_pdf_to_markdown",
+        "fetch_and_convert",
+        "fetch_pdf_by_url",
+        "fetch_patent_pdf",
+        "get_standard",
+    }
+    tools = {tool.name: tool for tool in await client.list_tools()}
+
+    for name in document_tools:
+        tool = tools[name]
+        assert "20,000 characters" in (tool.description or "")
+        properties = tool.input_schema["properties"]
+        assert "text_offset" in properties
+        assert "max_chars" in properties

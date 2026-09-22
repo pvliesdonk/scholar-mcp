@@ -437,11 +437,22 @@ async def test_convert_cached_markdown(
 
     async with Client(mcp_with_docling) as client:
         result = await client.call_tool(
-            "convert_pdf_to_markdown", {"file_path": str(pdf)}
+            "convert_pdf_to_markdown",
+            {"file_path": str(pdf), "text_offset": 2, "max_chars": 6},
+        )
+        complete = await client.call_tool(
+            "convert_pdf_to_markdown",
+            {"file_path": str(pdf), "max_chars": None},
         )
     data = json.loads(result.content[0].text)
+    complete_data = json.loads(complete.content[0].text)
     _assert_inline(data)
-    assert "# Cached" in data["markdown"]
+    assert data["markdown"] == "Cached"
+    assert data["text_offset"] == 2
+    assert data["text_total_chars"] == 22
+    assert data["next_offset"] == 8
+    assert complete_data["markdown"] == "# Cached\n\nCached text."
+    assert complete_data["text_truncated"] is False
 
 
 async def test_convert_cached_markdown_vlm_not_configured(
@@ -534,12 +545,16 @@ async def test_fetch_and_convert_success(
             return_value=httpx.Response(200, content=b"%PDF-1.4 fc content")
         )
         async with Client(pdf_app(service_with_docling, slow_jobs)) as client:
-            result = await client.call_tool("fetch_and_convert", {"identifier": "fc1"})
+            result = await client.call_tool(
+                "fetch_and_convert",
+                {"identifier": "fc1", "text_offset": 2, "max_chars": 9},
+            )
 
     data = json.loads(result.content[0].text)
     _assert_inline(data)
     assert data["metadata"]["paperId"] == "fc1"
-    assert "# Converted" in data["markdown"]
+    assert data["markdown"] == "Converted"
+    assert data["next_offset"] == 11
     assert data["pdf_path"].endswith("fc1.pdf")
     assert data["md_path"].endswith("fc1.md")
     assert data["vlm_used"] is False
@@ -724,13 +739,19 @@ async def test_fetch_pdf_by_url_download_and_convert(
         async with Client(pdf_app(service_with_docling, slow_jobs)) as client:
             result = await client.call_tool(
                 "fetch_pdf_by_url",
-                {"url": pdf_url, "filename": "custom_paper"},
+                {
+                    "url": pdf_url,
+                    "filename": "custom_paper",
+                    "text_offset": 2,
+                    "max_chars": 6,
+                },
             )
 
     data = json.loads(result.content[0].text)
     _assert_inline(data)
     assert data["pdf_path"].endswith("custom_paper.pdf")
-    assert "# Custom Paper" in data["markdown"]
+    assert data["markdown"] == "Custom"
+    assert data["next_offset"] == 8
     assert data["vlm_used"] is False
 
 
