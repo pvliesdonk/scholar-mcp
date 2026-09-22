@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Sequence
     from pathlib import Path
 
-    from fastmcp_pvl_core import Jobs
+    from fastmcp_pvl_core import Jobs, JobsConfig
 
     from ._record_types import PaperRecord
 
@@ -28,8 +28,9 @@ from ._epo_client import (
 )
 from ._patent_numbers import DocdbNumber, normalize
 from ._protocols import CacheProtocol
-from ._rate_limiter import RateLimitedError
+from ._rate_limiter import RateLimitedError, S2RetryDeadlineExceeded
 from ._s2_client import FIELD_SETS, S2Client
+from ._s2_jobs import register_s2_tool
 from ._server_deps import get_service
 from .domain import Service
 
@@ -513,7 +514,9 @@ async def fetch_patent_pdf(
     return result
 
 
-def register_patent_tools(mcp: FastMCP, jobs: Jobs) -> None:
+def register_patent_tools(
+    mcp: FastMCP, jobs: Jobs, jobs_config: JobsConfig | None = None
+) -> None:
     """Register patent search and retrieval tools on *mcp*.
 
     Each tool is a module-level coroutine registered here rather than a
@@ -537,9 +540,10 @@ def register_patent_tools(mcp: FastMCP, jobs: Jobs) -> None:
             "openWorldHint": True,
         },
     )(search_patents)
-    register_long_running_tool(
+    register_s2_tool(
         mcp,
         jobs,
+        jobs_config=jobs_config,
         tags={"patent"},
         annotations={
             "title": "Get Patent",
@@ -714,6 +718,8 @@ async def _fetch_patent_sections(
                         doi_ids, fields=FIELD_SETS["compact"]
                     )
                 except RateLimitedError:
+                    raise
+                except S2RetryDeadlineExceeded:
                     raise
                 except Exception:
                     logger.warning("npl_resolution_failed patent=%s", patent_id)

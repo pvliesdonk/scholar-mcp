@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Any, Literal
 import httpx
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
-from fastmcp_pvl_core import register_long_running_tool
 
 from ._book_enrichment import fill_authors_from_cache
 from ._cache import normalize_isbn
@@ -19,11 +18,12 @@ from ._epo_client import EPO_REPORTED_ERRORS, epo_error_payload, with_epo_retry
 from ._openlibrary_client import normalize_book
 from ._patent_numbers import is_patent_number, normalize
 from ._s2_client import FIELD_SETS, log_s2_error, s2_error_payload
+from ._s2_jobs import register_s2_tool
 from ._server_deps import get_service
 from .domain import Service
 
 if TYPE_CHECKING:
-    from fastmcp_pvl_core import Jobs
+    from fastmcp_pvl_core import Jobs, JobsConfig
 
     from ._record_types import PaperRecord
 
@@ -349,9 +349,8 @@ async def enrich_paper(
         try:
             paper = await service.s2.get_paper(identifier, fields="externalIds,paperId")
         except httpx.HTTPStatusError as exc:
-            # A rate limit that outlived the client's own retries reaches here
-            # too, and reporting it as "not_found" would tell the caller to
-            # stop asking about a paper that exists.
+            # Direct library calls have finite retries outside the MCP job
+            # context. Their exhausted 429 still must not mean "not_found".
             if exc.response.status_code == 429:
                 log_s2_error(exc)
                 return {
@@ -376,7 +375,9 @@ async def enrich_paper(
     return {"doi": doi, **_select_enrichment_fields(oa_data, list(fields))}
 
 
-def register_utility_tools(mcp: FastMCP, jobs: Jobs) -> None:
+def register_utility_tools(
+    mcp: FastMCP, jobs: Jobs, jobs_config: JobsConfig | None = None
+) -> None:
     """Register utility tools on *mcp*.
 
     Args:
@@ -384,9 +385,10 @@ def register_utility_tools(mcp: FastMCP, jobs: Jobs) -> None:
         jobs: Shared jobs mechanics. Both tools fan out across upstreams, so
             either can outrun the soft deadline and be promoted.
     """
-    register_long_running_tool(
+    register_s2_tool(
         mcp,
         jobs,
+        jobs_config=jobs_config,
         annotations={
             "title": "Batch Resolve Identifiers",
             "readOnlyHint": True,
@@ -394,9 +396,10 @@ def register_utility_tools(mcp: FastMCP, jobs: Jobs) -> None:
             "openWorldHint": True,
         },
     )(batch_resolve)
-    register_long_running_tool(
+    register_s2_tool(
         mcp,
         jobs,
+        jobs_config=jobs_config,
         annotations={
             "title": "Enrich Paper",
             "readOnlyHint": True,

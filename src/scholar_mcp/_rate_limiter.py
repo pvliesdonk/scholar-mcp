@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -21,6 +22,29 @@ class RateLimitedError(Exception):
 
     Callers use it to distinguish throttling from other upstream failures.
     """
+
+
+class S2RetryDeadlineExceeded(Exception):
+    """The caller's job can no longer retain an eventual S2 answer."""
+
+
+@dataclass
+class S2RetryContext:
+    """Per-tool throttle signal and last useful retry deadline."""
+
+    deadline: float
+    throttled: asyncio.Event = field(default_factory=asyncio.Event)
+    retry_after_s: float = 1.0
+
+    def notify(self, wait: float) -> None:
+        """Expose an S2 gate wait to the tool wrapper."""
+        self.retry_after_s = max(wait, 0.001)
+        self.throttled.set()
+
+
+S2_RETRY_CONTEXT: ContextVar[S2RetryContext | None] = ContextVar(
+    "s2_retry_context", default=None
+)
 
 
 @dataclass
@@ -46,6 +70,9 @@ class RateLimiter:
                 if wait <= 0:
                     self._last = now
                     return
+                context = S2_RETRY_CONTEXT.get()
+                if context is not None and self._cooldown_until > now:
+                    context.notify(self._cooldown_until - now)
             await asyncio.sleep(wait)
 
     def cooldown(self, seconds: float) -> None:
@@ -74,6 +101,9 @@ async def with_s2_retry(
 ) -> Any:
     """Call an async function with a shared exponential cooldown on HTTP 429.
 
+    Under an S2 tool context, retry until the job's last useful deadline.
+    Direct client calls keep the finite retry ladder.
+
     Args:
         coro_func: Zero-argument async callable to invoke.
         limiter: Rate limiter to acquire before each attempt.
@@ -87,28 +117,48 @@ async def with_s2_retry(
         The return value of ``coro_func`` on success.
 
     Raises:
-        httpx.HTTPStatusError: If retries are exhausted or a non-429 error occurs.
+        S2RetryDeadlineExceeded: If the contextual retry window closes.
+        httpx.HTTPStatusError: If direct-call retries are exhausted or a
+            non-429 error occurs.
     """
     retries = _S2_MAX_RETRIES if max_retries is None else max_retries
     delay_base = _S2_BASE_DELAY_S if base_delay is None else base_delay
-    for attempt in range(retries + 1):
-        await limiter.acquire()
+    context = S2_RETRY_CONTEXT.get()
+    attempt = 0
+    while True:
+        if context is not None and context.throttled.is_set():
+            remaining = context.deadline - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                raise S2RetryDeadlineExceeded()
+            try:
+                await asyncio.wait_for(limiter.acquire(), timeout=remaining)
+            except TimeoutError as exc:
+                raise S2RetryDeadlineExceeded() from exc
+        else:
+            await limiter.acquire()
         try:
             return await coro_func()
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code != 429:
                 raise
-            wait = delay_base * (2**attempt)
+            wait = min(delay_base * (2 ** min(attempt, 16)), 60.0)
             limiter.cooldown(wait)
-            if attempt == retries:
+            if context is not None:
+                context.notify(wait)
+            elif attempt == retries:
                 raise
-            logger.warning(
-                "s2_rate_limited attempt=%d/%d waiting=%.1fs",
-                attempt + 1,
-                retries + 1,
-                wait,
-            )
-    raise RuntimeError("unreachable")  # pragma: no cover
+            if context is not None:
+                logger.warning(
+                    "s2_rate_limited attempt=%d waiting=%.1fs", attempt + 1, wait
+                )
+            else:
+                logger.warning(
+                    "s2_rate_limited attempt=%d/%d waiting=%.1fs",
+                    attempt + 1,
+                    retries + 1,
+                    wait,
+                )
+            attempt += 1
 
 
 async def with_s2_try_once(

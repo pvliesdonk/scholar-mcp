@@ -8,14 +8,14 @@ from typing import TYPE_CHECKING, Any, Literal
 import httpx
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
-from fastmcp_pvl_core import register_long_running_tool
 
 from ._s2_client import FIELD_SETS, s2_error_payload
+from ._s2_jobs import register_s2_tool
 from ._server_deps import get_service
 from .domain import Service
 
 if TYPE_CHECKING:
-    from fastmcp_pvl_core import Jobs
+    from fastmcp_pvl_core import Jobs, JobsConfig
 
 logger = logging.getLogger(__name__)
 
@@ -222,18 +222,20 @@ async def get_author(
     return {"candidates": candidates}
 
 
-def register_search_tools(mcp: FastMCP, jobs: Jobs) -> None:
+def register_search_tools(
+    mcp: FastMCP, jobs: Jobs, jobs_config: JobsConfig | None = None
+) -> None:
     """Register search and retrieval tools on *mcp*.
 
     Args:
         mcp: FastMCP application instance.
-        jobs: Shared jobs mechanics. These tools always retry a rate-limited
-            upstream, so a throttled call runs long enough to be promoted
-            rather than being handed back as an error.
+        jobs: Shared jobs mechanics. These tools defer promptly on an S2
+            throttle, then continue retrying through the job.
     """
-    register_long_running_tool(
+    register_s2_tool(
         mcp,
         jobs,
+        jobs_config=jobs_config,
         annotations={
             "title": "Search Papers",
             "readOnlyHint": True,
@@ -241,9 +243,10 @@ def register_search_tools(mcp: FastMCP, jobs: Jobs) -> None:
             "openWorldHint": True,
         },
     )(search_papers)
-    register_long_running_tool(
+    register_s2_tool(
         mcp,
         jobs,
+        jobs_config=jobs_config,
         annotations={
             "title": "Get Paper",
             "readOnlyHint": True,
@@ -251,9 +254,10 @@ def register_search_tools(mcp: FastMCP, jobs: Jobs) -> None:
             "openWorldHint": True,
         },
     )(get_paper)
-    register_long_running_tool(
+    register_s2_tool(
         mcp,
         jobs,
+        jobs_config=jobs_config,
         annotations={
             "title": "Get Author",
             "readOnlyHint": True,

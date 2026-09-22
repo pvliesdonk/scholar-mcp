@@ -8,15 +8,15 @@ from typing import TYPE_CHECKING, Any, Literal
 import httpx
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
-from fastmcp_pvl_core import register_long_running_tool
 
 from ._citation_formatter import format_bibtex, format_csl_json, format_ris
 from ._s2_client import FIELD_SETS, s2_error_payload
+from ._s2_jobs import register_s2_tool
 from ._server_deps import get_service
 from .domain import Service
 
 if TYPE_CHECKING:
-    from fastmcp_pvl_core import Jobs
+    from fastmcp_pvl_core import Jobs, JobsConfig
 
     from ._record_types import PaperRecord
 
@@ -101,7 +101,9 @@ async def generate_citations(
     return {"format": citation_format, "output": formatter(papers, errors)}
 
 
-def register_citation_tools(mcp: FastMCP, jobs: Jobs) -> None:
+def register_citation_tools(
+    mcp: FastMCP, jobs: Jobs, jobs_config: JobsConfig | None = None
+) -> None:
     """Register citation generation tools on *mcp*.
 
     Args:
@@ -109,9 +111,10 @@ def register_citation_tools(mcp: FastMCP, jobs: Jobs) -> None:
         jobs: Shared jobs mechanics; enrichment over a large batch can
             outrun the soft deadline and is then promoted.
     """
-    register_long_running_tool(
+    register_s2_tool(
         mcp,
         jobs,
+        jobs_config=jobs_config,
         annotations={
             "title": "Generate Citations",
             "readOnlyHint": True,

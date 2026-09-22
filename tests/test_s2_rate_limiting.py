@@ -1,13 +1,14 @@
 """Tests for how the S2 client handles 429 responses.
 
-Formerly `test_async_queueing.py`. There is no queue any more: a 429 is
-absorbed by `with_s2_retry`'s backoff inside the tool call, and a call slow
-enough to matter is promoted to a background job instead. `with_s2_try_once`
-survives because `run_keepalive` deliberately does not retry its ping.
+Formerly `test_async_queueing.py`. There is no queue any more: a 429 inside
+an MCP tool defers its current body to a job, where `with_s2_retry` keeps
+waiting at the shared gate. `with_s2_try_once` remains for the keepalive's
+single ping.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 from contextlib import asynccontextmanager
 
@@ -16,12 +17,24 @@ import pytest
 import respx
 from fastmcp import FastMCP
 from fastmcp.client import Client
-from fastmcp_pvl_core import Jobs
+from fastmcp_pvl_core import (
+    JobLimitExceededError,
+    Jobs,
+    JobsConfig,
+    ServerConfig,
+    build_jobs,
+)
 
-from scholar_mcp._rate_limiter import RateLimitedError, RateLimiter, with_s2_try_once
+from scholar_mcp._rate_limiter import (
+    RateLimitedError,
+    RateLimiter,
+    with_s2_retry,
+    with_s2_try_once,
+)
+from scholar_mcp._s2_jobs import _run_s2_body
 from scholar_mcp._tools_search import register_search_tools
 from scholar_mcp.domain import Service
-from tests.conftest import tasks_server
+from tests.conftest import PlainClient, tasks_server
 
 S2_BASE = "https://api.semanticscholar.org/graph/v1"
 
@@ -68,10 +81,10 @@ async def test_try_once_propagates_other_errors() -> None:
 
 
 @pytest.mark.respx(base_url=S2_BASE)
-async def test_search_papers_retries_on_429(
+async def test_search_papers_defers_on_429(
     respx_mock: respx.MockRouter, service: Service, slow_jobs: Jobs
 ) -> None:
-    """A 429 is retried in-client; the caller still gets the result."""
+    """A 429 returns a reasoned handle and the same call finishes through it."""
     call_count = 0
 
     def _side_effect(request: httpx.Request) -> httpx.Response:  # noqa: ARG001
@@ -90,12 +103,21 @@ async def test_search_papers_retries_on_429(
     app = tasks_server("test", lifespan=lifespan)
     register_search_tools(app, slow_jobs)
 
-    async with Client(app) as client:
+    async with PlainClient(app) as client:
         result = await client.call_tool(
             "search_papers", {"query": "test", "fields": "compact"}
         )
-        inner = json.loads(result.content[0].text)
-    assert inner["data"][0]["title"] == "Paper1"
+        handle = json.loads(result.content[0].text)
+        assert handle["status"] == "working"
+        assert "Semantic Scholar" in handle["reason"]
+        assert handle["retry_after_s"] > 0
+        while True:
+            record = await slow_jobs.poll(handle["job_id"])
+            if record["status"] == "completed":
+                break
+            await asyncio.sleep(0.01)
+    assert record["result"]["data"][0]["title"] == "Paper1"
+    assert call_count == 2
 
 
 @pytest.mark.respx(base_url=S2_BASE)
@@ -126,10 +148,10 @@ async def test_search_papers_direct_on_success(
 
 
 @pytest.mark.respx(base_url=S2_BASE)
-async def test_get_paper_retries_on_429(
+async def test_get_paper_defers_on_429(
     respx_mock: respx.MockRouter, service: Service, slow_jobs: Jobs
 ) -> None:
-    """A 429 is retried in-client; the caller still gets the record."""
+    """A 429 defers the paper lookup and it eventually completes."""
     call_count = 0
 
     def _side_effect(request: httpx.Request) -> httpx.Response:  # noqa: ARG001
@@ -148,10 +170,15 @@ async def test_get_paper_retries_on_429(
     app = tasks_server("test", lifespan=lifespan)
     register_search_tools(app, slow_jobs)
 
-    async with Client(app) as client:
+    async with PlainClient(app) as client:
         result = await client.call_tool("get_paper", {"identifier": "x1"})
-        inner = json.loads(result.content[0].text)
-    assert inner["title"] == "Delayed"
+        handle = json.loads(result.content[0].text)
+        while True:
+            record = await slow_jobs.poll(handle["job_id"])
+            if record["status"] == "completed":
+                break
+            await asyncio.sleep(0.01)
+    assert record["result"]["title"] == "Delayed"
 
 
 @pytest.mark.respx(base_url=S2_BASE)
@@ -175,3 +202,124 @@ async def test_get_paper_cached_returns_direct(
     data = json.loads(result.content[0].text)
     assert "queued" not in data
     assert data["title"] == "Cached"
+
+
+async def test_throttle_continues_same_body_after_many_steps(slow_jobs: Jobs) -> None:
+    """Deferral at a late graph-like step does not restart earlier work."""
+    visited: list[int] = []
+    attempts_at_last = 0
+    limiter = RateLimiter(delay=0)
+
+    async def work() -> dict[str, list[int]]:
+        nonlocal attempts_at_last
+        for node in range(40):
+
+            async def request(current_node: int = node) -> int:
+                nonlocal attempts_at_last
+                if current_node == 39:
+                    attempts_at_last += 1
+                    if attempts_at_last == 1:
+                        response = httpx.Response(
+                            429, request=httpx.Request("GET", "https://example.test")
+                        )
+                        raise httpx.HTTPStatusError(
+                            "throttled", request=response.request, response=response
+                        )
+                return current_node
+
+            visited.append(await with_s2_retry(request, limiter, base_delay=0.01))
+        return {"visited": visited}
+
+    handle = await _run_s2_body(
+        work(), jobs=slow_jobs, config=JobsConfig(), tool="graph_like_work"
+    )
+    assert "Semantic Scholar" in handle["reason"]
+    while True:
+        record = await slow_jobs.poll(handle["job_id"])
+        if record["status"] == "completed":
+            break
+        await asyncio.sleep(0.01)
+    assert record["result"] == {"visited": list(range(40))}
+    assert attempts_at_last == 2
+
+
+async def test_existing_shared_cooldown_defers_next_call(slow_jobs: Jobs) -> None:
+    """A tool waiting on another call's 429 gets a reasoned handle."""
+    limiter = RateLimiter(delay=0)
+    limiter.cooldown(0.05)
+
+    async def work() -> dict[str, bool]:
+        async def request() -> dict[str, bool]:
+            return {"answered": True}
+
+        return await with_s2_retry(request, limiter)
+
+    handle = await _run_s2_body(
+        work(), jobs=slow_jobs, config=JobsConfig(), tool="waiting_call"
+    )
+    assert "Semantic Scholar" in handle["reason"]
+    while True:
+        record = await slow_jobs.poll(handle["job_id"])
+        if record["status"] == "completed":
+            break
+        await asyncio.sleep(0.01)
+    assert record["result"] == {"answered": True}
+
+
+async def test_throttle_stops_before_job_record_expires() -> None:
+    """A persistent 429 resolves to a retryable payload within the TTL."""
+    config = JobsConfig(soft_deadline_s=1, result_ttl_s=0.18)
+    jobs = build_jobs(ServerConfig(kv_store_url="memory://"), config)
+    attempts = 0
+
+    async def work() -> dict[str, str]:
+        nonlocal attempts
+
+        async def refused() -> dict[str, str]:
+            nonlocal attempts
+            attempts += 1
+            response = httpx.Response(
+                429, request=httpx.Request("GET", "https://example.test")
+            )
+            raise httpx.HTTPStatusError(
+                "throttled", request=response.request, response=response
+            )
+
+        return await with_s2_retry(refused, RateLimiter(delay=0), base_delay=0.01)
+
+    handle = await _run_s2_body(work(), jobs=jobs, config=config, tool="always_429")
+    while True:
+        record = await jobs.poll(handle["job_id"])
+        if record["status"] == "completed":
+            break
+        await asyncio.sleep(0.01)
+    assert record["result"] == {"error": "rate_limited", "retryable": True}
+    assert attempts > 1
+
+
+async def test_job_cap_cancels_throttled_body() -> None:
+    """A rejected deferred handle leaves no untracked request running."""
+    config = JobsConfig(soft_deadline_s=1, result_ttl_s=1, max_per_subject=1)
+    jobs = build_jobs(ServerConfig(kv_store_url="memory://"), config)
+    await jobs.start(asyncio.sleep(0.2, result={}), tool="occupy_slot")
+    cancelled = asyncio.Event()
+
+    async def work() -> dict[str, str]:
+        try:
+
+            async def refused() -> dict[str, str]:
+                response = httpx.Response(
+                    429, request=httpx.Request("GET", "https://example.test")
+                )
+                raise httpx.HTTPStatusError(
+                    "throttled", request=response.request, response=response
+                )
+
+            return await with_s2_retry(refused, RateLimiter(delay=0), base_delay=0.01)
+        finally:
+            cancelled.set()
+
+    with pytest.raises(JobLimitExceededError):
+        await _run_s2_body(work(), jobs=jobs, config=config, tool="blocked")
+    assert cancelled.is_set()
+    await asyncio.sleep(0.2)

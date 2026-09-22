@@ -18,11 +18,12 @@ from fastmcp_pvl_core import register_long_running_tool
 from ._docling_client import DoclingClient
 from ._pdf_url_resolver import ResolvedPdf, resolve_alternative_pdf
 from ._s2_client import FIELD_SETS, s2_error_payload
+from ._s2_jobs import register_s2_tool
 from ._server_deps import get_service
 from .domain import Service
 
 if TYPE_CHECKING:
-    from fastmcp_pvl_core import Jobs
+    from fastmcp_pvl_core import Jobs, JobsConfig
 
     from ._record_types import PaperRecord
 
@@ -439,11 +440,13 @@ async def fetch_pdf_by_url(
     }
 
 
-def register_pdf_tools(mcp: FastMCP, jobs: Jobs) -> None:
+def register_pdf_tools(
+    mcp: FastMCP, jobs: Jobs, jobs_config: JobsConfig | None = None
+) -> None:
     """Register the PDF tools on *mcp*.
 
-    Each tool is a module-level coroutine registered through
-    :func:`register_long_running_tool`, so a call that finishes within
+    Each tool is a module-level coroutine registered through the jobs layer.
+    A call that finishes within
     ``SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S`` returns its result inline and a
     slower one is promoted to a background job the caller polls with
     ``get_job_result``.  A cache hit therefore answers directly; only real
@@ -453,9 +456,10 @@ def register_pdf_tools(mcp: FastMCP, jobs: Jobs) -> None:
         mcp: FastMCP application instance.
         jobs: Shared jobs mechanics for this server.
     """
-    register_long_running_tool(
+    register_s2_tool(
         mcp,
         jobs,
+        jobs_config=jobs_config,
         tags={"write"},
         annotations={
             "title": "Fetch Paper PDF",
@@ -475,9 +479,10 @@ def register_pdf_tools(mcp: FastMCP, jobs: Jobs) -> None:
             "openWorldHint": True,
         },
     )(convert_pdf_to_markdown)
-    register_long_running_tool(
+    register_s2_tool(
         mcp,
         jobs,
+        jobs_config=jobs_config,
         tags={"write"},
         annotations={
             "title": "Fetch and Convert Paper",

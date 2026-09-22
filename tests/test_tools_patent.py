@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastmcp import FastMCP
 from fastmcp.client import Client
-from fastmcp_pvl_core import Jobs, register_job_tools
+from fastmcp_pvl_core import Jobs, JobsConfig, register_job_tools
 
 from scholar_mcp._docling_client import DoclingClient
 from scholar_mcp._epo_client import (
@@ -1249,7 +1249,9 @@ def test_fetch_patent_pdf_promotes_when_slow(service: Service, jobs: Jobs) -> No
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
-    register_patent_tools(app, jobs)
+    register_patent_tools(
+        app, jobs, JobsConfig(soft_deadline_s=0.05, result_ttl_s=60.0)
+    )
     register_job_tools(app, jobs)
 
     async def run() -> dict:
@@ -1719,7 +1721,9 @@ def _citing_app(service: Service, jobs: Jobs, epo: EpoClient) -> FastMCP:
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
-    register_patent_tools(app, jobs)
+    register_patent_tools(
+        app, jobs, JobsConfig(soft_deadline_s=0.05, result_ttl_s=60.0)
+    )
     return app
 
 

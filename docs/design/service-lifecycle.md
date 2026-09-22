@@ -22,6 +22,15 @@ One limiter on the service's `S2Client` spaces Graph and Recommendations
 requests 1.1 seconds apart. Any 429 extends that limiter's cooldown, so
 requests from other tools wait as well. This gate is process-local; separate
 server processes do not coordinate their key usage.
+S2-backed tool bodies run under a per-call retry context. The first 429, or a
+wait at the shared cooldown, signals `register_s2_tool`. For a plain MCP call,
+that wrapper attaches the same running body to `Jobs.defer`, so a graph walk
+does not restart. The retry deadline is five sixths of
+`SCHOLAR_MCP_JOBS_RESULT_TTL_S` from the start of the call: 50 minutes at the
+default one-hour TTL. A persistent 429 then becomes a retryable result while
+the job record can still be polled. A native MCP task already has its own
+handle and keeps the body inside that task.
+
 The Google Books enrichment client depends on
 [the Google Books volume-search reference](reference/google-books-api.md).
 

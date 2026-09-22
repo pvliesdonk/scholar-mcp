@@ -11,7 +11,7 @@ import pytest
 import respx
 from fastmcp import FastMCP
 from fastmcp.client import Client
-from fastmcp_pvl_core import Jobs, register_job_tools
+from fastmcp_pvl_core import Jobs, JobsConfig, register_job_tools
 
 from scholar_mcp._tools_graph import register_graph_tools
 from scholar_mcp.domain import Service
@@ -502,14 +502,14 @@ async def test_get_citation_graph_both_direction(
     assert data["stats"]["total_nodes"] == 3
 
 
-# --- get_citation_graph: RateLimitedError queueing (lines 317-319) ---
+# --- get_citation_graph: throttle deferral ---
 
 
 @pytest.mark.respx(base_url=S2_BASE)
 async def test_get_citation_graph_retries_on_429(
-    respx_mock: respx.MockRouter, mcp: FastMCP
+    respx_mock: respx.MockRouter, mcp: FastMCP, slow_jobs: Jobs
 ) -> None:
-    """A 429 is retried in-client; the graph still comes back."""
+    """A 429 defers the same graph walk and does not mark it partial."""
     batch_call_count = 0
 
     def _batch_side_effect(request: httpx.Request) -> httpx.Response:  # noqa: ARG001
@@ -543,7 +543,7 @@ async def test_get_citation_graph_retries_on_429(
         )
     )
 
-    async with Client(mcp) as client:
+    async with PlainClient(mcp) as client:
         result = await client.call_tool(
             "get_citation_graph",
             {
@@ -553,10 +553,17 @@ async def test_get_citation_graph_retries_on_429(
                 "max_nodes": 50,
             },
         )
-        inner = json.loads(result.content[0].text)
+        handle = json.loads(result.content[0].text)
+        assert "Semantic Scholar" in handle["reason"]
+        while True:
+            record = await slow_jobs.poll(handle["job_id"])
+            if record["status"] == "completed":
+                break
+            await asyncio.sleep(0.01)
+    inner = record["result"]
     assert "c1" in {n["id"] for n in inner["nodes"]}
-    # The 429 never survived the retry ladder, so nothing went unfetched.
     assert inner["stats"]["partial"] is False
+    assert batch_call_count == 2
 
 
 # --- find_bridge_papers: citations branch of _get_neighbours (lines 379-401) ---
@@ -1974,7 +1981,7 @@ async def test_get_citations_promotes_when_slow(
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
-    register_graph_tools(app, jobs)
+    register_graph_tools(app, jobs, JobsConfig(soft_deadline_s=0.05, result_ttl_s=60.0))
     register_job_tools(app, jobs)
 
     async with PlainClient(app) as client:
@@ -2027,7 +2034,7 @@ async def test_get_citation_graph_marks_reference_failure_partial(
             ],
         )
     )
-    respx_mock.get("/paper/p1/references").mock(return_value=httpx.Response(429))
+    respx_mock.get("/paper/p1/references").mock(return_value=httpx.Response(503))
     async with Client(mcp) as client:
         result = await client.call_tool(
             "get_citation_graph",
@@ -2041,7 +2048,7 @@ async def test_get_citation_graph_marks_reference_failure_partial(
     data = json.loads(result.content[0].text)
     assert data["stats"]["partial"] is True
     assert data["stats"]["failed_requests"] == 1
-    assert "429" in data["warning"]
+    assert "503" in data["warning"]
     # The partial graph is still returned, and truncation stays a separate signal.
     assert data["stats"]["total_nodes"] == 1
     assert data["stats"]["truncated"] is False
@@ -2052,7 +2059,7 @@ async def test_get_citation_graph_marks_seed_resolution_failure_partial(
     respx_mock: respx.MockRouter, mcp: FastMCP
 ) -> None:
     """Null seed metadata from a failed batch resolve is flagged, not silent."""
-    respx_mock.post("/paper/batch").mock(return_value=httpx.Response(429))
+    respx_mock.post("/paper/batch").mock(return_value=httpx.Response(503))
     respx_mock.get("/paper/p1/citations").mock(
         return_value=httpx.Response(200, json={"data": []})
     )
@@ -2140,7 +2147,7 @@ async def test_get_citation_graph_marks_citation_failure_partial(
             ],
         )
     )
-    respx_mock.get("/paper/p1/citations").mock(return_value=httpx.Response(429))
+    respx_mock.get("/paper/p1/citations").mock(return_value=httpx.Response(503))
     async with Client(mcp) as client:
         result = await client.call_tool(
             "get_citation_graph",
@@ -2156,7 +2163,7 @@ async def test_find_bridge_papers_marks_failed_search_partial(
     respx_mock: respx.MockRouter, mcp: FastMCP
 ) -> None:
     """A failed neighbour fetch is not reported as 'no path exists'."""
-    respx_mock.get("/paper/p1/references").mock(return_value=httpx.Response(429))
+    respx_mock.get("/paper/p1/references").mock(return_value=httpx.Response(503))
     async with Client(mcp) as client:
         result = await client.call_tool(
             "find_bridge_papers",
@@ -2171,7 +2178,7 @@ async def test_find_bridge_papers_marks_failed_search_partial(
     assert data["found"] is False
     assert data["partial"] is True
     assert data["failed_requests"] == 1
-    assert "429" in data["warning"]
+    assert "503" in data["warning"]
 
 
 @pytest.mark.respx(base_url=S2_BASE)
@@ -2209,7 +2216,7 @@ async def test_find_bridge_papers_flags_partiality_on_a_found_path(
             200, json={"data": [{"citedPaper": {"paperId": "p2"}}]}
         )
     )
-    respx_mock.get("/paper/p1/citations").mock(return_value=httpx.Response(429))
+    respx_mock.get("/paper/p1/citations").mock(return_value=httpx.Response(503))
     async with Client(mcp) as client:
         result = await client.call_tool(
             "find_bridge_papers",
@@ -2319,7 +2326,7 @@ async def test_get_citation_graph_keeps_earlier_pages_when_a_later_one_fails(
         offset = int(request.url.params.get("offset", 0))
         limit = int(request.url.params.get("limit", 1000))
         if offset:
-            return httpx.Response(429)
+            return httpx.Response(503)
         # A full first page, so the scan pages on: one qualifying paper
         # among filler that the min_citations threshold rejects.
         page = [
