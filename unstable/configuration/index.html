@@ -2264,9 +2264,14 @@ scholar-mcp<span class="w"> </span>cache<span class="w"> </span>clear<span class
 <h3 id="rate-limiting">Rate limiting<a class="headerlink" href="#rate-limiting" title="Permanent link">&para;</a></h3>
 <p>Rate limiting is automatic and not configurable:</p>
 <ul>
-<li><strong>With API key</strong>: ~0.1 s between Semantic Scholar requests</li>
-<li><strong>Without API key</strong>: ~1.1 s between requests</li>
-<li><strong>Retry</strong>: automatic exponential backoff on HTTP 429 (up to 3 retries)</li>
+<li><strong>With or without an API key</strong>: at least 1.1 s between this server's
+  Semantic Scholar requests. A key has a documented introductory allowance of
+  1 request per second across endpoints. Anonymous requests share upstream
+  capacity with other users.</li>
+<li><strong>On HTTP 429</strong>: the server holds all its S2 requests at one shared gate.
+  Retries wait 1, 2, then 4 seconds; an exhausted retry ladder also delays the
+  next request. A 429 can still reach the caller after the retry ladder; #409
+  tracks background deferral.</li>
 </ul>
 <h3 id="long-running-tools-and-get_job_result">Long-running tools and <code>get_job_result</code><a class="headerlink" href="#long-running-tools-and-get_job_result" title="Permanent link">&para;</a></h3>
 <p>Every tool whose work can run long runs as a background job when it is slow.
@@ -2394,7 +2399,7 @@ the keepalive. Do not rely on it alone.</p>
 <td><code>SCHOLAR_MCP_S2_API_KEY</code></td>
 <td>(none)</td>
 <td>No</td>
-<td>Semantic Scholar API key. Optional but strongly recommended: unauthenticated requests are limited to ~1 req/s. Request one at https://www.semanticscholar.org/product/api#api-key-form.</td>
+<td>Semantic Scholar API key. Optional but strongly recommended: a key has an introductory 1 req/s allowance; anonymous users share capacity and may be throttled. Request one at https://www.semanticscholar.org/product/api#api-key-form.</td>
 </tr>
 <tr>
 <td><code>SCHOLAR_MCP_CACHE_DIR</code></td>

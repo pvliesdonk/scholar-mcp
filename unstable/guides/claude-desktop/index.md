@@ -34,7 +34,7 @@ Restart Claude Desktop. You should see the Scholar MCP tools in the tool list.
 
 Note
 
-Without an API key, Semantic Scholar limits you to ~1 request per second. This works fine for occasional lookups but may feel slow during multi-step explorations.
+The server sends Semantic Scholar requests at least 1.1 seconds apart. Without an API key, those requests share Semantic Scholar's public capacity and may be throttled.
 
 ## Step 2: Add an API key
 
@@ -54,7 +54,7 @@ Without an API key, Semantic Scholar limits you to ~1 request per second. This w
 }
 ```
 
-This bumps the rate limit to ~10 req/s, making graph traversals and batch operations much faster.
+An API key gives an introductory allowance of 1 request per second across Semantic Scholar endpoints. It avoids reliance on the shared anonymous pool; it does not remove all throttling.
 
 ## Step 3: Enable PDF conversion
 

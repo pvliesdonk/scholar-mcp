@@ -1467,7 +1467,11 @@
 /plugin<span class="w"> </span>install<span class="w"> </span>scholar-mcp@pvliesdonk
 </code></pre></div>
 <h2 id="configure">Configure<a class="headerlink" href="#configure" title="Permanent link">&para;</a></h2>
-<p>The only recommended configuration is a Semantic Scholar API key. The server works without one, but unauthenticated requests are limited to ~1 req/s and will hit 429 throttles during multi-step operations. <a href="https://www.semanticscholar.org/product/api#api-key-form">Request a free key</a> to get ~10 req/s.</p>
+<p>The only recommended configuration is a Semantic Scholar API key. The server
+spaces requests at least 1.1 seconds apart with or without one. Unauthenticated
+requests share upstream capacity and may be throttled. <a href="https://www.semanticscholar.org/product/api#api-key-form">Request a free
+key</a> for an
+introductory allowance of 1 request per second across endpoints.</p>
 <p>Add to your shell profile:</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">macOS / Linux</label><label for="__tabbed_1_2">Windows PowerShell</label></div>
 <div class="tabbed-content">
