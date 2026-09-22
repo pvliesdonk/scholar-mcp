@@ -1,4 +1,7 @@
-"""Rate limiter and retry helper for external API calls."""
+"""Rate limiter and retry helper for external API calls.
+
+S2 rate-limit reference: ``docs/design/reference/semantic-scholar-api.md``.
+"""
 
 from __future__ import annotations
 

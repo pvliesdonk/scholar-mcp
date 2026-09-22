@@ -1,4 +1,7 @@
-"""Google Books API client for metadata enrichment."""
+"""Google Books API client for metadata enrichment.
+
+External behaviour: ``docs/design/reference/google-books-api.md``.
+"""
 
 from __future__ import annotations
 

@@ -25,6 +25,8 @@ world does. Read the relevant one before changing code that talks to it — the
 | [EPO OPS bibliographic responses](epo-ops-biblio.md) | Where OPS places the elements of a biblio response, and which sit outside `bibliographic-data` | `_epo_xml.py`: `parse_biblio_xml` |
 | [EPO OPS legal-status events](epo-ops-legal-events.md) | How OPS represents INPADOC legal events, and why they need no code dictionary | `_epo_xml.py`: `parse_legal_xml`; `_epo_client.py`: `get_legal` |
 | [GitHub planning objects](github-planning-objects.md) | Milestones, issue relationships, and pull request design material | `roadmapping` and release automation |
+| [Semantic Scholar API behaviour](semantic-scholar-api.md) | Published rate limits and endpoint shapes, with historical throttle reports marked unverified | `_s2_client.py`, `_rate_limiter.py`, `_tools_graph.py` |
+| [Google Books volume search](google-books-api.md) | ISBN search, result shape, and observed anonymous 429 | `_google_books_client.py`, `_enricher_google_books.py`, `_tools_books.py` |
 
 ## Vendored sources
 
@@ -43,9 +45,10 @@ passages are quoted in the pages instead.
 
 ## Known gaps
 
-- **Semantic Scholar and Google Books** have no page yet, though the same class
-  of undocumented behaviour sat behind #365, #366, #368 and #369. Tracked in
-  #389.
+- The Semantic Scholar issue reports need retained request and response
+  evidence before the draft page's historical claims can be promoted from
+  `[unverified]`. The Google Books draft also needs a successful no-match
+  response and a keyed quota response.
 
 **Whitespace in the vendored files was normalised** by the repository's
 `trailing-whitespace` and `end-of-file-fixer` hooks. Verified whitespace-only:
