@@ -21,7 +21,7 @@ from fastmcp_pvl_core import (
 )
 
 from scholar_mcp._epo_client import EpoClient
-from scholar_mcp._tools_utility import register_utility_tools
+from scholar_mcp._tools_utility import enrich_paper, register_utility_tools
 from scholar_mcp.domain import Service
 from tests.conftest import PlainClient, tasks_server
 
@@ -838,3 +838,19 @@ async def test_enrich_paper_reports_a_sustained_rate_limit_as_retryable(
     data = record["result"]
     assert data["error"] == "rate_limited"
     assert data["retryable"] is True
+
+
+async def test_enrich_paper_direct_call_reports_exhausted_429(
+    service: Service,
+) -> None:
+    """Direct Python calls retain a retryable result after finite S2 retries."""
+    with respx.mock:
+        route = respx.get(f"{S2_BASE}/paper/p1").mock(return_value=httpx.Response(429))
+        result = await enrich_paper("p1", ["oa_status"], service)
+
+    assert route.call_count == 4
+    assert result == {
+        "error": "rate_limited",
+        "identifier": "p1",
+        "retryable": True,
+    }
