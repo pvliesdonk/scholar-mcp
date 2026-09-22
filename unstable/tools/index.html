@@ -2346,6 +2346,14 @@
 <span class="w"> </span><span class="nt">&quot;retry_after_s&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">5.0</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;message&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">}</span>
 </code></pre></div>
 <p>Poll with <code>get_job_result</code>. Job records expire after <code>SCHOLAR_MCP_JOBS_RESULT_TTL_S</code> (1 hour by default), measured from when the record was created. Settling a job does not extend it.</p>
+<p>If Semantic Scholar throttles an S2-backed tool, a plain MCP call returns a
+handle immediately with <code>"reason": "Semantic Scholar is throttling requests; work continues."</code>
+and a <code>retry_after_s</code> hint. The job keeps the original work in progress. A
+graph walk resumes at the node it reached. If S2 keeps refusing
+requests, the job completes before its record expires with
+<code>{"error":"rate_limited","retryable":true}</code>. Other S2 HTTP errors retain their
+usual error response. Clients using native MCP tasks get the result through
+their task handle.</p>
 <p>The patent tools are worth calling out. When EPO reports its traffic light amber or red they wait for it to clear, which is what makes them long-running, so they return a <code>job_id</code>. If it has not cleared by the time the retries are spent they answer with <code>{"error": "rate_limited", "retryable": true}</code> and a hint, rather than failing opaquely.</p>
 <h2 id="papers-search-retrieval">Papers, Search &amp; Retrieval<a class="headerlink" href="#papers-search-retrieval" title="Permanent link">&para;</a></h2>
 <h3 id="search_papers"><code>search_papers</code><a class="headerlink" href="#search_papers" title="Permanent link">&para;</a></h3>
@@ -2677,7 +2685,7 @@ already holds every publication the author has.</p>
 </code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">Partial graphs</p>
-<p>A failed upstream request does not abort the traversal. When one happens, <code>stats.partial</code> is <code>true</code>, <code>stats.failed_requests</code> counts them, and a top-level <code>warning</code> key names the statuses and the operations affected. Treat such a graph as incomplete: a missing node or edge is unknown, not absent.</p>
+<p>A non-429 upstream failure does not abort the traversal. When one happens, <code>stats.partial</code> is <code>true</code>, <code>stats.failed_requests</code> counts them, and a top-level <code>warning</code> key names the statuses and the operations affected. Treat such a graph as incomplete: a missing node or edge is unknown, not absent. A 429 pauses the same walk in a job.</p>
 <p>This is separate from <code>stats.truncated</code>, which means <code>max_nodes</code> stopped an otherwise successful walk.</p>
 </div>
 <div class="admonition tip">
@@ -2737,7 +2745,7 @@ already holds every publication the author has.</p>
 <p>If no path exists within <code>max_depth</code>, <code>found</code> is <code>false</code> and <code>path</code> is absent. Every response also carries <code>"partial"</code> and <code>"failed_requests"</code>.</p>
 <div class="admonition warning">
 <p class="admonition-title">Partial searches</p>
-<p>A failed upstream request does not abort the search. When one happens, <code>partial</code> is <code>true</code>, <code>failed_requests</code> counts them, and a <code>warning</code> key names the statuses and the operations affected.</p>
+<p>A non-429 upstream failure does not abort the search. When one happens, <code>partial</code> is <code>true</code>, <code>failed_requests</code> counts them, and a <code>warning</code> key names the statuses and the operations affected. A 429 pauses the same search in a job.</p>
 <p>A partial <code>{"found": false}</code> is not evidence that no path exists, and a partial <code>{"found": true}</code> path is not guaranteed to be the shortest one.</p>
 </div>
 <hr />

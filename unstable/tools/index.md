@@ -27,6 +27,8 @@ A tool that exceeds `SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S` (25 seconds by default) r
 
 Poll with `get_job_result`. Job records expire after `SCHOLAR_MCP_JOBS_RESULT_TTL_S` (1 hour by default), measured from when the record was created. Settling a job does not extend it.
 
+If Semantic Scholar throttles an S2-backed tool, a plain MCP call returns a handle immediately with `"reason": "Semantic Scholar is throttling requests; work continues."` and a `retry_after_s` hint. The job keeps the original work in progress. A graph walk resumes at the node it reached. If S2 keeps refusing requests, the job completes before its record expires with `{"error":"rate_limited","retryable":true}`. Other S2 HTTP errors retain their usual error response. Clients using native MCP tasks get the result through their task handle.
+
 The patent tools are worth calling out. When EPO reports its traffic light amber or red they wait for it to clear, which is what makes them long-running, so they return a `job_id`. If it has not cleared by the time the retries are spent they answer with `{"error": "rate_limited", "retryable": true}` and a hint, rather than failing opaquely.
 
 ## Papers, Search & Retrieval
@@ -161,7 +163,7 @@ BFS traversal from one or more seed papers, collecting nodes and edges.
 
 Partial graphs
 
-A failed upstream request does not abort the traversal. When one happens, `stats.partial` is `true`, `stats.failed_requests` counts them, and a top-level `warning` key names the statuses and the operations affected. Treat such a graph as incomplete: a missing node or edge is unknown, not absent.
+A non-429 upstream failure does not abort the traversal. When one happens, `stats.partial` is `true`, `stats.failed_requests` counts them, and a top-level `warning` key names the statuses and the operations affected. Treat such a graph as incomplete: a missing node or edge is unknown, not absent. A 429 pauses the same walk in a job.
 
 This is separate from `stats.truncated`, which means `max_nodes` stopped an otherwise successful walk.
 
@@ -201,7 +203,7 @@ If no path exists within `max_depth`, `found` is `false` and `path` is absent. E
 
 Partial searches
 
-A failed upstream request does not abort the search. When one happens, `partial` is `true`, `failed_requests` counts them, and a `warning` key names the statuses and the operations affected.
+A non-429 upstream failure does not abort the search. When one happens, `partial` is `true`, `failed_requests` counts them, and a `warning` key names the statuses and the operations affected. A 429 pauses the same search in a job.
 
 A partial `{"found": false}` is not evidence that no path exists, and a partial `{"found": true}` path is not guaranteed to be the shortest one.
 

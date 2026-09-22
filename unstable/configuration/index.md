@@ -176,7 +176,7 @@ scholar-mcp cache clear --older-than 7   # Clear entries older than 7 days
 Rate limiting is automatic and not configurable:
 
 - **With or without an API key**: at least 1.1 s between this server's Semantic Scholar requests. A key has a documented introductory allowance of 1 request per second across endpoints. Anonymous requests share upstream capacity with other users.
-- **On HTTP 429**: the server holds all its S2 requests at one shared gate. Retries wait 1, 2, then 4 seconds; an exhausted retry ladder also delays the next request. A 429 can still reach the caller after the retry ladder; #409 tracks background deferral.
+- **On HTTP 429**: the server holds all its S2 requests at one shared gate. S2-backed tools keep retrying with a capped backoff. A plain MCP call returns a job handle as soon as its work hits the gate; the handle names Semantic Scholar throttling as its reason. Poll `get_job_result` for the original call's answer. If throttling persists, retries stop before the job record's TTL and the result is `{"error":"rate_limited","retryable":true}`.
 
 ### Long-running tools and `get_job_result`
 

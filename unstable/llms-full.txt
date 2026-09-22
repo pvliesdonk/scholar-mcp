@@ -317,7 +317,7 @@ scholar-mcp cache clear --older-than 7   # Clear entries older than 7 days
 Rate limiting is automatic and not configurable:
 
 - **With or without an API key**: at least 1.1 s between this server's Semantic Scholar requests. A key has a documented introductory allowance of 1 request per second across endpoints. Anonymous requests share upstream capacity with other users.
-- **On HTTP 429**: the server holds all its S2 requests at one shared gate. Retries wait 1, 2, then 4 seconds; an exhausted retry ladder also delays the next request. A 429 can still reach the caller after the retry ladder; #409 tracks background deferral.
+- **On HTTP 429**: the server holds all its S2 requests at one shared gate. S2-backed tools keep retrying with a capped backoff. A plain MCP call returns a job handle as soon as its work hits the gate; the handle names Semantic Scholar throttling as its reason. Poll `get_job_result` for the original call's answer. If throttling persists, retries stop before the job record's TTL and the result is `{"error":"rate_limited","retryable":true}`.
 
 ### Long-running tools and `get_job_result`
 
@@ -1087,7 +1087,9 @@ The response contains:
 
 ### When the graph is incomplete
 
-An upstream failure, most often a Semantic Scholar rate limit, does not abort the traversal: the nodes already collected are still returned. Check `stats.partial` before you read anything into the shape of the graph. A partial graph tells you what was found, not what exists, so an absent edge means the answer is unknown rather than negative. Retrying the same call once the rate limit clears is the way to get the full picture.
+An S2 rate limit pauses the traversal. The call returns a job handle, and the walk resumes from the same node after the shared gate opens. Poll `get_job_result` for the graph. If S2 is still throttling near the job's expiry, the result is `{"error":"rate_limited","retryable":true}`.
+
+Other upstream failures can leave a partial graph. Check `stats.partial` before reading anything into its shape. A partial graph tells you what was found, not what exists, so an absent edge means the answer is unknown rather than negative.
 
 `truncated` and `partial` answer different questions. `truncated` means the walk succeeded and `max_nodes` stopped it; `partial` means part of the walk never happened.
 
@@ -1169,6 +1171,8 @@ A tool that exceeds `SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S` (25 seconds by default) r
 ```
 
 Poll with `get_job_result`. Job records expire after `SCHOLAR_MCP_JOBS_RESULT_TTL_S` (1 hour by default), measured from when the record was created. Settling a job does not extend it.
+
+If Semantic Scholar throttles an S2-backed tool, a plain MCP call returns a handle immediately with `"reason": "Semantic Scholar is throttling requests; work continues."` and a `retry_after_s` hint. The job keeps the original work in progress. A graph walk resumes at the node it reached. If S2 keeps refusing requests, the job completes before its record expires with `{"error":"rate_limited","retryable":true}`. Other S2 HTTP errors retain their usual error response. Clients using native MCP tasks get the result through their task handle.
 
 The patent tools are worth calling out. When EPO reports its traffic light amber or red they wait for it to clear, which is what makes them long-running, so they return a `job_id`. If it has not cleared by the time the retries are spent they answer with `{"error": "rate_limited", "retryable": true}` and a hint, rather than failing opaquely.
 
@@ -1304,7 +1308,7 @@ BFS traversal from one or more seed papers, collecting nodes and edges.
 
 Partial graphs
 
-A failed upstream request does not abort the traversal. When one happens, `stats.partial` is `true`, `stats.failed_requests` counts them, and a top-level `warning` key names the statuses and the operations affected. Treat such a graph as incomplete: a missing node or edge is unknown, not absent.
+A non-429 upstream failure does not abort the traversal. When one happens, `stats.partial` is `true`, `stats.failed_requests` counts them, and a top-level `warning` key names the statuses and the operations affected. Treat such a graph as incomplete: a missing node or edge is unknown, not absent. A 429 pauses the same walk in a job.
 
 This is separate from `stats.truncated`, which means `max_nodes` stopped an otherwise successful walk.
 
@@ -1344,7 +1348,7 @@ If no path exists within `max_depth`, `found` is `false` and `path` is absent. E
 
 Partial searches
 
-A failed upstream request does not abort the search. When one happens, `partial` is `true`, `failed_requests` counts them, and a `warning` key names the statuses and the operations affected.
+A non-429 upstream failure does not abort the search. When one happens, `partial` is `true`, `failed_requests` counts them, and a `warning` key names the statuses and the operations affected. A 429 pauses the same search in a job.
 
 A partial `{"found": false}` is not evidence that no path exists, and a partial `{"found": true}` path is not guaranteed to be the shortest one.
 

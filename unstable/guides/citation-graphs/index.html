@@ -1760,7 +1760,14 @@
 <li><strong>stats.partial</strong>: if <code>true</code>, at least one upstream request failed and the walk carried on without it. <code>stats.failed_requests</code> counts them and a top-level <code>warning</code> key names the statuses involved.</li>
 </ul>
 <h3 id="when-the-graph-is-incomplete">When the graph is incomplete<a class="headerlink" href="#when-the-graph-is-incomplete" title="Permanent link">&para;</a></h3>
-<p>An upstream failure, most often a Semantic Scholar rate limit, does not abort the traversal: the nodes already collected are still returned. Check <code>stats.partial</code> before you read anything into the shape of the graph. A partial graph tells you what was found, not what exists, so an absent edge means the answer is unknown rather than negative. Retrying the same call once the rate limit clears is the way to get the full picture.</p>
+<p>An S2 rate limit pauses the traversal. The call returns a job handle, and the
+walk resumes from the same node after the shared gate opens. Poll
+<code>get_job_result</code> for the graph. If S2 is still throttling near the job's expiry,
+the result is <code>{"error":"rate_limited","retryable":true}</code>.</p>
+<p>Other upstream failures can leave a partial graph. Check <code>stats.partial</code>
+before reading anything into its shape. A partial graph tells you what was
+found, not what exists, so an absent edge means the answer is unknown rather
+than negative.</p>
 <p><code>truncated</code> and <code>partial</code> answer different questions. <code>truncated</code> means the walk succeeded and <code>max_nodes</code> stopped it; <code>partial</code> means part of the walk never happened.</p>
 <h2 id="bridge-papers">Bridge papers<a class="headerlink" href="#bridge-papers" title="Permanent link">&para;</a></h2>
 <p><code>find_bridge_papers</code> finds the shortest citation path between two papers. This is useful for:</p>
