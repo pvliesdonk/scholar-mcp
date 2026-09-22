@@ -47,6 +47,12 @@ Four tools are available once configured:
 
 PDFs are stored in `$SCHOLAR_MCP_CACHE_DIR/pdfs/` and Markdown files in `$SCHOLAR_MCP_CACHE_DIR/md/`.
 
+## Reading converted text
+
+Document tools return at most 20,000 Markdown characters by default. A paged response includes the current `text_offset`, the returned and total character counts, and `next_offset` when more text remains. Call the same tool again with `text_offset` set to `next_offset`; the conversion is already cached, so this does not repeat the expensive work.
+
+Set `max_chars` to a smaller positive integer for shorter pages. Values above 20,000 are capped. Set it to `null` only when the MCP client can accept the complete converted document in one response.
+
 ## VLM enrichment
 
 Standard conversion uses OCR only. For papers with complex formulas or figures, you can enable VLM (Vision-Language Model) enrichment:

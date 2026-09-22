@@ -869,6 +869,12 @@ Four tools are available once configured:
 
 PDFs are stored in `$SCHOLAR_MCP_CACHE_DIR/pdfs/` and Markdown files in `$SCHOLAR_MCP_CACHE_DIR/md/`.
 
+## Reading converted text
+
+Document tools return at most 20,000 Markdown characters by default. A paged response includes the current `text_offset`, the returned and total character counts, and `next_offset` when more text remains. Call the same tool again with `text_offset` set to `next_offset`; the conversion is already cached, so this does not repeat the expensive work.
+
+Set `max_chars` to a smaller positive integer for shorter pages. Values above 20,000 are capped. Set it to `null` only when the MCP client can accept the complete converted document in one response.
+
 ## VLM enrichment
 
 Standard conversion uses OCR only. For papers with complex formulas or figures, you can enable VLM (Vision-Language Model) enrichment:
@@ -1742,12 +1748,16 @@ ______________________________________________________________________
 
 Download a patent PDF via authenticated EPO OPS and optionally convert to Markdown.
 
-| Parameter       | Type   | Default      | Description                                                                                                        |
-| --------------- | ------ | ------------ | ------------------------------------------------------------------------------------------------------------------ |
-| `patent_number` | string | *(required)* | Patent number in any format or letter case (such as `EP3491801B1`, `ep3491801b1`, `US10123456B2`, `WO2024/123456`) |
-| `use_vlm`       | bool   | `false`      | Enable VLM enrichment for formulas and figures                                                                     |
+| Parameter       | Type            | Default      | Description                                                                                                        |
+| --------------- | --------------- | ------------ | ------------------------------------------------------------------------------------------------------------------ |
+| `patent_number` | string          | *(required)* | Patent number in any format or letter case (such as `EP3491801B1`, `ep3491801b1`, `US10123456B2`, `WO2024/123456`) |
+| `use_vlm`       | bool            | `false`      | Enable VLM enrichment for formulas and figures                                                                     |
+| `text_offset`   | integer         | `0`          | Character offset at which the Markdown page starts                                                                 |
+| `max_chars`     | integer or null | `20000`      | Page size, capped at 20,000; use `null` only when the client can accept the complete text                          |
 
 **Returns:** `{"pdf_path": "/data/scholar-mcp/pdfs/<stem>.pdf", "markdown": "...", "md_path": "/data/scholar-mcp/md/<stem>.md"}` when docling is configured, or just `{"pdf_path": "..."}` without it.
+
+When `markdown` is present, the response also reports `text_offset`, `text_returned_chars`, `text_total_chars`, and `text_truncated`. `next_offset` is present when another page remains; pass it back as `text_offset`.
 
 Not all patents have full text available via OPS, WO and older EP patents sometimes lack PDFs. Returns `{"error": "pdf_not_available"}` in that case.
 
@@ -1803,12 +1813,16 @@ ______________________________________________________________________
 
 Retrieve a standard by identifier (canonical or fuzzy). Optionally fetches and converts full text via docling.
 
-| Parameter         | Type    | Default | Description                             |
-| ----------------- | ------- | ------- | --------------------------------------- |
-| `identifier`      | string  | ,       | Canonical or fuzzy identifier           |
-| `fetch_full_text` | boolean | false   | Fetch and convert full text via docling |
+| Parameter         | Type            | Default | Description                                                                               |
+| ----------------- | --------------- | ------- | ----------------------------------------------------------------------------------------- |
+| `identifier`      | string          | ,       | Canonical or fuzzy identifier                                                             |
+| `fetch_full_text` | boolean         | false   | Fetch and convert full text via docling                                                   |
+| `text_offset`     | integer         | 0       | Character offset at which the full-text page starts                                       |
+| `max_chars`       | integer or null | 20000   | Page size, capped at 20,000; use `null` only when the client can accept the complete text |
 
 With `fetch_full_text=true`, a conversion that fails still returns the record, with the reason in `full_text_error`. Absent both `full_text` and `full_text_error`, no full text was on offer or docling is not configured; neither is worth retrying.
+
+When `full_text` is present, the response also reports `text_offset`, `text_returned_chars`, `text_total_chars`, and `text_truncated`. `next_offset` is present when another page remains; pass it back as `text_offset`.
 
 NIST SP and NISTIR publications are catalogued per revision. An identifier with no revision, such as `NIST SP 800-53`, can return `not_found` even though the publication exists; `search_standards` lists the revisions that are published.
 
@@ -1834,6 +1848,8 @@ Write-tagged tools
 
 All PDF tools are tagged as write operations. They are hidden by default when `SCHOLAR_MCP_READ_ONLY=true`. Set `SCHOLAR_MCP_READ_ONLY=false` to enable them.
 
+Converted Markdown is paged at 20,000 characters by default. Responses with Markdown include `text_offset`, `text_returned_chars`, `text_total_chars`, and `text_truncated`; `next_offset` points to the next page when one remains.
+
 ### `fetch_paper_pdf`
 
 Download the PDF for a paper. Tries the Semantic Scholar open-access URL first, then falls back to alternative sources: ArXiv (from `externalIds`), PubMed Central, and Unpaywall (by DOI, requires `SCHOLAR_MCP_CONTACT_EMAIL`).
@@ -1857,10 +1873,12 @@ ______________________________________________________________________
 
 Convert a local PDF file to Markdown via docling-serve.
 
-| Parameter   | Type   | Default      | Description                                    |
-| ----------- | ------ | ------------ | ---------------------------------------------- |
-| `file_path` | string | *(required)* | Absolute path to a PDF file                    |
-| `use_vlm`   | bool   | `false`      | Enable VLM enrichment for formulas and figures |
+| Parameter     | Type            | Default      | Description                                                                               |
+| ------------- | --------------- | ------------ | ----------------------------------------------------------------------------------------- |
+| `file_path`   | string          | *(required)* | Absolute path to a PDF file                                                               |
+| `use_vlm`     | bool            | `false`      | Enable VLM enrichment for formulas and figures                                            |
+| `text_offset` | integer         | `0`          | Character offset at which the Markdown page starts                                        |
+| `max_chars`   | integer or null | `20000`      | Page size, capped at 20,000; use `null` only when the client can accept the complete text |
 
 **Returns:** `{"markdown": "...", "path": "/data/scholar-mcp/md/<name>.md", "vlm_used": true/false}`.
 
@@ -1880,10 +1898,12 @@ ______________________________________________________________________
 
 Full paper-to-Markdown pipeline: downloads and converts the PDF, using the same fallback sources as `fetch_paper_pdf`.
 
-| Parameter    | Type   | Default      | Description                 |
-| ------------ | ------ | ------------ | --------------------------- |
-| `identifier` | string | *(required)* | Paper ID (DOI, S2 ID, etc.) |
-| `use_vlm`    | bool   | `false`      | Enable VLM enrichment       |
+| Parameter     | Type            | Default      | Description                                                                               |
+| ------------- | --------------- | ------------ | ----------------------------------------------------------------------------------------- |
+| `identifier`  | string          | *(required)* | Paper ID (DOI, S2 ID, etc.)                                                               |
+| `use_vlm`     | bool            | `false`      | Enable VLM enrichment                                                                     |
+| `text_offset` | integer         | `0`          | Character offset at which the Markdown page starts                                        |
+| `max_chars`   | integer or null | `20000`      | Page size, capped at 20,000; use `null` only when the client can accept the complete text |
 
 **Returns:** On full success:
 
@@ -1914,11 +1934,13 @@ ______________________________________________________________________
 
 Download a PDF from any URL and optionally convert to Markdown. Use this when you have found an alternative PDF link (such as from an author's homepage, a preprint server, or an institutional repository).
 
-| Parameter  | Type   | Default      | Description                                                                                   |
-| ---------- | ------ | ------------ | --------------------------------------------------------------------------------------------- |
-| `url`      | string | *(required)* | Direct URL to a PDF file                                                                      |
-| `filename` | string | *(none)*     | Filename stem for caching (such as `"smith2024_attention"`). Derived from the URL if omitted. |
-| `use_vlm`  | bool   | `false`      | Enable VLM enrichment for formulas and figures                                                |
+| Parameter     | Type            | Default      | Description                                                                                   |
+| ------------- | --------------- | ------------ | --------------------------------------------------------------------------------------------- |
+| `url`         | string          | *(required)* | Direct URL to a PDF file                                                                      |
+| `filename`    | string          | *(none)*     | Filename stem for caching (such as `"smith2024_attention"`). Derived from the URL if omitted. |
+| `use_vlm`     | bool            | `false`      | Enable VLM enrichment for formulas and figures                                                |
+| `text_offset` | integer         | `0`          | Character offset at which the Markdown page starts                                            |
+| `max_chars`   | integer or null | `20000`      | Page size, capped at 20,000; use `null` only when the client can accept the complete text     |
 
 **Returns:** On success (with docling configured):
 

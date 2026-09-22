@@ -872,6 +872,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#reading-converted-text" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reading converted text
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#vlm-enrichment" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1487,6 +1498,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#reading-converted-text" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reading converted text
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#vlm-enrichment" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1628,6 +1650,15 @@
 </tbody>
 </table>
 <p>PDFs are stored in <code>$SCHOLAR_MCP_CACHE_DIR/pdfs/</code> and Markdown files in <code>$SCHOLAR_MCP_CACHE_DIR/md/</code>.</p>
+<h2 id="reading-converted-text">Reading converted text<a class="headerlink" href="#reading-converted-text" title="Permanent link">&para;</a></h2>
+<p>Document tools return at most 20,000 Markdown characters by default. A paged
+response includes the current <code>text_offset</code>, the returned and total character
+counts, and <code>next_offset</code> when more text remains. Call the same tool again with
+<code>text_offset</code> set to <code>next_offset</code>; the conversion is already cached, so this
+does not repeat the expensive work.</p>
+<p>Set <code>max_chars</code> to a smaller positive integer for shorter pages. Values above
+20,000 are capped. Set it to <code>null</code> only when the MCP client can accept the
+complete converted document in one response.</p>
 <h2 id="vlm-enrichment">VLM enrichment<a class="headerlink" href="#vlm-enrichment" title="Permanent link">&para;</a></h2>
 <p>Standard conversion uses OCR only. For papers with complex formulas or figures, you can enable VLM (Vision-Language Model) enrichment:</p>
 <div class="highlight"><pre><span></span><code><span class="nb">export</span><span class="w"> </span><span class="nv">SCHOLAR_MCP_VLM_API_URL</span><span class="o">=</span>https://api.openai.com/v1

@@ -3459,9 +3459,25 @@ state.</p>
 <td><code>false</code></td>
 <td>Enable VLM enrichment for formulas and figures</td>
 </tr>
+<tr>
+<td><code>text_offset</code></td>
+<td>integer</td>
+<td><code>0</code></td>
+<td>Character offset at which the Markdown page starts</td>
+</tr>
+<tr>
+<td><code>max_chars</code></td>
+<td>integer or null</td>
+<td><code>20000</code></td>
+<td>Page size, capped at 20,000; use <code>null</code> only when the client can accept the complete text</td>
+</tr>
 </tbody>
 </table>
 <p><strong>Returns:</strong> <code>{"pdf_path": "/data/scholar-mcp/pdfs/&lt;stem&gt;.pdf", "markdown": "...", "md_path": "/data/scholar-mcp/md/&lt;stem&gt;.md"}</code> when docling is configured, or just <code>{"pdf_path": "..."}</code> without it.</p>
+<p>When <code>markdown</code> is present, the response also reports <code>text_offset</code>,
+<code>text_returned_chars</code>, <code>text_total_chars</code>, and <code>text_truncated</code>.
+<code>next_offset</code> is present when another page remains; pass it back as
+<code>text_offset</code>.</p>
 <p>Not all patents have full text available via OPS, WO and older EP patents sometimes lack PDFs. Returns <code>{"error": "pdf_not_available"}</code> in that case.</p>
 <div class="admonition note">
 <p class="admonition-title">One request per page</p>
@@ -3565,9 +3581,25 @@ full text via docling.</p>
 <td>false</td>
 <td>Fetch and convert full text via docling</td>
 </tr>
+<tr>
+<td><code>text_offset</code></td>
+<td>integer</td>
+<td>0</td>
+<td>Character offset at which the full-text page starts</td>
+</tr>
+<tr>
+<td><code>max_chars</code></td>
+<td>integer or null</td>
+<td>20000</td>
+<td>Page size, capped at 20,000; use <code>null</code> only when the client can accept the complete text</td>
+</tr>
 </tbody>
 </table>
 <p>With <code>fetch_full_text=true</code>, a conversion that fails still returns the record, with the reason in <code>full_text_error</code>. Absent both <code>full_text</code> and <code>full_text_error</code>, no full text was on offer or docling is not configured; neither is worth retrying.</p>
+<p>When <code>full_text</code> is present, the response also reports <code>text_offset</code>,
+<code>text_returned_chars</code>, <code>text_total_chars</code>, and <code>text_truncated</code>.
+<code>next_offset</code> is present when another page remains; pass it back as
+<code>text_offset</code>.</p>
 <p>NIST SP and NISTIR publications are catalogued per revision. An identifier with no revision, such as <code>NIST SP 800-53</code>, can return <code>not_found</code> even though the publication exists; <code>search_standards</code> lists the revisions that are published.</p>
 <div class="admonition warning">
 <p class="admonition-title">A refused lookup is not a missing standard</p>
@@ -3586,6 +3618,9 @@ An empty <code>runs</code> list means no sync has been run yet.</p>
 <p class="admonition-title">Write-tagged tools</p>
 <p>All PDF tools are tagged as write operations. They are hidden by default when <code>SCHOLAR_MCP_READ_ONLY=true</code>. Set <code>SCHOLAR_MCP_READ_ONLY=false</code> to enable them.</p>
 </div>
+<p>Converted Markdown is paged at 20,000 characters by default. Responses with
+Markdown include <code>text_offset</code>, <code>text_returned_chars</code>, <code>text_total_chars</code>, and
+<code>text_truncated</code>; <code>next_offset</code> points to the next page when one remains.</p>
 <h3 id="fetch_paper_pdf"><code>fetch_paper_pdf</code><a class="headerlink" href="#fetch_paper_pdf" title="Permanent link">&para;</a></h3>
 <p>Download the PDF for a paper. Tries the Semantic Scholar open-access URL first, then falls back to alternative sources: ArXiv (from <code>externalIds</code>), PubMed Central, and Unpaywall (by DOI, requires <code>SCHOLAR_MCP_CONTACT_EMAIL</code>).</p>
 <table>
@@ -3638,6 +3673,18 @@ An empty <code>runs</code> list means no sync has been run yet.</p>
 <td><code>false</code></td>
 <td>Enable VLM enrichment for formulas and figures</td>
 </tr>
+<tr>
+<td><code>text_offset</code></td>
+<td>integer</td>
+<td><code>0</code></td>
+<td>Character offset at which the Markdown page starts</td>
+</tr>
+<tr>
+<td><code>max_chars</code></td>
+<td>integer or null</td>
+<td><code>20000</code></td>
+<td>Page size, capped at 20,000; use <code>null</code> only when the client can accept the complete text</td>
+</tr>
 </tbody>
 </table>
 <p><strong>Returns:</strong> <code>{"markdown": "...", "path": "/data/scholar-mcp/md/&lt;name&gt;.md", "vlm_used": true/false}</code>.</p>
@@ -3672,6 +3719,18 @@ An empty <code>runs</code> list means no sync has been run yet.</p>
 <td>bool</td>
 <td><code>false</code></td>
 <td>Enable VLM enrichment</td>
+</tr>
+<tr>
+<td><code>text_offset</code></td>
+<td>integer</td>
+<td><code>0</code></td>
+<td>Character offset at which the Markdown page starts</td>
+</tr>
+<tr>
+<td><code>max_chars</code></td>
+<td>integer or null</td>
+<td><code>20000</code></td>
+<td>Page size, capped at 20,000; use <code>null</code> only when the client can accept the complete text</td>
 </tr>
 </tbody>
 </table>
@@ -3722,6 +3781,18 @@ An empty <code>runs</code> list means no sync has been run yet.</p>
 <td>bool</td>
 <td><code>false</code></td>
 <td>Enable VLM enrichment for formulas and figures</td>
+</tr>
+<tr>
+<td><code>text_offset</code></td>
+<td>integer</td>
+<td><code>0</code></td>
+<td>Character offset at which the Markdown page starts</td>
+</tr>
+<tr>
+<td><code>max_chars</code></td>
+<td>integer or null</td>
+<td><code>20000</code></td>
+<td>Page size, capped at 20,000; use <code>null</code> only when the client can accept the complete text</td>
 </tr>
 </tbody>
 </table>
