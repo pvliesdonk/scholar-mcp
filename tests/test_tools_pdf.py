@@ -1,6 +1,6 @@
 """Tests for the PDF tools, which run on the pvl-core jobs framework.
 
-Every tool here is registered with ``register_long_running_tool``, so the
+Every tool here is registered through the jobs layer, so the
 same call answers two ways depending on how long the work takes.  Tests pick
 the branch they mean with a fixture rather than by sleeping:
 
@@ -25,7 +25,7 @@ import pytest
 import respx
 from fastmcp import FastMCP
 from fastmcp.client import Client
-from fastmcp_pvl_core import Jobs, register_job_tools
+from fastmcp_pvl_core import Jobs, JobsConfig, register_job_tools
 
 from scholar_mcp._docling_client import DoclingClient
 from scholar_mcp._tools_pdf import register_pdf_tools
@@ -86,7 +86,7 @@ def pdf_app(service: Service, jobs: Jobs) -> FastMCP:
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
-    register_pdf_tools(app, jobs)
+    register_pdf_tools(app, jobs, JobsConfig(soft_deadline_s=0.05, result_ttl_s=60.0))
     register_job_tools(app, jobs)
     return app
 

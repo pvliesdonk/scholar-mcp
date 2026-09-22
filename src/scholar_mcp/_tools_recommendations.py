@@ -8,14 +8,14 @@ from typing import TYPE_CHECKING, Any, Literal
 import httpx
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
-from fastmcp_pvl_core import register_long_running_tool
 
 from ._s2_client import FIELD_SETS, s2_error_payload
+from ._s2_jobs import register_s2_tool
 from ._server_deps import get_service
 from .domain import Service
 
 if TYPE_CHECKING:
-    from fastmcp_pvl_core import Jobs
+    from fastmcp_pvl_core import Jobs, JobsConfig
 
 logger = logging.getLogger(__name__)
 
@@ -60,17 +60,20 @@ async def recommend_papers(
     return {"recommendations": recommendations}
 
 
-def register_recommendation_tools(mcp: FastMCP, jobs: Jobs) -> None:
+def register_recommendation_tools(
+    mcp: FastMCP, jobs: Jobs, jobs_config: JobsConfig | None = None
+) -> None:
     """Register recommendation tools on *mcp*.
 
     Args:
         mcp: FastMCP application instance.
-        jobs: Shared jobs mechanics; a rate-limited call is retried and so
-            runs long enough to be promoted rather than failing.
+        jobs: Shared jobs mechanics; an S2 throttle defers the same call
+            while it keeps retrying.
     """
-    register_long_running_tool(
+    register_s2_tool(
         mcp,
         jobs,
+        jobs_config=jobs_config,
         annotations={
             "title": "Recommend Papers",
             "readOnlyHint": True,

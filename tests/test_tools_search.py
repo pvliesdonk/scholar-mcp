@@ -11,7 +11,7 @@ import pytest
 import respx
 from fastmcp import FastMCP
 from fastmcp.client import Client
-from fastmcp_pvl_core import Jobs, register_job_tools
+from fastmcp_pvl_core import Jobs, JobsConfig, register_job_tools
 
 from scholar_mcp._tools_search import register_search_tools
 from scholar_mcp.domain import Service
@@ -386,7 +386,9 @@ async def test_search_papers_promotes_when_slow(
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
-    register_search_tools(app, jobs)
+    register_search_tools(
+        app, jobs, JobsConfig(soft_deadline_s=0.05, result_ttl_s=60.0)
+    )
     register_job_tools(app, jobs)
 
     async with PlainClient(app) as client:

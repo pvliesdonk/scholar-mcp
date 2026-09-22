@@ -122,7 +122,15 @@ The response contains:
 
 ### When the graph is incomplete
 
-An upstream failure, most often a Semantic Scholar rate limit, does not abort the traversal: the nodes already collected are still returned. Check `stats.partial` before you read anything into the shape of the graph. A partial graph tells you what was found, not what exists, so an absent edge means the answer is unknown rather than negative. Retrying the same call once the rate limit clears is the way to get the full picture.
+An S2 rate limit pauses the traversal. The call returns a job handle, and the
+walk resumes from the same node after the shared gate opens. Poll
+`get_job_result` for the graph. If S2 is still throttling near the job's expiry,
+the result is `{"error":"rate_limited","retryable":true}`.
+
+Other upstream failures can leave a partial graph. Check `stats.partial`
+before reading anything into its shape. A partial graph tells you what was
+found, not what exists, so an absent edge means the answer is unknown rather
+than negative.
 
 `truncated` and `partial` answer different questions. `truncated` means the walk succeeded and `max_nodes` stopped it; `partial` means part of the walk never happened.
 

@@ -13,14 +13,14 @@ from typing import TYPE_CHECKING, Any, Literal
 import httpx
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
-from fastmcp_pvl_core import register_long_running_tool
 
 from ._s2_client import FIELD_SETS, log_s2_error, s2_error_payload
+from ._s2_jobs import register_s2_tool
 from ._server_deps import get_service
 from .domain import Service
 
 if TYPE_CHECKING:
-    from fastmcp_pvl_core import Jobs
+    from fastmcp_pvl_core import Jobs, JobsConfig
 
 logger = logging.getLogger(__name__)
 
@@ -690,6 +690,9 @@ async def get_citation_graph(
     shallow, narrow graph runs long: expect a job handle to poll with
     ``get_job_result`` rather than the graph itself.
 
+    A Semantic Scholar throttle defers the same walk. Poll the job handle;
+    the resumed graph does not mark the throttled request as partial.
+
     A failed upstream request does not abort the walk. When one happens,
     ``stats.partial`` is true, ``stats.failed_requests`` counts them, and a
     ``warning`` key explains what went unfetched. Treat such a graph as
@@ -884,12 +887,15 @@ async def find_bridge_papers(
 ) -> dict[str, Any]:
     """Find the shortest citation path between two papers.
 
-    Uses BFS over the citation/reference graph. Leverages cached
+    Uses BFS over the citation/reference graph. Uses cached
     citation and reference lists to minimise API calls.
 
     The search walks outward one rate-limited request per node, so it
     commonly runs long and returns a job handle to poll with
     ``get_job_result`` rather than the path itself.
+
+    A Semantic Scholar throttle defers the same search. Poll the job handle;
+    the resumed search does not mark the throttled request as partial.
 
     A failed upstream request does not abort the search. When one happens,
     ``partial`` is true, ``failed_requests`` counts them, and a ``warning``
@@ -939,7 +945,9 @@ async def find_bridge_papers(
     return await _execute()
 
 
-def register_graph_tools(mcp: FastMCP, jobs: Jobs) -> None:
+def register_graph_tools(
+    mcp: FastMCP, jobs: Jobs, jobs_config: JobsConfig | None = None
+) -> None:
     """Register citation graph tools on *mcp*.
 
     Args:
@@ -949,9 +957,10 @@ def register_graph_tools(mcp: FastMCP, jobs: Jobs) -> None:
             rate-limited request per node, so they routinely outrun the soft
             deadline and are promoted.
     """
-    register_long_running_tool(
+    register_s2_tool(
         mcp,
         jobs,
+        jobs_config=jobs_config,
         annotations={
             "title": "Get Citations",
             "readOnlyHint": True,
@@ -959,9 +968,10 @@ def register_graph_tools(mcp: FastMCP, jobs: Jobs) -> None:
             "openWorldHint": True,
         },
     )(get_citations)
-    register_long_running_tool(
+    register_s2_tool(
         mcp,
         jobs,
+        jobs_config=jobs_config,
         annotations={
             "title": "Get References",
             "readOnlyHint": True,
@@ -969,9 +979,10 @@ def register_graph_tools(mcp: FastMCP, jobs: Jobs) -> None:
             "openWorldHint": True,
         },
     )(get_references)
-    register_long_running_tool(
+    register_s2_tool(
         mcp,
         jobs,
+        jobs_config=jobs_config,
         annotations={
             "title": "Get Citation Graph",
             "readOnlyHint": True,
@@ -979,9 +990,10 @@ def register_graph_tools(mcp: FastMCP, jobs: Jobs) -> None:
             "openWorldHint": True,
         },
     )(get_citation_graph)
-    register_long_running_tool(
+    register_s2_tool(
         mcp,
         jobs,
+        jobs_config=jobs_config,
         annotations={
             "title": "Find Bridge Papers",
             "readOnlyHint": True,

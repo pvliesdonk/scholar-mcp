@@ -138,9 +138,9 @@ throttle policy.
 `S2Client` spaces requests 1.1 seconds apart, including keyed requests. A 429
 sets a cooldown on that server's shared S2 gate. This follows the published
 introductory keyed rate without assuming the vendor always admits one request
-per second. The retry ladder can still end with a 429; #409 owns deferral of
-that call. The keepalive's 60-day assumption is not established by the sources
-above and should not be treated as a vendor guarantee.
+per second. S2-backed tools defer on a throttle and retry within the job's
+retention window. The keepalive's 60-day assumption is not established by the
+sources above and should not be treated as a vendor guarantee.
 
 ## Not covered
 

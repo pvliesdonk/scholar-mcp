@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fastmcp import FastMCP
-from fastmcp_pvl_core import Jobs, build_jobs, register_job_tools
+from fastmcp_pvl_core import Jobs, JobsConfig, build_jobs, register_job_tools
 
 from .config import ProjectConfig
 
@@ -12,6 +12,8 @@ _JOBS_NOTE = (
     "docling conversion usually take 1-5 minutes, a busy EPO traffic light "
     "is waited out, citation formatting enriches each paper in turn, and "
     "graph traversal makes one rate-limited request per node. "
+    "Semantic Scholar throttling defers the same work immediately and "
+    "adds a reason to the handle. "
     "Those calls commonly answer with a job_id rather than a result; a cache "
     "hit answers inline, with no job."
 )
@@ -22,6 +24,7 @@ def register_tools(
     *,
     transport: str = "stdio",
     jobs: Jobs | None = None,
+    jobs_config: JobsConfig | None = None,
 ) -> None:
     """Register all MCP tools on *mcp*.
 
@@ -34,44 +37,50 @@ def register_tools(
             One ``Jobs`` per server is deliberate — every handle, whichever
             tool minted it, resolves through the single ``get_job_result``
             registered below.
+        jobs_config: Settings used to build an injected ``jobs`` instance.
+            Defaults to standard values when ``jobs`` is injected.
     """
     if jobs is None:
         # Both halves come from one ProjectConfig load: `server` selects the
         # KV backend the job records live in, `jobs` carries the deadline,
         # TTL and per-subject cap.
         config = ProjectConfig.from_env()
-        jobs = build_jobs(config.server, config.jobs)
+        jobs_config = jobs_config or config.jobs
+        jobs = build_jobs(config.server, jobs_config)
+    else:
+        # Tests and embedders can inject Jobs without reading operator env.
+        jobs_config = jobs_config or JobsConfig()
 
     # Category modules are imported here to avoid circular imports.
     # Each module registers its tools onto `mcp` and accesses the
     # Service via Depends(get_service).
     from ._tools_search import register_search_tools
 
-    register_search_tools(mcp, jobs)
+    register_search_tools(mcp, jobs, jobs_config)
 
     from ._tools_graph import register_graph_tools
 
-    register_graph_tools(mcp, jobs)
+    register_graph_tools(mcp, jobs, jobs_config)
 
     from ._tools_recommendations import register_recommendation_tools
 
-    register_recommendation_tools(mcp, jobs)
+    register_recommendation_tools(mcp, jobs, jobs_config)
 
     from ._tools_utility import register_utility_tools
 
-    register_utility_tools(mcp, jobs)
+    register_utility_tools(mcp, jobs, jobs_config)
 
     from ._tools_pdf import register_pdf_tools
 
-    register_pdf_tools(mcp, jobs)
+    register_pdf_tools(mcp, jobs, jobs_config)
 
     from ._tools_citation import register_citation_tools
 
-    register_citation_tools(mcp, jobs)
+    register_citation_tools(mcp, jobs, jobs_config)
 
     from ._tools_patent import register_patent_tools
 
-    register_patent_tools(mcp, jobs)
+    register_patent_tools(mcp, jobs, jobs_config)
 
     from ._tools_books import register_book_tools
 

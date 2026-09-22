@@ -12,7 +12,13 @@ import pytest
 import respx
 from fastmcp import FastMCP
 from fastmcp.client import Client
-from fastmcp_pvl_core import Jobs, register_job_tools
+from fastmcp_pvl_core import (
+    Jobs,
+    JobsConfig,
+    ServerConfig,
+    build_jobs,
+    register_job_tools,
+)
 
 from scholar_mcp._epo_client import EpoClient
 from scholar_mcp._tools_utility import register_utility_tools
@@ -738,7 +744,9 @@ async def test_batch_resolve_promotes_when_slow(
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
-    register_utility_tools(app, jobs)
+    register_utility_tools(
+        app, jobs, JobsConfig(soft_deadline_s=0.05, result_ttl_s=60.0)
+    )
     register_job_tools(app, jobs)
 
     async with PlainClient(app) as client:
@@ -801,14 +809,11 @@ async def test_batch_resolve_reports_quota_exhaustion_per_entry(
 
 
 async def test_enrich_paper_reports_a_sustained_rate_limit_as_retryable(
-    service: Service, slow_jobs: Jobs
+    service: Service,
 ) -> None:
-    """An exhausted 429 says so, rather than claiming the paper is missing.
-
-    Before the migration a 429 raised `RateLimitedError` and queued, so this
-    handler never saw one. It does now, and answering "not_found" would tell
-    the caller to give up on a paper that exists.
-    """
+    """A persistent 429 returns a retryable result before job expiry."""
+    config = JobsConfig(soft_deadline_s=1, result_ttl_s=0.18)
+    jobs = build_jobs(ServerConfig(kv_store_url="memory://"), config)
     with respx.mock:
         respx.get(f"{S2_BASE}/paper/p1").mock(return_value=httpx.Response(429))
 
@@ -817,13 +822,19 @@ async def test_enrich_paper_reports_a_sustained_rate_limit_as_retryable(
             yield {"service": service}
 
         app = tasks_server("test", lifespan=lifespan)
-        register_utility_tools(app, slow_jobs)
+        register_utility_tools(app, jobs, config)
 
-        async with Client(app) as client:
+        async with PlainClient(app) as client:
             result = await client.call_tool(
                 "enrich_paper", {"identifier": "p1", "fields": ["oa_status"]}
             )
+            handle = json.loads(result.content[0].text)
+            while True:
+                record = await jobs.poll(handle["job_id"])
+                if record["status"] == "completed":
+                    break
+                await asyncio.sleep(0.01)
 
-    data = json.loads(result.content[0].text)
+    data = record["result"]
     assert data["error"] == "rate_limited"
     assert data["retryable"] is True
