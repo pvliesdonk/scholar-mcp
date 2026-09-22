@@ -266,7 +266,7 @@ The variables this project features as its entry points (domain variables use th
 | Variable | Default | Required | Description |
 |---|---|---|---|
 | `SCHOLAR_MCP_READ_ONLY` | `true` | No | When true, write-tagged tools (PDF download and conversion cache writes) are hidden. Set false to enable them. |
-| `SCHOLAR_MCP_S2_API_KEY` | (none) | No | Semantic Scholar API key. Optional but strongly recommended: unauthenticated requests are limited to ~1 req/s. Request one at https://www.semanticscholar.org/product/api#api-key-form. |
+| `SCHOLAR_MCP_S2_API_KEY` | (none) | No | Semantic Scholar API key. Optional but strongly recommended: a key has an introductory 1 req/s allowance; anonymous users share capacity and may be throttled. Request one at https://www.semanticscholar.org/product/api#api-key-form. |
 | `SCHOLAR_MCP_DOCLING_URL` | (none) | No | Base URL of a running docling-serve instance for PDF conversion (such as http://localhost:5001). When unset, PDF conversion tools return an error. |
 | `SCHOLAR_MCP_CACHE_DIR` | `/data/scholar-mcp` | No | Directory for the SQLite cache database (cache.db) and downloaded PDFs (pdfs/, md/). |
 | `SCHOLAR_MCP_CONTACT_EMAIL` | (none) | No | Contact email for the OpenAlex polite pool (improves rate limits). Also enables Unpaywall lookups as a PDF fallback source. |
