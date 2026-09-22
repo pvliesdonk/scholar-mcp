@@ -1413,13 +1413,20 @@ def test_fetch_patent_pdf_cache_hit_with_docling_and_cached_md(
 
         async with Client(app) as client:
             result = await client.call_tool(
-                "fetch_patent_pdf", {"patent_number": patent_number}
+                "fetch_patent_pdf",
+                {
+                    "patent_number": patent_number,
+                    "text_offset": 2,
+                    "max_chars": 6,
+                },
             )
         return json.loads(result.content[0].text)
 
     data = asyncio.run(run())
     assert "pdf_path" in data
-    assert data.get("markdown") == "# Cached Markdown"
+    assert data.get("markdown") == "Cached"
+    assert data.get("text_total_chars") == 17
+    assert data.get("next_offset") == 8
     assert data.get("vlm_used") is False
     assert data.get("queued") is not True
     # No EPO call and no docling conversion — both were cached

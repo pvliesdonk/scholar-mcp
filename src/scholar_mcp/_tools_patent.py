@@ -32,6 +32,7 @@ from ._rate_limiter import RateLimitedError, S2RetryDeadlineExceeded
 from ._s2_client import FIELD_SETS, S2Client
 from ._s2_jobs import register_s2_tool
 from ._server_deps import get_service
+from ._text_window import DEFAULT_MAX_TEXT_CHARS, page_text
 from .domain import Service
 
 logger = logging.getLogger(__name__)
@@ -427,6 +428,8 @@ def _patent_pdf_stem(doc: DocdbNumber) -> str:
 async def fetch_patent_pdf(
     patent_number: str,
     use_vlm: bool = False,
+    text_offset: int = 0,
+    max_chars: int | None = DEFAULT_MAX_TEXT_CHARS,
     service: Service = Depends(get_service),
 ) -> dict[str, Any]:
     """Download a patent PDF via authenticated EPO OPS and convert to Markdown.
@@ -449,11 +452,20 @@ async def fetch_patent_pdf(
     ``get_job_result`` rather than the result itself. Do not reason about EPO
     throttle states yourself.
 
+    Markdown is returned in pages of at most 20,000 characters. When
+    ``next_offset`` is present, call this tool again with that value as
+    ``text_offset``; the cached conversion makes later pages inexpensive.
+    Set ``max_chars`` to null only when the client can accept the complete
+    document in one response.
+
     Args:
         patent_number: Patent number in any format (EP, WO, US, etc.),
             e.g. "EP3491801B1", "EP 3491801 B1", "US10123456B2".
         use_vlm: Use VLM enrichment for formulas and figures (requires
             VLM to be configured).
+        text_offset: Character offset at which the Markdown page starts.
+        max_chars: Maximum Markdown characters to return, capped at 20,000.
+            Pass ``null`` for the complete text.
 
     Returns:
         ``pdf_path`` and optionally ``markdown`` / ``md_path``.
@@ -511,7 +523,12 @@ async def fetch_patent_pdf(
     skip_reason = docling.vlm_skip_reason(use_vlm)
     if skip_reason:
         result["vlm_skip_reason"] = skip_reason
-    return result
+    return page_text(
+        result,
+        "markdown",
+        text_offset=text_offset,
+        max_chars=max_chars,
+    )
 
 
 def register_patent_tools(

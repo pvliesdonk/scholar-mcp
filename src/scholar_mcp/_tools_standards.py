@@ -13,6 +13,7 @@ from fastmcp_pvl_core import register_long_running_tool
 from ._record_types import StandardRecord
 from ._server_deps import get_service
 from ._standards_client import StandardsUpstreamError, resolve_identifier_local
+from ._text_window import DEFAULT_MAX_TEXT_CHARS, page_text
 from .domain import Service
 
 
@@ -239,6 +240,8 @@ async def search_standards(
 async def get_standard(
     identifier: str,
     fetch_full_text: bool = False,
+    text_offset: int = 0,
+    max_chars: int | None = DEFAULT_MAX_TEXT_CHARS,
     service: Service = Depends(get_service),
 ) -> dict[str, Any]:
     """Retrieve a standard by identifier (canonical or fuzzy).
@@ -268,6 +271,12 @@ async def get_standard(
     with the status and what went wrong. Both are worth retrying -- the
     standard may well exist.
 
+    Full text is returned in pages of at most 20,000 characters. When
+    ``next_offset`` is present, call this tool again with that value as
+    ``text_offset``; the cached conversion makes later pages inexpensive.
+    Set ``max_chars`` to null only when the client can accept the complete
+    document in one response.
+
     Examples:
         get_standard("RFC 9000")
         get_standard("NIST SP 800-53 Rev. 5")
@@ -278,6 +287,9 @@ async def get_standard(
         identifier: Canonical or fuzzy standard identifier.
         fetch_full_text: If True and docling is configured, download and
             convert the full text PDF/HTML via docling.
+        text_offset: Character offset at which the full-text page starts.
+        max_chars: Maximum full-text characters to return, capped at 20,000.
+            Pass ``null`` for the complete text.
 
     Returns:
         The StandardRecord, or ``{"error": "not_found"}`` if unresolvable.
@@ -299,8 +311,15 @@ async def get_standard(
     if cached is not None:
         logger.debug("standard_cache_hit identifier=%s", canonical)
         if fetch_full_text:
-            return await _handle_full_text(cached, service)
-        return dict(cached)
+            result = await _handle_full_text(cached, service)
+        else:
+            result = dict(cached)
+        return page_text(
+            result,
+            "full_text",
+            text_offset=text_offset,
+            max_chars=max_chars,
+        )
 
     # 3. Fetch from source
     record, failures = await service.standards.get_with_failures(canonical)
@@ -317,8 +336,15 @@ async def get_standard(
         await service.cache.set_standard_alias(identifier, canonical)
 
     if fetch_full_text:
-        return await _handle_full_text(record, service)
-    return dict(record)
+        result = await _handle_full_text(record, service)
+    else:
+        result = dict(record)
+    return page_text(
+        result,
+        "full_text",
+        text_offset=text_offset,
+        max_chars=max_chars,
+    )
 
 
 async def get_sync_status(
