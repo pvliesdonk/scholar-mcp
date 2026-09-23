@@ -1337,9 +1337,9 @@ handle:</p>
 <code>failed</code>. <code>get_task_result</code> and <code>list_tasks</code> are gone. If you restrict the
 exposed tool surface with <code>SCHOLAR_MCP_TOOLS_ALLOW</code> (or an equivalent
 allowlist elsewhere) and named either of those, add <code>get_job_result</code> in their
-place: an allowlist matches by name, so a name that no longer resolves to
-anything is silently ignored rather than rejected, and a job handle with no
-tool able to poll it becomes unresolvable.</p>
+place. An allowlist matches by name, so a name that no longer resolves to
+anything is silently ignored rather than rejected. If that leaves a job handle
+with no polling tool, the handle becomes unresolvable.</p>
 <p>Two new variables round out the tuning surface, both documented in the
 <a href="../../configuration/#long-running-tools-and-get_job_result">configuration guide</a>:
 <code>SCHOLAR_MCP_JOBS_RESULT_TTL_S</code> (how long a job record is kept, one hour by
