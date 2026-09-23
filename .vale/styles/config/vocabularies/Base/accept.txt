@@ -185,6 +185,7 @@ Caddy
 Canonicalisation
 CC
 Codecov
+cooldown
 Cyber
 dev
 dicts
