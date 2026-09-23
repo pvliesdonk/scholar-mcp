@@ -19,6 +19,10 @@ index holds the argument for the direction and order.
   template drift share the first package because each makes later feature work
   harder to evaluate in production. The template adoption itself is tracked by
   [#411](https://github.com/pvliesdonk/scholar-mcp/issues/411).
+- **[evidenced: [ADR 0001](../decisions/0001-do-not-build-an-offline-semantic-scholar-store.md)]**
+  Keep Semantic Scholar resilience on the live API path. An offline Datasets
+  store is not planned because the measured storage and maintenance cost does
+  not justify the lookup coverage it could provide.
 
 ### Operator-provided corpus
 
@@ -97,6 +101,10 @@ backlog; commit it to a package when it should ship in that cut.
 
 ## Revisions
 
+- **2026-09-22 — [evidenced: [#406](https://github.com/pvliesdonk/scholar-mcp/issues/406)
+  and [ADR 0001](../decisions/0001-do-not-build-an-offline-semantic-scholar-store.md)]:**
+  Recorded the maintainer's no-go decision on an offline Semantic Scholar
+  store. Live API pacing and deferred jobs remain the chosen resilience path.
 - **2026-09-12 — [derived]:** Adopted the v8.2 roadmapping convention. Kept
   only the stabilization and corpus-foundation cuts as packages; converted the
   broader standards, patents, books, and structural buckets into story epics
