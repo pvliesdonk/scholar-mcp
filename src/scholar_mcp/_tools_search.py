@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any, Literal
 
 import httpx
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
 
+from ._paper_cache import resolve_paper
 from ._s2_client import FIELD_SETS, s2_error_payload
 from ._s2_jobs import register_s2_tool
 from ._server_deps import get_service
@@ -16,8 +16,6 @@ from .domain import Service
 
 if TYPE_CHECKING:
     from fastmcp_pvl_core import Jobs, JobsConfig
-
-logger = logging.getLogger(__name__)
 
 
 def _covers_author_page(cached: dict[str, Any], limit: int) -> bool:
@@ -150,28 +148,15 @@ async def get_paper(
         A mapping with full paper metadata, or
         ``{"error": "not_found", "identifier": "..."}`` if not found.
     """
-    cached_id = await service.cache.get_alias(identifier) or identifier
-    data = await service.cache.get_paper(cached_id)
-    if data:
-        logger.debug("cache_hit identifier=%s", identifier)
-        await service.enrichment.enrich([data], service, tags=frozenset({"papers"}))
-        return dict(data)
-
     try:
-        fetched = await service.s2.get_paper(identifier)
+        paper = await resolve_paper(service.cache, service.s2.get_paper, identifier)
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 404:
             return {"error": "not_found", "identifier": identifier}
         return s2_error_payload(exc)
 
-    paper_id: str = fetched.get("paperId") or ""
-    if paper_id:
-        await service.cache.set_paper(paper_id, fetched)
-        if identifier != paper_id:
-            await service.cache.set_alias(identifier, paper_id)
-
-    await service.enrichment.enrich([fetched], service, tags=frozenset({"papers"}))
-    return dict(fetched)
+    await service.enrichment.enrich([paper], service, tags=frozenset({"papers"}))
+    return dict(paper)
 
 
 async def get_author(
