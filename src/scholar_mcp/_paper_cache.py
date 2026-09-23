@@ -28,7 +28,9 @@ async def resolve_paper(
 
     Args:
         cache: Paper and identifier-alias cache.
-        fetch_paper: Async upstream lookup for a cache miss.
+        fetch_paper: Async upstream lookup for a cache miss. It must return
+            full metadata because its result is cached as a complete paper
+            record.
         identifier: DOI, Semantic Scholar ID, arXiv ID, or another supported ID.
 
     Returns:
