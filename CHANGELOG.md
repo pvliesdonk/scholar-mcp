@@ -2,6 +2,31 @@
 
 <!-- version list -->
 
+## 3.0.0-rc.0 (2026-09-23)
+
+### Breaking Changes
+
+- adopt the template service shape, closing clients on a failed startup (#422)
+- adopt the template's systemd and install-screen shape (#423)
+- defer throttled calls until the job deadline (#463)
+
+### Bug Fixes
+
+- apply limit when serving a cached author record (#431)
+- infer conference papers from S2's publication type (#432)
+- shorten the domain description so the render survives ruff format (#437)
+- answer from the cached paper record instead of asking S2 again (#435)
+- bind the S2 keepalive inside the DOMAIN-WIRING sentinel (#439)
+- repair rows a fix invalidates instead of waiting out their TTL (#441)
+- read the abstract and legal-event state OPS actually sends (#442)
+- key the patent PDF cache on the normalised number, not the raw spelling (#445)
+- fill empty authors from the cached work record instead of overwriting it (#449)
+- match NIST identifiers exactly instead of by substring (#452)
+- report an ETSI upstream failure instead of an empty result (#455)
+- share throttle cooldown across requests (#462)
+- normalize lowercase kind codes (#464)
+- page converted document responses (#465)
+
 ## 2.0.0 (2026-09-11)
 
 ### Breaking Changes
