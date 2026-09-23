@@ -16,8 +16,9 @@ from fastmcp.dependencies import Depends
 from fastmcp_pvl_core import register_long_running_tool
 
 from ._docling_client import DoclingClient
+from ._paper_cache import resolve_paper
 from ._pdf_url_resolver import ResolvedPdf, resolve_alternative_pdf
-from ._s2_client import FIELD_SETS, s2_error_payload
+from ._s2_client import s2_error_payload
 from ._s2_jobs import register_s2_tool
 from ._server_deps import get_service
 from ._text_window import DEFAULT_MAX_TEXT_CHARS, page_text
@@ -29,46 +30,6 @@ if TYPE_CHECKING:
     from ._record_types import PaperRecord
 
 logger = logging.getLogger(__name__)
-
-
-async def _resolve_paper(service: Service, identifier: str) -> PaperRecord:
-    """Return a paper record, reading through and populating the paper cache.
-
-    Mirrors the ``get_paper`` tool in ``_tools_search``, so the PDF tools and
-    ``get_paper`` answer from the same row rather than disagreeing about the
-    same paper. Without the write half this would be inert: ``get_paper`` was
-    the only thing that ever populated the paper cache, so a caller who only
-    ever reached for a PDF would miss on every call.
-
-    The record is requested with the full field set rather than only the four
-    fields the download path reads. S2 bills per request rather than per
-    field, and a narrow record written to the cache would be served later to
-    ``get_paper`` as though it were complete.
-
-    Args:
-        service: Domain service, for the S2 client and the cache.
-        identifier: Paper identifier (DOI, S2 ID, ARXIV:, etc.).
-
-    Returns:
-        The paper record, cached or freshly fetched.
-
-    Raises:
-        httpx.HTTPStatusError: If S2 refuses the lookup on a cache miss. The
-            callers already translate this into their own error mapping.
-    """
-    cached_id = await service.cache.get_alias(identifier) or identifier
-    cached = await service.cache.get_paper(cached_id)
-    if cached:
-        logger.debug("paper_cache_hit identifier=%s", identifier)
-        return cached
-
-    paper = await service.s2.get_paper(identifier, fields=FIELD_SETS["full"])
-    paper_id: str = paper.get("paperId") or ""
-    if paper_id:
-        await service.cache.set_paper(paper_id, paper)
-        if identifier != paper_id:
-            await service.cache.set_alias(identifier, paper_id)
-    return paper
 
 
 def _vlm_extras(docling: DoclingClient, use_vlm: bool) -> dict[str, Any]:
@@ -171,7 +132,7 @@ async def fetch_paper_pdf(
         PDF was obtained (``s2_oa``, ``arxiv``, ``pmc``, ``unpaywall``).
     """
     try:
-        paper = await _resolve_paper(service, identifier)
+        paper = await resolve_paper(service.cache, service.s2.get_paper, identifier)
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 404:
             return {"error": "not_found", "identifier": identifier}
@@ -321,7 +282,7 @@ async def fetch_and_convert(
         plus an ``error`` key if a stage fails.
     """
     try:
-        paper = await _resolve_paper(service, identifier)
+        paper = await resolve_paper(service.cache, service.s2.get_paper, identifier)
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 404:
             return {"error": "not_found", "identifier": identifier}
