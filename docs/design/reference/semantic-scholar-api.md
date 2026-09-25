@@ -30,6 +30,14 @@ sources:
     title: Maintainer's keyed paper-batch observations on issue 389
     resource: https://github.com/pvliesdonk/scholar-mcp/issues/389#issuecomment-5698506793
     accessed: 2026-09-21
+  - id: graph-swagger
+    title: Academic Graph API OpenAPI (swagger) specification
+    resource: https://api.semanticscholar.org/graph/v1/swagger.json
+    accessed: 2026-09-25
+  - id: recommendations-swagger
+    title: Recommendations API OpenAPI (swagger) specification
+    resource: https://api.semanticscholar.org/recommendations/v1/swagger.json
+    accessed: 2026-09-25
   - id: throttle-observations
     title: Deployed-server and direct-call observations on issue 406
     resource: https://github.com/pvliesdonk/scholar-mcp/issues/406
@@ -111,6 +119,25 @@ throttle policy.
 - The citations endpoint pages by `offset` and `limit`, with a documented
   maximum limit of 1,000; each data item contains `citingPaper`.
   [source: graph-docs] [pins: tests/test_s2_client.py::test_get_citations]
+- Each list endpoint documents its own `limit` maximum in the `limit`
+  parameter description: `/paper/search` "Must be <= 100"; `/paper/{id}/citations`,
+  `/paper/{id}/references`, `/paper/{id}/authors`, `/author/search` and
+  `/author/{id}/papers` "Must be <= 1000"; the Recommendations endpoints
+  `/papers/` and `/papers/forpaper/{id}` "Maximum 500". The default is 100 on
+  all of them. [source: graph-swagger] [source: recommendations-swagger]
+  [pins: tests/test_tools_search.py::test_search_papers_clamps_limit_to_s2_maximum,
+  tests/test_tools_graph.py::test_graph_page_clamps_limit_to_s2_maximum,
+  tests/test_tools_recommendations.py::test_recommend_papers_clamps_limit_to_s2_maximum]
+- `/author/{author_id}` documents no `limit` parameter at all, so there is no
+  published bound for `get_author` to clamp to. [source: graph-swagger]
+- The specifications list only `400 Bad query parameters` (and `404` for an
+  unknown id) as documented refusals on these endpoints. Issue #476 reports
+  `search_papers(limit=500)` surfacing `status: 500`, but which status S2 sent
+  is not established: an unkeyed `limit=100` search returned 200, while four
+  unkeyed `limit=101` and `limit=0` requests at 25-second spacing all received
+  429. [observed: unkeyed `curl` to `/graph/v1/paper/search` on 2026-09-25]
+  [unverified] Retain a keyed request with an over-maximum `limit` and its
+  response. [source: graph-swagger]
 - Citation order is not documented as newest-first in the endpoint reference.
   [unverified] Confirm with a vendor guarantee or a dated, repeatable response
   sample before making correctness depend on that order.
@@ -134,6 +161,12 @@ throttle policy.
   [unverified] Check representative records or an explicit schema guarantee.
 
 ## Where this project departs from the subject
+
+The paper-search, citation, reference and recommendation tools clamp a
+caller's `limit` into `1..maximum` for their endpoint before the request is
+sent, rather than passing an out-of-range value through for S2 to refuse. The
+advertised tool descriptions state each cap, so a caller that asked for more
+knows why it received fewer.
 
 `S2Client` spaces requests 1.1 seconds apart, including keyed requests. A 429
 sets a cooldown on that server's shared S2 gate. This follows the published

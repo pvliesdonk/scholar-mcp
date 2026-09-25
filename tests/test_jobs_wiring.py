@@ -309,3 +309,27 @@ async def test_document_tools_advertise_and_expose_text_paging(
         properties = tool.input_schema["properties"]
         assert "text_offset" in properties
         assert "max_chars" in properties
+
+
+@pytest.mark.parametrize("server", [_EVERYTHING_VISIBLE], indirect=True, ids=["all"])
+async def test_s2_list_tools_advertise_their_limit_cap(client: Client[Any]) -> None:
+    """A model that asks past S2's maximum learns why it got fewer rows (#476).
+
+    The tools clamp ``limit`` silently, and the ``Args:`` text naming the cap
+    is stripped from the advertised description, so the cap must be stated in
+    the body the client actually receives.
+    """
+    caps = {
+        "search_papers": "capped at 100",
+        "get_citations": "capped at 1000",
+        "get_references": "capped at 1000",
+        "recommend_papers": "capped at 500",
+    }
+    described = {t.name: (t.description or "") for t in await client.list_tools()}
+
+    missing = sorted(
+        name
+        for name, phrase in caps.items()
+        if phrase not in " ".join(described[name].split())
+    )
+    assert not missing, f"these tools never state their limit cap: {missing}"
