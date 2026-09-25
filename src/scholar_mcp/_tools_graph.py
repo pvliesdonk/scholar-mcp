@@ -14,7 +14,13 @@ import httpx
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
 
-from ._s2_client import FIELD_SETS, log_s2_error, s2_error_payload
+from ._s2_client import (
+    FIELD_SETS,
+    PAGE_LIMIT_MAX,
+    clamp_limit,
+    log_s2_error,
+    s2_error_payload,
+)
 from ._s2_jobs import register_s2_tool
 from ._server_deps import get_service
 from .domain import Service
@@ -229,6 +235,9 @@ async def get_citations(
 ) -> dict[str, Any]:
     """Fetch papers that cite the given paper (forward citations).
 
+    Returns at most 1000 citing papers per call; a larger ``limit`` is capped
+    at 1000, so page further with ``offset``.
+
     Paging deeply to satisfy ``min_citations`` can run long; such a call
     continues in the background and returns a job handle to poll with
     ``get_job_result``.
@@ -236,7 +245,7 @@ async def get_citations(
     Args:
         identifier: Paper identifier (DOI, S2 ID, ARXIV:, etc.).
         fields: Field set preset for returned paper records.
-        limit: Max results (pagination).
+        limit: Max results (pagination, max 1000).
         offset: Pagination offset.
         year_start: Filter citing papers published from this year.
         year_end: Filter citing papers published up to this year.
@@ -269,6 +278,7 @@ async def get_citations(
         year = f"-{year_end}"
 
     fos = ",".join(fields_of_study) if fields_of_study else None
+    limit = clamp_limit(limit, PAGE_LIMIT_MAX)
 
     async def _execute() -> dict[str, Any]:
         if min_citations is not None:
@@ -339,18 +349,22 @@ async def get_references(
 ) -> dict[str, Any]:
     """Fetch papers referenced by the given paper (backward references).
 
+    Returns at most 1000 references per call; a larger ``limit`` is capped at
+    1000, so page further with ``offset``.
+
     Should the call run long it continues in the background and returns a
     job handle to poll with ``get_job_result``.
 
     Args:
         identifier: Paper identifier (DOI, S2 ID, ARXIV:, etc.).
         fields: Field set preset for returned paper records.
-        limit: Max results.
+        limit: Max results (max 1000).
         offset: Pagination offset.
 
     Returns:
         JSON with ``data`` list of ``{"citedPaper": {...}}`` dicts.
     """
+    limit = clamp_limit(limit, PAGE_LIMIT_MAX)
 
     async def _execute() -> dict[str, Any]:
         try:

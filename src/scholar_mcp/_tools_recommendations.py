@@ -9,7 +9,12 @@ import httpx
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
 
-from ._s2_client import FIELD_SETS, s2_error_payload
+from ._s2_client import (
+    FIELD_SETS,
+    RECOMMEND_LIMIT_MAX,
+    clamp_limit,
+    s2_error_payload,
+)
 from ._s2_jobs import register_s2_tool
 from ._server_deps import get_service
 from .domain import Service
@@ -29,13 +34,15 @@ async def recommend_papers(
 ) -> dict[str, Any]:
     """Recommend papers based on positive (and optionally negative) examples.
 
+    Returns at most 500 recommendations; a larger ``limit`` is capped at 500.
+
     Answers directly in normal use. Should the call run long it continues in
     the background and returns a job handle to poll with ``get_job_result``.
 
     Args:
         positive_ids: 1-5 S2 paper IDs to use as positive examples.
         negative_ids: Optional S2 paper IDs to steer away from.
-        limit: Number of recommendations to return.
+        limit: Number of recommendations to return (max 500).
         fields: Field set preset for returned records.
         service: Injected service.
 
@@ -52,7 +59,7 @@ async def recommend_papers(
         recommendations = await service.s2.recommend(
             positive_ids[:5],
             negative_ids=negative_ids,
-            limit=limit,
+            limit=clamp_limit(limit, RECOMMEND_LIMIT_MAX),
             fields=FIELD_SETS[fields],
         )
     except httpx.HTTPStatusError as exc:

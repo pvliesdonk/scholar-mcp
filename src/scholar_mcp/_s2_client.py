@@ -37,6 +37,28 @@ FIELD_SETS: dict[str, str] = {
     ),
 }
 
+# Documented ``limit`` maxima per endpoint (the Graph and Recommendations
+# swagger specs), which reject a larger value as a bad query parameter.
+# Tools clamp before sending (#476); the floor of 1 keeps a zero or negative
+# limit from reaching S2 at all, since the specs document no lower bound.
+SEARCH_LIMIT_MAX = 100  # /paper/search
+PAGE_LIMIT_MAX = 1000  # /paper/{id}/citations, /paper/{id}/references
+RECOMMEND_LIMIT_MAX = 500  # /recommendations/v1/papers
+
+
+def clamp_limit(limit: int, maximum: int) -> int:
+    """Clamp a caller's ``limit`` into the range S2 accepts.
+
+    Args:
+        limit: The limit the caller asked for.
+        maximum: The endpoint's documented maximum.
+
+    Returns:
+        *limit* bounded to ``1..maximum``.
+    """
+    return max(1, min(limit, maximum))
+
+
 KEEPALIVE_PAPER_ID = (
     "ARXIV:1706.03762"  # "Attention Is All You Need" — stable, well-known
 )

@@ -2370,3 +2370,21 @@ async def test_get_citation_graph_keeps_earlier_pages_when_a_later_one_fails(
     # ...and the failure is still reported rather than absorbed by the success.
     assert data["stats"]["partial"] is True
     assert data["stats"]["failed_requests"] == 1
+
+
+@pytest.mark.parametrize(
+    "tool", ["get_citations", "get_references"], ids=["citations", "references"]
+)
+@pytest.mark.parametrize(("requested", "sent"), [(5000, 1000), (0, 1), (30, 30)])
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_graph_page_clamps_limit_to_s2_maximum(
+    respx_mock: respx.MockRouter, mcp: FastMCP, tool: str, requested: int, sent: int
+) -> None:
+    """Citation and reference pages never send S2 a limit outside 1..1000 (#476)."""
+    path = "/paper/p1/" + tool.removeprefix("get_")
+    route = respx_mock.get(path).mock(
+        return_value=httpx.Response(200, json={"data": []})
+    )
+    async with Client(mcp) as client:
+        await client.call_tool(tool, {"identifier": "p1", "limit": requested})
+    assert route.calls.last.request.url.params["limit"] == str(sent)
