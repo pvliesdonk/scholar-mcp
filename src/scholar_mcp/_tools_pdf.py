@@ -5,7 +5,9 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
+import os
 import re
+import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
@@ -30,6 +32,41 @@ if TYPE_CHECKING:
     from ._record_types import PaperRecord
 
 logger = logging.getLogger(__name__)
+_PDF_HEADER = b"%PDF-"
+
+
+def _pdf_cache_identity(file_stat: os.stat_result) -> tuple[int, int, int, int, int]:
+    """Return fields that change when a cache file is replaced or rewritten."""
+    return (
+        file_stat.st_dev,
+        file_stat.st_ino,
+        file_stat.st_size,
+        file_stat.st_mtime_ns,
+        file_stat.st_ctime_ns,
+    )
+
+
+def _cached_pdf_is_valid(path: Path) -> bool:
+    """Accept a cache hit only when its file begins with the PDF header."""
+    try:
+        with path.open("rb") as cached_pdf:
+            opened = os.fstat(cached_pdf.fileno())
+            has_header = cached_pdf.read(len(_PDF_HEADER)) == _PDF_HEADER
+            current = path.stat()
+    except FileNotFoundError:
+        return False
+
+    return _pdf_cache_identity(opened) == _pdf_cache_identity(current) and has_header
+
+
+def _write_pdf_cache(path: Path, content: bytes) -> None:
+    """Publish a verified download atomically so readers never see partial bytes."""
+    temporary_path = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        temporary_path.write_bytes(content)
+        temporary_path.replace(path)
+    finally:
+        temporary_path.unlink(missing_ok=True)
 
 
 def _vlm_extras(docling: DoclingClient, use_vlm: bool) -> dict[str, Any]:
@@ -87,7 +124,7 @@ async def _ensure_paper_pdf(
     pdf_dir = service.config.cache_dir / "pdfs"
     pdf_dir.mkdir(parents=True, exist_ok=True)
     path = pdf_dir / f"{pid}.pdf"
-    if path.exists():
+    if await asyncio.to_thread(_cached_pdf_is_valid, path):
         logger.info("pdf_already_exists path=%s", path)
         return path, source
 
@@ -101,7 +138,13 @@ async def _ensure_paper_pdf(
                 "detail": str(exc),
                 "pdf_source": source,
             }
-    await asyncio.to_thread(path.write_bytes, r.content)
+    if not r.content.startswith(_PDF_HEADER):
+        return {
+            "error": "not_pdf",
+            "detail": "Downloaded content does not begin with the PDF header %PDF-.",
+            "pdf_source": source,
+        }
+    await asyncio.to_thread(_write_pdf_cache, path, r.content)
     logger.info(
         "pdf_downloaded path=%s bytes=%d source=%s", path, len(r.content), source
     )
@@ -405,14 +448,19 @@ async def fetch_pdf_by_url(
     pdf_dir.mkdir(parents=True, exist_ok=True)
     pdf_path = pdf_dir / f"{stem}.pdf"
 
-    if not pdf_path.exists():
+    if not await asyncio.to_thread(_cached_pdf_is_valid, pdf_path):
         async with httpx.AsyncClient(timeout=120.0) as client:
             try:
                 r = await client.get(url, follow_redirects=True)
                 r.raise_for_status()
             except httpx.HTTPError as exc:
                 return {"error": "download_failed", "detail": str(exc)}
-        await asyncio.to_thread(pdf_path.write_bytes, r.content)
+        if not r.content.startswith(_PDF_HEADER):
+            return {
+                "error": "not_pdf",
+                "detail": "Downloaded content does not begin with the PDF header %PDF-.",
+            }
+        await asyncio.to_thread(_write_pdf_cache, pdf_path, r.content)
         logger.info("pdf_by_url_downloaded path=%s bytes=%d", pdf_path, len(r.content))
     else:
         logger.info("pdf_by_url_cached path=%s", pdf_path)
