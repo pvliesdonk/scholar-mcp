@@ -52,7 +52,7 @@ def _cached_pdf_is_valid(path: Path) -> bool:
         with path.open("rb") as cached_pdf:
             opened = os.fstat(cached_pdf.fileno())
             has_header = cached_pdf.read(len(_PDF_HEADER)) == _PDF_HEADER
-            current = path.stat()
+        current = path.stat()
     except FileNotFoundError:
         return False
 
