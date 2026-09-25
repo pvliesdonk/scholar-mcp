@@ -2,6 +2,20 @@
 
 Newest first. One entry per research pass.
 
+## 2026-09-25
+
+### Semantic Scholar `limit` maxima
+
+Added the per-endpoint `limit` maxima to
+[Semantic Scholar API behaviour](semantic-scholar-api.md) for #476, where
+`search_papers(limit=500)` came back as an opaque upstream error. Read from the
+Graph and Recommendations swagger specifications: 100 for paper search, 1,000
+for the citation, reference, author-search and author-papers lists, 500 for
+recommendations, and no `limit` at all on `/author/{id}`. An unkeyed probe
+returned 200 for `limit=100`; every over-maximum and `limit=0` attempt was
+throttled with 429, so the status S2 gives an out-of-range `limit` remains
+unverified.
+
 ## 2026-09-21
 
 ### Semantic Scholar and Google Books

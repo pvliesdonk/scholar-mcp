@@ -571,3 +571,20 @@ async def test_get_author_does_not_truncate_from_the_end_for_a_negative_limit(
 
     data = json.loads(result.content[0].text)
     assert data["papers"] == []
+
+
+@pytest.mark.parametrize(("requested", "sent"), [(500, 100), (0, 1), (-3, 1), (40, 40)])
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_search_papers_clamps_limit_to_s2_maximum(
+    respx_mock: respx.MockRouter, mcp: FastMCP, requested: int, sent: int
+) -> None:
+    """search_papers never sends S2 a limit outside 1..100 (#476)."""
+    route = respx_mock.get("/paper/search").mock(
+        return_value=httpx.Response(200, json={"data": [], "total": 0})
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "search_papers", {"query": "quantum", "limit": requested}
+        )
+    assert "error" not in json.loads(result.content[0].text)
+    assert route.calls.last.request.url.params["limit"] == str(sent)

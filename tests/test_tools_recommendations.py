@@ -182,3 +182,19 @@ async def test_recommend_papers_promotes_when_slow(
 
     assert settled["status"] == "completed"
     assert settled["result"]["recommendations"][0]["paperId"] == "r9"
+
+
+@pytest.mark.parametrize(("requested", "sent"), [(2000, 500), (0, 1), (25, 25)])
+async def test_recommend_papers_clamps_limit_to_s2_maximum(
+    mcp: FastMCP, requested: int, sent: int
+) -> None:
+    """recommend_papers never sends S2 a limit outside 1..500 (#476)."""
+    with respx.mock:
+        route = respx.post(f"{S2_REC}/papers").mock(
+            return_value=httpx.Response(200, json={"recommendedPapers": []})
+        )
+        async with Client(mcp) as client:
+            await client.call_tool(
+                "recommend_papers", {"positive_ids": ["p1"], "limit": requested}
+            )
+    assert route.calls.last.request.url.params["limit"] == str(sent)

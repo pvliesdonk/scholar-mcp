@@ -9,7 +9,7 @@ from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
 
 from ._paper_cache import resolve_paper
-from ._s2_client import FIELD_SETS, s2_error_payload
+from ._s2_client import FIELD_SETS, SEARCH_LIMIT_MAX, clamp_limit, s2_error_payload
 from ._s2_jobs import register_s2_tool
 from ._server_deps import get_service
 from .domain import Service
@@ -74,7 +74,8 @@ async def search_papers(
 ) -> dict[str, Any]:
     """Search Semantic Scholar for papers matching a query.
 
-    Usually completes in a few seconds.
+    Usually completes in a few seconds. Returns at most 100 papers per call;
+    a larger ``limit`` is capped at 100, so page further with ``offset``.
 
     Answers directly in normal use. Should the call run long it continues in
     the background and returns a job handle to poll with ``get_job_result``.
@@ -114,7 +115,7 @@ async def search_papers(
         return await service.s2.search_papers(
             query,
             fields=FIELD_SETS[fields],
-            limit=limit,
+            limit=clamp_limit(limit, SEARCH_LIMIT_MAX),
             offset=offset,
             year=year,
             fieldsOfStudy=fos,

@@ -50,7 +50,7 @@ Full-text search across the Semantic Scholar corpus.
 |---|---|---|---|
 | `query` | string | *(required)* | Search query string |
 | `fields` | string | `"compact"` | Field set: `compact`, `standard`, or `full` |
-| `limit` | int | `10` | Results per page (max 100) |
+| `limit` | int | `10` | Results per page (max 100; a larger value is capped at 100) |
 | `offset` | int | `0` | Pagination offset |
 | `year_start` | int | _(none)_ | Filter: earliest publication year |
 | `year_end` | int | _(none)_ | Filter: latest publication year |
@@ -114,7 +114,7 @@ Forward citations: papers that cite the given paper.
 |---|---|---|---|
 | `identifier` | string | *(required)* | Paper ID (DOI, S2 ID, etc.) |
 | `fields` | string | `"compact"` | Field set for citing papers |
-| `limit` | int | `20` | Max results (max 1000) |
+| `limit` | int | `20` | Max results (max 1000; a larger value is capped at 1000) |
 | `offset` | int | `0` | Pagination offset |
 | `year_start` | int | _(none)_ | Filter: earliest year |
 | `year_end` | int | _(none)_ | Filter: latest year |
@@ -133,7 +133,7 @@ Backward references: papers cited by the given paper.
 |---|---|---|---|
 | `identifier` | string | *(required)* | Paper ID (DOI, S2 ID, etc.) |
 | `fields` | string | `"compact"` | Field set for cited papers |
-| `limit` | int | `50` | Max results (max 1000) |
+| `limit` | int | `50` | Max results (max 1000; a larger value is capped at 1000) |
 | `offset` | int | `0` | Pagination offset |
 
 **Returns:** `{"data": [{"citedPaper": {...}}, ...]}`.
@@ -227,7 +227,7 @@ Paper recommendations based on positive (and optional negative) examples.
 |---|---|---|---|
 | `positive_ids` | list[string] | *(required)* | 1 to 5 S2 paper IDs as positive examples |
 | `negative_ids` | list[string] | _(none)_ | S2 paper IDs to steer recommendations away from |
-| `limit` | int | `10` | Number of recommendations |
+| `limit` | int | `10` | Number of recommendations (max 500; a larger value is capped at 500) |
 | `fields` | string | `"standard"` | Field set for returned papers |
 
 **Returns:** `{"recommendations": [...]}`, the recommended paper records.
