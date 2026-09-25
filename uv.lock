@@ -872,7 +872,7 @@ tasks = [
 
 [[package]]
 name = "fastmcp-pvl-core"
-version = "7.2.0"
+version = "10.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "fastmcp", extra = ["tasks"] },
@@ -880,9 +880,9 @@ dependencies = [
     { name = "httpx2" },
     { name = "opentelemetry-api" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/4c/1d/2a51a5115ccddcb17e2c9d10fb89fccc6b5309f907391ba85c373b90cb72/fastmcp_pvl_core-7.2.0.tar.gz", hash = "sha256:8c8ed2efad2b66e6a4ed04e527557ebce231fcb01455f4b0715a918decd9a5c3", size = 657467, upload-time = "2026-09-16T05:21:16.5Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/78/dd/1e49056d75f18f9057fd21126fb9cefe6798f564fe808c9c352c6db65143/fastmcp_pvl_core-10.0.0.tar.gz", hash = "sha256:6a2e722ee06c6fbdfa80bf37b88e8efde88e32edffabb39d190e7e9d98b828ab", size = 801366, upload-time = "2026-09-25T14:34:13.566Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/fc/52/d0f421a23b0db69a0b9bbf84274641e17cfe0b2399163603ed0faa48c43b/fastmcp_pvl_core-7.2.0-py3-none-any.whl", hash = "sha256:1e291da9aec0251f7d0e3c200df05777761b47137ef039911aed7caf993e1fab", size = 155987, upload-time = "2026-09-16T05:21:14.969Z" },
+    { url = "https://files.pythonhosted.org/packages/fd/8f/32dc683972655c31d2ebe4c78301a3261224d894025379ec69c32fd8449f/fastmcp_pvl_core-10.0.0-py3-none-any.whl", hash = "sha256:8f46823f73e5bd82a83ee981c38a8192ee05280703f80993bf1062e79ab745d6", size = 195101, upload-time = "2026-09-25T14:34:11.688Z" },
 ]
 
 [package.optional-dependencies]
@@ -2309,7 +2309,7 @@ requires-dist = [
     { name = "beautifulsoup4", specifier = ">=4.14.3" },
     { name = "fastmcp", extras = ["tasks"], marker = "extra == 'all'", specifier = ">=4,<5" },
     { name = "fastmcp", extras = ["tasks"], marker = "extra == 'mcp'", specifier = ">=4,<5" },
-    { name = "fastmcp-pvl-core", specifier = ">=7.1.0,<8" },
+    { name = "fastmcp-pvl-core", specifier = ">=10,<11" },
     { name = "fastmcp-pvl-core", extras = ["debug"], marker = "extra == 'debug'" },
     { name = "httpx" },
     { name = "lxml", specifier = ">=5.0" },
