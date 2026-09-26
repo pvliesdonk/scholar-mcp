@@ -723,6 +723,7 @@ Download the PDF for a paper. Tries the Semantic Scholar open-access URL first, 
 
 - `{"error": "no_oa_pdf"}`: no PDF URL found from any source
 - `{"error": "download_failed"}`: HTTP error downloading the PDF
+- `{"error": "not_pdf"}`: the response body does not begin with the PDF header
 
 The `source` field indicates where the PDF was obtained: `s2_oa`, `arxiv`, `pmc`, or `unpaywall`.
 
@@ -778,7 +779,7 @@ Full paper-to-Markdown pipeline: downloads and converts the PDF, using the same 
 }
 ```
 
-Partial results are returned if a later stage fails (such as metadata + error if no OA PDF is available). The `pdf_source` field indicates the download source. When VLM is requested but not configured, the response includes `vlm_skip_reason`.
+Partial results are returned if a later stage fails (such as metadata + error if no OA PDF is available). A successful HTTP response whose body does not begin with `%PDF-` returns `{"error": "not_pdf"}` before conversion. The `pdf_source` field indicates the download source. When VLM is requested but not configured, the response includes `vlm_skip_reason`.
 
 The `metadata` block is read from the same 30-day cache `get_paper` uses, and a freshly resolved record is written back to it. A call whose PDF and Markdown are both already on disk makes no Semantic Scholar request at all.
 
@@ -813,6 +814,10 @@ Download a PDF from any URL and optionally convert to Markdown. Use this when yo
 ```
 
 Without docling, only `pdf_path` is returned. The PDF is cached by filename, so subsequent calls with the same filename return immediately.
+
+The response body must begin with `%PDF-` before it is cached or sent to
+docling. A response with another body returns `{"error": "not_pdf"}` and is
+not converted. This header check does not validate the complete PDF structure.
 
 ---
 
