@@ -441,11 +441,17 @@ async def _handle_full_text(
     record: StandardRecord,
     service: Service,
 ) -> dict[str, Any]:
-    """Download and convert full text via docling if available.
+    """Attach the standard's full text, converting it via docling if needed.
 
-    If docling is not configured, no full_text_url is present, full_text is
-    already populated, or the download fails, returns the record as-is so the
-    caller can use full_text_url to fetch manually.
+    Text converted before is served from its own cache table, keyed by
+    ``full_text_url``. A fresh conversion is stored there too, never in the
+    standards row: that row is the metadata record every other read returns,
+    and a document written into it came back from calls that never asked for
+    one (#479).
+
+    If docling is not configured, no full_text_url is present, or the download
+    fails, returns the record as-is so the caller can use full_text_url to
+    fetch manually.
 
     Args:
         record: StandardRecord dict.
@@ -458,12 +464,13 @@ async def _handle_full_text(
         the caller to fetch by hand, which is more useful than losing the
         metadata too.
     """
-    if (
-        not record.get("full_text_available")
-        or not record.get("full_text_url")
-        or record.get("full_text")
-    ):
+    url = record.get("full_text_url")
+    if not record.get("full_text_available") or not url:
         return dict(record)
+
+    cached_text = await service.cache.get_standard_full_text(url)
+    if cached_text is not None:
+        return {**record, "full_text": cached_text}
 
     if service.docling is None:
         logger.debug(
@@ -472,7 +479,6 @@ async def _handle_full_text(
         )
         return dict(record)
 
-    url: str = record["full_text_url"] or ""
     filename = url.rsplit("/", 1)[-1] or "standard.pdf"
 
     try:
@@ -487,13 +493,14 @@ async def _handle_full_text(
         # different situations returning the same record with no full_text.
         return {**record, "full_text_error": str(exc)}
 
-    enriched: dict[str, Any] = {**record, "full_text": markdown}
-    identifier = enriched.get("identifier")
-    if identifier:
-        try:
-            await service.cache.set_standard(identifier, enriched)  # type: ignore[arg-type]
-        except Exception as exc:
-            # The conversion succeeded and the markdown is in hand; a cache
-            # write that fails must not throw it away.
-            logger.warning("standard_cache_write_failed id=%s err=%s", identifier, exc)
-    return enriched
+    try:
+        await service.cache.set_standard_full_text(url, markdown)
+    except Exception as exc:
+        # The conversion succeeded and the markdown is in hand; a cache
+        # write that fails must not throw it away.
+        logger.warning(
+            "standard_full_text_cache_write_failed id=%s err=%s",
+            record.get("identifier"),
+            exc,
+        )
+    return {**record, "full_text": markdown}

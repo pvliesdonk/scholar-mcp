@@ -237,6 +237,16 @@ CREATE INDEX IF NOT EXISTS idx_standards_cached ON standards(cached_at);
 -- idx_standards_source is created by _apply_migrations so v1 DBs (which
 -- lack the source column until ALTER TABLE runs) don't break on open.
 
+-- Converted full text, keyed by the URL it was converted from. Kept out of
+-- the standards row so a metadata read never carries a document (#479), and
+-- keyed by URL because CC records share one PDF across several identifiers.
+CREATE TABLE IF NOT EXISTS standard_full_text (
+    url        TEXT PRIMARY KEY,
+    data       TEXT NOT NULL,
+    cached_at  REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_standard_full_text_cached ON standard_full_text(cached_at);
+
 CREATE TABLE IF NOT EXISTS standards_aliases (
     raw_id     TEXT PRIMARY KEY,
     canonical  TEXT NOT NULL,
@@ -341,6 +351,28 @@ _REPAIRS: dict[str, str] = {
     "444_patent_citations_lowercase_kind": (
         "DELETE FROM patent_citations WHERE patent_id GLOB '*.[a-z]*'"
     ),
+    # #479: converted text was written back into the standards row, where
+    # every metadata read then returned it. The three steps run in this order
+    # on one open. First the text moves to its own table, so no conversion is
+    # thrown away.
+    "479_move_standard_full_text": (
+        "INSERT OR IGNORE INTO standard_full_text (url, data, cached_at) "
+        "SELECT json_extract(data, '$.full_text_url'), "
+        "json_extract(data, '$.full_text'), cached_at FROM standards "
+        "WHERE json_extract(data, '$.full_text') IS NOT NULL "
+        "AND json_extract(data, '$.full_text_url') IS NOT NULL"
+    ),
+    # The write-back also used set_standard's defaults, which unsynced the
+    # row. Only sync ever writes a CC record (_CCFetcher reads the cache), so
+    # a CC row without synced_at can only be one that write-back unsynced.
+    "479_resync_cc_rows": (
+        "UPDATE standards SET source = 'CC', synced_at = cached_at "
+        "WHERE synced_at IS NULL AND json_extract(data, '$.body') = 'CC'"
+    ),
+    "479_strip_standard_full_text": (
+        "UPDATE standards SET data = json_remove(data, '$.full_text') "
+        "WHERE json_extract(data, '$.full_text') IS NOT NULL"
+    ),
 }
 
 
@@ -408,6 +440,7 @@ _TTL_TABLES = (
     "crossref",
     "google_books",
     "standards",
+    "standard_full_text",
     "standards_aliases",
     "standards_search",
     "standards_index",
@@ -1272,6 +1305,40 @@ class ScholarCache:
         async with db.execute(sql, params) as cur:
             rows = await cur.fetchall()
         return [json.loads(row[0]) for row in rows]
+
+    async def get_standard_full_text(self, url: str) -> str | None:
+        """Return converted full text for a standard's document, or None.
+
+        Args:
+            url: The ``full_text_url`` the text was converted from.
+
+        Returns:
+            The Markdown, or None if missing or older than the standards TTL.
+        """
+        db = _require_open(self._db)
+        async with db.execute(
+            "SELECT data, cached_at FROM standard_full_text WHERE url = ?",
+            (url,),
+        ) as cur:
+            row = await cur.fetchone()
+        if row is None or time.time() - row[1] > _STANDARD_TTL:
+            return None
+        return row[0]  # type: ignore[no-any-return]
+
+    async def set_standard_full_text(self, url: str, text: str) -> None:
+        """Cache converted full text for a standard's document.
+
+        Args:
+            url: The ``full_text_url`` the text was converted from.
+            text: The converted Markdown.
+        """
+        db = _require_open(self._db)
+        await db.execute(
+            "INSERT OR REPLACE INTO standard_full_text (url, data, cached_at) "
+            "VALUES (?, ?, ?)",
+            (url, text, time.time()),
+        )
+        await db.commit()
 
     async def get_standard_alias(self, raw: str) -> str | None:
         """Return canonical identifier for a raw alias string, or None.

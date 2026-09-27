@@ -676,6 +676,8 @@ full text via docling.
 | `text_offset` | integer | 0 | Character offset at which the full-text page starts |
 | `max_chars` | integer or null | 20000 | Page size, capped at 20,000; use `null` only when the client can accept the complete text |
 
+`full_text` appears only when `fetch_full_text=true`. The converted text is cached, so a later request for it is not converted again, but a call without the flag returns the metadata record alone, whoever fetched the text before.
+
 With `fetch_full_text=true`, a conversion that fails still returns the record, with the reason in `full_text_error`. Absent both `full_text` and `full_text_error`, no full text was on offer or docling is not configured; neither is worth retrying.
 
 When `full_text` is present, the response also reports `text_offset`,

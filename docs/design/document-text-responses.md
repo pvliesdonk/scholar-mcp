@@ -21,6 +21,12 @@ also carries:
   text follows.
 
 Paging repeats the tool call with `text_offset=next_offset`. Each tool reads
-the already converted Markdown or cached standard record, so another page
-does not repeat conversion. Error and metadata-only responses contain no text
-pagination fields.
+the already converted Markdown, so another page does not repeat conversion.
+Error and metadata-only responses contain no text pagination fields.
+
+A standard's converted text is cached in its own `standard_full_text` table,
+keyed by `full_text_url`, never inside the `standards` row. That row is the
+metadata record `get_standard`, `resolve_standard_identifier` and
+`search_standards` return; text written into it came back from every later
+metadata read, whether or not the caller asked for it (#479). The URL key lets
+CC records that share one PDF share one conversion.

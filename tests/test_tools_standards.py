@@ -513,18 +513,22 @@ async def test_resolve_api_fallback_ambiguous(mcp: FastMCP, service: Service) ->
     assert len(data["candidates"]) == 2
 
 
-async def test_handle_full_text_already_present(mcp: FastMCP, service: Service) -> None:
-    """_handle_full_text short-circuits when full_text is already in the record."""
+async def test_handle_full_text_already_converted(
+    mcp: FastMCP, service: Service
+) -> None:
+    """_handle_full_text serves cached text, paged, without converting again."""
     record = {
         "identifier": "RFC 9000",
         "title": "QUIC",
         "body": "IETF",
         "full_text_available": True,
         "full_text_url": "https://www.rfc-editor.org/rfc/rfc9000.html",
-        "full_text": "# already converted",
         "url": "https://www.rfc-editor.org/info/rfc9000",
     }
     await service.cache.set_standard("RFC 9000", record)
+    await service.cache.set_standard_full_text(
+        "https://www.rfc-editor.org/rfc/rfc9000.html", "# already converted"
+    )
     mock_docling = MagicMock(spec=DoclingClient)
     mock_docling.convert = AsyncMock(return_value="# should not be called")
     service.docling = mock_docling  # type: ignore[assignment]
@@ -817,7 +821,7 @@ async def test_handle_full_text_survives_a_cache_write_failure(
     mock_docling.convert = AsyncMock(return_value="# QUIC\n\nConverted.")
     service.docling = mock_docling  # type: ignore[assignment]
 
-    original_set = service.cache.set_standard
+    original_set = service.cache.set_standard_full_text
     calls = {"n": 0}
 
     async def failing_set(*args: object, **kwargs: object) -> None:  # noqa: ARG001
@@ -828,15 +832,149 @@ async def test_handle_full_text_survives_a_cache_write_failure(
         mock.get("https://www.rfc-editor.org/rfc/rfc9000.html").mock(
             return_value=httpx.Response(200, content=b"<html>content</html>")
         )
-        service.cache.set_standard = failing_set  # type: ignore[assignment]
+        service.cache.set_standard_full_text = failing_set  # type: ignore[assignment]
         try:
             async with Client(mcp) as client:
                 result = await client.call_tool(
                     "get_standard", {"identifier": "RFC 9000", "fetch_full_text": True}
                 )
         finally:
-            service.cache.set_standard = original_set  # type: ignore[assignment]
+            service.cache.set_standard_full_text = original_set  # type: ignore[assignment]
 
     data = json.loads(result.content[0].text)
     assert calls["n"] == 1, "the write must have been attempted"
     assert "# QUIC" in data["full_text"], "the conversion must survive the failure"
+
+
+# ---------------------------------------------------------------------------
+# #479: converted text lives beside the record, never inside it
+# ---------------------------------------------------------------------------
+
+_RFC_URL = "https://www.rfc-editor.org/rfc/rfc9000.html"
+
+
+def _rfc_record() -> dict:
+    return {
+        "identifier": "RFC 9000",
+        "title": "QUIC",
+        "body": "IETF",
+        "full_text_available": True,
+        "full_text_url": _RFC_URL,
+        "url": "https://www.rfc-editor.org/info/rfc9000",
+    }
+
+
+async def _fetch_full_text_once(mcp: FastMCP, service: Service) -> MagicMock:
+    """Convert RFC 9000's text through a mocked docling, as a first caller would."""
+    await service.cache.set_standard("RFC 9000", _rfc_record())  # type: ignore[arg-type]
+    docling = MagicMock(spec=DoclingClient)
+    docling.convert = AsyncMock(return_value="# RFC 9000\n\nconverted text")
+    service.docling = docling  # type: ignore[assignment]
+    with respx.mock(assert_all_called=False) as mock:
+        mock.get(_RFC_URL).mock(return_value=httpx.Response(200, content=b"<html/>"))
+        async with Client(mcp) as client:
+            await client.call_tool(
+                "get_standard", {"identifier": "RFC 9000", "fetch_full_text": True}
+            )
+    return docling
+
+
+async def test_get_standard_without_full_text_ignores_an_earlier_conversion(
+    mcp: FastMCP, service: Service
+) -> None:
+    """The same call answers the same way whoever fetched the text before."""
+    await _fetch_full_text_once(mcp, service)
+    async with Client(mcp) as client:
+        result = await client.call_tool("get_standard", {"identifier": "RFC 9000"})
+    data = json.loads(result.content[0].text)
+    assert data["identifier"] == "RFC 9000"
+    for key in ("full_text", "text_total_chars", "next_offset", "text_truncated"):
+        assert key not in data
+
+
+async def test_resolve_alias_hit_never_carries_full_text(
+    mcp: FastMCP, service: Service
+) -> None:
+    """The alias-cache hit returns the stored record whole and unpaged."""
+    await _fetch_full_text_once(mcp, service)
+    await service.cache.set_standard_alias("rfc9000", "RFC 9000")
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "resolve_standard_identifier", {"raw": "rfc9000"}
+        )
+    data = json.loads(result.content[0].text)
+    assert data["canonical"] == "RFC 9000"
+    assert "full_text" not in data["record"]
+
+
+async def test_converted_text_is_reused_without_touching_the_record_row(
+    mcp: FastMCP, service: Service
+) -> None:
+    """A second full-text request is served from the text cache, not docling."""
+    docling = await _fetch_full_text_once(mcp, service)
+    stored = await service.cache.get_standard("RFC 9000")
+    assert stored is not None
+    assert "full_text" not in stored
+    assert await service.cache.get_standard_full_text(_RFC_URL) == (
+        "# RFC 9000\n\nconverted text"
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_standard", {"identifier": "RFC 9000", "fetch_full_text": True}
+        )
+    assert json.loads(result.content[0].text)["full_text"] == (
+        "# RFC 9000\n\nconverted text"
+    )
+    docling.convert.assert_awaited_once()
+
+
+async def test_fetching_full_text_keeps_a_synced_row_synced(
+    mcp: FastMCP, service: Service
+) -> None:
+    """Converting a synced CC standard's text must not unsync its row."""
+    record = {
+        "identifier": "CC:2022 Part 1",
+        "title": "Common Criteria Part 1",
+        "body": "CC",
+        "full_text_available": True,
+        "full_text_url": "https://www.commoncriteriaportal.org/cc2022p1.pdf",
+        "url": "https://www.commoncriteriaportal.org/",
+    }
+    await service.cache.set_standard(
+        "CC:2022 Part 1",
+        record,  # type: ignore[arg-type]
+        source="CC",
+        synced=True,
+    )
+    docling = MagicMock(spec=DoclingClient)
+    docling.convert = AsyncMock(return_value="# CC Part 1")
+    service.docling = docling  # type: ignore[assignment]
+    with respx.mock(assert_all_called=False) as mock:
+        mock.get(record["full_text_url"]).mock(
+            return_value=httpx.Response(200, content=b"%PDF")
+        )
+        async with Client(mcp) as client:
+            await client.call_tool(
+                "get_standard",
+                {"identifier": "CC:2022 Part 1", "fetch_full_text": True},
+            )
+    assert "CC:2022 Part 1" in await service.cache.list_synced_standard_ids("CC")
+
+
+async def test_full_text_request_for_a_paywalled_standard_returns_the_record(
+    mcp: FastMCP, service: Service
+) -> None:
+    """No text on offer: the record comes back as-is, with nothing converted."""
+    record = {**_rfc_record(), "full_text_available": False, "full_text_url": None}
+    await service.cache.set_standard("RFC 9000", record)  # type: ignore[arg-type]
+    docling = MagicMock(spec=DoclingClient)
+    docling.convert = AsyncMock()
+    service.docling = docling  # type: ignore[assignment]
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_standard", {"identifier": "RFC 9000", "fetch_full_text": True}
+        )
+    data = json.loads(result.content[0].text)
+    assert data["identifier"] == "RFC 9000"
+    assert "full_text" not in data
+    docling.convert.assert_not_called()

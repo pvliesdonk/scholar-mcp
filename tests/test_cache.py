@@ -389,6 +389,70 @@ async def test_repair_drops_every_patent_section_with_a_lowercase_kind(tmp_path)
         await upgraded.close()
 
 
+async def test_repair_moves_embedded_standard_text_out_of_the_record(tmp_path):
+    """#479: text written into a standards row moves to its own table.
+
+    The conversion is kept, so nobody pays for docling twice. The row is left
+    as the metadata record it should always have been, and a CC row the old
+    write-back had unsynced is synced again.
+    """
+    import aiosqlite
+
+    db_path = tmp_path / "standards.db"
+    old = ScholarCache(db_path)
+    await old.open()
+    rfc_url = "https://www.rfc-editor.org/rfc/rfc9000.html"
+    cc_url = "https://www.commoncriteriaportal.org/cc2022p1.pdf"
+    # What the old _handle_full_text wrote: default flags, text in the row.
+    await old.set_standard(
+        "RFC 9000",
+        {
+            "identifier": "RFC 9000",
+            "body": "IETF",
+            "full_text_url": rfc_url,
+            "full_text": "# RFC 9000",
+        },  # type: ignore[typeddict-unknown-key]
+    )
+    await old.set_standard(
+        "CC:2022 Part 1",
+        {
+            "identifier": "CC:2022 Part 1",
+            "body": "CC",
+            "full_text_url": cc_url,
+            "full_text": "# CC Part 1",
+        },  # type: ignore[typeddict-unknown-key]
+    )
+    await old.set_standard(
+        "CC:2022 Part 2",
+        {"identifier": "CC:2022 Part 2", "body": "CC", "full_text_url": cc_url},
+        source="CC",
+        synced=True,
+    )
+    await old.close()
+
+    async with aiosqlite.connect(db_path) as db:
+        await db.execute("DELETE FROM repairs")
+        await db.commit()
+
+    upgraded = ScholarCache(db_path)
+    await upgraded.open()
+    try:
+        for identifier in ("RFC 9000", "CC:2022 Part 1", "CC:2022 Part 2"):
+            row = await upgraded.get_standard(identifier)
+            assert row is not None
+            assert "full_text" not in row
+        assert await upgraded.get_standard_full_text(rfc_url) == "# RFC 9000"
+        assert await upgraded.get_standard_full_text(cc_url) == "# CC Part 1"
+        assert await upgraded.list_synced_standard_ids("CC") == {
+            "CC:2022 Part 1",
+            "CC:2022 Part 2",
+        }
+        # A live row of another body is not mistaken for an unsynced CC one.
+        assert await upgraded.list_synced_standard_ids("IETF") == set()
+    finally:
+        await upgraded.close()
+
+
 async def test_every_registered_repair_is_valid_sql(cache):
     """A malformed statement would otherwise only surface on a user's upgrade."""
     assert set(_REPAIRS) == {
@@ -403,6 +467,9 @@ async def test_every_registered_repair_is_valid_sql(cache):
         "444_patent_families_lowercase_kind",
         "444_patent_legal_lowercase_kind",
         "444_patent_citations_lowercase_kind",
+        "479_move_standard_full_text",
+        "479_resync_cc_rows",
+        "479_strip_standard_full_text",
     }
     for statement in _REPAIRS.values():
         await cache._db.execute(f"EXPLAIN {statement}")
