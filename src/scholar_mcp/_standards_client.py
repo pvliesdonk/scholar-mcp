@@ -1128,8 +1128,8 @@ class _ETSIFetcher:
                 "ETSI",
                 status=resp.status_code,
                 detail=(
-                    "answered with a non-JSON body (content-type: "
-                    f"{resp.headers.get('content-type', 'unknown')})"
+                    "answered with a non-JSON body, content-type: "
+                    f"{resp.headers.get('content-type', 'unknown')}"
                 ),
             ) from exc
         if not isinstance(items, list):

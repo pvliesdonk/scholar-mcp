@@ -61,7 +61,7 @@ def _upstream_error_payload(
 
 
 def _failure_warning(failures: list[StandardsUpstreamError]) -> str:
-    """Name the sources that did not answer, for a partial result.
+    """Name the sources that gave no usable answer, and why, for a partial result.
 
     Deliberately a ``warning`` rather than an ``error``: a caller
     pattern-matching on ``error`` would throw away the results that did
@@ -70,14 +70,34 @@ def _failure_warning(failures: list[StandardsUpstreamError]) -> str:
     Args:
         failures: The failures gathered during the search.
 
+    Each source carries its ``detail`` beside the status: a 200 whose body
+    could not be read is a failure only the detail explains (#477).
+
+    Args:
+        failures: The failures gathered during the search.
+
     Returns:
-        One sentence naming each source and its status.
+        One sentence naming each source, its status, and what went wrong.
     """
-    named = ", ".join(f"{f.body} ({f.status or 'no response'})" for f in failures)
+    named = "; ".join(_describe_failure(f) for f in failures)
     return (
-        f"Incomplete: no answer from {named}. Results from the other sources "
-        "are unaffected, and the missing ones may still hold matches."
+        f"Incomplete: no usable answer from {named}. Results from the other "
+        "sources are unaffected, and the missing ones may still hold matches."
     )
+
+
+def _describe_failure(failure: StandardsUpstreamError) -> str:
+    """Render one failure as ``BODY (HTTP 200: detail)``.
+
+    Args:
+        failure: The upstream failure.
+
+    Returns:
+        The body name, followed by its status and detail in parentheses.
+    """
+    status = f"HTTP {failure.status}" if failure.status else "no response"
+    reason = f"{status}: {failure.detail}" if failure.detail else status
+    return f"{failure.body} ({reason})"
 
 
 if TYPE_CHECKING:

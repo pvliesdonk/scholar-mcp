@@ -290,6 +290,51 @@ async def test_search_standards_reports_a_failing_body(
     assert "error" not in data
 
 
+@pytest.mark.parametrize(
+    ("response", "expected"),
+    [
+        (
+            httpx.Response(
+                200, text="<html></html>", headers={"content-type": "text/html"}
+            ),
+            "ETSI (HTTP 200: answered with a non-JSON body, content-type: text/html)",
+        ),
+        (httpx.Response(403), "ETSI (HTTP 403: ETSI refused the request)"),
+        (httpx.ConnectError("boom"), "ETSI (no response: request never reached"),
+    ],
+    ids=["200-html", "403", "network"],
+)
+@pytest.mark.parametrize("tool", ["search_standards", "resolve_standard_identifier"])
+@pytest.mark.respx(base_url=ETSI_BASE)
+async def test_failure_warning_says_what_went_wrong(
+    respx_mock: respx.MockRouter,
+    mcp: FastMCP,
+    tool: str,
+    response: httpx.Response | Exception,
+    expected: str,
+) -> None:
+    """The warning carries the failure's detail, not just its status (#477).
+
+    A bare "no answer from ETSI (200)" contradicts itself: the status says the
+    source answered, and only the detail says the answer was unusable.
+    """
+    route = respx_mock.get("/")
+    if isinstance(response, Exception):
+        route.mock(side_effect=response)
+    else:
+        route.mock(return_value=response)
+    args = (
+        {"query": "IoT security", "body": "ETSI"}
+        if tool == "search_standards"
+        else {"raw": "ETSI EN 303 645"}
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool(tool, args)
+    warning = json.loads(result.content[0].text)["warning"]
+    assert expected in warning
+    assert "no answer from" not in warning
+
+
 @pytest.mark.respx(base_url=IETF_BASE)
 async def test_search_standards_states_completeness_when_nothing_failed(
     respx_mock: respx.MockRouter, mcp: FastMCP
