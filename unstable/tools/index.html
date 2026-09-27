@@ -3514,7 +3514,7 @@ optional full-text conversion. Tier 2 paywalled bodies (ISO, IEC, IEEE) are trac
 </table>
 <div class="admonition warning">
 <p class="admonition-title">A null record is not always an absence</p>
-<p>A <code>warning</code> beside a null <code>record</code> means the source never answered, so the standard may well exist and the canonical form is still usable. A null <code>record</code> with no <code>warning</code> means the sources looked and found nothing.</p>
+<p>A <code>warning</code> beside a null <code>record</code> means the source gave no usable answer, so the standard may well exist and the canonical form is still usable. A null <code>record</code> with no <code>warning</code> means the sources looked and found nothing.</p>
 </div>
 <hr />
 <h3 id="search_standards"><code>search_standards</code><a class="headerlink" href="#search_standards" title="Permanent link">&para;</a></h3>
@@ -3551,7 +3551,7 @@ optional full-text conversion. Tier 2 paywalled bodies (ISO, IEC, IEEE) are trac
 </table>
 <div class="admonition warning">
 <p class="admonition-title">Every answer states its own completeness</p>
-<p><code>partial</code> is always present. When it is true, <code>failed_bodies</code> names each source that did not answer, and <code>warning</code> explains what went wrong.</p>
+<p><code>partial</code> is always present. When it is true, <code>failed_bodies</code> names each source that gave no usable answer. <code>warning</code> gives each one's HTTP status and what went wrong, such as <code>ETSI (HTTP 200: answered with a non-JSON body, content-type: text/html)</code>: a 200 alone would read as success.</p>
 <p>This is not an <code>error</code>. A caller matching on <code>error</code> would discard the records that other sources returned.</p>
 <p>Partial answers are never cached. A later call reaches the failing source again.</p>
 </div>

@@ -634,7 +634,7 @@ Normalise a messy citation string to its canonical form and body.
 
 A null record is not always an absence
 
-A `warning` beside a null `record` means the source never answered, so the standard may well exist and the canonical form is still usable. A null `record` with no `warning` means the sources looked and found nothing.
+A `warning` beside a null `record` means the source gave no usable answer, so the standard may well exist and the canonical form is still usable. A null `record` with no `warning` means the sources looked and found nothing.
 
 ______________________________________________________________________
 
@@ -650,7 +650,7 @@ Search standards by identifier, title, or free text.
 
 Every answer states its own completeness
 
-`partial` is always present. When it is true, `failed_bodies` names each source that did not answer, and `warning` explains what went wrong.
+`partial` is always present. When it is true, `failed_bodies` names each source that gave no usable answer. `warning` gives each one's HTTP status and what went wrong, such as `ETSI (HTTP 200: answered with a non-JSON body, content-type: text/html)`: a 200 alone would read as success.
 
 This is not an `error`. A caller matching on `error` would discard the records that other sources returned.
 
