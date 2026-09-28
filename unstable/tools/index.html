@@ -3595,6 +3595,7 @@ full text via docling.</p>
 </tr>
 </tbody>
 </table>
+<p><code>full_text</code> appears only when <code>fetch_full_text=true</code>. The converted text is cached, so a later request for it is not converted again, but a call without the flag returns the metadata record alone, whoever fetched the text before.</p>
 <p>With <code>fetch_full_text=true</code>, a conversion that fails still returns the record, with the reason in <code>full_text_error</code>. Absent both <code>full_text</code> and <code>full_text_error</code>, no full text was on offer or docling is not configured; neither is worth retrying.</p>
 <p>When <code>full_text</code> is present, the response also reports <code>text_offset</code>,
 <code>text_returned_chars</code>, <code>text_total_chars</code>, and <code>text_truncated</code>.
