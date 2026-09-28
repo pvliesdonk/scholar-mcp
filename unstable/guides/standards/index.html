@@ -1575,6 +1575,17 @@ scholar-mcp sync-standards --force    # re-sync even if upstream SHA is unchange
 </code></pre></div>
 <p>Exit codes: <code>0</code> on success (or no-op), <code>1</code> on hard failure, <code>3</code> on partial failure
 (some bodies succeeded, some did not).</p>
+<div class="admonition note">
+<p class="admonition-title">After upgrading to a release that corrects synced records</p>
+<p>A fix to how records are read from the Relaton dumps only reaches the local
+copy on the next sync. Such a release forgets the upstream commit recorded
+for ISO, IEC, and IEEE when the server first opens its cache, so the next
+<code>sync-standards</code> run rewrites every record even if upstream has not
+changed. Until that run,
+the records keep what the earlier release stored. Release 3.0 needs this
+once: ISO and IEC titles synced before it carry only the first part of the
+title.</p>
+</div>
 <h2 id="running-a-sync-from-docker">Running a sync from Docker<a class="headerlink" href="#running-a-sync-from-docker" title="Permanent link">&para;</a></h2>
 <p>The <code>scholar-mcp</code> binary is on <code>PATH</code> inside the container, so no <code>bash -c</code> or
 <code>uv run</code> wrapper is needed.</p>
