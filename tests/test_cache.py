@@ -525,6 +525,36 @@ async def test_repair_forces_a_relaton_resync_and_drops_short_titles(tmp_path):
         await upgraded.close()
 
 
+async def test_repair_resyncs_cc_rows_a_resolve_unsynced(tmp_path):
+    """#496: a CC row the resolve path rewrote as live is synced again."""
+    import aiosqlite
+
+    db_path = tmp_path / "standards.db"
+    old = ScholarCache(db_path)
+    await old.open()
+    await old.close()
+    # What the old resolve path left behind, written past the new guard.
+    async with aiosqlite.connect(db_path) as db:
+        await db.execute(
+            "INSERT INTO standards (identifier, data, cached_at, source, synced_at) "
+            "VALUES (?, ?, ?, NULL, NULL)",
+            (
+                "BSI-CC-PP-0099-2017",
+                '{"identifier": "BSI-CC-PP-0099-2017", "body": "CC"}',
+                1.0,
+            ),
+        )
+        await db.execute("DELETE FROM repairs WHERE name LIKE '496_%'")
+        await db.commit()
+
+    upgraded = ScholarCache(db_path)
+    await upgraded.open()
+    try:
+        assert await upgraded.list_synced_standard_ids("CC") == {"BSI-CC-PP-0099-2017"}
+    finally:
+        await upgraded.close()
+
+
 async def test_every_registered_repair_is_valid_sql(cache):
     """A malformed statement would otherwise only surface on a user's upgrade."""
     assert set(_REPAIRS) == {
@@ -545,6 +575,7 @@ async def test_every_registered_repair_is_valid_sql(cache):
         "480_resync_relaton_bodies",
         "480_live_relaton_rows",
         "480_standards_search_results",
+        "496_resync_cc_rows",
     }
     for statement in _REPAIRS.values():
         await cache._db.execute(f"EXPLAIN {statement}")
@@ -556,3 +587,53 @@ async def test_open_provisions_the_repairs_ledger(cache):
         "SELECT name FROM sqlite_master WHERE type='table' AND name='repairs'"
     ) as cur:
         assert await cur.fetchone() is not None
+
+
+async def test_a_live_write_never_replaces_a_synced_standard(cache):
+    """#496: sync owns a synced row; a live write leaves it as it is."""
+    synced = {"identifier": "ISO 9001:2015", "body": "ISO", "title": "QMS"}
+    await cache.set_standard("ISO 9001:2015", synced, source="ISO", synced=True)
+    await cache.set_standard(
+        "ISO 9001:2015", {"identifier": "ISO 9001:2015", "body": "ISO", "title": "x"}
+    )
+    assert await cache.list_synced_standard_ids("ISO") == {"ISO 9001:2015"}
+    assert await cache.get_standard("ISO 9001:2015") == synced
+
+
+async def test_live_and_sync_writes_still_replace_what_they_may(cache):
+    """A live row takes a newer live write, and a sync write replaces anything."""
+    await cache.set_standard("RFC 9000", {"identifier": "RFC 9000", "title": "a"})
+    await cache.set_standard("RFC 9000", {"identifier": "RFC 9000", "title": "b"})
+    row = await cache.get_standard("RFC 9000")
+    assert row is not None
+    assert row["title"] == "b"
+
+    await cache.set_standard(
+        "ISO 1:2022", {"identifier": "ISO 1:2022", "title": "live"}
+    )
+    await cache.set_standard(
+        "ISO 1:2022",
+        {"identifier": "ISO 1:2022", "title": "synced"},
+        source="ISO",
+        synced=True,
+    )
+    await cache.set_standard(
+        "ISO 1:2022",
+        {"identifier": "ISO 1:2022", "title": "resynced"},
+        source="ISO",
+        synced=True,
+    )
+    row = await cache.get_standard("ISO 1:2022")
+    assert row is not None
+    assert row["title"] == "resynced"
+    assert await cache.list_synced_standard_ids("ISO") == {"ISO 1:2022"}
+
+
+async def test_a_live_batch_never_replaces_a_synced_standard(cache):
+    """The batch writer follows the same rule as set_standard."""
+    synced = {"identifier": "ISO 9001:2015", "body": "ISO", "title": "QMS"}
+    await cache.set_standard("ISO 9001:2015", synced, source="ISO", synced=True)
+    await cache.set_standards_batch(
+        [("ISO 9001:2015", {"identifier": "ISO 9001:2015", "title": "x"})]
+    )
+    assert await cache.get_standard("ISO 9001:2015") == synced

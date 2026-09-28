@@ -6,6 +6,11 @@ is the community-maintained Relaton YAML dumps at
 [`relaton/relaton-data-iec`](https://github.com/relaton/relaton-data-iec), and
 [`relaton/relaton-data-ieee`](https://github.com/relaton/relaton-data-ieee).
 
+Only a sync replaces a synced record. A lookup through `get_standard` or
+`resolve_standard_identifier` caches what it fetched, but never over a synced
+record, so a synced standard stays in `search_standards` and never expires
+between syncs.
+
 ## Running a sync
 
 ```

@@ -15,6 +15,7 @@ from fastmcp.client import Client
 from fastmcp_pvl_core import Jobs
 
 from scholar_mcp._docling_client import DoclingClient
+from scholar_mcp._standards_client import StandardsClient
 from scholar_mcp._tools_standards import register_standards_tools
 from scholar_mcp.domain import Service
 from tests.conftest import tasks_server
@@ -978,3 +979,42 @@ async def test_full_text_request_for_a_paywalled_standard_returns_the_record(
     assert data["identifier"] == "RFC 9000"
     assert "full_text" not in data
     docling.convert.assert_not_called()
+
+
+async def test_resolve_keeps_a_synced_row_synced(
+    mcp: FastMCP, service: Service
+) -> None:
+    """Resolving a synced standard must not rewrite its row as a live one (#496).
+
+    ``_CCFetcher`` reads the synced row back out of the cache, and the resolve
+    path then cached it again with a live write's defaults, which dropped the
+    row from synced search and put it under the TTL.
+    """
+    record = {
+        "identifier": "CC:2022 Part 1",
+        "title": "Common Criteria Part 1",
+        "body": "CC",
+        "status": "published",
+        "full_text_available": True,
+        "full_text_url": "https://www.commoncriteriaportal.org/cc2022p1.pdf",
+    }
+    await service.cache.set_standard(
+        "CC:2022 Part 1",
+        record,  # type: ignore[arg-type]
+        source="CC",
+        synced=True,
+    )
+    # Wired as domain.Service wires it: the CC fetcher reads this cache.
+    fixture_standards = service.standards
+    service.standards = StandardsClient(httpx.AsyncClient(), cache=service.cache)
+    try:
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "resolve_standard_identifier", {"raw": "Common Criteria 2022 Part 1"}
+            )
+    finally:
+        await service.standards.aclose()
+        service.standards = fixture_standards
+    data = json.loads(result.content[0].text)
+    assert data["record"]["title"] == "Common Criteria Part 1"
+    assert "CC:2022 Part 1" in await service.cache.list_synced_standard_ids("CC")
