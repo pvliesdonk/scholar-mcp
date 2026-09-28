@@ -3192,7 +3192,7 @@ already holds every publication the author has.</p>
 </table>
 <p><strong>Returns:</strong> JSON list of resolved items:</p>
 <ul>
-<li><strong>Paper results</strong> have a <code>"paper"</code> key. Papers not found in Semantic Scholar are automatically tried via OpenAlex (by DOI); results from OpenAlex include <code>"source": "openalex"</code>. When the citation string contains chapter patterns (such as "Chapter 3" or "pp. 45-67"), a <code>chapter_info</code> dict is attached with parsed chapter/page information.</li>
+<li><strong>Paper results</strong> have a <code>"paper"</code> key. Papers not found in Semantic Scholar are automatically tried via OpenAlex (by DOI); results from OpenAlex include <code>"source": "openalex"</code>. Their <code>paper</code> carries the same keys as a Semantic Scholar record for the requested <code>fields</code>, with <code>paperId</code> null (OpenAlex has no Semantic Scholar ID), <code>tldr</code> and <code>fieldsOfStudy</code> null, and <code>openAccessPdf</code> set only when OpenAlex has a direct PDF link. When the citation string contains chapter patterns (such as "Chapter 3" or "pp. 45-67"), a <code>chapter_info</code> dict is attached with parsed chapter/page information.</li>
 <li><strong>Patent results</strong> have a <code>"patent"</code> key and <code>"source_type": "patent"</code>. Patent numbers are auto-detected by their two-letter country prefix (such as <code>EP</code>, <code>US</code>, <code>WO</code>) and routed to the EPO OPS API.</li>
 <li><strong>Book results</strong> have a <code>"book"</code> key and <code>"source_type": "book"</code>. ISBNs (prefixed with <code>ISBN:</code>) are routed to Open Library.</li>
 <li><strong>Unresolved items</strong> have an <code>"error"</code> key.</li>
