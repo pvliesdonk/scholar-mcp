@@ -141,10 +141,20 @@ throttle policy.
 - Citation order is not documented as newest-first in the endpoint reference.
   [unverified] Confirm with a vendor guarantee or a dated, repeatable response
   sample before making correctness depend on that order.
-- The maintainer reported `/author/{id}` ignoring `limit=3` and returning
-  466 embedded `papers`; `/author/{id}/papers` is the documented paginated
-  path. [unverified] Recheck the embedded-field behaviour with a retained
-  response. [source: key-observations] [source: graph-docs]
+- `/author/{author_id}` documents only `fields` and `author_id`; its embedded
+  `papers` list is limited only by a 10 MB response cap. `/author/{id}/papers`
+  is the documented paginated path, with `limit` and `offset`.
+  [source: graph-swagger]
+- `/author/{author_id}` ignores both `limit` and `offset`: for author
+  1695689, `offset=0`, `offset=5` and `limit=3&offset=5` each returned the
+  same 461 papers in the same order. This confirms the maintainer's earlier
+  report that `limit=3` was ignored. [observed: unkeyed `curl` of
+  `/graph/v1/author/1695689?fields=paperCount,papers.paperId` on 2026-09-28]
+  [source: key-observations]
+  [pins: tests/test_tools_search.py::test_get_author_offset_returns_the_next_page]
+- The embedded list can be shorter than `paperCount`: the same response
+  reported `paperCount` 472 against 461 embedded papers. [observed: the same
+  request] Why is not established. [unverified]
 
 ### Paper types
 

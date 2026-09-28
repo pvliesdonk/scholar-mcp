@@ -533,14 +533,17 @@ async def test_get_author_cuts_a_cached_record_that_has_no_paper_count(
     assert not route.called
 
 
-@pytest.mark.respx(base_url=S2_BASE)
-async def test_get_author_with_an_offset_goes_live_and_keeps_the_cached_page(
+@pytest.mark.respx(base_url=S2_BASE, assert_all_called=False)
+async def test_get_author_with_an_offset_is_served_from_the_cached_record(
     respx_mock: respx.MockRouter, mcp: FastMCP, service: Service
 ) -> None:
-    """A non-zero offset is answered live without clobbering the cache (#367)."""
-    route = respx_mock.get("/author/12345").mock(
-        return_value=httpx.Response(200, json=_author_record(35, 5))
-    )
+    """A non-zero offset pages the cached full record (#490).
+
+    #367 sent an offset upstream and kept the cache out of it, on the
+    assumption that S2 paged ``/author/{id}``. It does not: the record holds
+    every paper, so any page it covers is served from it.
+    """
+    route = respx_mock.get("/author/12345").mock(return_value=httpx.Response(500))
     await service.cache.set_author("12345", _author_record(35, 35))
 
     async with Client(mcp) as client:
@@ -549,11 +552,9 @@ async def test_get_author_with_an_offset_goes_live_and_keeps_the_cached_page(
         )
 
     data = json.loads(result.content[0].text)
-    assert len(data["papers"]) == 5
-    assert route.called
-    cached = await service.cache.get_author("12345")
-    assert cached is not None
-    assert len(cached["papers"]) == 35
+    assert [p["paperId"] for p in data["papers"]] == [f"p{i}" for i in range(10, 15)]
+    assert data["next_offset"] == 15
+    assert not route.called
 
 
 @pytest.mark.respx(base_url=S2_BASE, assert_all_called=False)
@@ -588,3 +589,64 @@ async def test_search_papers_clamps_limit_to_s2_maximum(
         )
     assert "error" not in json.loads(result.content[0].text)
     assert route.calls.last.request.url.params["limit"] == str(sent)
+
+
+# ---------------------------------------------------------------------------
+# #490: /author/{id} returns every paper and takes no offset, so pages are
+# cut locally
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_author_offset_returns_the_next_page(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """offset=5 returns papers 5-9, not the first page again."""
+    route = respx_mock.get("/author/12345").mock(
+        return_value=httpx.Response(200, json=_author_record(12, 12))
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_author", {"identifier": "12345", "limit": 5, "offset": 5}
+        )
+    data = json.loads(result.content[0].text)
+    assert [p["paperId"] for p in data["papers"]] == ["p5", "p6", "p7", "p8", "p9"]
+    assert data["next_offset"] == 10
+    # The endpoint documents neither parameter; sending them implied paging.
+    params = route.calls.last.request.url.params
+    assert "offset" not in params
+    assert "limit" not in params
+
+
+@pytest.mark.respx(base_url=S2_BASE, assert_all_called=False)
+async def test_get_author_pages_from_the_cache_at_any_offset(
+    respx_mock: respx.MockRouter, mcp: FastMCP, service: Service
+) -> None:
+    """A cached full record answers every page without a request."""
+    route = respx_mock.get("/author/12345").mock(return_value=httpx.Response(500))
+    await service.cache.set_author("12345", _author_record(12, 12))
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_author", {"identifier": "12345", "limit": 5, "offset": 10}
+        )
+    data = json.loads(result.content[0].text)
+    assert [p["paperId"] for p in data["papers"]] == ["p10", "p11"]
+    assert "next_offset" not in data
+    assert not route.called
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_author_caches_a_record_fetched_for_a_later_page(
+    respx_mock: respx.MockRouter, mcp: FastMCP, service: Service
+) -> None:
+    """The record does not depend on the offset asked for, so it is cached."""
+    respx_mock.get("/author/12345").mock(
+        return_value=httpx.Response(200, json=_author_record(12, 12))
+    )
+    async with Client(mcp) as client:
+        await client.call_tool(
+            "get_author", {"identifier": "12345", "limit": 5, "offset": 5}
+        )
+    cached = await service.cache.get_author("12345")
+    assert cached is not None
+    assert len(cached["papers"]) == 12

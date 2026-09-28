@@ -98,9 +98,11 @@ Fetch an author profile or search by name.
 - **Direct lookup** (numeric ID): author profile with paginated publications list
 - **Name search** (text): `{"candidates": [...]}` with up to 5 matching authors
 
-`limit` applies to cached and freshly fetched results alike. A cached author
-record holding fewer publications than `limit` is fetched again, unless it
-already holds every publication the author has.
+A direct lookup returns the publications from `offset` to `offset + limit`,
+with `next_offset` present when more follow. Semantic Scholar sends an
+author's whole publication list at once, so every page is cut from one cached
+record: later pages cost no further request. That list can be shorter than
+`paperCount`, so the last page may end before reaching that count.
 
 ---
 

@@ -442,27 +442,25 @@ class S2Client:
         self,
         author_id: str,
         *,
-        limit: int = 20,
-        offset: int = 0,
         retry: bool = True,
     ) -> dict[str, Any]:
-        """Fetch author profile with paginated publications.
+        """Fetch an author profile with every publication.
+
+        ``/author/{author_id}`` documents no ``limit`` or ``offset``: it
+        returns the whole embedded ``papers`` list, up to its 10 MB response
+        limit. Callers page that list themselves (#490).
 
         Args:
             author_id: S2 author ID.
-            limit: Publications per page.
-            offset: Publication page offset.
             retry: If False, raise :class:`RateLimitedError` on 429.
 
         Returns:
-            Author dict with ``papers`` list.
+            Author dict with the complete ``papers`` list.
         """
         return await self._get(
             f"/author/{author_id}",
             retry=retry,
             fields="name,affiliations,hIndex,paperCount,papers.paperId,papers.title,papers.year,papers.citationCount",
-            limit=limit,
-            offset=offset,
         )
 
     async def recommend(

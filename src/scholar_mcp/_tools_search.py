@@ -18,36 +18,39 @@ if TYPE_CHECKING:
     from fastmcp_pvl_core import Jobs, JobsConfig
 
 
-def _covers_author_page(cached: dict[str, Any], limit: int) -> bool:
-    """Return whether a cached author record can answer a request for *limit*.
+def _covers_author_page(cached: dict[str, Any], needed: int) -> bool:
+    """Return whether a cached author record reaches as far as a page needs.
 
-    A record is authoritative when it carries at least as many publications as
-    the caller asked for, or when it already holds every publication the author
-    has. The second case matters because a cached record shorter than *limit*
-    is not necessarily incomplete — the author may simply have fewer papers.
+    A record is authoritative when it carries at least *needed* publications,
+    or when it already holds every publication the author has. The second
+    case matters because a cached record shorter than the page is not
+    necessarily incomplete: the author may simply have fewer papers.
 
     Args:
         cached: The cached author record.
-        limit: Publications the caller asked for.
+        needed: How far into the publication list the page reaches,
+            ``offset + limit``.
 
     Returns:
         True when the record can be served without a live request.
     """
     papers = cached.get("papers") or []
     total = cached.get("paperCount")
-    wanted = min(limit, total) if isinstance(total, int) else limit
+    wanted = min(needed, total) if isinstance(total, int) else needed
     return len(papers) >= wanted
 
 
-def _author_page(data: dict[str, Any], limit: int) -> dict[str, Any]:
-    """Return a copy of *data* whose ``papers`` list is cut to *limit*.
+def _author_page(data: dict[str, Any], limit: int, offset: int = 0) -> dict[str, Any]:
+    """Return a copy of *data* holding one page of its ``papers`` list.
 
-    A negative *limit* is treated as zero, so it yields no publications
-    rather than trimming that many from the end of the list.
+    ``/author/{id}`` returns every publication, so pages are cut here (#490).
+    ``next_offset`` is set when publications remain past the page. A negative
+    *limit* or *offset* is treated as zero.
 
     Args:
         data: An author record, cached or freshly fetched.
         limit: Publications per page.
+        offset: Index of the first publication on the page.
 
     Returns:
         A copy of *data* holding at most *limit* publications.
@@ -55,7 +58,11 @@ def _author_page(data: dict[str, Any], limit: int) -> dict[str, Any]:
     page = dict(data)
     papers = page.get("papers")
     if isinstance(papers, list):
-        page["papers"] = papers[: max(0, limit)]
+        start = max(0, offset)
+        end = start + max(0, limit)
+        page["papers"] = papers[start:end]
+        if end < len(papers):
+            page["next_offset"] = end
     return page
 
 
@@ -172,6 +179,11 @@ async def get_author(
     directly. Otherwise performs a name search and returns up to 5 candidates
     for disambiguation.
 
+    A direct lookup returns one page of publications, ``limit`` long from
+    ``offset``; ``next_offset`` is present when more follow. Semantic Scholar
+    can list fewer publications than ``paperCount``, so the last page may end
+    short of that count.
+
     Answers directly in normal use. Should the call run long it continues in
     the background and returns a job handle to poll with ``get_job_result``.
 
@@ -182,23 +194,24 @@ async def get_author(
         service: Injected service.
 
     Returns:
-        A mapping with author data and a paginated ``papers`` list, or
+        A mapping with author data and a paginated ``papers`` list, plus
+        ``next_offset`` when more publications follow, or
         ``{"candidates": [...]}`` for name searches.
     """
     if identifier.isdigit():
-        if offset == 0:
-            cached = await service.cache.get_author(identifier)
-            if cached is not None and _covers_author_page(cached, limit):
-                return _author_page(cached, limit)
+        cached = await service.cache.get_author(identifier)
+        if cached is not None and _covers_author_page(
+            cached, max(0, offset) + max(0, limit)
+        ):
+            return _author_page(cached, limit, offset)
         try:
-            data = await service.s2.get_author(identifier, limit=limit, offset=offset)
+            data = await service.s2.get_author(identifier)
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 404:
                 return {"error": "not_found", "identifier": identifier}
             return s2_error_payload(exc)
-        if offset == 0:
-            await service.cache.set_author(identifier, data)
-        return _author_page(data, limit)
+        await service.cache.set_author(identifier, data)
+        return _author_page(data, limit, offset)
 
     # Name search — return candidates for disambiguation
     try:

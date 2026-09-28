@@ -4,6 +4,14 @@ Newest first. One entry per research pass.
 
 ## 2026-09-28
 
+### Semantic Scholar author pages
+
+Updated [Semantic Scholar API behaviour](semantic-scholar-api.md) for #490.
+Three unkeyed requests to `/author/1695689` with different `limit` and
+`offset` values returned the same 461 papers in the same order, confirming
+the endpoint ignores both; the spec documents neither. The same response
+reported `paperCount` 472, so the embedded list is not always complete.
+
 ### DOIs in citation text
 
 Added [DOIs in free-text citations](doi-in-citation-text.md) for #482, where
