@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from scholar_mcp._epo_xml import (
     parse_biblio_xml,
     parse_citations_from_biblio,
@@ -829,3 +831,62 @@ class TestParseCitationsFromBiblio:
         empty = b'<?xml version="1.0"?><ops:world-patent-data xmlns:ops="http://ops.epo.org"></ops:world-patent-data>'
         result = parse_citations_from_biblio(empty)
         assert result == {"patent_refs": [], "npl_refs": []}
+
+
+# ---------------------------------------------------------------------------
+# #482: DOIs in the forms patent NPL citations actually use
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("text", "doi"),
+    [
+        # Forms observed on DE102025108780A1 (#482).
+        (
+            "LECUN, Yann: Deep learning. In: Nature, Vol. 521, 2015. ISSN "
+            "0028-0836. https://doi.org/10.1038/nature14539 [abgerufen am "
+            "2018-12-17]",
+            "10.1038/nature14539",
+        ),
+        (
+            "Lee KB (2017) A Convolutional Neural Network; IEEE T Semiconduct M "
+            "30: 135{142, DOI 10.1109/TSM.2017.2676245",
+            "10.1109/TSM.2017.2676245",
+        ),
+        ("Smith, doi:10.1234/widgets.2018.", "10.1234/widgets.2018"),
+        ("DOI: 10.1145/3065386;", "10.1145/3065386"),
+        ("see http://dx.doi.org/10.1002/abc.123)", "10.1002/abc.123"),
+        # Parentheses inside a DOI survive; an unbalanced closing one does not.
+        (
+            "(Lancet, doi:10.1016/S0140-6736(97)11096-0)",
+            "10.1016/S0140-6736(97)11096-0",
+        ),
+        # An early Wiley SICI DOI keeps its angle brackets.
+        (
+            "J Biomed Mater Res, doi:10.1002/(SICI)1097-4636(199706)35:4"
+            "<523::AID-JBM12>3.0.CO;2-M>",
+            "10.1002/(SICI)1097-4636(199706)35:4<523::AID-JBM12>3.0.CO;2-M",
+        ),
+        ("DOI 10.1109/TSM.2017.2676245, IEEE", "10.1109/TSM.2017.2676245"),
+        ("ISSN 0028-0836, Vol. 10.5, no DOI", None),
+        ("Report 10.1234/abc without a DOI marker", None),
+        ("", None),
+    ],
+    ids=[
+        "doi-org-url",
+        "DOI-space",
+        "doi-colon",
+        "DOI-colon-space",
+        "dx-doi-org",
+        "inner-parens",
+        "sici-angle-brackets",
+        "trailing-comma",
+        "no-doi",
+        "bare-unmarked",
+        "empty",
+    ],
+)
+def test_extract_doi(text: str, doi: str | None) -> None:
+    from scholar_mcp._epo_xml import extract_doi
+
+    assert extract_doi(text) == doi

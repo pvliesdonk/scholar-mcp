@@ -26,6 +26,7 @@ from ._epo_client import (
     epo_error_payload,
     with_epo_retry,
 )
+from ._epo_xml import extract_doi
 from ._patent_numbers import DocdbNumber, normalize
 from ._protocols import CacheProtocol
 from ._rate_limiter import RateLimitedError, S2RetryDeadlineExceeded
@@ -719,13 +720,16 @@ async def _fetch_patent_sections(
         # resolution always reflects the latest paper index state.
         resolved_npl: list[dict[str, Any]] = []
         if s2 is not None and npl_refs:
-            # Build batch of DOI identifiers
+            # Build batch of DOI identifiers. The DOI is read from the raw text
+            # again rather than from the parsed ``doi``: citations cached before
+            # #482 stored None for the doi.org and "DOI 10." forms.
+            dois = [extract_doi(npl["raw"]) for npl in npl_refs]
             doi_indices: list[int] = []
             doi_ids: list[str] = []
-            for i, npl in enumerate(npl_refs):
-                if npl["doi"]:
+            for i, doi in enumerate(dois):
+                if doi:
                     doi_indices.append(i)
-                    doi_ids.append(f"DOI:{npl['doi']}")
+                    doi_ids.append(f"DOI:{doi}")
 
             # Batch resolve DOIs via S2
             s2_results: list[PaperRecord | None] = [None] * len(doi_ids)
@@ -752,9 +756,9 @@ async def _fetch_patent_sections(
                 if s2_paper is not None:
                     entry["paper"] = s2_paper
                     entry["confidence"] = "high"
-                elif npl["doi"]:
+                elif dois[i]:
                     # Had DOI but resolution failed
-                    entry["doi"] = npl["doi"]
+                    entry["doi"] = dois[i]
                     entry["confidence"] = None
                 else:
                     entry["confidence"] = None

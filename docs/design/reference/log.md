@@ -4,6 +4,16 @@ Newest first. One entry per research pass.
 
 ## 2026-09-28
 
+### DOIs in citation text
+
+Added [DOIs in free-text citations](doi-in-citation-text.md) for #482, where
+no NPL reference on DE102025108780A1 was resolved because the extractor
+required `doi:`. Sourced Crossref's recommended DOI pattern and the two EPO
+forms recorded in the issue (`https://doi.org/…`, `DOI 10.…`). The DOI
+Handbook's syntax pages render only through JavaScript and were not read;
+early non-Crossref-shaped DOIs, percent-encoded DOIs and DOIs broken across
+lines remain unverified.
+
 ### OpenAlex work objects
 
 Added [OpenAlex work objects](openalex-works.md) for #478, where

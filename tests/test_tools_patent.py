@@ -887,6 +887,55 @@ async def test_citations_npl_resolution_with_s2(
     assert "paper" not in npl[1]
 
 
+async def test_get_patent_npl_resolution_reads_the_doi_from_raw_text(
+    service: Service,
+    slow_jobs: Jobs,
+) -> None:
+    """A DOI in https://doi.org/ or "DOI 10." form is resolved (#482).
+
+    The stored ``doi`` is ``None``, as in citations parsed and cached before
+    the fix, so resolution has to read the DOI from ``raw`` itself.
+    """
+    citations_data = {
+        "patent_refs": [],
+        "npl_refs": [
+            {
+                "raw": "LECUN: Deep learning. https://doi.org/10.1038/nature14539 "
+                "[abgerufen am 2018-12-17]",
+                "doi": None,
+            },
+            {"raw": "Lee KB (2017), DOI 10.1109/TSM.2017.2676245", "doi": None},
+        ],
+    }
+    service.epo = _make_epo_client(citations_result=citations_data)
+    service.s2.batch_resolve = AsyncMock(  # type: ignore[assignment]
+        return_value=[{"paperId": "p1", "title": "Deep learning"}, None]
+    )
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
+        yield {"service": service}
+
+    app = tasks_server("test", lifespan=lifespan)
+    register_patent_tools(app, slow_jobs)
+
+    async with Client(app) as client:
+        result = await client.call_tool(
+            "get_patent",
+            {"patent_number": "EP1234567A1", "sections": ["citations"]},
+        )
+    npl = json.loads(result.content[0].text)["citations"]["npl_refs"]
+    service.s2.batch_resolve.assert_awaited_once()
+    assert service.s2.batch_resolve.await_args.args[0] == [
+        "DOI:10.1038/nature14539",
+        "DOI:10.1109/TSM.2017.2676245",
+    ]
+    assert npl[0]["paper"]["paperId"] == "p1"
+    assert npl[0]["confidence"] == "high"
+    assert npl[1]["doi"] == "10.1109/TSM.2017.2676245"
+    assert npl[1]["confidence"] is None
+
+
 # ---------------------------------------------------------------------------
 # get_citing_patents tests
 # ---------------------------------------------------------------------------

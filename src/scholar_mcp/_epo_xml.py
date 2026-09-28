@@ -49,8 +49,42 @@ _NS: dict[str, str] = {
 # Default namespace URI (used on exchange-document and most biblio elements).
 _EXCH = "http://www.epo.org/exchange"
 
-# Regex to extract DOIs from non-patent literature citation text.
-_DOI_RE = re.compile(r"\bdoi:\s*(10\.\S+)", re.IGNORECASE)
+# A DOI in non-patent literature citation text, after the marker that
+# introduces it: "doi:10.", "DOI 10.", "DOI: 10." or a doi.org resolver URL
+# (#482). A bare "10.x/y" with no marker is left alone. The suffix runs to
+# whitespace or a bracket, brace or quote: Crossref's recommended character
+# set would truncate early Wiley DOIs, some of which contain "<" and ">".
+# See docs/design/reference/doi-in-citation-text.md.
+_DOI_RE = re.compile(
+    r"(?:\bdoi\s*:?\s*|doi\.org/)(10\.\d{4,9}/[^\s\[\]{}\"']+)", re.IGNORECASE
+)
+
+# Closing characters that end a DOI only when the DOI never opened them.
+_PAIRS = {")": "(", ">": "<"}
+
+
+def extract_doi(text: str) -> str | None:
+    """Return the DOI a citation string names, or None.
+
+    Trailing sentence punctuation is dropped, and so is a closing ``)`` or
+    ``>`` with no opening partner in the DOI, since both are legal inside
+    one (``10.1016/S0140-6736(97)11096-0``).
+
+    Args:
+        text: Free-text citation, as in an EPO ``nplcit``.
+
+    Returns:
+        The DOI, without a ``doi:`` or resolver prefix.
+    """
+    match = _DOI_RE.search(text)
+    if match is None:
+        return None
+    doi = match.group(1)
+    while doi[-1] in ".,;:" or (
+        doi[-1] in _PAIRS and doi.count(doi[-1]) > doi.count(_PAIRS[doi[-1]])
+    ):
+        doi = doi[:-1]
+    return doi
 
 
 # ---------------------------------------------------------------------------
@@ -533,9 +567,7 @@ def parse_citations_from_biblio(xml_data: bytes) -> dict[str, list[dict[str, Any
         if nplcit is not None:
             text_el = nplcit.find(f"{{{_EXCH}}}text")
             raw = _text(text_el)
-            doi_match = _DOI_RE.search(raw)
-            doi = doi_match.group(1).rstrip(".,;>)]") if doi_match else None
-            npl_refs.append({"raw": raw, "doi": doi})
+            npl_refs.append({"raw": raw, "doi": extract_doi(raw)})
 
     return {"patent_refs": patent_refs, "npl_refs": npl_refs}
 
