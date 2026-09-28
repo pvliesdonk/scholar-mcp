@@ -267,8 +267,14 @@ async def test_existing_shared_cooldown_defers_next_call(slow_jobs: Jobs) -> Non
 
 
 async def test_throttle_stops_before_job_record_expires() -> None:
-    """A persistent 429 resolves to a retryable payload within the TTL."""
-    config = JobsConfig(soft_deadline_s=1, result_ttl_s=0.18)
+    """A persistent 429 resolves to a retryable payload within the TTL.
+
+    The retry window closes at 5/6 of the record's lifetime, and the record's
+    lifetime counts from creation, so the settled result is readable only for
+    the last sixth. At 0.18s that was 30ms, which a GC pause in a full-suite
+    run on Python 3.14 outlasted (#499); 1.2s leaves 200ms.
+    """
+    config = JobsConfig(soft_deadline_s=1, result_ttl_s=1.2)
     jobs = build_jobs(ServerConfig(kv_store_url="memory://"), config)
     attempts = 0
 
