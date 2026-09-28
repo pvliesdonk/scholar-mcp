@@ -15,6 +15,7 @@ from ._book_enrichment import fill_authors_from_cache
 from ._cache import normalize_isbn
 from ._chapter_parser import hint_to_dict, parse_chapter_hint
 from ._epo_client import EPO_REPORTED_ERRORS, epo_error_payload, with_epo_retry
+from ._openalex_client import work_to_paper
 from ._openlibrary_client import normalize_book
 from ._patent_numbers import is_patent_number, normalize
 from ._s2_client import FIELD_SETS, log_s2_error, s2_error_payload
@@ -23,6 +24,8 @@ from ._server_deps import get_service
 from .domain import Service
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable
+
     from fastmcp_pvl_core import Jobs, JobsConfig
 
     from ._record_types import PaperRecord
@@ -100,35 +103,65 @@ def _classify(identifiers: list[str]) -> _Groups:
 
 
 async def _resolve_paper(
-    idx: int,
     raw: str,
     s2_data: PaperRecord | None,
-    doi_map: dict[int, str],
+    doi: str | None,
+    fields: str,
     service: Service,
-) -> tuple[int, dict[str, Any]]:
+) -> dict[str, Any]:
     """Build the result entry for one paper identifier.
 
     Args:
-        idx: Position in the caller's original list.
         raw: The raw identifier.
         s2_data: What the S2 batch endpoint returned, or None.
-        doi_map: Index to DOI, for the OpenAlex fallback.
+        doi: The identifier's DOI, for the OpenAlex fallback, or None.
+        fields: The S2 field set the caller asked for, which the OpenAlex
+            fallback is mapped onto too.
         service: Injected service.
 
     Returns:
-        ``(idx, entry)`` so the caller can restore the original order.
+        The entry for this identifier.
     """
     if s2_data is not None:
         paper_result: dict[str, Any] = {"identifier": raw, "paper": s2_data}
         _attach_chapter_info(paper_result, raw)
-        return idx, paper_result
-    if idx in doi_map:
-        oa = await service.openalex.get_by_doi(doi_map[idx])
+        return paper_result
+    if doi is not None:
+        oa = await _openalex_work(doi, service)
         if oa:
-            paper_result = {"identifier": raw, "paper": oa, "source": "openalex"}
+            paper_result = {
+                "identifier": raw,
+                "paper": work_to_paper(oa, fields),
+                "source": "openalex",
+            }
             _attach_chapter_info(paper_result, raw)
-            return idx, paper_result
-    return idx, {"identifier": raw, "error": "not_found"}
+            return paper_result
+    return {"identifier": raw, "error": "not_found"}
+
+
+async def _indexed(
+    idx: int, entry: Awaitable[dict[str, Any]]
+) -> tuple[int, dict[str, Any]]:
+    """Pair an entry with its position in the caller's list."""
+    return idx, await entry
+
+
+async def _openalex_work(doi: str, service: Service) -> dict[str, Any] | None:
+    """Return the OpenAlex work for *doi*, from the shared cache when held.
+
+    Args:
+        doi: The DOI, without a ``https://doi.org/`` prefix.
+        service: Injected service.
+
+    Returns:
+        The work, or None when OpenAlex has none.
+    """
+    work = await service.cache.get_openalex(doi)
+    if work is None:
+        work = await service.openalex.get_by_doi(doi)
+        if work is not None:
+            await service.cache.set_openalex(doi, work)
+    return work
 
 
 async def _resolve_patent(
@@ -229,6 +262,8 @@ async def batch_resolve(
     """Resolve a list of paper, patent, or book identifiers to full records.
 
     Uses the S2 batch endpoint for paper IDs/DOIs, with OpenAlex fallback.
+    An OpenAlex-sourced paper (``"source": "openalex"``) has the same keys as
+    an S2 one for the requested ``fields``, with ``paperId`` null.
     Patent numbers (e.g. EP1234567A1) are auto-detected and resolved via
     the EPO OPS API when configured. ISBNs (prefixed ``ISBN:``) are
     resolved via Open Library.
@@ -263,12 +298,15 @@ async def batch_resolve(
 
     resolved = await asyncio.gather(
         *(
-            _resolve_paper(
+            _indexed(
                 groups.paper_indices[j],
-                groups.paper_ids[j],
-                data,
-                groups.doi_map,
-                service,
+                _resolve_paper(
+                    groups.paper_ids[j],
+                    data,
+                    groups.doi_map.get(groups.paper_indices[j]),
+                    FIELD_SETS[fields],
+                    service,
+                ),
             )
             for j, data in enumerate(s2_results)
         ),

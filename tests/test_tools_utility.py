@@ -124,6 +124,17 @@ async def test_batch_resolve_openalex_fallback(mcp: FastMCP) -> None:
             )
     data = json.loads(result.content[0].text)["results"]
     assert data[0].get("source") == "openalex"
+    # The default preset is standard: the S2 keys, not the raw OpenAlex work.
+    assert data[0]["paper"] == {
+        "paperId": None,
+        "title": "Found via OpenAlex",
+        "year": None,
+        "venue": None,
+        "citationCount": None,
+        "authors": [],
+        "externalIds": {"DOI": "10.1/test", "OpenAlex": "W1"},
+        "abstract": None,
+    }
 
 
 async def test_enrich_paper(mcp: FastMCP) -> None:
@@ -854,3 +865,171 @@ async def test_enrich_paper_direct_call_reports_exhausted_429(
         "identifier": "p1",
         "retryable": True,
     }
+
+
+# ---------------------------------------------------------------------------
+# #478: the OpenAlex fallback answers in the requested S2 field set
+# ---------------------------------------------------------------------------
+
+# Trimmed from api.openalex.org/works/doi:10.1038/nature14539 (2026-09-28),
+# with a short abstract and a PDF location added to exercise those paths.
+_OA_WORK = {
+    "id": "https://openalex.org/W2919115771",
+    "doi": "https://doi.org/10.1038/nature14539",
+    "title": "Deep learning",
+    "display_name": "Deep learning",
+    "publication_year": 2015,
+    "cited_by_count": 85142,
+    "referenced_works_count": 54,
+    "ids": {
+        "openalex": "https://openalex.org/W2919115771",
+        "doi": "https://doi.org/10.1038/nature14539",
+        "mag": "2919115771",
+        "pmid": "https://pubmed.ncbi.nlm.nih.gov/26017442",
+    },
+    "primary_location": {"source": {"display_name": "Nature"}},
+    "best_oa_location": {"pdf_url": "https://hal.science/hal-04206682/document"},
+    "open_access": {"is_oa": True, "oa_status": "green"},
+    "authorships": [
+        {"author": {"display_name": "Yann LeCun"}},
+        {"author": {"display_name": "Yoshua Bengio"}},
+    ],
+    "abstract_inverted_index": {
+        "Deep": [0],
+        "learning": [1, 4],
+        "is": [2],
+        "about": [3],
+    },
+    "mesh": [{"descriptor_name": "Algorithms"}] * 3,
+}
+
+
+async def _resolve_via_openalex(
+    mcp: FastMCP, work: dict, fields: str, doi: str = "10.1038/nature14539"
+) -> dict:
+    with respx.mock:
+        respx.post(f"{S2_BASE}/paper/batch").mock(
+            return_value=httpx.Response(200, json=[None])
+        )
+        respx.get(f"{OA_BASE}/works/https://doi.org/{doi}").mock(
+            return_value=httpx.Response(200, json=work)
+        )
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "batch_resolve", {"identifiers": [f"DOI:{doi}"], "fields": fields}
+            )
+    entry = json.loads(result.content[0].text)["results"][0]
+    assert entry["source"] == "openalex"
+    return entry["paper"]
+
+
+async def test_openalex_fallback_compact_has_exactly_the_compact_keys(
+    mcp: FastMCP,
+) -> None:
+    paper = await _resolve_via_openalex(mcp, _OA_WORK, "compact")
+    assert paper == {
+        "paperId": None,
+        "title": "Deep learning",
+        "year": 2015,
+        "venue": "Nature",
+        "citationCount": 85142,
+    }
+
+
+async def test_openalex_fallback_standard_maps_authors_ids_and_abstract(
+    mcp: FastMCP,
+) -> None:
+    paper = await _resolve_via_openalex(mcp, _OA_WORK, "standard")
+    assert paper["authors"] == [
+        {"authorId": None, "name": "Yann LeCun"},
+        {"authorId": None, "name": "Yoshua Bengio"},
+    ]
+    assert paper["externalIds"] == {
+        "DOI": "10.1038/nature14539",
+        "MAG": "2919115771",
+        "PubMed": "26017442",
+        "OpenAlex": "W2919115771",
+    }
+    assert paper["abstract"] == "Deep learning is about learning"
+    assert "mesh" not in paper
+
+
+async def test_openalex_fallback_full_takes_only_a_pdf_url(mcp: FastMCP) -> None:
+    paper = await _resolve_via_openalex(mcp, _OA_WORK, "full")
+    assert paper["openAccessPdf"] == {
+        "url": "https://hal.science/hal-04206682/document",
+        "status": "GREEN",
+        "license": None,
+    }
+    assert paper["referenceCount"] == 54
+    assert paper["tldr"] is None
+    assert paper["fieldsOfStudy"] is None
+
+    # A landing page is not a PDF: no pdf_url means no openAccessPdf (#484).
+    landing_only = {
+        **_OA_WORK,
+        "best_oa_location": {"pdf_url": None, "landing_page_url": "https://x.org/"},
+        "referenced_works_count": None,
+        "referenced_works": ["https://openalex.org/W1", "https://openalex.org/W2"],
+    }
+    paper = await _resolve_via_openalex(mcp, landing_only, "full", doi="10.1/landing")
+    assert paper["openAccessPdf"] is None
+    assert paper["referenceCount"] == 2
+
+
+async def test_openalex_fallback_tolerates_missing_objects(mcp: FastMCP) -> None:
+    sparse = {
+        "id": "https://openalex.org/W1",
+        "title": "Sparse",
+        "primary_location": None,
+        "best_oa_location": None,
+        "ids": None,
+        "authorships": None,
+        "abstract_inverted_index": None,
+    }
+    paper = await _resolve_via_openalex(mcp, sparse, "full")
+    assert paper["venue"] is None
+    assert paper["authors"] == []
+    assert paper["externalIds"] == {"OpenAlex": "W1"}
+    assert paper["abstract"] is None
+    assert paper["openAccessPdf"] is None
+    assert paper["referenceCount"] is None
+
+
+async def test_openalex_fallback_reads_the_openalex_cache(
+    mcp: FastMCP, service: Service
+) -> None:
+    """A work already cached for enrichment answers without a request."""
+    await service.cache.set_openalex("10.1038/nature14539", _OA_WORK)
+    with respx.mock:
+        respx.post(f"{S2_BASE}/paper/batch").mock(
+            return_value=httpx.Response(200, json=[None])
+        )
+        oa_route = respx.get(f"{OA_BASE}/works/https://doi.org/10.1038/nature14539")
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "batch_resolve", {"identifiers": ["DOI:10.1038/nature14539"]}
+            )
+    assert not oa_route.called
+    paper = json.loads(result.content[0].text)["results"][0]["paper"]
+    assert paper["title"] == "Deep learning"
+
+
+async def test_openalex_fallback_miss_is_not_found_and_not_cached(
+    mcp: FastMCP, service: Service
+) -> None:
+    """A DOI neither S2 nor OpenAlex knows is not_found, and nothing is cached."""
+    with respx.mock:
+        respx.post(f"{S2_BASE}/paper/batch").mock(
+            return_value=httpx.Response(200, json=[None])
+        )
+        respx.get(f"{OA_BASE}/works/https://doi.org/10.1/missing").mock(
+            return_value=httpx.Response(404)
+        )
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "batch_resolve", {"identifiers": ["DOI:10.1/missing"]}
+            )
+    entry = json.loads(result.content[0].text)["results"][0]
+    assert entry == {"identifier": "DOI:10.1/missing", "error": "not_found"}
+    assert await service.cache.get_openalex("10.1/missing") is None

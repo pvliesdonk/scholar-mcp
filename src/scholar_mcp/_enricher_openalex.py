@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from ._openalex_client import work_venue
+
 logger = logging.getLogger(__name__)
 
 
@@ -64,9 +66,7 @@ class OpenAlexEnricher:
                 return
             if cached is None:
                 await service.cache.set_openalex(doi, oa_data)
-            loc = oa_data.get("primary_location") or {}
-            source = loc.get("source") or {}
-            venue = source.get("display_name")
+            venue = work_venue(oa_data)
             if venue:
                 record["venue"] = venue
         except Exception:

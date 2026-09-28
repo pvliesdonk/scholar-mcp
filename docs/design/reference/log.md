@@ -4,6 +4,16 @@ Newest first. One entry per research pass.
 
 ## 2026-09-28
 
+### OpenAlex work objects
+
+Added [OpenAlex work objects](openalex-works.md) for #478, where
+`batch_resolve`'s DOI fallback returned the raw 15 KB work. Read the
+work-object docs at openalex-docs 8cec9db and one live record
+(10.1038/nature14539). The docs type `ids.mag` as an integer; the record
+served a string. `referenced_works_count` is served but undocumented. The live
+record's `oa_url` was a landing page with no `pdf_url`, which is why the
+mapped `openAccessPdf` reads `pdf_url` only.
+
 ### Relaton titles
 
 Added [Relaton bibitem titles](relaton-titles.md) for #480, where synced ISO
