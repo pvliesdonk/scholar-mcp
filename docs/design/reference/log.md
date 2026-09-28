@@ -45,6 +45,14 @@ comes first (which the abstract lookup also relies on), remain unverified.
 
 ## 2026-09-25
 
+### PDF download header
+
+Added [PDF file header behaviour](pdf-file-header.md) as a stable reference for
+#484. Checked PDF 32000-1:2008 section 7.5.2 and RFC 9110 section 8.3. The PDF
+header starts with `%PDF-`; `Content-Type` describes the response media type
+but does not verify the body. The implementation and tests use the header as
+a download/cache check and do not claim full PDF structural validation.
+
 ### Semantic Scholar `limit` maxima
 
 Added the per-endpoint `limit` maxima to

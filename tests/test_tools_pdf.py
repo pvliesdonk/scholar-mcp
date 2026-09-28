@@ -17,6 +17,7 @@ import asyncio
 import json
 from contextlib import asynccontextmanager
 from pathlib import Path
+from threading import Event, Thread
 from typing import Any
 from unittest.mock import AsyncMock
 
@@ -28,7 +29,11 @@ from fastmcp.client import Client
 from fastmcp_pvl_core import Jobs, JobsConfig, register_job_tools
 
 from scholar_mcp._docling_client import DoclingClient
-from scholar_mcp._tools_pdf import register_pdf_tools
+from scholar_mcp._tools_pdf import (
+    _cached_pdf_is_valid,
+    _write_pdf_cache,
+    register_pdf_tools,
+)
 from scholar_mcp.domain import Service
 from tests.conftest import PlainClient, tasks_server
 
@@ -188,7 +193,7 @@ async def test_fetch_paper_pdf_cache_hit(
     pdf_dir = service.config.cache_dir / "pdfs"
     pdf_dir.mkdir(parents=True, exist_ok=True)
     pdf_path = pdf_dir / "p1.pdf"
-    pdf_path.write_bytes(b"%PDF cached")
+    pdf_path.write_bytes(b"%PDF-1.7 cached")
 
     async with Client(mcp_no_docling) as client:
         result = await client.call_tool("fetch_paper_pdf", {"identifier": "p1"})
@@ -227,6 +232,48 @@ async def test_fetch_paper_pdf_download_succeeds(
     assert pdf_path.read_bytes() == b"%PDF-1.4 fake content"
 
 
+@pytest.mark.parametrize("tool_name", ["fetch_paper_pdf", "fetch_and_convert"])
+@pytest.mark.respx(assert_all_called=False)
+async def test_paper_pdf_tools_reject_non_pdf_response(
+    tool_name: str,
+    service_with_docling: Service,
+    slow_jobs: Jobs,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The shared paper download path rejects HTML before caching or converting."""
+    pdf_url = "https://example.com/not_a_pdf.pdf"
+    paper_id = "not_pdf_1"
+    paper_json = {
+        "paperId": paper_id,
+        "openAccessPdf": {"url": pdf_url},
+        "title": "HTML response",
+    }
+    convert = AsyncMock(return_value="# Should not run")
+    assert service_with_docling.docling is not None
+    monkeypatch.setattr(service_with_docling.docling, "convert", convert)
+
+    with respx.mock(assert_all_called=False) as router:
+        router.get(f"{S2_BASE}/paper/{paper_id}").mock(
+            return_value=httpx.Response(200, json=paper_json)
+        )
+        router.get(pdf_url).mock(
+            return_value=httpx.Response(
+                200,
+                content=b"<!doctype html><title>Not a PDF</title>",
+                headers={"Content-Type": "application/pdf"},
+            )
+        )
+        async with Client(pdf_app(service_with_docling, slow_jobs)) as client:
+            result = await client.call_tool(tool_name, {"identifier": paper_id})
+
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "not_pdf"
+    assert "%PDF-" in data["detail"]
+    pdf_path = service_with_docling.config.cache_dir / "pdfs" / f"{paper_id}.pdf"
+    assert not pdf_path.exists()
+    convert.assert_not_awaited()
+
+
 @pytest.mark.respx(assert_all_called=False)
 async def test_fetch_paper_pdf_rate_limited_then_succeeds(
     service: Service, slow_jobs: Jobs
@@ -255,7 +302,7 @@ async def test_fetch_paper_pdf_rate_limited_then_succeeds(
     with respx.mock(assert_all_called=False) as router:
         router.get(f"{S2_BASE}/paper/rl1").mock(side_effect=s2_side_effect)
         router.get(pdf_url).mock(
-            return_value=httpx.Response(200, content=b"%PDF rate limited ok")
+            return_value=httpx.Response(200, content=b"%PDF-1.7 rate limited ok")
         )
         async with Client(pdf_app(service, slow_jobs)) as client:
             result = await client.call_tool("fetch_paper_pdf", {"identifier": "rl1"})
@@ -263,7 +310,7 @@ async def test_fetch_paper_pdf_rate_limited_then_succeeds(
     data = json.loads(result.content[0].text)
     _assert_inline(data)
     assert call_count >= 2, "expected the 429 to be retried"
-    assert Path(data["path"]).read_bytes() == b"%PDF rate limited ok"
+    assert Path(data["path"]).read_bytes() == b"%PDF-1.7 rate limited ok"
 
 
 @pytest.mark.respx(assert_all_called=False)
@@ -284,7 +331,7 @@ async def test_fetch_paper_pdf_arxiv_fallback(
             return_value=httpx.Response(200, json=paper_json)
         )
         router.get(arxiv_pdf_url).mock(
-            return_value=httpx.Response(200, content=b"%PDF arxiv content")
+            return_value=httpx.Response(200, content=b"%PDF-1.7 arxiv content")
         )
         async with Client(pdf_app(service, slow_jobs)) as client:
             result = await client.call_tool("fetch_paper_pdf", {"identifier": "arx1"})
@@ -320,7 +367,7 @@ async def test_fetch_paper_pdf_rate_limited_arxiv_fallback(
     with respx.mock(assert_all_called=False) as router:
         router.get(f"{S2_BASE}/paper/rl_arx").mock(side_effect=s2_side_effect)
         router.get(arxiv_pdf_url).mock(
-            return_value=httpx.Response(200, content=b"%PDF arxiv rl")
+            return_value=httpx.Response(200, content=b"%PDF-1.7 arxiv rl")
         )
         async with Client(pdf_app(service, slow_jobs)) as client:
             result = await client.call_tool("fetch_paper_pdf", {"identifier": "rl_arx"})
@@ -682,7 +729,7 @@ async def test_fetch_and_convert_arxiv_fallback(
             return_value=httpx.Response(200, json=paper_json)
         )
         router.get(arxiv_pdf_url).mock(
-            return_value=httpx.Response(200, content=b"%PDF arxiv fc")
+            return_value=httpx.Response(200, content=b"%PDF-1.7 arxiv fc")
         )
         async with Client(pdf_app(service_with_docling, slow_jobs)) as client:
             result = await client.call_tool("fetch_and_convert", {"identifier": "fca1"})
@@ -707,7 +754,9 @@ async def test_fetch_and_convert_no_docling(service: Service, slow_jobs: Jobs) -
         router.get(f"{S2_BASE}/paper/nd1").mock(
             return_value=httpx.Response(200, json=paper_json)
         )
-        router.get(pdf_url).mock(return_value=httpx.Response(200, content=b"%PDF nd"))
+        router.get(pdf_url).mock(
+            return_value=httpx.Response(200, content=b"%PDF-1.7 nd")
+        )
         async with Client(pdf_app(service, slow_jobs)) as client:
             result = await client.call_tool("fetch_and_convert", {"identifier": "nd1"})
 
@@ -734,7 +783,7 @@ async def test_fetch_pdf_by_url_download_and_convert(
 
     with respx.mock(assert_all_called=False) as router:
         router.get(pdf_url).mock(
-            return_value=httpx.Response(200, content=b"%PDF custom")
+            return_value=httpx.Response(200, content=b"%PDF-1.7 custom")
         )
         async with Client(pdf_app(service_with_docling, slow_jobs)) as client:
             result = await client.call_tool(
@@ -762,7 +811,7 @@ async def test_fetch_pdf_by_url_no_docling(service: Service, slow_jobs: Jobs) ->
 
     with respx.mock(assert_all_called=False) as router:
         router.get(pdf_url).mock(
-            return_value=httpx.Response(200, content=b"%PDF no docling")
+            return_value=httpx.Response(200, content=b"%PDF-1.7 no docling")
         )
         async with Client(pdf_app(service, slow_jobs)) as client:
             result = await client.call_tool("fetch_pdf_by_url", {"url": pdf_url})
@@ -778,7 +827,7 @@ async def test_fetch_pdf_by_url_cached(service: Service, slow_jobs: Jobs) -> Non
     pdf_dir = service.config.cache_dir / "pdfs"
     pdf_dir.mkdir(parents=True, exist_ok=True)
     cached = pdf_dir / "cached_paper.pdf"
-    cached.write_bytes(b"%PDF cached")
+    cached.write_bytes(b"%PDF-1.7 cached")
 
     async with Client(pdf_app(service, slow_jobs)) as client:
         result = await client.call_tool(
@@ -788,6 +837,159 @@ async def test_fetch_pdf_by_url_cached(service: Service, slow_jobs: Jobs) -> Non
     data = json.loads(result.content[0].text)
     _assert_inline(data)
     assert data["pdf_path"] == str(cached)
+
+
+@pytest.mark.respx(assert_all_called=False)
+async def test_fetch_pdf_by_url_rejects_non_pdf_before_conversion(
+    service_with_docling: Service, slow_jobs: Jobs, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A successful HTTP response without a PDF header is not sent to docling."""
+    pdf_url = "https://example.com/html.pdf"
+    convert = AsyncMock(return_value="# Should not run")
+    assert service_with_docling.docling is not None
+    monkeypatch.setattr(service_with_docling.docling, "convert", convert)
+
+    with respx.mock(assert_all_called=False) as router:
+        router.get(pdf_url).mock(
+            return_value=httpx.Response(
+                200,
+                content=b"<!doctype html><title>Sign in</title>",
+                headers={"Content-Type": "application/pdf"},
+            )
+        )
+        async with Client(pdf_app(service_with_docling, slow_jobs)) as client:
+            result = await client.call_tool(
+                "fetch_pdf_by_url", {"url": pdf_url, "filename": "html_response"}
+            )
+
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "not_pdf"
+    assert "%PDF-" in data["detail"]
+    assert "pdf_path" not in data
+    pdf_path = service_with_docling.config.cache_dir / "pdfs" / "html_response.pdf"
+    assert not pdf_path.exists()
+    convert.assert_not_awaited()
+
+
+@pytest.mark.respx(assert_all_called=False)
+async def test_fetch_pdf_by_url_accepts_pdf_header_when_content_type_is_html(
+    service_with_docling: Service, slow_jobs: Jobs, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The PDF signature is authoritative when a server labels it as HTML."""
+    pdf_url = "https://example.com/mislabeled.pdf"
+    convert = AsyncMock(return_value="# Converted PDF")
+    assert service_with_docling.docling is not None
+    monkeypatch.setattr(service_with_docling.docling, "convert", convert)
+
+    with respx.mock(assert_all_called=False) as router:
+        router.get(pdf_url).mock(
+            return_value=httpx.Response(
+                200,
+                content=b"%PDF-1.7 valid header",
+                headers={"Content-Type": "text/html"},
+            )
+        )
+        async with Client(pdf_app(service_with_docling, slow_jobs)) as client:
+            result = await client.call_tool(
+                "fetch_pdf_by_url", {"url": pdf_url, "filename": "mislabeled"}
+            )
+
+    data = json.loads(result.content[0].text)
+    _assert_inline(data)
+    assert data["markdown"] == "# Converted PDF"
+    convert.assert_awaited_once()
+
+
+@pytest.mark.respx(assert_all_called=False)
+async def test_fetch_pdf_by_url_replaces_invalid_cached_file(
+    service: Service, slow_jobs: Jobs
+) -> None:
+    """An old HTML cache entry triggers a fresh download instead of a cache hit."""
+    pdf_url = "https://example.com/recovered.pdf"
+    pdf_path = service.config.cache_dir / "pdfs" / "recovered.pdf"
+    pdf_path.parent.mkdir(parents=True, exist_ok=True)
+    pdf_path.write_bytes(b"<!doctype html>stale cached page")
+
+    with respx.mock(assert_all_called=False) as router:
+        download = router.get(pdf_url).mock(
+            return_value=httpx.Response(200, content=b"%PDF-1.7 recovered PDF")
+        )
+        async with Client(pdf_app(service, slow_jobs)) as client:
+            result = await client.call_tool(
+                "fetch_pdf_by_url", {"url": pdf_url, "filename": "recovered"}
+            )
+
+    data = json.loads(result.content[0].text)
+    _assert_inline(data)
+    assert download.called
+    assert data["pdf_path"] == str(pdf_path)
+    assert pdf_path.read_bytes() == b"%PDF-1.7 recovered PDF"
+
+
+def test_cached_pdf_rejects_path_replaced_during_validation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A replaced path is not accepted based on the previously opened file."""
+    cached = tmp_path / "cached.pdf"
+    cached.write_bytes(b"%PDF-1.7 cached PDF")
+    replacement = tmp_path / "replacement.tmp"
+    original_stat = Path.stat
+    replaced = False
+
+    def replace_before_stat(path: Path, *args: Any, **kwargs: Any) -> Any:
+        nonlocal replaced
+        if path == cached and not replaced:
+            replacement.write_bytes(b"<!doctype html>replacement")
+            replacement.replace(cached)
+            replaced = True
+        return original_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "stat", replace_before_stat)
+
+    assert not _cached_pdf_is_valid(cached)
+    assert cached.read_bytes() == b"<!doctype html>replacement"
+
+
+def test_pdf_cache_write_keeps_old_file_until_atomic_replace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Readers see the old complete cache until the new file is published."""
+    cached = tmp_path / "cached.pdf"
+    old_content = b"%PDF-1.7 old PDF"
+    new_content = b"%PDF-1.7 new PDF"
+    cached.write_bytes(old_content)
+    temporary_written = Event()
+    allow_publish = Event()
+    errors: list[Exception] = []
+    original_write = Path.write_bytes
+
+    def pause_before_publish(path: Path, content: bytes) -> int:
+        written = original_write(path, content)
+        temporary_written.set()
+        if not allow_publish.wait(timeout=5):
+            raise TimeoutError("test did not release the cache writer")
+        return written
+
+    def write_cache() -> None:
+        try:
+            _write_pdf_cache(cached, new_content)
+        except Exception as exc:
+            errors.append(exc)
+
+    monkeypatch.setattr(Path, "write_bytes", pause_before_publish)
+    writer = Thread(target=write_cache)
+    writer.start()
+    try:
+        assert temporary_written.wait(timeout=5)
+        assert cached.read_bytes() == old_content
+    finally:
+        allow_publish.set()
+        writer.join(timeout=5)
+
+    assert not writer.is_alive()
+    assert errors == []
+    assert cached.read_bytes() == new_content
+    assert list(tmp_path.glob(".*.tmp")) == []
 
 
 async def test_fetch_pdf_by_url_intercepts_epo_url(mcp_no_docling: FastMCP) -> None:
@@ -855,7 +1057,7 @@ async def test_cache_hit_answers_inline_even_under_a_short_deadline(
     pdf_dir = service.config.cache_dir / "pdfs"
     pdf_dir.mkdir(parents=True, exist_ok=True)
     cached = pdf_dir / "quick.pdf"
-    cached.write_bytes(b"%PDF cached")
+    cached.write_bytes(b"%PDF-1.7 cached")
 
     async with Client(pdf_app(service, jobs)) as client:
         result = await client.call_tool(
@@ -951,7 +1153,9 @@ async def test_fetch_and_convert_conversion_failure(
         router.get(f"{S2_BASE}/paper/fcc1").mock(
             return_value=httpx.Response(200, json=paper_json)
         )
-        router.get(pdf_url).mock(return_value=httpx.Response(200, content=b"%PDF conv"))
+        router.get(pdf_url).mock(
+            return_value=httpx.Response(200, content=b"%PDF-1.7 conv")
+        )
         async with Client(pdf_app(service_with_docling, slow_jobs)) as client:
             result = await client.call_tool("fetch_and_convert", {"identifier": "fcc1"})
 
@@ -1006,7 +1210,9 @@ async def test_fetch_pdf_by_url_conversion_failure(
     )
 
     with respx.mock(assert_all_called=False) as router:
-        router.get(pdf_url).mock(return_value=httpx.Response(200, content=b"%PDF conv"))
+        router.get(pdf_url).mock(
+            return_value=httpx.Response(200, content=b"%PDF-1.7 conv")
+        )
         async with Client(pdf_app(service_with_docling, slow_jobs)) as client:
             result = await client.call_tool(
                 "fetch_pdf_by_url", {"url": pdf_url, "filename": "url_conv"}
@@ -1025,7 +1231,7 @@ async def test_fetch_pdf_by_url_derives_stem_from_url(
 
     with respx.mock(assert_all_called=False) as router:
         router.get(pdf_url).mock(
-            return_value=httpx.Response(200, content=b"%PDF derived")
+            return_value=httpx.Response(200, content=b"%PDF-1.7 derived")
         )
         async with Client(pdf_app(service, slow_jobs)) as client:
             result = await client.call_tool("fetch_pdf_by_url", {"url": pdf_url})

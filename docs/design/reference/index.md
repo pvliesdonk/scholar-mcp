@@ -27,6 +27,7 @@ world does. Read the relevant one before changing code that talks to it — the
 | [GitHub planning objects](github-planning-objects.md) | Milestones, issue relationships, and pull request design material | `roadmapping` and release automation |
 | [Semantic Scholar API behaviour](semantic-scholar-api.md) | Published rate limits and endpoint shapes, with historical throttle reports marked unverified | `_s2_client.py`, `_rate_limiter.py`, `_tools_graph.py` |
 | [Google Books volume search](google-books-api.md) | ISBN search, result shape, and observed anonymous 429 | `_google_books_client.py`, `_enricher_google_books.py`, `_tools_books.py` |
+| [PDF file header behaviour](pdf-file-header.md) | PDF 1.7's required header and HTTP Content-Type semantics | `_tools_pdf.py`: downloaded PDF and cache validation |
 | [Relaton bibitem titles](relaton-titles.md) | How ISO, IEC and IEEE Relaton records list a title's parts, its composed `main` title and its languages | `_sync_relaton.py`: `_full_title` (sync and `_relaton_live.py`) |
 | [OpenAlex work objects](openalex-works.md) | The work fields Scholar MCP reads and how they map onto an S2-shaped paper | `_openalex_client.py`: `work_to_paper`, `work_venue`; `_enricher_openalex.py`; `_tools_utility.py` |
 | [DOIs in free-text citations](doi-in-citation-text.md) | DOI syntax, and the forms a DOI takes in EPO non-patent literature citations | `_epo_xml.py`: `extract_doi`; `_tools_patent.py` NPL resolution |
