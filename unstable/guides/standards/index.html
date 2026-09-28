@@ -1567,6 +1567,10 @@ is the community-maintained Relaton YAML dumps at
 <a href="https://github.com/relaton/relaton-data-iso"><code>relaton/relaton-data-iso</code></a>,
 <a href="https://github.com/relaton/relaton-data-iec"><code>relaton/relaton-data-iec</code></a>, and
 <a href="https://github.com/relaton/relaton-data-ieee"><code>relaton/relaton-data-ieee</code></a>.</p>
+<p>Only a sync replaces a synced record. A lookup through <code>get_standard</code> or
+<code>resolve_standard_identifier</code> caches what it fetched, but never over a synced
+record, so a synced standard stays in <code>search_standards</code> and never expires
+between syncs.</p>
 <h2 id="running-a-sync">Running a sync<a class="headerlink" href="#running-a-sync" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code>scholar-mcp sync-standards            # all registered bodies
 scholar-mcp sync-standards --body ISO # only ISO
