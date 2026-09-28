@@ -207,21 +207,21 @@ def test_first_link_of_type_finds_later_entry() -> None:
 
 
 # ---------------------------------------------------------------------------
-# _first_title coverage
+# _full_title coverage
 # ---------------------------------------------------------------------------
 
 
-def test_first_title_plain_string() -> None:
+def test_full_title_plain_string() -> None:
     """When titles[0] is a plain string, it is returned as-is."""
-    from scholar_mcp._sync_relaton import _first_title
+    from scholar_mcp._sync_relaton import _full_title
 
-    assert _first_title(["Some Title"]) == "Some Title"
+    assert _full_title(["Some Title"]) == "Some Title"
 
 
-def test_first_title_empty_list() -> None:
-    from scholar_mcp._sync_relaton import _first_title
+def test_full_title_empty_list() -> None:
+    from scholar_mcp._sync_relaton import _full_title
 
-    assert _first_title([]) == ""
+    assert _full_title([]) == ""
 
 
 # ---------------------------------------------------------------------------
@@ -1567,3 +1567,156 @@ def test_yaml_to_record_supersedes_string_entries_skipped() -> None:
 
     assert record is not None
     assert record["supersedes"] == ["ISO 9001:2008"]
+
+
+# ---------------------------------------------------------------------------
+# #480: the composed ``main`` title, not whichever part comes first
+# ---------------------------------------------------------------------------
+
+# Title lists copied from relaton-data-iso, -iec and -ieee (fetched 2026-09-28).
+_ISO_27002_TITLES = [
+    {
+        "content": "Information security, cybersecurity and privacy protection",
+        "language": ["en"],
+        "type": "title-intro",
+    },
+    {
+        "content": "Information security controls",
+        "language": ["en"],
+        "type": "title-main",
+    },
+    {
+        "content": "Information security, cybersecurity and privacy protection - "
+        "Information security controls",
+        "language": ["en"],
+        "type": "main",
+    },
+    {
+        "content": "Sécurité de l'information, cybersécurité et protection de la "
+        "vie privée",
+        "language": ["fr"],
+        "type": "title-intro",
+    },
+    {
+        "content": "Mesures de sécurité de l'information",
+        "language": ["fr"],
+        "type": "title-main",
+    },
+    {
+        "content": "Sécurité de l'information, cybersécurité et protection de la "
+        "vie privée - Mesures de sécurité de l'information",
+        "language": ["fr"],
+        "type": "main",
+    },
+]
+_IEC_AMENDMENT_TITLES = [
+    {"content": "Amendment 1", "language": "en", "type": "title-intro"},
+    {
+        "content": "Specification for CISPR radio interference measuring "
+        "apparatus for the frequency range 0,15 MHz to 30 MHz",
+        "language": "en",
+        "type": "title-main",
+    },
+    {
+        "content": "Amendment 1 - Specification for CISPR radio interference "
+        "measuring apparatus for the frequency range 0,15 MHz to 30 MHz",
+        "language": "en",
+        "type": "main",
+    },
+    {"content": "Amendement 1", "language": "fr", "type": "title-intro"},
+]
+_IEEE_TITLES = [
+    {
+        "content": "IRE Standards on Antennas and Waveguides: Definitions for "
+        "Waveguide Components, 1955",
+        "language": None,
+        "type": "main",
+    },
+]
+
+
+@pytest.mark.parametrize(
+    ("titles", "expected"),
+    [
+        (
+            _ISO_27002_TITLES,
+            "Information security, cybersecurity and privacy protection - "
+            "Information security controls",
+        ),
+        (
+            _IEC_AMENDMENT_TITLES,
+            "Amendment 1 - Specification for CISPR radio interference "
+            "measuring apparatus for the frequency range 0,15 MHz to 30 MHz",
+        ),
+        (
+            _IEEE_TITLES,
+            "IRE Standards on Antennas and Waveguides: Definitions for "
+            "Waveguide Components, 1955",
+        ),
+        # French-only main: still better than a bare part.
+        (
+            [
+                {"content": "Exigences", "language": ["fr"], "type": "title-main"},
+                {"content": "Qualité - Exigences", "language": ["fr"], "type": "main"},
+            ],
+            "Qualité - Exigences",
+        ),
+        # No composed title at all: fall back to the first entry, as before.
+        ([{"content": "orphan", "type": "title-main"}], "orphan"),
+        # A main with no usable text is skipped, and so is a bad first entry.
+        ([{"type": "main", "content": None}, {"type": "main", "content": "X"}], "X"),
+        ([5], ""),
+    ],
+    ids=[
+        "iso-list-language",
+        "iec-string-language",
+        "ieee-null-language",
+        "non-english-main",
+        "no-main",
+        "empty-main-skipped",
+        "unusable-entry",
+    ],
+)
+def test_full_title_prefers_the_english_main_title(titles: list, expected: str) -> None:
+    from scholar_mcp._sync_relaton import _full_title
+
+    assert _full_title(titles) == expected
+
+
+def test_iso_27001_and_27002_no_longer_share_a_title() -> None:
+    """The observed symptom: two standards, one title-intro, one title."""
+    from scholar_mcp._sync_relaton import _yaml_to_record
+
+    iso_27001_titles = [
+        {
+            "content": "Information security, cybersecurity and privacy protection",
+            "language": ["en"],
+            "type": "title-intro",
+        },
+        {
+            "content": "Information security management systems",
+            "language": ["en"],
+            "type": "title-main",
+        },
+        {"content": "Requirements", "language": ["en"], "type": "title-part"},
+        {
+            "content": "Information security, cybersecurity and privacy protection - "
+            "Information security management systems - Requirements",
+            "language": ["en"],
+            "type": "main",
+        },
+    ]
+    first, _ = _yaml_to_record(
+        {
+            "docid": [{"id": "ISO/IEC 27001:2022", "type": "ISO", "primary": True}],
+            "title": iso_27001_titles,
+        }
+    )
+    second, _ = _yaml_to_record(
+        {
+            "docid": [{"id": "ISO/IEC 27002:2022", "type": "ISO", "primary": True}],
+            "title": _ISO_27002_TITLES,
+        }
+    )
+    assert first is not None and second is not None
+    assert first["title"] != second["title"]

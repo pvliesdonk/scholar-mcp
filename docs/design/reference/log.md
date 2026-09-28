@@ -2,6 +2,19 @@
 
 Newest first. One entry per research pass.
 
+## 2026-09-28
+
+### Relaton titles
+
+Added [Relaton bibitem titles](relaton-titles.md) for #480, where synced ISO
+records carried only their `title-intro`. Read the relaton-iso README, which
+shows `main` as the composed title beside its typed parts, and ten records
+across relaton-data-iso, -iec and -ieee, pinned to the commits read. IEC
+amendments have the same shape and were affected too; the IEEE records carry
+`main` only. `language` is a list, a string or null depending on the
+repository. Whether every record has a `main`, and whether English always
+comes first (which the abstract lookup also relies on), remain unverified.
+
 ## 2026-09-25
 
 ### Semantic Scholar `limit` maxima

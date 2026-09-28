@@ -27,6 +27,7 @@ world does. Read the relevant one before changing code that talks to it — the
 | [GitHub planning objects](github-planning-objects.md) | Milestones, issue relationships, and pull request design material | `roadmapping` and release automation |
 | [Semantic Scholar API behaviour](semantic-scholar-api.md) | Published rate limits and endpoint shapes, with historical throttle reports marked unverified | `_s2_client.py`, `_rate_limiter.py`, `_tools_graph.py` |
 | [Google Books volume search](google-books-api.md) | ISBN search, result shape, and observed anonymous 429 | `_google_books_client.py`, `_enricher_google_books.py`, `_tools_books.py` |
+| [Relaton bibitem titles](relaton-titles.md) | How ISO, IEC and IEEE Relaton records list a title's parts, its composed `main` title and its languages | `_sync_relaton.py`: `_full_title` (sync and `_relaton_live.py`) |
 
 ## Vendored sources
 

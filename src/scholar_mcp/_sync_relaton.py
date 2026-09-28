@@ -4,6 +4,7 @@ Shared between the ISO and IEC sync loaders; the joint-standard detection
 logic lives in :func:`_canonical_identifier_and_body`.
 
 Design reference: ``docs/design/history/specs/2026-04-13-pr2-iso-iec-relaton-design.md``.
+External behaviour (the title list): ``docs/design/reference/relaton-titles.md``.
 """
 
 from __future__ import annotations
@@ -182,17 +183,53 @@ def _first_link_of_type(links: list[dict[str, Any]] | None, wanted: str) -> str 
     return None
 
 
-def _first_title(titles: list[Any] | None) -> str:
-    if not titles:
-        return ""
-    first = titles[0]
-    if isinstance(first, str):
-        return first
-    if isinstance(first, dict):
-        content = first.get("content")
+def _title_content(entry: Any) -> str:
+    """Return a title entry's text: a bare string, or a mapping's ``content``."""
+    if isinstance(entry, str):
+        return entry
+    if isinstance(entry, dict):
+        content = entry.get("content")
         if isinstance(content, str):
             return content
     return ""
+
+
+def _is_english(entry: dict[str, Any]) -> bool:
+    """Whether a title entry is in English.
+
+    ``language`` is a list in relaton-data-iso, a bare string in
+    relaton-data-iec and null in relaton-data-ieee.
+    """
+    language = entry.get("language")
+    if isinstance(language, str):
+        return language == "en"
+    return isinstance(language, list) and "en" in language
+
+
+def _full_title(titles: list[Any] | None) -> str:
+    """Return the full title from a Relaton ``title`` list.
+
+    Relaton lists a title's parts (``title-intro``, ``title-main``,
+    ``title-part``) beside the composed ``main`` title, once per language. The
+    intro alone is shared by whole series, so taking the first entry gave
+    ISO/IEC 27001 and 27002 the same title (#480). Prefers the English
+    ``main``, then any ``main``, then the first entry.
+
+    See ``docs/design/reference/relaton-titles.md``.
+
+    Args:
+        titles: The document's ``title`` list.
+
+    Returns:
+        The title text, or ``""`` when there is none.
+    """
+    if not titles:
+        return ""
+    mains = [t for t in titles if isinstance(t, dict) and t.get("type") == "main"]
+    for entry in [t for t in mains if _is_english(t)] + mains:
+        if content := _title_content(entry):
+            return content
+    return _title_content(titles[0])
 
 
 def _published_date(dates: list[dict[str, Any]] | None) -> str | None:
@@ -287,7 +324,7 @@ def _yaml_to_record(
         )
         return None, []
 
-    title = _first_title(doc.get("title"))
+    title = _full_title(doc.get("title"))
     if not title:
         logger.debug(
             "relaton_yaml_skip reason=%s identifier=%s", "no_title", identifier

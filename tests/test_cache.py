@@ -328,7 +328,7 @@ async def test_repair_drops_nist_standards_cached_under_a_foreign_identity(tmp_p
     await old.close()
 
     async with aiosqlite.connect(db_path) as db:
-        await db.execute("DELETE FROM repairs")
+        await db.execute("DELETE FROM repairs WHERE name LIKE '400_%'")
         await db.commit()
 
     upgraded = ScholarCache(db_path)
@@ -431,7 +431,7 @@ async def test_repair_moves_embedded_standard_text_out_of_the_record(tmp_path):
     await old.close()
 
     async with aiosqlite.connect(db_path) as db:
-        await db.execute("DELETE FROM repairs")
+        await db.execute("DELETE FROM repairs WHERE name LIKE '479_%'")
         await db.commit()
 
     upgraded = ScholarCache(db_path)
@@ -453,6 +453,78 @@ async def test_repair_moves_embedded_standard_text_out_of_the_record(tmp_path):
         await upgraded.close()
 
 
+async def test_repair_forces_a_relaton_resync_and_drops_short_titles(tmp_path):
+    """#480: every Relaton title cached before the fix is replaced.
+
+    Synced rows are kept for the next sync to rewrite, and that sync must
+    reparse even when upstream has not moved. Live rows and cached search
+    results have no such rewrite coming, so they go.
+    """
+    import aiosqlite
+
+    db_path = tmp_path / "standards.db"
+    old = ScholarCache(db_path)
+    await old.open()
+    short = "Information security, cybersecurity and privacy protection"
+    for body in ("ISO", "IEEE", "CC"):
+        await old.set_sync_run(
+            body=body,
+            upstream_ref="abc123",
+            added=1,
+            updated=0,
+            unchanged=0,
+            withdrawn=0,
+            errors=[],
+            started_at=1.0,
+            finished_at=2.0,
+        )
+    await old.set_standard(
+        "ISO/IEC 27002:2022",
+        {"identifier": "ISO/IEC 27002:2022", "body": "ISO/IEC", "title": short},
+    )
+    await old.set_standard(
+        "ISO/IEC 27001:2022",
+        {"identifier": "ISO/IEC 27001:2022", "body": "ISO/IEC", "title": short},
+        source="ISO",
+        synced=True,
+    )
+    # A CC mirror of an ISO/IEC publication: synced by the CC loader, kept.
+    await old.set_standard(
+        "ISO/IEC 15408-1:2022",
+        {"identifier": "ISO/IEC 15408-1:2022", "body": "ISO/IEC", "title": "CC"},
+        source="CC",
+        synced=True,
+    )
+    # A live row from another body is not Relaton's and stays.
+    await old.set_standard(
+        "RFC 9000", {"identifier": "RFC 9000", "body": "IETF", "title": "QUIC"}
+    )
+    await old.set_standards_search("27001", [{"identifier": "x", "title": short}])
+    await old.close()
+
+    async with aiosqlite.connect(db_path) as db:
+        await db.execute("DELETE FROM repairs WHERE name LIKE '480_%'")
+        await db.commit()
+
+    upgraded = ScholarCache(db_path)
+    await upgraded.open()
+    try:
+        for body in ("ISO", "IEEE"):
+            run = await upgraded.get_sync_run(body)
+            assert run is not None
+            assert run["upstream_ref"] is None
+        cc_run = await upgraded.get_sync_run("CC")
+        assert cc_run is not None
+        assert cc_run["upstream_ref"] == "abc123"
+        assert await upgraded.get_standard("ISO/IEC 27002:2022") is None
+        assert await upgraded.get_standard("ISO/IEC 27001:2022") is not None
+        assert await upgraded.get_standard("ISO/IEC 15408-1:2022") is not None
+        assert await upgraded.get_standard("RFC 9000") is not None
+        assert await upgraded.get_standards_search("27001") is None
+    finally:
+        await upgraded.close()
+
+
 async def test_every_registered_repair_is_valid_sql(cache):
     """A malformed statement would otherwise only surface on a user's upgrade."""
     assert set(_REPAIRS) == {
@@ -470,6 +542,9 @@ async def test_every_registered_repair_is_valid_sql(cache):
         "479_move_standard_full_text",
         "479_resync_cc_rows",
         "479_strip_standard_full_text",
+        "480_resync_relaton_bodies",
+        "480_live_relaton_rows",
+        "480_standards_search_results",
     }
     for statement in _REPAIRS.values():
         await cache._db.execute(f"EXPLAIN {statement}")

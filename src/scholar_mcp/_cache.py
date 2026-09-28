@@ -373,6 +373,26 @@ _REPAIRS: dict[str, str] = {
         "UPDATE standards SET data = json_remove(data, '$.full_text') "
         "WHERE json_extract(data, '$.full_text') IS NOT NULL"
     ),
+    # #480: Relaton records took their title from the first entry of the
+    # title list, the series-wide title-intro, so ISO/IEC 27001 and 27002
+    # shared one title. Synced rows are rewritten by the next sync-standards
+    # run; clearing the stored commit makes that run reparse even when the
+    # upstream repository has not moved since.
+    "480_resync_relaton_bodies": (
+        "UPDATE standards_sync_runs SET upstream_ref = NULL "
+        "WHERE body IN ('ISO', 'IEC', 'IEEE')"
+    ),
+    # Live-fetched Relaton rows carry the same short title and no sync
+    # rewrites them, so they go for one refetch each. Synced rows stay until
+    # the resync replaces them.
+    "480_live_relaton_rows": (
+        "DELETE FROM standards WHERE synced_at IS NULL "
+        "AND json_extract(data, '$.body') IN "
+        "('ISO', 'IEC', 'IEEE', 'ISO/IEC', 'IEC/IEEE', 'ISO/IEC/IEEE')"
+    ),
+    # Cached search results hold the short titles too, and nothing in a
+    # cached list says which body each record came from.
+    "480_standards_search_results": "DELETE FROM standards_search",
 }
 
 
