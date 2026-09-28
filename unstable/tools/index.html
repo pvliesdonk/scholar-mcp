@@ -3392,7 +3392,7 @@ state.</p>
 <span class="w">  </span><span class="p">}</span>
 <span class="p">}</span>
 </code></pre></div>
-<p>When <code>citations</code> is requested, non-patent literature (NPL) references are resolved against Semantic Scholar on a best-effort basis. References with a DOI are resolved with <code>"confidence": "high"</code>. References without a DOI or that fail to resolve have <code>"confidence": null</code>. When citation strings contain chapter patterns (such as "Ch. 5" or "pp. 112-130"), a <code>chapter_info</code> dict is included with parsed chapter and page information.</p>
+<p>When <code>citations</code> is requested, non-patent literature (NPL) references are resolved against Semantic Scholar on a best-effort basis. References with a DOI are resolved with <code>"confidence": "high"</code>. A DOI is recognised after <code>doi:</code>, <code>DOI</code>, or in a <code>doi.org</code> link, and one that does not resolve is still returned in <code>doi</code>. References without a DOI or that fail to resolve have <code>"confidence": null</code>. When citation strings contain chapter patterns (such as "Ch. 5" or "pp. 112-130"), a <code>chapter_info</code> dict is included with parsed chapter and page information.</p>
 <hr />
 <h3 id="get_citing_patents"><code>get_citing_patents</code><a class="headerlink" href="#get_citing_patents" title="Permanent link">&para;</a></h3>
 <p>Find patents that cite a given academic paper. Coverage is incomplete; relies on EPO OPS citation search, which does not capture all patent-to-paper citations. Best results with DOIs of well-known papers.</p>

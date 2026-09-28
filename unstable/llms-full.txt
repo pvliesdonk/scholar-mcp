@@ -1712,7 +1712,7 @@ Sections are fetched concurrently where possible (cache lookups run in parallel;
 }
 ```
 
-When `citations` is requested, non-patent literature (NPL) references are resolved against Semantic Scholar on a best-effort basis. References with a DOI are resolved with `"confidence": "high"`. References without a DOI or that fail to resolve have `"confidence": null`. When citation strings contain chapter patterns (such as "Ch. 5" or "pp. 112-130"), a `chapter_info` dict is included with parsed chapter and page information.
+When `citations` is requested, non-patent literature (NPL) references are resolved against Semantic Scholar on a best-effort basis. References with a DOI are resolved with `"confidence": "high"`. A DOI is recognised after `doi:`, `DOI`, or in a `doi.org` link, and one that does not resolve is still returned in `doi`. References without a DOI or that fail to resolve have `"confidence": null`. When citation strings contain chapter patterns (such as "Ch. 5" or "pp. 112-130"), a `chapter_info` dict is included with parsed chapter and page information.
 
 ______________________________________________________________________
 
