@@ -47,6 +47,8 @@ Four tools are available once configured:
 
 PDFs are stored in `$SCHOLAR_MCP_CACHE_DIR/pdfs/` and Markdown files in `$SCHOLAR_MCP_CACHE_DIR/md/`.
 
+Downloads are accepted only when the response body begins with the PDF header `%PDF-`. Other successful HTTP responses return `not_pdf` before conversion; an existing cached file without that header is fetched again. The check does not validate the complete PDF structure.
+
 ## Reading converted text
 
 Document tools return at most 20,000 Markdown characters by default. A paged response includes the current `text_offset`, the returned and total character counts, and `next_offset` when more text remains. Call the same tool again with `text_offset` set to `next_offset`; the conversion is already cached, so this does not repeat the expensive work.

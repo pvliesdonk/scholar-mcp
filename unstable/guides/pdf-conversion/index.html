@@ -1650,6 +1650,10 @@
 </tbody>
 </table>
 <p>PDFs are stored in <code>$SCHOLAR_MCP_CACHE_DIR/pdfs/</code> and Markdown files in <code>$SCHOLAR_MCP_CACHE_DIR/md/</code>.</p>
+<p>Downloads are accepted only when the response body begins with the PDF header
+<code>%PDF-</code>. Other successful HTTP responses return <code>not_pdf</code> before conversion;
+an existing cached file without that header is fetched again. The check does
+not validate the complete PDF structure.</p>
 <h2 id="reading-converted-text">Reading converted text<a class="headerlink" href="#reading-converted-text" title="Permanent link">&para;</a></h2>
 <p>Document tools return at most 20,000 Markdown characters by default. A paged
 response includes the current <code>text_offset</code>, the returned and total character
