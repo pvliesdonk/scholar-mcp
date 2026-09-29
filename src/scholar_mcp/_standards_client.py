@@ -551,7 +551,7 @@ class _NISTFetcher:
         age_days = (time.time() - path.stat().st_mtime) / 86400
         if age_days > _NIST_CACHE_MAX_AGE_DAYS:
             logger.info(
-                "nist_catalogue_stale age_days=%.0f threshold=%d — re-downloading",
+                "nist_catalogue_stale age_days=%.0f threshold_days=%d action=redownload",
                 age_days,
                 _NIST_CACHE_MAX_AGE_DAYS,
             )

@@ -149,12 +149,12 @@ def parse_chapter_hint(citation: str) -> ChapterHint:
     m13 = _RE_ISBN13.search(citation)
     if m13:
         hint.isbn = _clean_isbn(m13.group())
-        logger.debug("parse_chapter_hint isbn=%s (isbn13)", hint.isbn)
+        logger.debug("parse_chapter_hint isbn=%s isbn_kind=isbn13", hint.isbn)
     else:
         m10 = _RE_ISBN10.search(citation)
         if m10:
             hint.isbn = _clean_isbn(m10.group())
-            logger.debug("parse_chapter_hint isbn=%s (isbn10)", hint.isbn)
+            logger.debug("parse_chapter_hint isbn=%s isbn_kind=isbn10", hint.isbn)
 
     return hint
 

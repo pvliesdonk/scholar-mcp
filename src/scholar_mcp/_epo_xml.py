@@ -210,7 +210,7 @@ def parse_biblio_xml(xml_bytes: bytes) -> PatentRecord:
         # Fall back: search without exch prefix (default namespace handling)
         exchange_doc = root.find(f".//{{{_EXCH}}}exchange-document")
     if exchange_doc is None:
-        logger.warning("No exchange-document found in biblio XML")
+        logger.warning("epo_biblio_missing element=exchange-document")
         return _empty_biblio()
 
     family_id = exchange_doc.get("family-id", "")
@@ -218,7 +218,7 @@ def parse_biblio_xml(xml_bytes: bytes) -> PatentRecord:
 
     biblio = exchange_doc.find(f"{{{_EXCH}}}bibliographic-data")
     if biblio is None:
-        logger.warning("No bibliographic-data found in exchange-document")
+        logger.warning("epo_biblio_missing element=bibliographic-data")
         return _empty_biblio()
 
     # --- Publication reference ---
@@ -421,7 +421,7 @@ def parse_search_xml(xml_bytes: bytes) -> dict[str, Any]:
 
     biblio_search = root.find("ops:biblio-search", _NS)
     if biblio_search is None:
-        logger.warning("No ops:biblio-search element found in search XML")
+        logger.warning("epo_search_missing element=ops:biblio-search")
         return {"total_count": 0, "references": []}
 
     total_count = int(biblio_search.get("total-result-count", "0"))

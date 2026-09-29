@@ -262,7 +262,7 @@ def _build_docling(
         returned alongside so the service can close it on shutdown.
     """
     if not config.docling_url:
-        logger.info("docling_not_configured pdf_tools_disabled")
+        logger.info("docling_not_configured pdf_tools=disabled")
         return None, None
 
     http = httpx.AsyncClient(base_url=config.docling_url, timeout=300.0)

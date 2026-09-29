@@ -127,7 +127,7 @@ async def test_build_docling_returns_none_pair_when_unconfigured(
         http, docling = _build_docling(ProjectConfig.from_env())
 
     assert (http, docling) == (None, None)
-    assert "docling_not_configured pdf_tools_disabled" in caplog.text
+    assert "docling_not_configured pdf_tools=disabled" in caplog.text
 
 
 async def test_start_failure_closes_what_was_already_built(

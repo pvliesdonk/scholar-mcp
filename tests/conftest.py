@@ -124,13 +124,14 @@ class PlainClient(Client[Any]):
 
 
 @pytest.fixture
-def config_contract_env() -> dict[str, str]:
-    """Env vars the template's `test_config_contract.py` presets before it
-    constructs the config via an otherwise env-less ``ProjectConfig.from_env()``.
+def config_contract_env(tmp_path_factory: pytest.TempPathFactory) -> dict[str, str]:
+    """Env vars every template-owned test presets before building from the env.
 
-    Scholar's ``from_env`` hard-requires nothing, so there is nothing to preset.
+    Scholar's ``from_env`` requires nothing, but its cache directory defaults
+    to ``/data/scholar-mcp``, which a test host cannot write; the template's
+    env-scrubbing tests would otherwise fail on server construction.
     """
-    return {}
+    return {"SCHOLAR_MCP_CACHE_DIR": str(tmp_path_factory.mktemp("contract-cache"))}
 
 
 @pytest.fixture
