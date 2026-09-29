@@ -134,7 +134,7 @@ files:
         id: epo_consumer_secret
         title: "EPO OPS consumer secret"
         sensitive: true
-      FASTMCP_LOG_LEVEL:
+      "{PREFIX}_LOG_LEVEL":
         id: log_level
         title: "Log level"
 

@@ -30,8 +30,6 @@ def register_apps(_mcp: FastMCP) -> None:
         or os.environ.get(f"{_ENV_PREFIX}_BASE_URL", "").strip()
     )
     if app_domain:
-        logger.info(
-            "MCP Apps scaffold present but not wired — app_domain=%s", app_domain
-        )
+        logger.info("apps_scaffold_not_wired app_domain=%s", app_domain)
     else:
-        logger.debug("MCP Apps scaffold inactive (no app_domain configured)")
+        logger.debug("apps_scaffold_inactive reason=no_app_domain")

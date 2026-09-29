@@ -349,10 +349,12 @@ def test_systemd_uses_raw_host_path_not_container(page: Page) -> None:
     # systemd is a host-path context: no container-path rewrite.
     assert "DEMO_DATA_DIR=/host/data" in result
     assert "/data/app" not in result
-    # The wizard's unit frame mirrors the packaged one, whose journald output
-    # is not a terminal either; tests/test_container_logging.py pins the same
-    # default on that file.
-    assert "Environment=FASTMCP_ENABLE_RICH_LOGGING=false" in result, result
+    # The wizard's unit frame mirrors the packaged one: journald is not a
+    # terminal, pvl-core renders JSON there by itself, and neither unit pins
+    # a log format (tests/test_container_logging.py holds the packaged one
+    # to the same absence).
+    assert "FASTMCP_ENABLE_RICH_LOGGING" not in result, result
+    assert "LOG_FORMAT" not in result, result
 
 
 def test_docker_targets_omit_the_pinned_listener_vars(page: Page) -> None:
@@ -388,8 +390,9 @@ def test_docker_targets_omit_the_pinned_listener_vars(page: Page) -> None:
         assert "DEMO_PORT" not in result[target], result[target]
         # Everything else still flows through.
         assert "DEMO_OTHER" in result[target]
-    assert "8000:8000" in result["docker"]
-    assert "8000:8000" in result["compose"]
+    # Both targets publish on loopback only, like the shipped compose.yml.
+    assert "-p 127.0.0.1:8000:8000" in result["docker"], result["docker"]
+    assert '"127.0.0.1:8000:8000"' in result["compose"], result["compose"]
     # The wizard's compose frame mirrors the shipped compose.yml, liveness
     # probe included; tests/test_compose.py pins the same URL on that file.
     assert "127.0.0.1:8000/health" in result["compose"], result["compose"]

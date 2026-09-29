@@ -25,8 +25,12 @@ services:
     env_file:
       - path: .env
         required: false
+    # Published on the host's loopback interface only, so this file as written
+    # reaches no other machine.  Authentication, not the bind address, is what
+    # protects the server: set a bearer token or OIDC in `.env` first, then
+    # publish wider from `compose.override.yml` (`docs/deployment/docker.md`).
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     # Named volume permissions are fixed automatically by the entrypoint.
     # For bind-mount UID/GID mismatch, set PUID/PGID in your .env file:
     #   PUID=1001
@@ -45,6 +49,10 @@ services:
       # Determined by this file, not an operator knob: points the server at
       # the state volume mounted above.  Everything else belongs in `.env`.
       FASTMCP_HOME: /data/state/fastmcp
+      # A container's stderr is not a terminal, so the server logs one JSON
+      # object per record with nothing set.  Uncomment to read `docker logs`
+      # in colour instead (`.env` works too; this is the same knob).
+      # SCHOLAR_MCP_LOG_FORMAT: rich
       # DOMAIN-COMPOSE-ENVIRONMENT-START — project env; kept across copier update
       # DOMAIN-COMPOSE-ENVIRONMENT-END
     # Liveness: `GET /health` answers 200 for as long as the process serves.

@@ -24,16 +24,19 @@ from fastmcp_pvl_core import (
     configure_task_backend,
     env,  # also used by DOMAIN-WIRING additions, so no new import is needed there
     finalize_instructions,
+    get_current_auth_mode,
     instructions_for,
     normalise_http_path,
     register_health_routes,
     register_server_info_tool,
-    resolve_auth_mode,
     wire_middleware_stack,
 )
 
 from scholar_mcp._server_apps import register_apps
-from scholar_mcp._server_deps import server_lifespan
+from scholar_mcp._server_deps import (
+    bind_config,
+    server_lifespan,
+)
 from scholar_mcp.config import ProjectConfig
 from scholar_mcp.prompts import register_prompts
 from scholar_mcp.resources import register_resources
@@ -59,7 +62,10 @@ def make_server(
             stdio), gates the template's own liveness and readiness
             routes, which register for ``"http"`` alone, and appears as
             ``transport=%s`` in the startup log.
-        config: Optional pre-loaded config; default loads from env.
+        config: Optional pre-loaded config; default loads from env.  Bound
+            to the server before the registrars run, so ``register_*``
+            code reads it back with ``_server_deps.config_for(mcp)`` and
+            handlers with ``Depends(get_config)``.
         http_path: The MCP mount path the caller will hand to
             ``http_app(path=...)``.  The health routes derive their prefix
             from it, so the CLI passes the value it resolved; unset, the
@@ -72,7 +78,7 @@ def make_server(
         A configured :class:`fastmcp.FastMCP` instance.
     """
     config = config or ProjectConfig.from_env()
-    configure_logging_from_env()
+    configure_logging_from_env(_ENV_PREFIX)
     mount_path = normalise_http_path(http_path or env(_ENV_PREFIX, "HTTP_PATH"))
 
     # One source for the name, so `FastMCP(name=...)` below and the shaped
@@ -86,13 +92,17 @@ def make_server(
     server_name = config.server_name
 
     auth = build_auth(config.server)
-    auth_mode = resolve_auth_mode(config.server) if auth is not None else "none"
-    if auth_mode == "none":
-        logger.warning(
-            "No auth configured — server accepts unauthenticated connections"
-        )
-    else:
-        logger.info("Auth enabled: mode=%s", auth_mode)
+    # pvl-core records the mode ``build_auth`` resolved and announces it as
+    # ``auth_mode_resolved mode=… source=…`` (pvl-core#310); reading it back
+    # here replaces a second ``resolve_auth_mode`` run and a second
+    # announcement (#605).
+    auth_mode = get_current_auth_mode() or "none"
+    if transport == "stdio" and auth is not None:
+        # FastMCP applies auth on the HTTP transports only; stdio inherits
+        # the security of its local execution environment, so the provider
+        # built above is never consulted there. Say so rather than let the
+        # ``auth=`` field below read as enforcement (#617).
+        logger.warning("auth_configured_but_stdio_skips_enforcement mode=%s", auth_mode)
 
     try:
         pkg_ver = _pkg_version("pvliesdonk-scholar-mcp")
@@ -100,7 +110,7 @@ def make_server(
         pkg_ver = "unknown"
 
     logger.info(
-        "Server config: version=%s name=%s transport=%s auth=%s",
+        "server_configured version=%s name=%s transport=%s auth=%s",
         pkg_ver,
         server_name,
         transport,
@@ -112,6 +122,14 @@ def make_server(
         lifespan=server_lifespan,
         auth=auth,
     )
+
+    # Make the resolved config reachable from the registrars below without
+    # threading it through their signatures, which are project-owned and
+    # vary: ``config_for(mcp)`` at registration time, ``Depends(get_config)``
+    # in a handler — both in ``_server_deps``.  A subsystem a registrar builds
+    # from the environment instead silently disagrees with a ``config`` passed
+    # in here (#534).
+    bind_config(mcp, config)
 
     wire_middleware_stack(mcp)
 
@@ -140,8 +158,11 @@ def make_server(
     # may use only INSTANCE, CAPABILITIES, and WORKFLOWS; pvl-core reserves the
     # shaped identity, operator routing/policy, and documentation roles.
     # ``finalize_instructions`` renders them once, after tool visibility.
+    # One argument per line with a trailing comma, which ruff keeps as it is at
+    # any length: the blurb may run to the validator's 100 characters (#704).
     instructions_for(mcp).identity(
-        server_name, "Scholarly papers, patents, books, standards and PDF conversion"
+        server_name,
+        "Scholarly papers, patents, books, standards and PDF conversion",
     )
     # The docs site publishes llms.txt per version (mkdocs-llmstxt, mike);
     # `/latest/` resolves once the first release has published the site.
@@ -271,6 +292,11 @@ def make_server(
     #         # the generic tool descriptions — context only, no shape change.
     #     )
     #
+    # _my_validator rejects a ref only by raising
+    # ToolError(msg, log_level=logging.INFO), and the model reads msg. Any other
+    # exception, a ValueError included, is reported to the model as a server
+    # fault ("the request was fine; retry later").
+    #
     # Path 2 — your own tool over the same capability-link machinery, when the
     # generic pair cannot express it (a different name, a domain-accurate
     # description, domain-specific parameters). build_transfer_links mounts the
@@ -278,13 +304,18 @@ def make_server(
     # caller ref itself, then mints over the already-validated sink handle:
     #
     # if transport != "stdio":
-    #     from fastmcp_pvl_core import add_transfer_workflow, build_transfer_links
+    #     from fastmcp_pvl_core import (
+    #         add_transfer_workflow,
+    #         build_transfer_links,
+    #         tool_boundary,
+    #     )
     #
     #     links = build_transfer_links(
     #         mcp, config.server, config.transfer, sink=_my_transfer_sink
     #     )
     #
     #     @mcp.tool
+    #     @tool_boundary
     #     async def share_document(doc_id: str) -> dict[str, object]:
     #         """Mint a one-shot download link for a document."""
     #         handle = _resolve_and_check(doc_id)  # your validation -> sink handle
