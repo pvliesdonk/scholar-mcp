@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 
 
 def test_register_s2_tool_applies_tool_boundary(slow_jobs: Jobs) -> None:
+    """The registered function carries pvl-core's boundary marker."""
     mcp = FastMCP("t")
 
     @register_s2_tool(mcp, slow_jobs)

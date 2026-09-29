@@ -5,6 +5,8 @@ from __future__ import annotations
 from fastmcp import FastMCP
 from fastmcp_pvl_core import Jobs, JobsConfig, build_jobs, register_job_tools
 
+from ._server_deps import config_for
+
 _JOBS_NOTE = (
     "Scholar MCP promotes slow work to a background job. PDF download and "
     "docling conversion usually take 1-5 minutes, a busy EPO traffic light "
@@ -43,8 +45,6 @@ def register_tools(
         # Both halves come from the one ProjectConfig make_server resolved and
         # bound (bind_config): `server` selects the KV backend the job records
         # live in, `jobs` carries the deadline, TTL and per-subject cap.
-        from ._server_deps import config_for
-
         config = config_for(mcp)
         jobs_config = jobs_config or config.jobs
         jobs = build_jobs(config.server, jobs_config)
