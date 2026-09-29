@@ -367,19 +367,27 @@ async def get_standard(
     )
 
 
+# The single source of get_sync_status's model-facing text; see its docstring.
+_SYNC_STATUS_DESCRIPTION = (
+    "Report the last standards sync run for each standards body. "
+    'Returns {"runs": [...]}, one row per body with body, upstream_ref, '
+    "added, updated, unchanged, withdrawn, errors (non-fatal error "
+    "strings from the latest run; empty on success), started_at and "
+    "finished_at (Unix seconds). runs is empty when no sync has run yet."
+)
+
+
 async def get_sync_status(
     service: Service = Depends(get_service),
 ) -> dict[str, Any]:
     """Report the last sync run for each standards body.
 
-    One row per body. ``started_at`` / ``finished_at`` are Unix
-    timestamps (seconds). ``errors`` is a list of non-fatal error
-    strings from the most recent run (empty on success).
+    The model-facing description is ``_SYNC_STATUS_DESCRIPTION``, passed at
+    registration: this tool has no model-visible parameters, so FastMCP
+    would otherwise ship this whole docstring, section headings included.
 
     Returns:
-        ``{"runs": [{body, upstream_ref, added, updated,
-        unchanged, withdrawn, errors, started_at, finished_at}, ...]}``.
-        Empty ``runs`` list when no sync has been run yet.
+        The runs payload ``_SYNC_STATUS_DESCRIPTION`` describes.
     """
     runs = await service.cache.list_sync_runs()
     return {"runs": runs}
@@ -428,15 +436,7 @@ def register_standards_tools(mcp: FastMCP, jobs: Jobs) -> None:
         },
     )(get_standard)
     mcp.tool(
-        # A tool with no model-visible parameters ships its docstring whole,
-        # Returns: section included, so the description is given explicitly.
-        description=(
-            "Report the last standards sync run for each standards body. "
-            'Returns {"runs": [...]}, one row per body with body, upstream_ref, '
-            "added, updated, unchanged, withdrawn, errors (non-fatal error "
-            "strings from the latest run; empty on success), started_at and "
-            "finished_at (Unix seconds). runs is empty when no sync has run yet."
-        ),
+        description=_SYNC_STATUS_DESCRIPTION,
         annotations={
             "title": "Get Sync Status",
             "readOnlyHint": True,

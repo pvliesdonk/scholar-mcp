@@ -1018,3 +1018,19 @@ async def test_resolve_keeps_a_synced_row_synced(
     data = json.loads(result.content[0].text)
     assert data["record"]["title"] == "Common Criteria Part 1"
     assert "CC:2022 Part 1" in await service.cache.list_synced_standard_ids("CC")
+
+
+async def test_get_sync_status_description_carries_no_docstring_sections(
+    mcp: FastMCP,
+) -> None:
+    """The advertised description is the explicit one, not the whole docstring.
+
+    ``get_sync_status`` has no model-visible parameters, so without an
+    explicit ``description=`` FastMCP ships its docstring whole, section
+    headings included.
+    """
+    async with Client(mcp) as client:
+        tools = {t.name: t for t in await client.list_tools()}
+    description = tools["get_sync_status"].description or ""
+    assert "Returns:" not in description
+    assert '{"runs": [...]}' in description
