@@ -2,6 +2,20 @@
 
 Newest first. One entry per research pass.
 
+## 2026-09-29
+
+### Template-authored pages
+
+Five pages arrived with the fastmcp-server-template v11.0.2 update (#508),
+researched upstream and carried here unchanged:
+[GitHub and git behaviour behind integration branches](github-integration-branches.md),
+[GitHub repository security settings](github-repository-security-settings.md),
+[MCP model-facing text](mcp-model-facing-text.md),
+[MCP tool outcomes and errors](mcp-tool-outcomes-and-errors.md) and
+[Negative outcomes and faults outside MCP](negative-outcomes-and-faults.md).
+Their research history is in the template's own log; each page's frontmatter
+carries its review date.
+
 ## 2026-09-28
 
 ### Semantic Scholar author pages
