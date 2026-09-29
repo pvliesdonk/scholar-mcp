@@ -890,3 +890,41 @@ def test_extract_doi(text: str, doi: str | None) -> None:
     from scholar_mcp._epo_xml import extract_doi
 
     assert extract_doi(text) == doi
+
+
+_OPS_ROOT = (
+    b'<ops:world-patent-data xmlns:ops="http://ops.epo.org" '
+    b'xmlns="http://www.epo.org/exchange">%s</ops:world-patent-data>'
+)
+
+
+@pytest.mark.parametrize(
+    ("body", "element"),
+    [
+        (b"", "exchange-document"),
+        (
+            b'<exchange-documents><exchange-document family-id="1" country="EP">'
+            b"</exchange-document></exchange-documents>",
+            "bibliographic-data",
+        ),
+    ],
+    ids=["no-exchange-document", "no-bibliographic-data"],
+)
+def test_parse_biblio_xml_logs_the_missing_element(
+    body: bytes, element: str, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A biblio response missing a required element yields an empty record."""
+    with caplog.at_level("WARNING", logger="scholar_mcp._epo_xml"):
+        result = parse_biblio_xml(_OPS_ROOT % body)
+    assert result["title"] == ""
+    assert f"epo_biblio_missing element={element}" in caplog.messages
+
+
+def test_parse_search_xml_logs_a_missing_biblio_search(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A search response without ops:biblio-search yields no references."""
+    with caplog.at_level("WARNING", logger="scholar_mcp._epo_xml"):
+        result = parse_search_xml(_OPS_ROOT % b"")
+    assert result == {"total_count": 0, "references": []}
+    assert "epo_search_missing element=ops:biblio-search" in caplog.messages
