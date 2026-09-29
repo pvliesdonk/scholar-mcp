@@ -51,7 +51,7 @@ Add to your shell profile:
 | `SCHOLAR_MCP_VLM_MODEL` | `gpt-4o` | Model name for VLM-enriched conversion. |
 | `SCHOLAR_MCP_EPO_CONSUMER_KEY` | _(none)_ | EPO OPS key (enables patent tools). |
 | `SCHOLAR_MCP_EPO_CONSUMER_SECRET` | _(none)_ | EPO OPS secret. |
-| `FASTMCP_LOG_LEVEL` | `INFO` | `DEBUG` / `INFO` / `WARNING` / `ERROR`. |
+| `SCHOLAR_MCP_LOG_LEVEL` | `INFO` | `DEBUG` / `INFO` / `WARNING` / `ERROR` / `CRITICAL`. The unprefixed `FASTMCP_LOG_LEVEL` still works for one major version. |
 
 For the full list, see [Configuration](../configuration.md).
 

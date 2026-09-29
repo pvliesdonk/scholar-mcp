@@ -41,7 +41,7 @@ Optional environment variables:
 | `SCHOLAR_MCP_EPO_CONSUMER_KEY` | -- | EPO OPS key (enables patent tools). |
 | `SCHOLAR_MCP_EPO_CONSUMER_SECRET` | -- | EPO OPS secret. |
 | `SCHOLAR_MCP_GOOGLE_BOOKS_API_KEY` | -- | Google Books API key (higher rate limits). |
-| `FASTMCP_LOG_LEVEL` | `INFO` | `DEBUG` / `INFO` / `WARNING` / `ERROR`. |
+| `SCHOLAR_MCP_LOG_LEVEL` | `INFO` | `DEBUG` / `INFO` / `WARNING` / `ERROR` / `CRITICAL`. The unprefixed `FASTMCP_LOG_LEVEL` still works for one major version. |
 
 For the full list of env vars, see the
 [Configuration reference](https://pvliesdonk.github.io/scholar-mcp/configuration/).
