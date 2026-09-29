@@ -428,6 +428,15 @@ def register_standards_tools(mcp: FastMCP, jobs: Jobs) -> None:
         },
     )(get_standard)
     mcp.tool(
+        # A tool with no model-visible parameters ships its docstring whole,
+        # Returns: section included, so the description is given explicitly.
+        description=(
+            "Report the last standards sync run for each standards body. "
+            'Returns {"runs": [...]}, one row per body with body, upstream_ref, '
+            "added, updated, unchanged, withdrawn, errors (non-fatal error "
+            "strings from the latest run; empty on success), started_at and "
+            "finished_at (Unix seconds). runs is empty when no sync has run yet."
+        ),
         annotations={
             "title": "Get Sync Status",
             "readOnlyHint": True,
