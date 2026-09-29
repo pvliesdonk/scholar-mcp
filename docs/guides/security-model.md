@@ -21,9 +21,35 @@ Over stdio there is no network listener and no authentication. The MCP client st
 An authenticated caller has every tool the instance exposes. Each tool runs with the server's own privileges: its filesystem and network access, and any credential in its configuration. `SCHOLAR_MCP_TOOLS_ALLOW` and `SCHOLAR_MCP_TOOLS_DENY` trim that set for an instance; see [Configuration](../configuration.md).
 
 <!-- DOMAIN-SECURITY-MODEL-SURFACE-START — what THIS server's tools reach; kept across copier update -->
-<!-- Replace with what this server's tools can do with the server's privileges:
-     which data they read and change, which outbound requests they make, and
-     which credentials they use on the caller's behalf. -->
+This server's tools make outbound HTTPS requests on the caller's behalf and
+keep what they fetch in a local cache.
+
+- **Outbound requests.** Paper, citation and author tools call Semantic
+  Scholar, OpenAlex, Crossref and Unpaywall. PDF lookups also try arXiv and
+  PubMed Central. Book tools call Open Library and the Google Books API.
+  Patent tools call EPO Open Patent Services. Standards tools call the IETF
+  (`datatracker.ietf.org`), the RFC Editor, W3C, ETSI, the Common Criteria portal, the
+  European Commission's harmonised-standards pages and GitHub (the Relaton
+  datasets and the NIST catalogue releases). Every request carries the
+  caller's query terms to that service.
+- **Caller-chosen URLs.** `fetch_pdf_by_url` downloads whatever URL the
+  caller passes and follows redirects. The server does not filter private or
+  internal addresses, so the tool can reach anything the server's network can
+  reach. It is a write tool: `SCHOLAR_MCP_READ_ONLY=true`, the default, hides
+  it along with the other download and conversion tools.
+- **PDF conversion.** When `SCHOLAR_MCP_DOCLING_URL` is set, conversion tools
+  send downloaded PDFs to that docling-serve instance. When
+  `SCHOLAR_MCP_VLM_API_URL` is set, the server passes that URL and
+  `SCHOLAR_MCP_VLM_API_KEY` to docling-serve, which sends page images to the
+  VLM endpoint.
+- **Local data.** Tools read and write the SQLite cache, downloaded PDFs,
+  converted Markdown and book covers under `SCHOLAR_MCP_CACHE_DIR`, and write
+  nothing outside it.
+- **Credentials.** Upstream calls use the server's own keys, never the
+  caller's: `SCHOLAR_MCP_S2_API_KEY`, `SCHOLAR_MCP_EPO_CONSUMER_KEY` and
+  `SCHOLAR_MCP_EPO_CONSUMER_SECRET`, `SCHOLAR_MCP_GOOGLE_BOOKS_API_KEY`,
+  `SCHOLAR_GITHUB_TOKEN`, and the VLM key above. `SCHOLAR_MCP_CONTACT_EMAIL`
+  is sent to OpenAlex and Unpaywall as the polite-pool contact.
 <!-- DOMAIN-SECURITY-MODEL-SURFACE-END -->
 
 ## What answers without a credential
