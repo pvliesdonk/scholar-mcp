@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 import httpx
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
-from fastmcp_pvl_core import register_long_running_tool
+from fastmcp_pvl_core import register_long_running_tool, tool_boundary
 
 from ._book_enrichment import cache_book_record, enrich_authors_from_work
 from ._cache import normalize_isbn
@@ -347,7 +347,7 @@ def register_book_tools(mcp: FastMCP, jobs: Jobs) -> None:
             "destructiveHint": False,
             "openWorldHint": True,
         },
-    )(get_book_excerpt)
+    )(tool_boundary(get_book_excerpt))
     mcp.tool(
         annotations={
             "title": "Recommend Books",
@@ -355,7 +355,7 @@ def register_book_tools(mcp: FastMCP, jobs: Jobs) -> None:
             "destructiveHint": False,
             "openWorldHint": True,
         },
-    )(recommend_books)
+    )(tool_boundary(recommend_books))
 
 
 async def _resolve_isbn(isbn: str, service: Service) -> dict[str, Any]:

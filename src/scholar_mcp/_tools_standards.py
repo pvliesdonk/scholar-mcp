@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
-from fastmcp_pvl_core import register_long_running_tool
+from fastmcp_pvl_core import register_long_running_tool, tool_boundary
 
 from ._record_types import StandardRecord
 from ._server_deps import get_service
@@ -443,7 +443,7 @@ def register_standards_tools(mcp: FastMCP, jobs: Jobs) -> None:
             "destructiveHint": False,
             "openWorldHint": False,
         },
-    )(get_sync_status)
+    )(tool_boundary(get_sync_status))
 
 
 async def _handle_full_text(
