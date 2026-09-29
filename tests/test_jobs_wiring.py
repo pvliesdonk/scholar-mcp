@@ -346,8 +346,10 @@ def test_register_tools_builds_jobs_from_the_bound_config(
 ) -> None:
     """A config passed to make_server reaches the jobs backend, not the env.
 
-    The env carries one soft deadline and the passed config another; the
-    Jobs that register_tools builds must use the passed one.
+    Both halves are pinned: the env carries one soft deadline and the passed
+    config another, and the server half (which selects the KV backend the job
+    records live in) must be the passed config's own object, not one rebuilt
+    from the environment.
     """
     import dataclasses
 
@@ -361,14 +363,17 @@ def test_register_tools_builds_jobs_from_the_bound_config(
     config = dataclasses.replace(
         ProjectConfig.from_env(), jobs=JobsConfig(soft_deadline_s=7.0)
     )
-    seen: list[JobsConfig] = []
+    seen: list[tuple[Any, JobsConfig]] = []
     real_build_jobs = tools_module.build_jobs
 
     def spy(server: Any, jobs_config: JobsConfig) -> Any:
-        seen.append(jobs_config)
+        seen.append((server, jobs_config))
         return real_build_jobs(server, jobs_config)
 
     monkeypatch.setattr(tools_module, "build_jobs", spy)
     make_server(config=config)
 
-    assert [c.soft_deadline_s for c in seen] == [7.0]
+    assert len(seen) == 1
+    server, jobs_config = seen[0]
+    assert jobs_config.soft_deadline_s == 7.0
+    assert server is config.server
