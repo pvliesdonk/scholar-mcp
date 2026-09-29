@@ -31,6 +31,13 @@ _EPO_READ_WRITE = _READ_WRITE | {
 _NAMED = {"SCHOLAR_MCP_SERVER_NAME": "scholar-mcp-prod"}
 
 
+def _configured_auth_mode(caplog: pytest.LogCaptureFixture) -> str:
+    """The ``auth=`` field of the ``server_configured`` startup record."""
+    (record,) = [r for r in caplog.records if r.msg.startswith("server_configured ")]
+    assert isinstance(record.args, tuple)
+    return str(record.args[-1])
+
+
 class TestAuthModeSelection:
     """Tests for make_server() auth mode selection.
 
@@ -82,7 +89,7 @@ class TestAuthModeSelection:
             server = make_server(transport="http")
 
         assert isinstance(server.auth, MultiAuth)
-        assert "Auth enabled: mode=multi" in caplog.text
+        assert _configured_auth_mode(caplog) == "multi"
 
     def test_multi_auth_structure(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """OIDCProxy must be server= (not in verifiers=) for OAuth routes to mount."""
@@ -270,7 +277,7 @@ class TestMakeServerRemoteAuth:
         with patch("httpx.get", return_value=mock_resp), caplog.at_level(logging.INFO):
             server = make_server(transport="http")
         assert isinstance(server.auth, MultiAuth)
-        assert "Auth enabled: mode=multi" in caplog.text
+        assert _configured_auth_mode(caplog) == "multi"
 
     def test_make_server_propagates_oidc_failure_on_stdio(
         self, monkeypatch: pytest.MonkeyPatch

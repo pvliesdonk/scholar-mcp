@@ -9,8 +9,6 @@ in read-only mode alongside write tools.
 See https://gofastmcp.com/servers/prompts for the full prompt API.
 """
 
-from __future__ import annotations
-
 from fastmcp import FastMCP
 
 
