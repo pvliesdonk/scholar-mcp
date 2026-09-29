@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
@@ -215,7 +216,7 @@ def test_serve_http_binds_env_host_over_loopback_default(
     monkeypatch.setenv("SCHOLAR_MCP_PORT", "9137")
     result, captured = _invoke_http_serve()
     assert result.exit_code == 0, result.output
-    assert captured == {"host": "0.0.0.0", "port": 9137}
+    assert captured == {"host": os.environ["SCHOLAR_MCP_HOST"], "port": 9137}
 
 
 def test_serve_http_explicit_host_flag_wins(
