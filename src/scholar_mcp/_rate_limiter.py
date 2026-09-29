@@ -149,11 +149,11 @@ async def with_s2_retry(
                 raise
             if context is not None:
                 logger.warning(
-                    "s2_rate_limited attempt=%d waiting=%.1fs", attempt + 1, wait
+                    "s2_rate_limited attempt=%d waiting_s=%.1f", attempt + 1, wait
                 )
             else:
                 logger.warning(
-                    "s2_rate_limited attempt=%d/%d waiting=%.1fs",
+                    "s2_rate_limited attempt=%d max_attempts=%d waiting_s=%.1f",
                     attempt + 1,
                     retries + 1,
                     wait,
