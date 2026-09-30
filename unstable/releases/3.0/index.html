@@ -1304,6 +1304,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#server-errors-logs-and-security" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Server errors, logs and security
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#upgrading" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1314,6 +1325,28 @@
   
     <nav class="md-nav" aria-label="Upgrading">
       <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#logging-variables-and-log-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Logging variables and log format
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#docker-compose-publishes-on-loopback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Docker Compose publishes on loopback
+      
+    </span>
+  </a>
+  
+</li>
         
           <li class="md-nav__item">
   <a href="#packaged-systemd-deployments" class="md-nav__link">
@@ -1348,6 +1381,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#synced-standards" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Synced standards
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1374,30 +1418,48 @@
 
 
 <h1 id="30">3.0<a class="headerlink" href="#30" title="Permanent link">&para;</a></h1>
-<!-- notes-range-end: 751313ed7c15eac7c6b2aa4be739eb7fb74a47ef -->
+<!-- notes-range-end: abadcbae988ef3c0ab9fed5e92aa94019854acfe -->
 
 <!-- RELEASE-SUMMARY v3.0.0 START -->
 <p>Scholar MCP 3.0 corrects wrong or incomplete answers across its research tools
 and repairs affected cached rows on upgrade. Semantic Scholar throttling becomes
 background work, while converted documents arrive in pages that clients can
-receive. Packaged systemd deployments and two Python library call paths need
-migration steps described below.</p>
+receive. Logging variables, container log format, the Compose port binding and
+packaged systemd deployments change for operators, and one Python library call
+path changes; the upgrade steps are described below.</p>
 <!-- RELEASE-SUMMARY v3.0.0 END -->
 
 <h2 id="correct-answers-including-cached-records">Correct answers, including cached records<a class="headerlink" href="#correct-answers-including-cached-records" title="Permanent link">&para;</a></h2>
 <p>The stabilization package set out to make Scholar MCP "answer correctly where
 2.0 answered wrongly or not at all," including for rows cached before an upgrade
 (<a href="https://github.com/pvliesdonk/scholar-mcp/issues/429">epic #429</a>). The fixes
-include a one-shot cache repair system. On startup, each repair deletes
-only rows made invalid by its corresponding fix and records that it ran. Operators
-do not need to clear the cache or discard downloaded PDFs and converted Markdown
+include a one-shot cache repair system. On startup, each repair removes or
+corrects only the rows made invalid by its corresponding fix and records that it
+ran. Operators do not need to clear the cache or discard downloaded PDFs and
+converted Markdown
 (<a href="https://github.com/pvliesdonk/scholar-mcp/issues/440">#440</a>,
-<a href="https://github.com/pvliesdonk/scholar-mcp/pull/441">#441</a>).</p>
+<a href="https://github.com/pvliesdonk/scholar-mcp/pull/441">#441</a>). Synced ISO and IEC
+standards are the one exception: they are corrected by the next
+<code>sync-standards</code> run, described under <a href="#upgrading">Upgrading</a>.</p>
 <p>Paper and book workflows now return the requested data instead of leaking quirks
-from their upstream sources. <code>get_author</code> applies <code>limit</code> to live and cached
-direct-ID lookups, even when Semantic Scholar ignores the requested limit
+from their upstream sources. <code>get_author</code> pages the publications of a
+direct-ID lookup with <code>limit</code> and <code>offset</code> and adds <code>next_offset</code> when more follow.
+In 2.0 both parameters were ignored, because Semantic Scholar's author endpoint
+honours neither; every page is now served from one cached record
 (<a href="https://github.com/pvliesdonk/scholar-mcp/issues/367">#367</a>,
-<a href="https://github.com/pvliesdonk/scholar-mcp/pull/431">#431</a>). Citation generation
+<a href="https://github.com/pvliesdonk/scholar-mcp/pull/431">#431</a>,
+<a href="https://github.com/pvliesdonk/scholar-mcp/issues/490">#490</a>,
+<a href="https://github.com/pvliesdonk/scholar-mcp/pull/504">#504</a>). <code>search_papers</code>,
+<code>get_citations</code>, <code>get_references</code> and <code>recommend_papers</code> cap <code>limit</code> at each
+endpoint's documented maximum (100, 1,000, 1,000 and 500) rather than passing a
+larger value on and returning an opaque <code>upstream_error</code>
+(<a href="https://github.com/pvliesdonk/scholar-mcp/issues/476">#476</a>,
+<a href="https://github.com/pvliesdonk/scholar-mcp/pull/489">#489</a>). When
+<code>batch_resolve</code> falls back to OpenAlex for a DOI, the <code>paper</code> it returns uses
+Semantic Scholar field names and honours the requested <code>fields</code> preset instead
+of carrying the raw OpenAlex work
+(<a href="https://github.com/pvliesdonk/scholar-mcp/issues/478">#478</a>,
+<a href="https://github.com/pvliesdonk/scholar-mcp/pull/502">#502</a>). Citation generation
 uses Semantic Scholar's conference publication type for BibTeX <code>@inproceedings</code>,
 CSL-JSON <code>paper-conference</code>, and RIS <code>CONF</code> output
 (<a href="https://github.com/pvliesdonk/scholar-mcp/issues/404">#404</a>,
@@ -1411,25 +1473,63 @@ fresh record and alias on a miss, and make no Semantic Scholar request when the
 metadata and converted files are already present
 (<a href="https://github.com/pvliesdonk/scholar-mcp/issues/373">#373</a>,
 <a href="https://github.com/pvliesdonk/scholar-mcp/pull/435">#435</a>,
-<a href="https://github.com/pvliesdonk/scholar-mcp/pull/467">#467</a>).</p>
+<a href="https://github.com/pvliesdonk/scholar-mcp/pull/467">#467</a>). The PDF download
+tools also check that what they downloaded is a PDF. A response whose body does
+not begin with <code>%PDF-</code> returns <code>{"error": "not_pdf"}</code> before it is cached or
+converted, where 2.0 stored an HTML page as a <code>.pdf</code> and reported only that
+conversion produced no Markdown. A cached file without the header is downloaded
+again (<a href="https://github.com/pvliesdonk/scholar-mcp/issues/484">#484</a>,
+<a href="https://github.com/pvliesdonk/scholar-mcp/pull/492">#492</a>, contributed by
+@mikemikimike).</p>
 <p>Patent records now include the abstract and the country associated with each EPO
 legal event. Patent numbers also normalize spacing, punctuation, and letter case
 before cache lookup, so equivalent spellings reuse one metadata row and one PDF
 (<a href="https://github.com/pvliesdonk/scholar-mcp/issues/399">#399</a>,
 <a href="https://github.com/pvliesdonk/scholar-mcp/issues/405">#405</a>,
 <a href="https://github.com/pvliesdonk/scholar-mcp/issues/402">#402</a>,
-<a href="https://github.com/pvliesdonk/scholar-mcp/issues/444">#444</a>).</p>
+<a href="https://github.com/pvliesdonk/scholar-mcp/issues/444">#444</a>). Non-patent
+literature citations resolve when the DOI is written as a <code>doi.org</code> link or as
+<code>DOI 10.…</code> without a colon, not only after <code>doi:</code>; on the patent in the report,
+none of 22 citations resolved before
+(<a href="https://github.com/pvliesdonk/scholar-mcp/issues/482">#482</a>,
+<a href="https://github.com/pvliesdonk/scholar-mcp/pull/503">#503</a>).</p>
 <p>Standards lookups match NIST identifiers exactly rather than by substring. ETSI
 failures are no longer reported as missing standards: direct lookup returns a
 rate-limit or upstream-error payload, identifier resolution preserves the
-canonical value with a warning, and multi-body search identifies partial results
+canonical value with a warning, and multi-body search marks partial results
 without caching them
 (<a href="https://github.com/pvliesdonk/scholar-mcp/issues/400">#400</a>,
 <a href="https://github.com/pvliesdonk/scholar-mcp/issues/401">#401</a>,
 <a href="https://github.com/pvliesdonk/scholar-mcp/pull/452">#452</a>,
-<a href="https://github.com/pvliesdonk/scholar-mcp/pull/455">#455</a>). The
+<a href="https://github.com/pvliesdonk/scholar-mcp/pull/455">#455</a>). The warning names
+each source that gave no usable answer, with its HTTP status and the reason, for
+example <code>ETSI (HTTP 200: answered with a non-JSON body, content-type: text/html)</code>
+(<a href="https://github.com/pvliesdonk/scholar-mcp/issues/477">#477</a>,
+<a href="https://github.com/pvliesdonk/scholar-mcp/pull/495">#495</a>).</p>
+<p>Standards records themselves are corrected in three ways:</p>
+<ul>
+<li>ISO and IEC records carry the full composed title. In 2.0 they carried only
+  its first part, so ISO/IEC 27001:2022 and 27002:2022 shared one title
+  (<a href="https://github.com/pvliesdonk/scholar-mcp/issues/480">#480</a>,
+  <a href="https://github.com/pvliesdonk/scholar-mcp/pull/498">#498</a>).</li>
+<li><code>get_standard</code> returns <code>full_text</code> only when called with
+  <code>fetch_full_text=true</code>. In 2.0, once any caller had fetched a standard's text,
+  every later lookup returned the whole text as well; converted text is now
+  stored apart from the record and still not converted twice
+  (<a href="https://github.com/pvliesdonk/scholar-mcp/issues/479">#479</a>,
+  <a href="https://github.com/pvliesdonk/scholar-mcp/pull/497">#497</a>).</li>
+<li>A lookup through <code>get_standard</code> or <code>resolve_standard_identifier</code> never
+  replaces a synced record. In 2.0 it could, which dropped the standard from
+  <code>search_standards</code> and put it under the 90-day cache expiry; Common Criteria
+  records were affected on every resolution
+  (<a href="https://github.com/pvliesdonk/scholar-mcp/issues/496">#496</a>,
+  <a href="https://github.com/pvliesdonk/scholar-mcp/pull/501">#501</a>).</li>
+</ul>
+<p>The cache repairs move previously stored text out of standards records and
+restore Common Criteria records to the synced set. The
 <a href="../../tools/">tool reference</a> documents the final response shapes and
-identifier rules.</p>
+identifier rules, and the <a href="../../guides/standards/">standards guide</a> describes
+sync behaviour.</p>
 <h2 id="semantic-scholar-throttling-becomes-a-job">Semantic Scholar throttling becomes a job<a class="headerlink" href="#semantic-scholar-throttling-becomes-a-job" title="Permanent link">&para;</a></h2>
 <p>All Semantic Scholar traffic from one server process now passes through one gate
 with at least 1.1 seconds between requests. A 429 extends a shared cooldown, so a
@@ -1472,8 +1572,75 @@ again. Clients that can accept the remaining text in one response can set
 <code>max_chars=null</code> for the previous behavior
 (<a href="https://github.com/pvliesdonk/scholar-mcp/pull/465">#465</a>). The
 <a href="../../guides/pdf-conversion/">PDF conversion guide</a> has the paging recipe.</p>
+<h2 id="server-errors-logs-and-security">Server errors, logs and security<a class="headerlink" href="#server-errors-logs-and-security" title="Permanent link">&para;</a></h2>
+<p>This release moves to
+<a href="https://github.com/pvliesdonk/fastmcp-server-template/releases/tag/v11.0.2">fastmcp-server-template v11.0.2</a>
+and fastmcp-pvl-core 10, from template v8.1.0 and pvl-core 7.1 in 2.0
+(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/513">#513</a>). Three effects
+reach users of this server; the logging changes are under
+<a href="#upgrading">Upgrading</a>.</p>
+<p>When a tool fails with an unexpected exception, the model receives a fixed
+message, "The call failed because of a server-side error; the request itself
+was fine. Retry later, and tell the user if it keeps failing." In 2.0 it
+received FastMCP's <code>Error calling tool</code> text with the exception's own message.
+The server logs the failure once as <code>tool_failed</code> at ERROR with its traceback.
+Results the tools return on purpose, such as <code>{"error": "not_found"}</code>, are
+unchanged
+(<a href="https://github.com/pvliesdonk/fastmcp-server-template/blob/v11.0.2/upgrading/v10.0.md">template upgrade note v10.0</a>).</p>
+<p>The project now publishes a <code>SECURITY.md</code> policy and accepts private
+vulnerability reports through GitHub. The new
+<a href="../../guides/security-model/">security model</a> page lists the upstream services
+each tool family calls and the credentials the server holds for them, and names
+the cache directory as the only place tools write. It also states that
+<code>fetch_pdf_by_url</code>, hidden in the default read-only mode, downloads any URL a
+caller passes, including addresses on the server's own network
+(<a href="https://github.com/pvliesdonk/scholar-mcp/issues/514">#514</a> tracks this).</p>
+<p>The dependency lock pins PyJWT 2.15.1. v2.0.0 locked PyJWT 2.13.0, which ten
+advisories published on 2026-09-29 affect (one critical, five high, four
+medium; all fixed in 2.14.0)
+(<a href="https://github.com/pvliesdonk/scholar-mcp/issues/516">#516</a>,
+<a href="https://github.com/pvliesdonk/scholar-mcp/pull/517">#517</a>). PyJWT reaches
+Scholar MCP only through client code in the MCP SDK; neither this server nor
+FastMCP's server-side authentication imports it. The container image installs
+from the lock. Installations that resolve dependencies themselves should
+confirm PyJWT is at 2.14.0 or later.</p>
 <h2 id="upgrading">Upgrading<a class="headerlink" href="#upgrading" title="Permanent link">&para;</a></h2>
-<p>This release has three compatibility changes against v2.0.0.</p>
+<p>Five areas change against v2.0.0, and synced standards need one maintenance
+step.</p>
+<h3 id="logging-variables-and-log-format">Logging variables and log format<a class="headerlink" href="#logging-variables-and-log-format" title="Permanent link">&para;</a></h3>
+<p><code>FASTMCP_LOG_LEVEL</code> is renamed <code>SCHOLAR_MCP_LOG_LEVEL</code>. The old name still
+works until the next major release and logs <code>log_level_env_deprecated</code> at
+startup. <code>FASTMCP_ENABLE_RICH_LOGGING</code> is removed; <code>SCHOLAR_MCP_LOG_FORMAT</code>
+takes <code>rich</code> or <code>json</code>. Left unset, it renders Rich lines on a terminal and one
+JSON object per record everywhere else, so container and journald logs change
+from 2.0's Rich text to JSON with <code>ts</code>, <code>level</code>, <code>logger</code> and <code>event</code> fields.
+Re-key log queries and alerts, or set <code>SCHOLAR_MCP_LOG_FORMAT=rich</code> to keep
+readable lines
+(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/513">#513</a>,
+<a href="https://github.com/pvliesdonk/fastmcp-server-template/blob/v11.0.2/upgrading/v9.0.md">template upgrade note v9.0</a>).
+Several Scholar MCP log events also changed form: <code>s2_rate_limited</code> now
+reports <code>waiting_s=</code> in place of <code>waiting=…s</code>
+(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/510">#510</a> lists each one).
+The Claude Desktop bundle and the Claude Code plugin map their log-level setting
+to the new name without any action.</p>
+<p>Over HTTP, <code>SCHOLAR_MCP_SHUTDOWN_GRACE_S</code> (default 3) now gives in-flight
+requests that many seconds to finish on SIGTERM; 2.0 dropped them at once. The
+<a href="../../configuration/">configuration reference</a> lists both logging variables and
+the shutdown grace setting.</p>
+<h3 id="docker-compose-publishes-on-loopback">Docker Compose publishes on loopback<a class="headerlink" href="#docker-compose-publishes-on-loopback" title="Permanent link">&para;</a></h3>
+<p><code>compose.yml</code> now publishes the server as <code>127.0.0.1:8000:8000</code> instead of
+<code>8000:8000</code>, so the quick start is reachable only from the Docker host. A
+deployment behind a reverse proxy on a shared network is unaffected. If other
+machines reach the container directly, confirm authentication is configured and
+publish on every interface from <code>compose.override.yml</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">services</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">scholar-mcp</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">ports</span><span class="p">:</span><span class="w"> </span><span class="kt">!override</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;8000:8000&quot;</span>
+</code></pre></div>
+<p>See the <a href="../../deployment/docker/">Docker deployment guide</a>
+(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/513">#513</a>,
+<a href="https://github.com/pvliesdonk/fastmcp-server-template/blob/v11.0.2/upgrading/v9.3.md">template upgrade note v9.3</a>).</p>
 <h3 id="packaged-systemd-deployments">Packaged systemd deployments<a class="headerlink" href="#packaged-systemd-deployments" title="Permanent link">&para;</a></h3>
 <p>The <code>.deb</code> and <code>.rpm</code> unit no longer supplies <code>SCHOLAR_MCP_HOST=0.0.0.0</code>, and
 its generated <code>/etc/scholar-mcp/env.example</code> is fully commented. Before or
@@ -1483,24 +1650,12 @@ set <code>SCHOLAR_MCP_HOST=0.0.0.0</code>. An installation that relied on the ol
 default otherwise binds to <code>127.0.0.1</code> after the package restarts it
 (<a href="https://github.com/pvliesdonk/scholar-mcp/pull/423">#423</a>). See the
 <a href="../../deployment/systemd/">systemd deployment guide</a> for the complete unit and
-file layout.</p>
-<p>Container and systemd deployments now default
-<code>FASTMCP_ENABLE_RICH_LOGGING=false</code>, which produces one-line request records.
-Set it to <code>true</code> to retain Rich terminal formatting
-(<a href="https://github.com/pvliesdonk/fastmcp-server-template/releases/tag/v8.2.0">template v8.2.0</a>,
-<a href="https://github.com/pvliesdonk/scholar-mcp/pull/420">#420</a>). Existing explicit
-values still win.</p>
+file layout. The journal receives JSON records under the logging change above.</p>
 <h3 id="python-library-callers">Python library callers<a class="headerlink" href="#python-library-callers" title="Permanent link">&para;</a></h3>
 <p><code>scholar_mcp.server.build_event_store</code> now uses the shared core signature
 <code>build_event_store(env_prefix, config)</code>. Replace calls with no arguments, or
 with only a URL, by passing <code>"SCHOLAR_MCP"</code> and a <code>ServerConfig</code>
 (<a href="https://github.com/pvliesdonk/scholar-mcp/pull/422">#422</a>).</p>
-<p><code>make_server(config=...)</code> no longer forwards <code>config.jobs</code> to tool registration.
-Library callers whose explicit jobs configuration differs from the process
-environment must set <code>SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S</code>,
-<code>SCHOLAR_MCP_JOBS_RESULT_TTL_S</code>, and <code>SCHOLAR_MCP_JOBS_MAX_PER_SUBJECT</code> in the
-environment instead (<a href="https://github.com/pvliesdonk/scholar-mcp/issues/344">#344</a>,
-<a href="https://github.com/pvliesdonk/scholar-mcp/pull/422">#422</a>).</p>
 <h3 id="mcp-callers">MCP callers<a class="headerlink" href="#mcp-callers" title="Permanent link">&para;</a></h3>
 <p>Semantic Scholar 429 responses no longer return the immediate error shapes from
 v2.0.0; callers receive a job or native task handle while the lookup waits. Code
@@ -1510,6 +1665,13 @@ that interpreted the old error must poll the returned handle instead
 <code>next_offset</code> to collect the document in pages, or pass <code>max_chars=null</code> when a
 client can receive the complete remaining text
 (<a href="https://github.com/pvliesdonk/scholar-mcp/pull/465">#465</a>).</p>
+<h3 id="synced-standards">Synced standards<a class="headerlink" href="#synced-standards" title="Permanent link">&para;</a></h3>
+<p>Run <code>scholar-mcp sync-standards</code> once after upgrading. ISO and IEC records
+synced by 2.0 keep their shortened titles until the next sync rewrites them;
+the upgrade makes that run rewrite every ISO, IEC and IEEE record even when
+upstream has not changed
+(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/498">#498</a>). See the
+<a href="../../guides/standards/">standards guide</a>.</p>
 <!-- PATCH-RELEASES-START -->
 <!-- PATCH-RELEASES-END -->
 
