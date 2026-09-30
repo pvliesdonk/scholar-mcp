@@ -7,7 +7,7 @@ cp .env.example .env
 docker compose up -d
 ```
 
-The server listens on port 8000 with HTTP transport, published on the host as `8000:8000`. No reverse proxy, TLS terminator, or external network is assumed.
+The server listens on port 8000 with HTTP transport, published on the host as `127.0.0.1:8000:8000`, so only the host itself can connect. No reverse proxy, TLS terminator, or external network is assumed. Authentication is off, since every auth variable in `.env.example` is commented out; [Ports](#ports) covers serving other machines.
 
 Copying `.env.example` first is the step to keep. Every variable in it arrives commented out, so the server starts on its defaults and the copy changes no behaviour by itself. It is the file you edit next, and `compose.yml` names it.
 
@@ -28,7 +28,18 @@ The `env_file:` entry is marked `required: false`, so a checkout with no `.env` 
 
 ### Ports
 
-The image pins its own listener: `CMD` passes `--host 0.0.0.0 --port 8000`, so `SCHOLAR_MCP_HOST` and `SCHOLAR_MCP_PORT` in a `.env` do not move it. To serve on a different host port, change the left-hand side of the mapping (`"9000:8000"`) rather than the server's port.
+The image pins its own listener: `CMD` passes `--host 0.0.0.0 --port 8000`, so `SCHOLAR_MCP_HOST` and `SCHOLAR_MCP_PORT` in a `.env` do not move it. To serve on a different host port, change the host port in the mapping (`"127.0.0.1:9000:8000"`) rather than the server's port.
+
+`compose.yml` publishes on `127.0.0.1` because the quick start runs without authentication. The bind address limits which machines can connect; it does not replace authentication. To serve other machines, first configure a bearer token or OIDC ([Authentication](https://pvliesdonk.github.io/scholar-mcp/unstable/guides/authentication/index.md)), then either put a reverse proxy in front ([Behind a reverse proxy](#behind-a-reverse-proxy)) or publish on every interface from `compose.override.yml`:
+
+```
+services:
+  scholar-mcp:
+    ports: !override
+      - "8000:8000"
+```
+
+`!override` replaces the mapping instead of appending to it. The override file leaves `compose.yml` unedited, so a template update does not conflict with the change.
 
 ### Domain content and `copier update`
 
@@ -114,20 +125,17 @@ curl -s http://localhost:8000/health/ready
 
 ### Logs
 
-The image sets `FASTMCP_ENABLE_RICH_LOGGING=false`, so `docker logs` gets one line per record: a JSON object for every MCP request the logging middleware sees, `LEVEL: message` from the rest of FastMCP. Both grep cleanly and both survive a log collector. The server's own loggers print one line either way.
+`docker logs` gets one JSON object per record: a container's stderr is not a terminal, so the server picks its JSON renderer with nothing configured. Each line carries `ts`, `level` and `logger`, then the event name and its fields for a request or a tool call, and Docker adds its own timestamp on `docker logs -t`. Every logger in the process renders this way, FastMCP's and uvicorn's included.
 
-The reason is that a container has no terminal. Rich falls back to 80 columns, its time, level and source columns claim most of them, and a structured record then wraps across three space-padded lines that no reader and no parser puts back together. Rich's time column goes with the setting, and Docker timestamps every line it captures anyway, so `docker logs -t` prints them.
-
-This is an image default like any other, so `.env` or the compose `environment:` block overrides it. Turning Rich back on for a human reading `docker logs` needs `COLUMNS` set as well, since that is what Rich reads in place of asking a terminal it does not have. In `.env`:
+The image sets no log format, so `.env` or the compose `environment:` block decides. To read the stream in colour instead, for a person rather than a collector:
 
 ```
-FASTMCP_ENABLE_RICH_LOGGING=true
-COLUMNS=200
+SCHOLAR_MCP_LOG_FORMAT=rich
 ```
 
-Records then render one line each, in color, padded out to the full width. The packaged Debian and RPM installs make the same trade for `journalctl`: the systemd unit sets `FASTMCP_ENABLE_RICH_LOGGING=false`, and `/etc/scholar-mcp/env` overrides it.
+Records then render one `event key=value` line each. The packaged Debian and RPM installs behave the same way under `journalctl`: the systemd unit sets nothing, and `/etc/scholar-mcp/env` carries the choice.
 
-`FASTMCP_LOG_LEVEL` sets how much is logged; see [Configuration](https://pvliesdonk.github.io/scholar-mcp/unstable/configuration/#logging).
+`SCHOLAR_MCP_LOG_LEVEL` sets how much is logged; see [Configuration](https://pvliesdonk.github.io/scholar-mcp/unstable/configuration/#logging).
 
 ## Image tags
 
@@ -150,16 +158,16 @@ docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.revis
 
 ## Environment variables
 
-| Variable                           | Default               | Description                                                                                                   |
-| ---------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `SCHOLAR_MCP_BEARER_TOKEN`         | n/a                   | Enable bearer token auth                                                                                      |
-| `FASTMCP_LOG_LEVEL`                | `INFO`                | Log level (`DEBUG` / `INFO` / `WARNING` / `ERROR`)                                                            |
-| `FASTMCP_ENABLE_RICH_LOGGING`      | `false` in the image  | Rich output; off means one plain or JSON line per record (see [Logs](#logs))                                  |
-| `SCHOLAR_MCP_INSTANCE_DESCRIPTION` | n/a                   | Routing context that distinguishes this deployment                                                            |
-| `SCHOLAR_MCP_INSTRUCTIONS_EXTRA`   | n/a                   | Deployment-specific behavioral policy added to the generated MCP instructions                                 |
-| `SCHOLAR_MCP_INSTRUCTIONS`         | (computed at startup) | Legacy full replacement of the generated instructions (deprecated)                                            |
-| `SCHOLAR_MCP_DEBUG_PORT`           | n/a                   | Remote-debugger TCP port (see [Remote debugging](#remote-debugging); requires `--build-arg DEBUG=true` image) |
-| `SCHOLAR_MCP_DEBUG_WAIT`           | `false`               | Block startup until IDE attaches (see [Remote debugging](#remote-debugging))                                  |
+| Variable                           | Default                      | Description                                                                                                   |
+| ---------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `SCHOLAR_MCP_BEARER_TOKEN`         | n/a                          | Enable bearer token auth                                                                                      |
+| `SCHOLAR_MCP_LOG_LEVEL`            | `INFO`                       | Log level (`DEBUG` / `INFO` / `WARNING` / `ERROR` / `CRITICAL`)                                               |
+| `SCHOLAR_MCP_LOG_FORMAT`           | unset: `json` in a container | `rich` or `json`; unset picks by whether stderr is a terminal (see [Logs](#logs))                             |
+| `SCHOLAR_MCP_INSTANCE_DESCRIPTION` | n/a                          | Routing context that distinguishes this deployment                                                            |
+| `SCHOLAR_MCP_INSTRUCTIONS_EXTRA`   | n/a                          | Deployment-specific behavioral policy added to the generated MCP instructions                                 |
+| `SCHOLAR_MCP_INSTRUCTIONS`         | (computed at startup)        | Legacy full replacement of the generated instructions (deprecated)                                            |
+| `SCHOLAR_MCP_DEBUG_PORT`           | n/a                          | Remote-debugger TCP port (see [Remote debugging](#remote-debugging); requires `--build-arg DEBUG=true` image) |
+| `SCHOLAR_MCP_DEBUG_WAIT`           | `false`                      | Block startup until IDE attaches (see [Remote debugging](#remote-debugging))                                  |
 
 For OIDC auth variables, see [Authentication](https://pvliesdonk.github.io/scholar-mcp/unstable/guides/authentication/index.md).
 
@@ -195,7 +203,7 @@ Production images ship without `debugpy` to keep the image lean. To attach a rem
      -e SCHOLAR_MCP_DEBUG_PORT=5678 \
      -e SCHOLAR_MCP_DEBUG_WAIT=true \
      -p 127.0.0.1:5678:5678 \
-     -p 8000:8000 \
+     -p 127.0.0.1:8000:8000 \
      scholar-mcp:debug
    ```
 

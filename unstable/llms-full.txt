@@ -160,6 +160,7 @@ Generated guidance targets 1,536 UTF-16 units, reserving 512 units for normal op
 | `SCHOLAR_MCP_TRANSPORT`            | `stdio`     | Transport the server speaks: `stdio` for local Claude Desktop/Code, `http` or `sse` for a network server.                                                                                                                                                   |
 | `SCHOLAR_MCP_HOST`                 | `127.0.0.1` | Interface the HTTP server binds to.                                                                                                                                                                                                                         |
 | `SCHOLAR_MCP_PORT`                 | `8000`      | TCP port for the HTTP server.                                                                                                                                                                                                                               |
+| `SCHOLAR_MCP_SHUTDOWN_GRACE_S`     | `3`         | Seconds SIGTERM may spend draining in-flight requests before the HTTP server exits. Keep it at or below the termination grace period the orchestrator allows. `0` drops in-flight requests immediately.                                                     |
 | `SCHOLAR_MCP_BASE_URL`             | (none)      | Public base URL of the deployed server (`https://mcp.example.com`). Required for OIDC. Also the fallback source of the MCP Apps domain when `app_domain` is unset.                                                                                          |
 | `SCHOLAR_MCP_TOOLS_ALLOW`          | (none)      | Comma-separated explicit tool names this instance exposes; every other tool is hidden from listings and cannot be invoked. Names matching no registered tool are inert. Mutually exclusive with `tools_deny`. Takes effect through `apply_tool_visibility`. |
 | `SCHOLAR_MCP_TOOLS_DENY`           | (none)      | Comma-separated explicit tool names hidden from this instance (absent from listings, cannot be invoked). Names matching no registered tool are inert. Mutually exclusive with `tools_allow`. Takes effect through `apply_tool_visibility`.                  |
@@ -223,14 +224,18 @@ Worker tuning stays on the native `FASTMCP_DOCKET_*` variables below. Set the ba
 
 ## Logging
 
-`FASTMCP_ENABLE_RICH_LOGGING` picks the shape of FastMCP's own log output, the request-logging middleware included. Left on, Rich renders each record with color, a time column and the source file that emitted it. Turned off, the middleware emits one JSON object per record and the rest of FastMCP's loggers emit `LEVEL: message`. This server's own `scholar_mcp.*` lines are not affected either way: the CLI attaches its own one-line handler to the root logger.
+`SCHOLAR_MCP_LOG_LEVEL` sets how much every logger in the process says, FastMCP's own included; `-v` on the command line forces `DEBUG`. The unprefixed `FASTMCP_LOG_LEVEL` still works for one major version and logs a deprecation warning that names the replacement.
 
-The container image and the packaged systemd unit both default it to `false`, because neither stream is a terminal. Rich falls back to 80 columns there, and a structured record does not fit in what its own columns leave, so each record wraps across three space-padded lines that neither `docker logs` nor a collector reads back. `docker logs -t` and `journalctl` both carry a timestamp per line, covering the column Rich stops printing. Both are ordinary environment defaults: `.env`, the compose `environment:` block and `/etc/scholar-mcp/env` all override them. Turning Rich back on inside a container wraps the records again unless `COLUMNS` is set too, which is what Rich reads in preference to asking the terminal.
+`SCHOLAR_MCP_LOG_FORMAT` picks the renderer. `rich` writes one coloured `event key=value` line per record, for a person at a terminal. `json` writes one JSON object per record, with `ts`, `level`, `logger` and the event's own fields as keys, for a log collector. Unset, the server chooses by itself: `rich` when stderr is a terminal and `json` everywhere else, so a container and a systemd unit log JSON with no configuration. Neither the image nor the packaged unit sets anything.
 
-| Variable                      | Default | Description                                                                                                                                                                                                                 |
-| ----------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `FASTMCP_LOG_LEVEL`           | `INFO`  | Log level for FastMCP internals and app loggers (DEBUG / INFO / WARNING / ERROR / CRITICAL). The -v CLI flag overrides to DEBUG.                                                                                            |
-| `FASTMCP_ENABLE_RICH_LOGGING` | `true`  | Rich color output for a terminal; false gives one plain or JSON line per record. Off in the container image and the systemd unit, since neither is a terminal and Rich wraps a structured record at its 80-column fallback. |
+The choice applies to the whole process. pvl-core owns the root logger and switches FastMCP's own handlers off, so this server's `scholar_mcp.*` lines and FastMCP's render through the same chain, as do uvicorn's. Access lines from `uvicorn.access` are filtered rather than levelled: below `DEBUG` only failed requests (status 400 and above) appear, and at every level the query string is stripped and a credential in the path is redacted.
+
+Set `SCHOLAR_MCP_LOG_FORMAT=rich` in `.env` or in `/etc/scholar-mcp/env` to read a container's or a unit's log in colour. A test runner is not a terminal either: a test that asserts on Rich-shaped stderr needs the same setting, or it reads JSON.
+
+| Variable                 | Default | Description                                                                                                                                                                                                                                                              |
+| ------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `SCHOLAR_MCP_LOG_LEVEL`  | `INFO`  | Log level for every logger in the process, FastMCP's included (DEBUG / INFO / WARNING / ERROR / CRITICAL). The -v CLI flag overrides to DEBUG. The unprefixed FASTMCP_LOG_LEVEL still works for one major version and logs a deprecation warning.                        |
+| `SCHOLAR_MCP_LOG_FORMAT` | (none)  | Log rendering. rich is one colour event key=value line per record, for a terminal; json is one JSON object per record, for a collector. Unset picks rich when stderr is a terminal and json everywhere else, so a container or journald gets JSON with no configuration. |
 
 ## Container runtime
 
@@ -347,7 +352,7 @@ Upgrading from a release that had `get_task_result` and `list_tasks`: those tool
 
 ### EPO throttling
 
-The patent tools wait out an amber or red EPO traffic light rather than failing on it. Each wait is longer than the 60-second lifetime of the cached light, because a shorter one would re-read the same cached color instead of asking EPO again. Two retries follow the first attempt, so a throttled call can spend roughly three minutes waiting. That is well past `SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S`, so such a call is handed back as a job to poll rather than holding the connection open.
+The patent tools wait out an amber or red EPO traffic light rather than failing on it. Each wait is longer than the 60-second lifetime of the cached light, because a shorter one would re-read the same cached light instead of asking EPO again. Two retries follow the first attempt, so a throttled call can spend roughly three minutes waiting. That is well past `SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S`, so such a call is handed back as a job to poll rather than holding the connection open.
 
 A black light means the daily quota is spent. That does not clear until tomorrow, so it is reported at once with `"retryable": false` instead of costing the caller the full wait for the same answer.
 
@@ -583,13 +588,13 @@ Authentication only works with HTTP transport (`--transport http` or `sse`). It 
 
 The server supports five authentication modes:
 
-| Mode                  | When to use                                                                                                      | Configuration                                                                                       |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| **Multi-auth**        | Mixed clients, such as Claude web (OIDC) + Claude Code (bearer token) on the same server                         | Set both `SCHOLAR_MCP_BEARER_TOKEN` and the OIDC variables                                          |
-| **Bearer token**      | Simple deployments behind a VPN, Docker compose stacks, development                                              | Set `SCHOLAR_MCP_BEARER_TOKEN` only                                                                 |
-| **OIDC (remote)**     | Production with user identity, SSO, multi-user access; local JWKS validation, no confidential client to register | Set `SCHOLAR_MCP_BASE_URL` + `SCHOLAR_MCP_OIDC_CONFIG_URL` only                                     |
-| **OIDC (oidc-proxy)** | The same, where the server should run the OAuth flow itself and manage sessions                                  | Set all four OIDC variables (`BASE_URL`, `OIDC_CONFIG_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`) |
-| **No auth**           | Local stdio usage, trusted networks                                                                              | Default (nothing to configure)                                                                      |
+| Mode                  | When to use                                                                                                                                 | Configuration                                                                                       |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| **Multi-auth**        | Mixed clients, such as Claude web (OIDC) + Claude Code (bearer token) on the same server                                                    | Set both `SCHOLAR_MCP_BEARER_TOKEN` and the OIDC variables                                          |
+| **Bearer token**      | Simple deployments behind a VPN, Docker compose stacks, development                                                                         | Set `SCHOLAR_MCP_BEARER_TOKEN` only                                                                 |
+| **OIDC (remote)**     | Production with user identity, SSO, multi-user access; local JWKS validation, no confidential client to register                            | Set `SCHOLAR_MCP_BASE_URL` + `SCHOLAR_MCP_OIDC_CONFIG_URL` only                                     |
+| **OIDC (oidc-proxy)** | The same, where the server should run the OAuth flow itself and manage sessions                                                             | Set all four OIDC variables (`BASE_URL`, `OIDC_CONFIG_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`) |
+| **No auth**           | Local stdio usage, trusted networks; see [Security model](https://pvliesdonk.github.io/scholar-mcp/unstable/guides/security-model/index.md) | Default (nothing to configure)                                                                      |
 
 When both bearer token and OIDC are configured, the server accepts **either** credential: a valid bearer token or a valid OIDC session. This is useful when different clients require different authentication flows against the same server instance.
 
@@ -2010,7 +2015,7 @@ cp .env.example .env
 docker compose up -d
 ```
 
-The server listens on port 8000 with HTTP transport, published on the host as `8000:8000`. No reverse proxy, TLS terminator, or external network is assumed.
+The server listens on port 8000 with HTTP transport, published on the host as `127.0.0.1:8000:8000`, so only the host itself can connect. No reverse proxy, TLS terminator, or external network is assumed. Authentication is off, since every auth variable in `.env.example` is commented out; [Ports](#ports) covers serving other machines.
 
 Copying `.env.example` first is the step to keep. Every variable in it arrives commented out, so the server starts on its defaults and the copy changes no behaviour by itself. It is the file you edit next, and `compose.yml` names it.
 
@@ -2031,7 +2036,18 @@ The `env_file:` entry is marked `required: false`, so a checkout with no `.env` 
 
 ### Ports
 
-The image pins its own listener: `CMD` passes `--host 0.0.0.0 --port 8000`, so `SCHOLAR_MCP_HOST` and `SCHOLAR_MCP_PORT` in a `.env` do not move it. To serve on a different host port, change the left-hand side of the mapping (`"9000:8000"`) rather than the server's port.
+The image pins its own listener: `CMD` passes `--host 0.0.0.0 --port 8000`, so `SCHOLAR_MCP_HOST` and `SCHOLAR_MCP_PORT` in a `.env` do not move it. To serve on a different host port, change the host port in the mapping (`"127.0.0.1:9000:8000"`) rather than the server's port.
+
+`compose.yml` publishes on `127.0.0.1` because the quick start runs without authentication. The bind address limits which machines can connect; it does not replace authentication. To serve other machines, first configure a bearer token or OIDC ([Authentication](https://pvliesdonk.github.io/scholar-mcp/unstable/guides/authentication/index.md)), then either put a reverse proxy in front ([Behind a reverse proxy](#behind-a-reverse-proxy)) or publish on every interface from `compose.override.yml`:
+
+```
+services:
+  scholar-mcp:
+    ports: !override
+      - "8000:8000"
+```
+
+`!override` replaces the mapping instead of appending to it. The override file leaves `compose.yml` unedited, so a template update does not conflict with the change.
 
 ### Domain content and `copier update`
 
@@ -2117,20 +2133,17 @@ curl -s http://localhost:8000/health/ready
 
 ### Logs
 
-The image sets `FASTMCP_ENABLE_RICH_LOGGING=false`, so `docker logs` gets one line per record: a JSON object for every MCP request the logging middleware sees, `LEVEL: message` from the rest of FastMCP. Both grep cleanly and both survive a log collector. The server's own loggers print one line either way.
+`docker logs` gets one JSON object per record: a container's stderr is not a terminal, so the server picks its JSON renderer with nothing configured. Each line carries `ts`, `level` and `logger`, then the event name and its fields for a request or a tool call, and Docker adds its own timestamp on `docker logs -t`. Every logger in the process renders this way, FastMCP's and uvicorn's included.
 
-The reason is that a container has no terminal. Rich falls back to 80 columns, its time, level and source columns claim most of them, and a structured record then wraps across three space-padded lines that no reader and no parser puts back together. Rich's time column goes with the setting, and Docker timestamps every line it captures anyway, so `docker logs -t` prints them.
-
-This is an image default like any other, so `.env` or the compose `environment:` block overrides it. Turning Rich back on for a human reading `docker logs` needs `COLUMNS` set as well, since that is what Rich reads in place of asking a terminal it does not have. In `.env`:
+The image sets no log format, so `.env` or the compose `environment:` block decides. To read the stream in colour instead, for a person rather than a collector:
 
 ```
-FASTMCP_ENABLE_RICH_LOGGING=true
-COLUMNS=200
+SCHOLAR_MCP_LOG_FORMAT=rich
 ```
 
-Records then render one line each, in color, padded out to the full width. The packaged Debian and RPM installs make the same trade for `journalctl`: the systemd unit sets `FASTMCP_ENABLE_RICH_LOGGING=false`, and `/etc/scholar-mcp/env` overrides it.
+Records then render one `event key=value` line each. The packaged Debian and RPM installs behave the same way under `journalctl`: the systemd unit sets nothing, and `/etc/scholar-mcp/env` carries the choice.
 
-`FASTMCP_LOG_LEVEL` sets how much is logged; see [Configuration](https://pvliesdonk.github.io/scholar-mcp/unstable/configuration/#logging).
+`SCHOLAR_MCP_LOG_LEVEL` sets how much is logged; see [Configuration](https://pvliesdonk.github.io/scholar-mcp/unstable/configuration/#logging).
 
 ## Image tags
 
@@ -2153,16 +2166,16 @@ docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.revis
 
 ## Environment variables
 
-| Variable                           | Default               | Description                                                                                                   |
-| ---------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `SCHOLAR_MCP_BEARER_TOKEN`         | n/a                   | Enable bearer token auth                                                                                      |
-| `FASTMCP_LOG_LEVEL`                | `INFO`                | Log level (`DEBUG` / `INFO` / `WARNING` / `ERROR`)                                                            |
-| `FASTMCP_ENABLE_RICH_LOGGING`      | `false` in the image  | Rich output; off means one plain or JSON line per record (see [Logs](#logs))                                  |
-| `SCHOLAR_MCP_INSTANCE_DESCRIPTION` | n/a                   | Routing context that distinguishes this deployment                                                            |
-| `SCHOLAR_MCP_INSTRUCTIONS_EXTRA`   | n/a                   | Deployment-specific behavioral policy added to the generated MCP instructions                                 |
-| `SCHOLAR_MCP_INSTRUCTIONS`         | (computed at startup) | Legacy full replacement of the generated instructions (deprecated)                                            |
-| `SCHOLAR_MCP_DEBUG_PORT`           | n/a                   | Remote-debugger TCP port (see [Remote debugging](#remote-debugging); requires `--build-arg DEBUG=true` image) |
-| `SCHOLAR_MCP_DEBUG_WAIT`           | `false`               | Block startup until IDE attaches (see [Remote debugging](#remote-debugging))                                  |
+| Variable                           | Default                      | Description                                                                                                   |
+| ---------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `SCHOLAR_MCP_BEARER_TOKEN`         | n/a                          | Enable bearer token auth                                                                                      |
+| `SCHOLAR_MCP_LOG_LEVEL`            | `INFO`                       | Log level (`DEBUG` / `INFO` / `WARNING` / `ERROR` / `CRITICAL`)                                               |
+| `SCHOLAR_MCP_LOG_FORMAT`           | unset: `json` in a container | `rich` or `json`; unset picks by whether stderr is a terminal (see [Logs](#logs))                             |
+| `SCHOLAR_MCP_INSTANCE_DESCRIPTION` | n/a                          | Routing context that distinguishes this deployment                                                            |
+| `SCHOLAR_MCP_INSTRUCTIONS_EXTRA`   | n/a                          | Deployment-specific behavioral policy added to the generated MCP instructions                                 |
+| `SCHOLAR_MCP_INSTRUCTIONS`         | (computed at startup)        | Legacy full replacement of the generated instructions (deprecated)                                            |
+| `SCHOLAR_MCP_DEBUG_PORT`           | n/a                          | Remote-debugger TCP port (see [Remote debugging](#remote-debugging); requires `--build-arg DEBUG=true` image) |
+| `SCHOLAR_MCP_DEBUG_WAIT`           | `false`                      | Block startup until IDE attaches (see [Remote debugging](#remote-debugging))                                  |
 
 For OIDC auth variables, see [Authentication](https://pvliesdonk.github.io/scholar-mcp/unstable/guides/authentication/index.md).
 
@@ -2198,7 +2211,7 @@ Production images ship without `debugpy` to keep the image lean. To attach a rem
      -e SCHOLAR_MCP_DEBUG_PORT=5678 \
      -e SCHOLAR_MCP_DEBUG_WAIT=true \
      -p 127.0.0.1:5678:5678 \
-     -p 8000:8000 \
+     -p 127.0.0.1:8000:8000 \
      scholar-mcp:debug
    ```
 
@@ -2668,7 +2681,7 @@ The `mcp-wellknown` router above is the fix. In Traefik it also wins by default:
 
 One document still collides: `oauth-authorization-server`
 
-In proxy mode the server serves authorization-server metadata at `/.well-known/oauth-authorization-server`, at the **host root**, whatever prefix `BASE_URL` carries. FastMCP does contain an RFC 8414 path-aware override, `OAuthProvider.get_well_known_routes()`, which would serve it at `/.well-known/oauth-authorization-server/myservice`. Nothing reaches it: the HTTP app mounts `get_routes()` instead, leaving the path-aware form unreachable. (Verified against FastMCP 3.4.7.)
+In proxy mode the server serves authorization-server metadata at `/.well-known/oauth-authorization-server`, at the **host root**, whatever prefix `BASE_URL` carries. FastMCP does contain an RFC 8414 path-aware override, `OAuthProvider.get_well_known_routes()`, which would serve it at `/.well-known/oauth-authorization-server/myservice`. Nothing reaches it: the HTTP app mounts `get_routes()` instead, leaving the path-aware form unreachable. (Verified against FastMCP 4.0.9; the project's `tests/test_oidc_discovery_routes.py` fails if a FastMCP upgrade changes this.)
 
 Only this one document collides. Protected-resource metadata is path-namespaced, so several servers can share a hostname without contending for it.
 

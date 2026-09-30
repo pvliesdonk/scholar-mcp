@@ -16,7 +16,7 @@
         <link rel="prev" href="../template-updates/">
       
       
-        <link rel="next" href="../../releases/">
+        <link rel="next" href="../integration-branches/">
       
       
         
@@ -737,6 +737,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../guides/security-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../guides/pdf-conversion/" class="md-nav__link">
         
   
@@ -1210,6 +1238,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="What ships">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#branches-need-not-be-up-to-date" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Branches need not be up to date
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1247,10 +1292,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#codecovpatch-if-you-require-it" class="md-nav__link">
+  <a href="#coveragepatch-if-you-require-it" class="md-nav__link">
     <span class="md-ellipsis">
       
-        codecov/patch, if you require it
+        coverage/patch, if you require it
       
     </span>
   </a>
@@ -1259,6 +1304,17 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-reporting-and-alerts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security reporting and alerts
+      
+    </span>
+  </a>
   
 </li>
       
@@ -1288,6 +1344,34 @@
   
 </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../integration-branches/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Integration Branches
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -1362,6 +1446,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="What ships">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#branches-need-not-be-up-to-date" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Branches need not be up to date
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1399,10 +1500,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#codecovpatch-if-you-require-it" class="md-nav__link">
+  <a href="#coveragepatch-if-you-require-it" class="md-nav__link">
     <span class="md-ellipsis">
       
-        codecov/patch, if you require it
+        coverage/patch, if you require it
       
     </span>
   </a>
@@ -1411,6 +1512,17 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-reporting-and-alerts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security reporting and alerts
+      
+    </span>
+  </a>
   
 </li>
       
@@ -1463,7 +1575,7 @@ and the <code>bootstrap.yml</code> workflow applies them, so the effective prote
 state is checked in, reviewed, and re-applied rather than clicked together
 in the UI and forgotten.</p>
 <h2 id="what-ships">What ships<a class="headerlink" href="#what-ships" title="Permanent link">&para;</a></h2>
-<p>Three rulesets, one file each:</p>
+<p>Four rulesets, one file each:</p>
 <table>
 <thead>
 <tr>
@@ -1476,12 +1588,17 @@ in the UI and forgotten.</p>
 <tr>
 <td><code>protect-main</code></td>
 <td>the default branch</td>
-<td>pull request required (zero approvals), <code>CI Success</code> status check (strict), no deletion, no force push</td>
+<td>pull request required (zero approvals), <code>CI Success</code> status check, no deletion, no force push</td>
 </tr>
 <tr>
 <td><code>protect-release-branches</code></td>
 <td><code>release/*</code> branches</td>
 <td>same gates as the default branch</td>
+</tr>
+<tr>
+<td><code>protect-integration-branches</code></td>
+<td><code>integration/*</code> branches</td>
+<td>pull request required (zero approvals), <code>CI Success</code> status check, no force push</td>
 </tr>
 <tr>
 <td><code>protect-release-tags</code></td>
@@ -1505,11 +1622,37 @@ in the UI and forgotten.</p>
   on pull requests targeting <code>release/*</code> for exactly this reason. Status
   checks are not enforced on branch creation, so cutting <code>release/X.Y</code> is a
   plain push.</li>
+<li><strong><code>integration/*</code></strong> branches park an epic's child pull requests until the
+  whole epic goes to <code>main</code> at once; the
+  <a href="../integration-branches/">integration branches</a> page covers the workflow.
+  Child pull requests need a pull request and <code>CI Success</code>, and force pushes
+  are blocked because a rebase would rewrite the commits every open child is
+  based on. Deletion stays open, so GitHub's automatic head-branch deletion
+  can remove the branch once its final pull request merges. The checks
+  listed in <code>extra_required_checks</code> (below) are not required here: they come
+  from workflows the project owns, which may not run on <code>integration/*</code>, and
+  the final pull request to <code>main</code> has to pass them anyway.</li>
 <li><strong><code>v*</code> tags</strong> are the identity of every shipped release: package
   registries, Docker tags, and install instructions all point at them.
   The ruleset blocks deleting or force-moving them. Creating tags stays
   unrestricted because the release workflow creates one per release.</li>
 </ul>
+<h3 id="branches-need-not-be-up-to-date">Branches need not be up to date<a class="headerlink" href="#branches-need-not-be-up-to-date" title="Permanent link">&para;</a></h3>
+<p>The required checks are not <em>strict</em>: a pull request whose checks passed
+can merge even after its base branch has moved on. The strict setting,
+GitHub's <strong>Require branches to be up to date before merging</strong>, makes every
+merge to <code>main</code> turn each open pull request's green check stale, so each one
+waits for an <strong>Update branch</strong> round trip and a full CI re-run before it can
+merge. On a busy trunk that happens once per sibling merge.</p>
+<p>The cost of turning it off is the semantic conflict: two pull requests that
+each pass alone and break together. CI runs on every push to <code>main</code>,
+<code>release/*</code> and <code>integration/*</code>, so such a break shows up on the merged
+commit rather than slipping through unseen. A release pull request is the
+one place this needs care: nothing stops it merging after its base moved
+on, so re-dispatch Release Prepare first (see the release process page). GitHub's merge queue is the tool
+that closes the gap without the update chore, but it needs a <code>merge_group</code>
+trigger in every required workflow and is not available on repositories
+owned by a personal account.</p>
 <h2 id="who-bypasses-and-how">Who bypasses, and how<a class="headerlink" href="#who-bypasses-and-how" title="Permanent link">&para;</a></h2>
 <p>Ruleset bypass lists name roles, teams, apps, or deploy keys, not user
 accounts. The shipped entry grants bypass to the <strong>repository admin role</strong>
@@ -1573,9 +1716,9 @@ nothing stops the merge.</p>
 <span class="nt">extra_required_checks</span><span class="p">:</span>
 <span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SPA sources</span>
 </code></pre></div>
-<p>Each name renders into the <code>required_status_checks</code> array of both branch
-rulesets, alongside <code>CI Success</code>, and applies to <code>main</code> and <code>release/*</code>
-alike. The answer is the project's own, so the rulesets stay template-owned
+<p>Each name renders into the <code>required_status_checks</code> array of both release
+branch rulesets, alongside <code>CI Success</code>, and applies to <code>main</code> and
+<code>release/*</code> alike. Integration branches require <code>CI Success</code> alone. The answer is the project's own, so the rulesets stay template-owned
 and a <code>copier update</code> re-renders them with the project's checks intact. An
 empty answer, the default, renders exactly the single-context form every
 project already had.</p>
@@ -1604,8 +1747,18 @@ decide inside the job whether there is work to do, exiting zero when
 there is not. Verify on a pull request that touches nothing the check
 cares about: the context must still appear, and pass.</p>
 </div>
-<h3 id="codecovpatch-if-you-require-it"><code>codecov/patch</code>, if you require it<a class="headerlink" href="#codecovpatch-if-you-require-it" title="Permanent link">&para;</a></h3>
-<p><code>codecov/patch</code> is the one context this rule applies to that the template
+<h3 id="coveragepatch-if-you-require-it"><code>coverage/patch</code>, if you require it<a class="headerlink" href="#coveragepatch-if-you-require-it" title="Permanent link">&para;</a></h3>
+<p>CI requires the full test suite to pass on Python 3.11 through 3.14.
+Only the Python 3.14 job collects branch coverage, using
+<code>uv run pytest --cov --cov-report=xml --durations=20</code>. The other interpreters
+run <code>uv run pytest --durations=20</code>. The coverage job retains the 80% total
+and patch thresholds. Each job has a 20-minute timeout and reports its
+<a href="https://docs.pytest.org/en/stable/how-to/usage.html#profiling-test-execution-duration">slowest test durations</a>
+when <code>pytest</code> finishes.</p>
+<p>Python 3.14 supports branch measurement with coverage.py's
+<a href="https://coverage.readthedocs.io/en/latest/config.html#run-core"><code>sys.monitoring</code> core</a>.
+Python 3.12 and 3.13 cannot use that core for branch coverage.</p>
+<p><code>coverage/patch</code> is the one context this rule applies to that the template
 itself ships, and it is worth knowing how it reaches a pull request before
 you add it to <code>extra_required_checks</code>.</p>
 <p>Two workflows post it. <code>ci.yml</code> posts it directly for a pull request from a
@@ -1619,6 +1772,48 @@ maintainer can re-run the workflow, while a missing status is not. If you
 require this context and a fork pull request stalls on it, check the <strong>Post
 Coverage Status</strong> workflow's runs rather than the CI run: the status comes
 from there.</p>
+<h2 id="security-reporting-and-alerts">Security reporting and alerts<a class="headerlink" href="#security-reporting-and-alerts" title="Permanent link">&para;</a></h2>
+<p>The same workflow turns on three settings that GitHub otherwise leaves for
+someone to click, in a separate <code>security</code> job so a ruleset failure and a
+security-settings failure show up apart:</p>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Effect</th>
+<th>Applied when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Private vulnerability reporting</td>
+<td>Adds <strong>Report a vulnerability</strong> to the Security tab, the channel the root <code>SECURITY.md</code> sends researchers to</td>
+<td>Public repositories only; GitHub does not offer it on private ones</td>
+</tr>
+<tr>
+<td>Dependabot alerts</td>
+<td>Lists known-vulnerable dependencies on the Security tab; Renovate still owns the update pull requests</td>
+<td>Every repository</td>
+</tr>
+<tr>
+<td>Secret scanning push protection</td>
+<td>Blocks a push that contains a recognised secret</td>
+<td>Public repositories, when the plan allows it; a refusal is a warning in the run, not a failure</td>
+</tr>
+</tbody>
+</table>
+<p>Without private vulnerability reporting, a researcher's only path is a public
+issue asking for a private one, which is how a project generated from this
+template was contacted. <code>SECURITY.md</code> at the repository root is the policy
+GitHub shows next to that button. It covers the reporting path, the response
+targets, the supported versions, and where a fix lands. The response targets
+and the scope live inside its <code>DOMAIN-SECURITY</code> block, which a project edits
+once and keeps across template updates.</p>
+<p>The job runs with <code>RELEASE_TOKEN</code>, the same <code>administration: write</code> the
+rulesets need. Each call is idempotent, so a re-run converges on the same
+enabled state. An organisation-level security configuration outranks these
+repository settings. Where one applies, GitHub may reject the job's calls,
+and the run log names the rejected one.</p>
 <h2 id="applying-by-hand">Applying by hand<a class="headerlink" href="#applying-by-hand" title="Permanent link">&para;</a></h2>
 <p>Without the bootstrap workflow (or when importing into another repository):</p>
 <div class="highlight"><pre><span></span><code>gh<span class="w"> </span>api<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span><span class="s2">&quot;repos/OWNER/REPO/rulesets&quot;</span><span class="w"> </span><span class="se">\</span>

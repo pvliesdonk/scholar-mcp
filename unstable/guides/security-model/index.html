@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://pvliesdonk.github.io/scholar-mcp/unstable/deployment/claude-desktop/">
+        <link rel="canonical" href="https://pvliesdonk.github.io/scholar-mcp/unstable/guides/security-model/">
       
       
-        <link rel="prev" href="../oidc/">
+        <link rel="prev" href="../authentication/">
       
       
-        <link rel="next" href="../release-process/">
+        <link rel="next" href="../pdf-conversion/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Claude Desktop - scholar-mcp</title>
+        <title>Security Model - scholar-mcp</title>
       
     
     
@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#claude-desktop" class="md-skip">
+        <a href="#security-model" class="md-skip">
           Skip to content
         </a>
       
@@ -120,7 +120,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Claude Desktop
+              Security Model
             
           </span>
         </div>
@@ -270,11 +270,13 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
-        <a href="../../guides/" class="md-tabs__link">
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
           
   
   
@@ -310,13 +312,11 @@
   
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../docker/" class="md-tabs__link">
+      <li class="md-tabs__item">
+        <a href="../../deployment/docker/" class="md-tabs__link">
           
   
   
@@ -568,28 +568,31 @@
       
   
   
+    
   
   
+  
     
     
     
     
+      
+        
+        
       
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
         
           
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
-        
-          
-          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
             
   
   
@@ -607,7 +610,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             
@@ -625,7 +628,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/" class="md-nav__link">
+      <a href="../" class="md-nav__link">
         
   
   
@@ -653,7 +656,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/claude-code-plugin/" class="md-nav__link">
+      <a href="../claude-code-plugin/" class="md-nav__link">
         
   
   
@@ -681,7 +684,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/claude-desktop/" class="md-nav__link">
+      <a href="../claude-desktop/" class="md-nav__link">
         
   
   
@@ -709,7 +712,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/authentication/" class="md-nav__link">
+      <a href="../authentication/" class="md-nav__link">
         
   
   
@@ -734,10 +737,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../guides/security-model/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security Model
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -753,6 +783,114 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#authentication-is-the-boundary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Authentication is the boundary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#running-without-authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Running without authentication
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#stdio" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stdio
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-an-authenticated-caller-can-reach" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What an authenticated caller can reach
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-answers-without-a-credential" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What answers without a credential
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-the-operator-is-responsible-for" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the operator is responsible for
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#host-and-origin-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Host and Origin validation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reporting-a-vulnerability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reporting a vulnerability
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -765,7 +903,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/pdf-conversion/" class="md-nav__link">
+      <a href="../pdf-conversion/" class="md-nav__link">
         
   
   
@@ -793,7 +931,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/citation-graphs/" class="md-nav__link">
+      <a href="../citation-graphs/" class="md-nav__link">
         
   
   
@@ -942,31 +1080,28 @@
       
   
   
-    
   
   
-  
     
     
     
     
-      
-        
-        
       
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
         
           
-          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
             
   
   
@@ -984,7 +1119,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1002,7 +1137,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../docker/" class="md-nav__link">
+      <a href="../../deployment/docker/" class="md-nav__link">
         
   
   
@@ -1030,7 +1165,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../systemd/" class="md-nav__link">
+      <a href="../../deployment/systemd/" class="md-nav__link">
         
   
   
@@ -1058,7 +1193,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../oidc/" class="md-nav__link">
+      <a href="../../deployment/oidc/" class="md-nav__link">
         
   
   
@@ -1083,37 +1218,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Claude Desktop
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../deployment/claude-desktop/" class="md-nav__link">
         
   
   
@@ -1129,126 +1237,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#setup" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Setup
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Setup">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#1-install" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        1. Install
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#2-configure-claude-desktop" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2. Configure Claude Desktop
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#3-restart-claude-desktop" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        3. Restart Claude Desktop
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#configuration-examples" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Configuration examples
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#troubleshooting" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Troubleshooting
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Troubleshooting">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#server-not-appearing-in-claude-desktop" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Server not appearing in Claude Desktop
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#command-not-found" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        "Command not found"
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1261,7 +1249,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../release-process/" class="md-nav__link">
+      <a href="../../deployment/release-process/" class="md-nav__link">
         
   
   
@@ -1289,7 +1277,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../template-updates/" class="md-nav__link">
+      <a href="../../deployment/template-updates/" class="md-nav__link">
         
   
   
@@ -1317,7 +1305,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../repository-protection/" class="md-nav__link">
+      <a href="../../deployment/repository-protection/" class="md-nav__link">
         
   
   
@@ -1345,7 +1333,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../integration-branches/" class="md-nav__link">
+      <a href="../../deployment/integration-branches/" class="md-nav__link">
         
   
   
@@ -1427,60 +1415,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#setup" class="md-nav__link">
+  <a href="#authentication-is-the-boundary" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Setup
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Setup">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#1-install" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        1. Install
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#2-configure-claude-desktop" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2. Configure Claude Desktop
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#3-restart-claude-desktop" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        3. Restart Claude Desktop
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#configuration-examples" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Configuration examples
+        Authentication is the boundary
       
     </span>
   </a>
@@ -1488,41 +1426,79 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#troubleshooting" class="md-nav__link">
+  <a href="#running-without-authentication" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Troubleshooting
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Troubleshooting">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#server-not-appearing-in-claude-desktop" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Server not appearing in Claude Desktop
+        Running without authentication
       
     </span>
   </a>
   
 </li>
-        
-          <li class="md-nav__item">
-  <a href="#command-not-found" class="md-nav__link">
+      
+        <li class="md-nav__item">
+  <a href="#stdio" class="md-nav__link">
     <span class="md-ellipsis">
       
-        "Command not found"
+        stdio
       
     </span>
   </a>
   
 </li>
-        
-      </ul>
-    </nav>
+      
+        <li class="md-nav__item">
+  <a href="#what-an-authenticated-caller-can-reach" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What an authenticated caller can reach
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-answers-without-a-credential" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What answers without a credential
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-the-operator-is-responsible-for" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the operator is responsible for
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#host-and-origin-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Host and Origin validation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reporting-a-vulnerability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reporting a vulnerability
+      
+    </span>
+  </a>
   
 </li>
       
@@ -1546,80 +1522,70 @@
   
 
 
-<h1 id="claude-desktop">Claude Desktop<a class="headerlink" href="#claude-desktop" title="Permanent link">&para;</a></h1>
-<p>Scholar MCP integrates with <a href="https://claude.ai/download">Claude Desktop</a> via the stdio transport.</p>
-<h2 id="setup">Setup<a class="headerlink" href="#setup" title="Permanent link">&para;</a></h2>
-<h3 id="1-install">1. Install<a class="headerlink" href="#1-install" title="Permanent link">&para;</a></h3>
-<p>From PyPI:</p>
-<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>pvliesdonk-scholar-mcp
-</code></pre></div>
-<p>Or with uv (installs <code>scholar-mcp</code> as a global command on your PATH):</p>
-<div class="highlight"><pre><span></span><code>uv<span class="w"> </span>tool<span class="w"> </span>install<span class="w"> </span>pvliesdonk-scholar-mcp
-</code></pre></div>
-<p>Or download the <code>.mcpb</code> bundle from the <a href="https://github.com/pvliesdonk/scholar-mcp/releases">GitHub Releases</a> page and double-click to install; Claude Desktop prompts for required env vars via a GUI wizard, no manual JSON editing needed.</p>
-<p>The bundle does not carry the code. It pins <code>pvliesdonk-scholar-mcp[all]</code> at its own
-version and <code>uvx</code> fetches that from PyPI on first launch, so the machine
-needs network access the first time it starts. Release candidates publish to
-PyPI for exactly this reason, which makes a <code>vX.Y.Z-rc.N</code> bundle installable
-the same way a stable one is.</p>
-<h3 id="2-configure-claude-desktop">2. Configure Claude Desktop<a class="headerlink" href="#2-configure-claude-desktop" title="Permanent link">&para;</a></h3>
-<p>If you installed via <code>.mcpb</code>, skip this step. Claude Desktop was configured automatically by the wizard.</p>
-<p>Otherwise, add the server to your Claude Desktop configuration file. The path varies by operating system:</p>
+<h1 id="security-model">Security model<a class="headerlink" href="#security-model" title="Permanent link">&para;</a></h1>
+<p>This page states what scholar-mcp protects and what it leaves to the operator. <a href="../authentication/">Authentication</a> covers how to configure each mode, and <code>SECURITY.md</code> in the repository covers how to report a vulnerability.</p>
+<h2 id="authentication-is-the-boundary">Authentication is the boundary<a class="headerlink" href="#authentication-is-the-boundary" title="Permanent link">&para;</a></h2>
+<p>Over HTTP, authentication is the only access control: a bearer token, a mapped bearer token file, or OIDC. A request without a valid credential is refused before it reaches a tool. It is the same model as any other MCP server reached over HTTP.</p>
+<h2 id="running-without-authentication">Running without authentication<a class="headerlink" href="#running-without-authentication" title="Permanent link">&para;</a></h2>
+<p>With no authentication variables set, the server starts in mode <code>none</code> and logs <code>auth_mode_resolved</code> at warning level with <code>mode=none</code>. Every client that can open a connection to the port then has the full tool surface. Turning authentication off is a decision to trust everything that can reach the port.</p>
+<p>The bind address decides which machines reach the port, and nothing more. Binding to <code>127.0.0.1</code> keeps other machines out. It does not keep out other processes on the host, nor a web page in a browser on the host that uses DNS rebinding. Without authentication, run the server only where everything that reaches the port is trusted, such as a single-user workstation or a private network you control.</p>
+<h2 id="stdio">stdio<a class="headerlink" href="#stdio" title="Permanent link">&para;</a></h2>
+<p>Over stdio there is no network listener and no authentication. The MCP client starts the server as a child process, and the server trusts that client. Authentication variables have no effect there, and the server logs <code>auth_configured_but_stdio_skips_enforcement</code> when they are set.</p>
+<h2 id="what-an-authenticated-caller-can-reach">What an authenticated caller can reach<a class="headerlink" href="#what-an-authenticated-caller-can-reach" title="Permanent link">&para;</a></h2>
+<p>An authenticated caller has every tool the instance exposes. Each tool runs with the server's own privileges: its filesystem and network access, and any credential in its configuration. <code>SCHOLAR_MCP_TOOLS_ALLOW</code> and <code>SCHOLAR_MCP_TOOLS_DENY</code> trim that set for an instance; see <a href="../../configuration/">Configuration</a>.</p>
+<!-- DOMAIN-SECURITY-MODEL-SURFACE-START — what THIS server's tools reach; kept across copier update -->
+<p>This server's tools make outbound HTTPS requests on the caller's behalf and
+keep what they fetch in a local cache.</p>
 <ul>
-<li><strong>macOS:</strong> <code>~/Library/Application Support/Claude/claude_desktop_config.json</code></li>
-<li><strong>Windows:</strong> <code>%APPDATA%\Claude\claude_desktop_config.json</code></li>
-<li><strong>Linux:</strong> <code>~/.config/Claude/claude_desktop_config.json</code></li>
+<li><strong>Outbound requests.</strong> Paper, citation and author tools call Semantic
+  Scholar, OpenAlex, Crossref and Unpaywall. PDF lookups also try arXiv and
+  PubMed Central. Book tools call Open Library and the Google Books API.
+  Patent tools call EPO Open Patent Services. Standards tools call the IETF
+  (<code>datatracker.ietf.org</code>), the RFC Editor, W3C, ETSI, the Common Criteria portal, the
+  European Commission's harmonised-standards pages and GitHub (the Relaton
+  datasets and the NIST catalogue releases). Every request carries the
+  caller's query terms to that service.</li>
+<li><strong>Caller-chosen URLs.</strong> <code>fetch_pdf_by_url</code> downloads whatever URL the
+  caller passes and follows redirects. The server does not filter private or
+  internal addresses, so the tool can reach anything the server's network can
+  reach. It is a write tool: <code>SCHOLAR_MCP_READ_ONLY=true</code>, the default, hides
+  it along with the other download and conversion tools.</li>
+<li><strong>PDF conversion.</strong> When <code>SCHOLAR_MCP_DOCLING_URL</code> is set, conversion tools
+  send downloaded PDFs to that docling-serve instance. When
+  <code>SCHOLAR_MCP_VLM_API_URL</code> is set, the server passes that URL and
+  <code>SCHOLAR_MCP_VLM_API_KEY</code> to docling-serve, which sends page images to the
+  VLM endpoint.</li>
+<li><strong>Local data.</strong> Tools read and write the SQLite cache, downloaded PDFs,
+  converted Markdown and book covers under <code>SCHOLAR_MCP_CACHE_DIR</code>, and write
+  nothing outside it.</li>
+<li><strong>Credentials.</strong> Upstream calls use the server's own keys, never the
+  caller's: <code>SCHOLAR_MCP_S2_API_KEY</code>, <code>SCHOLAR_MCP_EPO_CONSUMER_KEY</code> and
+  <code>SCHOLAR_MCP_EPO_CONSUMER_SECRET</code>, <code>SCHOLAR_MCP_GOOGLE_BOOKS_API_KEY</code>,
+  <code>SCHOLAR_GITHUB_TOKEN</code>, and the VLM key above. <code>SCHOLAR_MCP_CONTACT_EMAIL</code>
+  is sent to OpenAlex and Unpaywall as the polite-pool contact.</li>
 </ul>
-<div class="highlight"><pre><span></span><code><span class="p">{</span>
-<span class="w">  </span><span class="nt">&quot;mcpServers&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<span class="w">    </span><span class="nt">&quot;scholar-mcp&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<span class="w">      </span><span class="nt">&quot;command&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;scholar-mcp&quot;</span><span class="p">,</span>
-<span class="w">      </span><span class="nt">&quot;args&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;serve&quot;</span><span class="p">],</span>
-<span class="w">      </span><span class="nt">&quot;env&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{}</span>
-<span class="w">    </span><span class="p">}</span>
-<span class="w">  </span><span class="p">}</span>
-<span class="p">}</span>
-</code></pre></div>
-<h3 id="3-restart-claude-desktop">3. Restart Claude Desktop<a class="headerlink" href="#3-restart-claude-desktop" title="Permanent link">&para;</a></h3>
-<p>Restart the application to pick up the new configuration. If the server connects successfully, <code>Scholar MCP</code> tools appear in Claude's tool list. If not, see <a href="#troubleshooting">Troubleshooting</a> below.</p>
-<h2 id="configuration-examples">Configuration examples<a class="headerlink" href="#configuration-examples" title="Permanent link">&para;</a></h2>
-<!-- DOMAIN-CLAUDE-DESKTOP-START -->
-<!-- Add domain-specific Claude Desktop configuration examples here.
-     Kept across copier update. -->
-<!-- DOMAIN-CLAUDE-DESKTOP-END -->
+<!-- DOMAIN-SECURITY-MODEL-SURFACE-END -->
 
-<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
-<h3 id="server-not-appearing-in-claude-desktop">Server not appearing in Claude Desktop<a class="headerlink" href="#server-not-appearing-in-claude-desktop" title="Permanent link">&para;</a></h3>
-<ol>
-<li>Check the config file path is correct for your OS</li>
-<li>Ensure the JSON is valid (no trailing commas)</li>
-<li>Restart Claude Desktop completely (quit and reopen)</li>
-<li>Check Claude Desktop logs for error messages</li>
-</ol>
-<h3 id="command-not-found">"Command not found"<a class="headerlink" href="#command-not-found" title="Permanent link">&para;</a></h3>
-<p>Ensure <code>scholar-mcp</code> is on your PATH. If installed in a virtualenv, use the full path to the binary. Replace only the <code>"command"</code> value in your existing config and keep <code>"args"</code> and <code>"env"</code> as-is.</p>
-<p>macOS/Linux:</p>
-<div class="highlight"><pre><span></span><code><span class="p">{</span>
-<span class="w">  </span><span class="nt">&quot;mcpServers&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<span class="w">    </span><span class="nt">&quot;scholar-mcp&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<span class="w">      </span><span class="nt">&quot;command&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/Users/me/.venvs/mcp/bin/scholar-mcp&quot;</span><span class="p">,</span>
-<span class="w">      </span><span class="nt">&quot;args&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;serve&quot;</span><span class="p">],</span>
-<span class="w">      </span><span class="nt">&quot;env&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{}</span>
-<span class="w">    </span><span class="p">}</span>
-<span class="w">  </span><span class="p">}</span>
-<span class="p">}</span>
-</code></pre></div>
-<p>Windows (<code>Scripts\</code> not <code>bin\</code>, <code>.exe</code> suffix):</p>
-<div class="highlight"><pre><span></span><code><span class="p">{</span>
-<span class="w">  </span><span class="nt">&quot;mcpServers&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<span class="w">    </span><span class="nt">&quot;scholar-mcp&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<span class="w">      </span><span class="nt">&quot;command&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;C:\\Users\\me\\.venvs\\mcp\\Scripts\\scholar-mcp.exe&quot;</span><span class="p">,</span>
-<span class="w">      </span><span class="nt">&quot;args&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;serve&quot;</span><span class="p">],</span>
-<span class="w">      </span><span class="nt">&quot;env&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{}</span>
-<span class="w">    </span><span class="p">}</span>
-<span class="w">  </span><span class="p">}</span>
-<span class="p">}</span>
-</code></pre></div>
+<h2 id="what-answers-without-a-credential">What answers without a credential<a class="headerlink" href="#what-answers-without-a-credential" title="Permanent link">&para;</a></h2>
+<p>Some routes answer anyone who can reach the port, with authentication on or off:</p>
+<ul>
+<li><code>/health</code> and <code>/health/ready</code>. <code>SCHOLAR_MCP_HEALTH_DETAIL</code> decides how much they say; see <a href="../../deployment/docker/#health">Health</a>.</li>
+<li>In the OIDC modes, the OAuth metadata and sign-in routes a client uses before it holds a token.</li>
+</ul>
+<h2 id="what-the-operator-is-responsible-for">What the operator is responsible for<a class="headerlink" href="#what-the-operator-is-responsible-for" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>TLS.</strong> The server speaks plain HTTP. Terminate TLS at a reverse proxy in front of it.</li>
+<li><strong>Exposure.</strong> Which interfaces and networks can reach the port. <a href="../../deployment/docker/#ports">Ports</a> covers the published port of the Docker deployment.</li>
+<li><strong>Secrets.</strong> Bearer tokens, OIDC client secrets and the credentials the tools use live in the environment or in files you control. Anyone who can read them can act as the server.</li>
+<li><strong>The debugger port.</strong> A debug build's debugger port grants code execution to anyone who reaches it; see <a href="../../deployment/docker/#remote-debugging">Remote debugging</a>.</li>
+</ul>
+<h2 id="host-and-origin-validation">Host and Origin validation<a class="headerlink" href="#host-and-origin-validation" title="Permanent link">&para;</a></h2>
+<p>FastMCP can refuse requests whose <code>Host</code> or <code>Origin</code> header does not name the server, which blocks DNS rebinding against a server running without authentication. It is off by default, and the model above does not depend on it. To turn it on, set <code>FASTMCP_HTTP_HOST_ORIGIN_PROTECTION</code> to <code>auto</code>, which checks requests that reach the server on a local address, or to <code>true</code>, which checks every request against <code>FASTMCP_HTTP_ALLOWED_HOSTS</code> (a JSON list of host names). Behind a reverse proxy, test it before relying on it: a request whose headers do not match is refused.</p>
+<h2 id="reporting-a-vulnerability">Reporting a vulnerability<a class="headerlink" href="#reporting-a-vulnerability" title="Permanent link">&para;</a></h2>
+<p>Read this page before reporting. A finding that depends on authentication being off describes the configuration above rather than a flaw in the server. <code>SECURITY.md</code> covers the reporting channel, scope and response targets.</p>
+<!-- DOMAIN-SECURITY-MODEL-EXTRA-START -->
+<!-- Project-specific security notes go here; kept across copier update. -->
+<!-- DOMAIN-SECURITY-MODEL-EXTRA-END -->
 
 
 
