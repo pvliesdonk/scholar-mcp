@@ -2,6 +2,43 @@
 
 <!-- version list -->
 
+## 3.0.0-rc.1 (2026-09-30)
+
+### Breaking Changes
+
+- adopt the template service shape, closing clients on a failed startup (#422)
+- adopt the template's systemd and install-screen shape (#423)
+- defer throttled calls until the job deadline (#463)
+- rename FASTMCP_LOG_LEVEL and drop the Rich log switch (template v11.0.2) (#513)
+
+### Bug Fixes
+
+- apply limit when serving a cached author record (#431)
+- infer conference papers from S2's publication type (#432)
+- shorten the domain description so the render survives ruff format (#437)
+- answer from the cached paper record instead of asking S2 again (#435)
+- bind the S2 keepalive inside the DOMAIN-WIRING sentinel (#439)
+- repair rows a fix invalidates instead of waiting out their TTL (#441)
+- read the abstract and legal-event state OPS actually sends (#442)
+- key the patent PDF cache on the normalised number, not the raw spelling (#445)
+- fill empty authors from the cached work record instead of overwriting it (#449)
+- match NIST identifiers exactly instead of by substring (#452)
+- report an ETSI upstream failure instead of an empty result (#455)
+- share throttle cooldown across requests (#462)
+- normalize lowercase kind codes (#464)
+- page converted document responses (#465)
+- clamp S2 limits to the documented endpoint maxima (#489)
+- say what went wrong in the partial-result warning (#495)
+- keep converted full text out of the standards record (#497)
+- take Relaton titles from the composed main entry (#498)
+- never let a live write replace a synced standards row (#501)
+- map batch_resolve's OpenAlex fallback onto the S2 field set (#502)
+- recognise doi.org and "DOI 10." forms in NPL citations (#503)
+- page get_author's publications locally, by offset (#504)
+- reject non-PDF downloads (#492)
+- make first-party log calls and tool text pass the template's v9 checks (#510)
+- lock pyjwt 2.15.1 for ten published advisories (#517)
+
 ## 3.0.0-rc.0 (2026-09-23)
 
 ### Breaking Changes
