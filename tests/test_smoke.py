@@ -99,8 +99,10 @@ def test_legacy_instructions_replaces_everything_and_warns(
     deprecation warning is what tells them the additive variables exist.
     """
     monkeypatch.setenv("SCHOLAR_MCP_INSTRUCTIONS", "Custom operator text.")
-    # Scope to core's logger: make_server() re-applies FASTMCP_LOG_LEVEL to the
-    # root logger, which would otherwise drop the record under a stricter env.
+    # Scope to core's logger: make_server() re-applies SCHOLAR_MCP_LOG_LEVEL
+    # (or the legacy FASTMCP_LOG_LEVEL) to the root logger, which would
+    # otherwise drop the record under a stricter env.
+    monkeypatch.delenv("SCHOLAR_MCP_LOG_LEVEL", raising=False)
     monkeypatch.delenv("FASTMCP_LOG_LEVEL", raising=False)
     with caplog.at_level("WARNING", logger="fastmcp_pvl_core"):
         server = make_server()
@@ -194,8 +196,10 @@ def test_instructions_env_override(
     monkeypatch.setenv("SCHOLAR_MCP_INSTRUCTIONS", "Custom operator text.")
     monkeypatch.setenv("SCHOLAR_MCP_INSTANCE_DESCRIPTION", "Demo material.")
     monkeypatch.setenv("SCHOLAR_MCP_INSTRUCTIONS_EXTRA", "House rule: be brief.")
-    # Scope to core's logger: make_server() re-applies FASTMCP_LOG_LEVEL to the
-    # root logger, which would otherwise drop the record under a stricter env.
+    # Scope to core's logger: make_server() re-applies SCHOLAR_MCP_LOG_LEVEL
+    # (or the legacy FASTMCP_LOG_LEVEL) to the root logger, which would
+    # otherwise drop the record under a stricter env.
+    monkeypatch.delenv("SCHOLAR_MCP_LOG_LEVEL", raising=False)
     monkeypatch.delenv("FASTMCP_LOG_LEVEL", raising=False)
     with caplog.at_level("WARNING", logger="fastmcp_pvl_core"):
         server = make_server()

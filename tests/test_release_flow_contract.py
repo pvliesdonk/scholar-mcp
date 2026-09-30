@@ -981,6 +981,27 @@ def test_rc_release_body_reads_the_stable_summary_marker() -> None:
     )
 
 
+def test_rc_release_body_links_the_live_unstable_docs() -> None:
+    """An rc's release page links docs that exist when it is published.
+
+    rcs deploy no versioned docs, so the only live pages for unreleased
+    code are the rolling ``unstable`` version docs.yml deploys on every
+    push to main (template#668).  The site root would be the previous
+    stable's ``latest``.
+    """
+    release = RELEASE_WORKFLOW.read_text(encoding="utf-8")
+    prerelease_branch = release.split("# rcs deploy no versioned docs", 1)[1]
+    prerelease_branch = prerelease_branch.split("            else\n", 1)[0]
+    unstable_link = r"Documentation.*\.github\.io/[^/\s]+/unstable/"
+    assert re.search(unstable_link, prerelease_branch), (
+        "the rc body's Documentation line must link the rolling unstable docs"
+    )
+    docs = DOCS_WORKFLOW.read_text(encoding="utf-8")
+    assert "mike deploy --push unstable" in docs, (
+        "the rc body links /unstable/, so docs.yml must keep deploying it"
+    )
+
+
 PORT = REPO_ROOT / "scripts" / "port_bookkeeping.sh"
 
 
@@ -2092,6 +2113,28 @@ def test_missing_manifest_refuses_loudly(stamp_sandbox: Path) -> None:
     assert "server.json" in result.stderr
 
 
+@pytest.mark.parametrize(
+    "version", ["9.9.9.dev1", "v9.9.9", "9.9.9-beta.1", "9.9", "../9.9.9", "9.9.9\n"]
+)
+def test_malformed_version_refuses_before_touching_anything(
+    stamp_sandbox: Path, version: str
+) -> None:
+    """Only the two shapes the release flow emits are stamped (#694).
+
+    knope hands the stamper ``X.Y.Z`` or ``X.Y.Z-rc.N``; anything else is a
+    broken invocation, and it must refuse before any manifest is rewritten
+    rather than write the string into uv.lock and server.json.
+    """
+    files = [stamp_sandbox / "uv.lock", stamp_sandbox / "server.json"]
+    before = [f.read_bytes() for f in files]
+
+    result = _run_stamper(stamp_sandbox, version)
+
+    assert result.returncode != 0
+    assert "version" in result.stderr
+    assert [f.read_bytes() for f in files] == before
+
+
 def test_unstampable_oci_pin_refuses_and_names_the_file(stamp_sandbox: Path) -> None:
     """An OCI identifier without a ``:v<tag>`` suffix refuses, atomically."""
     server_path = stamp_sandbox / "server.json"
@@ -2408,12 +2451,12 @@ def test_committed_pins_name_the_last_stable_or_the_prepared_version() -> None:
         (COVERAGE_STATUS_WORKFLOW, "coverage-status.yml (fork-PR fallback)"),
     ],
 )
-def test_every_codecov_patch_poster_posts_under_all_outcomes(
+def test_every_coverage_patch_poster_posts_under_all_outcomes(
     workflow: Path, label: str
 ) -> None:
-    """Both posters of ``codecov/patch`` report something, always.
+    """Both posters of ``coverage/patch`` report something, always.
 
-    `extra_required_checks` lets a project make ``codecov/patch`` a required
+    `extra_required_checks` lets a project make ``coverage/patch`` a required
     context.  A required check that never reports does not turn a pull request
     red — it leaves it waiting forever on a status that is not coming, and the
     only exits are an admin bypass or a ruleset edit.  So "post an ``error``"
@@ -2429,12 +2472,12 @@ def test_every_codecov_patch_poster_posts_under_all_outcomes(
     else couples them.
     """
     text = workflow.read_text(encoding="utf-8")
-    poster = text.index("name: Post codecov/patch status")
+    poster = text.index("name: Post coverage/patch status")
     # Look only at the posting step, not the whole workflow: `always()`
     # elsewhere in the file would satisfy a naive substring check.
     step = text[poster : poster + 2000]
     assert "always()" in step, (
-        f"{label}: the codecov/patch posting step must run under all outcomes"
+        f"{label}: the coverage/patch posting step must run under all outcomes"
     )
     # ...and it must carry a fallback state, or `always()` only guarantees the
     # step runs, not that it posts a usable status.

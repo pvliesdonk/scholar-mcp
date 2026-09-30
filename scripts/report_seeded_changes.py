@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.11"
+# dependencies = ["copier"]
+# ///
 """Report what the template changed in seeded-once files during ``copier update``.
 
 Files under ``_skip_if_exists`` are written on the first ``copier copy`` and
@@ -10,11 +14,19 @@ between the two, and writes ``.copier-seeded-changes.md`` at the repository
 root for the human or agent working the update.  The weekly update pull
 request embeds that file.
 
+From the previous ref's render it also writes ``.copier-template-drift.md``:
+every template-owned file that, before this update, already differed from
+that render outside its sentinel blocks (``check_template_conformance.py``
+does the comparison).  ``copier update`` carries such drift forward without
+a conflict marker wherever the template did not touch the same lines, so
+the update's diff alone never shows it.
+
 It never fails the update.  A fresh copy, an unchanged ref, a missing tool
 or an impossible render (offline, unknown ref) each leave a clear message —
 in the report where one can be written — and exit 0.  Importing this module
-has no side effects; the ``uv run`` fallback for missing dependencies runs
-from ``main()`` only.
+has no side effects; the ``uv run --script`` fallback for a missing copier
+runs from ``main()`` only.  The script takes no arguments, so that fallback
+hands nothing it was given to ``uv`` (#694).
 """
 
 from __future__ import annotations
@@ -28,6 +40,7 @@ import tempfile
 from pathlib import Path
 
 REPORT = Path(".copier-seeded-changes.md")
+DRIFT_REPORT = Path(".copier-template-drift.md")
 ANSWERS = Path(".copier-answers.yml")
 
 # Skip-listed only for copier's patch mechanics; regenerated in full by
@@ -231,29 +244,83 @@ def _refs(current: dict[str, object]) -> tuple[str, str, str]:
     return src, old, new
 
 
+_DRIFT_BEFORE = """
+This is the project as it stood before this update (`HEAD`), compared with
+the template version it was last updated to, so every difference below
+predates the update. Re-run `uv run --script scripts/check_template_conformance.py`
+after resolving the update to see what is left.
+"""
+
+
+def _conflicted(rel: str) -> str:
+    path = Path(rel)
+    try:
+        text = path.read_text(encoding="utf-8") if path.is_file() else ""
+    except UnicodeDecodeError:
+        return ""
+    if re.search(r"^<<<<<<< before updating$", text, re.MULTILINE):
+        return (
+            "This file also has conflict markers now: where a hunk overlaps the "
+            "lines below, its local side holds this drift."
+        )
+    return ""
+
+
+def _drift_report(
+    src: str, old: str, current: dict[str, object], old_root: Path
+) -> str:
+    """The pre-update drift report; a failure is written into it, never raised."""
+    try:
+        import check_template_conformance as conformance
+
+        patterns = [_render_pattern(p, current) for p in _skip_patterns(src, old)]
+        drifts = conformance.check(
+            old_root, conformance.read_revision("HEAD"), patterns
+        )
+    except Exception as exc:  # reported in the file, never raised
+        return (
+            "# Template-owned files that differ from the template\n"
+            f"\n**The comparison could not be made:** {type(exc).__name__}: {exc}\n\n"
+            "Run `uv run --script scripts/check_template_conformance.py --rev HEAD "
+            f"--ref {old}` by hand.\n"
+        )
+    header = conformance.report_header(
+        src=src, ref=old, what="this project before the update"
+    )
+
+    def describe(drift: conformance.Drift) -> str:
+        blame = conformance.blame_note(drift, "HEAD")
+        return " ".join(s for s in (_conflicted(drift.path), blame) if s)
+
+    return conformance.render_report(drifts, header + _DRIFT_BEFORE, describe)
+
+
 def _compute(
     src: str, old: str, new: str, current: dict[str, object]
-) -> list[tuple[str, str]]:
+) -> tuple[list[tuple[str, str]], str]:
     patterns = [_render_pattern(p, current) for p in _skip_patterns(src, new)]
     with tempfile.TemporaryDirectory() as tmp:
         old_root, new_root = Path(tmp) / "previous", Path(tmp) / "target"
         _render(src, old, current, old_root)
         _render(src, new, current, new_root)
-        return diff_seeded(old_root, new_root, patterns)
+        changes = diff_seeded(old_root, new_root, patterns)
+        return changes, _drift_report(src, old, current, old_root)
 
 
 def _skip(reason: str) -> int:
     """A no-op update leaves no stale report behind."""
-    if REPORT.exists():
-        REPORT.unlink()
-        reason += f"; removed the stale {REPORT}"
+    for stale in (REPORT, DRIFT_REPORT):
+        if stale.exists():
+            stale.unlink()
+            reason += f"; removed the stale {stale}"
     print(f"report_seeded_changes: {reason}")
     return 0
 
 
-def _reexec_with_deps() -> bool:
-    """Re-exec under `uv run --no-project` when copier is missing; True when
-    the caller should fall through to a failure report instead."""
+def _reexec_under_uv() -> bool:
+    """Re-exec under `uv run --script` (the inline metadata above supplies
+    copier) when copier is missing; True when the caller should fall through
+    to a failure report instead."""
     try:
         import copier  # noqa: F401
     except ImportError:
@@ -263,18 +330,8 @@ def _reexec_with_deps() -> bool:
     if os.environ.get("_SEEDED_REPORT_BOOTSTRAPPED") == "1":
         return True
     os.environ["_SEEDED_REPORT_BOOTSTRAPPED"] = "1"
-    argv = [
-        "uv",
-        "run",
-        "--no-project",
-        "--with",
-        "copier",
-        "python",
-        __file__,
-        *sys.argv[1:],
-    ]
     try:
-        os.execvpe("uv", argv, os.environ)
+        os.execvpe("uv", ["uv", "run", "--script", __file__], os.environ)
     except OSError:
         return True
     return True  # pragma: no cover — execvpe does not return on success
@@ -291,17 +348,22 @@ def main() -> int:
         return _skip(f"template ref unchanged ({new}); skipping")
     failure: str | None = None
     changes: list[tuple[str, str]] = []
-    if _reexec_with_deps():
+    drift = ""
+    if _reexec_under_uv():
         failure = "copier is not importable and `uv` is not available to fetch it"
     else:
         try:
-            changes = _compute(src, old, new, current)
+            changes, drift = _compute(src, old, new, current)
         except Exception as exc:  # any failure is reported in the file, never raised
             failure = f"{type(exc).__name__}: {exc}"
     REPORT.write_text(
         render_report(src=src, old=old, new=new, changes=changes, failure=failure),
         encoding="utf-8",
     )
+    if drift:
+        DRIFT_REPORT.write_text(drift, encoding="utf-8")
+    elif DRIFT_REPORT.exists():
+        DRIFT_REPORT.unlink()
     if failure:
         print(
             f"report_seeded_changes: WARNING could not compute the report ({failure}); wrote {REPORT}"

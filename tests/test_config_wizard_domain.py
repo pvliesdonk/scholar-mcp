@@ -106,19 +106,3 @@ def test_bool_left_at_default_emits_nothing(page: Page) -> None:
     "emitted because chosen" from "emitted always".
     """
     assert "SCHOLAR_MCP_READ_ONLY=" not in page.inner_text(".cfg-output")
-
-
-def test_rich_logging_emits_the_unprefixed_fastmcp_var(page: Page) -> None:
-    """``fastmcp_enable_rich_logging`` deliberately carries no project prefix.
-
-    It is read by FastMCP itself, so the emitted key must stay
-    ``FASTMCP_ENABLE_RICH_LOGGING``. A refactor that applied the
-    ``SCHOLAR_MCP_`` prefix uniformly would break it silently, which is why the
-    negative is asserted alongside the positive.
-    """
-    page.locator("details.cfg-advanced summary").first.click()
-    page.select_option('[data-qid="fastmcp_enable_rich_logging"] select', "false")
-
-    text = page.inner_text(".cfg-output")
-    assert "FASTMCP_ENABLE_RICH_LOGGING=false" in text
-    assert "SCHOLAR_MCP_ENABLE_RICH_LOGGING" not in text

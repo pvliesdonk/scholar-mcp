@@ -18,7 +18,7 @@
       "SCHOLAR_MCP_VLM_MODEL": "${user_config.vlm_model}",
       "SCHOLAR_MCP_EPO_CONSUMER_KEY": "${user_config.epo_consumer_key}",
       "SCHOLAR_MCP_EPO_CONSUMER_SECRET": "${user_config.epo_consumer_secret}",
-      "FASTMCP_LOG_LEVEL": "${user_config.log_level}"
+      "SCHOLAR_MCP_LOG_LEVEL": "${user_config.log_level}"
     }
   }
 }

@@ -1,5 +1,5 @@
 # Changes here will be overwritten by `copier update`.
-_commit: v8.2.0
+_commit: v11.0.2
 _src_path: https://github.com/pvliesdonk/fastmcp-server-template
 author_email: pvliesdonk@users.noreply.github.com
 author_name: Peter van Liesdonk
@@ -10,7 +10,7 @@ enable_automatic_claude_review: false
 enable_structural_gate: true
 env_prefix: SCHOLAR_MCP
 extra_required_checks:
-- codecov/patch
+- coverage/patch
 github_org: pvliesdonk
 human_name: Scholar MCP
 include_claude_plugin: true

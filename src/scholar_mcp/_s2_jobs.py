@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import functools
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from fastmcp.utilities.tasks import TaskConfig
-from fastmcp_pvl_core import JobsConfig
+from fastmcp_pvl_core import JobsConfig, tool_boundary
 from fastmcp_tasks.context import get_task_context
 
 from ._rate_limiter import (
@@ -72,16 +72,19 @@ async def _run_s2_body(
             return task.result()
         continuation = _await_task(task)
         try:
+            # pvl-core types both verbs `Any`: inside a native task they return
+            # the work's own result. That path returned above, so here they
+            # always return the JobHandle mapping (pvl-core#324).
             if signal in done:
-                return dict(
-                    await jobs.defer(
-                        continuation,
-                        tool=tool,
-                        reason=_S2_THROTTLE_REASON,
-                        retry_after_s=context.retry_after_s,
-                    )
+                handle = await jobs.defer(
+                    continuation,
+                    tool=tool,
+                    reason=_S2_THROTTLE_REASON,
+                    retry_after_s=context.retry_after_s,
                 )
-            return dict(await jobs.start(continuation, tool=tool))
+            else:
+                handle = await jobs.start(continuation, tool=tool)
+            return cast("dict[str, Any]", handle)
         except Exception:
             continuation.close()
             task.cancel()
@@ -126,6 +129,8 @@ def register_s2_tool(
                 fn(*args, **kwargs), jobs=jobs, config=config, tool=tool_name
             )
 
-        return mcp.tool(task=TaskConfig(mode="optional"), **tool_kwargs)(wrapper)
+        return mcp.tool(task=TaskConfig(mode="optional"), **tool_kwargs)(
+            tool_boundary(wrapper)
+        )
 
     return decorator

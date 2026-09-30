@@ -188,7 +188,7 @@ export function generateDockerRun(spec, answers, map) {
   const env = dockerEnvMap(spec, answers, map);
   const lines = [
     `docker run -d --name ${spec.meta.projectName}`,
-    "  -p 8000:8000",
+    "  -p 127.0.0.1:8000:8000",
     `  -v ${SERVICE_VOLUME}`,
     `  -v ${STATE_VOLUME}`,
   ];
@@ -217,7 +217,7 @@ export function generateCompose(spec, answers, map) {
     `    image: ${spec.meta.dockerImage}`,
     "    restart: unless-stopped",
     "    ports:",
-    '      - "8000:8000"',
+    '      - "127.0.0.1:8000:8000"',
     "    volumes:",
     ...volLines,
     "    environment:",
@@ -251,11 +251,9 @@ export function generateSystemd(meta, map) {
     `# Create this user first: sudo useradd --system --no-create-home ${name}`,
     `User=${name}`,
     `ExecStart=/opt/${name}/venv/bin/${name} serve --transport http`,
-    // Same trade the packaged unit makes: journald is not a terminal, so Rich
-    // wraps every structured log record across three lines. Emitted before
-    // `envLines` because systemd lets a later Environment= win, so an operator
-    // who answered this question still gets their answer.
-    "Environment=FASTMCP_ENABLE_RICH_LOGGING=false",
+    // No log-format line, matching the packaged unit: journald is not a
+    // terminal, so pvl-core renders JSON there by itself, and the operator's
+    // own `<PREFIX>_LOG_FORMAT` answer in `envLines` is the only say.
     envLines,
     "Restart=on-failure",
     "",

@@ -6,7 +6,7 @@
 
 <!-- mcp-name: io.github.pvliesdonk/scholar-mcp -->
 
-[![CI](https://github.com/pvliesdonk/scholar-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/pvliesdonk/scholar-mcp/actions/workflows/ci.yml) [![codecov](https://codecov.io/gh/pvliesdonk/scholar-mcp/graph/badge.svg)](https://codecov.io/gh/pvliesdonk/scholar-mcp) [![repowise](https://api.repowise.dev/badge/wiki/pvliesdonk/scholar-mcp.svg)](https://repowise.dev/repo/pvliesdonk/scholar-mcp) [![Code health](https://api.repowise.dev/badge/health/pvliesdonk/scholar-mcp.svg)](https://repowise.dev/repo/pvliesdonk/scholar-mcp) [![PyPI](https://img.shields.io/pypi/v/pvliesdonk-scholar-mcp)](https://pypi.org/project/pvliesdonk-scholar-mcp/) [![Python](https://img.shields.io/pypi/pyversions/pvliesdonk-scholar-mcp)](https://pypi.org/project/pvliesdonk-scholar-mcp/) [![License](https://img.shields.io/github/license/pvliesdonk/scholar-mcp)](LICENSE) [![Docker](https://img.shields.io/github/v/release/pvliesdonk/scholar-mcp?label=ghcr.io&logo=docker)](https://github.com/pvliesdonk/scholar-mcp/pkgs/container/scholar-mcp) [![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://pvliesdonk.github.io/scholar-mcp/) [![llms.txt](https://img.shields.io/badge/llms.txt-available-brightgreen)](https://pvliesdonk.github.io/scholar-mcp/latest/llms.txt) [![Template](https://img.shields.io/badge/dynamic/yaml?url=https://raw.githubusercontent.com/pvliesdonk/scholar-mcp/main/.copier-answers.yml&query=%24._commit&label=template)](https://github.com/pvliesdonk/fastmcp-server-template)
+[![CI](https://github.com/pvliesdonk/scholar-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/pvliesdonk/scholar-mcp/actions/workflows/ci.yml) [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=pvliesdonk_scholar-mcp&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=pvliesdonk_scholar-mcp) [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=pvliesdonk_scholar-mcp&metric=coverage)](https://sonarcloud.io/summary/new_code?id=pvliesdonk_scholar-mcp) [![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=pvliesdonk_scholar-mcp&metric=reliability_rating)](https://sonarcloud.io/summary/new_code?id=pvliesdonk_scholar-mcp) [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=pvliesdonk_scholar-mcp&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=pvliesdonk_scholar-mcp) [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=pvliesdonk_scholar-mcp&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=pvliesdonk_scholar-mcp) [![PyPI](https://img.shields.io/pypi/v/pvliesdonk-scholar-mcp)](https://pypi.org/project/pvliesdonk-scholar-mcp/) [![Python](https://img.shields.io/pypi/pyversions/pvliesdonk-scholar-mcp)](https://pypi.org/project/pvliesdonk-scholar-mcp/) [![License](https://img.shields.io/github/license/pvliesdonk/scholar-mcp)](LICENSE) [![Docker](https://img.shields.io/github/v/release/pvliesdonk/scholar-mcp?label=ghcr.io&logo=docker)](https://github.com/pvliesdonk/scholar-mcp/pkgs/container/scholar-mcp) [![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://pvliesdonk.github.io/scholar-mcp/) [![llms.txt](https://img.shields.io/badge/llms.txt-available-brightgreen)](https://pvliesdonk.github.io/scholar-mcp/latest/llms.txt) [![Template](https://img.shields.io/badge/dynamic/yaml?url=https://raw.githubusercontent.com/pvliesdonk/scholar-mcp/main/.copier-answers.yml&query=%24._commit&label=template)](https://github.com/pvliesdonk/fastmcp-server-template)
 
 Scholarly papers, patents, books, standards and PDF conversion
 
@@ -150,8 +150,8 @@ The most common environment variables, shared across all
 | Variable | Default | Description |
 |---|---|---|
 | `SCHOLAR_MCP_KV_STORE_URL` | `file:///data/state` | Persistent-state backend URL shared by every pvl-core subsystem that needs state. `memory://` is in-process and lost on restart; `file:///path` persists on one server; `redis://`, `dynamodb://` and `mongodb://` each need their matching extra. When unset, defaults to `file:///data/state` (the volume family Docker images mount), or to `memory://` (with a warning) on a host where that directory is not usable. |
-| `FASTMCP_LOG_LEVEL` | `INFO` | Log level for FastMCP internals and app loggers (DEBUG / INFO / WARNING / ERROR / CRITICAL). The -v CLI flag overrides to DEBUG. |
-| `FASTMCP_ENABLE_RICH_LOGGING` | `true` | Rich color output for a terminal; false gives one plain or JSON line per record. Off in the container image and the systemd unit, since neither is a terminal and Rich wraps a structured record at its 80-column fallback. |
+| `SCHOLAR_MCP_LOG_LEVEL` | `INFO` | Log level for every logger in the process, FastMCP's included (DEBUG / INFO / WARNING / ERROR / CRITICAL). The -v CLI flag overrides to DEBUG. The unprefixed FASTMCP_LOG_LEVEL still works for one major version and logs a deprecation warning. |
+| `SCHOLAR_MCP_LOG_FORMAT` | (none) | Log rendering. rich is one colour event key=value line per record, for a terminal; json is one JSON object per record, for a collector. Unset picks rich when stderr is a terminal and json everywhere else, so a container or journald gets JSON with no configuration. |
 <!-- GENERATED-ENV-TABLE-CORE-END -->
 
 This table and the one under [Domain configuration](#domain-configuration)
@@ -180,23 +180,26 @@ CI workflows reference two required repository secrets and one optional Claude t
 
 | Secret | Used by | How to generate |
 |---|---|---|
-| `RELEASE_TOKEN` | `release-prepare.yml`, `release.yml`, `copier-update.yml`, `renovate.yml`, `bootstrap.yml` | Fine-grained PAT at <https://github.com/settings/personal-access-tokens/new> with `contents: write`, `pull_requests: write`, and `administration: write` (bootstrap applies the repository rulesets + auto-merge). Must belong to a repository admin: the shipped rulesets grant bypass to the admin role, and the release tag + GitHub release that knope creates after a release pull request merges rely on it (pull requests the token opens also need it so their CI runs). Scoped to this repo. |
-| `CODECOV_TOKEN` | `ci.yml` | <https://codecov.io>: sign in with GitHub and add the repo. The upload token is on its settings page. |
+| `RELEASE_TOKEN` | `release-prepare.yml`, `release.yml`, `copier-update.yml`, `renovate.yml`, `bootstrap.yml` | Fine-grained PAT at <https://github.com/settings/personal-access-tokens/new> with `contents: write`, `pull_requests: write`, and `administration: write` (bootstrap applies the repository rulesets, auto-merge, the security settings, and the About block). Must belong to a repository admin: the shipped rulesets grant bypass to the admin role, and the release tag + GitHub release that knope creates after a release pull request merges rely on it (pull requests the token opens also need it so their CI runs). Scoped to this repo. |
+| `SONAR_TOKEN` | `ci.yml` | <https://sonarcloud.io>: after importing the repository, open its **Administration → Analysis Method** page. Turn Automatic Analysis off there first, because SonarQube Cloud refuses a CI scan while it is on; choosing GitHub Actions then shows the token. Until the secret exists, CI skips the scan. |
 | `CLAUDE_CODE_OAUTH_TOKEN` | `claude.yml` | Optional. Run `claude setup-token` locally and configure this only for `@claude` or opted-in automatic review. |
 
 ```bash
 gh secret set RELEASE_TOKEN
-gh secret set CODECOV_TOKEN
+gh secret set SONAR_TOKEN
 # Optional: enables @claude and opted-in automatic review.
 gh secret set CLAUDE_CODE_OAUTH_TOKEN
 ```
 
 > Dependency updates are handled by **Renovate** (`renovate.yml`), which reuses
 > `RELEASE_TOKEN`. It maintains `uv.lock` and auto-merges patch/minor bumps once
-> the `CI Success` check is green; `bootstrap.yml` enables auto-merge and applies
-> the repository rulesets (`.github/rulesets/`) on first push. See
+> the `CI Success` check is green; `bootstrap.yml` enables auto-merge, applies
+> the repository rulesets (`.github/rulesets/`), turns on private
+> vulnerability reporting and Dependabot alerts, and fills the repository's
+> About block (description, website, topics) from `pyproject.toml` on first
+> push. See
 > [Repository Protection](docs/deployment/repository-protection.md) for the
-> per-branch posture and bypass model. GitHub Actions are updated in the copier
+> per-branch posture, bypass model, and security settings. GitHub Actions are updated in the copier
 > template and arrive via `copier update`, not per-repo.
 
 `GITHUB_TOKEN` is auto-provided; no action needed.
@@ -212,6 +215,11 @@ uv run mypy src/ tests/                              # type-check
 ```
 
 Pre-commit runs a subset of the gate on each commit; see `.pre-commit-config.yaml` for details, or [`AGENTS.md`](AGENTS.md) for the full Hard PR Acceptance Gates.
+
+CI requires tests to pass on Python 3.11 through 3.14. Python 3.14 also collects
+branch coverage and enforces the 80% total and patch coverage thresholds.
+To reproduce that test command, run
+`uv run --python 3.14 pytest --cov --cov-report=xml --durations=20`.
 
 ## Troubleshooting
 
@@ -241,13 +249,15 @@ fix belongs: `fastmcp-pvl-core` for library code, the template for
 template-owned files, this repository for anything inside its `DOMAIN-*` /
 `CONFIG-*` / `PROJECT-*` blocks. `AGENTS.md` carries the conventions and
 gates; the skills under `.agents/skills/` carry the task procedures, among
-them `code-review` (local self-review before a pull request),
+them `self-reviewing` (local self-review before a pull request),
 `writing-release-notes` (release notes),
 `applying-template-updates` (the weekly template update pull request) and
 `authoring-issues-prs` (filing). The release procedure is in
 [docs/deployment/release-process.md](docs/deployment/release-process.md);
 the template update procedure in
 [docs/deployment/template-updates.md](docs/deployment/template-updates.md).
+`SECURITY.md` says how to report a vulnerability privately, and what to
+expect after.
 
 ## Links
 

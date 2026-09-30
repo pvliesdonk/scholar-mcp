@@ -8,12 +8,13 @@ in the UI and forgotten.
 
 ## What ships
 
-Three rulesets, one file each:
+Four rulesets, one file each:
 
 | Ruleset | Targets | Rules |
 |---|---|---|
-| `protect-main` | the default branch | pull request required (zero approvals), `CI Success` status check (strict), no deletion, no force push |
+| `protect-main` | the default branch | pull request required (zero approvals), `CI Success` status check, no deletion, no force push |
 | `protect-release-branches` | `release/*` branches | same gates as the default branch |
+| `protect-integration-branches` | `integration/*` branches | pull request required (zero approvals), `CI Success` status check, no force push |
 | `protect-release-tags` | `v*` tags | no deletion, no force move (creation stays open) |
 
 The reasoning per branch class:
@@ -31,10 +32,39 @@ The reasoning per branch class:
   on pull requests targeting `release/*` for exactly this reason. Status
   checks are not enforced on branch creation, so cutting `release/X.Y` is a
   plain push.
+- **`integration/*`** branches park an epic's child pull requests until the
+  whole epic goes to `main` at once; the
+  [integration branches](integration-branches.md) page covers the workflow.
+  Child pull requests need a pull request and `CI Success`, and force pushes
+  are blocked because a rebase would rewrite the commits every open child is
+  based on. Deletion stays open, so GitHub's automatic head-branch deletion
+  can remove the branch once its final pull request merges. The checks
+  listed in `extra_required_checks` (below) are not required here: they come
+  from workflows the project owns, which may not run on `integration/*`, and
+  the final pull request to `main` has to pass them anyway.
 - **`v*` tags** are the identity of every shipped release: package
   registries, Docker tags, and install instructions all point at them.
   The ruleset blocks deleting or force-moving them. Creating tags stays
   unrestricted because the release workflow creates one per release.
+
+### Branches need not be up to date
+
+The required checks are not *strict*: a pull request whose checks passed
+can merge even after its base branch has moved on. The strict setting,
+GitHub's **Require branches to be up to date before merging**, makes every
+merge to `main` turn each open pull request's green check stale, so each one
+waits for an **Update branch** round trip and a full CI re-run before it can
+merge. On a busy trunk that happens once per sibling merge.
+
+The cost of turning it off is the semantic conflict: two pull requests that
+each pass alone and break together. CI runs on every push to `main`,
+`release/*` and `integration/*`, so such a break shows up on the merged
+commit rather than slipping through unseen. A release pull request is the
+one place this needs care: nothing stops it merging after its base moved
+on, so re-dispatch Release Prepare first (see the release process page). GitHub's merge queue is the tool
+that closes the gap without the update chore, but it needs a `merge_group`
+trigger in every required workflow and is not available on repositories
+owned by a personal account.
 
 ## Who bypasses, and how
 
@@ -113,9 +143,9 @@ extra_required_checks:
   - SPA sources
 ```
 
-Each name renders into the `required_status_checks` array of both branch
-rulesets, alongside `CI Success`, and applies to `main` and `release/*`
-alike. The answer is the project's own, so the rulesets stay template-owned
+Each name renders into the `required_status_checks` array of both release
+branch rulesets, alongside `CI Success`, and applies to `main` and
+`release/*` alike. Integration branches require `CI Success` alone. The answer is the project's own, so the rulesets stay template-owned
 and a `copier update` re-renders them with the project's checks intact. An
 empty answer, the default, renders exactly the single-context form every
 project already had.
@@ -146,9 +176,21 @@ commit them and push, and the `.github/rulesets/` path filter starts
     there is not. Verify on a pull request that touches nothing the check
     cares about: the context must still appear, and pass.
 
-### `codecov/patch`, if you require it
+### `coverage/patch`, if you require it
 
-`codecov/patch` is the one context this rule applies to that the template
+CI requires the full test suite to pass on Python 3.11 through 3.14.
+Only the Python 3.14 job collects branch coverage, using
+`uv run pytest --cov --cov-report=xml --durations=20`. The other interpreters
+run `uv run pytest --durations=20`. The coverage job retains the 80% total
+and patch thresholds. Each job has a 20-minute timeout and reports its
+[slowest test durations](https://docs.pytest.org/en/stable/how-to/usage.html#profiling-test-execution-duration)
+when `pytest` finishes.
+
+Python 3.14 supports branch measurement with coverage.py's
+[`sys.monitoring` core](https://coverage.readthedocs.io/en/latest/config.html#run-core).
+Python 3.12 and 3.13 cannot use that core for branch coverage.
+
+`coverage/patch` is the one context this rule applies to that the template
 itself ships, and it is worth knowing how it reaches a pull request before
 you add it to `extra_required_checks`.
 
@@ -164,6 +206,32 @@ maintainer can re-run the workflow, while a missing status is not. If you
 require this context and a fork pull request stalls on it, check the **Post
 Coverage Status** workflow's runs rather than the CI run: the status comes
 from there.
+
+## Security reporting and alerts
+
+The same workflow turns on three settings that GitHub otherwise leaves for
+someone to click, in a separate `security` job so a ruleset failure and a
+security-settings failure show up apart:
+
+| Setting | Effect | Applied when |
+|---|---|---|
+| Private vulnerability reporting | Adds **Report a vulnerability** to the Security tab, the channel the root `SECURITY.md` sends researchers to | Public repositories only; GitHub does not offer it on private ones |
+| Dependabot alerts | Lists known-vulnerable dependencies on the Security tab; Renovate still owns the update pull requests | Every repository |
+| Secret scanning push protection | Blocks a push that contains a recognised secret | Public repositories, when the plan allows it; a refusal is a warning in the run, not a failure |
+
+Without private vulnerability reporting, a researcher's only path is a public
+issue asking for a private one, which is how a project generated from this
+template was contacted. `SECURITY.md` at the repository root is the policy
+GitHub shows next to that button. It covers the reporting path, the response
+targets, the supported versions, and where a fix lands. The response targets
+and the scope live inside its `DOMAIN-SECURITY` block, which a project edits
+once and keeps across template updates.
+
+The job runs with `RELEASE_TOKEN`, the same `administration: write` the
+rulesets need. Each call is idempotent, so a re-run converges on the same
+enabled state. An organisation-level security configuration outranks these
+repository settings. Where one applies, GitHub may reject the job's calls,
+and the run log names the rejected one.
 
 ## Applying by hand
 

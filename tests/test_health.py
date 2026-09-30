@@ -45,15 +45,42 @@ def _get(server: FastMCP, url: str, *, http_path: str = "/mcp") -> Response:
     return asyncio.run(_probe())
 
 
+def _preset_contract_env(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Set every variable the project's ``config_contract_env`` returns.
+
+    The fixture in the project's ``tests/conftest.py`` supplies values for
+    the variables its ``from_env`` reads with ``env(..., required=True)``.
+    Resolved via ``getfixturevalue`` so a ``conftest.py`` that predates the
+    fixture keeps passing with nothing preset.  Repeated verbatim in every
+    template-owned test that builds from the environment rather than
+    imported: a sibling import only resolves when ``tests/`` is not a package.
+    """
+    try:
+        env = request.getfixturevalue("config_contract_env")
+    except pytest.FixtureLookupError:
+        return
+    for key, value in dict(env).items():
+        monkeypatch.setenv(key, value)
+
+
 @pytest.fixture(autouse=True)
-def _kv_store_in_tmp(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def _kv_store_in_tmp(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """Pin the readiness probe's backend to a temp directory.
 
     Unset, pvl-core defaults to ``file:///data/state`` where that directory
     is usable and ``memory://`` elsewhere — which would make the readiness
-    verdict depend on the host running the tests.
+    verdict depend on the host running the tests.  The project's
+    ``config_contract_env`` is applied first, so this pin wins.
     """
-    monkeypatch.setenv("SCHOLAR_MCP_KV_STORE_URL", f"file://{tmp_path / 'kv'}")
+    _preset_contract_env(request, monkeypatch)
+    monkeypatch.setenv(
+        "SCHOLAR_MCP_KV_STORE_URL",
+        f"file://{tmp_path / 'kv'}",
+    )
 
 
 def test_liveness_answers_outside_the_mcp_mount() -> None:
@@ -88,8 +115,12 @@ def test_health_prefix_follows_the_mount_path() -> None:
     never collide on ``/health``.
     """
     mount = "/scholar-mcp/mcp"
+    # Hoisted so the assert's length does not grow with ``project_name``: an
+    # inline literal pushed the line past ruff's 88 for names over 17
+    # characters, and ``ruff format`` rewrapped every such render (#649).
+    health = "/scholar-mcp/health"
     server = make_server(transport="http", http_path=mount)
-    assert _get(server, "/scholar-mcp/health", http_path=mount).status_code == 200
+    assert _get(server, health, http_path=mount).status_code == 200
     assert _get(server, "/health", http_path=mount).status_code == 404
 
 
@@ -101,8 +132,9 @@ def test_mount_path_env_var_is_the_fallback(monkeypatch: pytest.MonkeyPatch) -> 
     """
     mount = "/scholar-mcp/mcp"
     monkeypatch.setenv("SCHOLAR_MCP_HTTP_PATH", mount)
+    health = "/scholar-mcp/health"
     server = make_server(transport="http")
-    assert _get(server, "/scholar-mcp/health", http_path=mount).status_code == 200
+    assert _get(server, health, http_path=mount).status_code == 200
 
 
 @pytest.mark.parametrize("transport", ["stdio", "sse"])

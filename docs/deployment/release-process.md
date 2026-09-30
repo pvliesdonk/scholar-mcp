@@ -149,7 +149,11 @@ Two rules keep the flow sound:
 - Never press GitHub's "Update branch" button on a release pull request.
   If the base branch moves while the pull request is open, dispatch
   Release Prepare again: it recreates the preparation branch from the
-  base and refreshes the same pull request in place.
+  base and refreshes the same pull request in place. Nothing blocks the
+  merge of a stale release pull request, because the rulesets do not
+  require branches to be up to date. Merged anyway, it ships the newer
+  commits without counting them in its version or changelog, so check
+  that the base has not moved before you merge.
 - A release candidate promotes through a plain `channel: stable` dispatch
   over the same commits. A guard verifies that nothing but release stamps
   and release-notes pages changed since the last candidate, first when
@@ -219,7 +223,9 @@ Each release is described in three places with distinct jobs:
 
 - **The GitHub release body** carries the release's notes summary, its
   machine-written changelog section, and pointers: the versioned docs,
-  the compare view, and a deep link to the notes page.
+  the compare view, and a deep link to the notes page. A pre-release
+  deploys no versioned docs, so its body points at the rolling
+  `unstable` version, which follows `main` rather than the tag.
 - **The release notes pages on this docs site** are the canonical
   human-facing narrative of what changed and why it matters.
 - **`CHANGELOG.md`** in the repository is the machine-written audit

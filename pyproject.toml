@@ -14,6 +14,7 @@ authors = [{ name = "Peter van Liesdonk", email = "pvliesdonk@users.noreply.gith
 # The template knows the terms that are true of every server it generates and
 # the project's own names; it cannot know the domain terms, which go in the
 # seam.  An empty list was not a decision, just nobody's job (#583).
+# bootstrap.yml also sets these as the GitHub repository's topics.
 keywords = [
     "mcp",
     "model-context-protocol",
@@ -22,10 +23,24 @@ keywords = [
     "pvliesdonk-scholar-mcp",
     # PROJECT-KEYWORDS-START — add this project's domain terms below (what it
     # is *about*: "vault", "ocr", "patents"); kept across copier update.
+    "scholarly",
+    "semantic-scholar",
+    "openalex",
+    "citations",
+    "patents",
+    "standards",
+    "books",
+    "pdf-to-markdown",
     # PROJECT-KEYWORDS-END
 ]
 classifiers = [
+    # PROJECT-CLASSIFIERS-START — kept across copier update: this project's
+    # development status, and any audience/topic/framework classifiers.
     "Development Status :: 3 - Alpha",
+    # PROJECT-CLASSIFIERS-END
+    # The Python versions are the ones ci.yml's matrix requires (its
+    # non-experimental entries); scripts/tests/test_python_classifiers.py in
+    # the template keeps the two equal.
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -38,9 +53,55 @@ classifiers = [
     # PROJECT-LICENSE-CLASSIFIER-END
 ]
 dependencies = [
-    # >=7.1.0 for register_health_routes: the unauthenticated /health and
-    # /health/ready routes make_server wires under HTTP, which compose.yml
-    # now probes instead of opening a socket.
+    # >=10.1.0 for env(..., required=True) and env_int / env_float's
+    # required keyword, and for domain_env_surface reporting such a read as
+    # required: config.py's CONFIG-FROM-ENV example, the template-ci
+    # required-var variant and test_config_contract.py's
+    # every-required-var guard depend on both.
+    #
+    # 10.0.0 was the floor before that, for tool_boundary and
+    # is_tool_boundary (pvl-core ADR 0005):
+    # tools.py wraps every tool in the boundary instead of copying it, and
+    # tests/test_tool_outcomes.py fails a registered tool that is not
+    # wrapped (#678).  The request-logging middleware now logs
+    # tool_call_failed at the ToolError's log_level, so an INFO outcome no
+    # longer produces an ERROR line (pvl-core #363).  The major is for two
+    # contract changes in pvl-core's own tools: a transfer validate hook
+    # rejects only with ToolError, and a register_long_running_tool
+    # coroutine that raises anything else ends as a server fault (pvl-core
+    # #375, #376).
+    #
+    # 9.0.0 was the previous floor, for the operator-input contract and the
+    # reworded config help.  Every config-driven builder (build_kv_store / build_event_store,
+    # build_jobs, register_health_routes, register_transfer_routes /
+    # build_transfer_links) raises ConfigurationError where 8.x raised
+    # ValueError or ImportError, so a malformed
+    # SCHOLAR_MCP_KV_STORE_URL reaches cli.py's one-line handler
+    # instead of a traceback (pvl-core #337).  A resolved auth mode that
+    # builds no provider now refuses to start instead of serving
+    # unauthenticated (pvl-core #316), and compute_app_domain strips
+    # userinfo from the value it hands the MCP Apps CSP origin (pvl-core
+    # #343).  The cap matters as much as the floor here: the config-surface
+    # generator resolves this whole constraint, and only 9.0.0's
+    # SHUTDOWN_GRACE_S help text keeps the generated table in
+    # docs/configuration.md clear of ai-tells' MicDrop rule (#639).
+    #
+    # 8.0.0 was the previous floor, for the logging topology and the HTTP
+    # seam: pvl-core owns the root logger, configure_logging_from_env takes
+    # the env prefix as its first argument (7.x's call without one no longer
+    # exists), run_http replaces the uvicorn.run call cli.py used to make,
+    # and the logging variables moved from FASTMCP_* to
+    # SCHOLAR_MCP_LOG_LEVEL / _LOG_FORMAT (template #624).
+    #
+    # 7.2.0 was the floor before that, for find_nonconforming_log_calls: the AST
+    # check tests/test_logging_standard.py runs over src/, which turns the
+    # logging-standard skill's ``event_name key=value`` message format from
+    # prose into a build gate (#611).  7.2.0 is additive; nothing about
+    # logging behaviour changed with it.
+    #
+    # 7.1.0 was the previous floor, for register_health_routes: the
+    # unauthenticated /health and /health/ready routes make_server wires
+    # under HTTP, which compose.yml now probes instead of opening a socket.
     #
     # 7.0.0 was the previous floor, for the FastMCP 4 adoption:
     # configure_task_backend takes the
@@ -89,7 +150,7 @@ dependencies = [
     # this whole constraint rather than the floor alone (#335), but a floor
     # naming a release nobody can install is still a trap for anyone pinning
     # to it.
-    "fastmcp-pvl-core>=7.1.0,<8",
+    "fastmcp-pvl-core>=10.1.0,<11",
     "typer>=0.12",
 
     # PROJECT-DEPS-START — add domain dependencies below; kept across copier update
@@ -244,8 +305,14 @@ ignore = ["E501"]
 "scripts/promote_release_notes.py" = ["S603", "S607"]
 # Package bookkeeping invokes gh with fixed argv and JSON on stdin, never a shell.
 "scripts/package_milestones.py" = ["S603", "S607"]
+# The copier-update migration reads the pre-update CLAUDE.md with a fixed-argv
+# `git show HEAD:CLAUDE.md` (a list, never a shell): the same S607 bare-name
+# and S603 subprocess exceptions as the stamper, and the same reason — the
+# file is template-owned, so a hit reddens the adopter's diff-gate (#524).
+"scripts/migrate_agent_instructions.py" = ["S603", "S607"]
 "scripts/check_pins.py" = ["S310"]  # urlopen on a validated api.github.com URL
 "scripts/report_seeded_changes.py" = ["S603", "S606", "S607"]
+"scripts/check_template_conformance.py" = ["S603", "S607"]
 
 # PROJECT-RUFF-IGNORES-START — replace, extend, or override the entries below
 # for your project's real source/test paths (split _server_apps.py into
@@ -257,18 +324,6 @@ ignore = ["E501"]
 # `# noqa: PLR0913` routine. It only bites when enable_structural_gate is on
 # (PLR0913 isn't in the base select); domain modules keep the check, and
 # C901/PLR0912/PLR0915 still catch a genuinely complex tool here.
-# Template-owned script the template's own managed list above does not cover:
-# scripts/migrate_agent_instructions.py reads the pre-update CLAUDE.md with a
-# fixed-argv `git show HEAD:CLAUDE.md` (no shell), which trips S607's bare-`git`
-# partial-path rule on the structural diff-gate the first time an update ships
-# the file — exactly what the managed entries for stamp_manifests.py,
-# promote_release_notes.py and report_seeded_changes.py exist to prevent.
-# The gap is known upstream and was declined: fastmcp-server-template#524 is
-# closed as not-planned, and names this local entry as the resolution (the
-# same one markdown-vault-mcp carries). So this is permanent, not a carry
-# awaiting a fix. If the template ever does add the entry to its managed block,
-# remove this one — two entries for one path is a duplicate TOML key.
-"scripts/migrate_agent_instructions.py" = ["S603", "S607"]
 "src/scholar_mcp/server.py" = ["ARG001", "B008", "TC002"]
 "src/scholar_mcp/cli.py" = ["B008", "TC002", "TC003", "PLR0913"]
 "src/scholar_mcp/_server_apps.py" = ["TC002", "PLR0913"]
@@ -342,6 +397,8 @@ markers = [
 [tool.coverage.run]
 source = ["src/scholar_mcp"]
 branch = true
+# Relative paths keep coverage.xml valid in the ci.yml job that scans it.
+relative_files = true
 
 [tool.coverage.report]
 fail_under = 80

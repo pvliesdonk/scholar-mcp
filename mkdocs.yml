@@ -135,6 +135,7 @@ nav:
       - Claude Code Plugin: guides/claude-code-plugin.md
       - Claude Desktop: guides/claude-desktop.md
       - Authentication: guides/authentication.md
+      - Security Model: guides/security-model.md
       - PDF Conversion: guides/pdf-conversion.md
       - Citation Graphs: guides/citation-graphs.md
   - MCP Interface:
@@ -148,6 +149,7 @@ nav:
       - Release Process: deployment/release-process.md
       - Template Updates: deployment/template-updates.md
       - Repository Protection: deployment/repository-protection.md
+      - Integration Branches: deployment/integration-branches.md
   # Landing page only, deliberately: per-minor pages stay out of nav so a new
   # release never needs a nav edit (mkdocs treats not-in-nav pages as INFO,
   # so `--strict` stays green); the landing page and search link them.

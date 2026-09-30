@@ -2,12 +2,13 @@ name: CI
 
 on:
   push:
-    branches: [main, "release/**"]
+    branches: [main, "release/**", "integration/**"]
   pull_request:
-    # release/** keeps backport PRs CI-gated: the shipped rulesets
-    # (.github/rulesets/) require the CI Success check on release/* exactly
-    # as on main, which deadlocks unless CI actually runs there.
-    branches: [main, "release/**"]
+    # release/** keeps backport PRs CI-gated, and integration/** does the same
+    # for the child PRs of an epic parked on an integration branch: the
+    # shipped rulesets (.github/rulesets/) require the CI Success check on
+    # both exactly as on main, which deadlocks unless CI actually runs there.
+    branches: [main, "release/**", "integration/**"]
   workflow_dispatch:
 
 jobs:
@@ -16,46 +17,44 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
 
       - name: Set up project environment
         uses: ./.github/actions/setup-project-env
 
 
       - name: Verify generated config artifacts are up-to-date
-        run: uv run python scripts/gen_config_surface.py --check
+        run: uv run --no-sync --no-build python scripts/gen_config_surface.py --check
 
       - name: Verify [tool.uv] pins carry a live exit condition
         # A pin's `# until:` issue being closed fails this step: lift the pin.
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: uv run python scripts/check_pins.py
+        run: uv run --no-sync --no-build python scripts/check_pins.py
 
       - name: Run ruff check
-        run: uv run ruff check src/ tests/
+        run: uv run --no-sync --no-build ruff check src/ tests/
 
       - name: Run ruff format check
-        run: uv run ruff format --check src/ tests/
+        run: uv run --no-sync --no-build ruff format --check src/ tests/
 
   typecheck:
     name: Type Check
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
 
       - name: Set up project environment
         uses: ./.github/actions/setup-project-env
 
       - name: Run mypy
-        run: uv run mypy src/ tests/
+        run: uv run --no-sync --no-build mypy src/ tests/
 
   test:
     name: Test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
-    # Prevent a stalled `uv python install` from blocking the PR for hours.
-    # 20 min covers the full test matrix with headroom; cold interpreter
-    # downloads from python-build-standalone are the most likely stall source.
+    # Bound both environment setup and test execution for each interpreter.
     timeout-minutes: 20
     continue-on-error: ${{ matrix.experimental || false }}
     permissions:
@@ -72,9 +71,9 @@ jobs:
           - python-version: "3.13"
             experimental: false
           - python-version: "3.14"
-            experimental: true
+            experimental: false
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
           # Tags inform the release-contract tests (template#387): without
           # them a checkout of a repo that HAS releases looks like a fresh
@@ -91,26 +90,35 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Run tests with coverage
-        run: uv run pytest --cov --cov-report=xml
+      - name: Run tests
+        if: matrix.python-version != '3.14'
+        run: uv run --no-sync --no-build pytest --durations=20
 
-      - name: Upload coverage to Codecov
-        if: matrix.python-version == '3.13'
-        uses: codecov/codecov-action@v7
+      - name: Run tests with coverage
+        # Only this required interpreter supplies coverage to the steps below.
+        # Repeating branch instrumentation on other entries wastes their budget.
+        if: matrix.python-version == '3.14'
+        run: uv run --no-sync --no-build pytest --cov --cov-report=xml --durations=20
+
+      - name: Upload coverage report
+        # For the `sonar` job below, on every event: a push to main needs it
+        # as much as a pull request does, since that analysis is the one the
+        # project's ratings and badges show.
+        if: matrix.python-version == '3.14'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         with:
-          files: ./coverage.xml
-          fail_ci_if_error: false
-          override_pr: ${{ github.event.pull_request.number }}
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+          name: coverage-xml
+          path: coverage.xml
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Fetch base branch for diff-cover
-        if: matrix.python-version == '3.13' && github.event_name == 'pull_request'
+        if: matrix.python-version == '3.14' && github.event_name == 'pull_request'
         run: git fetch origin ${{ github.base_ref }} --depth=50
 
       - name: Check patch coverage
         id: diffcover
-        if: matrix.python-version == '3.13' && github.event_name == 'pull_request'
+        if: matrix.python-version == '3.14' && github.event_name == 'pull_request'
         env:
           BASE_REF: ${{ github.base_ref }}
         run: |
@@ -121,7 +129,7 @@ jobs:
             echo "description=Coverage not affected" >> "$GITHUB_OUTPUT"
             echo "No Python source changes — skipping diff-cover"
           else
-            OUTPUT=$(uv run diff-cover coverage.xml --compare-branch="origin/${BASE_REF}" --fail-under=80 2>&1) && RC=0 || RC=$?
+            OUTPUT=$(uv run --no-sync --no-build diff-cover coverage.xml --compare-branch="origin/${BASE_REF}" --fail-under=80 2>&1) && RC=0 || RC=$?
             echo "$OUTPUT"
             # `Coverage:`, NOT `Total:` — diff-cover's summary carries both,
             # and `Total:` is the coverable-LINE COUNT, not a percentage:
@@ -158,7 +166,7 @@ jobs:
           fi
 
       - name: Save patch coverage result
-        if: matrix.python-version == '3.13' && github.event_name == 'pull_request'
+        if: matrix.python-version == '3.14' && github.event_name == 'pull_request'
         env:
           PATCH_STATE: ${{ steps.diffcover.outputs.state || 'error' }}
           PATCH_DESC: ${{ steps.diffcover.outputs.description || 'diff-cover step did not run' }}
@@ -167,20 +175,20 @@ jobs:
             '{"state":$state,"description":$description}' > patch-coverage.json
 
       - name: Upload patch coverage artifact
-        if: matrix.python-version == '3.13' && github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v7
+        if: matrix.python-version == '3.14' && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         with:
           name: patch-coverage
           path: patch-coverage.json
           retention-days: 1
 
-      - name: Post codecov/patch status
+      - name: Post coverage/patch status
         # Fork PRs: GITHUB_TOKEN is read-only for pull_request events from forks regardless
         # of the permissions block — GitHub security restriction. continue-on-error prevents
         # the job from failing; coverage-status.yml posts the status via workflow_run instead.
-        if: matrix.python-version == '3.13' && github.event_name == 'pull_request' && always()
+        if: matrix.python-version == '3.14' && github.event_name == 'pull_request' && always()
         continue-on-error: true
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9
         env:
           PATCH_STATE: ${{ steps.diffcover.outputs.state }}
           PATCH_DESC: ${{ steps.diffcover.outputs.description }}
@@ -190,16 +198,64 @@ jobs:
             const state = process.env.PATCH_STATE || 'error';
             const description = process.env.PATCH_DESC || 'diff-cover step did not run';
             const headSha = context.payload.pull_request.head.sha;
-            core.info(`Posting codecov/patch: ${state} — ${description} to ${headSha}`);
+            core.info(`Posting coverage/patch: ${state} — ${description} to ${headSha}`);
             await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,
               repo: context.repo.repo,
               sha: headSha,
               state,
-              context: 'codecov/patch',
+              context: 'coverage/patch',
               description,
-              target_url: 'https://app.codecov.io/gh/pvliesdonk/scholar-mcp',
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
             });
+
+  sonar:
+    name: SonarQube
+    # CI-based SonarQube Cloud analysis with the coverage report of the
+    # Python 3.14 test run; settings live in sonar-project.properties.  Its own
+    # job, so SONAR_TOKEN is never in the environment the tests ran in.
+    #
+    # Without SONAR_TOKEN (a pull request from a fork, or a project that has
+    # not set the secret yet) the scan is skipped with a notice and the job
+    # passes.  With it, SonarQube Cloud refuses the scan while the project's
+    # Automatic Analysis is still on: turn that off before adding the secret.
+    # In CI Success on purpose: a failed scan (an outage, an expired token)
+    # blocks merging until the job is re-run, rather than passing unseen.
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Check for SONAR_TOKEN
+        id: token
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          if [ -n "$SONAR_TOKEN" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::SONAR_TOKEN is not available to this run; SonarQube analysis skipped"
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        if: steps.token.outputs.present == 'true'
+        with:
+          # Full history: SonarQube Cloud blames lines to decide what is new code.
+          fetch-depth: 0
+
+      - name: Download coverage report
+        if: steps.token.outputs.present == 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8
+        with:
+          name: coverage-xml
+
+      - name: SonarQube Scan
+        if: steps.token.outputs.present == 'true'
+        uses: SonarSource/sonarqube-scan-action@ba9859eae8dd6bd29e412f25ddbbef3d032000f4  # v8.2.2
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   audit:
     name: Dependency Audit
@@ -208,7 +264,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
 
       - name: Set up project environment
         # No sync: this job resolves the dependency list with `uv export` and
@@ -230,11 +286,10 @@ jobs:
       - name: Run pip-audit
         run: |
           uvx pip-audit --strict --progress-spinner off \
-            --ignore-vuln CVE-2026-42561 \
             -r ${{ runner.temp }}/requirements.txt
-          # CVE-2026-42561: python-multipart <0.0.27, pulled in transitively by
-          # fastmcp/starlette. Ignored until the upstream pin chain propagates
-          # the fix to 0.0.27. Remove once `uv lock` resolves >=0.0.27.
+          # No standing --ignore-vuln: a suppression outlives the advisory it
+          # was added for and then hides the next one in the same package
+          # (#604). Add one only with its removal condition in this comment.
 
   secrets:
     name: Secret Detection
@@ -242,7 +297,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
           fetch-depth: 0
 
@@ -263,7 +318,7 @@ jobs:
       # need to add `pull-requests: write` here too.
       checks: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
 
       - name: Cache Vale style packages
         # Cache only the downloaded pack directories — NOT .vale/styles/config/.
@@ -289,7 +344,7 @@ jobs:
         # a `sync:` expression that stops matching this step's `id` silently
         # returns the cache to being decorative.
         id: vale-cache
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6
         with:
           path: |
             .vale/styles/Google
@@ -371,7 +426,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
           fetch-depth: 0
 
@@ -410,7 +465,7 @@ jobs:
       contents: read
       pull-requests: read
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
 
       - name: Check pull-request title
         env:
@@ -436,6 +491,7 @@ jobs:
       - lint
       - typecheck
       - test
+      - sonar
       - audit
       - secrets
       - vale

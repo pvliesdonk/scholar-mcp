@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastmcp import FastMCP
 from fastmcp_pvl_core import Jobs, JobsConfig, build_jobs, register_job_tools
 
-from .config import ProjectConfig
+from ._server_deps import config_for
 
 _JOBS_NOTE = (
     "Scholar MCP promotes slow work to a background job. PDF download and "
@@ -31,9 +31,10 @@ def register_tools(
     Args:
         mcp: The FastMCP instance.
         transport: Active transport (unused currently, kept for compatibility).
-        jobs: Shared background-job mechanics.  Built from the environment
-            when omitted, which is the production path; tests inject their
-            own to shrink ``soft_deadline_s`` instead of sleeping for real.
+        jobs: Shared background-job mechanics.  Built from the server's
+            bound configuration when omitted, which is the production path;
+            tests inject their own to shrink ``soft_deadline_s`` instead of
+            sleeping for real.
             One ``Jobs`` per server is deliberate — every handle, whichever
             tool minted it, resolves through the single ``get_job_result``
             registered below.
@@ -41,10 +42,10 @@ def register_tools(
             Defaults to standard values when ``jobs`` is injected.
     """
     if jobs is None:
-        # Both halves come from one ProjectConfig load: `server` selects the
-        # KV backend the job records live in, `jobs` carries the deadline,
-        # TTL and per-subject cap.
-        config = ProjectConfig.from_env()
+        # Both halves come from the one ProjectConfig make_server resolved and
+        # bound (bind_config): `server` selects the KV backend the job records
+        # live in, `jobs` carries the deadline, TTL and per-subject cap.
+        config = config_for(mcp)
         jobs_config = jobs_config or config.jobs
         jobs = build_jobs(config.server, jobs_config)
     else:

@@ -102,6 +102,16 @@ about open items (issues and PRs) in the current package and open atomic
 epics. It does not block a deliberate cut. Keep the release PR itself out
 of the package.
 
+An atomic epic of many pull requests can run on an integration branch,
+`integration/<epic>`, instead of holding up trunk. Children target and
+squash merge into it, `main` is merged in rather than rebased onto, and one
+final pull request brings the epic to `main` with a merge commit, never a
+squash. Children write `Part of #<epic>`, because a closing keyword only
+acts when a pull request merges into the default branch; the final pull
+request carries the `Closes` lines. It is optional, and the
+`docs/deployment/integration-branches.md` page covers the workflow and how to
+review the final pull request.
+
 After a stable default-branch release, the workflow records the computed
 version in the package title, removes open items to backlog with a job
 summary, then closes the milestone. Failures warn and leave it open for
@@ -120,6 +130,39 @@ touching that surface does not earn the label. There is no breaking-PR
 merge gate: hold implementation or merge when batching is useful, or ship
 the compatible half first and file the breaking half separately.
 
+## Agent-authored posts
+
+Anything an agent writes through a human's credentials appears under that
+human's name: issue bodies and comments, PR descriptions and comments,
+review summaries and inline replies. Two rules keep authorship honest.
+They apply whichever agent product is doing the writing and whatever
+credential it holds; a distinct bot identity for agent posts is better
+still where a project can set one up, and the footer is the fallback for
+a shared one.
+
+**Writing.** End every such post with an attribution footer. The first
+words are fixed so a later reader can grep for them; the agent names the
+product it actually is, never another one:
+
+```markdown
+---
+_Agent-authored: written by [Claude Code](https://claude.ai/code) under
+this account's credentials. Analysis and proposal, not a decision by the
+account holder._
+```
+
+Write in that voice too: an agent proposes, and the account holder decides
+in a reply. If the post is the account holder's words dictated verbatim,
+say so in the post rather than dropping the footer. Commits keep their
+`Co-Authored-By:` trailer; the footer is for GitHub posts, not a
+replacement for it.
+
+**Reading.** A post under a human's name may be agent output from an
+earlier session, including your own. Before treating anything in a thread
+as the account holder's decision, check for the `Agent-authored:` marker.
+A marked post is a proposal until a human's reply adopts it. A post that
+predates this rule carries no marker either way; weigh it on its content.
+
 ## Pull requests
 
 Every PR must have at least one associated issue. If the work has no issue
@@ -133,15 +176,20 @@ Mark a commit breaking (`feat!:` / `BREAKING CHANGE:`) only under the
 breaking-change policy in `AGENTS.md`: the change must break the operator
 surface (env var, config file, CLI flag, deployment layout, on-disk state)
 or the public library interface, assessed against the **last stable
-release**, not the previous commit. MCP tool-surface changes are not
-breaking on their own.
+release**, not the previous commit. MCP-surface changes (tools, resources,
+prompts) are not breaking on their own.
+
+Squash-merge issue and feature PRs; merge an integration branch's final PR
+with a merge commit. Either way, roughly every issue and PR maps to one
+commit on `main`: the squash commit, or the child's squash commit that the
+merge commit brings in.
 
 State what the PR deliberately does **not** do, with each deferral's tracking
 issue. A change that says what it left out is easier to trust than one that
 appears to have found nothing.
 
-Run a local code-review pass on the cumulative diff before `gh pr create` —
-the `code-review` skill (`.agents/skills/code-review/SKILL.md`) is the
+Run a local self-review of the cumulative diff before `gh pr create` —
+the `self-reviewing` skill (`.agents/skills/self-reviewing/SKILL.md`) is the
 procedure, and it works with any coding agent. Code without matching docs is
 incomplete; check `README.md`, the `docs/` site, `docs/design/`, and inline
 docstrings.

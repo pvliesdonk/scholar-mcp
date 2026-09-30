@@ -35,7 +35,9 @@ from fastmcp_pvl_core import (
 from fastmcp_pvl_core._errors import ConfigurationError
 
 from scholar_mcp._docling_client import DoclingClient
+from scholar_mcp._server_deps import bind_config
 from scholar_mcp._tools_pdf import register_pdf_tools
+from scholar_mcp.config import ProjectConfig
 from scholar_mcp.domain import Service
 from scholar_mcp.tools import register_tools
 from tests.conftest import PlainClient, tasks_server
@@ -79,6 +81,9 @@ def _slow_docling_service(service: Service) -> Service:
 def _app(service: Service) -> FastMCP:
     """Build a server whose tools are wired from the ambient environment.
 
+    The environment is loaded once and bound, the way ``make_server`` does,
+    because ``register_tools`` reads the bound config, not the environment.
+
     Args:
         service: Domain service yielded from the app's lifespan.
 
@@ -91,6 +96,7 @@ def _app(service: Service) -> FastMCP:
         yield {"service": service}
 
     app = tasks_server("test", lifespan=lifespan)
+    bind_config(app, ProjectConfig.from_env())
     register_tools(app)
     return app
 
@@ -151,19 +157,19 @@ async def test_default_deadline_answers_inline(
     assert "# Slow" in data["markdown"]
 
 
-def test_malformed_jobs_var_fails_at_registration(
+def test_malformed_jobs_var_fails_at_config_load(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A typo in a `JOBS_*` var raises rather than silently taking a default.
 
-    `JobsConfig.from_env` reads strictly. Because the `Jobs` object is built
-    inside `register_tools`, that strictness surfaces at tool registration
-    rather than at config load -- worth pinning so the failure point does not
-    move silently.
+    `JobsConfig.from_env` reads strictly. `register_tools` builds its `Jobs`
+    from the config `make_server` loaded and bound, so that strictness
+    surfaces at config load, before any tool is registered -- worth pinning
+    so the failure point does not move silently.
     """
     monkeypatch.setenv("SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S", "not-a-number")
     with pytest.raises(ConfigurationError, match="JOBS_SOFT_DEADLINE_S"):
-        register_tools(tasks_server("test"))
+        ProjectConfig.from_env()
 
 
 def test_injected_jobs_bypasses_the_environment(
@@ -333,3 +339,41 @@ async def test_s2_list_tools_advertise_their_limit_cap(client: Client[Any]) -> N
         if phrase not in " ".join(described[name].split())
     )
     assert not missing, f"these tools never state their limit cap: {missing}"
+
+
+def test_register_tools_builds_jobs_from_the_bound_config(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A config passed to make_server reaches the jobs backend, not the env.
+
+    Both halves are pinned: the env carries one soft deadline and the passed
+    config another, and the server half (which selects the KV backend the job
+    records live in) must be the passed config's own object, not one rebuilt
+    from the environment.
+    """
+    import dataclasses
+
+    from fastmcp_pvl_core import JobsConfig
+
+    import scholar_mcp.tools as tools_module
+    from scholar_mcp.server import make_server
+
+    monkeypatch.setenv("SCHOLAR_MCP_CACHE_DIR", str(tmp_path))
+    monkeypatch.setenv("SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S", "11")
+    config = dataclasses.replace(
+        ProjectConfig.from_env(), jobs=JobsConfig(soft_deadline_s=7.0)
+    )
+    seen: list[tuple[Any, JobsConfig]] = []
+    real_build_jobs = tools_module.build_jobs
+
+    def spy(server: Any, jobs_config: JobsConfig) -> Any:
+        seen.append((server, jobs_config))
+        return real_build_jobs(server, jobs_config)
+
+    monkeypatch.setattr(tools_module, "build_jobs", spy)
+    make_server(config=config)
+
+    assert len(seen) == 1
+    server, jobs_config = seen[0]
+    assert jobs_config.soft_deadline_s == 7.0
+    assert server is config.server
