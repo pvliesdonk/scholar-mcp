@@ -84,7 +84,7 @@ dependencies = [
     # #343).  The cap matters as much as the floor here: the config-surface
     # generator resolves this whole constraint, and only 9.0.0's
     # SHUTDOWN_GRACE_S help text keeps the generated table in
-    # docs/configuration.md clear of ai-tells' MicDrop rule (#639).
+    # docs/reference/configuration.md clear of ai-tells' MicDrop rule (#639).
     #
     # 8.0.0 was the previous floor, for the logging topology and the HTTP
     # seam: pvl-core owns the root logger, configure_logging_from_env takes
@@ -209,6 +209,7 @@ docs = [
     "mkdocs-material>=9.7.6",
     "mkdocstrings[python]>=0.28",
     "mkdocs-llmstxt>=0.5",
+    "mkdocs-redirects>=1.2",
 ]
 
 browser = [
@@ -310,6 +311,10 @@ ignore = ["E501"]
 # and S603 subprocess exceptions as the stamper, and the same reason — the
 # file is template-owned, so a hit reddens the adopter's diff-gate (#524).
 "scripts/migrate_agent_instructions.py" = ["S603", "S607"]
+# migrate_docs_nav.py reads `git show HEAD:mkdocs.yml` the same way, as a
+# list and never a shell; same exceptions, same reason (#713).
+"scripts/migrate_docs_nav.py" = ["S603", "S607"]
+"scripts/migrate_docs_pages.py" = ["S603", "S607"]
 "scripts/check_pins.py" = ["S310"]  # urlopen on a validated api.github.com URL
 "scripts/report_seeded_changes.py" = ["S603", "S606", "S607"]
 "scripts/check_template_conformance.py" = ["S603", "S607"]
@@ -349,6 +354,7 @@ ignore = ["E501"]
 "src/scholar_mcp/_relaton_live.py" = ["TC001", "TC002", "TC003"]
 "src/scholar_mcp/resources.py" = ["B008", "TC001", "TC002", "PLR0913"]
 "src/scholar_mcp/prompts.py" = ["B008", "TC002", "PLR0913"]
+<<<<<<< before updating
 # pytest fixtures need runtime imports; Path used in signatures needs to be importable at runtime.
 "tests/*.py" = ["TC001", "TC002", "TC003"]
 # The config-wizard domain tests reach their browser fixtures by importing them
@@ -359,6 +365,13 @@ ignore = ["E501"]
 # Scoped to this one file rather than appended to the `tests/*.py` list above,
 # so a real redefinition in any other test still fails the lint.
 "tests/test_config_wizard_domain.py" = ["F811"]
+=======
+# The published-examples test runs the documented Python blocks: exec is the point.
+"tests/test_published_examples.py" = ["S102"]
+"tests/conftest.py" = ["TC002", "TC003"]
+"tests/test_smoke.py" = ["TC002", "TC003"]
+"tests/test_tools.py" = ["TC002"]
+>>>>>>> after updating
 # PROJECT-RUFF-IGNORES-END
 
 [tool.ruff.lint.isort]
@@ -490,3 +503,18 @@ pythonVersion = "3.11"
 # src-layout editable installs use a .pth shim that Pyright does not execute;
 # point Pyright at src/ directly so IDE import resolution matches runtime.
 extraPaths = ["src"]
+
+# Documentation tooling settings, project-owned. Set strict = true once
+# `python scripts/check_docs_structure.py` reports no warnings, so that new
+# documentation debt fails CI (docs/contribute/docs-structure.md, Checks).
+# Variables scripts/gen_reference.py sets before building the server, for a
+# `from_env` that requires them (the scaffold requires none), go in a
+# `[tool.docs-reference.env]` table inside the block.  It builds the server
+# for the http transport, so a project wiring transfer links needs BASE_URL:
+#   [tool.docs-reference.env]
+#   SCHOLAR_MCP_UPSTREAM_URL = "https://example.invalid"
+#   SCHOLAR_MCP_BASE_URL = "https://example.invalid"
+# PROJECT-DOCS-CHECKS-START — kept across copier update
+[tool.docs-structure]
+strict = false
+# PROJECT-DOCS-CHECKS-END
