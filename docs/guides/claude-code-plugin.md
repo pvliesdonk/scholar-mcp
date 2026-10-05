@@ -53,7 +53,7 @@ Add to your shell profile:
 | `SCHOLAR_MCP_EPO_CONSUMER_SECRET` | _(none)_ | EPO OPS secret. |
 | `SCHOLAR_MCP_LOG_LEVEL` | `INFO` | `DEBUG` / `INFO` / `WARNING` / `ERROR` / `CRITICAL`. The unprefixed `FASTMCP_LOG_LEVEL` still works for one major version. |
 
-For the full list, see [Configuration](../configuration.md).
+For the full list, see [Configuration](../reference/configuration.md).
 
 ## What you get
 
