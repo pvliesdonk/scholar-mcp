@@ -27,7 +27,7 @@ echo "=== scholar-mcp .deb install test ==="
 
 # Find the .deb
 DEB=$(find dist/ -name 'scholar-mcp*.deb' -print -quit 2>/dev/null || true)
-if [ -z "$DEB" ]; then
+if [[ -z "$DEB" ]]; then
     echo "ERROR: No .deb found in dist/. Build one first:"
     echo "  VERSION=0.0.0-test nfpm package --packager deb --target dist/"
     exit 1
@@ -60,12 +60,12 @@ else
 fi
 
 # 3. State directory exists with correct ownership and permissions
-if [ -d /var/lib/scholar-mcp ]; then
+if [[ -d /var/lib/scholar-mcp ]]; then
     OWNER=$(stat -c '%U:%G' /var/lib/scholar-mcp)
     MODE=$(stat -c '%a' /var/lib/scholar-mcp)
-    if [ "$OWNER" = "scholar-mcp:scholar-mcp" ] && [ "$MODE" = "750" ]; then
+    if [[ "$OWNER" = "scholar-mcp:scholar-mcp" ]] && [[ "$MODE" = "750" ]]; then
         pass "State directory owned by scholar-mcp with mode 0750"
-    elif [ "$OWNER" != "scholar-mcp:scholar-mcp" ]; then
+    elif [[ "$OWNER" != "scholar-mcp:scholar-mcp" ]]; then
         fail "State directory owned by $OWNER (expected scholar-mcp:scholar-mcp)"
     else
         fail "State directory mode $MODE (expected 750)"
@@ -75,21 +75,21 @@ else
 fi
 
 # 4. Install directory exists
-if [ -d /opt/scholar-mcp ]; then
+if [[ -d /opt/scholar-mcp ]]; then
     pass "Install directory /opt/scholar-mcp exists"
 else
     fail "Install directory /opt/scholar-mcp does not exist"
 fi
 
 # 4b. Venv installed by postinstall
-if [ -x /opt/scholar-mcp/venv/bin/python3 ]; then
+if [[ -x /opt/scholar-mcp/venv/bin/python3 ]]; then
     pass "venv installed at /opt/scholar-mcp/venv"
 else
     fail "venv not found at /opt/scholar-mcp/venv (postinstall may have failed)"
 fi
 
 # 5. Unit file exists
-if [ -f /usr/lib/systemd/system/scholar-mcp.service ]; then
+if [[ -f /usr/lib/systemd/system/scholar-mcp.service ]]; then
     pass "systemd unit file installed"
 else
     fail "systemd unit file not found"
@@ -109,7 +109,7 @@ else
 fi
 
 # 7. Environment example exists
-if [ -f /etc/scholar-mcp/env.example ]; then
+if [[ -f /etc/scholar-mcp/env.example ]]; then
     pass "Environment example file installed"
 else
     fail "Environment example file not found"
@@ -121,14 +121,14 @@ echo "--- Removing package ---"
 dpkg -r scholar-mcp
 
 # 8. Install directory removed
-if [ ! -d /opt/scholar-mcp ]; then
+if [[ ! -d /opt/scholar-mcp ]]; then
     pass "Install directory removed after uninstall"
 else
     fail "Install directory still exists after uninstall"
 fi
 
 # 9. State directory preserved (intentional)
-if [ -d /var/lib/scholar-mcp ]; then
+if [[ -d /var/lib/scholar-mcp ]]; then
     pass "State directory preserved after uninstall (expected)"
 else
     fail "State directory removed after uninstall (should be preserved)"
@@ -163,6 +163,6 @@ fi
 # --- Summary ---
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="
-if [ "$FAIL" -gt 0 ]; then
+if [[ "$FAIL" -gt 0 ]]; then
     exit 1
 fi
