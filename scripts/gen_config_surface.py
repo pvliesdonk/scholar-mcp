@@ -2435,8 +2435,9 @@ _EM_DASH = "\N{EM DASH}"
 _EN_DASH = "\N{EN DASH}"
 _RESIDUAL_EM_DASH_RE = re.compile(rf"\s*[{_EM_DASH}{_EN_DASH}]\s*")
 # A separator left stranded at the end of a cell once a trailing dash was
-# rewritten (`Value continues —` would otherwise become `Value continues; `).
-_TRAILING_SEPARATOR_RE = re.compile(r"[;,\s]+$")
+# rewritten (`Value continues —` would otherwise become `Value continues; `)
+# is stripped with `str.rstrip(";, ")`: the prose is single-spaced by then,
+# and a `[;,\s]+$` search is quadratic on a long run of separators.
 # `e.g. FRAGMENT.`/`e.g. FRAGMENT;` -> ` (FRAGMENT).`/` (FRAGMENT);` — a
 # parenthetical aside instead of the Latin abbreviation. FRAGMENT is
 # whatever sits between `e.g.` and the clause's own terminator: a `;`, or a
@@ -2444,7 +2445,10 @@ _TRAILING_SEPARATOR_RE = re.compile(r"[;,\s]+$")
 # on the `.` terminator matters — an `e.g.` example is frequently a URL
 # (`https://mcp.example.com`) whose own periods must NOT end the match; only
 # a period followed by whitespace/EOS is a genuine sentence boundary.
-_EG_CLAUSE_RE = re.compile(r",\s*e\.g\.,?\s+(.+?)(\.(?=\s|$)|;)", re.IGNORECASE)
+# Whitespace is a literal single space here and in `_FOR_EXAMPLE_RE`: the
+# prose is collapsed with `" ".join(text.split())` before either runs, and a
+# `\s*`/`\s+` beside the lazy capture is flagged as backtracking (S8786).
+_EG_CLAUSE_RE = re.compile(r", ?e\.g\.,? (\S.*?)(\.(?= |$)|;)", re.IGNORECASE)
 # `e.g.` outside the comma-clause shape above — sentence-initial (`E.g. do X`)
 # or inside an existing parenthetical (`(e.g. \`url\`)`), where wrapping the
 # fragment in another pair of parentheses would read wrongly. Sentence-initial
@@ -2456,7 +2460,7 @@ _EG_RESIDUAL_RE = re.compile(r"\be\.g\.,?\s+", re.IGNORECASE)
 # position.  Fold it back onto the `e.g.` pipeline above so both spellings
 # get the same mid-clause parenthetical / sentence-initial treatment.
 _FOR_EXAMPLE_RE = re.compile(
-    r"(?:(?<=,)\s*for example[,:]?\s+|(?:^|(?<=\.\s))for example[,:]?\s+)",
+    r"(?:(?<=,) ?for example[,:]? |(?:^|(?<=\. ))for example[,:]? )",
     re.IGNORECASE,
 )
 _IE_RE = re.compile(r"\bi\.e\.,?\s+", re.IGNORECASE)
@@ -2544,7 +2548,7 @@ def _clean_help_for_markdown_table(
     text = _IE_RE.sub("that is, ", text)
     for term, replacement in (vocabulary or {}).items():
         text = text.replace(term, replacement)
-    return _TRAILING_SEPARATOR_RE.sub("", text)
+    return text.rstrip(";, ")
 
 
 def _md_description_cell(
@@ -2691,7 +2695,7 @@ def splice_region(text: str, region_id: str, body: str, *, source: str) -> str:
     Pure: never reads or writes a file — the caller owns all I/O (a spliced
     file must already exist; `render_splice_file` is what enforces that).
     *source* is the file this *text* came from (a project-relative path,
-    e.g. ``"docs/deployment/oidc.md"``) — used only to name the offending
+    e.g. ``"docs/deploy/oidc.md"``) — used only to name the offending
     file in an error message, never to read or write anything here.
 
     Both markers may sit behind a comment prefix — `  # <!-- ... -->` in a
@@ -3299,7 +3303,7 @@ def write_artifacts(
     # env-destination guard: a var that would land in no env artifact is a
     # config-presentation bug, and this guard's message (which names the
     # known section tags) is the actionable one — it must fire before any
-    # renderer runs, or docs/configuration.md's own `complete: true` guard
+    # renderer runs, or docs/reference/configuration.md's own `complete: true` guard
     # reports the same root cause with a less specific message. Both run
     # before anything is written to disk, so partial output never masks
     # either.
