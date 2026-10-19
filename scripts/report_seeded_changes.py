@@ -77,9 +77,9 @@ def _read_simple_answers(text: str) -> dict[str, object]:
     except ImportError:
         out: dict[str, object] = {}
         for line in text.splitlines():
-            m = re.match(r"^(_commit|_src_path):\s*(.+?)\s*$", line)
-            if m:
-                out[m.group(1)] = m.group(2).strip("'\"")
+            m = re.match(r"^(_commit|_src_path):(.*)$", line)
+            if m and m.group(2).strip():
+                out[m.group(1)] = m.group(2).strip().strip("'\"")
         return out
     data = yaml.safe_load(text) or {}
     return data if isinstance(data, dict) else {}
@@ -217,7 +217,7 @@ def render_report(
         text += (
             f"\n**The report could not be computed:** {failure}\n\n"
             "Open the template's compare view for the two refs and check every "
-            "`_skip_if_exists` path by hand (see `docs/deployment/template-updates.md`).\n"
+            "`_skip_if_exists` path by hand (see `docs/contribute/template-updates.md`).\n"
         )
     elif not changes:
         text += "\nNo seeded file changed between these refs.\n"
