@@ -308,9 +308,12 @@ they may not be invented.
   closing actually satisfy it? If there is a gap, add a feature or record
   the shortfall; never edit the criterion to fit.
 - Close the refinement issue only once the coverage check holds.
+- Slice each feature to one PR: one behaviour in at most three source
+  files (`AGENTS.md`, "PR Discipline"). A feature that cannot be sliced
+  that far is an epic of its own.
 - For an atomic epic of many features, decide whether it runs on an
   integration branch so trunk stays releasable meanwhile
-  (`docs/deployment/integration-branches.md`); record the choice on the
+  (`docs/contribute/integration-branches.md`); record the choice on the
   epic, since it sets every child PR's base branch.
 - Refinement may contradict the direction: the graph wins. Rewrite the
   argument in the index; never bend the graph to match the prose.

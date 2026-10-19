@@ -26,6 +26,12 @@ jobs:
       - name: Verify generated config artifacts are up-to-date
         run: uv run --no-sync --no-build python scripts/gen_config_surface.py --check
 
+      - name: Verify generated reference is up-to-date
+        # docs/reference/ is written from the registered server by
+        # scripts/gen_reference.py (#716); regenerate after changing a tool,
+        # resource, prompt or CLI option.
+        run: uv run --no-sync --no-build python scripts/gen_reference.py --check
+
       - name: Verify [tool.uv] pins carry a live exit condition
         # A pin's `# until:` issue being closed fails this step: lift the pin.
         env:
@@ -105,7 +111,7 @@ jobs:
         # as much as a pull request does, since that analysis is the one the
         # project's ratings and badges show.
         if: matrix.python-version == '3.14'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
         with:
           name: coverage-xml
           path: coverage.xml
@@ -176,7 +182,7 @@ jobs:
 
       - name: Upload patch coverage artifact
         if: matrix.python-version == '3.14' && github.event_name == 'pull_request'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
         with:
           name: patch-coverage
           path: patch-coverage.json
@@ -247,13 +253,13 @@ jobs:
 
       - name: Download coverage report
         if: steps.token.outputs.present == 'true'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8
         with:
           name: coverage-xml
 
       - name: SonarQube Scan
         if: steps.token.outputs.present == 'true'
-        uses: SonarSource/sonarqube-scan-action@ba9859eae8dd6bd29e412f25ddbbef3d032000f4  # v8.2.2
+        uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9  # v8.3.0
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
