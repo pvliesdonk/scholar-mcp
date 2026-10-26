@@ -1,4 +1,4 @@
-FROM python:3.14-slim
+FROM python:3.15-slim
 
 # DOCKERFILE-APT-DEPS-START — add domain apt packages below; kept across copier update
 RUN apt-get update && apt-get install -y --no-install-recommends git git-lfs gosu \
@@ -6,7 +6,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends git git-lfs gos
     && git lfs install --system
 # DOCKERFILE-APT-DEPS-END
 
-COPY --from=ghcr.io/astral-sh/uv:0.12 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.13 /uv /uvx /bin/
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy
@@ -18,7 +18,7 @@ WORKDIR /app
 # (debugpy) and bake the listener into the image.  Accepts the same boolean
 # vocabulary as runtime ``parse_bool`` (``true``/``1``/``yes``/``on``,
 # case-insensitive); anything else is treated as off.  See
-# ``docs/deployment/docker.md`` for the full attach workflow.
+# ``docs/deploy/docker.md`` for the full attach workflow.
 ARG DEBUG=false
 
 # DOCKERFILE-UV-EXTRAS-START — append `--extra <name>` flags below to pull domain-specific extras; kept across copier update

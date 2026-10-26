@@ -46,6 +46,17 @@ repos:
         stages: [pre-push]
       # <<< template-tracking: conformance hook
 
+      # Self-review: fails a push whose commit has no review recorded by the
+      # self-reviewing skill (scripts/check_self_review.py --record).  A
+      # person pushing without an agent: SKIP=self-review git push.
+      - id: self-review
+        name: self-review recorded for the pushed commit
+        entry: python3 scripts/check_self_review.py --hook
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
 
       # Structural-health gate: strict ruff structural rules on CHANGED LINES
       # ONLY, sharing scripts/structural_gate.sh with the CI `structure` job so
@@ -155,6 +166,31 @@ repos:
         # sync with the CI step's `glob:` input; template-ci asserts they match.
         files: ^(docs/|README\.md$)
         exclude: ^docs/(superpowers|design|decisions)/
+
+  # Documentation structure (#715): errors fail the commit; warnings print,
+  # and fail only with `strict = true` under [tool.docs-structure] in
+  # pyproject.toml. See docs/contribute/docs-structure.md.
+  - repo: local
+    hooks:
+      - id: docs-structure
+        name: docs structure
+        entry: uv run --no-sync python scripts/check_docs_structure.py
+        language: system
+        pass_filenames: false
+        files: ^(docs/|mkdocs\.yml$|pyproject\.toml$)
+
+  # Generated reference (#716): docs/reference/ is written from the
+  # registered server by scripts/gen_reference.py; a stale page fails the
+  # commit. Run `uv run python scripts/gen_reference.py` after changing a
+  # tool, resource, prompt or CLI option.
+  - repo: local
+    hooks:
+      - id: gen-reference
+        name: generated reference is up to date
+        entry: uv run --no-sync python scripts/gen_reference.py --check
+        language: system
+        pass_filenames: false
+        files: ^(src/|docs/reference/|mkdocs\.yml$|pyproject\.toml$)
 
 # DOMAIN-HOOKS-START — add domain-specific hooks (shellcheck, yamllint,
 # project linters, etc.) below as full `- repo:` blocks indented to match the
