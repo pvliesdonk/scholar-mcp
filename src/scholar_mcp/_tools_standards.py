@@ -222,7 +222,7 @@ async def search_standards(
         limit: Maximum results (max 50).
 
     Returns:
-        ``{"results": [...]}``, the matching standard records.
+        ``{"results": [...]}``, the matching ``StandardRecord`` entries.
     """
     limit = max(1, min(limit, 50))
     cache_key = hashlib.sha256(f"{query}:{body}:{limit}".encode()).hexdigest()
@@ -312,7 +312,7 @@ async def get_standard(
             Pass ``null`` for the complete text.
 
     Returns:
-        The StandardRecord, or ``{"error": "not_found"}`` if unresolvable.
+        The ``StandardRecord``, or ``{"error": "not_found"}`` if unresolvable.
         With ``fetch_full_text=True``, either ``full_text`` or
         ``full_text_error`` is present.
     """
