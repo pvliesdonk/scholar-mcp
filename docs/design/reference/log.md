@@ -2,6 +2,15 @@
 
 Newest first. One entry per research pass.
 
+## 2026-10-31
+
+### Template-authored page
+
+[Pull request size and review effectiveness](pull-request-size.md) arrived
+with the fastmcp-server-template v11.5.1 update, researched upstream (passes
+of 2026-10-17 and 2026-10-21) and carried here unchanged. Next review:
+2027-04-17.
+
 ## 2026-09-29
 
 ### Template-authored pages

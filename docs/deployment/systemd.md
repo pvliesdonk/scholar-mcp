@@ -52,7 +52,7 @@ SCHOLAR_MCP_HOST=0.0.0.0
 SCHOLAR_MCP_S2_API_KEY=your-key-here
 ```
 
-See [Configuration](../configuration.md) for all available variables.
+See [Configuration](../reference/configuration.md) for all available variables.
 
 ## Starting the service
 
