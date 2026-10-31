@@ -264,18 +264,18 @@ async def batch_resolve(
     Uses the S2 batch endpoint for paper IDs/DOIs, with OpenAlex fallback.
     An OpenAlex-sourced paper (``"source": "openalex"``) has the same keys as
     an S2 one for the requested ``fields``, with ``paperId`` null.
-    Patent numbers (e.g. EP1234567A1) are auto-detected and resolved via
+    Patent numbers (such as ``EP1234567A1``) are auto-detected and resolved via
     the EPO OPS API when configured. ISBNs (prefixed ``ISBN:``) are
     resolved via Open Library.
 
-    Identifiers fan out across three upstreams, so a large batch runs long
+    Identifiers fan out across three upstream sources, so a large batch runs long
     and is then handed back as a job handle to poll with ``get_job_result``
     rather than the records themselves.
 
     Args:
         identifiers: List of S2 IDs, DOIs (prefixed ``DOI:``), plain DOIs,
-            patent numbers (e.g. ``EP1234567A1``, ``US11234567B2``),
-            or ISBNs (prefixed ``ISBN:``, e.g. ``ISBN:9780201633610``).
+            patent numbers (such as ``EP1234567A1`` or ``US11234567B2``),
+            or ISBNs (prefixed ``ISBN:``, such as ``ISBN:9780201633610``).
         fields: Field set preset (applies to paper results only).
         service: Injected service.
 

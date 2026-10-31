@@ -185,9 +185,9 @@ def sync_standards(
     Safe to schedule under cron / launchd / systemd timers.
 
     Exit codes:
-        0 — no changes OR synced with updates
-        1 — hard failure (no body synced)
-        3 — partial failure (some bodies succeeded, some did not)
+        0: no changes, or synced with updates
+        1: hard failure (no body synced)
+        3: partial failure (some bodies succeeded, some did not)
     """
     import httpx
 

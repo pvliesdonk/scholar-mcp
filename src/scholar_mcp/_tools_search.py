@@ -89,15 +89,15 @@ async def search_papers(
 
     Args:
         query: Keyword or semantic search query.
-        fields: Field set preset — compact, standard, or full.
+        fields: Field set preset: ``compact``, ``standard`` or ``full``.
         limit: Maximum results to return (max 100).
         offset: Pagination offset.
         year_start: Earliest publication year (inclusive).
         year_end: Latest publication year (inclusive).
-        fields_of_study: Filter by fields, e.g. ["Computer Science"].
+        fields_of_study: Filter by fields, such as ``["Computer Science"]``.
         venue: Filter by venue name.
         min_citations: Minimum citation count.
-        sort: Sort order — relevance, citations, or year.
+        sort: Sort order: ``relevance``, ``citations`` or ``year``.
         service: Injected service.
 
     Returns:
@@ -147,7 +147,7 @@ async def get_paper(
     a job handle to poll with ``get_job_result``.
 
     Args:
-        identifier: Paper identifier — DOI, S2 paper ID, arXiv ID
+        identifier: Paper identifier: DOI, S2 paper ID, arXiv ID
             (prefix with ``ARXIV:``), ACM ID (``ACM:``), or PubMed ID
             (``PMID:``).
         service: Injected service.

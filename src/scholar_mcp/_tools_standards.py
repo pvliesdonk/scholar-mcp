@@ -218,11 +218,11 @@ async def search_standards(
 
     Args:
         query: Identifier, title, or free text.
-        body: Optional filter — "NIST", "IETF", "W3C", or "ETSI".
+        body: Optional filter: ``NIST``, ``IETF``, ``W3C`` or ``ETSI``.
         limit: Maximum results (max 50).
 
     Returns:
-        ``{"results": [...]}`` — the matching StandardRecords.
+        ``{"results": [...]}``, the matching ``StandardRecord`` entries.
     """
     limit = max(1, min(limit, 50))
     cache_key = hashlib.sha256(f"{query}:{body}:{limit}".encode()).hexdigest()
@@ -266,7 +266,7 @@ async def get_standard(
 ) -> dict[str, Any]:
     """Retrieve a standard by identifier (canonical or fuzzy).
 
-    Resolves fuzzy inputs (e.g. "rfc9000", "nist 800-53") to their
+    Resolves fuzzy inputs (such as ``rfc9000`` or ``nist 800-53``) to their
     canonical form before fetching. With ``fetch_full_text=True`` and
     docling configured, downloads and converts the full text.
 
@@ -278,7 +278,7 @@ async def get_standard(
     A conversion that fails still returns the record, with the reason in
     ``full_text_error``; ``full_text_url`` is there to fetch by hand. No
     ``full_text`` and no ``full_text_error`` means none was on offer, or
-    docling is not configured — neither is worth retrying.
+    docling is not configured; neither is worth retrying.
 
     NIST SP and NISTIR publications are catalogued per revision, so an
     identifier with no revision, such as ``NIST SP 800-53``, can come back
@@ -288,7 +288,7 @@ async def get_standard(
     ``not_found`` means the source answered and holds no such standard: stop
     asking about that identifier. A lookup that never got an answer says so
     instead, as ``rate_limited`` (with ``retryable``) or ``upstream_error``
-    with the status and what went wrong. Both are worth retrying -- the
+    with the status and what went wrong. Both are worth retrying: the
     standard may well exist.
 
     Full text is returned in pages of at most 20,000 characters. When
@@ -312,7 +312,7 @@ async def get_standard(
             Pass ``null`` for the complete text.
 
     Returns:
-        The StandardRecord, or ``{"error": "not_found"}`` if unresolvable.
+        The ``StandardRecord``, or ``{"error": "not_found"}`` if unresolvable.
         With ``fetch_full_text=True``, either ``full_text`` or
         ``full_text_error`` is present.
     """
@@ -370,7 +370,7 @@ async def get_standard(
 # The single source of get_sync_status's model-facing text; see its docstring.
 _SYNC_STATUS_DESCRIPTION = (
     "Report the last standards sync run for each standards body. "
-    'Returns {"runs": [...]}, one row per body with body, upstream_ref, '
+    'Returns `{"runs": [...]}`, one row per body with body, upstream_ref, '
     "added, updated, unchanged, withdrawn, errors (non-fatal error "
     "strings from the latest run; empty on success), started_at and "
     "finished_at (Unix seconds). runs is empty when no sync has run yet."
