@@ -408,6 +408,7 @@ def register_standards_tools(mcp: FastMCP, jobs: Jobs) -> None:
     register_long_running_tool(
         mcp,
         jobs,
+        tags={"group:standards"},
         annotations={
             "title": "Resolve Standard Identifier",
             "readOnlyHint": True,
@@ -418,6 +419,7 @@ def register_standards_tools(mcp: FastMCP, jobs: Jobs) -> None:
     register_long_running_tool(
         mcp,
         jobs,
+        tags={"group:standards"},
         annotations={
             "title": "Search Standards",
             "readOnlyHint": True,
@@ -428,6 +430,7 @@ def register_standards_tools(mcp: FastMCP, jobs: Jobs) -> None:
     register_long_running_tool(
         mcp,
         jobs,
+        tags={"group:standards"},
         annotations={
             "title": "Get Standard",
             "readOnlyHint": True,
@@ -437,6 +440,7 @@ def register_standards_tools(mcp: FastMCP, jobs: Jobs) -> None:
     )(get_standard)
     mcp.tool(
         description=_SYNC_STATUS_DESCRIPTION,
+        tags={"group:standards"},
         annotations={
             "title": "Get Sync Status",
             "readOnlyHint": True,

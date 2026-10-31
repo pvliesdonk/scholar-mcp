@@ -523,7 +523,7 @@ def register_pdf_tools(
         mcp,
         jobs,
         jobs_config=jobs_config,
-        tags={"write"},
+        tags={"group:full-text", "write"},
         annotations={
             "title": "Fetch Paper PDF",
             "readOnlyHint": False,
@@ -534,7 +534,7 @@ def register_pdf_tools(
     register_long_running_tool(
         mcp,
         jobs,
-        tags={"write"},
+        tags={"group:full-text", "write"},
         annotations={
             "title": "Convert PDF to Markdown",
             "readOnlyHint": False,
@@ -546,7 +546,7 @@ def register_pdf_tools(
         mcp,
         jobs,
         jobs_config=jobs_config,
-        tags={"write"},
+        tags={"group:full-text", "write"},
         annotations={
             "title": "Fetch and Convert Paper",
             "readOnlyHint": False,
@@ -557,7 +557,7 @@ def register_pdf_tools(
     register_long_running_tool(
         mcp,
         jobs,
-        tags={"write"},
+        tags={"group:full-text", "write"},
         annotations={
             "title": "Fetch PDF by URL",
             "readOnlyHint": False,

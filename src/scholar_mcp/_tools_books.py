@@ -323,6 +323,7 @@ def register_book_tools(mcp: FastMCP, jobs: Jobs) -> None:
     register_long_running_tool(
         mcp,
         jobs,
+        tags={"group:books"},
         annotations={
             "title": "Search Books",
             "readOnlyHint": True,
@@ -333,6 +334,7 @@ def register_book_tools(mcp: FastMCP, jobs: Jobs) -> None:
     register_long_running_tool(
         mcp,
         jobs,
+        tags={"group:books"},
         annotations={
             "title": "Get Book",
             "readOnlyHint": True,
@@ -341,6 +343,7 @@ def register_book_tools(mcp: FastMCP, jobs: Jobs) -> None:
         },
     )(get_book)
     mcp.tool(
+        tags={"group:books"},
         annotations={
             "title": "Get Book Excerpt",
             "readOnlyHint": True,
@@ -349,6 +352,7 @@ def register_book_tools(mcp: FastMCP, jobs: Jobs) -> None:
         },
     )(tool_boundary(get_book_excerpt))
     mcp.tool(
+        tags={"group:books"},
         annotations={
             "title": "Recommend Books",
             "readOnlyHint": True,
