@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="FastMCP server for scholarly papers, patents, books and standards with docling PDF conversion">
+        <meta name="description" content="Release notes for the 2.0 series, with the steps to upgrade to it.">
       
       
       
@@ -19,7 +19,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.8.0">
     
     
       
@@ -27,10 +27,10 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -1530,7 +1530,7 @@ server name, version and a verdict per check, or <code>full</code> with a redact
 for each check that raised. <code>standard</code> means an unauthenticated caller can read
 your server name and version, which was not previously exposed; set <code>status</code> if
 the port is reachable by anyone you would rather not tell. See
-<a href="../../deployment/docker/#health">Docker deployment</a> for the routes in full.</p>
+<a href="../deploy/docker.md#health">Docker deployment</a> for the routes in full.</p>
 <h2 id="whether-the-semantic-scholar-key-still-works">Whether the Semantic Scholar key still works<a class="headerlink" href="#whether-the-semantic-scholar-key-still-works" title="Permanent link">&para;</a></h2>
 <p>A configured <code>SCHOLAR_MCP_S2_API_KEY</code> can stop conferring authenticated quota
 without saying so. Semantic Scholar answers <code>429</code>, indefinitely, which is exactly
@@ -1550,13 +1550,13 @@ ERROR, once, and logs <code>s2_keepalive_recovered</code> when a ping lands
 (<a href="https://github.com/pvliesdonk/scholar-mcp/pull/378">#378</a>).</p>
 <p><strong><code>get_server_info</code> reports the verdict</strong>, so a caller can read it instead of
 hunting through the log (<a href="https://github.com/pvliesdonk/scholar-mcp/pull/393">#393</a>):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">&quot;semantic_scholar&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">&quot;key_configured&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">&quot;key_status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;degraded&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">&quot;consecutive_failures&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">26</span><span class="p">,</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="nt">&quot;last_success&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2026-09-03T12:00:00+00:00&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">  </span><span class="nt">&quot;last_failure&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2026-09-10T18:00:00+00:00&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">  </span><span class="nt">&quot;last_failure_kind&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;rate_limited&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">"semantic_scholar"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">"key_configured"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">"key_status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"degraded"</span><span class="p">,</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">"consecutive_failures"</span><span class="p">:</span><span class="w"> </span><span class="mi">26</span><span class="p">,</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="nt">"last_success"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2026-09-03T12:00:00+00:00"</span><span class="p">,</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">  </span><span class="nt">"last_failure"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2026-09-10T18:00:00+00:00"</span><span class="p">,</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">  </span><span class="nt">"last_failure_kind"</span><span class="p">:</span><span class="w"> </span><span class="s2">"rate_limited"</span>
 <a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="p">}</span>
 </code></pre></div>
 <p><code>key_status</code> is <code>not_configured</code> (no key, and the anonymous tier still serves),
@@ -1577,7 +1577,7 @@ why, so the emptiness does not read as an oversight.</p>
 <li><strong>Check your Compose version.</strong> <code>docker compose version</code> must report 2.24.0 or newer, or 2.24.4 if you will use the proxy overlay. On an older engine, replace the <code>env_file:</code> block with plain <code>env_file: .env</code> and make sure the file exists.</li>
 <li><strong>Remove <code>SCHOLAR_MCP_PORT</code> from any <code>.env</code> a container reads.</strong> It is ignored there now.</li>
 <li><strong>Re-express a custom port as the host side of the mapping,</strong> as <code>-p 9000:8000</code> or <code>ports: - "9000:8000"</code>. Never change the right-hand side.</li>
-<li><strong>Recreate your reverse-proxy routing yourself.</strong> Copy the overlay from <a href="../../deployment/docker/">Docker deployment</a> into <code>compose.override.yml</code>, keep the <code>ports: !reset []</code> line, and check the result with <code>docker compose config</code> before starting anything.</li>
+<li><strong>Recreate your reverse-proxy routing yourself.</strong> Copy the overlay from <a href="../deploy/docker.md">Docker deployment</a> into <code>compose.override.yml</code>, keep the <code>ports: !reset []</code> line, and check the result with <code>docker compose config</code> before starting anything.</li>
 <li><strong>If <code>SCHOLAR_MCP_HOST</code> held a public hostname</strong> for the old Traefik router rule, put that hostname in your overlay's <code>Host(...)</code> rule and set <code>SCHOLAR_MCP_BASE_URL</code> to the public URL. Reset <code>SCHOLAR_MCP_HOST</code> to a bind address or drop the line: it is the interface the server binds to, and a name that does not resolve locally now fails startup.</li>
 <li><strong>If you built from <code>compose.yml</code>,</strong> build and tag explicitly with <code>docker build -t ghcr.io/pvliesdonk/scholar-mcp:dev .</code>, then point <code>image:</code> at that tag.</li>
 <li><strong>Move any hand edits to <code>compose.yml</code></strong> into the <code>DOMAIN-COMPOSE-VOLUMES</code>, <code>-ENVIRONMENT</code>, <code>-SERVICES</code> and <code>-VOLUME-NAMES</code> blocks, where they survive future template updates. A named volume needs two entries: the mount, and its top-level declaration.</li>
@@ -1603,6 +1603,9 @@ why, so the emptiness does not read as an oversight.</p>
 
 
 
+
+  
+  
 
 
 
@@ -1654,10 +1657,10 @@ why, so the emptiness does not read as an oversight.</p>
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
       
         <script src="../../javascripts/config-wizard/wizard.js" type="module"></script>
       
