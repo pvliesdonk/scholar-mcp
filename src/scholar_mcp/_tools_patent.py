@@ -193,19 +193,19 @@ async def search_patents(
     throttle states yourself.
 
     Args:
-        query: Keyword search — searches patent titles and abstracts.
+        query: Keyword search over patent titles and abstracts.
             Optional; omit when searching purely by inventor, applicant,
             CPC code, or date.
         cpc_classification: CPC classification code to filter by,
-            e.g. ``"H01M10/00"`` for lithium-ion batteries.
+            such as ``"H01M10/00"`` for lithium-ion batteries.
         applicant: Applicant (assignee) name to filter by.
         inventor: Inventor name to filter by.
         date_from: Earliest date (``YYYY-MM-DD``).
         date_to: Latest date (``YYYY-MM-DD``).
-        date_type: Date field to apply range to — ``"publication"``,
-            ``"filing"``, or ``"priority"``.
-        jurisdiction: Restrict to a single patent authority, e.g.
-            ``"EP"``, ``"WO"``, or ``"US"``.
+        date_type: Date field to apply the range to: ``"publication"``,
+            ``"filing"`` or ``"priority"``.
+        jurisdiction: Restrict to a single patent authority, such as
+            ``"EP"``, ``"WO"`` or ``"US"``.
         limit: Maximum results to return (default 10).
         offset: Pagination offset (0-based).
         service: Injected service.
@@ -268,7 +268,7 @@ async def get_patent(
     """Get detailed information about a single patent.
 
     Accepts patent numbers in any format (EP, WO, US, etc.). By default
-    returns bibliographic data only -- use the sections parameter to
+    returns bibliographic data only; use the sections parameter to
     request additional detail (claims, description, family members, legal
     status, cited references). When sections includes 'citations',
     non-patent literature references are resolved to Semantic Scholar
@@ -281,11 +281,11 @@ async def get_patent(
     throttle states yourself.
 
     Args:
-        patent_number: Patent number in any common format, e.g.
-            ``"EP1234567A1"``, ``"WO2024/123456"``, or ``"US11,234,567B2"``.
+        patent_number: Patent number in any common format, such as
+            ``"EP1234567A1"``, ``"WO2024/123456"`` or ``"US11,234,567B2"``.
         sections: Sections to include in the response. Defaults to
             ``["biblio"]``. Available sections: biblio, claims,
-            description, family, legal, citations.  When citations
+            description, family, legal, citations. When citations
             is included, NPL references are resolved via Semantic
             Scholar on a best-effort basis.
         service: Injected service.
@@ -333,9 +333,9 @@ async def get_citing_patents(
 ) -> dict[str, Any]:
     """Find patents that cite a given academic paper.
 
-    Coverage is incomplete -- relies on EPO OPS citation search which
+    Coverage is incomplete: it relies on EPO OPS citation search, which
     does not capture all patent-to-paper citations. Best results with
-    DOIs of well-known, highly-cited papers. Returns confirmed matches
+    DOIs of well-known, highly cited papers. Returns confirmed matches
     only, not an exhaustive list.
 
     When EPO reports itself busy this waits for it to clear, which can take a
@@ -441,7 +441,7 @@ async def fetch_patent_pdf(
     per request, so a long patent costs one request per page and the
     document is reassembled before conversion.
 
-    Not all patents have full text available via OPS — WO and older EP
+    Not all patents have full text available through OPS: WO and older EP
     patents sometimes lack PDFs. Returns an error in that case.
 
     A previously downloaded and converted patent answers immediately;
@@ -460,8 +460,8 @@ async def fetch_patent_pdf(
     document in one response.
 
     Args:
-        patent_number: Patent number in any format (EP, WO, US, etc.),
-            e.g. "EP3491801B1", "EP 3491801 B1", "US10123456B2".
+        patent_number: Patent number in any format (EP, WO, US and others),
+            such as ``EP3491801B1``, ``EP 3491801 B1`` or ``US10123456B2``.
         use_vlm: Use VLM enrichment for formulas and figures (requires
             VLM to be configured).
         text_offset: Character offset at which the Markdown page starts.

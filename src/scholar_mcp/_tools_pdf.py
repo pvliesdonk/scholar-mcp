@@ -159,7 +159,7 @@ async def fetch_paper_pdf(
 
     Tries the Semantic Scholar open-access URL first. When that is
     unavailable, automatically checks alternative sources: ArXiv
-    (from externalIds), PubMed Central, and Unpaywall (by DOI,
+    (from ``externalIds``), PubMed Central, and Unpaywall (by DOI,
     requires ``SCHOLAR_MCP_CONTACT_EMAIL``).
 
     Skips download if the file already exists locally, which answers
@@ -395,12 +395,12 @@ async def fetch_pdf_by_url(
 ) -> dict[str, Any]:
     """Download a PDF from a URL and optionally convert to Markdown.
 
-    Use this when you have found an alternative PDF link (e.g. from an
-    author's homepage, a preprint server, or an institutional repository)
+    Use this when you have found an alternative PDF link (such as one
+    on an author's homepage, a preprint server, or an institutional repository)
     that is not listed in Semantic Scholar's openAccessPdf field.
 
     The PDF is saved locally and, if docling-serve is configured,
-    converted to Markdown automatically — which typically takes 1-5
+    converted to Markdown automatically. Conversion typically takes 1-5
     minutes and is returned as a background job handle. An already
     downloaded and converted URL answers immediately.
 
@@ -412,7 +412,7 @@ async def fetch_pdf_by_url(
 
     Args:
         url: Direct URL to a PDF file.
-        filename: Optional filename stem for caching (e.g.
+        filename: Optional filename stem for caching (such as
             ``"smith2024_attention"``). Derived from the URL if omitted.
         use_vlm: Use VLM enrichment for formulas and figures.
         text_offset: Character offset at which the Markdown page starts.
