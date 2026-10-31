@@ -78,7 +78,7 @@ may still hold matches worth asking for again.
 
 **Returns**
 
-``{"results": [...]}``, the matching standard records.
+``{"results": [...]}``, the matching ``StandardRecord`` entries.
 
 <!-- DOMAIN-EXAMPLE-search_standards-START -->
 <!-- A worked example for this tool; kept across regeneration. -->
@@ -132,7 +132,7 @@ document in one response.
 
 **Returns**
 
-The StandardRecord, or ``{"error": "not_found"}`` if unresolvable.
+The ``StandardRecord``, or ``{"error": "not_found"}`` if unresolvable.
 With ``fetch_full_text=True``, either ``full_text`` or
 ``full_text_error`` is present.
 
