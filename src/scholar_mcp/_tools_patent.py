@@ -550,7 +550,7 @@ def register_patent_tools(
     register_long_running_tool(
         mcp,
         jobs,
-        tags={"patent"},
+        tags={"group:patents", "patent"},
         annotations={
             "title": "Search Patents",
             "readOnlyHint": True,
@@ -562,7 +562,7 @@ def register_patent_tools(
         mcp,
         jobs,
         jobs_config=jobs_config,
-        tags={"patent"},
+        tags={"group:patents", "patent"},
         annotations={
             "title": "Get Patent",
             "readOnlyHint": True,
@@ -573,7 +573,7 @@ def register_patent_tools(
     register_long_running_tool(
         mcp,
         jobs,
-        tags={"patent"},
+        tags={"group:patents", "patent"},
         annotations={
             "title": "Get Citing Patents",
             "readOnlyHint": True,
@@ -593,7 +593,7 @@ def register_patent_tools(
         # Both tags matter: "write" hides it in read-only mode, "patent"
         # hides it when EPO is unconfigured. `disable` matches on any tag,
         # so carrying both keeps it in step with its three siblings (#316).
-        tags={"write", "patent"},
+        tags={"group:patents", "write", "patent"},
     )(fetch_patent_pdf)
 
 

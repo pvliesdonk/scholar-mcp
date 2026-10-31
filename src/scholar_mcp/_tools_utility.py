@@ -427,6 +427,7 @@ def register_utility_tools(
         mcp,
         jobs,
         jobs_config=jobs_config,
+        tags={"group:cross-source"},
         annotations={
             "title": "Batch Resolve Identifiers",
             "readOnlyHint": True,
@@ -438,6 +439,7 @@ def register_utility_tools(
         mcp,
         jobs,
         jobs_config=jobs_config,
+        tags={"group:cross-source"},
         annotations={
             "title": "Enrich Paper",
             "readOnlyHint": True,

@@ -81,6 +81,7 @@ def register_recommendation_tools(
         mcp,
         jobs,
         jobs_config=jobs_config,
+        tags={"group:recommendations"},
         annotations={
             "title": "Recommend Papers",
             "readOnlyHint": True,
