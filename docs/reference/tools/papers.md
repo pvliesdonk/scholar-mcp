@@ -43,7 +43,11 @@ the background and returns a job handle to poll with ``get_job_result``.
 A mapping with ``data`` (list of papers) and ``total``.
 
 <!-- DOMAIN-EXAMPLE-search_papers-START -->
-<!-- A worked example for this tool; kept across regeneration. -->
+**Field sets:**
+
+- **compact**: `paperId`, `title`, `year`, `venue`, `citationCount`
+- **standard**: compact + `authors`, `externalIds`, `abstract`
+- **full**: standard + `tldr`, `openAccessPdf`, `fieldsOfStudy`, `referenceCount`
 <!-- DOMAIN-EXAMPLE-search_papers-END -->
 
 ## `get_paper`
@@ -68,7 +72,9 @@ A mapping with full paper metadata, or
 ``{"error": "not_found", "identifier": "..."}`` if not found.
 
 <!-- DOMAIN-EXAMPLE-get_paper-START -->
-<!-- A worked example for this tool; kept across regeneration. -->
+The record always uses the `full` field set.
+
+Results are cached for 30 days. Identifier aliases (such as DOI to S2 ID) are cached permanently.
 <!-- DOMAIN-EXAMPLE-get_paper-END -->
 
 ## `get_author`
@@ -104,5 +110,6 @@ A mapping with author data and a paginated ``papers`` list, plus
 ``{"candidates": [...]}`` for name searches.
 
 <!-- DOMAIN-EXAMPLE-get_author-START -->
-<!-- A worked example for this tool; kept across regeneration. -->
+Semantic Scholar sends an author's whole publication list at once, so every
+page is cut from one cached record: later pages cost no further request.
 <!-- DOMAIN-EXAMPLE-get_author-END -->

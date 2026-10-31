@@ -119,7 +119,30 @@ JSON ``{"nodes": [...], "edges": [...], "stats": {...}}``, where
 ``partial`` is true.
 
 <!-- DOMAIN-EXAMPLE-get_citation_graph-START -->
-<!-- A worked example for this tool; kept across regeneration. -->
+A response looks like:
+
+```json
+{
+  "nodes": [{"id": "...", "title": "...", "year": 2024, "citationCount": 42}, ...],
+  "edges": [{"source": "id1", "target": "id2"}, ...],
+  "stats": {
+    "total_nodes": 42,
+    "total_edges": 67,
+    "depth_reached": 2,
+    "truncated": false,
+    "partial": false,
+    "failed_requests": 0
+  }
+}
+```
+
+!!! warning "Partial graphs"
+    Only a non-429 upstream failure makes a graph partial; a 429 pauses the same walk in a job. The top-level `warning` key names the statuses and the operations affected.
+
+!!! tip "Controlling graph size"
+    Start with `depth=1` and a small `max_nodes` to get an overview, then increase as needed. `depth=3` with `direction=both` can produce large graphs.
+
+See [Citation Graphs guide](../../guides/citation-graphs.md) for usage patterns.
 <!-- DOMAIN-EXAMPLE-get_citation_graph-END -->
 
 ## `find_bridge_papers`
@@ -160,5 +183,21 @@ either way carrying ``partial`` and ``failed_requests``. A
 ``warning`` key joins them when ``partial`` is true.
 
 <!-- DOMAIN-EXAMPLE-find_bridge_papers-START -->
-<!-- A worked example for this tool; kept across regeneration. -->
+A response looks like:
+
+```json
+{
+  "found": true,
+  "path": [
+    {"paperId": "source", "title": "...", ...},
+    {"paperId": "bridge", "title": "...", ...},
+    {"paperId": "target", "title": "...", ...}
+  ]
+}
+```
+
+If no path exists within `max_depth`, `path` is absent.
+
+!!! warning "Partial searches"
+    Only a non-429 upstream failure makes a search partial; a 429 pauses the same search in a job. The `warning` key names the statuses and the operations affected.
 <!-- DOMAIN-EXAMPLE-find_bridge_papers-END -->

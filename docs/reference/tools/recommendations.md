@@ -36,5 +36,6 @@ the background and returns a job handle to poll with ``get_job_result``.
 ``{"recommendations": [...]}``, or an error mapping.
 
 <!-- DOMAIN-EXAMPLE-recommend_papers-START -->
-<!-- A worked example for this tool; kept across regeneration. -->
+!!! tip
+    Recommendations work best with 3 to 5 positive examples that represent the topic you're interested in. Adding 1 to 2 negative examples that are close but off-topic helps narrow results.
 <!-- DOMAIN-EXAMPLE-recommend_papers-END -->
