@@ -393,6 +393,10 @@ async def get_sync_status(
     return {"runs": runs}
 
 
+# The reference page these tools are listed on (scripts/gen_reference.py).
+_GROUP = "group:standards"
+
+
 def register_standards_tools(mcp: FastMCP, jobs: Jobs) -> None:
     """Register standards tools on *mcp*.
 
@@ -408,6 +412,7 @@ def register_standards_tools(mcp: FastMCP, jobs: Jobs) -> None:
     register_long_running_tool(
         mcp,
         jobs,
+        tags={_GROUP},
         annotations={
             "title": "Resolve Standard Identifier",
             "readOnlyHint": True,
@@ -418,6 +423,7 @@ def register_standards_tools(mcp: FastMCP, jobs: Jobs) -> None:
     register_long_running_tool(
         mcp,
         jobs,
+        tags={_GROUP},
         annotations={
             "title": "Search Standards",
             "readOnlyHint": True,
@@ -428,6 +434,7 @@ def register_standards_tools(mcp: FastMCP, jobs: Jobs) -> None:
     register_long_running_tool(
         mcp,
         jobs,
+        tags={_GROUP},
         annotations={
             "title": "Get Standard",
             "readOnlyHint": True,
@@ -437,6 +444,7 @@ def register_standards_tools(mcp: FastMCP, jobs: Jobs) -> None:
     )(get_standard)
     mcp.tool(
         description=_SYNC_STATUS_DESCRIPTION,
+        tags={_GROUP},
         annotations={
             "title": "Get Sync Status",
             "readOnlyHint": True,

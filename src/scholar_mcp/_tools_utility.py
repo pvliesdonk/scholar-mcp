@@ -413,6 +413,10 @@ async def enrich_paper(
     return {"doi": doi, **_select_enrichment_fields(oa_data, list(fields))}
 
 
+# The reference page these tools are listed on (scripts/gen_reference.py).
+_GROUP = "group:cross-source"
+
+
 def register_utility_tools(
     mcp: FastMCP, jobs: Jobs, jobs_config: JobsConfig | None = None
 ) -> None:
@@ -427,6 +431,7 @@ def register_utility_tools(
         mcp,
         jobs,
         jobs_config=jobs_config,
+        tags={_GROUP},
         annotations={
             "title": "Batch Resolve Identifiers",
             "readOnlyHint": True,
@@ -438,6 +443,7 @@ def register_utility_tools(
         mcp,
         jobs,
         jobs_config=jobs_config,
+        tags={_GROUP},
         annotations={
             "title": "Enrich Paper",
             "readOnlyHint": True,

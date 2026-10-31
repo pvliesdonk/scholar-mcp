@@ -221,6 +221,10 @@ async def get_author(
     return {"candidates": candidates}
 
 
+# The reference page these tools are listed on (scripts/gen_reference.py).
+_GROUP = "group:papers"
+
+
 def register_search_tools(
     mcp: FastMCP, jobs: Jobs, jobs_config: JobsConfig | None = None
 ) -> None:
@@ -235,6 +239,7 @@ def register_search_tools(
         mcp,
         jobs,
         jobs_config=jobs_config,
+        tags={_GROUP},
         annotations={
             "title": "Search Papers",
             "readOnlyHint": True,
@@ -246,6 +251,7 @@ def register_search_tools(
         mcp,
         jobs,
         jobs_config=jobs_config,
+        tags={_GROUP},
         annotations={
             "title": "Get Paper",
             "readOnlyHint": True,
@@ -257,6 +263,7 @@ def register_search_tools(
         mcp,
         jobs,
         jobs_config=jobs_config,
+        tags={_GROUP},
         annotations={
             "title": "Get Author",
             "readOnlyHint": True,

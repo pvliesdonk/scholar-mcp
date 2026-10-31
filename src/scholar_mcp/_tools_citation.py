@@ -101,6 +101,10 @@ async def generate_citations(
     return {"format": citation_format, "output": formatter(papers, errors)}
 
 
+# The reference page these tools are listed on (scripts/gen_reference.py).
+_GROUP = "group:citations"
+
+
 def register_citation_tools(
     mcp: FastMCP, jobs: Jobs, jobs_config: JobsConfig | None = None
 ) -> None:
@@ -115,6 +119,7 @@ def register_citation_tools(
         mcp,
         jobs,
         jobs_config=jobs_config,
+        tags={_GROUP},
         annotations={
             "title": "Generate Citations",
             "readOnlyHint": True,
