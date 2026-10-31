@@ -142,7 +142,7 @@ A response looks like:
 !!! tip "Controlling graph size"
     Start with `depth=1` and a small `max_nodes` to get an overview, then increase as needed. `depth=3` with `direction=both` can produce large graphs.
 
-See [Citation Graphs guide](../../guides/citation-graphs.md) for usage patterns.
+See [Citation Graphs guide](../../use/citation-graphs.md) for usage patterns.
 <!-- DOMAIN-EXAMPLE-get_citation_graph-END -->
 
 ## `find_bridge_papers`

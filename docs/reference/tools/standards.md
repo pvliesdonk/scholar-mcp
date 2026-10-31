@@ -9,7 +9,7 @@ kind: reference
 
 <!-- DOMAIN-INTRO-START -->
 <!-- A short orientation for this page; task guidance belongs under Use. Kept across regeneration. -->
-Tier 1 bodies (NIST, IETF, W3C, ETSI) come with full metadata and optional full-text conversion. Tier 2 bodies (ISO, IEC, IEEE) are synced from Relaton data by `scholar-mcp sync-standards`; see the [standards guide](../../guides/standards.md).
+Tier 1 bodies (NIST, IETF, W3C, ETSI) come with full metadata and optional full-text conversion. Tier 2 bodies (ISO, IEC, IEEE) are synced from Relaton data by `scholar-mcp sync-standards`; see the [standards guide](../../use/standards.md).
 <!-- DOMAIN-INTRO-END -->
 
 ## `resolve_standard_identifier`

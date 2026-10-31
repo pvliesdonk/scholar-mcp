@@ -114,4 +114,13 @@ Then configure and start as above. Python 3.11 or newer with the `venv` module i
 
 <!-- DOMAIN-SYSTEMD-EXTRA-START -->
 <!-- What this server needs on a package install: data paths to open with ReadWritePaths, the variables that must be set before the first start, services it reaches; kept across copier update. -->
+Set `SCHOLAR_MCP_CACHE_DIR` in `/etc/scholar-mcp/env` before the first start. Its default, `/data/scholar-mcp`, is the container path, and the unit's confinement leaves only the state directory writable:
+
+```bash
+SCHOLAR_MCP_CACHE_DIR=/var/lib/scholar-mcp
+# Optional: a Semantic Scholar API key for its own allowance instead of the shared pool
+SCHOLAR_MCP_S2_API_KEY=your-key-here
+```
+
+The cache, downloaded PDFs and converted Markdown all live under that directory, so no other path needs `ReadWritePaths`. The service reaches out to Semantic Scholar, OpenAlex, CrossRef, Open Library and Google Books for metadata; to arXiv, PubMed Central and Unpaywall for open-access PDFs; to the standards bodies' catalogues, and to GitHub for the Tier 2 standards sync; and, when configured, to EPO OPS and your docling-serve. A firewall that limits outbound traffic has to allow those.
 <!-- DOMAIN-SYSTEMD-EXTRA-END -->

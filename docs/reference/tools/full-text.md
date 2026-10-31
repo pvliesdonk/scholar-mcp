@@ -159,7 +159,7 @@ A successful HTTP response whose body does not begin with `%PDF-` returns `{"err
 
 The `metadata` block is read from the same 30-day cache `get_paper` uses, and a freshly resolved record is written back to it. A call whose PDF and Markdown are both already on disk makes no Semantic Scholar request at all.
 
-See [PDF Conversion guide](../../guides/pdf-conversion.md) for setup instructions.
+See [PDF Conversion guide](../../use/pdf-conversion.md) for setup instructions.
 <!-- DOMAIN-EXAMPLE-fetch_and_convert-END -->
 
 ## `fetch_pdf_by_url`

@@ -1,3 +1,8 @@
+---
+description: "How to download open-access PDFs and convert them to Markdown with docling-serve, with or without VLM enrichment."
+kind: how-to
+---
+
 # PDF Conversion
 
 Scholar MCP can download open-access PDFs and convert them to Markdown using [docling-serve](https://github.com/DS4SD/docling-serve). This guide covers setup and usage.

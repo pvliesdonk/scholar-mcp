@@ -102,7 +102,7 @@ This is the setup for changing the project; [Contribute](../contribute/index.md)
 /plugin install scholar-mcp@pvliesdonk
 ```
 
-See [Claude Code Plugin guide](../guides/claude-code-plugin.md) for configuration and details.
+See [Claude Code](claude-code.md) for configuration and details.
 
 ## With `uvx` (recommended)
 
@@ -141,5 +141,5 @@ The package installs:
 - An example config at `/etc/scholar-mcp/env.example`
 - A dedicated `scholar-mcp` system user
 
-See [systemd deployment](../deployment/systemd.md) for configuration details.
+See [systemd deployment](../deploy/systemd.md) for configuration details.
 <!-- DOMAIN-INSTALL-EXTRA-END -->
