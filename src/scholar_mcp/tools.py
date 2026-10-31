@@ -10,7 +10,7 @@ from ._server_deps import config_for
 _JOBS_NOTE = (
     "Scholar MCP promotes slow work to a background job. PDF download and "
     "docling conversion usually take 1-5 minutes, a busy EPO traffic light "
-    "is waited out, citation formatting enriches each paper in turn, and "
+    "is waited out, citation formatting enriches one paper after another, and "
     "graph traversal makes one rate-limited request per node. "
     "Semantic Scholar throttling defers the same work immediately and "
     "adds a reason to the handle. "

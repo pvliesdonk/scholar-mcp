@@ -43,8 +43,8 @@ async def search_books(
 ) -> dict[str, Any]:
     """Search for books by title, author, or free text.
 
-    Uses Open Library. Prefer ``title`` and ``author`` over ``query``
-    — they use dedicated indexes and return far better results.
+    Uses Open Library. Prefer ``title`` and ``author`` over ``query``:
+    they use dedicated indexes and return far better results.
 
     Open Library is politeness-rate-limited, so a busy moment may answer
     with a job handle to poll using ``get_job_result`` instead of the
@@ -63,7 +63,7 @@ async def search_books(
         limit: Maximum results to return (max 50).
 
     Returns:
-        ``{"books": [...]}`` — records with title, authors, publisher,
+        ``{"books": [...]}``: records with title, authors, publisher,
         year, ISBNs, Open Library IDs, cover URL, and subjects.
     """
     if not query and not title and not author:
@@ -141,8 +141,8 @@ async def get_book(
     record itself.
 
     Args:
-        identifier: ISBN-10, ISBN-13, Open Library work ID (e.g.
-            OL1168083W), or edition ID (e.g. OL1429049M).
+        identifier: ISBN-10, ISBN-13, Open Library work ID (such as
+            ``OL1168083W``), or edition ID (such as ``OL1429049M``).
         download_cover: If True, download and cache the cover image
             locally. Returns ``cover_path`` in the response. In
             read-only mode, returns ``cover_error`` instead.
@@ -226,13 +226,13 @@ async def get_book_excerpt(
 
     Returns the publisher description, text snippet, and a link to
     the Google Books preview page. Google Books does not expose full
-    chapter text via API -- the excerpt is a publisher-provided summary
+    chapter text through its API; the excerpt is a publisher-provided summary
     and/or search snippet.
 
     An ``error`` of ``not_found`` means Google Books answered and has no
     such volume: stop asking about that ISBN. A lookup that never got an
     answer says so instead, as ``rate_limited`` (with ``retryable``) or
-    ``upstream_error``, and is worth retrying -- the book may well exist.
+    ``upstream_error``, and is worth retrying: the book may well exist.
 
     Args:
         isbn: ISBN-10 or ISBN-13.
@@ -283,8 +283,8 @@ async def recommend_books(
     topic, sorted by edition count (a proxy for popularity).
 
     Args:
-        subject: Subject or topic (e.g. "machine learning",
-            "algorithms", "computer vision").
+        subject: Subject or topic, such as ``machine learning``,
+            ``algorithms`` or ``computer vision``.
         limit: Maximum results to return (max 50).
 
     Returns:
