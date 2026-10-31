@@ -147,6 +147,8 @@ nav:
   - Use:
       - Overview: use/index.md
       # PROJECT-NAV-USE-START — this server's how-tos and explanations (docs/use/); kept across copier update
+      - Background jobs: use/background-jobs.md
+      - Automatic enrichment: use/enrichment.md
       # PROJECT-NAV-USE-END
   # Reference is generated from the code by scripts/gen_reference.py; a fact
   # on these pages changes at its source (docstring, annotation, CLI help).
@@ -199,5 +201,4 @@ nav:
       - Citation Graphs: guides/citation-graphs.md
   - Deployment:
       - systemd: deployment/systemd.md
-  - Tools guide: tools/index.md
   # PROJECT-NAV-UNSORTED-END

@@ -9,6 +9,7 @@ kind: reference
 
 <!-- DOMAIN-INTRO-START -->
 <!-- A short orientation for this page; task guidance belongs under Use. Kept across regeneration. -->
+These tools write to the local cache, so they're hidden when `SCHOLAR_MCP_READ_ONLY=true` (the default). Converted Markdown comes back in pages of 20,000 characters by default; see [Background jobs](../../use/background-jobs.md) for why conversions usually answer with a job handle.
 <!-- DOMAIN-INTRO-END -->
 
 ## `fetch_paper_pdf`
@@ -39,7 +40,13 @@ structured error dict. The ``source`` field indicates where the
 PDF was obtained (``s2_oa``, ``arxiv``, ``pmc``, ``unpaywall``).
 
 <!-- DOMAIN-EXAMPLE-fetch_paper_pdf-START -->
-<!-- A worked example for this tool; kept across regeneration. -->
+A response looks like `{"path": "/data/scholar-mcp/pdfs/<id>.pdf", "source": "s2_oa"}`. The error forms are:
+
+- `{"error": "no_oa_pdf"}`: no PDF URL found from any source
+- `{"error": "download_failed"}`: HTTP error downloading the PDF
+- `{"error": "not_pdf"}`: the response body does not begin with the PDF header
+
+Paper metadata is read from the same 30-day cache `get_paper` uses, and a freshly resolved record is written back to it. A repeat call for the same paper needs no Semantic Scholar request.
 <!-- DOMAIN-EXAMPLE-fetch_paper_pdf-END -->
 
 ## `convert_pdf_to_markdown`
@@ -84,7 +91,11 @@ document in one response.
 ``{"markdown": "...", "path": "...", "vlm_used": bool}``.
 
 <!-- DOMAIN-EXAMPLE-convert_pdf_to_markdown-START -->
-<!-- A worked example for this tool; kept across regeneration. -->
+A response looks like `{"markdown": "...", "path": "/data/scholar-mcp/md/<name>.md", "vlm_used": true/false}`. A `vlm_skip_reason` reads like `"vlm_api_url_not_configured"`.
+
+VLM enrichment processes each formula and figure image individually via an external vision model, which is slower.
+
+Requires `SCHOLAR_MCP_DOCLING_URL` to be set. VLM enrichment also requires `SCHOLAR_MCP_VLM_API_URL` and `SCHOLAR_MCP_VLM_API_KEY`.
 <!-- DOMAIN-EXAMPLE-convert_pdf_to_markdown-END -->
 
 ## `fetch_and_convert`
@@ -131,7 +142,24 @@ document in one response.
 plus an ``error`` key if a stage fails.
 
 <!-- DOMAIN-EXAMPLE-fetch_and_convert-START -->
-<!-- A worked example for this tool; kept across regeneration. -->
+On full success, a response looks like:
+
+```json
+{
+  "metadata": {"paperId": "...", "title": "...", ...},
+  "markdown": "# Paper Title\n...",
+  "pdf_path": "/data/scholar-mcp/pdfs/<id>.pdf",
+  "md_path": "/data/scholar-mcp/md/<id>.md",
+  "pdf_source": "s2_oa",
+  "vlm_used": false
+}
+```
+
+A successful HTTP response whose body does not begin with `%PDF-` returns `{"error": "not_pdf"}` before conversion. The `pdf_source` field indicates the download source.
+
+The `metadata` block is read from the same 30-day cache `get_paper` uses, and a freshly resolved record is written back to it. A call whose PDF and Markdown are both already on disk makes no Semantic Scholar request at all.
+
+See [PDF Conversion guide](../../guides/pdf-conversion.md) for setup instructions.
 <!-- DOMAIN-EXAMPLE-fetch_and_convert-END -->
 
 ## `fetch_pdf_by_url`
@@ -170,5 +198,20 @@ document in one response.
 ``pdf_path`` and optionally ``markdown`` / ``md_path``.
 
 <!-- DOMAIN-EXAMPLE-fetch_pdf_by_url-START -->
-<!-- A worked example for this tool; kept across regeneration. -->
+On success with docling configured, a response looks like:
+
+```json
+{
+  "pdf_path": "/data/scholar-mcp/pdfs/<filename>.pdf",
+  "markdown": "# Paper Title\n...",
+  "md_path": "/data/scholar-mcp/md/<filename>.md",
+  "vlm_used": false
+}
+```
+
+The PDF is cached by filename, so subsequent calls with the same filename return immediately.
+
+The response body must begin with `%PDF-` before it is cached or sent to
+docling. A response with another body returns `{"error": "not_pdf"}` and is
+not converted. This header check does not validate the complete PDF structure.
 <!-- DOMAIN-EXAMPLE-fetch_pdf_by_url-END -->

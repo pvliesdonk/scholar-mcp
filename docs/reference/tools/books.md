@@ -9,6 +9,7 @@ kind: reference
 
 <!-- DOMAIN-INTRO-START -->
 <!-- A short orientation for this page; task guidance belongs under Use. Kept across regeneration. -->
+Book tools draw on [Open Library](https://openlibrary.org/) and [Google Books](https://developers.google.com/books). Neither needs an API key; a Google Books key raises its rate limit.
 <!-- DOMAIN-INTRO-END -->
 
 ## `search_books`
@@ -39,7 +40,44 @@ results themselves.
 year, ISBNs, Open Library IDs, cover URL, and subjects.
 
 <!-- DOMAIN-EXAMPLE-search_books-START -->
-<!-- A worked example for this tool; kept across regeneration. -->
+At least one of `query`, `title`, or `author` must be provided.
+
+When only `query` is given, it is first tried as a title search (better relevance) and falls back to free-text if no results are found. When `author` is given with multiple tokens (such as "Frank Duffy") and initial results are thin, a broadened search is automatically attempted to catch name variants (such as Frank → Francis).
+
+A response looks like:
+
+```json
+{
+  "books": [
+    {
+      "title": "Deep Learning",
+      "authors": [
+        "Ian Goodfellow",
+        "Yoshua Bengio",
+        "Aaron Courville"
+      ],
+      "publisher": "MIT Press",
+      "year": 2016,
+      "edition": null,
+      "isbn_10": "0262035618",
+      "isbn_13": "9780262035613",
+      "openlibrary_work_id": "OL17953442W",
+      "openlibrary_edition_id": "OL26423929M",
+      "cover_url": "https://covers.openlibrary.org/b/isbn/9780262035613-M.jpg",
+      "google_books_url": "https://books.google.com/books?id=Np9SDQAAQBAJ",
+      "worldcat_url": "https://www.worldcat.org/isbn/9780262035613",
+      "snippet": "An introduction to a broad range of topics in deep learning...",
+      "cover_path": null,
+      "subjects": [
+        "Machine learning",
+        "Artificial intelligence"
+      ],
+      "page_count": 800,
+      "description": null
+    }
+  ]
+}
+```
 <!-- DOMAIN-EXAMPLE-search_books-END -->
 
 ## `get_book`
@@ -65,7 +103,19 @@ record itself.
 The book record, or ``{"error": "not_found"}`` if not found.
 
 <!-- DOMAIN-EXAMPLE-get_book-START -->
-<!-- A worked example for this tool; kept across regeneration. -->
+**Identifier formats:**
+
+| Format | Example |
+|---|---|
+| ISBN-13 | `9780262035613` |
+| ISBN-10 | `0262035618` |
+| ISBN with hyphens | `978-0-262-03561-3` |
+| Open Library work ID | `OL17953442W` |
+| Open Library edition ID | `OL26423929M` |
+
+The book record has the same shape as items returned by `search_books`, and the `not_found` error also carries `"identifier": "..."`.
+
+Results are cached. Work and edition lookups are cached by their respective Open Library IDs; ISBN lookups are also stored under the resolved ISBN-13. When `download_cover=true`, the cover image is saved to `<cache_dir>/covers/<isbn>_<size>.jpg`.
 <!-- DOMAIN-EXAMPLE-get_book-END -->
 
 ## `get_book_excerpt`
@@ -100,7 +150,22 @@ Example return::
      "`preview_available`": true, "`preview_link`": "https://..."}
 
 <!-- DOMAIN-EXAMPLE-get_book_excerpt-START -->
-<!-- A worked example for this tool; kept across regeneration. -->
+A response looks like:
+
+```json
+{
+  "excerpt": "Deep learning is a form of machine learning that enables...",
+  "description": "An introduction to a broad range of topics in deep learning...",
+  "source": "google_books",
+  "preview_available": true,
+  "preview_link": "https://books.google.com/books?id=Np9SDQAAQBAJ&printsec=frontcover"
+}
+```
+
+!!! warning "Error shapes"
+    `not_found` is `{"error": "not_found", "isbn": "..."}`. A lookup that never got an answer is `{"error": "rate_limited", "isbn": "...", "retryable": true}` for a 429, or `{"error": "upstream_error", "isbn": "...", "status": <code or null>}` for anything else.
+
+    Without `SCHOLAR_MCP_GOOGLE_BOOKS_API_KEY` set, requests use the anonymous tier, where 429 is common.
 <!-- DOMAIN-EXAMPLE-get_book_excerpt-END -->
 
 ## `recommend_books`
@@ -124,5 +189,7 @@ topic, sorted by edition count (a proxy for popularity).
 JSON list of book records sorted by popularity.
 
 <!-- DOMAIN-EXAMPLE-recommend_books-START -->
-<!-- A worked example for this tool; kept across regeneration. -->
+Each record has the same shape as `search_books` results, with fields populated from the Open Library subject API (title, authors, Open Library work ID, cover URL). ISBN and edition fields are `null` since subject results are work-level.
+
+Results are cached for 7 days, keyed by the normalized subject slug. Up to 50 results are fetched and cached; the `limit` parameter slices the cached pool on return.
 <!-- DOMAIN-EXAMPLE-recommend_books-END -->

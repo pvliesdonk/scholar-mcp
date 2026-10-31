@@ -9,6 +9,7 @@ kind: reference
 
 <!-- DOMAIN-INTRO-START -->
 <!-- A short orientation for this page; task guidance belongs under Use. Kept across regeneration. -->
+Tier 1 bodies (NIST, IETF, W3C, ETSI) come with full metadata and optional full-text conversion. Tier 2 bodies (ISO, IEC, IEEE) are synced from Relaton data by `scholar-mcp sync-standards`; see the [standards guide](../../guides/standards.md).
 <!-- DOMAIN-INTRO-END -->
 
 ## `resolve_standard_identifier`
@@ -81,7 +82,9 @@ may still hold matches worth asking for again.
 ``{"results": [...]}``, the matching ``StandardRecord`` entries.
 
 <!-- DOMAIN-EXAMPLE-search_standards-START -->
-<!-- A worked example for this tool; kept across regeneration. -->
+`warning` gives each failed source's HTTP status and what went wrong, such as `ETSI (HTTP 200: answered with a non-JSON body, content-type: text/html)`: a 200 alone would read as success.
+
+Partial answers are never cached. A later call reaches the failing source again.
 <!-- DOMAIN-EXAMPLE-search_standards-END -->
 
 ## `get_standard`
@@ -137,7 +140,15 @@ With ``fetch_full_text=True``, either ``full_text`` or
 ``full_text_error`` is present.
 
 <!-- DOMAIN-EXAMPLE-get_standard-START -->
-<!-- A worked example for this tool; kept across regeneration. -->
+The converted text is cached, so a later request for it is not converted again, but a call without `fetch_full_text=true` returns the metadata record alone, whoever fetched the text before.
+
+When `full_text` is present, the response also reports `text_offset`,
+`text_returned_chars`, `text_total_chars`, and `text_truncated`.
+
+!!! warning "Error shapes"
+    A lookup that never got an answer reports `{"error": "rate_limited", "retryable": true}` for a 429, or `{"error": "upstream_error", "status": <code or null>, "detail": "..."}` for anything else.
+
+    Nothing is cached on either path, so the retry is not served the failed answer.
 <!-- DOMAIN-EXAMPLE-get_standard-END -->
 
 ## `get_sync_status`

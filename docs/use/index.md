@@ -11,4 +11,5 @@ For what the server can reach and change while you use it, see the [security mod
 
 <!-- DOMAIN-USE-INTRO-START -->
 <!-- One or two sentences on what this server's pages here cover; kept across copier update. -->
+Scholar MCP covers four kinds of source: papers, patents, books and standards. Papers have the richest tools (citation graph, recommendations, links to the other three); standards have the fewest. That follows what public data is available, not a ranking. The pages here explain behaviour that spans tools; each tool's own contract is in the [tools reference](../reference/tools/index.md).
 <!-- DOMAIN-USE-INTRO-END -->

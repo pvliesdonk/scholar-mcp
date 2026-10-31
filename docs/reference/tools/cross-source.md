@@ -43,7 +43,8 @@ have a ``paper`` key, patent entries a ``patent`` key and
 ``source_type: "book"``. Unresolved entries have an ``error`` key.
 
 <!-- DOMAIN-EXAMPLE-batch_resolve-START -->
-<!-- A worked example for this tool; kept across regeneration. -->
+- **Paper results**: the OpenAlex fallback looks the paper up by DOI. An OpenAlex `paper` also has `tldr` and `fieldsOfStudy` null, and `openAccessPdf` set only when OpenAlex has a direct PDF link. When the citation string contains chapter patterns (such as "Chapter 3" or "pp. 45-67"), a `chapter_info` dict is attached with parsed chapter/page information.
+- **Patent results**: patent numbers are auto-detected by their two-letter country prefix (such as `EP`, `US`, `WO`).
 <!-- DOMAIN-EXAMPLE-batch_resolve-END -->
 
 ## `enrich_paper`
@@ -71,5 +72,12 @@ continues in the background and returns a job handle to poll with
 A mapping with the requested fields plus ``doi``, or an error mapping.
 
 <!-- DOMAIN-EXAMPLE-enrich_paper-START -->
-<!-- A worked example for this tool; kept across regeneration. -->
+**Available fields:**
+
+| Field | Description |
+|---|---|
+| `affiliations` | Institution display names from author affiliations |
+| `funders` | Funding organization names |
+| `oa_status` | Open access status string (such as `gold`, `green`, `hybrid`); also includes `is_oa` boolean |
+| `concepts` | List of `{"name": "...", "score": 0.95}` topic concepts |
 <!-- DOMAIN-EXAMPLE-enrich_paper-END -->

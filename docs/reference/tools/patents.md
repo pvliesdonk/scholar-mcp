@@ -9,6 +9,7 @@ kind: reference
 
 <!-- DOMAIN-INTRO-START -->
 <!-- A short orientation for this page; task guidance belongs under Use. Kept across regeneration. -->
+Patent tools reach the EPO Open Patent Services API and need EPO OPS credentials. Without `SCHOLAR_MCP_EPO_CONSUMER_KEY` and `SCHOLAR_MCP_EPO_CONSUMER_SECRET` they're hidden. [Obtaining EPO OPS credentials](../configuration.md#patents-obtaining-epo-ops-credentials) covers setup.
 <!-- DOMAIN-INTRO-END -->
 
 ## `search_patents`
@@ -57,7 +58,10 @@ and an exhausted daily quota is ``{"error": "epo_unavailable",
 states directly.
 
 <!-- DOMAIN-EXAMPLE-search_patents-START -->
-<!-- A worked example for this tool; kept across regeneration. -->
+Each entry in `references` has `country`, `number`, and `kind` fields.
+
+!!! tip "Query syntax"
+    The tool translates parameters into EPO CQL internally. `query` will not find patents where the keyword appears only in inventor/applicant names. Combining `query` with filters applies both constraints.
 <!-- DOMAIN-EXAMPLE-search_patents-END -->
 
 ## `get_patent`
@@ -100,7 +104,63 @@ and an exhausted daily quota is ``{"error": "epo_unavailable",
 states directly.
 
 <!-- DOMAIN-EXAMPLE-get_patent-START -->
-<!-- A worked example for this tool; kept across regeneration. -->
+**Available sections:**
+
+| Section | Description | Status |
+|---|---|---|
+| `biblio` | Bibliographic metadata (title, applicants, inventors, dates, classifications, abstract) | Available |
+| `claims` | Patent claims text (English preferred) | Available |
+| `description` | Full patent description text (English preferred) | Available |
+| `family` | Patent family members across jurisdictions (country, number, kind, date) | Available |
+| `legal` | Legal status events (date, code, description, country) | Available |
+| `citations` | Patent and non-patent literature citations, with Semantic Scholar resolution for NPL | Available |
+
+`country` is the contracting state a legal event concerns. EPO sends it only on
+the event types that name one, such as `PG25` (lapsed in a state), `REG` and
+`PGFP`, so it is an empty string on the rest. It is what distinguishes the
+otherwise identical `PG25` events a patent accumulates as it lapses state by
+state.
+
+Sections are fetched concurrently where possible (cache lookups run in parallel; EPO API calls are serialised by the client). Each section is cached independently with appropriate TTLs.
+
+A response has keys matching the requested sections:
+
+```json
+{
+  "patent_number": "EP.1234567.A1",
+  "biblio": {
+    "title": "...",
+    "abstract": "...",
+    "applicants": ["..."],
+    "inventors": ["..."],
+    "publication_number": "EP.1234567.A1",
+    "publication_date": "2020-01-15",
+    "filing_date": "2019-06-01",
+    "priority_date": "2019-01-15",
+    "family_id": "12345678",
+    "classifications": ["H04L29/06"],
+    "url": "https://worldwide.espacenet.com/..."
+  },
+  "claims": "1. A method for...\n\n2. The method of claim 1...",
+  "family": [
+    {"country": "US", "number": "11234567", "kind": "B2", "date": "2021-03-01"}
+  ],
+  "legal": [
+    {"date": "2021-07-30", "code": "PG25", "description": "LAPSED IN A CONTRACTING STATE [...]", "country": "BG"}
+  ],
+  "citations": {
+    "patent_refs": [
+      {"country": "US", "number": "9876543", "kind": "B2"}
+    ],
+    "npl_refs": [
+      {"raw": "Smith et al., \"Widget Processing\", 2018, doi:10.1234/test", "paper": {"paperId": "abc123", "title": "Widget Processing"}, "confidence": "high"},
+      {"raw": "Doe, \"Advanced Widgets\", Ch. 5, pp. 112-130, 2019", "confidence": null, "chapter_info": {"citation_source": "parsed", "chapter_number": 5, "page_start": 112, "page_end": 130}}
+    ]
+  }
+}
+```
+
+In `citations`, NPL references with a DOI are resolved with `"confidence": "high"`. A DOI is recognised after `doi:`, `DOI`, or in a `doi.org` link, and one that does not resolve is still returned in `doi`. References without a DOI or that fail to resolve have `"confidence": null`. When citation strings contain chapter patterns (such as "Ch. 5" or "pp. 112-130"), a `chapter_info` dict is included with parsed chapter and page information.
 <!-- DOMAIN-EXAMPLE-get_patent-END -->
 
 ## `get_citing_patents`
@@ -141,7 +201,18 @@ and an exhausted daily quota is ``{"error": "epo_unavailable",
 states directly.
 
 <!-- DOMAIN-EXAMPLE-get_citing_patents-START -->
-<!-- A worked example for this tool; kept across regeneration. -->
+A response looks like:
+
+```json
+{
+  "paper_id": "10.1234/test",
+  "patents": [
+    {"title": "...", "publication_number": "EP.9999999.A1", "match_source": "epo_search", ...}
+  ],
+  "total_count": 1,
+  "note": "Coverage is incomplete. Results come from EPO OPS citation search..."
+}
+```
 <!-- DOMAIN-EXAMPLE-get_citing_patents-END -->
 
 ## `fetch_patent_pdf`
@@ -188,5 +259,16 @@ document in one response.
 ``pdf_path`` and optionally ``markdown`` / ``md_path``.
 
 <!-- DOMAIN-EXAMPLE-fetch_patent_pdf-START -->
-<!-- A worked example for this tool; kept across regeneration. -->
+A response looks like `{"pdf_path": "/data/scholar-mcp/pdfs/<stem>.pdf", "markdown": "...", "md_path": "/data/scholar-mcp/md/<stem>.md"}` when docling is configured, or just `{"pdf_path": "..."}` without it.
+
+When `markdown` is present, the response also reports `text_offset`,
+`text_returned_chars`, `text_total_chars`, and `text_truncated`.
+
+A patent with no PDF available through OPS returns `{"error": "pdf_not_available"}`.
+
+!!! note "Download time"
+    A 21-page patent takes roughly 20 seconds to download; longer patents scale linearly, which is part of why this tool commonly answers with a job handle.
+
+!!! note "Write-tagged"
+    This tool carries both gates: it is hidden when `SCHOLAR_MCP_READ_ONLY=true`, and like every patent tool it is hidden when EPO OPS credentials are not set.
 <!-- DOMAIN-EXAMPLE-fetch_patent_pdf-END -->

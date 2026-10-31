@@ -1,8 +1,8 @@
-"""Gate the tool counts that five documents state by hand.
+"""Gate the tool counts that four documents state by hand.
 
-The number of MCP tools is published in five places -- `README.md` (which
-reaches PyPI), the tools reference, the docs landing page, the plugin guide and
-the plugin README. Nothing failed when one was missed, which is how 13, 27 and
+The number of MCP tools is published in four places -- `README.md` (which
+reaches PyPI), the docs landing page, the plugin guide and the plugin README.
+The generated tools reference lists the registry itself, so it needs no gate. Nothing failed when one was missed, which is how 13, 27 and
 28 came to coexist (#268). This test makes the registry the source of truth and
 the documents its assertions.
 
@@ -25,7 +25,6 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 # Each entry: the file, and a regex whose one capture group is the count.
 _DOCUMENTED_COUNTS: dict[str, str] = {
     "README.md": r"^(\d+) tools, organised by scholarly source type\.$",
-    "docs/tools/index.md": r"Scholar MCP provides (\d+) tools organised",
     "docs/index.md": r"Scholar MCP exposes (\d+) tools that let",
     "docs/guides/claude-code-plugin.md": r"^(\d+) tools across four scholarly",
     ".claude-plugin/plugin/README.md": r"^(\d+) tools across four scholarly",
