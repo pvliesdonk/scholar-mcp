@@ -503,6 +503,10 @@ async def fetch_pdf_by_url(
     )
 
 
+# The reference page these tools are listed on (scripts/gen_reference.py).
+_GROUP = "group:full-text"
+
+
 def register_pdf_tools(
     mcp: FastMCP, jobs: Jobs, jobs_config: JobsConfig | None = None
 ) -> None:
@@ -523,7 +527,7 @@ def register_pdf_tools(
         mcp,
         jobs,
         jobs_config=jobs_config,
-        tags={"group:full-text", "write"},
+        tags={_GROUP, "write"},
         annotations={
             "title": "Fetch Paper PDF",
             "readOnlyHint": False,
@@ -534,7 +538,7 @@ def register_pdf_tools(
     register_long_running_tool(
         mcp,
         jobs,
-        tags={"group:full-text", "write"},
+        tags={_GROUP, "write"},
         annotations={
             "title": "Convert PDF to Markdown",
             "readOnlyHint": False,
@@ -546,7 +550,7 @@ def register_pdf_tools(
         mcp,
         jobs,
         jobs_config=jobs_config,
-        tags={"group:full-text", "write"},
+        tags={_GROUP, "write"},
         annotations={
             "title": "Fetch and Convert Paper",
             "readOnlyHint": False,
@@ -557,7 +561,7 @@ def register_pdf_tools(
     register_long_running_tool(
         mcp,
         jobs,
-        tags={"group:full-text", "write"},
+        tags={_GROUP, "write"},
         annotations={
             "title": "Fetch PDF by URL",
             "readOnlyHint": False,

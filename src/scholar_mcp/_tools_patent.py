@@ -532,6 +532,10 @@ async def fetch_patent_pdf(
     )
 
 
+# The reference page these tools are listed on (scripts/gen_reference.py).
+_GROUP = "group:patents"
+
+
 def register_patent_tools(
     mcp: FastMCP, jobs: Jobs, jobs_config: JobsConfig | None = None
 ) -> None:
@@ -550,7 +554,7 @@ def register_patent_tools(
     register_long_running_tool(
         mcp,
         jobs,
-        tags={"group:patents", "patent"},
+        tags={_GROUP, "patent"},
         annotations={
             "title": "Search Patents",
             "readOnlyHint": True,
@@ -562,7 +566,7 @@ def register_patent_tools(
         mcp,
         jobs,
         jobs_config=jobs_config,
-        tags={"group:patents", "patent"},
+        tags={_GROUP, "patent"},
         annotations={
             "title": "Get Patent",
             "readOnlyHint": True,
@@ -573,7 +577,7 @@ def register_patent_tools(
     register_long_running_tool(
         mcp,
         jobs,
-        tags={"group:patents", "patent"},
+        tags={_GROUP, "patent"},
         annotations={
             "title": "Get Citing Patents",
             "readOnlyHint": True,
@@ -593,7 +597,7 @@ def register_patent_tools(
         # Both tags matter: "write" hides it in read-only mode, "patent"
         # hides it when EPO is unconfigured. `disable` matches on any tag,
         # so carrying both keeps it in step with its three siblings (#316).
-        tags={"group:patents", "write", "patent"},
+        tags={_GROUP, "write", "patent"},
     )(fetch_patent_pdf)
 
 

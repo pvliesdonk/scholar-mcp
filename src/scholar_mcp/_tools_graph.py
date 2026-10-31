@@ -959,6 +959,10 @@ async def find_bridge_papers(
     return await _execute()
 
 
+# The reference page these tools are listed on (scripts/gen_reference.py).
+_GROUP = "group:citation-graph"
+
+
 def register_graph_tools(
     mcp: FastMCP, jobs: Jobs, jobs_config: JobsConfig | None = None
 ) -> None:
@@ -975,7 +979,7 @@ def register_graph_tools(
         mcp,
         jobs,
         jobs_config=jobs_config,
-        tags={"group:citation-graph"},
+        tags={_GROUP},
         annotations={
             "title": "Get Citations",
             "readOnlyHint": True,
@@ -987,7 +991,7 @@ def register_graph_tools(
         mcp,
         jobs,
         jobs_config=jobs_config,
-        tags={"group:citation-graph"},
+        tags={_GROUP},
         annotations={
             "title": "Get References",
             "readOnlyHint": True,
@@ -999,7 +1003,7 @@ def register_graph_tools(
         mcp,
         jobs,
         jobs_config=jobs_config,
-        tags={"group:citation-graph"},
+        tags={_GROUP},
         annotations={
             "title": "Get Citation Graph",
             "readOnlyHint": True,
@@ -1011,7 +1015,7 @@ def register_graph_tools(
         mcp,
         jobs,
         jobs_config=jobs_config,
-        tags={"group:citation-graph"},
+        tags={_GROUP},
         annotations={
             "title": "Find Bridge Papers",
             "readOnlyHint": True,

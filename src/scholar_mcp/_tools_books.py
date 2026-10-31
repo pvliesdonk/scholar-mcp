@@ -311,6 +311,10 @@ async def recommend_books(
     return json.dumps(books[:limit])
 
 
+# The reference page these tools are listed on (scripts/gen_reference.py).
+_GROUP = "group:books"
+
+
 def register_book_tools(mcp: FastMCP, jobs: Jobs) -> None:
     """Register book search and lookup tools on *mcp*.
 
@@ -323,7 +327,7 @@ def register_book_tools(mcp: FastMCP, jobs: Jobs) -> None:
     register_long_running_tool(
         mcp,
         jobs,
-        tags={"group:books"},
+        tags={_GROUP},
         annotations={
             "title": "Search Books",
             "readOnlyHint": True,
@@ -334,7 +338,7 @@ def register_book_tools(mcp: FastMCP, jobs: Jobs) -> None:
     register_long_running_tool(
         mcp,
         jobs,
-        tags={"group:books"},
+        tags={_GROUP},
         annotations={
             "title": "Get Book",
             "readOnlyHint": True,
@@ -343,7 +347,7 @@ def register_book_tools(mcp: FastMCP, jobs: Jobs) -> None:
         },
     )(get_book)
     mcp.tool(
-        tags={"group:books"},
+        tags={_GROUP},
         annotations={
             "title": "Get Book Excerpt",
             "readOnlyHint": True,
@@ -352,7 +356,7 @@ def register_book_tools(mcp: FastMCP, jobs: Jobs) -> None:
         },
     )(tool_boundary(get_book_excerpt))
     mcp.tool(
-        tags={"group:books"},
+        tags={_GROUP},
         annotations={
             "title": "Recommend Books",
             "readOnlyHint": True,
