@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.8.0">
     
     
       
@@ -31,10 +31,10 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -2020,8 +2020,8 @@
 <p>The bearer-token mode above shares one subject across every authenticated caller. By default this is the library's <code>bearer-anon</code>; override with <code>SCHOLAR_MCP_BEARER_DEFAULT_SUBJECT</code>. For audit logs and authorization that distinguish callers, switch to mapped-token mode by pointing <code>SCHOLAR_MCP_BEARER_TOKENS_FILE</code> at a TOML file:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># tokens.toml</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="k">[tokens]</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="s2">&quot;ghp_alice_xxxxxxxx&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;user:alice@example.com&quot;</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="s2">&quot;sk_ci_yyyyyyyy&quot;</span><span class="w">     </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;service:ci-bot&quot;</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="s2">"ghp_alice_xxxxxxxx"</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"user:alice@example.com"</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="s2">"sk_ci_yyyyyyyy"</span><span class="w">     </span><span class="o">=</span><span class="w"> </span><span class="s2">"service:ci-bot"</span>
 </code></pre></div>
 <p>Each token resolves to a distinct subject string for downstream attribution. Subject strings are opaque: the <code>&lt;kind&gt;:&lt;id&gt;</code> convention (<code>user:</code>, <code>service:</code>, <code>token:</code>) is documentation only. When <code>BEARER_TOKENS_FILE</code> is set it overrides <code>BEARER_TOKEN</code> (a <code>WARNING</code> is logged if both are present). A missing or malformed file aborts startup with <code>ConfigurationError</code> rather than silently denying every request.</p>
 <p>For the per-tool authorization that consumes these subjects, see the <strong>Authorization (opt-in)</strong> section of the project <a href="https://github.com/pvliesdonk/scholar-mcp#authorization-opt-in">README</a>.</p>
@@ -2231,9 +2231,9 @@
 <a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="nt">lifespans</span><span class="p">:</span>
 <a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span><span class="nt">custom</span><span class="p">:</span>
 <a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">    </span><span class="nt">mcp_long_lived</span><span class="p">:</span>
-<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">      </span><span class="nt">access_token</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;8h&#39;</span>
-<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">      </span><span class="nt">id_token</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;8h&#39;</span><span class="w">        </span><span class="c1"># must match access_token for verify_id_token mode</span>
-<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">      </span><span class="nt">refresh_token</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;30d&#39;</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">      </span><span class="nt">access_token</span><span class="p">:</span><span class="w"> </span><span class="s">'8h'</span>
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">      </span><span class="nt">id_token</span><span class="p">:</span><span class="w"> </span><span class="s">'8h'</span><span class="w">        </span><span class="c1"># must match access_token for verify_id_token mode</span>
+<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">      </span><span class="nt">refresh_token</span><span class="p">:</span><span class="w"> </span><span class="s">'30d'</span>
 </code></pre></div>
 <h3 id="opaque-access-tokens-authelia">Opaque access tokens (Authelia)<a class="headerlink" href="#opaque-access-tokens-authelia" title="Permanent link">&para;</a></h3>
 <p>Authelia issues opaque (non-JWT) access tokens. This is handled automatically: the server verifies the <code>id_token</code> instead. No extra configuration needed.</p>
@@ -2354,10 +2354,10 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
       
         <script src="../../javascripts/config-wizard/wizard.js" type="module"></script>
       
