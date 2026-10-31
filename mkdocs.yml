@@ -78,6 +78,13 @@ plugins:
         deployment/repository-protection.md: contribute/repository-protection.md
         deployment/integration-branches.md: contribute/integration-branches.md
         # PROJECT-REDIRECTS-START — this project's moved pages; kept across copier update
+        guides/index.md: use/index.md
+        guides/citation-graphs.md: use/citation-graphs.md
+        guides/pdf-conversion.md: use/pdf-conversion.md
+        guides/standards.md: use/standards.md
+        guides/claude-desktop.md: get-started/claude-desktop.md
+        guides/claude-code-plugin.md: get-started/claude-code.md
+        deployment/systemd.md: deploy/systemd.md
         # PROJECT-REDIRECTS-END
   # Generates llms.txt + llms-full.txt for the README badge.
   # The sections are filled from `nav:` at build time by
@@ -149,6 +156,9 @@ nav:
       # PROJECT-NAV-USE-START — this server's how-tos and explanations (docs/use/); kept across copier update
       - Background jobs: use/background-jobs.md
       - Automatic enrichment: use/enrichment.md
+      - Citation graphs: use/citation-graphs.md
+      - PDF conversion: use/pdf-conversion.md
+      - Standards sync: use/standards.md
       # PROJECT-NAV-USE-END
   # Reference is generated from the code by scripts/gen_reference.py; a fact
   # on these pages changes at its source (docstring, annotation, CLI help).
@@ -193,12 +203,4 @@ nav:
       # PROJECT-NAV-CONTRIBUTE-START — kept across copier update
       # PROJECT-NAV-CONTRIBUTE-END
   # PROJECT-NAV-UNSORTED-START — entries the nav migration could not place; move each into a section above
-  - Guides:
-      - Overview: guides/index.md
-      - Claude Code Plugin: guides/claude-code-plugin.md
-      - Claude Desktop: guides/claude-desktop.md
-      - PDF Conversion: guides/pdf-conversion.md
-      - Citation Graphs: guides/citation-graphs.md
-  - Deployment:
-      - systemd: deployment/systemd.md
   # PROJECT-NAV-UNSORTED-END

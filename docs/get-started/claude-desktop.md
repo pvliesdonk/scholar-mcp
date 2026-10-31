@@ -64,6 +64,57 @@ Claude Desktop passes every value as written, so paths are absolute (`~` is not 
 <!-- DOMAIN-CLAUDE-DESKTOP-START -->
 <!-- Add domain-specific Claude Desktop configuration examples here.
      Kept across copier update. -->
+Scholar MCP keeps its cache in `/data/scholar-mcp` by default, a path meant for the container image. On your own machine, point `SCHOLAR_MCP_CACHE_DIR` at a directory you can write. A Semantic Scholar API key is optional: without one, requests share Semantic Scholar's public capacity and are throttled more often. [Request a key](https://www.semanticscholar.org/product/api#api-key-form) (free; approval usually takes a few days). An API key gives an introductory allowance of 1 request per second; the server spaces its requests at least 1.1 seconds apart either way.
+
+This first configuration is read-only: Claude can search and read metadata, but not download anything.
+
+```json { .config data-expect="read_only=True" }
+{
+  "mcpServers": {
+    "scholar-mcp": {
+      "command": "/Users/me/.local/bin/scholar-mcp",
+      "args": ["serve"],
+      "env": {
+        "SCHOLAR_MCP_CACHE_DIR": "/Users/me/.local/share/scholar-mcp",
+        "SCHOLAR_MCP_S2_API_KEY": "your-key-here",
+        "SCHOLAR_MCP_CONTACT_EMAIL": "you@example.com"
+      }
+    }
+  }
+}
+```
+
+`SCHOLAR_MCP_CONTACT_EMAIL` puts OpenAlex requests in its faster polite pool and lets the server ask Unpaywall for open-access PDFs.
+
+A first task once it's connected:
+
+> Search for recent papers on retrieval-augmented generation published after 2023.
+
+**Downloading and converting PDFs** needs a running [docling-serve](https://github.com/DS4SD/docling-serve) and write mode. Start docling-serve:
+
+```bash
+docker run -p 5001:5001 ghcr.io/ds4sd/docling-serve:latest
+```
+
+Then add two settings to `env`:
+
+```json { .config data-expect="read_only=False,docling_url='http://localhost:5001'" }
+{
+  "mcpServers": {
+    "scholar-mcp": {
+      "command": "/Users/me/.local/bin/scholar-mcp",
+      "args": ["serve"],
+      "env": {
+        "SCHOLAR_MCP_CACHE_DIR": "/Users/me/.local/share/scholar-mcp",
+        "SCHOLAR_MCP_DOCLING_URL": "http://localhost:5001",
+        "SCHOLAR_MCP_READ_ONLY": "false"
+      }
+    }
+  }
+}
+```
+
+Then ask: "Download and convert the PDF for arXiv:2005.11401 to Markdown." [PDF conversion](../use/pdf-conversion.md) covers VLM enrichment and the cache layout.
 <!-- DOMAIN-CLAUDE-DESKTOP-END -->
 
 ## 3. Restart Claude Desktop

@@ -1,3 +1,8 @@
+---
+description: "How to sync ISO, IEC and IEEE standards metadata into the local cache with the sync-standards command."
+kind: how-to
+---
+
 # Tier 2 standards sync: ISO, IEC & IEEE
 
 Scholar MCP caches ISO, IEC, and IEEE standards metadata locally. The source of truth

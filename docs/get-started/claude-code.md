@@ -66,6 +66,22 @@ Claude calls the server's `get_server_info` tool, which reads the server's versi
 
 <!-- DOMAIN-CLAUDE-CODE-FIRST-TASK-START -->
 <!-- The first task to give Claude Code with this server, read-only where the server has such a mode, and the `--env` settings it needs; kept across copier update. -->
+When you install the plugin, Claude Code asks for its settings. Only the cache directory is required: give it a writable local path such as `~/Documents/scholar-mcp`. Read-only mode is on by default. Enter a Semantic Scholar API key there too if you have one, and an EPO OPS key and secret to turn on the patent tools.
+
+With the command instead of the plugin, pass the same settings with `--env`:
+
+```bash
+claude mcp add --transport stdio \
+  --env SCHOLAR_MCP_CACHE_DIR="$HOME/.local/share/scholar-mcp" \
+  --env SCHOLAR_MCP_S2_API_KEY=your-key \
+  scholar-mcp -- scholar-mcp serve
+```
+
+The key is optional: without one, requests share Semantic Scholar's public capacity and are throttled more often. Then give Claude a read-only task:
+
+> Find the three most cited papers on retrieval-augmented generation and show how they cite each other.
+
+That uses search and the citation graph. PDF download and conversion need write mode and a docling-serve; [PDF conversion](../use/pdf-conversion.md) covers both.
 <!-- DOMAIN-CLAUDE-CODE-FIRST-TASK-END -->
 
 ## Next

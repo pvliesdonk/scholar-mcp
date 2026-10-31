@@ -1,3 +1,8 @@
+---
+description: "How to explore citation networks with Scholar MCP: forward and backward walks, graph traversal and bridge papers."
+kind: how-to
+---
+
 # Citation Graphs
 
 Scholar MCP provides four tools for exploring citation networks. This guide covers common patterns and strategies.
