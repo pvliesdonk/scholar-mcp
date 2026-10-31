@@ -32,4 +32,4 @@ CrossRef adds publisher metadata, page ranges and container titles to a paper re
 
 ## When a source doesn't answer
 
-Enrichment is best effort. If a source is unreachable or has no data, the record comes back without that layer. At most 5 requests per batch run at once.
+Enrichment is best effort. If a source is unreachable or has no data, the record comes back without that layer. At most 10 enrichment requests run at once in each phase.
