@@ -2,35 +2,77 @@
 
 > Scholarly papers, patents, books, standards and PDF conversion
 
-## Getting Started
+## Overview
 
-- [Home](https://pvliesdonk.github.io/scholar-mcp/unstable/index.md): Overview — features, architecture, and quick start
-- [Installation](https://pvliesdonk.github.io/scholar-mcp/unstable/installation/index.md): Installation from PyPI, uv, Docker, or Linux packages
-- [Configuration](https://pvliesdonk.github.io/scholar-mcp/unstable/configuration/index.md): All environment variables with types and defaults
-- [Configuration Generator](https://pvliesdonk.github.io/scholar-mcp/unstable/configuration-generator/index.md): Browser-based configuration generator
+- [Overview](https://pvliesdonk.github.io/scholar-mcp/unstable/index.md): What Scholar MCP is, what it does, and where to start reading.
 
-## Guides
+## Security model
 
-- [Overview](https://pvliesdonk.github.io/scholar-mcp/unstable/guides/index.md): Guide overview — which guide to read
-- [Claude Desktop](https://pvliesdonk.github.io/scholar-mcp/unstable/guides/claude-desktop/index.md): Claude Desktop setup (basic, API key, PDF, OpenAlex)
-- [Authentication](https://pvliesdonk.github.io/scholar-mcp/unstable/guides/authentication/index.md): Authentication modes — bearer token, OIDC, and troubleshooting
-- [PDF Conversion](https://pvliesdonk.github.io/scholar-mcp/unstable/guides/pdf-conversion/index.md): PDF conversion with docling-serve and VLM enrichment
-- [Citation Graphs](https://pvliesdonk.github.io/scholar-mcp/unstable/guides/citation-graphs/index.md): Citation graph traversal, bridge papers, and caching
+- [Security model](https://pvliesdonk.github.io/scholar-mcp/unstable/security-model/index.md): What the server protects, what it can reach, and what stays the operator's responsibility.
 
-## Tools
+## Get started
 
-- [Tools](https://pvliesdonk.github.io/scholar-mcp/unstable/tools/index.md): All MCP tools with parameters, return values, and usage tips
+- [Overview](https://pvliesdonk.github.io/scholar-mcp/unstable/get-started/index.md): Pick your client and reach a first working call with Scholar MCP.
+- [Claude Desktop](https://pvliesdonk.github.io/scholar-mcp/unstable/get-started/claude-desktop/index.md): Connect Claude Desktop to Scholar MCP on your machine and make a first, read-only call.
+- [Claude Code](https://pvliesdonk.github.io/scholar-mcp/unstable/get-started/claude-code/index.md): Run Scholar MCP inside Claude Code through its plugin, or connect Claude Code to a server that already runs.
+- [A remote server](https://pvliesdonk.github.io/scholar-mcp/unstable/get-started/http-client/index.md): Connect claude.ai, Claude Code or another client to a Scholar MCP server that runs somewhere else.
+- [Installation](https://pvliesdonk.github.io/scholar-mcp/unstable/get-started/installation/index.md): Every way to install Scholar MCP, by where it runs, with a check of what you installed.
 
-## Deployment
+## Deploy
 
-- [Docker](https://pvliesdonk.github.io/scholar-mcp/unstable/deployment/docker/index.md): Docker Compose with docling-serve, Traefik, volumes, UID/GID
-- [systemd](https://pvliesdonk.github.io/scholar-mcp/unstable/deployment/systemd/index.md): systemd service — package install, security hardening
-- [OIDC Authentication](https://pvliesdonk.github.io/scholar-mcp/unstable/deployment/oidc/index.md): OIDC authentication setup with Authelia
+- [Overview](https://pvliesdonk.github.io/scholar-mcp/unstable/deploy/index.md): Run Scholar MCP for real: Docker or a system package, authentication, OIDC and its providers, a reverse proxy.
+- [Docker](https://pvliesdonk.github.io/scholar-mcp/unstable/deploy/docker/index.md): Run the server with Docker Compose, locally or behind a reverse proxy.
+- [systemd and packages](https://pvliesdonk.github.io/scholar-mcp/unstable/deploy/systemd/index.md): Run Scholar MCP as a systemd service from the .deb or .rpm package, from the environment file to upgrades.
+- [Authentication](https://pvliesdonk.github.io/scholar-mcp/unstable/deploy/authentication/index.md): Choose and configure an authentication mode for an HTTP deployment.
+- [OIDC](https://pvliesdonk.github.io/scholar-mcp/unstable/deploy/oidc/index.md): Which OIDC mode to run and how to configure it: the server as a resource server, or as the provider's registered client.
+- [OIDC providers](https://pvliesdonk.github.io/scholar-mcp/unstable/deploy/oidc-providers/index.md): Register Scholar MCP with Authelia, Keycloak or Google, or sign in through GitHub via a broker, and see which OIDC mode each allows.
+- [Reverse proxy](https://pvliesdonk.github.io/scholar-mcp/unstable/deploy/reverse-proxy/index.md): Put Scholar MCP behind a reverse proxy: TLS, its own hostname or a path prefix, and the routing rules OAuth discovery needs.
+- [Transfer links](https://pvliesdonk.github.io/scholar-mcp/unstable/deploy/transfer-links/index.md): One-time download and upload links: how a client uses them, and what the operator configures and exposes.
 
-## Release Notes
+## Use
 
-- [1.10](https://pvliesdonk.github.io/scholar-mcp/unstable/releases/1.10/index.md)
-- [1.9](https://pvliesdonk.github.io/scholar-mcp/unstable/releases/1.9/index.md)
-- [2.0](https://pvliesdonk.github.io/scholar-mcp/unstable/releases/2.0/index.md)
-- [3.0](https://pvliesdonk.github.io/scholar-mcp/unstable/releases/3.0/index.md)
+- [Overview](https://pvliesdonk.github.io/scholar-mcp/unstable/use/index.md): How to use this server's features for real tasks, and why they behave as they do.
+- [Background jobs](https://pvliesdonk.github.io/scholar-mcp/unstable/use/background-jobs/index.md): Why some scholar-mcp calls answer with a job handle, and how a client gets the result.
+- [Automatic enrichment](https://pvliesdonk.github.io/scholar-mcp/unstable/use/enrichment/index.md): Which extra sources scholar-mcp consults to fill in paper and book records, and what each adds.
+- [Citation graphs](https://pvliesdonk.github.io/scholar-mcp/unstable/use/citation-graphs/index.md): How to explore citation networks with Scholar MCP: forward and backward walks, graph traversal and bridge papers.
+- [PDF conversion](https://pvliesdonk.github.io/scholar-mcp/unstable/use/pdf-conversion/index.md): How to download open-access PDFs and convert them to Markdown with docling-serve, with or without VLM enrichment.
+- [Standards sync](https://pvliesdonk.github.io/scholar-mcp/unstable/use/standards/index.md): How to sync ISO, IEC and IEEE standards metadata into the local cache with the sync-standards command.
+
+## Reference
+
+- [Configuration](https://pvliesdonk.github.io/scholar-mcp/unstable/reference/configuration/index.md): Every environment variable the server reads, with its type, default and effect.
+- [Configuration generator](https://pvliesdonk.github.io/scholar-mcp/unstable/reference/configuration-generator/index.md): Generate a configuration for your deployment in the browser.
+- [Overview](https://pvliesdonk.github.io/scholar-mcp/unstable/reference/tools/index.md): Every tool this server registers, by group.
+- [Papers](https://pvliesdonk.github.io/scholar-mcp/unstable/reference/tools/papers/index.md): Reference for the Papers group of tools.
+- [Citation graph](https://pvliesdonk.github.io/scholar-mcp/unstable/reference/tools/citation-graph/index.md): Reference for the Citation graph group of tools.
+- [Recommendations](https://pvliesdonk.github.io/scholar-mcp/unstable/reference/tools/recommendations/index.md): Reference for the Recommendations group of tools.
+- [Cross source](https://pvliesdonk.github.io/scholar-mcp/unstable/reference/tools/cross-source/index.md): Reference for the Cross source group of tools.
+- [Full text](https://pvliesdonk.github.io/scholar-mcp/unstable/reference/tools/full-text/index.md): Reference for the Full text group of tools.
+- [Citations](https://pvliesdonk.github.io/scholar-mcp/unstable/reference/tools/citations/index.md): Reference for the Citations group of tools.
+- [Patents](https://pvliesdonk.github.io/scholar-mcp/unstable/reference/tools/patents/index.md): Reference for the Patents group of tools.
+- [Books](https://pvliesdonk.github.io/scholar-mcp/unstable/reference/tools/books/index.md): Reference for the Books group of tools.
+- [Standards](https://pvliesdonk.github.io/scholar-mcp/unstable/reference/tools/standards/index.md): Reference for the Standards group of tools.
+- [Jobs](https://pvliesdonk.github.io/scholar-mcp/unstable/reference/tools/jobs/index.md): Reference for the Jobs group of tools.
+- [Server info](https://pvliesdonk.github.io/scholar-mcp/unstable/reference/tools/server_info/index.md): Reference for the Server info group of tools.
+- [Resources](https://pvliesdonk.github.io/scholar-mcp/unstable/reference/resources/index.md): The resources and resource templates this server serves.
+- [Prompts](https://pvliesdonk.github.io/scholar-mcp/unstable/reference/prompts/index.md): The prompt templates this server offers to MCP clients.
+- [Command line](https://pvliesdonk.github.io/scholar-mcp/unstable/reference/cli/index.md): The `scholar-mcp` command line: commands, options and their environment variables.
+
+## Upgrade
+
+- [Overview](https://pvliesdonk.github.io/scholar-mcp/unstable/upgrade/index.md): The step for your channel, what a new release changes for your clients and your state, and where a release page answers those questions.
+- [Release notes](https://pvliesdonk.github.io/scholar-mcp/unstable/releases/index.md): Release notes for each minor series, with the steps to upgrade.
+- [1.10](https://pvliesdonk.github.io/scholar-mcp/unstable/releases/1.10/index.md): Release notes for the 1.10 series, with the steps to upgrade to it.
+- [1.9](https://pvliesdonk.github.io/scholar-mcp/unstable/releases/1.9/index.md): Release notes for the 1.9 series, with the steps to upgrade to it.
+- [2.0](https://pvliesdonk.github.io/scholar-mcp/unstable/releases/2.0/index.md): Release notes for the 2.0 series, with the steps to upgrade to it.
+- [3.0](https://pvliesdonk.github.io/scholar-mcp/unstable/releases/3.0/index.md): Release notes for the 3.0 series, with the steps to upgrade to it.
+
+## Contribute
+
+- [Overview](https://pvliesdonk.github.io/scholar-mcp/unstable/contribute/index.md): Set up a clone of Scholar MCP to contribute, and learn where a fix belongs.
+- [Documentation structure](https://pvliesdonk.github.io/scholar-mcp/unstable/contribute/docs-structure/index.md): Where each piece of documentation belongs, and who owns it.
+- [Release process](https://pvliesdonk.github.io/scholar-mcp/unstable/contribute/release-process/index.md): How a release is cut, published and promoted.
+- [Template updates](https://pvliesdonk.github.io/scholar-mcp/unstable/contribute/template-updates/index.md): How to work through a template update pull request.
+- [Repository protection](https://pvliesdonk.github.io/scholar-mcp/unstable/contribute/repository-protection/index.md): The branch and tag rules that decide what a release can ship from.
+- [Integration branches](https://pvliesdonk.github.io/scholar-mcp/unstable/contribute/integration-branches/index.md): How to run an epic on an integration branch and bring it to main in one pull request.
 

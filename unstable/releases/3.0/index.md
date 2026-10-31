@@ -20,7 +20,7 @@ Standards records themselves are corrected in three ways:
 - `get_standard` returns `full_text` only when called with `fetch_full_text=true`. In 2.0, once any caller had fetched a standard's text, every later lookup returned the whole text as well; converted text is now stored apart from the record and still not converted twice ([#479](https://github.com/pvliesdonk/scholar-mcp/issues/479), [#497](https://github.com/pvliesdonk/scholar-mcp/pull/497)).
 - A lookup through `get_standard` or `resolve_standard_identifier` never replaces a synced record. In 2.0 it could, which dropped the standard from `search_standards` and put it under the 90-day cache expiry; Common Criteria records were affected on every resolution ([#496](https://github.com/pvliesdonk/scholar-mcp/issues/496), [#501](https://github.com/pvliesdonk/scholar-mcp/pull/501)).
 
-The cache repairs move previously stored text out of standards records and restore Common Criteria records to the synced set. The [tool reference](https://pvliesdonk.github.io/scholar-mcp/unstable/tools/index.md) documents the final response shapes and identifier rules, and the [standards guide](https://pvliesdonk.github.io/scholar-mcp/unstable/guides/standards/index.md) describes sync behaviour.
+The cache repairs move previously stored text out of standards records and restore Common Criteria records to the synced set. The [tool reference](https://pvliesdonk.github.io/scholar-mcp/unstable/reference/tools/index.md) documents the final response shapes and identifier rules, and the [standards guide](https://pvliesdonk.github.io/scholar-mcp/unstable/use/standards/index.md) describes sync behaviour.
 
 ## Semantic Scholar throttling becomes a job
 
@@ -28,7 +28,7 @@ All Semantic Scholar traffic from one server process now passes through one gate
 
 For MCP callers, throttled work continues through the existing jobs system. A plain call promptly returns a handle with the reason `Semantic Scholar is throttling requests; work continues.` Poll `get_job_result`; the running body resumes from where it paused rather than restarting. With the default one-hour result TTL, retries may continue for 50 minutes before the job settles as `{"error":"rate_limited","retryable":true}` ([#409](https://github.com/pvliesdonk/scholar-mcp/issues/409), [#463](https://github.com/pvliesdonk/scholar-mcp/pull/463)). Native MCP task clients keep their native task handle.
 
-No new setting is required. The existing defaults remain 25 seconds for `SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S`, 3,600 seconds for `SCHOLAR_MCP_JOBS_RESULT_TTL_S`, and 256 retained jobs per subject. See [rate limiting and background jobs](https://pvliesdonk.github.io/scholar-mcp/unstable/configuration/#rate-limiting) for the operator contract.
+No new setting is required. The existing defaults remain 25 seconds for `SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S`, 3,600 seconds for `SCHOLAR_MCP_JOBS_RESULT_TTL_S`, and 256 retained jobs per subject. See [rate limiting and background jobs](https://pvliesdonk.github.io/scholar-mcp/unstable/reference/configuration/#rate-limiting) for the operator contract.
 
 The server still depends on the live Semantic Scholar service. Research found that papers plus abstracts alone require about 82 GB of compressed source data, before authors, so the project chose shared pacing and deferred jobs rather than an offline store ([#406](https://github.com/pvliesdonk/scholar-mcp/issues/406), [#466](https://github.com/pvliesdonk/scholar-mcp/pull/466)).
 
@@ -36,7 +36,7 @@ The server still depends on the live Semantic Scholar service. Research found th
 
 Five document tools used to return the entire conversion in one MCP response. The reported examples reached 242,042 characters and exceeded the caller's response limit, so the model could not receive the result ([#372](https://github.com/pvliesdonk/scholar-mcp/issues/372)).
 
-`convert_pdf_to_markdown`, `fetch_and_convert`, `fetch_pdf_by_url`, `fetch_patent_pdf`, and `get_standard` now return at most 20,000 Markdown or full-text characters by default. Responses include character counts and `next_offset` when another page remains. Call the same tool with `text_offset=next_offset`; the complete conversion stays cached and is not run again. Clients that can accept the remaining text in one response can set `max_chars=null` for the previous behavior ([#465](https://github.com/pvliesdonk/scholar-mcp/pull/465)). The [PDF conversion guide](https://pvliesdonk.github.io/scholar-mcp/unstable/guides/pdf-conversion/index.md) has the paging recipe.
+`convert_pdf_to_markdown`, `fetch_and_convert`, `fetch_pdf_by_url`, `fetch_patent_pdf`, and `get_standard` now return at most 20,000 Markdown or full-text characters by default. Responses include character counts and `next_offset` when another page remains. Call the same tool with `text_offset=next_offset`; the complete conversion stays cached and is not run again. Clients that can accept the remaining text in one response can set `max_chars=null` for the previous behavior ([#465](https://github.com/pvliesdonk/scholar-mcp/pull/465)). The [PDF conversion guide](https://pvliesdonk.github.io/scholar-mcp/unstable/use/pdf-conversion/index.md) has the paging recipe.
 
 ## Server errors, logs and security
 
@@ -44,7 +44,7 @@ This release moves to [fastmcp-server-template v11.0.2](https://github.com/pvlie
 
 When a tool fails with an unexpected exception, the model receives a fixed message, "The call failed because of a server-side error; the request itself was fine. Retry later, and tell the user if it keeps failing." In 2.0 it received FastMCP's `Error calling tool` text with the exception's own message. The server logs the failure once as `tool_failed` at ERROR with its traceback. Results the tools return on purpose, such as `{"error": "not_found"}`, are unchanged ([template upgrade note v10.0](https://github.com/pvliesdonk/fastmcp-server-template/blob/v11.0.2/upgrading/v10.0.md)).
 
-The project now publishes a `SECURITY.md` policy and accepts private vulnerability reports through GitHub. The new [security model](https://pvliesdonk.github.io/scholar-mcp/unstable/guides/security-model/index.md) page lists the upstream services each tool family calls and the credentials the server holds for them, and names the cache directory as the only place tools write. It also states that `fetch_pdf_by_url`, hidden in the default read-only mode, downloads any URL a caller passes, including addresses on the server's own network ([#514](https://github.com/pvliesdonk/scholar-mcp/issues/514) tracks this).
+The project now publishes a `SECURITY.md` policy and accepts private vulnerability reports through GitHub. The new [security model](https://pvliesdonk.github.io/scholar-mcp/unstable/security-model/index.md) page lists the upstream services each tool family calls and the credentials the server holds for them, and names the cache directory as the only place tools write. It also states that `fetch_pdf_by_url`, hidden in the default read-only mode, downloads any URL a caller passes, including addresses on the server's own network ([#514](https://github.com/pvliesdonk/scholar-mcp/issues/514) tracks this).
 
 The dependency lock pins PyJWT 2.15.1. v2.0.0 locked PyJWT 2.13.0, which ten advisories published on 2026-09-29 affect (one critical, five high, four medium; all fixed in 2.14.0) ([#516](https://github.com/pvliesdonk/scholar-mcp/issues/516), [#517](https://github.com/pvliesdonk/scholar-mcp/pull/517)). PyJWT reaches Scholar MCP only through client code in the MCP SDK; neither this server nor FastMCP's server-side authentication imports it. The container image installs from the lock. Installations that resolve dependencies themselves should confirm PyJWT is at 2.14.0 or later.
 
@@ -56,7 +56,7 @@ Five areas change against v2.0.0, and synced standards need one maintenance step
 
 `FASTMCP_LOG_LEVEL` is renamed `SCHOLAR_MCP_LOG_LEVEL`. The old name still works until the next major release and logs `log_level_env_deprecated` at startup. `FASTMCP_ENABLE_RICH_LOGGING` is removed; `SCHOLAR_MCP_LOG_FORMAT` takes `rich` or `json`. Left unset, it renders Rich lines on a terminal and one JSON object per record everywhere else, so container and journald logs change from 2.0's Rich text to JSON with `ts`, `level`, `logger` and `event` fields. Re-key log queries and alerts, or set `SCHOLAR_MCP_LOG_FORMAT=rich` to keep readable lines ([#513](https://github.com/pvliesdonk/scholar-mcp/pull/513), [template upgrade note v9.0](https://github.com/pvliesdonk/fastmcp-server-template/blob/v11.0.2/upgrading/v9.0.md)). Several Scholar MCP log events also changed form: `s2_rate_limited` now reports `waiting_s=` in place of `waiting=…s` ([#510](https://github.com/pvliesdonk/scholar-mcp/pull/510) lists each one). The Claude Desktop bundle and the Claude Code plugin map their log-level setting to the new name without any action.
 
-Over HTTP, `SCHOLAR_MCP_SHUTDOWN_GRACE_S` (default 3) now gives in-flight requests that many seconds to finish on SIGTERM; 2.0 dropped them at once. The [configuration reference](https://pvliesdonk.github.io/scholar-mcp/unstable/configuration/index.md) lists both logging variables and the shutdown grace setting.
+Over HTTP, `SCHOLAR_MCP_SHUTDOWN_GRACE_S` (default 3) now gives in-flight requests that many seconds to finish on SIGTERM; 2.0 dropped them at once. The [configuration reference](https://pvliesdonk.github.io/scholar-mcp/unstable/reference/configuration/index.md) lists both logging variables and the shutdown grace setting.
 
 ### Docker Compose publishes on loopback
 
@@ -69,11 +69,11 @@ services:
       - "8000:8000"
 ```
 
-See the [Docker deployment guide](https://pvliesdonk.github.io/scholar-mcp/unstable/deployment/docker/index.md) ([#513](https://github.com/pvliesdonk/scholar-mcp/pull/513), [template upgrade note v9.3](https://github.com/pvliesdonk/fastmcp-server-template/blob/v11.0.2/upgrading/v9.3.md)).
+See the [Docker deployment guide](https://pvliesdonk.github.io/scholar-mcp/unstable/deploy/docker/index.md) ([#513](https://github.com/pvliesdonk/scholar-mcp/pull/513), [template upgrade note v9.3](https://github.com/pvliesdonk/fastmcp-server-template/blob/v11.0.2/upgrading/v9.3.md)).
 
 ### Packaged systemd deployments
 
-The `.deb` and `.rpm` unit no longer supplies `SCHOLAR_MCP_HOST=0.0.0.0`, and its generated `/etc/scholar-mcp/env.example` is fully commented. Before or after upgrading, set `SCHOLAR_MCP_CACHE_DIR=/var/lib/scholar-mcp` in `/etc/scholar-mcp/env`. If the service must accept off-host connections, also set `SCHOLAR_MCP_HOST=0.0.0.0`. An installation that relied on the old unit default otherwise binds to `127.0.0.1` after the package restarts it ([#423](https://github.com/pvliesdonk/scholar-mcp/pull/423)). See the [systemd deployment guide](https://pvliesdonk.github.io/scholar-mcp/unstable/deployment/systemd/index.md) for the complete unit and file layout. The journal receives JSON records under the logging change above.
+The `.deb` and `.rpm` unit no longer supplies `SCHOLAR_MCP_HOST=0.0.0.0`, and its generated `/etc/scholar-mcp/env.example` is fully commented. Before or after upgrading, set `SCHOLAR_MCP_CACHE_DIR=/var/lib/scholar-mcp` in `/etc/scholar-mcp/env`. If the service must accept off-host connections, also set `SCHOLAR_MCP_HOST=0.0.0.0`. An installation that relied on the old unit default otherwise binds to `127.0.0.1` after the package restarts it ([#423](https://github.com/pvliesdonk/scholar-mcp/pull/423)). See the [systemd deployment guide](https://pvliesdonk.github.io/scholar-mcp/unstable/deploy/systemd/index.md) for the complete unit and file layout. The journal receives JSON records under the logging change above.
 
 ### Python library callers
 
@@ -87,4 +87,4 @@ Converted-document defaults are compatible rather than removed. Follow `next_off
 
 ### Synced standards
 
-Run `scholar-mcp sync-standards` once after upgrading. ISO and IEC records synced by 2.0 keep their shortened titles until the next sync rewrites them; the upgrade makes that run rewrite every ISO, IEC and IEEE record even when upstream has not changed ([#498](https://github.com/pvliesdonk/scholar-mcp/pull/498)). See the [standards guide](https://pvliesdonk.github.io/scholar-mcp/unstable/guides/standards/index.md).
+Run `scholar-mcp sync-standards` once after upgrading. ISO and IEC records synced by 2.0 keep their shortened titles until the next sync rewrites them; the upgrade makes that run rewrite every ISO, IEC and IEEE record even when upstream has not changed ([#498](https://github.com/pvliesdonk/scholar-mcp/pull/498)). See the [standards guide](https://pvliesdonk.github.io/scholar-mcp/unstable/use/standards/index.md).

@@ -1,0 +1,84 @@
+# Papers
+
+## `search_papers`
+
+**Search Papers.** Read-only. Reaches outside the server.
+
+Search Semantic Scholar for papers matching a query.
+
+Usually completes in a few seconds. Returns at most 100 papers per call; a larger `limit` is capped at 100, so page further with `offset`.
+
+Answers directly in normal use. Should the call run long it continues in the background and returns a job handle to poll with `get_job_result`.
+
+**Parameters**
+
+| Name              | Type                             | Default       | Description                                        |
+| ----------------- | -------------------------------- | ------------- | -------------------------------------------------- |
+| `query`           | `string`                         | required      | Keyword or semantic search query.                  |
+| `fields`          | `compact \| standard \| full`    | `"compact"`   | Field set preset: `compact`, `standard` or `full`. |
+| `limit`           | `integer`                        | `10`          | Maximum results to return (max 100).               |
+| `offset`          | `integer`                        | `0`           | Pagination offset.                                 |
+| `year_start`      | `integer \| null`                | `null`        | Earliest publication year (inclusive).             |
+| `year_end`        | `integer \| null`                | `null`        | Latest publication year (inclusive).               |
+| `fields_of_study` | `array of string \| null`        | `null`        | Filter by fields, such as `["Computer Science"]`.  |
+| `venue`           | `string \| null`                 | `null`        | Filter by venue name.                              |
+| `min_citations`   | `integer \| null`                | `null`        | Minimum citation count.                            |
+| `sort`            | `relevance \| citations \| year` | `"relevance"` | Sort order: `relevance`, `citations` or `year`.    |
+
+**Returns**
+
+A mapping with `data` (list of papers) and `total`.
+
+**Field sets:**
+
+- **compact**: `paperId`, `title`, `year`, `venue`, `citationCount`
+- **standard**: compact + `authors`, `externalIds`, `abstract`
+- **full**: standard + `tldr`, `openAccessPdf`, `fieldsOfStudy`, `referenceCount`
+
+## `get_paper`
+
+**Get Paper.** Read-only. Reaches outside the server.
+
+Fetch full metadata for a single paper.
+
+A cached paper answers immediately. Otherwise the record is fetched and enriched; should that run long it continues in the background and returns a job handle to poll with `get_job_result`.
+
+**Parameters**
+
+| Name         | Type     | Default  | Description                                                                                                   |
+| ------------ | -------- | -------- | ------------------------------------------------------------------------------------------------------------- |
+| `identifier` | `string` | required | Paper identifier: DOI, S2 paper ID, arXiv ID (prefix with `ARXIV:`), ACM ID (`ACM:`), or PubMed ID (`PMID:`). |
+
+**Returns**
+
+A mapping with full paper metadata, or `{"error": "not_found", "identifier": "..."}` if not found.
+
+The record always uses the `full` field set.
+
+Results are cached for 30 days. Identifier aliases (such as DOI to S2 ID) are cached permanently.
+
+## `get_author`
+
+**Get Author.** Read-only. Reaches outside the server.
+
+Fetch author profile and publications, or search by name.
+
+If *identifier* looks like a numeric S2 author ID, fetches the author directly. Otherwise performs a name search and returns up to 5 candidates for disambiguation.
+
+A direct lookup returns one page of publications, `limit` long from `offset`; `next_offset` is present when more follow. Semantic Scholar can list fewer publications than `paperCount`, so the last page may end short of that count.
+
+Answers directly in normal use. Should the call run long it continues in the background and returns a job handle to poll with `get_job_result`.
+
+**Parameters**
+
+| Name         | Type      | Default  | Description                                               |
+| ------------ | --------- | -------- | --------------------------------------------------------- |
+| `identifier` | `string`  | required | S2 author ID (numeric string) or free-text author name.   |
+| `limit`      | `integer` | `20`     | Publications per page (only used for direct ID lookup).   |
+| `offset`     | `integer` | `0`      | Publication page offset (only used for direct ID lookup). |
+
+**Returns**
+
+A mapping with author data and a paginated `papers` list, plus `next_offset` when more publications follow, or `{"candidates": [...]}` for name searches.
+
+Semantic Scholar sends an author's whole publication list at once, so every page is cut from one cached record: later pages cost no further request.

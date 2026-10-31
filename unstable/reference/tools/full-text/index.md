@@ -1,0 +1,155 @@
+# Full text
+
+These tools write to the local cache, so they're hidden when `SCHOLAR_MCP_READ_ONLY=true` (the default). Converted Markdown comes back in pages of 20,000 characters by default; see [Background jobs](https://pvliesdonk.github.io/scholar-mcp/unstable/use/background-jobs/index.md) for why conversions usually answer with a job handle.
+
+## `fetch_paper_pdf`
+
+**Fetch Paper PDF.** Changes state, not destructive. Reaches outside the server. Tags: `write`.
+
+Download the PDF of a paper.
+
+Tries the Semantic Scholar open-access URL first. When that is unavailable, automatically checks alternative sources: ArXiv (from `externalIds`), PubMed Central, and Unpaywall (by DOI, requires `SCHOLAR_MCP_CONTACT_EMAIL`).
+
+Skips download if the file already exists locally, which answers immediately; a fresh download usually takes 10-30 seconds and may be returned as a background job handle instead.
+
+**Parameters**
+
+| Name         | Type     | Default  | Description                                  |
+| ------------ | -------- | -------- | -------------------------------------------- |
+| `identifier` | `string` | required | Paper identifier (DOI, S2 ID, ARXIV:, etc.). |
+
+**Returns**
+
+`{"path": "...", "source": "..."}` on success, or a structured error dict. The `source` field indicates where the PDF was obtained (`s2_oa`, `arxiv`, `pmc`, `unpaywall`).
+
+A response looks like `{"path": "/data/scholar-mcp/pdfs/<id>.pdf", "source": "s2_oa"}`. The error forms are:
+
+- `{"error": "no_oa_pdf"}`: no PDF URL found from any source
+- `{"error": "download_failed"}`: HTTP error downloading the PDF
+- `{"error": "not_pdf"}`: the response body does not begin with the PDF header
+
+Paper metadata is read from the same 30-day cache `get_paper` uses, and a freshly resolved record is written back to it. A repeat call for the same paper needs no Semantic Scholar request.
+
+## `convert_pdf_to_markdown`
+
+**Convert PDF to Markdown.** Changes state, not destructive. Reaches outside the server. Tags: `write`.
+
+Convert a local PDF to Markdown using docling-serve.
+
+Works on any local PDF, including manually placed paywalled papers. Returns an error if the server does not have PDF conversion configured.
+
+Conversion typically takes 1-5 minutes depending on page count, so expect a background job handle rather than an inline result; a previously converted file is served from cache immediately.
+
+Tip: start with `use_vlm=false` (the default). Standard conversion handles most papers well. Only retry with `use_vlm=true` when the result has garbled formulas or missing figure descriptions.
+
+VLM and standard results are cached separately (`<stem>.md` vs `<stem>_vlm.md`), so switching modes never overwrites a previous conversion. When VLM is requested but not configured, the response includes a `vlm_skip_reason` field explaining why.
+
+Markdown is returned in pages of at most 20,000 characters. When `next_offset` is present, call this tool again with that value as `text_offset`; the cached conversion makes later pages inexpensive. Set `max_chars` to null only when the client can accept the complete document in one response.
+
+**Parameters**
+
+| Name          | Type              | Default  | Description                                                                                                                                          |
+| ------------- | ----------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `file_path`   | `string`          | required | Absolute path to the local PDF file.                                                                                                                 |
+| `use_vlm`     | `boolean`         | `false`  | Use VLM enrichment for formulas and figures. Falls back to standard conversion if VLM is not configured and reports the reason in `vlm_skip_reason`. |
+| `text_offset` | `integer`         | `0`      | Character offset at which the Markdown page starts.                                                                                                  |
+| `max_chars`   | `integer \| null` | `20000`  | Maximum Markdown characters to return, capped at 20,000. Pass `null` for the complete text.                                                          |
+
+**Returns**
+
+`{"markdown": "...", "path": "...", "vlm_used": bool}`.
+
+A response looks like `{"markdown": "...", "path": "/data/scholar-mcp/md/<name>.md", "vlm_used": true/false}`. A `vlm_skip_reason` reads like `"vlm_api_url_not_configured"`.
+
+VLM enrichment processes each formula and figure image individually via an external vision model, which is slower.
+
+Requires `SCHOLAR_MCP_DOCLING_URL` to be set. VLM enrichment also requires `SCHOLAR_MCP_VLM_API_URL` and `SCHOLAR_MCP_VLM_API_KEY`.
+
+## `fetch_and_convert`
+
+**Fetch and Convert Paper.** Changes state, not destructive. Reaches outside the server. Tags: `write`.
+
+Resolve a paper, download its PDF, and convert to Markdown.
+
+Tries the Semantic Scholar open-access URL first, then alternative sources (ArXiv, PubMed Central, Unpaywall). Each stage fails gracefully: metadata is always returned if the paper resolves, even if PDF download or conversion fails.
+
+The full pipeline typically takes 1-5 minutes, so expect a background job handle rather than an inline result.
+
+Tip: start with `use_vlm=false` (the default). Standard conversion handles most papers well. Only retry with `use_vlm=true` when the result has garbled formulas or missing figure descriptions.
+
+VLM and standard results are cached separately (`<id>.md` vs `<id>_vlm.md`), so switching modes never overwrites a previous conversion. When VLM is requested but not configured, the response includes a `vlm_skip_reason` field explaining why.
+
+Markdown is returned in pages of at most 20,000 characters. When `next_offset` is present, call this tool again with that value as `text_offset`; the cached conversion makes later pages inexpensive. Set `max_chars` to null only when the client can accept the complete document in one response.
+
+**Parameters**
+
+| Name          | Type              | Default  | Description                                                                                                                                               |
+| ------------- | ----------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `identifier`  | `string`          | required | Paper identifier (DOI, S2 ID, ARXIV:, etc.).                                                                                                              |
+| `use_vlm`     | `boolean`         | `false`  | Use VLM enrichment for formula/figure extraction. Falls back to standard conversion if VLM is not configured and reports the reason in `vlm_skip_reason`. |
+| `text_offset` | `integer`         | `0`      | Character offset at which the Markdown page starts.                                                                                                       |
+| `max_chars`   | `integer \| null` | `20000`  | Maximum Markdown characters to return, capped at 20,000. Pass `null` for the complete text.                                                               |
+
+**Returns**
+
+`metadata` and `markdown` on full success, or `metadata` plus an `error` key if a stage fails.
+
+On full success, a response looks like:
+
+```
+{
+  "metadata": {"paperId": "...", "title": "...", ...},
+  "markdown": "# Paper Title\n...",
+  "pdf_path": "/data/scholar-mcp/pdfs/<id>.pdf",
+  "md_path": "/data/scholar-mcp/md/<id>.md",
+  "pdf_source": "s2_oa",
+  "vlm_used": false
+}
+```
+
+A successful HTTP response whose body does not begin with `%PDF-` returns `{"error": "not_pdf"}` before conversion. The `pdf_source` field indicates the download source.
+
+The `metadata` block is read from the same 30-day cache `get_paper` uses, and a freshly resolved record is written back to it. A call whose PDF and Markdown are both already on disk makes no Semantic Scholar request at all.
+
+See [PDF Conversion guide](https://pvliesdonk.github.io/scholar-mcp/unstable/use/pdf-conversion/index.md) for setup instructions.
+
+## `fetch_pdf_by_url`
+
+**Fetch PDF by URL.** Changes state, not destructive. Reaches outside the server. Tags: `write`.
+
+Download a PDF from a URL and optionally convert to Markdown.
+
+Use this when you have found an alternative PDF link (such as one on an author's homepage, a preprint server, or an institutional repository) that is not listed in Semantic Scholar's openAccessPdf field.
+
+The PDF is saved locally and, if docling-serve is configured, converted to Markdown automatically. Conversion typically takes 1-5 minutes and is returned as a background job handle. An already downloaded and converted URL answers immediately.
+
+Markdown is returned in pages of at most 20,000 characters. When `next_offset` is present, call this tool again with that value as `text_offset`; the cached conversion makes later pages inexpensive. Set `max_chars` to null only when the client can accept the complete document in one response.
+
+**Parameters**
+
+| Name          | Type              | Default  | Description                                                                                            |
+| ------------- | ----------------- | -------- | ------------------------------------------------------------------------------------------------------ |
+| `url`         | `string`          | required | Direct URL to a PDF file.                                                                              |
+| `filename`    | `string \| null`  | `null`   | Optional filename stem for caching (such as `"smith2024_attention"`). Derived from the URL if omitted. |
+| `use_vlm`     | `boolean`         | `false`  | Use VLM enrichment for formulas and figures.                                                           |
+| `text_offset` | `integer`         | `0`      | Character offset at which the Markdown page starts.                                                    |
+| `max_chars`   | `integer \| null` | `20000`  | Maximum Markdown characters to return, capped at 20,000. Pass `null` for the complete text.            |
+
+**Returns**
+
+`pdf_path` and optionally `markdown` / `md_path`.
+
+On success with docling configured, a response looks like:
+
+```
+{
+  "pdf_path": "/data/scholar-mcp/pdfs/<filename>.pdf",
+  "markdown": "# Paper Title\n...",
+  "md_path": "/data/scholar-mcp/md/<filename>.md",
+  "vlm_used": false
+}
+```
+
+The PDF is cached by filename, so subsequent calls with the same filename return immediately.
+
+The response body must begin with `%PDF-` before it is cached or sent to docling. A response with another body returns `{"error": "not_pdf"}` and is not converted. This header check does not validate the complete PDF structure.

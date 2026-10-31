@@ -1,0 +1,108 @@
+# Standards
+
+Tier 1 bodies (NIST, IETF, W3C, ETSI) come with full metadata and optional full-text conversion. Tier 2 bodies (ISO, IEC, IEEE) are synced from Relaton data by `scholar-mcp sync-standards`; see the [standards guide](https://pvliesdonk.github.io/scholar-mcp/unstable/use/standards/index.md).
+
+## `resolve_standard_identifier`
+
+**Resolve Standard Identifier.** Read-only.
+
+Normalise a messy standard citation string to its canonical form.
+
+Tries local regex first (fast, no network). Falls back to querying source APIs when local patterns don't match. Returns all candidates when the input is ambiguous.
+
+A cold catalogue makes this slow: the first call after a fresh install or a cleared cache downloads and parses each body's index, which runs well past the soft deadline. Such a call returns a job handle to poll with `get_job_result` rather than the result itself.
+
+A `warning` beside a null `record` means the source never answered, so the standard may well exist and the canonical form is still usable. Only a null `record` with no `warning` means the sources looked and found nothing.
+
+**Parameters**
+
+| Name  | Type     | Default  | Description                                             |
+| ----- | -------- | -------- | ------------------------------------------------------- |
+| `raw` | `string` | required | Raw citation string as it appears in a paper reference. |
+
+**Returns**
+
+A mapping with `canonical`, `body`, and `record` when unambiguous; `{"ambiguous": true, "candidates": [...]}` when multiple matches; `{"canonical": null, "body": null, "record": null}` when unresolvable.
+
+## `search_standards`
+
+**Search Standards.** Read-only. Reaches outside the server.
+
+Search technical standards by identifier, title, or free text.
+
+Searches NIST, IETF, W3C, and ETSI. Use `body` to restrict to one source body.
+
+A cold catalogue makes this slow: the first call after a fresh install or a cleared cache downloads and parses each body's index, which runs well past the soft deadline. Such a call returns a job handle to poll with `get_job_result` rather than the result itself.
+
+Every answer states its own completeness. `partial` is always present, and when it is true `failed_bodies` names each source that did not answer and `warning` describes it. A partial answer is deliberately not an `error`: the results that did arrive are usable, and the named bodies may still hold matches worth asking for again.
+
+**Parameters**
+
+| Name    | Type             | Default  | Description                                       |
+| ------- | ---------------- | -------- | ------------------------------------------------- |
+| `query` | `string`         | required | Identifier, title, or free text.                  |
+| `body`  | `string \| null` | `null`   | Optional filter: `NIST`, `IETF`, `W3C` or `ETSI`. |
+| `limit` | `integer`        | `10`     | Maximum results (max 50).                         |
+
+**Returns**
+
+`{"results": [...]}`, the matching `StandardRecord` entries.
+
+`warning` gives each failed source's HTTP status and what went wrong, such as `ETSI (HTTP 200: answered with a non-JSON body, content-type: text/html)`: a 200 alone would read as success.
+
+Partial answers are never cached. A later call reaches the failing source again.
+
+## `get_standard`
+
+**Get Standard.** Read-only. Reaches outside the server.
+
+Retrieve a standard by identifier (canonical or fuzzy).
+
+Resolves fuzzy inputs (such as `rfc9000` or `nist 800-53`) to their canonical form before fetching. With `fetch_full_text=True` and docling configured, downloads and converts the full text.
+
+With `fetch_full_text=True` the docling conversion takes minutes, so such a call returns a job handle to poll with `get_job_result` rather than the record itself. Without it, and on a cache hit, the record comes back directly.
+
+A conversion that fails still returns the record, with the reason in `full_text_error`; `full_text_url` is there to fetch by hand. No `full_text` and no `full_text_error` means none was on offer, or docling is not configured; neither is worth retrying.
+
+NIST SP and NISTIR publications are catalogued per revision, so an identifier with no revision, such as `NIST SP 800-53`, can come back `not_found` even though the publication exists. `search_standards` lists the revisions that are published.
+
+`not_found` means the source answered and holds no such standard: stop asking about that identifier. A lookup that never got an answer says so instead, as `rate_limited` (with `retryable`) or `upstream_error` with the status and what went wrong. Both are worth retrying: the standard may well exist.
+
+Full text is returned in pages of at most 20,000 characters. When `next_offset` is present, call this tool again with that value as `text_offset`; the cached conversion makes later pages inexpensive. Set `max_chars` to null only when the client can accept the complete document in one response.
+
+**Parameters**
+
+| Name              | Type              | Default  | Description                                                                                  |
+| ----------------- | ----------------- | -------- | -------------------------------------------------------------------------------------------- |
+| `identifier`      | `string`          | required | Canonical or fuzzy standard identifier.                                                      |
+| `fetch_full_text` | `boolean`         | `false`  | If True and docling is configured, download and convert the full text PDF/HTML via docling.  |
+| `text_offset`     | `integer`         | `0`      | Character offset at which the full-text page starts.                                         |
+| `max_chars`       | `integer \| null` | `20000`  | Maximum full-text characters to return, capped at 20,000. Pass `null` for the complete text. |
+
+**Returns**
+
+The `StandardRecord`, or `{"error": "not_found"}` if unresolvable. With `fetch_full_text=True`, either `full_text` or `full_text_error` is present.
+
+The converted text is cached, so a later request for it is not converted again, but a call without `fetch_full_text=true` returns the metadata record alone, whoever fetched the text before.
+
+When `full_text` is present, the response also reports `text_offset`, `text_returned_chars`, `text_total_chars`, and `text_truncated`.
+
+Error shapes
+
+A lookup that never got an answer reports `{"error": "rate_limited", "retryable": true}` for a 429, or `{"error": "upstream_error", "status": <code or null>, "detail": "..."}` for anything else.
+
+Nothing is cached on either path, so the retry is not served the failed answer.
+
+## `get_sync_status`
+
+**Get Sync Status.** Read-only.
+
+Report the last standards sync run for each standards body. Returns `{"runs": [...]}`, one row per body with body, `upstream_ref`, added, updated, unchanged, withdrawn, errors (non-fatal error strings from the latest run; empty on success), `started_at` and `finished_at` (Unix seconds). runs is empty when no sync has run yet.
+
+**Parameters**
+
+None.
+
+**Returns**
+
+The runs payload `_SYNC_STATUS_DESCRIPTION` describes.

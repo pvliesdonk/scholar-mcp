@@ -5,83 +5,151 @@
          <lastmod>2026-10-31</lastmod>
     </url>
     <url>
-         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/configuration-generator/</loc>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/security-model/</loc>
          <lastmod>2026-10-31</lastmod>
     </url>
     <url>
-         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/configuration/</loc>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/contribute/</loc>
          <lastmod>2026-10-31</lastmod>
     </url>
     <url>
-         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/installation/</loc>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/contribute/docs-structure/</loc>
          <lastmod>2026-10-31</lastmod>
     </url>
     <url>
-         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/prompts/</loc>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/contribute/integration-branches/</loc>
          <lastmod>2026-10-31</lastmod>
     </url>
     <url>
-         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/deployment/claude-desktop/</loc>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/contribute/release-process/</loc>
          <lastmod>2026-10-31</lastmod>
     </url>
     <url>
-         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/deployment/docker/</loc>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/contribute/repository-protection/</loc>
          <lastmod>2026-10-31</lastmod>
     </url>
     <url>
-         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/deployment/integration-branches/</loc>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/contribute/template-updates/</loc>
          <lastmod>2026-10-31</lastmod>
     </url>
     <url>
-         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/deployment/oidc/</loc>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/deploy/</loc>
          <lastmod>2026-10-31</lastmod>
     </url>
     <url>
-         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/deployment/release-process/</loc>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/deploy/authentication/</loc>
          <lastmod>2026-10-31</lastmod>
     </url>
     <url>
-         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/deployment/repository-protection/</loc>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/deploy/docker/</loc>
          <lastmod>2026-10-31</lastmod>
     </url>
     <url>
-         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/deployment/systemd/</loc>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/deploy/oidc-providers/</loc>
          <lastmod>2026-10-31</lastmod>
     </url>
     <url>
-         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/deployment/template-updates/</loc>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/deploy/oidc/</loc>
          <lastmod>2026-10-31</lastmod>
     </url>
     <url>
-         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/guides/</loc>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/deploy/reverse-proxy/</loc>
          <lastmod>2026-10-31</lastmod>
     </url>
     <url>
-         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/guides/authentication/</loc>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/deploy/systemd/</loc>
          <lastmod>2026-10-31</lastmod>
     </url>
     <url>
-         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/guides/citation-graphs/</loc>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/deploy/transfer-links/</loc>
          <lastmod>2026-10-31</lastmod>
     </url>
     <url>
-         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/guides/claude-code-plugin/</loc>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/get-started/</loc>
          <lastmod>2026-10-31</lastmod>
     </url>
     <url>
-         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/guides/claude-desktop/</loc>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/get-started/claude-code/</loc>
          <lastmod>2026-10-31</lastmod>
     </url>
     <url>
-         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/guides/pdf-conversion/</loc>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/get-started/claude-desktop/</loc>
          <lastmod>2026-10-31</lastmod>
     </url>
     <url>
-         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/guides/security-model/</loc>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/get-started/http-client/</loc>
          <lastmod>2026-10-31</lastmod>
     </url>
     <url>
-         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/guides/standards/</loc>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/get-started/installation/</loc>
+         <lastmod>2026-10-31</lastmod>
+    </url>
+    <url>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/reference/cli/</loc>
+         <lastmod>2026-10-31</lastmod>
+    </url>
+    <url>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/reference/configuration-generator/</loc>
+         <lastmod>2026-10-31</lastmod>
+    </url>
+    <url>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/reference/configuration/</loc>
+         <lastmod>2026-10-31</lastmod>
+    </url>
+    <url>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/reference/prompts/</loc>
+         <lastmod>2026-10-31</lastmod>
+    </url>
+    <url>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/reference/resources/</loc>
+         <lastmod>2026-10-31</lastmod>
+    </url>
+    <url>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/reference/tools/</loc>
+         <lastmod>2026-10-31</lastmod>
+    </url>
+    <url>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/reference/tools/books/</loc>
+         <lastmod>2026-10-31</lastmod>
+    </url>
+    <url>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/reference/tools/citation-graph/</loc>
+         <lastmod>2026-10-31</lastmod>
+    </url>
+    <url>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/reference/tools/citations/</loc>
+         <lastmod>2026-10-31</lastmod>
+    </url>
+    <url>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/reference/tools/cross-source/</loc>
+         <lastmod>2026-10-31</lastmod>
+    </url>
+    <url>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/reference/tools/full-text/</loc>
+         <lastmod>2026-10-31</lastmod>
+    </url>
+    <url>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/reference/tools/jobs/</loc>
+         <lastmod>2026-10-31</lastmod>
+    </url>
+    <url>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/reference/tools/papers/</loc>
+         <lastmod>2026-10-31</lastmod>
+    </url>
+    <url>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/reference/tools/patents/</loc>
+         <lastmod>2026-10-31</lastmod>
+    </url>
+    <url>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/reference/tools/recommendations/</loc>
+         <lastmod>2026-10-31</lastmod>
+    </url>
+    <url>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/reference/tools/server_info/</loc>
+         <lastmod>2026-10-31</lastmod>
+    </url>
+    <url>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/reference/tools/standards/</loc>
          <lastmod>2026-10-31</lastmod>
     </url>
     <url>
@@ -105,7 +173,31 @@
          <lastmod>2026-10-31</lastmod>
     </url>
     <url>
-         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/tools/</loc>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/upgrade/</loc>
+         <lastmod>2026-10-31</lastmod>
+    </url>
+    <url>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/use/</loc>
+         <lastmod>2026-10-31</lastmod>
+    </url>
+    <url>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/use/background-jobs/</loc>
+         <lastmod>2026-10-31</lastmod>
+    </url>
+    <url>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/use/citation-graphs/</loc>
+         <lastmod>2026-10-31</lastmod>
+    </url>
+    <url>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/use/enrichment/</loc>
+         <lastmod>2026-10-31</lastmod>
+    </url>
+    <url>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/use/pdf-conversion/</loc>
+         <lastmod>2026-10-31</lastmod>
+    </url>
+    <url>
+         <loc>https://pvliesdonk.github.io/scholar-mcp/unstable/use/standards/</loc>
          <lastmod>2026-10-31</lastmod>
     </url>
 </urlset>

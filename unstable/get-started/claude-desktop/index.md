@@ -1,0 +1,133 @@
+# Claude Desktop
+
+Claude Desktop starts the server on your machine when it opens and talks to it directly; nothing listens on the network. The server runs with your user account's access and trusts the app that started it; the [security model](https://pvliesdonk.github.io/scholar-mcp/unstable/security-model/index.md) says what that reaches. Claude Desktop is available for macOS and Windows.
+
+The steps below end with one question to Claude.
+
+## 1. Install the command
+
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then install the server as a command:
+
+```
+uv tool install "pvliesdonk-scholar-mcp"
+```
+
+uv keeps the server in its own environment and fetches a Python when your machine has none. Check the result:
+
+```
+scholar-mcp --help
+```
+
+Claude Desktop needs the command's full path, because it does not read your shell's `PATH`. Print it now and keep it for step 2:
+
+```
+which scholar-mcp        # macOS
+where.exe scholar-mcp    # Windows
+```
+
+The path is inside uv's executable directory, `~/.local/bin` unless you configured another (`uv tool dir --bin` prints it).
+
+**Without a terminal.** Each release ships a `.mcpb` bundle on the [releases page](https://github.com/pvliesdonk/scholar-mcp/releases). Download it and open it with Claude Desktop, or choose **Settings** › **Extensions** › **Advanced settings** › **Install Extension…** and pick the file. Claude Desktop asks for the settings this server declares and writes its own configuration. The bundle carries no code: on first launch it fetches the released package from PyPI, so the machine needs network access then. Skip to [step 4](#4-ask-claude-one-question).
+
+## 2. Tell Claude Desktop about it
+
+In Claude Desktop, open the Claude menu, choose **Settings…**, then **Developer**, then **Edit Config**. That opens the configuration file, creating it when it does not exist:
+
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+
+Add the server, with the path from step 1 as `command`. With this entry the server appears in Claude under the name `scholar-mcp`:
+
+```
+{
+  "mcpServers": {
+    "scholar-mcp": {
+      "command": "/Users/me/.local/bin/scholar-mcp",
+      "args": ["serve"],
+      "env": {}
+    }
+  }
+}
+```
+
+On Windows the path ends in `.exe` and each backslash is doubled: `"C:\\Users\\me\\.local\\bin\\scholar-mcp.exe"`.
+
+Claude Desktop passes every value as written, so paths are absolute (`~` is not expanded). Keep the JSON valid: no trailing commas. Settings for the server go in `env`, one environment variable per key; the [configuration reference](https://pvliesdonk.github.io/scholar-mcp/unstable/reference/configuration/index.md) lists them all.
+
+### What this server needs
+
+Scholar MCP keeps its cache in `/data/scholar-mcp` by default, a path meant for the container image. On your own machine, point `SCHOLAR_MCP_CACHE_DIR` at a directory you can write. A Semantic Scholar API key is optional: without one, requests share Semantic Scholar's public capacity and are throttled more often. [Request a key](https://www.semanticscholar.org/product/api#api-key-form) (free; approval usually takes a few days). An API key gives an introductory allowance of 1 request per second; the server spaces its requests at least 1.1 seconds apart either way.
+
+This first configuration is read-only: Claude can search and read metadata, but not download anything.
+
+```
+{
+  "mcpServers": {
+    "scholar-mcp": {
+      "command": "/Users/me/.local/bin/scholar-mcp",
+      "args": ["serve"],
+      "env": {
+        "SCHOLAR_MCP_CACHE_DIR": "/Users/me/.local/share/scholar-mcp",
+        "SCHOLAR_MCP_S2_API_KEY": "your-key-here",
+        "SCHOLAR_MCP_CONTACT_EMAIL": "you@example.com"
+      }
+    }
+  }
+}
+```
+
+`SCHOLAR_MCP_CONTACT_EMAIL` puts OpenAlex requests in its faster polite pool and lets the server ask Unpaywall for open-access PDFs.
+
+A first task once it's connected:
+
+> Search for recent papers on retrieval-augmented generation published after 2023.
+
+**Downloading and converting PDFs** needs a running [docling-serve](https://github.com/DS4SD/docling-serve) and write mode. Start docling-serve:
+
+```
+docker run -p 5001:5001 ghcr.io/ds4sd/docling-serve:latest
+```
+
+Then add two settings to `env`:
+
+```
+{
+  "mcpServers": {
+    "scholar-mcp": {
+      "command": "/Users/me/.local/bin/scholar-mcp",
+      "args": ["serve"],
+      "env": {
+        "SCHOLAR_MCP_CACHE_DIR": "/Users/me/.local/share/scholar-mcp",
+        "SCHOLAR_MCP_DOCLING_URL": "http://localhost:5001",
+        "SCHOLAR_MCP_READ_ONLY": "false"
+      }
+    }
+  }
+}
+```
+
+Then ask: "Download and convert the PDF for arXiv:2005.11401 to Markdown." [PDF conversion](https://pvliesdonk.github.io/scholar-mcp/unstable/use/pdf-conversion/index.md) covers VLM enrichment and the cache layout.
+
+## 3. Restart Claude Desktop
+
+Quit it completely and open it again; the configuration is read at start. Then click the **+** button at the bottom left of the message box, open **Connectors**, then **Manage connectors**: `scholar-mcp` is listed with its tools. If it is not, see [step 5](#5-if-it-does-not-appear).
+
+## 4. Ask Claude one question
+
+Ask Claude:
+
+> Which version of Scholar MCP is running?
+
+Claude calls the server's `get_server_info` tool and answers with the server's version, the version of the shared library it is built on and the protocol revision in use. The call reads those fields and changes nothing, so it is a safe first check of the connection; the [tools reference](https://pvliesdonk.github.io/scholar-mcp/unstable/reference/tools/index.md) says what else the server offers. Then try the first task named under [What this server needs](#what-this-server-needs).
+
+## 5. If it does not appear
+
+- The JSON is valid (a trailing comma is the usual culprit) and `command` is an absolute path.
+- Run the command yourself in a terminal: `scholar-mcp serve` starts the server and waits for a client; press Ctrl+C to stop it. An error here is the server's, not Claude Desktop's.
+- Read the logs: `~/Library/Logs/Claude/mcp*.log` on macOS, `%APPDATA%\Claude\logs` on Windows. `mcp-server-scholar-mcp.log` holds what the server wrote to its standard error.
+
+## Next
+
+- [Claude Code](https://pvliesdonk.github.io/scholar-mcp/unstable/get-started/claude-code/index.md): the same server inside Claude Code.
+- [Installation](https://pvliesdonk.github.io/scholar-mcp/unstable/get-started/installation/index.md): the other ways to install it.
+- [Use](https://pvliesdonk.github.io/scholar-mcp/unstable/use/index.md): what the server does for real tasks.

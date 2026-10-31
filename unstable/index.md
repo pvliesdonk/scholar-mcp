@@ -2,11 +2,16 @@
 
 Scholarly papers, patents, books, standards and PDF conversion
 
-## Getting started
+What the server can reach, what it changes and who gets in is set out in the [security model](https://pvliesdonk.github.io/scholar-mcp/unstable/security-model/index.md).
 
-- [Installation](https://pvliesdonk.github.io/scholar-mcp/unstable/installation/index.md)
-- [Configuration](https://pvliesdonk.github.io/scholar-mcp/unstable/configuration/index.md)
-- [Tools](https://pvliesdonk.github.io/scholar-mcp/unstable/tools/index.md)
+## Where to go
+
+- [Get started](https://pvliesdonk.github.io/scholar-mcp/unstable/get-started/index.md): a first success with the client you use.
+- [Deploy](https://pvliesdonk.github.io/scholar-mcp/unstable/deploy/index.md): run it for real, in a container and behind authentication.
+- [Use](https://pvliesdonk.github.io/scholar-mcp/unstable/use/index.md): get more out of its features.
+- [Reference](https://pvliesdonk.github.io/scholar-mcp/unstable/reference/configuration/index.md): configuration, [tools](https://pvliesdonk.github.io/scholar-mcp/unstable/reference/tools/index.md), resources, prompts and the command line.
+- [Upgrade](https://pvliesdonk.github.io/scholar-mcp/unstable/upgrade/index.md): release channels and what changes when you move.
+- [Contribute](https://pvliesdonk.github.io/scholar-mcp/unstable/contribute/index.md): change the project.
 
 ## Features
 

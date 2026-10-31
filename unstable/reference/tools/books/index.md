@@ -1,0 +1,167 @@
+# Books
+
+Book tools draw on [Open Library](https://openlibrary.org/) and [Google Books](https://developers.google.com/books). Neither needs an API key; a Google Books key raises its rate limit.
+
+## `search_books`
+
+**Search Books.** Read-only. Reaches outside the server.
+
+Search for books by title, author, or free text.
+
+Uses Open Library. Prefer `title` and `author` over `query`: they use dedicated indexes and return far better results.
+
+Open Library is politeness-rate-limited, so a busy moment may answer with a job handle to poll using `get_job_result` instead of the results themselves.
+
+**Parameters**
+
+| Name     | Type             | Default | Description                                          |
+| -------- | ---------------- | ------- | ---------------------------------------------------- |
+| `query`  | `string \| null` | `null`  | Free-text fallback. Use `title`/`author` when known. |
+| `title`  | `string \| null` | `null`  | Book title or partial title (recommended).           |
+| `author` | `string \| null` | `null`  | Author name (recommended).                           |
+| `limit`  | `integer`        | `10`    | Maximum results to return (max 50).                  |
+
+**Returns**
+
+`{"books": [...]}`: records with title, authors, publisher, year, ISBNs, Open Library IDs, cover URL, and subjects.
+
+At least one of `query`, `title`, or `author` must be provided.
+
+When only `query` is given, it is first tried as a title search (better relevance) and falls back to free-text if no results are found. When `author` is given with multiple tokens (such as "Frank Duffy") and initial results are thin, a broadened search is automatically attempted to catch name variants (such as Frank → Francis).
+
+A response looks like:
+
+```
+{
+  "books": [
+    {
+      "title": "Deep Learning",
+      "authors": [
+        "Ian Goodfellow",
+        "Yoshua Bengio",
+        "Aaron Courville"
+      ],
+      "publisher": "MIT Press",
+      "year": 2016,
+      "edition": null,
+      "isbn_10": "0262035618",
+      "isbn_13": "9780262035613",
+      "openlibrary_work_id": "OL17953442W",
+      "openlibrary_edition_id": "OL26423929M",
+      "cover_url": "https://covers.openlibrary.org/b/isbn/9780262035613-M.jpg",
+      "google_books_url": "https://books.google.com/books?id=Np9SDQAAQBAJ",
+      "worldcat_url": "https://www.worldcat.org/isbn/9780262035613",
+      "snippet": "An introduction to a broad range of topics in deep learning...",
+      "cover_path": null,
+      "subjects": [
+        "Machine learning",
+        "Artificial intelligence"
+      ],
+      "page_count": 800,
+      "description": null
+    }
+  ]
+}
+```
+
+## `get_book`
+
+**Get Book.** Read-only. Reaches outside the server.
+
+Fetch book metadata by ISBN or Open Library ID.
+
+Open Library is politeness-rate-limited, so a busy moment may answer with a job handle to poll using `get_job_result` instead of the record itself.
+
+**Parameters**
+
+| Name             | Type      | Default  | Description                                                                                                                                  |
+| ---------------- | --------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `identifier`     | `string`  | required | ISBN-10, ISBN-13, Open Library work ID (such as `OL1168083W`), or edition ID (such as `OL1429049M`).                                         |
+| `download_cover` | `boolean` | `false`  | If True, download and cache the cover image locally. Returns `cover_path` in the response. In read-only mode, returns `cover_error` instead. |
+| `cover_size`     | `string`  | `"M"`    | Cover size variant: `"S"` (small), `"M"` (medium), `"L"` (large). Defaults to `"M"`.                                                         |
+
+**Returns**
+
+The book record, or `{"error": "not_found"}` if not found.
+
+**Identifier formats:**
+
+| Format                  | Example             |
+| ----------------------- | ------------------- |
+| ISBN-13                 | `9780262035613`     |
+| ISBN-10                 | `0262035618`        |
+| ISBN with hyphens       | `978-0-262-03561-3` |
+| Open Library work ID    | `OL17953442W`       |
+| Open Library edition ID | `OL26423929M`       |
+
+The book record has the same shape as items returned by `search_books`, and the `not_found` error also carries `"identifier": "..."`.
+
+Results are cached. Work and edition lookups are cached by their respective Open Library IDs; ISBN lookups are also stored under the resolved ISBN-13. When `download_cover=true`, the cover image is saved to `<cache_dir>/covers/<isbn>_<size>.jpg`.
+
+## `get_book_excerpt`
+
+**Get Book Excerpt.** Read-only. Reaches outside the server.
+
+Get a book excerpt and preview info from Google Books.
+
+Returns the publisher description, text snippet, and a link to the Google Books preview page. Google Books does not expose full chapter text through its API; the excerpt is a publisher-provided summary and/or search snippet.
+
+An `error` of `not_found` means Google Books answered and has no such volume: stop asking about that ISBN. A lookup that never got an answer says so instead, as `rate_limited` (with `retryable`) or `upstream_error`, and is worth retrying: the book may well exist.
+
+**Parameters**
+
+| Name   | Type     | Default  | Description         |
+| ------ | -------- | -------- | ------------------- |
+| `isbn` | `string` | required | ISBN-10 or ISBN-13. |
+
+**Returns**
+
+JSON with excerpt, description, preview availability, and link.
+
+Example return::
+
+```
+{"excerpt": "...", "description": "...", "source": "`google_books`",
+ "`preview_available`": true, "`preview_link`": "https://..."}
+```
+
+A response looks like:
+
+```
+{
+  "excerpt": "Deep learning is a form of machine learning that enables...",
+  "description": "An introduction to a broad range of topics in deep learning...",
+  "source": "google_books",
+  "preview_available": true,
+  "preview_link": "https://books.google.com/books?id=Np9SDQAAQBAJ&printsec=frontcover"
+}
+```
+
+Error shapes
+
+`not_found` is `{"error": "not_found", "isbn": "..."}`. A lookup that never got an answer is `{"error": "rate_limited", "isbn": "...", "retryable": true}` for a 429, or `{"error": "upstream_error", "isbn": "...", "status": <code or null>}` for anything else.
+
+Without `SCHOLAR_MCP_GOOGLE_BOOKS_API_KEY` set, requests use the anonymous tier, where 429 is common.
+
+## `recommend_books`
+
+**Recommend Books.** Read-only. Reaches outside the server.
+
+Recommend books for a subject via Open Library.
+
+Uses the Open Library subject API to find popular books on a topic, sorted by edition count (a proxy for popularity).
+
+**Parameters**
+
+| Name      | Type      | Default  | Description                                                                      |
+| --------- | --------- | -------- | -------------------------------------------------------------------------------- |
+| `subject` | `string`  | required | Subject or topic, such as `machine learning`, `algorithms` or `computer vision`. |
+| `limit`   | `integer` | `10`     | Maximum results to return (max 50).                                              |
+
+**Returns**
+
+JSON list of book records sorted by popularity.
+
+Each record has the same shape as `search_books` results, with fields populated from the Open Library subject API (title, authors, Open Library work ID, cover URL). ISBN and edition fields are `null` since subject results are work-level.
+
+Results are cached for 7 days, keyed by the normalized subject slug. Up to 50 results are fetched and cached; the `limit` parameter slices the cached pool on return.
