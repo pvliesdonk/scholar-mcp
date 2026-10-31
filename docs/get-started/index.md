@@ -16,4 +16,5 @@ A first setup is the moment to decide what the server may touch. What it can rea
 
 <!-- DOMAIN-GET-STARTED-INTRO-START -->
 <!-- One or two sentences on what a newcomer to this server should try first; kept across copier update. -->
+Start read-only: search for papers on a topic you know and follow their citations. PDF download and conversion need write mode and a docling-serve, so add them once the basics work.
 <!-- DOMAIN-GET-STARTED-INTRO-END -->

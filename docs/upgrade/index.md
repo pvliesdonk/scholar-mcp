@@ -56,4 +56,5 @@ The steps a release needs sit above those lines, each conditional on what you ru
 
 <!-- DOMAIN-UPGRADE-INTRO-START -->
 <!-- What an upgrade of this server touches beyond the generic picture (indexes to rebuild, data formats); kept across copier update. -->
+An upgrade keeps the cache under `SCHOLAR_MCP_CACHE_DIR`: the server migrates its SQLite schema on start, and nothing needs rebuilding by hand. Tier 2 standards data synced by `scholar-mcp sync-standards` stays as well.
 <!-- DOMAIN-UPGRADE-INTRO-END -->

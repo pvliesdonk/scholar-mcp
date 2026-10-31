@@ -95,51 +95,7 @@ This is the setup for changing the project; [Contribute](../contribute/index.md)
 ## Notes for this server
 
 <!-- DOMAIN-INSTALL-EXTRA-START -->
-## As a Claude Code plugin
+The PyPI package is `pvliesdonk-scholar-mcp`; the command it installs is `scholar-mcp`. Because the names differ, `uvx` needs `--from "pvliesdonk-scholar-mcp"` and `uv tool install` takes the package name.
 
-```bash
-/plugin marketplace add pvliesdonk/claude-plugins
-/plugin install scholar-mcp@pvliesdonk
-```
-
-See [Claude Code](claude-code.md) for configuration and details.
-
-## With `uvx` (recommended)
-
-[`uvx`](https://docs.astral.sh/uv/) runs the server in an isolated environment without installing anything globally:
-
-```bash
-uvx --from pvliesdonk-scholar-mcp scholar-mcp serve
-```
-
-!!! note "Package name vs. command"
-    The PyPI package is `pvliesdonk-scholar-mcp`. The CLI command installed is `scholar-mcp`.
-    The `--from` flag is needed because the package and command names differ.
-
-## Linux packages
-
-Download `.deb` or `.rpm` from the [latest release](https://github.com/pvliesdonk/scholar-mcp/releases/latest):
-
-=== "Debian / Ubuntu"
-
-    ```bash
-    sudo dpkg -i scholar-mcp_*.deb
-    sudo systemctl enable --now scholar-mcp
-    ```
-
-=== "RHEL / Fedora"
-
-    ```bash
-    sudo rpm -i scholar-mcp-*.rpm
-    sudo systemctl enable --now scholar-mcp
-    ```
-
-The package installs:
-
-- A systemd service (`scholar-mcp.service`)
-- A Python venv at `/opt/scholar-mcp/venv/`
-- An example config at `/etc/scholar-mcp/env.example`
-- A dedicated `scholar-mcp` system user
-
-See [systemd deployment](../deploy/systemd.md) for configuration details.
+Outside the container, set `SCHOLAR_MCP_CACHE_DIR` to a directory you can write: its default, `/data/scholar-mcp`, is the container path.
 <!-- DOMAIN-INSTALL-EXTRA-END -->
