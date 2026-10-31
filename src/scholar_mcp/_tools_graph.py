@@ -252,9 +252,9 @@ async def get_citations(
         fields_of_study: Filter by field of study.
         min_citations: Minimum citation count of citing papers.
             Applied client-side (S2 does not support this filter on
-            the citations endpoint).  Papers with unknown citation
-            counts are excluded.  Pagination (``offset``/``limit``)
-            is applied to the filtered results.  The tool paginates
+            the citations endpoint). Papers with unknown citation
+            counts are excluded. Pagination (``offset``/``limit``)
+            is applied to the filtered results. The tool paginates
             through up to 10 000 upstream results to find qualifying
             papers.
 
@@ -709,7 +709,7 @@ async def get_citation_graph(
 
     A failed upstream request does not abort the walk. When one happens,
     ``stats.partial`` is true, ``stats.failed_requests`` counts them, and a
-    ``warning`` key explains what went unfetched. Treat such a graph as
+    ``warning`` key explains what was not fetched. Treat such a graph as
     incomplete: a missing node or edge is unknown, not absent. This is
     distinct from ``stats.truncated``, which means ``max_nodes`` stopped an
     otherwise successful walk.
@@ -913,7 +913,7 @@ async def find_bridge_papers(
 
     A failed upstream request does not abort the search. When one happens,
     ``partial`` is true, ``failed_requests`` counts them, and a ``warning``
-    key explains what went unfetched. A partial ``{"found": false}`` is not
+    key explains what was not fetched. A partial ``{"found": false}`` is not
     evidence that no path exists, and a partial ``{"found": true}`` path is
     not guaranteed to be the shortest one.
 
