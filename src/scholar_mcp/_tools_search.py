@@ -235,6 +235,7 @@ def register_search_tools(
         mcp,
         jobs,
         jobs_config=jobs_config,
+        tags={"group:papers"},
         annotations={
             "title": "Search Papers",
             "readOnlyHint": True,
@@ -246,6 +247,7 @@ def register_search_tools(
         mcp,
         jobs,
         jobs_config=jobs_config,
+        tags={"group:papers"},
         annotations={
             "title": "Get Paper",
             "readOnlyHint": True,
@@ -257,6 +259,7 @@ def register_search_tools(
         mcp,
         jobs,
         jobs_config=jobs_config,
+        tags={"group:papers"},
         annotations={
             "title": "Get Author",
             "readOnlyHint": True,

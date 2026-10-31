@@ -115,6 +115,7 @@ def register_citation_tools(
         mcp,
         jobs,
         jobs_config=jobs_config,
+        tags={"group:citations"},
         annotations={
             "title": "Generate Citations",
             "readOnlyHint": True,

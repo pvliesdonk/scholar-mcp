@@ -975,6 +975,7 @@ def register_graph_tools(
         mcp,
         jobs,
         jobs_config=jobs_config,
+        tags={"group:citation-graph"},
         annotations={
             "title": "Get Citations",
             "readOnlyHint": True,
@@ -986,6 +987,7 @@ def register_graph_tools(
         mcp,
         jobs,
         jobs_config=jobs_config,
+        tags={"group:citation-graph"},
         annotations={
             "title": "Get References",
             "readOnlyHint": True,
@@ -997,6 +999,7 @@ def register_graph_tools(
         mcp,
         jobs,
         jobs_config=jobs_config,
+        tags={"group:citation-graph"},
         annotations={
             "title": "Get Citation Graph",
             "readOnlyHint": True,
@@ -1008,6 +1011,7 @@ def register_graph_tools(
         mcp,
         jobs,
         jobs_config=jobs_config,
+        tags={"group:citation-graph"},
         annotations={
             "title": "Find Bridge Papers",
             "readOnlyHint": True,
