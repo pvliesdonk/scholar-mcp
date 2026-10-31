@@ -1,10 +1,17 @@
+---
+description: "Release notes for each minor series, with the steps to upgrade."
+kind: how-to
+---
+
 # Release Notes
 
 Each minor release series gets one page here telling its story: what
 changed, why it matters, and how to adopt it. Patch releases add a versioned
 section to their series page, so a series stays one linkable document.
 The commit-level record lives in the repository's `CHANGELOG.md`; each
-GitHub release links back to its page here.
+GitHub release links back to its page here. A page's Upgrading section answers
+three questions on fixed lines, **Clients**, **State** and **Security
+posture**; the [Upgrade](../upgrade/index.md) page says what each answers.
 
 <!-- RELEASE-PAGES-START: newest series first; one list entry per page.
      The first real entry replaces the placeholder line below. -->

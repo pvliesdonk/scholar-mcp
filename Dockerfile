@@ -1,4 +1,21 @@
-FROM python:3.14-slim
+# Python comes from uv, not from a `python:*-slim` base: that image's SQLite is
+# Debian's system library, which lacks the WAL-reset corruption fix
+# (template#829), while a uv-managed CPython bundles a current SQLite.  It also
+# keeps the shipped interpreter off Renovate's Docker-tag bumps (template#828):
+# keep PYTHON_VERSION below equal to the Python version whose ci.yml test job
+# collects coverage, so the image runs the interpreter CI measures.
+FROM debian:trixie-slim
+
+# What a `python:*-slim` image carried and a bare Debian lacks: CA roots for
+# TLS (git over HTTPS, outbound clients), /etc/services, and zoneinfo data.
+# Plus tini, the init the ENTRYPOINT below runs as PID 1.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates netbase tini tzdata \
+    && rm -rf /var/lib/apt/lists/*
+
+# Here, between the two apt RUNs, so neither merges into the other: the
+# packages above must not depend on what a project keeps in the block below.
+COPY --from=ghcr.io/astral-sh/uv:0.13 /uv /uvx /bin/
 
 # DOCKERFILE-APT-DEPS-START — add domain apt packages below; kept across copier update
 RUN apt-get update && apt-get install -y --no-install-recommends git git-lfs gosu \
@@ -6,10 +23,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends git git-lfs gos
     && git lfs install --system
 # DOCKERFILE-APT-DEPS-END
 
-COPY --from=ghcr.io/astral-sh/uv:0.12 /uv /uvx /bin/
-
-ENV UV_COMPILE_BYTECODE=1 \
-    UV_LINK_MODE=copy
+ARG PYTHON_VERSION=3.14
+# The interpreter lives under /opt, not root's home, so the venv's symlinked
+# `python` stays readable after the entrypoint drops to appuser.
+# `only-managed` keeps `uv sync` off any python3 an apt package pulls in.
+ENV LANG=C.UTF-8 \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON=${PYTHON_VERSION} \
+    UV_PYTHON_INSTALL_DIR=/opt/python \
+    UV_PYTHON_PREFERENCE=only-managed
+RUN uv python install "$PYTHON_VERSION"
 
 WORKDIR /app
 
@@ -18,7 +42,7 @@ WORKDIR /app
 # (debugpy) and bake the listener into the image.  Accepts the same boolean
 # vocabulary as runtime ``parse_bool`` (``true``/``1``/``yes``/``on``,
 # case-insensitive); anything else is treated as off.  See
-# ``docs/deployment/docker.md`` for the full attach workflow.
+# ``docs/deploy/docker.md`` for the full attach workflow.
 ARG DEBUG=false
 
 # DOCKERFILE-UV-EXTRAS-START — append `--extra <name>` flags below to pull domain-specific extras; kept across copier update
@@ -74,7 +98,13 @@ EXPOSE 5678
 VOLUME ["/data/service", "/data/state"]
 # DOCKERFILE-VOLUMES-END
 
-ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+# tini is PID 1 and reaps every orphan re-parented to it.  The server would
+# reap only the children it waits on, so a subprocess that detaches (git's
+# `maintenance run --auto --detach`, for one) would stay a zombie until the
+# container's pids limit stops every fork (template#840).  `-s` keeps tini
+# reaping when it is not PID 1, under `docker run --init` or compose's
+# `init: true`, instead of warning on every start.
+ENTRYPOINT ["/usr/bin/tini", "-s", "--", "/usr/local/bin/docker-entrypoint.sh"]
 # Liveness for a bare `docker run`: the same `GET /health` probe compose.yml
 # declares, so a container reports health with or without Compose (a compose
 # `healthcheck:` overrides this one where both exist).  Assumes the
