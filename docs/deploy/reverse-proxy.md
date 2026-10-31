@@ -159,4 +159,5 @@ Both must reach this server, and the `resource` field in the JSON must read `htt
 
 <!-- DOMAIN-REVERSE-PROXY-EXTRA-START -->
 <!-- What this server adds behind a proxy (a route it serves outside the mount, a header it needs, an upload size limit to raise); kept across copier update. -->
+Scholar MCP serves nothing outside the MCP mount and needs no extra header. It accepts no uploads, so no body-size limit needs raising. A PDF conversion can take minutes. It's a background job, so the proxy never holds one request open for that long.
 <!-- DOMAIN-REVERSE-PROXY-EXTRA-END -->

@@ -513,7 +513,7 @@ extraPaths = ["src"]
 #   SCHOLAR_MCP_BASE_URL = "https://example.invalid"
 # PROJECT-DOCS-CHECKS-START — kept across copier update
 [tool.docs-structure]
-strict = false
+strict = true
 
 # Build the reference with every tool visible: write-tagged PDF tools are
 # hidden in read-only mode and patent tools without EPO credentials, so the

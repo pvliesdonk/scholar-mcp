@@ -51,4 +51,5 @@ A link pasted into a chat or written to a log is a live credential until it is u
 
 <!-- DOMAIN-TRANSFER-EXTRA-START -->
 <!-- What a `ref` is for this server (a path, an id), which destinations an upload may name, and any overwrite rule; kept across copier update. -->
+Scholar MCP registers no transfer-link tools. Downloaded PDFs and converted Markdown stay in its cache, and the tools return the converted text in pages rather than as a file to fetch.
 <!-- DOMAIN-TRANSFER-EXTRA-END -->

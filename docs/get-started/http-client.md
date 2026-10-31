@@ -51,6 +51,7 @@ Claude calls the server's `get_server_info` tool, which reads the server's versi
 
 <!-- DOMAIN-HTTP-CLIENT-EXTRA-START -->
 <!-- What a remote client of this server should know first: the first read-only task to try, and any feature that needs a particular credential or client; kept across copier update. -->
+A first read-only task: ask Claude to find recent papers on a topic you know and list who cites the top result. Whether the PDF and patent tools appear depends on how the server was deployed: the operator turns on write mode and supplies EPO OPS credentials, not the client. Downloaded PDFs and converted Markdown stay in the server's cache; the tools return their text, not a file to download.
 <!-- DOMAIN-HTTP-CLIENT-EXTRA-END -->
 
 ## Next

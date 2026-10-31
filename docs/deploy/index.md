@@ -19,4 +19,5 @@ Before exposing the server, read the [security model](../security-model.md): an 
 
 <!-- DOMAIN-DEPLOY-INTRO-START -->
 <!-- What deploying this server adds to the generic picture (data it needs mounted, services it calls); kept across copier update. -->
+Scholar MCP needs one writable path, `SCHOLAR_MCP_CACHE_DIR`, for its SQLite cache, downloaded PDFs and converted Markdown. It calls public scholarly APIs over HTTPS and, when configured, a docling-serve for PDF conversion and EPO OPS for patents; the [security model](../security-model.md) lists every service.
 <!-- DOMAIN-DEPLOY-INTRO-END -->

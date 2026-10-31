@@ -28,9 +28,6 @@ Scholarly papers, patents, books, standards and PDF conversion
 - **Enrichment pipeline**: phased enrichment from multiple sources: OpenAlex (OA status, affiliations, funders, concepts), CrossRef (publisher, page ranges, container titles), Google Books (preview links, excerpts), and Open Library (book metadata). Runs automatically on paper and book results.
 - **PDF conversion**: download open-access PDFs and convert to Markdown via [docling-serve](https://github.com/DS4SD/docling-serve), with optional VLM enrichment for formulas and figures; automatic fallback to ArXiv, PubMed Central, and Unpaywall when Semantic Scholar has no OA link; direct URL download for PDFs found elsewhere; converted text is paged so large documents fit in MCP responses.
 - **Intelligent caching**: SQLite-backed cache with per-table TTLs (30 days for papers/authors, 7 days for citations/references) and identifier aliasing.
-- **Authentication**: bearer token, OIDC (OAuth 2.1), or both simultaneously (multi-auth).
-- **Multi-transport**: stdio (Claude Desktop), HTTP (streamable-http), and SSE transports.
-- **Linux packages**: `.deb` and `.rpm` packages with systemd service and security hardening.
 
 ### Coverage by domain
 
@@ -50,6 +47,8 @@ With this server mounted in an MCP client (Claude, etc.), you can:
 - **Cross-reference prior art**: "For this patent family, list academic papers it cites and any books or standards that show up in the description." Composes `get_patent` + `batch_resolve` + standards/book enrichment.
 - **Generate a bibliography**: "Emit BibTeX for these 30 DOIs with OpenAlex venue data." Uses `generate_citations`.
 - **Look up a standard**: "What's the latest status of RFC 9000, and fetch the Markdown full text." Uses `resolve_standard_identifier` + `get_standard`.
+
+It reaches public scholarly metadata and open-access full text; it doesn't get past paywalls, and paywalled standards (ISO, IEC, IEEE) come back as metadata only. Patent tools need your own EPO OPS credentials.
 <!-- DOMAIN-README-FIT-END -->
 
 ## Quick start
@@ -83,7 +82,7 @@ A `compose.yml` ships at the repository root and runs as-is: copy `.env.example`
 <!-- DOMAIN-README-EXTRAS-START -->
 
 - **`[all]`**: every production feature in one extra; the Linux packages and the Claude Desktop bundle install it.
-- **`[debug]`**: adds the remote debugger (`debugpy`); see [Remote debugging](docs/deployment/docker.md#remote-debugging).
+- **`[debug]`**: adds the remote debugger (`debugpy`); see [Remote debugging](docs/deploy/docker.md#remote-debugging).
 
 The base package already carries FastMCP through `fastmcp-pvl-core`, so `pip install pvliesdonk-scholar-mcp` is enough to run `scholar-mcp serve`. The older `[mcp]` extra is kept so existing install commands keep working; it adds nothing beyond the base package.
 <!-- DOMAIN-README-EXTRAS-END -->
@@ -118,8 +117,8 @@ Every variable the server reads, the shared ones included, is in the [configurat
 
 <!-- DOMAIN-README-DESIGN-START -->
 
-- **Library-first, MCP-optional.** The core domain logic (S2/EPO/Open Library/standards clients, enrichment pipeline, cache) is importable without FastMCP; the MCP server is a thin async wrapper. Enables reuse in scripts, notebooks, and other servers.
-- **Sync domain code, async MCP layer.** Backend clients are synchronous; MCP tools call them via `asyncio.to_thread()`. Simpler client code, explicit offloading at the transport boundary.
+- **Domain logic apart from the MCP layer.** The upstream clients (Semantic Scholar, OpenAlex, EPO, Open Library, standards bodies), the enrichment pipeline and the cache don't import FastMCP; the tool modules are thin wrappers over them.
+- **Async clients, blocking libraries off the event loop.** The HTTP clients and the SQLite cache are async. The blocking pieces (the `python-epo-ops-client` library, file I/O around PDF download and conversion, the Relaton sync) run through `asyncio.to_thread()`.
 - **SQLite cache with per-table TTLs and identifier aliases.** Papers / authors last 30 days, citations / references 7 days. DOI ↔ S2 ID ↔ arXiv ID aliasing survives across cache clears so repeated enrichment hits the same row.
 - **Read-only by default.** Write-tagged tools (PDF download/convert, patent PDF) are hidden unless `SCHOLAR_MCP_READ_ONLY=false`. Safer default for first-run.
 - **Slow work becomes a background job.** Every tool whose work can run long uses the `fastmcp-pvl-core` jobs layer. A call that beats `SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S` returns its result directly; a slower one returns a handle to poll with `get_job_result`. S2-backed tools also return a reasoned handle as soon as Semantic Scholar throttles them. The work continues from where it paused, and a cache hit still answers directly.

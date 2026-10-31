@@ -158,4 +158,5 @@ A failed sign-in names its cause: `invalid_client` is a client ID or secret that
 
 <!-- DOMAIN-OIDC-PROVIDERS-EXTRA-START -->
 <!-- What this server needs from a provider beyond the generic setup: a claim it reads, a scope its tools require, a provider it was tested against; kept across copier update. -->
+Scholar MCP reads no claim or scope beyond what the generic setup above asks for. Every authenticated caller gets the same tools. Whether the write tools appear depends on read-only mode, not on a scope.
 <!-- DOMAIN-OIDC-PROVIDERS-EXTRA-END -->
