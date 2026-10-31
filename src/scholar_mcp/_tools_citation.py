@@ -37,8 +37,8 @@ async def generate_citations(
 ) -> dict[str, Any]:
     """Generate formatted citations for one or more papers.
 
-    Resolves papers via Semantic Scholar, optionally enriches with
-    OpenAlex metadata, and formats as BibTeX, CSL-JSON, or RIS.
+    Papers are resolved through Semantic Scholar and can be enriched with
+    OpenAlex metadata. The output is BibTeX, CSL-JSON or RIS.
 
     Enrichment fans out per paper, so a large batch can take a while; such a
     call answers with a job handle to poll using ``get_job_result`` instead
@@ -47,7 +47,7 @@ async def generate_citations(
     Args:
         paper_ids: List of paper identifiers (S2 IDs, DOIs, arXiv IDs,
             etc.). Maximum 100.
-        citation_format: Output format — bibtex, csl-json, or ris.
+        citation_format: Output format: ``bibtex``, ``csl-json`` or ``ris``.
         enrich: If True, attempt OpenAlex enrichment for missing venue
             data when a DOI is available.
         service: Injected service.
@@ -55,7 +55,7 @@ async def generate_citations(
     Returns:
         ``{"format": ..., "output": ...}`` where ``output`` is the formatted
         text, with unresolved identifiers included as comments in the
-        formatter's own style. An error mapping on failure.
+        comment style of the chosen format. An error mapping on failure.
 
         The key is ``output`` rather than ``citations`` because the CSL-JSON
         formatter emits its own ``citations`` key, which would collide.
