@@ -594,9 +594,10 @@ def register_patent_tools(
             "destructiveHint": False,
             "openWorldHint": True,
         },
-        # Both tags matter: "write" hides it in read-only mode, "patent"
-        # hides it when EPO is unconfigured. `disable` matches on any tag,
-        # so carrying both keeps it in step with its three siblings (#316).
+        # Both visibility tags matter: "write" hides it in read-only mode,
+        # "patent" hides it when EPO is unconfigured. `disable` matches on any
+        # tag, so carrying both keeps it in step with its three siblings (#316).
+        # _GROUP only names its reference page.
         tags={_GROUP, "write", "patent"},
     )(fetch_patent_pdf)
 

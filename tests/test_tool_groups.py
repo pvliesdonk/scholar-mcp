@@ -40,6 +40,8 @@ async def test_every_domain_tool_has_one_known_group(server: FastMCP) -> None:
     ]
     assert len(tools) == 27
     for tool in tools:
-        groups = {tag.removeprefix("group:") for tag in tool.tags} - set(tool.tags)
+        groups = {
+            tag.removeprefix("group:") for tag in tool.tags if tag.startswith("group:")
+        }
         assert len(groups) == 1, (tool.name, sorted(tool.tags))
         assert groups <= _GROUPS, (tool.name, groups)
