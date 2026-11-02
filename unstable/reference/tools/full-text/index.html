@@ -2381,6 +2381,7 @@ PDF was obtained (<code>s2_oa</code>, <code>arxiv</code>, <code>pmc</code>, <cod
 <li><code>{"error": "download_failed"}</code>: HTTP error downloading the PDF</li>
 <li><code>{"error": "not_pdf"}</code>: the response body does not begin with the PDF header</li>
 </ul>
+<p>When the operator configured <a href="../../../use/pdf-conversion/#access-links-for-licensed-papers">access links</a>, each of these three also carries <code>access_links</code>, a list of <code>{"label", "url"}</code> routes to the paper through the user's library, and a <code>note</code> for the model.</p>
 <p>Paper metadata is read from the same 30-day cache <code>get_paper</code> uses, and a freshly resolved record is written back to it. A repeat call for the same paper needs no Semantic Scholar request.</p>
 <!-- DOMAIN-EXAMPLE-fetch_paper_pdf-END -->
 

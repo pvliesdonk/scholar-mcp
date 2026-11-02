@@ -1352,6 +1352,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#access-links-for-licensed-papers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Access links for licensed papers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#limitations" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2522,6 +2533,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#access-links-for-licensed-papers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Access links for licensed papers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#limitations" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2690,9 +2712,52 @@ converts. To force a fresh conversion, delete the cached <code>.md</code> file.<
 <p class="admonition-title">Enable Unpaywall</p>
 <p>Set <code>SCHOLAR_MCP_CONTACT_EMAIL</code> to your email address to enable Unpaywall lookups. This is also used for the OpenAlex polite pool.</p>
 </div>
+<h2 id="access-links-for-licensed-papers">Access links for licensed papers<a class="headerlink" href="#access-links-for-licensed-papers" title="Permanent link">&para;</a></h2>
+<p>Some papers have no open copy, but your library licenses them. You can configure links into your library's systems, and when <code>fetch_paper_pdf</code> or <code>fetch_and_convert</code> can't get a PDF (<code>no_oa_pdf</code>, <code>download_failed</code> or <code>not_pdf</code>), the response lists them under <code>access_links</code>, in your order. Scholar MCP builds these links but never opens them. Your browser, or an agent on your network, can use them where your library's licence applies.</p>
+<p>Set <code>SCHOLAR_MCP_ACCESS_LINKS</code> to a JSON list of <code>label</code> and <code>template</code> pairs. A template is a URL with placeholders:</p>
+<table>
+<thead>
+<tr>
+<th>Placeholder</th>
+<th>Becomes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>{doi}</code></td>
+<td>The DOI, escaped so it is safe in a URL path or query</td>
+</tr>
+<tr>
+<td><code>{doi_url}</code></td>
+<td><code>https://doi.org/&lt;DOI&gt;</code>, fully encoded, to wrap inside another link</td>
+</tr>
+<tr>
+<td><code>{openurl}</code></td>
+<td>An OpenURL 1.0 citation: DOI, PubMed ID, title, journal, year and authors</td>
+</tr>
+<tr>
+<td><code>{openurl_0_1}</code></td>
+<td>The same citation in the older OpenURL 0.1 form</td>
+</tr>
+<tr>
+<td><code>{openurl_hybrid}</code></td>
+<td>Both forms in one link</td>
+</tr>
+</tbody>
+</table>
+<p>A template is skipped for a paper it can't be filled for, such as <code>{doi}</code> for a paper without a DOI. The OpenURL forms still work without a DOI when the paper has a title.</p>
+<p>This configures a library on OCLC WorldCat, with its link resolver first and its inter-library loan form second:</p>
+<div class="highlight"><pre><span></span><code><span class="nv">SCHOLAR_MCP_ACCESS_LINKS</span><span class="o">=</span><span class="s1">'[</span>
+<span class="s1">  {"label": "Library full text", "template": "https://example.on.worldcat.org/atoztitles/link?{openurl}"},</span>
+<span class="s1">  {"label": "Library order form", "template": "https://123456.account.worldcat.org/account/route/wsill/openurl?{openurl}"},</span>
+<span class="s1">  {"label": "Publisher", "template": "https://doi.org/{doi}"}</span>
+<span class="s1">]'</span>
+</code></pre></div>
+<p>To find your library's resolver address, turn on your library under Google Scholar's <strong>Settings → Library links</strong>, then copy the address of its link on any search result: everything before the <code>?</code> is the base. Other templates follow the same pattern: an OpenAthens redirector is <code>https://go.openathens.net/redirector/&lt;your domain&gt;?url={doi_url}</code>, and an SFX or Alma resolver takes <code>?{openurl}</code> after its base address.</p>
+<p>Which OpenURL form to use depends on the resolver. Most accept both. OCLC's resolver looks up the DOI itself when it gets <code>{openurl}</code>, which fills in missing details.</p>
 <h2 id="limitations">Limitations<a class="headerlink" href="#limitations" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Paywalled papers</strong>: Alternative resolution only finds openly available versions. Truly paywalled papers require manual download followed by <code>convert_pdf_to_markdown</code>, or use <code>fetch_pdf_by_url</code> if you find a link.</li>
+<li><strong>Paywalled papers</strong>: Alternative resolution only finds openly available versions. Truly paywalled papers require manual download followed by <code>convert_pdf_to_markdown</code>, or use <code>fetch_pdf_by_url</code> if you find a link. <a href="#access-links-for-licensed-papers">Access links</a> point you to your library's copy.</li>
 <li><strong>Conversion quality varies</strong>: OCR quality depends on the PDF source. Scanned papers produce lower-quality results than born-digital PDFs.</li>
 <li><strong>docling-serve polling</strong>: Conversion is asynchronous internally. The server polls docling-serve for completion with a timeout of ~10 minutes (200 polls at 3-second intervals). This happens inside the background job, so the MCP client is not blocked.</li>
 </ul>

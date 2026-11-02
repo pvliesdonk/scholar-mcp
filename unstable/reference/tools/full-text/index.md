@@ -28,6 +28,8 @@ A response looks like `{"path": "/data/scholar-mcp/pdfs/<id>.pdf", "source": "s2
 - `{"error": "download_failed"}`: HTTP error downloading the PDF
 - `{"error": "not_pdf"}`: the response body does not begin with the PDF header
 
+When the operator configured [access links](https://pvliesdonk.github.io/scholar-mcp/unstable/use/pdf-conversion/#access-links-for-licensed-papers), each of these three also carries `access_links`, a list of `{"label", "url"}` routes to the paper through the user's library, and a `note` for the model.
+
 Paper metadata is read from the same 30-day cache `get_paper` uses, and a freshly resolved record is written back to it. A repeat call for the same paper needs no Semantic Scholar request.
 
 ## `convert_pdf_to_markdown`
