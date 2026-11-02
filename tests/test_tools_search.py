@@ -126,10 +126,14 @@ async def test_get_paper_carries_configured_access_links(
     assert "access_links" not in cached
 
 
+@pytest.mark.usefixtures("respx_mock")
 async def test_get_paper_builds_access_links_for_a_cached_paper(
     mcp: FastMCP, service: Service
 ) -> None:
-    """A paper cached before the links were configured still gets them."""
+    """A paper cached before the links were configured still gets them.
+
+    ``respx_mock`` keeps enrichment of the cached DOI off the network.
+    """
     await service.cache.set_paper("lic1", _LICENSED)
     service.config = dataclasses.replace(service.config, access_links=_ACCESS_LINKS)
     async with Client(mcp) as client:
