@@ -4,6 +4,16 @@ Newest first. One entry per research pass.
 
 ## 2026-11-02
 
+### Journal details for OpenURL links
+
+New page [CrossRef work journal fields](crossref-works.md), and a "Journal
+details" section on [Semantic Scholar API behaviour](semantic-scholar-api.md),
+for the OpenURL journal keys (#541). Read the Crossref and S2 swagger
+definitions; sampled one CrossRef work and one unkeyed S2 batch of five
+papers. Found S2 returns `publicationVenue.issn` although the description
+omits it, and can merge volume and issue. Not settled: how common either S2
+shape is, and the other `issn-type` values. Next review: 2027-05-02.
+
 ### OpenURL 0.1 and 1.0
 
 New page [OpenURL 0.1 and 1.0 query strings](openurl.md) for the access-link

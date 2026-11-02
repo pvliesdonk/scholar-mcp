@@ -76,7 +76,7 @@ identifiers a configured route needs. By default that is the
 doi.org link, so a paper without a DOI gets none.
 
 <!-- DOMAIN-EXAMPLE-get_paper-START -->
-The record always uses the `full` field set.
+The record uses the `full` field set plus `journal` (name, volume and pages) and `publicationVenue` (the venue, with its ISSN for a journal).
 
 Results are cached for 30 days. Identifier aliases (such as DOI to S2 ID) are cached permanently.
 

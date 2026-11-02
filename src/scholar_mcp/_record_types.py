@@ -49,11 +49,37 @@ class S2OpenAccessPdf(TypedDict, total=False):
     license: str | None
 
 
+class S2Journal(TypedDict, total=False):
+    """The ``journal`` object of an S2 paper; any key may be absent.
+
+    ``volume`` can hold volume and issue together (``"116 6"``) and
+    ``pages`` can be a range or a single article number.
+    """
+
+    name: str
+    volume: str
+    pages: str
+
+
+class S2PublicationVenue(TypedDict, total=False):
+    """The ``publicationVenue`` object of an S2 paper (keys Scholar MCP reads).
+
+    ``issn`` is returned for journals although the API documentation does
+    not list it.
+    """
+
+    id: str
+    name: str
+    type: str
+    issn: str
+
+
 class PaperRecord(TypedDict, total=False):
     """Typed representation of a Semantic Scholar paper record.
 
     Fields mirror the camelCase names returned by the S2 Graph API and
-    align with :data:`scholar_mcp._s2_client.FIELD_SETS`. ``total=False``
+    align with :data:`scholar_mcp._s2_client.FIELD_SETS` and
+    :data:`scholar_mcp._s2_client.PAPER_RECORD_FIELDS`. ``total=False``
     because any subset of fields may be present depending on the
     requested field set and what the S2 corpus has indexed, and records
     round-trip through JSON cache serialisation.
@@ -75,6 +101,8 @@ class PaperRecord(TypedDict, total=False):
     tldr: S2Tldr | None
     openAccessPdf: S2OpenAccessPdf | None
     publicationTypes: list[str] | None
+    journal: S2Journal | None
+    publicationVenue: S2PublicationVenue | None
 
     # Enrichment-added fields (populated by enrichers, not by S2).
     book_metadata: dict[str, Any]

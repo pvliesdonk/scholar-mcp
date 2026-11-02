@@ -172,11 +172,11 @@ To offer your library's routes, set `SCHOLAR_MCP_ACCESS_LINKS` to a JSON list of
 |---|---|
 | `{doi}` | The DOI, escaped so it is safe in a URL path or query |
 | `{doi_url}` | `https://doi.org/<DOI>`, fully encoded, to wrap inside another link |
-| `{openurl}` | An OpenURL 1.0 citation: DOI, PubMed ID, title, journal, year and authors |
+| `{openurl}` | An OpenURL 1.0 citation: DOI, PubMed ID, title, journal, year and authors, and the ISSN, volume, issue and pages when known |
 | `{openurl_0_1}` | The same citation in the older OpenURL 0.1 form |
 | `{openurl_hybrid}` | Both forms in one link |
 
-A template is skipped for a paper it can't be filled for, such as `{doi}` for a paper without a DOI. The OpenURL forms still work without a DOI when the paper has a title.
+A template is skipped for a paper it can't be filled for, such as `{doi}` for a paper without a DOI. The OpenURL forms still work without a DOI when the paper has a title, and the journal's ISSN, volume and pages help a resolver find such a paper in your library's holdings.
 
 This configures a library on OCLC WorldCat, with its link resolver first and its inter-library loan form second:
 

@@ -37,6 +37,13 @@ FIELD_SETS: dict[str, str] = {
     ),
 }
 
+#: What :meth:`S2Client.get_paper` fetches by default, and so the record
+#: ``get_paper`` and the PDF tools cache: the ``full`` preset plus the journal
+#: details an access link's OpenURL carries (ISSN, volume, pages). Kept apart
+#: from ``full`` so ``search_papers(fields="full")`` and the batch callers
+#: return what they did.
+PAPER_RECORD_FIELDS = FIELD_SETS["full"] + ",journal,publicationVenue"
+
 # Documented ``limit`` maxima per endpoint (the Graph and Recommendations
 # swagger specs), which reject a larger value as a bad query parameter.
 # Tools clamp before sending (#476); the floor of 1 keeps a zero or negative
@@ -288,7 +295,7 @@ class S2Client:
     async def get_paper(
         self,
         identifier: str,
-        fields: str = FIELD_SETS["full"],
+        fields: str = PAPER_RECORD_FIELDS,
         *,
         retry: bool = True,
     ) -> PaperRecord:

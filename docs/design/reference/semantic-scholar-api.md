@@ -38,6 +38,10 @@ sources:
     title: Recommendations API OpenAPI (swagger) specification
     resource: https://api.semanticscholar.org/recommendations/v1/swagger.json
     accessed: 2026-09-25
+  - id: graph-swagger-journal
+    title: Academic Graph API OpenAPI (swagger) specification, paper `journal` and `publicationVenue`
+    resource: https://api.semanticscholar.org/graph/v1/swagger.json
+    accessed: 2026-11-02
   - id: throttle-observations
     title: Deployed-server and direct-call observations on issue 406
     resource: https://github.com/pvliesdonk/scholar-mcp/issues/406
@@ -54,11 +58,12 @@ throttle policy.
 ## Scope
 
 - Covers: Academic Graph request limits, HTTP refusals, citation pagination and
-  filters, author papers, and publication types. Datasets appears only as a key
+  filters, author papers, publication types, and a paper's journal details. Datasets appears only as a key
   acceptance probe.
 - Does not cover: the cost or design of a local Datasets store; see #406.
 - Depended on by: `src/scholar_mcp/_s2_client.py`, `_rate_limiter.py`,
-  `_tools_graph.py`, and `docs/design/service-lifecycle.md`.
+  `_tools_graph.py`, `_access_links.py` (journal details), and
+  `docs/design/service-lifecycle.md`.
 
 ## Claims
 
@@ -170,6 +175,33 @@ throttle policy.
   whether `publicationTypes` can be `null`, was not established by that sample.
   [unverified] Check representative records or an explicit schema guarantee.
 
+### Journal details
+
+- A paper's `journal` object holds, "if available", `name`, `volume` and
+  `pages` (the page range); the specification's example is
+  `{"volume": "40", "pages": "116 - 135", "name": "IETE Technical Review"}`.
+  It documents no issue key. [source: graph-swagger-journal] (`FullPaper`)
+- The `publicationVenue` object is documented with `id`, `name`, `type`,
+  `alternate_names` and `url`; the description does not list an ISSN.
+  [source: graph-swagger-journal] (`FullPaper`)
+- For journals, `publicationVenue` also carries `issn`, a single string
+  (`"0001-0782"` for Communications of the ACM, `"0031-9007"` for Physical
+  Review Letters), and a conference venue carried none. [observed: unkeyed
+  paper-batch request for DOIs 10.1145/3065386, 10.1085/jgp.4.6.733,
+  10.1103/PhysRevLett.116.061102 and arXiv 1706.03762 with
+  `fields=title,venue,journal,publicationVenue,externalIds`, 2026-11-02]
+  [pins: tests/test_access_links.py::test_openurl_carries_s2_journal_details]
+- `pages` came as `"84 - 90"`, as `"5998-6008"`, and for an article-numbered
+  letter as `"\n          061102\n        "`. [observed: the same request]
+  [pins: tests/test_access_links.py::test_openurl_carries_s2_journal_details,
+  tests/test_access_links.py::test_s2_merged_volume_and_article_number]
+- `volume` can hold the volume and the issue together: Physical Review Letters
+  116(6) came as `"116 6"`. How often, and whether the second token is always
+  the issue, is not established. [observed: the same request] [unverified]
+  [pins: tests/test_access_links.py::test_s2_merged_volume_and_article_number]
+- A conference paper's `journal` held only `pages` (`"5998-6008"` for
+  arXiv 1706.03762). [observed: the same request]
+
 ## Where this project departs from the subject
 
 The paper-search, citation, reference and recommendation tools clamp a
@@ -187,8 +219,11 @@ sources above and should not be treated as a vendor guarantee.
 
 ## Not covered
 
+Journal details were sampled from five papers on one day; their shapes across
+the corpus are not established.
+
 The vendor's private throttle algorithm, exact meaning of a valid key's quota
 state, and ordering guarantees for citations remain unknown. The historical
 issue observations also need retained evidence or repetition. No live Graph
-requests were made for this research pass, to preserve the project's limited
-API allowance.
+requests were made for the 2026-09 research pass, to preserve the project's
+limited API allowance; the 2026-11-02 pass made one unkeyed batch request.

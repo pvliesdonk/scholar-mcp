@@ -6,6 +6,7 @@ import asyncio
 import dataclasses
 import json
 from contextlib import asynccontextmanager
+from urllib.parse import parse_qsl
 
 import httpx
 import pytest
@@ -124,6 +125,37 @@ async def test_get_paper_carries_configured_access_links(
     cached = await service.cache.get_paper("lic1")
     assert cached is not None
     assert "access_links" not in cached
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_paper_access_links_carry_journal_details(
+    respx_mock: respx.MockRouter, mcp: FastMCP, service: Service
+) -> None:
+    """get_paper asks S2 for journal details, and CrossRef adds the issue."""
+    service.config = dataclasses.replace(service.config, access_links=_ACCESS_LINKS)
+    s2_route = respx_mock.get("/paper/lic1").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                **_LICENSED,
+                "journal": {"name": "J", "volume": "7", "pages": "10 - 20"},
+                "publicationVenue": {"name": "J", "issn": "1234-5678"},
+            },
+        )
+    )
+    respx_mock.get("https://api.crossref.org/works/10.1000/xyz").mock(
+        return_value=httpx.Response(200, json={"message": {"issue": "3"}})
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool("get_paper", {"identifier": "lic1"})
+    fields = s2_route.calls.last.request.url.params["fields"].split(",")
+    assert {"journal", "publicationVenue"} <= set(fields)
+    url = json.loads(result.content[0].text)["access_links"][0]["url"]
+    query = dict(parse_qsl(url.split("?", 1)[1]))
+    assert query["rft.issn"] == "1234-5678"
+    assert query["rft.volume"] == "7"
+    assert query["rft.issue"] == "3"
+    assert (query["rft.spage"], query["rft.epage"]) == ("10", "20")
 
 
 @pytest.mark.usefixtures("respx_mock")
