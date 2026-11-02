@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import ipaddress
 import os
-from collections.abc import AsyncIterator
+import socket
+from collections.abc import AsyncIterator, Callable, Iterator
 from pathlib import Path
 from typing import Any
 
@@ -56,6 +58,126 @@ def pytest_collection_modifyitems(
     if live:
         config.hook.pytest_deselected(items=live)
         items[:] = [item for item in items if not item.get_closest_marker("live")]
+
+
+_LOCAL_HOSTNAMES = frozenset({"localhost", "localhost.localdomain"})
+_PROXY_ENV_VARS = ("http_proxy", "https_proxy", "all_proxy")
+
+
+def _host_name(host: object) -> str:
+    """Return ``host`` as text; httpcore passes bytes, most callers str.
+
+    Args:
+        host: A `socket.getaddrinfo` host argument other than None.
+
+    Returns:
+        The host decoded or converted to str.
+    """
+    return host.decode() if isinstance(host, bytes) else str(host)
+
+
+def _is_local_host(host: object) -> bool:
+    """Return whether ``host`` names this machine (loopback name or address).
+
+    Args:
+        host: The ``host`` argument a caller passed to `socket.getaddrinfo`;
+            bytes, str or None.
+
+    Returns:
+        True for None (the wildcard bind address), a localhost name, or a
+        loopback / unspecified IP literal; False for anything else.
+    """
+    if host is None:
+        return True
+    name = _host_name(host).strip("[]").lower()
+    if name in _LOCAL_HOSTNAMES or name.endswith(".localhost"):
+        return True
+    try:
+        address = ipaddress.ip_address(name.split("%", 1)[0])
+    except ValueError:
+        return False
+    return address.is_loopback or address.is_unspecified
+
+
+class NetworkGuard:
+    """A `socket.getaddrinfo` stand-in that refuses every non-local host.
+
+    Attributes:
+        refused: Each host a lookup was refused for, in call order.
+    """
+
+    def __init__(self, real_getaddrinfo: Callable[..., Any]) -> None:
+        """Wrap the resolver that local lookups still go to.
+
+        Args:
+            real_getaddrinfo: The unpatched `socket.getaddrinfo`.
+        """
+        self._real_getaddrinfo = real_getaddrinfo
+        self.refused: list[str] = []
+
+    def getaddrinfo(self, host: Any, *args: Any, **kwargs: Any) -> Any:
+        """Resolve ``host`` if it is local; record and refuse it otherwise.
+
+        Args:
+            host: The host to resolve, as `socket.getaddrinfo` takes it.
+            *args: Passed through to the real resolver.
+            **kwargs: Passed through to the real resolver.
+
+        Returns:
+            The real resolver's result for a local host.
+
+        Raises:
+            socket.gaierror: For any non-local host.
+        """
+        if _is_local_host(host):
+            return self._real_getaddrinfo(host, *args, **kwargs)
+        self.refused.append(_host_name(host))
+        raise socket.gaierror(
+            socket.EAI_NONAME,
+            f"network access blocked in tests: {host!r} "
+            "(mock it with respx or a stub; mark real network tests `live`)",
+        )
+
+
+@pytest.fixture(autouse=True)
+def _no_network(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[NetworkGuard | None]:
+    """Refuse every non-local host lookup, and fail the test that tried one.
+
+    The `service` fixture holds real upstream clients, so a test that forgets
+    `respx` silently reaches the internet: slow when the upstream throttles,
+    flaky when it is down (#548). Every TCP connection -- httpx sync or async,
+    asyncio, `socket.create_connection` -- resolves its host through
+    `socket.getaddrinfo` first, so refusing it there covers them all; respx
+    intercepts at the transport and never resolves anything.
+
+    The refusal raises `socket.gaierror`, which code under test may swallow
+    (a best-effort enrichment step does). The test is therefore failed at
+    teardown as well, naming each host, so the leak cannot pass silently.
+
+    The proxy variables are cleared too: with a loopback proxy configured,
+    the client resolves only the proxy and the proxy resolves the real host,
+    so the lookup would never be seen here. This runs before the `service`
+    fixture builds its clients, which read the proxy settings when built.
+
+    Tests marked `live` opt out: they are deselected unless `-m live` names
+    them, and reaching the network is their point.
+    """
+    if request.node.get_closest_marker("live"):
+        yield None
+        return
+    for name in _PROXY_ENV_VARS:
+        monkeypatch.delenv(name, raising=False)
+        monkeypatch.delenv(name.upper(), raising=False)
+    guard = NetworkGuard(socket.getaddrinfo)
+    monkeypatch.setattr(socket, "getaddrinfo", guard.getaddrinfo)
+    yield guard
+    if guard.refused:
+        pytest.fail(
+            "test tried to reach the network: " + ", ".join(sorted(set(guard.refused))),
+            pytrace=False,
+        )
 
 
 @pytest.fixture(autouse=True)
