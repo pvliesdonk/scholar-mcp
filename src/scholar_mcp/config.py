@@ -202,6 +202,22 @@ class ProjectConfig:
             "wizard": {"group": "Books", "secret": True},
         },
     )
+    access_links: str | None = field(
+        default=None,
+        metadata={
+            "help": (
+                "Opt-in links to a paper through your library, offered when no "
+                "PDF can be fetched: a JSON list of objects with a label and an "
+                "http(s) URL template, in priority order. Placeholders: {doi}, "
+                "{doi_url} (the encoded doi.org URL, for wrapping), {openurl} "
+                "(OpenURL 1.0), {openurl_0_1} and {openurl_hybrid}. The server "
+                "never opens these links. See the PDF conversion guide for "
+                "examples."
+            ),
+            "tags": ("pdf",),
+            "wizard": {"group": "Access links"},
+        },
+    )
     # Populated from SCHOLAR_GITHUB_TOKEN (not SCHOLAR_MCP_GITHUB_TOKEN) — the
     # conventional GitHub-tooling env name users expect. The non-prefixed read
     # is invisible to the domain env-var scan, so the var is declared in
@@ -246,8 +262,14 @@ class ProjectConfig:
         ``object.__setattr__(self, "name", value)``.
         """
         # CONFIG-VALIDATE-START — validate domain fields below; kept across copier update
-        # (no domain invariants yet — scholar's fields are all independently
-        #  optional; add cross-field rules here when one appears)
+        from ._access_links import parse_access_link_templates
+
+        try:
+            parse_access_link_templates(self.access_links)
+        except ValueError as exc:
+            raise ConfigurationError(
+                f"SCHOLAR_MCP_ACCESS_LINKS is invalid: {exc}"
+            ) from None
         # CONFIG-VALIDATE-END
 
     @classmethod
@@ -271,6 +293,7 @@ class ProjectConfig:
             epo_consumer_key=env(_ENV_PREFIX, "EPO_CONSUMER_KEY"),
             epo_consumer_secret=env(_ENV_PREFIX, "EPO_CONSUMER_SECRET"),
             google_books_api_key=env(_ENV_PREFIX, "GOOGLE_BOOKS_API_KEY"),
+            access_links=env(_ENV_PREFIX, "ACCESS_LINKS"),
             # SCHOLAR_GITHUB_TOKEN — see the github_token field comment above.
             github_token=os.environ.get("SCHOLAR_GITHUB_TOKEN") or None,
             # CONFIG-FROM-ENV-END

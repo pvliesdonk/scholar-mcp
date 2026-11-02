@@ -17,6 +17,7 @@ from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
 from fastmcp_pvl_core import register_long_running_tool
 
+from ._access_links import build_access_links, parse_access_link_templates
 from ._docling_client import DoclingClient
 from ._paper_cache import resolve_paper
 from ._pdf_url_resolver import ResolvedPdf, resolve_alternative_pdf
@@ -33,6 +34,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 _PDF_HEADER = b"%PDF-"
+_ACCESS_LINKS_NOTE = (
+    "This server could not fetch the PDF. access_links lead to the paper "
+    "through the user's own library access: offer them to the user, or open "
+    "one yourself if you can browse the web from the user's network."
+)
 
 
 def _pdf_cache_identity(file_stat: os.stat_result) -> tuple[int, int, int, int, int]:
@@ -67,6 +73,28 @@ def _write_pdf_cache(path: Path, content: bytes) -> None:
         temporary_path.replace(path)
     finally:
         temporary_path.unlink(missing_ok=True)
+
+
+def _with_access_links(
+    service: Service, paper: PaperRecord, payload: dict[str, Any]
+) -> dict[str, Any]:
+    """Add the operator's access links to a no-PDF payload, when any apply.
+
+    Args:
+        service: Domain service, for the configured link templates.
+        paper: The paper whose PDF could not be fetched.
+        payload: The error payload to extend.
+
+    Returns:
+        ``payload``, with ``access_links`` and a ``note`` when at least one
+        configured template could be filled for this paper.
+    """
+    templates = parse_access_link_templates(service.config.access_links)
+    links = build_access_links(paper, templates)
+    if links:
+        payload["access_links"] = links
+        payload["note"] = _ACCESS_LINKS_NOTE
+    return payload
 
 
 def _vlm_extras(docling: DoclingClient, use_vlm: bool) -> dict[str, Any]:
@@ -114,11 +142,15 @@ async def _ensure_paper_pdf(
         if alt:
             url, source = alt.url, alt.source
     if not url:
-        return {
-            "error": "no_oa_pdf",
-            "paper_id": paper.get("paperId"),
-            "title": paper.get("title"),
-        }
+        return _with_access_links(
+            service,
+            paper,
+            {
+                "error": "no_oa_pdf",
+                "paper_id": paper.get("paperId"),
+                "title": paper.get("title"),
+            },
+        )
 
     pid = paper.get("paperId", identifier.replace("/", "_"))
     pdf_dir = service.config.cache_dir / "pdfs"
@@ -133,17 +165,21 @@ async def _ensure_paper_pdf(
             r = await client.get(url, follow_redirects=True)
             r.raise_for_status()
         except httpx.HTTPError as exc:
-            return {
-                "error": "download_failed",
-                "detail": str(exc),
-                "pdf_source": source,
-            }
+            return _with_access_links(
+                service,
+                paper,
+                {"error": "download_failed", "detail": str(exc), "pdf_source": source},
+            )
     if not r.content.startswith(_PDF_HEADER):
-        return {
-            "error": "not_pdf",
-            "detail": "Downloaded content does not begin with the PDF header %PDF-.",
-            "pdf_source": source,
-        }
+        return _with_access_links(
+            service,
+            paper,
+            {
+                "error": "not_pdf",
+                "detail": "Downloaded content does not begin with the PDF header %PDF-.",
+                "pdf_source": source,
+            },
+        )
     await asyncio.to_thread(_write_pdf_cache, path, r.content)
     logger.info(
         "pdf_downloaded path=%s bytes=%d source=%s", path, len(r.content), source

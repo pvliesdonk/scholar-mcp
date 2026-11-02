@@ -442,6 +442,12 @@ the keepalive. Do not rely on it alone.
 |---|---|---|---|
 | `SCHOLAR_MCP_GOOGLE_BOOKS_API_KEY` | (none) | No | Google Books API key. Optional; book tools work unauthenticated at reduced rate limits. |
 
+### Access links
+
+| Variable | Default | Required | Description |
+|---|---|---|---|
+| `SCHOLAR_MCP_ACCESS_LINKS` | (none) | No | Opt-in links to a paper through your library, offered when no PDF can be fetched: a JSON list of objects with a label and an http(s) URL template, in priority order. Placeholders: {doi}, {doi_url} (the encoded doi.org URL, for wrapping), {openurl} (OpenURL 1.0), {openurl_0_1} and {openurl_hybrid}. The server never opens these links. See the PDF conversion guide for examples. |
+
 ### Jobs
 
 | Variable | Default | Required | Description |

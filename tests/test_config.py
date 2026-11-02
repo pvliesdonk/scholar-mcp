@@ -98,3 +98,21 @@ def test_github_token_defaults_to_none(monkeypatch):
     monkeypatch.delenv("SCHOLAR_GITHUB_TOKEN", raising=False)
     config = ProjectConfig.from_env()
     assert config.github_token is None
+
+
+def test_access_links_read_from_env(monkeypatch):
+    """SCHOLAR_MCP_ACCESS_LINKS is read verbatim; unset means off."""
+    monkeypatch.delenv("SCHOLAR_MCP_ACCESS_LINKS", raising=False)
+    assert ProjectConfig.from_env().access_links is None
+    raw = '[{"label": "Library", "template": "https://r.example/link?{openurl}"}]'
+    monkeypatch.setenv("SCHOLAR_MCP_ACCESS_LINKS", raw)
+    assert ProjectConfig.from_env().access_links == raw
+
+
+def test_invalid_access_links_refuse_startup():
+    """A malformed template list is a configuration error naming the variable."""
+    import pytest
+    from fastmcp_pvl_core import ConfigurationError
+
+    with pytest.raises(ConfigurationError, match="SCHOLAR_MCP_ACCESS_LINKS"):
+        ProjectConfig(access_links='[{"label": "x", "template": "https://r/{isbn}"}]')

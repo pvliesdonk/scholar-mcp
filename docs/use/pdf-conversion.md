@@ -160,8 +160,38 @@ For PDFs found through other means (author homepages, institutional repositories
 !!! tip "Enable Unpaywall"
     Set `SCHOLAR_MCP_CONTACT_EMAIL` to your email address to enable Unpaywall lookups. This is also used for the OpenAlex polite pool.
 
+## Access links for licensed papers
+
+Some papers have no open copy, but your library licenses them. You can configure links into your library's systems, and when `fetch_paper_pdf` or `fetch_and_convert` can't get a PDF (`no_oa_pdf`, `download_failed` or `not_pdf`), the response lists them under `access_links`, in your order. Scholar MCP builds these links but never opens them. Your browser, or an agent on your network, can use them where your library's licence applies.
+
+Set `SCHOLAR_MCP_ACCESS_LINKS` to a JSON list of `label` and `template` pairs. A template is a URL with placeholders:
+
+| Placeholder | Becomes |
+|---|---|
+| `{doi}` | The DOI, escaped so it is safe in a URL path or query |
+| `{doi_url}` | `https://doi.org/<DOI>`, fully encoded, to wrap inside another link |
+| `{openurl}` | An OpenURL 1.0 citation: DOI, PubMed ID, title, journal, year and authors |
+| `{openurl_0_1}` | The same citation in the older OpenURL 0.1 form |
+| `{openurl_hybrid}` | Both forms in one link |
+
+A template is skipped for a paper it can't be filled for, such as `{doi}` for a paper without a DOI. The OpenURL forms still work without a DOI when the paper has a title.
+
+This configures a library on OCLC WorldCat, with its link resolver first and its inter-library loan form second:
+
+```bash
+SCHOLAR_MCP_ACCESS_LINKS='[
+  {"label": "Library full text", "template": "https://example.on.worldcat.org/atoztitles/link?{openurl}"},
+  {"label": "Library order form", "template": "https://123456.account.worldcat.org/account/route/wsill/openurl?{openurl}"},
+  {"label": "Publisher", "template": "https://doi.org/{doi}"}
+]'
+```
+
+To find your library's resolver address, turn on your library under Google Scholar's **Settings → Library links**, then copy the address of its link on any search result: everything before the `?` is the base. Other templates follow the same pattern: an OpenAthens redirector is `https://go.openathens.net/redirector/<your domain>?url={doi_url}`, and an SFX or Alma resolver takes `?{openurl}` after its base address.
+
+Which OpenURL form to use depends on the resolver. Most accept both. OCLC's resolver looks up the DOI itself when it gets `{openurl}`, which fills in missing details.
+
 ## Limitations
 
-- **Paywalled papers**: Alternative resolution only finds openly available versions. Truly paywalled papers require manual download followed by `convert_pdf_to_markdown`, or use `fetch_pdf_by_url` if you find a link.
+- **Paywalled papers**: Alternative resolution only finds openly available versions. Truly paywalled papers require manual download followed by `convert_pdf_to_markdown`, or use `fetch_pdf_by_url` if you find a link. [Access links](#access-links-for-licensed-papers) point you to your library's copy.
 - **Conversion quality varies**: OCR quality depends on the PDF source. Scanned papers produce lower-quality results than born-digital PDFs.
 - **docling-serve polling**: Conversion is asynchronous internally. The server polls docling-serve for completion with a timeout of ~10 minutes (200 polls at 3-second intervals). This happens inside the background job, so the MCP client is not blocked.
