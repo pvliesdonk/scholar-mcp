@@ -46,7 +46,7 @@ A response looks like `{"path": "/data/scholar-mcp/pdfs/<id>.pdf", "source": "s2
 - `{"error": "download_failed"}`: HTTP error downloading the PDF
 - `{"error": "not_pdf"}`: the response body does not begin with the PDF header
 
-Unless the operator turned [access links](../../use/pdf-conversion.md#access-links-for-licensed-papers) off, each of these three also carries `access_links`, a list of `{"label", "url"}` routes to the paper (by default its doi.org link), and a `note` for the model.
+Unless the operator turned [access links](../../use/pdf-conversion.md#access-links-for-licensed-papers) off, each of these three also carries `access_links`, a list of `{"label", "url"}` routes to the paper (by default its doi.org link), and a `note` for the model. A paper with nothing to fill a route, such as one without a DOI under the default, gets neither.
 
 Paper metadata is read from the same 30-day cache `get_paper` uses, and a freshly resolved record is written back to it. A repeat call for the same paper needs no Semantic Scholar request.
 <!-- DOMAIN-EXAMPLE-fetch_paper_pdf-END -->
