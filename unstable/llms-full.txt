@@ -2107,7 +2107,7 @@ Set `SCHOLAR_MCP_CONTACT_EMAIL` to your email address to enable Unpaywall lookup
 
 ## Access links for licensed papers
 
-Some papers have no open copy, but your library licenses them. You can configure links into your library's systems, and when `fetch_paper_pdf` or `fetch_and_convert` can't get a PDF (`no_oa_pdf`, `download_failed` or `not_pdf`), the response lists them under `access_links`, in your order. Scholar MCP builds these links but never opens them. Your browser, or an agent on your network, can use them where your library's licence applies.
+Some papers have no open copy, but your library licenses them. You can configure links into your library's systems, and when `fetch_paper_pdf` or `fetch_and_convert` can't get a PDF (`no_oa_pdf`, `download_failed` or `not_pdf`), the response lists them under `access_links`, in your order. `get_paper` lists them too, ahead of any download attempt. Scholar MCP builds these links but never opens them. Your browser, or an agent on your network, can use them where your library's licence applies.
 
 Set `SCHOLAR_MCP_ACCESS_LINKS` to a JSON list of `label` and `template` pairs. A template is a URL with placeholders:
 
@@ -2804,11 +2804,13 @@ A cached paper answers immediately. Otherwise the record is fetched and enriched
 
 **Returns**
 
-A mapping with full paper metadata, or `{"error": "not_found", "identifier": "..."}` if not found.
+A mapping with full paper metadata, or `{"error": "not_found", "identifier": "..."}` if not found. When the deployment configures access links, the mapping also carries `access_links`: labelled routes to the paper through the user's library, which the server itself never opens.
 
 The record always uses the `full` field set.
 
 Results are cached for 30 days. Identifier aliases (such as DOI to S2 ID) are cached permanently.
+
+When the deployment configures [access links](https://pvliesdonk.github.io/scholar-mcp/unstable/use/pdf-conversion/#access-links-for-licensed-papers), each record also carries `access_links`, a list of `{label, url}` routes through the user's library. They are built on every call and never cached.
 
 ## `get_author`
 

@@ -144,7 +144,7 @@ Set `SCHOLAR_MCP_CONTACT_EMAIL` to your email address to enable Unpaywall lookup
 
 ## Access links for licensed papers
 
-Some papers have no open copy, but your library licenses them. You can configure links into your library's systems, and when `fetch_paper_pdf` or `fetch_and_convert` can't get a PDF (`no_oa_pdf`, `download_failed` or `not_pdf`), the response lists them under `access_links`, in your order. Scholar MCP builds these links but never opens them. Your browser, or an agent on your network, can use them where your library's licence applies.
+Some papers have no open copy, but your library licenses them. You can configure links into your library's systems, and when `fetch_paper_pdf` or `fetch_and_convert` can't get a PDF (`no_oa_pdf`, `download_failed` or `not_pdf`), the response lists them under `access_links`, in your order. `get_paper` lists them too, ahead of any download attempt. Scholar MCP builds these links but never opens them. Your browser, or an agent on your network, can use them where your library's licence applies.
 
 Set `SCHOLAR_MCP_ACCESS_LINKS` to a JSON list of `label` and `template` pairs. A template is a URL with placeholders:
 

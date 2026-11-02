@@ -51,11 +51,13 @@ A cached paper answers immediately. Otherwise the record is fetched and enriched
 
 **Returns**
 
-A mapping with full paper metadata, or `{"error": "not_found", "identifier": "..."}` if not found.
+A mapping with full paper metadata, or `{"error": "not_found", "identifier": "..."}` if not found. When the deployment configures access links, the mapping also carries `access_links`: labelled routes to the paper through the user's library, which the server itself never opens.
 
 The record always uses the `full` field set.
 
 Results are cached for 30 days. Identifier aliases (such as DOI to S2 ID) are cached permanently.
+
+When the deployment configures [access links](https://pvliesdonk.github.io/scholar-mcp/unstable/use/pdf-conversion/#access-links-for-licensed-papers), each record also carries `access_links`, a list of `{label, url}` routes through the user's library. They are built on every call and never cached.
 
 ## `get_author`
 
