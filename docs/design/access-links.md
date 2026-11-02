@@ -6,8 +6,9 @@ a login redirector, or the publisher's page on a network with licence access.
 These routes are site-specific and run in the user's browser session, so the
 server cannot use them, but it can build links that very likely work for that
 user. Epic [#538](https://github.com/pvliesdonk/scholar-mcp/issues/538) holds
-the story; [#539](https://github.com/pvliesdonk/scholar-mcp/issues/539) is this
-first slice.
+the story; [#539](https://github.com/pvliesdonk/scholar-mcp/issues/539) added
+the links to failed PDF fetches and
+[#540](https://github.com/pvliesdonk/scholar-mcp/issues/540) to `get_paper`.
 
 ## Behaviour
 
@@ -20,6 +21,10 @@ first slice.
   the three outcomes where no PDF arrived: `no_oa_pdf`, `download_failed` and
   `not_pdf`. The last two usually mean a publisher answered with a paywall or a
   login page, which is exactly when a library route helps.
+- `get_paper` adds `access_links`, without a `note`, to every record it can
+  fill a template for, whether or not the paper has an open-access PDF. A
+  library route can reach the version of record when the open copy is a
+  preprint, and the agent learns the route before trying a fetch.
 - Links come back in the configured order. Order is the operator's way of
   putting the route most likely to succeed first.
 - A template whose placeholders the paper cannot fill is skipped, so every
@@ -64,7 +69,13 @@ every library it links to.
   tells the model to offer the links to the user, or to open one if it can
   browse from the user's network. The description stays a statement of the
   contract (`writing-model-facing-text`).
+- **Links on `get_paper` are built on read, never cached.** The tool adds
+  them to its copy of the record after the cache read, so a changed template
+  list applies to the next call, including for papers cached before it.
+- **`batch_resolve` carries no links.** It resolves many papers at once to
+  identify them; a set of URLs per paper would multiply its output for a use
+  that `get_paper` covers.
 - **Templates are parsed per call.** The config holds the raw text; the tool
-  parses it when it builds links. Parsing is cheap next to a failed download,
+  parses it when it builds links. Parsing a short JSON list is cheap,
   and keeping config fields plain avoids imports outside the config module's
   sentinel blocks.
