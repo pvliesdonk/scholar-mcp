@@ -69,17 +69,18 @@ a job handle to poll with ``get_job_result``.
 **Returns**
 
 A mapping with full paper metadata, or
-``{"error": "not_found", "identifier": "..."}`` if not found. When
-the deployment configures access links, the mapping also carries
-``access_links``: labelled routes to the paper through the user's
-library, which the server itself never opens.
+``{"error": "not_found", "identifier": "..."}`` if not found. The
+mapping also carries ``access_links``, labelled routes to the paper
+that the server itself never opens, when the paper has the
+identifiers a configured route needs. By default that is the
+doi.org link, so a paper without a DOI gets none.
 
 <!-- DOMAIN-EXAMPLE-get_paper-START -->
 The record always uses the `full` field set.
 
 Results are cached for 30 days. Identifier aliases (such as DOI to S2 ID) are cached permanently.
 
-When the deployment configures [access links](../../use/pdf-conversion.md#access-links-for-licensed-papers), each record also carries `access_links`, a list of `{label, url}` routes through the user's library. They are built on every call and never cached.
+A record can also have [`access_links`](../../use/pdf-conversion.md#access-links-for-licensed-papers): `{label, url}` routes to the paper, which the server works out again on each call. By default the list holds only the doi.org link, so a paper without a DOI gets no `access_links`. An operator can list library routes in its place or turn links off.
 <!-- DOMAIN-EXAMPLE-get_paper-END -->
 
 ## `get_author`

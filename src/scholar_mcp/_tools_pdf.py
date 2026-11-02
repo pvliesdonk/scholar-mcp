@@ -36,8 +36,8 @@ logger = logging.getLogger(__name__)
 _PDF_HEADER = b"%PDF-"
 _ACCESS_LINKS_NOTE = (
     "This server could not fetch the PDF. access_links lead to the paper "
-    "through the user's own library access: offer them to the user, or open "
-    "one yourself if you can browse the web from the user's network."
+    "where the user's own licence access may apply: offer them to the user, "
+    "or open one yourself if you can browse the web from the user's network."
 )
 
 

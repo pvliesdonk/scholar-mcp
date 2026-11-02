@@ -164,7 +164,9 @@ For PDFs found through other means (author homepages, institutional repositories
 
 Some papers have no open copy, but your library licenses them. You can configure links into your library's systems, and when `fetch_paper_pdf` or `fetch_and_convert` can't get a PDF (`no_oa_pdf`, `download_failed` or `not_pdf`), the response lists them under `access_links`, in your order. `get_paper` lists them too, ahead of any download attempt. Scholar MCP builds these links but never opens them. Your browser, or an agent on your network, can use them where your library's licence applies.
 
-Set `SCHOLAR_MCP_ACCESS_LINKS` to a JSON list of `label` and `template` pairs. A template is a URL with placeholders:
+Without any configuration, the list holds one link, `https://doi.org/<DOI>`, labelled `Publisher (DOI)`. It leads to the publisher's page, which on a network with licence access (many universities and research institutes) often opens the full text directly. Set `SCHOLAR_MCP_ACCESS_LINKS='[]'` to turn links off.
+
+To offer your library's routes, set `SCHOLAR_MCP_ACCESS_LINKS` to a JSON list of `label` and `template` pairs. Your list replaces the default, so include the DOI link yourself if you want it. A template is a URL with placeholders:
 
 | Placeholder | Becomes |
 |---|---|

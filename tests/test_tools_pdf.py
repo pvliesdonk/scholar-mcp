@@ -1501,11 +1501,8 @@ async def test_not_pdf_offers_access_links_in_fetch_and_convert(
     assert len(data["access_links"]) == 2
 
 
-@pytest.mark.respx(assert_all_called=False)
-async def test_no_oa_without_configuration_has_no_access_links(
-    service: Service, slow_jobs: Jobs
-) -> None:
-    """With no templates configured the payload is unchanged."""
+async def _no_oa_payload(service: Service, slow_jobs: Jobs) -> dict[str, Any]:
+    """Call fetch_paper_pdf for a paper with a DOI and no open-access PDF."""
     paper_json = {
         "paperId": "al4",
         "openAccessPdf": None,
@@ -1517,9 +1514,28 @@ async def test_no_oa_without_configuration_has_no_access_links(
         )
         async with Client(pdf_app(service, slow_jobs)) as client:
             result = await client.call_tool("fetch_paper_pdf", {"identifier": "al4"})
-
-    data = json.loads(result.content[0].text)
+    data: dict[str, Any] = json.loads(result.content[0].text)
     assert data["error"] == "no_oa_pdf"
+    return data
+
+
+async def test_no_oa_without_configuration_offers_the_doi_link(
+    service: Service, slow_jobs: Jobs
+) -> None:
+    """Unconfigured, the payload offers the single doi.org link and the note."""
+    data = await _no_oa_payload(service, slow_jobs)
+    assert data["access_links"] == [
+        {"label": "Publisher (DOI)", "url": "https://doi.org/10.1000/al4"}
+    ]
+    assert "note" in data
+
+
+async def test_no_oa_with_empty_configuration_has_no_access_links(
+    service: Service, slow_jobs: Jobs
+) -> None:
+    """An explicit empty list turns links off: the payload is unchanged."""
+    service.config = dataclasses.replace(service.config, access_links="[]")
+    data = await _no_oa_payload(service, slow_jobs)
     assert "access_links" not in data
     assert "note" not in data
 

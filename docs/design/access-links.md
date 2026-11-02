@@ -8,10 +8,15 @@ server cannot use them, but it can build links that very likely work for that
 user. Epic [#538](https://github.com/pvliesdonk/scholar-mcp/issues/538) holds
 the story; [#539](https://github.com/pvliesdonk/scholar-mcp/issues/539) added
 the links to failed PDF fetches and
-[#540](https://github.com/pvliesdonk/scholar-mcp/issues/540) to `get_paper`.
+[#540](https://github.com/pvliesdonk/scholar-mcp/issues/540) to `get_paper`;
+[#547](https://github.com/pvliesdonk/scholar-mcp/issues/547) made a doi.org
+link the default.
 
 ## Behaviour
 
+- Unset, `SCHOLAR_MCP_ACCESS_LINKS` means one template,
+  `{"label": "Publisher (DOI)", "template": "https://doi.org/{doi}"}`. An
+  explicit `[]` turns links off.
 - The operator sets `SCHOLAR_MCP_ACCESS_LINKS` to a JSON list of
   `{"label", "template"}` objects. The list is validated at startup: each
   template must be an `http(s)` URL using only the known placeholders, with no
@@ -28,8 +33,8 @@ the links to failed PDF fetches and
 - Links come back in the configured order. Order is the operator's way of
   putting the route most likely to succeed first.
 - A template whose placeholders the paper cannot fill is skipped, so every
-  returned link is complete. With no templates configured, or none fillable,
-  the payload is unchanged.
+  returned link is complete. With links turned off, or no template
+  fillable, the payload is unchanged.
 - The server never requests a configured URL. Nothing in this feature widens
   what the server reaches.
 
@@ -55,8 +60,13 @@ every library it links to.
   SFX, Alma, OCLC and OpenAthens all reduce to "a base URL plus a citation or a
   wrapped DOI". A list of templates covers them and anything similar without
   code changes, and the operator controls order.
-- **No default templates.** Every URL comes from operator configuration, so
-  the shipped package points nowhere.
+- **One default link, and no resolver defaults.** Unconfigured, the server
+  offers `https://doi.org/{doi}`: it names no institution, and on a network
+  with IP-based licence access it is often the route that works, because
+  the publisher sees the network. Every resolver, order-form or redirector
+  URL still comes from operator configuration. A configured list replaces
+  the default rather than extending it, so the operator decides whether and
+  where the DOI link appears; `[]` is the opt-out.
 - **The link builder takes only what the record already has.** It reads DOI,
   PubMed ID, title, venue, year and author names. `genre` is always `article`,
   because records carry no reliable type across sources. Journal ISSN, volume,
