@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import json
 from contextlib import asynccontextmanager
 
@@ -90,6 +91,67 @@ async def test_get_paper_not_found(respx_mock: respx.MockRouter, mcp: FastMCP) -
         result = await client.call_tool("get_paper", {"identifier": "missing"})
     data = json.loads(result.content[0].text)
     assert data["error"] == "not_found"
+
+
+_ACCESS_LINKS = json.dumps(
+    [
+        {"label": "Library", "template": "https://resolver.example/link?{openurl}"},
+        {"label": "Publisher", "template": "https://doi.org/{doi}"},
+    ]
+)
+_LICENSED = {
+    "paperId": "lic1",
+    "title": "Licensed paper",
+    "externalIds": {"DOI": "10.1000/xyz"},
+}
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_paper_carries_configured_access_links(
+    respx_mock: respx.MockRouter, mcp: FastMCP, service: Service
+) -> None:
+    """Configured templates come back filled, in order, and are never cached."""
+    service.config = dataclasses.replace(service.config, access_links=_ACCESS_LINKS)
+    respx_mock.get("/paper/lic1").mock(return_value=httpx.Response(200, json=_LICENSED))
+    async with Client(mcp) as client:
+        result = await client.call_tool("get_paper", {"identifier": "lic1"})
+    data = json.loads(result.content[0].text)
+    assert [link["label"] for link in data["access_links"]] == ["Library", "Publisher"]
+    assert data["access_links"][0]["url"].startswith(
+        "https://resolver.example/link?url_ver=Z39.88-2004"
+    )
+    assert data["access_links"][1]["url"] == "https://doi.org/10.1000/xyz"
+    cached = await service.cache.get_paper("lic1")
+    assert cached is not None
+    assert "access_links" not in cached
+
+
+@pytest.mark.usefixtures("respx_mock")
+async def test_get_paper_builds_access_links_for_a_cached_paper(
+    mcp: FastMCP, service: Service
+) -> None:
+    """A paper cached before the links were configured still gets them.
+
+    ``respx_mock`` keeps enrichment of the cached DOI off the network.
+    """
+    await service.cache.set_paper("lic1", _LICENSED)
+    service.config = dataclasses.replace(service.config, access_links=_ACCESS_LINKS)
+    async with Client(mcp) as client:
+        result = await client.call_tool("get_paper", {"identifier": "lic1"})
+    data = json.loads(result.content[0].text)
+    assert len(data["access_links"]) == 2
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_paper_without_access_links_config_is_unchanged(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    """With nothing configured the record carries no access_links key."""
+    respx_mock.get("/paper/lic1").mock(return_value=httpx.Response(200, json=_LICENSED))
+    async with Client(mcp) as client:
+        result = await client.call_tool("get_paper", {"identifier": "lic1"})
+    data = json.loads(result.content[0].text)
+    assert "access_links" not in data
 
 
 @pytest.mark.respx(base_url=S2_BASE)

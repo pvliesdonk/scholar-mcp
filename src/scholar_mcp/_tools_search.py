@@ -8,6 +8,7 @@ import httpx
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
 
+from ._access_links import build_access_links, parse_access_link_templates
 from ._paper_cache import resolve_paper
 from ._s2_client import FIELD_SETS, SEARCH_LIMIT_MAX, clamp_limit, s2_error_payload
 from ._s2_jobs import register_s2_tool
@@ -154,7 +155,10 @@ async def get_paper(
 
     Returns:
         A mapping with full paper metadata, or
-        ``{"error": "not_found", "identifier": "..."}`` if not found.
+        ``{"error": "not_found", "identifier": "..."}`` if not found. When
+        the deployment configures access links, the mapping also carries
+        ``access_links``: labelled routes to the paper through the user's
+        library, which the server itself never opens.
     """
     try:
         paper = await resolve_paper(service.cache, service.s2.get_paper, identifier)
@@ -164,7 +168,13 @@ async def get_paper(
         return s2_error_payload(exc)
 
     await service.enrichment.enrich([paper], service, tags=frozenset({"papers"}))
-    return dict(paper)
+    result = dict(paper)
+    # Built on every read, never cached, so a config change applies at once.
+    templates = parse_access_link_templates(service.config.access_links)
+    links = build_access_links(paper, templates)
+    if links:
+        result["access_links"] = links
+    return result
 
 
 async def get_author(
