@@ -10,7 +10,9 @@ the story; [#539](https://github.com/pvliesdonk/scholar-mcp/issues/539) added
 the links to failed PDF fetches and
 [#540](https://github.com/pvliesdonk/scholar-mcp/issues/540) to `get_paper`;
 [#547](https://github.com/pvliesdonk/scholar-mcp/issues/547) made a doi.org
-link the default.
+link the default;
+[#541](https://github.com/pvliesdonk/scholar-mcp/issues/541) put the journal
+details into the OpenURL.
 
 ## Behaviour
 
@@ -44,7 +46,7 @@ link the default.
 |---|---|---|
 | `{doi}` | DOI | Percent-encoded except `/ ( )`, so it is safe in a path and in a query value |
 | `{doi_url}` | DOI | `https://doi.org/<DOI>`, fully percent-encoded, for wrapping in a redirector's `url=` |
-| `{openurl}` | DOI, PubMed ID or title | OpenURL 1.0 KEV, journal format |
+| `{openurl}` | DOI, PubMed ID or title | OpenURL 1.0 KEV, journal format, with ISSN, volume, issue and pages when known |
 | `{openurl_0_1}` | DOI, PubMed ID or title | OpenURL 0.1 |
 | `{openurl_hybrid}` | DOI, PubMed ID or title | 1.0 keys followed by the 0.1 keys |
 
@@ -68,10 +70,25 @@ every library it links to.
   the default rather than extending it, so the operator decides whether and
   where the DOI link appears; `[]` is the opt-out.
 - **The link builder takes only what the record already has.** It reads DOI,
-  PubMed ID, title, venue, year and author names. `genre` is always `article`,
-  because records carry no reliable type across sources. Journal ISSN, volume,
-  issue and pages are left to
-  [#541](https://github.com/pvliesdonk/scholar-mcp/issues/541).
+  PubMed ID, title, venue, year and author names, plus ISSN, volume, issue
+  and pages. `genre` is always `article`, because records carry no reliable
+  type across sources.
+- **The cached paper record carries S2's journal details.** `get_paper` and
+  the PDF tools fetch the `full` field set plus `journal` and
+  `publicationVenue`, which give volume, pages and ISSN. The `full` preset
+  itself is unchanged, so `search_papers(fields="full")` and the batch tools
+  return what they did. Records cached before this change lack the two
+  fields until their 30-day entry expires; their links are built as before.
+- **CrossRef first, S2 for the gaps, field by field.** CrossRef keeps volume,
+  issue, pages and each ISSN with its type in separate fields. S2 has no
+  issue and can merge volume and issue into one string (`"116 6"`), so only
+  its first token is taken as the volume. CrossRef metadata is on the record
+  only in `get_paper`, after enrichment of a paper with a DOI; the PDF tools
+  use S2's details alone. OpenAlex is not read for these details yet.
+- **A page range is split into `spage` and `epage`.** A single token, such
+  as an article number, is the start page. Anything else is left out rather
+  than guessed at. Both OpenURL versions use the same key names for these
+  details, so the 0.1 form carries them too.
 - **No arXiv identifier in OpenURL.** Neither version has a namespace that
   covers current arXiv identifiers (see the reference page); arXiv papers are
   open access and resolved earlier in the pipeline anyway.

@@ -9,7 +9,10 @@ network, to a paper the server could not fetch itself.
 The OpenURL query strings follow OpenURL 0.1 and ANSI/NISO Z39.88-2004
 (OpenURL 1.0, KEV journal format); the keys, the encoding rules and the
 hybrid form are recorded with sources in
-``docs/design/reference/openurl.md``.
+``docs/design/reference/openurl.md``. The journal details they carry (ISSN,
+volume, issue, pages) come from the record's S2 and CrossRef fields, described
+in ``docs/design/reference/semantic-scholar-api.md`` and
+``docs/design/reference/crossref-works.md``.
 """
 
 from __future__ import annotations
@@ -17,7 +20,8 @@ from __future__ import annotations
 import json
 import re
 import string
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from dataclasses import fields as dataclass_fields
 from typing import TYPE_CHECKING, Any, TypedDict
 from urllib.parse import quote
 
@@ -42,6 +46,8 @@ _KEV_ADMIN: tuple[tuple[str, str], ...] = (
 _SID_0_1 = "scholarmcp:scholarmcp"
 # Bounds the URL: Z39.88 asks resolvers to accept 2,048 bytes (App. E.1).
 _MAX_LISTED_AUTHORS = 5
+# A page range as S2 ("116 - 135") and CrossRef ("436-444") write it.
+_PAGE_RANGE = re.compile(r"^(\S+?)\s*[-\u2013\u2014]+\s*(\S+)$")
 _DOI_URL_PREFIX = re.compile(r"^(?:https?://(?:dx\.)?doi\.org/|doi:)", re.IGNORECASE)
 _TEMPLATE_KEYS = frozenset({"label", "template"})
 
@@ -76,6 +82,27 @@ class AccessLink(TypedDict):
 
 
 @dataclass(frozen=True)
+class _JournalDetails:
+    """Where in its journal a paper appears, as far as the record says."""
+
+    issn: str | None = None
+    eissn: str | None = None
+    volume: str | None = None
+    issue: str | None = None
+    spage: str | None = None
+    epage: str | None = None
+
+    def or_else(self, fallback: _JournalDetails) -> _JournalDetails:
+        """Fill each field this one lacks from *fallback*."""
+        filled = {
+            f.name: getattr(fallback, f.name)
+            for f in dataclass_fields(self)
+            if getattr(self, f.name) is None
+        }
+        return replace(self, **filled)
+
+
+@dataclass(frozen=True)
 class _Citation:
     """The metadata the link formats draw on, extracted once per paper."""
 
@@ -85,6 +112,7 @@ class _Citation:
     journal: str | None
     year: str | None
     authors: tuple[str, ...]
+    details: _JournalDetails
 
     @property
     def citable(self) -> bool:
@@ -165,7 +193,8 @@ def build_access_links(
     paper without a DOI) is skipped, so every returned link is complete.
 
     Args:
-        paper: A Semantic Scholar paper record.
+        paper: A Semantic Scholar paper record, with ``crossref_metadata``
+            when enrichment added it.
         templates: The configured templates, in priority order.
 
     Returns:
@@ -203,14 +232,97 @@ def _citation(paper: Mapping[str, Any]) -> _Citation:
     pmid = ids.get("PubMed")
     year = paper.get("year")
     names = [a.get("name") for a in paper.get("authors") or []]
+    s2_journal = paper.get("journal") or {}
+    crossref = paper.get("crossref_metadata") or {}
+    journal = (
+        paper.get("venue")
+        or _text(s2_journal.get("name"))
+        or _first_text(crossref.get("container-title"))
+    )
     return _Citation(
         doi=_DOI_URL_PREFIX.sub("", doi.strip()) or None if doi else None,
         pmid=str(pmid) if pmid else None,
         title=paper.get("title") or None,
-        journal=paper.get("venue") or None,
+        journal=journal or None,
         year=str(year) if year else None,
         authors=tuple(n.strip() for n in names if isinstance(n, str) and n.strip()),
+        details=_journal_details(paper),
     )
+
+
+def _journal_details(paper: Mapping[str, Any]) -> _JournalDetails:
+    """ISSN, volume, issue and pages, CrossRef first and S2 for the rest.
+
+    CrossRef carries each value in its own field. S2 can merge volume and
+    issue into one string, so its values only fill what CrossRef lacks.
+    """
+    details = _crossref_details(paper.get("crossref_metadata") or {}).or_else(
+        _s2_details(paper)
+    )
+    if details.issn is not None and details.issn == details.eissn:
+        details = replace(details, issn=None)
+    return details
+
+
+def _crossref_details(work: Mapping[str, Any]) -> _JournalDetails:
+    """Journal details from a CrossRef work (``crossref_metadata``)."""
+    typed = {
+        entry.get("type"): _text(entry.get("value"))
+        for entry in work.get("issn-type") or []
+        if isinstance(entry, dict)
+    }
+    issn = typed.get("print")
+    eissn = typed.get("electronic")
+    if issn is None and eissn is None:
+        issn = _first_text(work.get("ISSN"))
+    spage, epage = _page_range(_text(work.get("page")))
+    return _JournalDetails(
+        issn=issn,
+        eissn=eissn,
+        volume=_text(work.get("volume")),
+        issue=_text(work.get("issue")),
+        spage=spage or _text(work.get("article-number")),
+        epage=epage,
+    )
+
+
+def _s2_details(paper: Mapping[str, Any]) -> _JournalDetails:
+    """Journal details from S2's ``journal`` and ``publicationVenue``."""
+    journal = paper.get("journal") or {}
+    venue = paper.get("publicationVenue") or {}
+    volume = _text(journal.get("volume"))
+    spage, epage = _page_range(_text(journal.get("pages")))
+    return _JournalDetails(
+        issn=_text(venue.get("issn")),
+        # "116 6" is volume 116, issue 6, but only the volume is certain.
+        volume=volume.split()[0] if volume else None,
+        spage=spage,
+        epage=epage,
+    )
+
+
+def _page_range(pages: str | None) -> tuple[str | None, str | None]:
+    """Split ``"116 - 135"`` into start and end; a single token is the start."""
+    if pages is None:
+        return None, None
+    match = _PAGE_RANGE.match(pages)
+    if match:
+        return match.group(1), match.group(2)
+    return (pages, None) if len(pages.split()) == 1 else (None, None)
+
+
+def _text(value: object) -> str | None:
+    """A stripped non-empty string, or None."""
+    if isinstance(value, int | str):
+        return str(value).strip() or None
+    return None
+
+
+def _first_text(values: object) -> str | None:
+    """The first usable string of a list, or None."""
+    if isinstance(values, list):
+        return next((t for t in map(_text, values) if t), None)
+    return None
 
 
 def _split_name(name: str) -> tuple[str, str | None]:
@@ -286,10 +398,17 @@ _KEY_0_1 = {"jtitle": "title"}
 def _metadata_fields(citation: _Citation) -> list[tuple[str, str]]:
     """Unencoded journal-format metadata, keyed by their 1.0 names."""
     fields = [("genre", "article")]
+    details = citation.details
     optional = (
         ("atitle", citation.title),
         ("jtitle", citation.journal),
+        ("issn", details.issn),
+        ("eissn", details.eissn),
         ("date", citation.year),
+        ("volume", details.volume),
+        ("issue", details.issue),
+        ("spage", details.spage),
+        ("epage", details.epage),
     )
     fields += [(key, value) for key, value in optional if value]
     if citation.authors:

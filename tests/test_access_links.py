@@ -320,6 +320,130 @@ def test_openurl_hybrid_carries_both_versions() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Journal details: ISSN, volume, issue, pages
+# ---------------------------------------------------------------------------
+
+# Shapes as S2 returned them for DOI 10.1145/3065386 and
+# 10.1103/PhysRevLett.116.061102, and CrossRef for 10.1038/nature14539.
+S2_CACM: dict[str, Any] = {
+    "journal": {
+        "name": "Communications of the ACM",
+        "pages": "84 - 90",
+        "volume": "60",
+    },
+    "publicationVenue": {"name": "Communications of the ACM", "issn": "0001-0782"},
+}
+CROSSREF_NATURE: dict[str, Any] = {
+    "ISSN": ["0028-0836", "1476-4687"],
+    "issn-type": [
+        {"value": "0028-0836", "type": "print"},
+        {"value": "1476-4687", "type": "electronic"},
+    ],
+    "volume": "521",
+    "issue": "7553",
+    "page": "436-444",
+    "container-title": ["Nature"],
+}
+_DETAIL_KEYS = ("issn", "eissn", "volume", "issue", "spage", "epage")
+
+
+def _details(paper: dict[str, Any], version: str = "{openurl}") -> dict[str, str]:
+    """The journal-detail keys of one OpenURL, without the ``rft.`` prefix."""
+    pairs = dict(_query(_one(RESOLVER + version, paper)))
+    found = {k.removeprefix("rft."): v for k, v in pairs.items()}
+    return {k: found[k] for k in _DETAIL_KEYS if k in found}
+
+
+def test_openurl_carries_s2_journal_details() -> None:
+    """S2's ISSN, volume and page range reach both OpenURL versions."""
+    paper = {**PAPER, **S2_CACM}
+    expected = {"issn": "0001-0782", "volume": "60", "spage": "84", "epage": "90"}
+    assert _details(paper) == expected
+    assert _details(paper, "{openurl_0_1}") == expected
+
+
+def test_s2_merged_volume_and_article_number() -> None:
+    """``"116 6"`` gives volume 116 only; a padded article number is the start page."""
+    paper = {
+        **PAPER,
+        "journal": {"pages": "\n          061102\n        ", "volume": "116 6"},
+    }
+    assert _details(paper) == {"volume": "116", "spage": "061102"}
+
+
+def test_openurl_carries_crossref_journal_details() -> None:
+    """CrossRef's print and electronic ISSN, volume, issue and pages are used."""
+    paper = {**PAPER, "crossref_metadata": CROSSREF_NATURE}
+    assert _details(paper) == {
+        "issn": "0028-0836",
+        "eissn": "1476-4687",
+        "volume": "521",
+        "issue": "7553",
+        "spage": "436",
+        "epage": "444",
+    }
+
+
+def test_crossref_wins_and_s2_fills_the_gaps() -> None:
+    """Each field comes from CrossRef when it has one, otherwise from S2."""
+    crossref = {"volume": "521", "issue": "7553"}
+    paper = {**PAPER, **S2_CACM, "crossref_metadata": crossref}
+    assert _details(paper) == {
+        "issn": "0001-0782",
+        "volume": "521",
+        "issue": "7553",
+        "spage": "84",
+        "epage": "90",
+    }
+
+
+def test_crossref_untyped_issn_and_article_number() -> None:
+    """Without ``issn-type`` the first ISSN is used; an article number starts the pages."""
+    crossref = {"ISSN": ["", "1234-5678"], "article-number": "e1001"}
+    paper = {**PAPER, "crossref_metadata": crossref}
+    assert _details(paper) == {"issn": "1234-5678", "spage": "e1001"}
+
+
+def test_same_issn_is_sent_once_as_eissn() -> None:
+    """An S2 ISSN equal to CrossRef's electronic one is not repeated as print."""
+    crossref = {"issn-type": [{"value": "0001-0782", "type": "electronic"}]}
+    paper = {**PAPER, **S2_CACM, "crossref_metadata": crossref}
+    assert _details(paper)["eissn"] == "0001-0782"
+    assert "issn" not in _details(paper)
+
+
+def test_unreadable_pages_are_left_out() -> None:
+    """Pages that are neither a range nor one token give no page keys."""
+    paper = {**PAPER, "journal": {"pages": "pp. 12 ff"}}
+    assert _details(paper) == {}
+
+
+def test_journal_details_identify_a_paper_without_doi() -> None:
+    """With no DOI the OpenURL still carries ISSN, volume and pages."""
+    paper = {"title": PAPER["title"], **S2_CACM}
+    keys = dict(_query(_one(RESOLVER + "{openurl}", paper)))
+    assert "rft_id" not in keys
+    assert keys["rft.issn"] == "0001-0782"
+    assert keys["rft.spage"] == "84"
+
+
+@pytest.mark.parametrize(
+    ("extra", "jtitle"),
+    [
+        ({"journal": {"name": "Physical review letters"}}, "Physical review letters"),
+        ({"crossref_metadata": {"container-title": ["Nature"]}}, "Nature"),
+    ],
+    ids=["s2-journal-name", "crossref-container-title"],
+)
+def test_journal_title_falls_back_when_venue_is_empty(
+    extra: dict[str, Any], jtitle: str
+) -> None:
+    """Without a venue the journal name comes from S2's journal or CrossRef."""
+    paper = {**PAPER, "venue": "", **extra}
+    assert dict(_query(_one(RESOLVER + "{openurl}", paper)))["rft.jtitle"] == jtitle
+
+
+# ---------------------------------------------------------------------------
 # build_access_links
 # ---------------------------------------------------------------------------
 
