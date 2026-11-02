@@ -16,8 +16,8 @@ index holds the argument for the direction and order.
 
 - **[derived]** Stabilize the v2 foundation before committing another broad
   capability. Correctness defects, operational follow-ups, and residual
-  template drift share the first package because each makes later feature work
-  harder to evaluate in production. The template adoption itself is tracked by
+  template drift shared the first package, `010 stabilization`, now closed,
+  because each makes later feature work harder to evaluate in production. The template adoption itself is tracked by
   [#411](https://github.com/pvliesdonk/scholar-mcp/issues/411).
 - **[evidenced: [ADR 0001](../decisions/0001-do-not-build-an-offline-semantic-scholar-store.md)]**
   Keep Semantic Scholar resilience on the live API path. An offline Datasets
@@ -88,7 +88,7 @@ index holds the argument for the direction and order.
   the maintainer chose to ship it before corpus foundations.
 - **[evidenced: [epic #353](https://github.com/pvliesdonk/scholar-mcp/issues/353)]
   [020 corpus foundations](https://github.com/pvliesdonk/scholar-mcp/milestone/16)
-  (minor):** follow stabilization with the manifest, record attachment, and
+  (minor):** follow access links with the manifest, record attachment, and
   pointer path because those three form a useful operator workflow without the
   optional semantic subsystem.
 
