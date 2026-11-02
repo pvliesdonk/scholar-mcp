@@ -143,10 +143,25 @@ async def test_get_paper_builds_access_links_for_a_cached_paper(
 
 
 @pytest.mark.respx(base_url=S2_BASE)
-async def test_get_paper_without_access_links_config_is_unchanged(
+async def test_get_paper_without_access_links_config_offers_the_doi_link(
     respx_mock: respx.MockRouter, mcp: FastMCP
 ) -> None:
-    """With nothing configured the record carries no access_links key."""
+    """With nothing configured the record carries the single doi.org link."""
+    respx_mock.get("/paper/lic1").mock(return_value=httpx.Response(200, json=_LICENSED))
+    async with Client(mcp) as client:
+        result = await client.call_tool("get_paper", {"identifier": "lic1"})
+    data = json.loads(result.content[0].text)
+    assert data["access_links"] == [
+        {"label": "Publisher (DOI)", "url": "https://doi.org/10.1000/xyz"}
+    ]
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_get_paper_with_empty_access_links_config_is_unchanged(
+    respx_mock: respx.MockRouter, mcp: FastMCP, service: Service
+) -> None:
+    """An explicit empty list turns links off: no access_links key."""
+    service.config = dataclasses.replace(service.config, access_links="[]")
     respx_mock.get("/paper/lic1").mock(return_value=httpx.Response(200, json=_LICENSED))
     async with Client(mcp) as client:
         result = await client.call_tool("get_paper", {"identifier": "lic1"})

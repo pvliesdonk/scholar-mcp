@@ -9,6 +9,7 @@ from urllib.parse import parse_qsl
 import pytest
 
 from scholar_mcp._access_links import (
+    DEFAULT_TEMPLATES,
     AccessLinkTemplate,
     build_access_links,
     parse_access_link_templates,
@@ -46,10 +47,18 @@ def _query(url: str) -> list[tuple[str, str]]:
 # ---------------------------------------------------------------------------
 
 
-def test_parse_none_and_blank_give_no_templates() -> None:
-    """Unset or blank configuration means the feature is off."""
-    assert parse_access_link_templates(None) == ()
-    assert parse_access_link_templates("   ") == ()
+def test_parse_none_and_blank_give_the_doi_default() -> None:
+    """Unset or blank configuration falls back to the single doi.org link."""
+    assert parse_access_link_templates(None) == DEFAULT_TEMPLATES
+    assert parse_access_link_templates("   ") == DEFAULT_TEMPLATES
+    assert (
+        AccessLinkTemplate(label="Publisher (DOI)", template="https://doi.org/{doi}"),
+    ) == DEFAULT_TEMPLATES
+
+
+def test_parse_empty_list_turns_links_off() -> None:
+    """An explicit empty list is the opt-out."""
+    assert parse_access_link_templates("[]") == ()
 
 
 def test_parse_keeps_configured_order() -> None:

@@ -155,10 +155,10 @@ async def get_paper(
 
     Returns:
         A mapping with full paper metadata, or
-        ``{"error": "not_found", "identifier": "..."}`` if not found. When
-        the deployment configures access links, the mapping also carries
-        ``access_links``: labelled routes to the paper through the user's
-        library, which the server itself never opens.
+        ``{"error": "not_found", "identifier": "..."}`` if not found. Unless
+        the deployment turns them off, the mapping also carries
+        ``access_links``, labelled routes to the paper that the server
+        itself never opens; by default that is the doi.org link.
     """
     try:
         paper = await resolve_paper(service.cache, service.s2.get_paper, identifier)

@@ -60,6 +60,14 @@ class AccessLinkTemplate:
     template: str
 
 
+#: Used when the operator configures nothing: doi.org reaches the publisher,
+#: where a licensed network's IP-based access applies. Not tied to any
+#: institution. An explicit empty list turns links off.
+DEFAULT_TEMPLATES: tuple[AccessLinkTemplate, ...] = (
+    AccessLinkTemplate(label="Publisher (DOI)", template="https://doi.org/{doi}"),
+)
+
+
 class AccessLink(TypedDict):
     """A filled-in access link."""
 
@@ -89,17 +97,19 @@ def parse_access_link_templates(raw: str | None) -> tuple[AccessLinkTemplate, ..
 
     Args:
         raw: JSON text: a list of ``{"label": ..., "template": ...}``
-            objects. ``None`` or blank means no templates.
+            objects. ``None`` or blank means unconfigured; ``[]`` turns
+            links off.
 
     Returns:
-        The templates, in the configured order.
+        The templates, in the configured order, or
+        :data:`DEFAULT_TEMPLATES` when unconfigured.
 
     Raises:
         ValueError: The text is not such a list, or a template is not an
             ``http(s)`` URL using only known placeholders.
     """
     if raw is None or not raw.strip():
-        return ()
+        return DEFAULT_TEMPLATES
     try:
         entries = json.loads(raw)
     except json.JSONDecodeError as exc:

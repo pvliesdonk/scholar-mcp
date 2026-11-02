@@ -34,9 +34,12 @@ index holds the argument for the direction and order.
   and `docs/design/access-links.md`]** One generic template list covers
   OpenURL link resolvers (both OpenURL versions), inter-library loan forms,
   login redirectors and publisher links.
+- **[stated]** With nothing configured, the server still offers a bare
+  doi.org link, since a licensed network's IP-based access often applies at
+  the publisher. Tracked as [#547](https://github.com/pvliesdonk/scholar-mcp/issues/547).
 - **[derived]** Agents running on a licensed network can open those links
   where the server cannot. Bringing such a PDF back into the server for
-  conversion is an open idea, not yet an issue.
+  conversion is [#546](https://github.com/pvliesdonk/scholar-mcp/issues/546).
 
 ### Operator-provided corpus
 

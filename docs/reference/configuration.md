@@ -446,7 +446,7 @@ the keepalive. Do not rely on it alone.
 
 | Variable | Default | Required | Description |
 |---|---|---|---|
-| `SCHOLAR_MCP_ACCESS_LINKS` | (none) | No | Opt-in links to a paper through your library, offered when no PDF can be fetched: a JSON list of objects with a label and an http(s) URL template, in priority order. Placeholders: {doi}, {doi_url} (the encoded doi.org URL, for wrapping), {openurl} (OpenURL 1.0), {openurl_0_1} and {openurl_hybrid}. The server never opens these links. See the PDF conversion guide for examples. |
+| `SCHOLAR_MCP_ACCESS_LINKS` | (none) | No | Links to a paper through your library, offered when no PDF can be fetched and with each paper lookup: a JSON list of objects with a label and an http(s) URL template, in priority order. Placeholders: {doi}, {doi_url} (the encoded doi.org URL, for wrapping), {openurl} (OpenURL 1.0), {openurl_0_1} and {openurl_hybrid}. Unset means one doi.org link; an empty list turns links off. The server never opens these links. See the PDF conversion guide for examples. |
 
 ### Jobs
 
