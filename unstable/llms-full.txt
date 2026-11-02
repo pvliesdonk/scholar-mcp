@@ -2109,7 +2109,9 @@ Set `SCHOLAR_MCP_CONTACT_EMAIL` to your email address to enable Unpaywall lookup
 
 Some papers have no open copy, but your library licenses them. You can configure links into your library's systems, and when `fetch_paper_pdf` or `fetch_and_convert` can't get a PDF (`no_oa_pdf`, `download_failed` or `not_pdf`), the response lists them under `access_links`, in your order. `get_paper` lists them too, ahead of any download attempt. Scholar MCP builds these links but never opens them. Your browser, or an agent on your network, can use them where your library's licence applies.
 
-Set `SCHOLAR_MCP_ACCESS_LINKS` to a JSON list of `label` and `template` pairs. A template is a URL with placeholders:
+Without any configuration, the list holds one link, `https://doi.org/<DOI>`, labelled `Publisher (DOI)`. It leads to the publisher's page, which on a network with licence access (many universities and research institutes) often opens the full text directly. Set `SCHOLAR_MCP_ACCESS_LINKS='[]'` to turn links off.
+
+To offer your library's routes, set `SCHOLAR_MCP_ACCESS_LINKS` to a JSON list of `label` and `template` pairs. Your list replaces the default, so include the DOI link yourself if you want it. A template is a URL with placeholders:
 
 | Placeholder        | Becomes                                                                   |
 | ------------------ | ------------------------------------------------------------------------- |
@@ -2697,9 +2699,9 @@ A `403 Forbidden` remains the cheaper signal when S2 does send one: `s2_key_forb
 
 ### Access links
 
-| Variable                   | Default | Required | Description                                                                                                                                                                                                                                                                                                                                                                               |
-| -------------------------- | ------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SCHOLAR_MCP_ACCESS_LINKS` | (none)  | No       | Opt-in links to a paper through your library, offered when no PDF can be fetched: a JSON list of objects with a label and an http(s) URL template, in priority order. Placeholders: {doi}, {doi_url} (the encoded doi.org URL, for wrapping), {openurl} (OpenURL 1.0), {openurl_0_1} and {openurl_hybrid}. The server never opens these links. See the PDF conversion guide for examples. |
+| Variable                   | Default | Required | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| -------------------------- | ------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SCHOLAR_MCP_ACCESS_LINKS` | (none)  | No       | Links to a paper through your library, offered when no PDF can be fetched and with each paper lookup: a JSON list of objects with a label and an http(s) URL template, in priority order. Placeholders: {doi}, {doi_url} (the encoded doi.org URL, for wrapping), {openurl} (OpenURL 1.0), {openurl_0_1} and {openurl_hybrid}. Unset means one doi.org link; an empty list turns links off. The server never opens these links. See the PDF conversion guide for examples. |
 
 ### Jobs
 
@@ -2804,13 +2806,13 @@ A cached paper answers immediately. Otherwise the record is fetched and enriched
 
 **Returns**
 
-A mapping with full paper metadata, or `{"error": "not_found", "identifier": "..."}` if not found. When the deployment configures access links, the mapping also carries `access_links`: labelled routes to the paper through the user's library, which the server itself never opens.
+A mapping with full paper metadata, or `{"error": "not_found", "identifier": "..."}` if not found. The mapping also carries `access_links`, labelled routes to the paper that the server itself never opens, when the paper has the identifiers a configured route needs. By default that is the doi.org link, so a paper without a DOI gets none.
 
 The record always uses the `full` field set.
 
 Results are cached for 30 days. Identifier aliases (such as DOI to S2 ID) are cached permanently.
 
-When the deployment configures [access links](https://pvliesdonk.github.io/scholar-mcp/unstable/use/pdf-conversion/#access-links-for-licensed-papers), each record also carries `access_links`, a list of `{label, url}` routes through the user's library. They are built on every call and never cached.
+A record can also have [`access_links`](https://pvliesdonk.github.io/scholar-mcp/unstable/use/pdf-conversion/#access-links-for-licensed-papers): `{label, url}` routes to the paper, which the server works out again on each call. By default the list holds only the doi.org link, so a paper without a DOI gets no `access_links`. An operator can list library routes in its place or turn links off.
 
 ## `get_author`
 
@@ -3109,7 +3111,7 @@ A response looks like `{"path": "/data/scholar-mcp/pdfs/<id>.pdf", "source": "s2
 - `{"error": "download_failed"}`: HTTP error downloading the PDF
 - `{"error": "not_pdf"}`: the response body does not begin with the PDF header
 
-When the operator configured [access links](https://pvliesdonk.github.io/scholar-mcp/unstable/use/pdf-conversion/#access-links-for-licensed-papers), each of these three also carries `access_links`, a list of `{"label", "url"}` routes to the paper through the user's library, and a `note` for the model.
+Unless the operator turned [access links](https://pvliesdonk.github.io/scholar-mcp/unstable/use/pdf-conversion/#access-links-for-licensed-papers) off, each of these three also carries `access_links`, a list of `{"label", "url"}` routes to the paper (by default its doi.org link), and a `note` for the model. A paper with nothing to fill a route, such as one without a DOI under the default, gets neither.
 
 Paper metadata is read from the same 30-day cache `get_paper` uses, and a freshly resolved record is written back to it. A repeat call for the same paper needs no Semantic Scholar request.
 

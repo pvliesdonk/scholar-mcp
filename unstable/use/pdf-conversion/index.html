@@ -2714,7 +2714,8 @@ converts. To force a fresh conversion, delete the cached <code>.md</code> file.<
 </div>
 <h2 id="access-links-for-licensed-papers">Access links for licensed papers<a class="headerlink" href="#access-links-for-licensed-papers" title="Permanent link">&para;</a></h2>
 <p>Some papers have no open copy, but your library licenses them. You can configure links into your library's systems, and when <code>fetch_paper_pdf</code> or <code>fetch_and_convert</code> can't get a PDF (<code>no_oa_pdf</code>, <code>download_failed</code> or <code>not_pdf</code>), the response lists them under <code>access_links</code>, in your order. <code>get_paper</code> lists them too, ahead of any download attempt. Scholar MCP builds these links but never opens them. Your browser, or an agent on your network, can use them where your library's licence applies.</p>
-<p>Set <code>SCHOLAR_MCP_ACCESS_LINKS</code> to a JSON list of <code>label</code> and <code>template</code> pairs. A template is a URL with placeholders:</p>
+<p>Without any configuration, the list holds one link, <code>https://doi.org/&lt;DOI&gt;</code>, labelled <code>Publisher (DOI)</code>. It leads to the publisher's page, which on a network with licence access (many universities and research institutes) often opens the full text directly. Set <code>SCHOLAR_MCP_ACCESS_LINKS='[]'</code> to turn links off.</p>
+<p>To offer your library's routes, set <code>SCHOLAR_MCP_ACCESS_LINKS</code> to a JSON list of <code>label</code> and <code>template</code> pairs. Your list replaces the default, so include the DOI link yourself if you want it. A template is a URL with placeholders:</p>
 <table>
 <thead>
 <tr>
