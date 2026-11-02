@@ -16,13 +16,27 @@ index holds the argument for the direction and order.
 
 - **[derived]** Stabilize the v2 foundation before committing another broad
   capability. Correctness defects, operational follow-ups, and residual
-  template drift share the first package because each makes later feature work
-  harder to evaluate in production. The template adoption itself is tracked by
+  template drift shared the first package, `010 stabilization`, now closed,
+  because each makes later feature work harder to evaluate in production. The template adoption itself is tracked by
   [#411](https://github.com/pvliesdonk/scholar-mcp/issues/411).
 - **[evidenced: [ADR 0001](../decisions/0001-do-not-build-an-offline-semantic-scholar-store.md)]**
   Keep Semantic Scholar resilience on the live API path. An offline Datasets
   store is not planned because the measured storage and maintenance cost does
   not justify the lookup coverage it could provide.
+
+### Library access routes
+
+- **[stated]** When Scholar MCP cannot fetch a paper, it should hand the user
+  links into their own library's systems, opt-in and configured by the
+  operator, without the server ever following them. Shadow libraries may be
+  configured the same way but are never fetched or shipped as a default.
+- **[evidenced: [epic #538](https://github.com/pvliesdonk/scholar-mcp/issues/538)
+  and `docs/design/access-links.md`]** One generic template list covers
+  OpenURL link resolvers (both OpenURL versions), inter-library loan forms,
+  login redirectors and publisher links.
+- **[derived]** Agents running on a licensed network can open those links
+  where the server cannot. Bringing such a PDF back into the server for
+  conversion is an open idea, not yet an issue.
 
 ### Operator-provided corpus
 
@@ -69,12 +83,12 @@ index holds the argument for the direction and order.
 
 ## Packages
 
-- **[derived] [010 stabilization](https://github.com/pvliesdonk/scholar-mcp/milestone/14)
-  (patch):** finish the correctness, operational, and template follow-ups that
-  make the v2 base dependable before broadening the product surface.
+- **[stated] [010 access-links](https://github.com/pvliesdonk/scholar-mcp/milestone/21)
+  (minor):** library access links on failed PDF fetches and on `get_paper`;
+  the maintainer chose to ship it before corpus foundations.
 - **[evidenced: [epic #353](https://github.com/pvliesdonk/scholar-mcp/issues/353)]
   [020 corpus foundations](https://github.com/pvliesdonk/scholar-mcp/milestone/16)
-  (minor):** follow stabilization with the manifest, record attachment, and
+  (minor):** follow access links with the manifest, record attachment, and
   pointer path because those three form a useful operator workflow without the
   optional semantic subsystem.
 
@@ -100,6 +114,12 @@ backlog; commit it to a package when it should ship in that cut.
   independently of the package sequence.
 
 ## Revisions
+
+- **2026-11-02 — [stated]:** Added the library access routes direction (epic
+  [#538](https://github.com/pvliesdonk/scholar-mcp/issues/538)) and its
+  package, `010 access-links`, ahead of corpus foundations at the
+  maintainer's request. Dropped `010 stabilization` from the package list:
+  that milestone is closed.
 
 - **2026-09-22 — [evidenced: [#406](https://github.com/pvliesdonk/scholar-mcp/issues/406)
   and [ADR 0001](../decisions/0001-do-not-build-an-offline-semantic-scholar-store.md)]:**

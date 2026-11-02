@@ -2,6 +2,17 @@
 
 Newest first. One entry per research pass.
 
+## 2026-11-02
+
+### OpenURL 0.1 and 1.0
+
+New page [OpenURL 0.1 and 1.0 query strings](openurl.md) for the access-link
+placeholders (#539). Read the 0.1 syntax description, Z39.88-2004 (R2010), the
+frozen OpenURL registry matrices, the KEV implementation guidelines, NISO
+RP-21-2013 and OCLC's resolver documentation; observed an OCLC Link Resolver
+with a 1.0 and a 0.1 link for the same citation. Not settled: arXiv
+identifiers, and resolver handling of hybrid links. Next review: 2027-11-02.
+
 ## 2026-10-31
 
 ### Template-authored page

@@ -127,6 +127,10 @@
           "isSecret": true
         },
         {
+          "name": "SCHOLAR_MCP_ACCESS_LINKS",
+          "description": "Opt-in links to a paper through your library, offered when no PDF can be fetched: a JSON list of objects with a label and an http(s) URL template, in priority order. Placeholders: {doi}, {doi_url} (the encoded doi.org URL, for wrapping), {openurl} (OpenURL 1.0), {openurl_0_1} and {openurl_hybrid}. The server never opens these links. See the PDF conversion guide for examples."
+        },
+        {
           "name": "SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S",
           "description": "Seconds a long-running tool call may run in the foreground before it is promoted to a background job and a job handle is returned instead.",
           "format": "number",
@@ -374,6 +378,10 @@
           "name": "SCHOLAR_MCP_GOOGLE_BOOKS_API_KEY",
           "description": "Google Books API key. Optional; book tools work unauthenticated at reduced rate limits.",
           "isSecret": true
+        },
+        {
+          "name": "SCHOLAR_MCP_ACCESS_LINKS",
+          "description": "Opt-in links to a paper through your library, offered when no PDF can be fetched: a JSON list of objects with a label and an http(s) URL template, in priority order. Placeholders: {doi}, {doi_url} (the encoded doi.org URL, for wrapping), {openurl} (OpenURL 1.0), {openurl_0_1} and {openurl_hybrid}. The server never opens these links. See the PDF conversion guide for examples."
         },
         {
           "name": "SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S",

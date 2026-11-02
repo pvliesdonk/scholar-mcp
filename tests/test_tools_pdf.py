@@ -14,6 +14,7 @@ the branch they mean with a fixture rather than by sleeping:
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import json
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -1395,3 +1396,153 @@ async def test_fetch_paper_pdf_does_not_cache_a_record_without_a_paper_id(
     _assert_inline(data)
     assert data["path"].endswith("noid1.pdf")
     assert await service.cache.get_paper("noid1") is None
+
+
+# ---------------------------------------------------------------------------
+# access links on no-PDF outcomes
+# ---------------------------------------------------------------------------
+
+_ACCESS_LINKS = json.dumps(
+    [
+        {
+            "label": "Library",
+            "template": "https://resolver.example/link?{openurl}",
+        },
+        {"label": "Publisher", "template": "https://doi.org/{doi}"},
+    ]
+)
+
+
+def _with_links(service: Service) -> Service:
+    """Configure the service with two access-link templates."""
+    service.config = dataclasses.replace(service.config, access_links=_ACCESS_LINKS)
+    return service
+
+
+@pytest.mark.respx(assert_all_called=False)
+async def test_fetch_paper_pdf_no_oa_offers_access_links(
+    service: Service, slow_jobs: Jobs
+) -> None:
+    """no_oa_pdf carries the configured links, in order, and a note."""
+    paper_json = {
+        "paperId": "al1",
+        "title": "Licensed paper",
+        "openAccessPdf": None,
+        "externalIds": {"DOI": "10.1000/al1"},
+    }
+    with respx.mock(assert_all_called=False) as router:
+        router.get(f"{S2_BASE}/paper/al1").mock(
+            return_value=httpx.Response(200, json=paper_json)
+        )
+        async with Client(pdf_app(_with_links(service), slow_jobs)) as client:
+            result = await client.call_tool("fetch_paper_pdf", {"identifier": "al1"})
+
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "no_oa_pdf"
+    assert [link["label"] for link in data["access_links"]] == ["Library", "Publisher"]
+    assert data["access_links"][0]["url"].startswith(
+        "https://resolver.example/link?url_ver=Z39.88-2004&"
+    )
+    assert data["access_links"][1]["url"] == "https://doi.org/10.1000/al1"
+    assert "access_links" in data["note"]
+
+
+@pytest.mark.respx(assert_all_called=False)
+async def test_download_failure_offers_access_links(
+    service: Service, slow_jobs: Jobs
+) -> None:
+    """A paywalled download (HTTP error) also carries the access links."""
+    pdf_url = "https://publisher.example/paywalled.pdf"
+    paper_json = {
+        "paperId": "al2",
+        "title": "Paywalled",
+        "openAccessPdf": {"url": pdf_url},
+        "externalIds": {"DOI": "10.1000/al2"},
+    }
+    with respx.mock(assert_all_called=False) as router:
+        router.get(f"{S2_BASE}/paper/al2").mock(
+            return_value=httpx.Response(200, json=paper_json)
+        )
+        router.get(pdf_url).mock(return_value=httpx.Response(403))
+        async with Client(pdf_app(_with_links(service), slow_jobs)) as client:
+            result = await client.call_tool("fetch_paper_pdf", {"identifier": "al2"})
+
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "download_failed"
+    assert len(data["access_links"]) == 2
+
+
+@pytest.mark.respx(assert_all_called=False)
+async def test_not_pdf_offers_access_links_in_fetch_and_convert(
+    service_with_docling: Service, slow_jobs: Jobs
+) -> None:
+    """A login page served instead of a PDF carries the links through fetch_and_convert."""
+    pdf_url = "https://publisher.example/login.pdf"
+    paper_json = {
+        "paperId": "al3",
+        "title": "Login wall",
+        "openAccessPdf": {"url": pdf_url},
+        "externalIds": {"DOI": "10.1000/al3"},
+    }
+    with respx.mock(assert_all_called=False) as router:
+        router.get(f"{S2_BASE}/paper/al3").mock(
+            return_value=httpx.Response(200, json=paper_json)
+        )
+        router.get(pdf_url).mock(
+            return_value=httpx.Response(200, content=b"<html>Sign in</html>")
+        )
+        app = pdf_app(_with_links(service_with_docling), slow_jobs)
+        async with Client(app) as client:
+            result = await client.call_tool("fetch_and_convert", {"identifier": "al3"})
+
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "not_pdf"
+    assert data["metadata"]["paperId"] == "al3"
+    assert len(data["access_links"]) == 2
+
+
+@pytest.mark.respx(assert_all_called=False)
+async def test_no_oa_without_configuration_has_no_access_links(
+    service: Service, slow_jobs: Jobs
+) -> None:
+    """With no templates configured the payload is unchanged."""
+    paper_json = {
+        "paperId": "al4",
+        "openAccessPdf": None,
+        "externalIds": {"DOI": "10.1000/al4"},
+    }
+    with respx.mock(assert_all_called=False) as router:
+        router.get(f"{S2_BASE}/paper/al4").mock(
+            return_value=httpx.Response(200, json=paper_json)
+        )
+        async with Client(pdf_app(service, slow_jobs)) as client:
+            result = await client.call_tool("fetch_paper_pdf", {"identifier": "al4"})
+
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "no_oa_pdf"
+    assert "access_links" not in data
+    assert "note" not in data
+
+
+@pytest.mark.respx(assert_all_called=False)
+async def test_no_fillable_template_adds_no_access_links(
+    service: Service, slow_jobs: Jobs
+) -> None:
+    """When no template can be filled for the paper, no links and no note."""
+    service.config = dataclasses.replace(
+        service.config,
+        access_links=json.dumps(
+            [{"label": "DOI", "template": "https://r.example/{doi}"}]
+        ),
+    )
+    paper_json = {"paperId": "al5", "openAccessPdf": None, "externalIds": {}}
+    with respx.mock(assert_all_called=False) as router:
+        router.get(f"{S2_BASE}/paper/al5").mock(
+            return_value=httpx.Response(200, json=paper_json)
+        )
+        async with Client(pdf_app(service, slow_jobs)) as client:
+            result = await client.call_tool("fetch_paper_pdf", {"identifier": "al5"})
+
+    data = json.loads(result.content[0].text)
+    assert "access_links" not in data
+    assert "note" not in data

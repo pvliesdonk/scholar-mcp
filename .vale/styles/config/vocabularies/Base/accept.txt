@@ -218,3 +218,7 @@ traceback
 
 # --- Project scaffolding / template tooling ---
 scaffolded
+
+# --- Library access (OpenURL resolvers, access links) ---
+OCLC
+redirector
