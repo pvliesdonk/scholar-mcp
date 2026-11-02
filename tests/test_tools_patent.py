@@ -824,6 +824,10 @@ async def test_get_patent_citations_section(
     }
     epo = _make_epo_client(citations_result=citations_data)
     service.epo = epo
+    # S2 knows no paper for the DOI. Stubbed so the NPL path never reaches the
+    # live API: an anonymous, throttled call here once cost CI minutes (#548).
+    batch_resolve = AsyncMock(return_value=[None])
+    service.s2.batch_resolve = batch_resolve  # type: ignore[assignment]
 
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
@@ -841,8 +845,13 @@ async def test_get_patent_citations_section(
     assert "citations" in data
     assert len(data["citations"]["patent_refs"]) == 1
     assert len(data["citations"]["npl_refs"]) == 2
-    # Without S2 client configured on the service's s2 mock, NPL refs have no paper
-    assert data["citations"]["npl_refs"][0]["confidence"] is None
+    # Only the reference with a DOI is sent to S2; it resolves to nothing, so
+    # the entry keeps its DOI and has no paper.
+    assert batch_resolve.await_args.args[0] == ["DOI:10.1234/test"]
+    first = data["citations"]["npl_refs"][0]
+    assert first["confidence"] is None
+    assert first["doi"] == "10.1234/test"
+    assert "paper" not in first
 
 
 async def test_citations_npl_resolution_with_s2(
