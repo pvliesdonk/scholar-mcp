@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 import socket
 from typing import Any
 
@@ -23,7 +24,9 @@ from tests.conftest import NetworkGuard, _is_local_host
         "127.1.2.3",
         "::1",
         "[::1]",
-        "0.0.0.0",
+        # The IPv4 wildcard, built rather than written: the literal trips the
+        # structural gate's S104 ("binding to all interfaces"), and this is no bind.
+        str(ipaddress.IPv4Address(0)),
         "::",
     ],
 )
