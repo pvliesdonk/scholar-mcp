@@ -2734,7 +2734,7 @@ converts. To force a fresh conversion, delete the cached <code>.md</code> file.<
 </tr>
 <tr>
 <td><code>{openurl}</code></td>
-<td>An OpenURL 1.0 citation: DOI, PubMed ID, title, journal, year and authors</td>
+<td>An OpenURL 1.0 citation: DOI, PubMed ID, title, journal, year and authors, and the ISSN, volume, issue and pages when known</td>
 </tr>
 <tr>
 <td><code>{openurl_0_1}</code></td>
@@ -2746,7 +2746,7 @@ converts. To force a fresh conversion, delete the cached <code>.md</code> file.<
 </tr>
 </tbody>
 </table>
-<p>A template is skipped for a paper it can't be filled for, such as <code>{doi}</code> for a paper without a DOI. The OpenURL forms still work without a DOI when the paper has a title.</p>
+<p>A template is skipped for a paper it can't be filled for, such as <code>{doi}</code> for a paper without a DOI. The OpenURL forms still work without a DOI when the paper has a title, and the journal's ISSN, volume and pages help a resolver find such a paper in your library's holdings.</p>
 <p>This configures a library on OCLC WorldCat, with its link resolver first and its inter-library loan form second:</p>
 <div class="highlight"><pre><span></span><code><span class="nv">SCHOLAR_MCP_ACCESS_LINKS</span><span class="o">=</span><span class="s1">'[</span>
 <span class="s1">  {"label": "Library full text", "template": "https://example.on.worldcat.org/atoztitles/link?{openurl}"},</span>

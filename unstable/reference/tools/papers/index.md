@@ -53,7 +53,7 @@ A cached paper answers immediately. Otherwise the record is fetched and enriched
 
 A mapping with full paper metadata, or `{"error": "not_found", "identifier": "..."}` if not found. The mapping also carries `access_links`, labelled routes to the paper that the server itself never opens, when the paper has the identifiers a configured route needs. By default that is the doi.org link, so a paper without a DOI gets none.
 
-The record always uses the `full` field set.
+The record uses the `full` field set plus `journal` (name, volume and pages) and `publicationVenue` (the venue, with its ISSN for a journal).
 
 Results are cached for 30 days. Identifier aliases (such as DOI to S2 ID) are cached permanently.
 
