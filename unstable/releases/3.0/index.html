@@ -2167,6 +2167,111 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#upgrading" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Upgrading
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Upgrading">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#logging-variables-and-log-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Logging variables and log format
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#docker-compose-publishes-on-loopback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Docker Compose publishes on loopback
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#http-sessions-and-combined-authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HTTP sessions and combined authentication
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#packaged-systemd-deployments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Packaged systemd deployments
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#python-library-callers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Python library callers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#installations-without-the-lock" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Installations without the lock
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mcp-callers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MCP callers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#synced-standards" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Synced standards
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#correct-answers-including-cached-records" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2210,89 +2315,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#upgrading" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Upgrading
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Upgrading">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#logging-variables-and-log-format" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Logging variables and log format
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#docker-compose-publishes-on-loopback" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Docker Compose publishes on loopback
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#packaged-systemd-deployments" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Packaged systemd deployments
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#python-library-callers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Python library callers
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#mcp-callers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        MCP callers
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#synced-standards" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Synced standards
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -2314,7 +2336,7 @@
 
 
 <h1 id="30">3.0<a class="headerlink" href="#30" title="Permanent link">&para;</a></h1>
-<!-- notes-range-end: abadcbae988ef3c0ab9fed5e92aa94019854acfe -->
+<!-- notes-range-end: ee814277689a948adef425be26c13333d1ac72de -->
 
 <!-- RELEASE-SUMMARY v3.0.0 START -->
 <p>Scholar MCP 3.0 corrects wrong or incomplete answers across its research tools
@@ -2325,6 +2347,99 @@ packaged systemd deployments change for operators, and one Python library call
 path changes; the upgrade steps are described below.</p>
 <!-- RELEASE-SUMMARY v3.0.0 END -->
 
+<h2 id="upgrading">Upgrading<a class="headerlink" href="#upgrading" title="Permanent link">&para;</a></h2>
+<p>Several areas change against v2.0.0, and synced standards need one maintenance
+step. Three lines sum up what the upgrade means:</p>
+<p><strong>Clients:</strong> reconnect to pick up the changed tool surface. Code that read
+Semantic Scholar 429 errors polls the returned handle instead (see
+<a href="#mcp-callers">MCP callers</a>).</p>
+<p><strong>State:</strong> the cache, downloaded PDFs and converted Markdown are kept; one-shot
+repairs correct affected rows at startup. Synced ISO and IEC standards are
+corrected by the next <code>sync-standards</code> run (see
+<a href="#synced-standards">Synced standards</a>).</p>
+<p><strong>Security posture:</strong> Compose publishes on loopback, packaged units no longer
+bind to every interface, and an unexpected tool failure no longer passes the
+exception text to the model. The dependency lock moves past published
+advisories, which installations without the lock must match (see
+<a href="#installations-without-the-lock">Installations without the lock</a>).</p>
+<h3 id="logging-variables-and-log-format">Logging variables and log format<a class="headerlink" href="#logging-variables-and-log-format" title="Permanent link">&para;</a></h3>
+<p><code>FASTMCP_LOG_LEVEL</code> is renamed <code>SCHOLAR_MCP_LOG_LEVEL</code>. The old name still
+works until the next major release and logs <code>log_level_env_deprecated</code> at
+startup. <code>FASTMCP_ENABLE_RICH_LOGGING</code> is removed; <code>SCHOLAR_MCP_LOG_FORMAT</code>
+takes <code>rich</code> or <code>json</code>. Left unset, it renders Rich lines on a terminal and one
+JSON object per record everywhere else, so container and journald logs change
+from 2.0's Rich text to JSON with <code>ts</code>, <code>level</code>, <code>logger</code> and <code>event</code> fields.
+Re-key log queries and alerts, or set <code>SCHOLAR_MCP_LOG_FORMAT=rich</code> to keep
+readable lines
+(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/513">#513</a>,
+<a href="https://github.com/pvliesdonk/fastmcp-server-template/blob/v11.0.2/upgrading/v9.0.md">template upgrade note v9.0</a>).
+Several Scholar MCP log events also changed form: <code>s2_rate_limited</code> now
+reports <code>waiting_s=</code> in place of <code>waiting=…s</code>
+(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/510">#510</a> lists each one).
+The Claude Desktop bundle and the Claude Code plugin map their log-level setting
+to the new name without any action.</p>
+<p>Over HTTP, <code>SCHOLAR_MCP_SHUTDOWN_GRACE_S</code> (default 3) now gives in-flight
+requests that many seconds to finish on SIGTERM; 2.0 dropped them at once. The
+<a href="../../reference/configuration/">configuration reference</a> lists both logging variables and
+the shutdown grace setting.</p>
+<h3 id="docker-compose-publishes-on-loopback">Docker Compose publishes on loopback<a class="headerlink" href="#docker-compose-publishes-on-loopback" title="Permanent link">&para;</a></h3>
+<p><code>compose.yml</code> now publishes the server as <code>127.0.0.1:8000:8000</code> instead of
+<code>8000:8000</code>, so the quick start is reachable only from the Docker host. A
+deployment behind a reverse proxy on a shared network is unaffected. If other
+machines reach the container directly, confirm authentication is configured and
+publish on every interface from <code>compose.override.yml</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">services</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">scholar-mcp</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">ports</span><span class="p">:</span><span class="w"> </span><span class="kt">!override</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"8000:8000"</span>
+</code></pre></div>
+<p>See the <a href="../../deploy/docker/">Docker deployment guide</a>
+(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/513">#513</a>,
+<a href="https://github.com/pvliesdonk/fastmcp-server-template/blob/v11.0.2/upgrading/v9.3.md">template upgrade note v9.3</a>).</p>
+<h3 id="http-sessions-and-combined-authentication">HTTP sessions and combined authentication<a class="headerlink" href="#http-sessions-and-combined-authentication" title="Permanent link">&para;</a></h3>
+<p>Over HTTP, an MCP session now expires after 30 idle minutes, where it never
+expired before. With both bearer and OIDC authentication configured,
+existing sessions and tasks start new ownership scopes after the upgrade, so
+let pending tasks finish first. Both changes come with FastMCP 4.1
+(<a href="https://github.com/PrefectHQ/fastmcp/releases/tag/v4.1.0">FastMCP v4.1.0 release notes</a>,
+<a href="https://github.com/pvliesdonk/scholar-mcp/pull/524">#524</a>).</p>
+<h3 id="packaged-systemd-deployments">Packaged systemd deployments<a class="headerlink" href="#packaged-systemd-deployments" title="Permanent link">&para;</a></h3>
+<p>The <code>.deb</code> and <code>.rpm</code> unit no longer supplies <code>SCHOLAR_MCP_HOST=0.0.0.0</code>, and
+its generated <code>/etc/scholar-mcp/env.example</code> is fully commented. Before or
+after upgrading, set <code>SCHOLAR_MCP_CACHE_DIR=/var/lib/scholar-mcp</code> in
+<code>/etc/scholar-mcp/env</code>. If the service must accept off-host connections, also
+set <code>SCHOLAR_MCP_HOST=0.0.0.0</code>. An installation that relied on the old unit
+default otherwise binds to <code>127.0.0.1</code> after the package restarts it
+(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/423">#423</a>). See the
+<a href="../../deploy/systemd/">systemd deployment guide</a> for the complete unit and
+file layout. The journal receives JSON records under the logging change above.</p>
+<h3 id="python-library-callers">Python library callers<a class="headerlink" href="#python-library-callers" title="Permanent link">&para;</a></h3>
+<p><code>scholar_mcp.server.build_event_store</code> now uses the shared core signature
+<code>build_event_store(env_prefix, config)</code>. Replace calls with no arguments, or
+with only a URL, by passing <code>"SCHOLAR_MCP"</code> and a <code>ServerConfig</code>
+(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/422">#422</a>).</p>
+<h3 id="installations-without-the-lock">Installations without the lock<a class="headerlink" href="#installations-without-the-lock" title="Permanent link">&para;</a></h3>
+<p>The container image installs from the dependency lock. If you install with
+<code>pip</code> or resolve dependencies yourself, confirm at least <code>pypdf</code> 6.21.4,
+<code>authlib</code> 1.9.1 and PyJWT 2.14.0; the package's own version ranges still allow
+older, affected releases (see
+<a href="#server-errors-logs-and-security">Server errors, logs and security</a>).</p>
+<h3 id="mcp-callers">MCP callers<a class="headerlink" href="#mcp-callers" title="Permanent link">&para;</a></h3>
+<p>Semantic Scholar 429 responses no longer return the immediate error shapes from
+v2.0.0; callers receive a job or native task handle while the lookup waits. Code
+that interpreted the old error must poll the returned handle instead
+(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/463">#463</a>).</p>
+<p>Converted-document defaults are compatible rather than removed. Follow
+<code>next_offset</code> to collect the document in pages, or pass <code>max_chars=null</code> when a
+client can receive the complete remaining text
+(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/465">#465</a>).</p>
+<h3 id="synced-standards">Synced standards<a class="headerlink" href="#synced-standards" title="Permanent link">&para;</a></h3>
+<p>Run <code>scholar-mcp sync-standards</code> once after upgrading. ISO and IEC records
+synced by 2.0 keep their shortened titles until the next sync rewrites them;
+the upgrade makes that run rewrite every ISO, IEC and IEEE record even when
+upstream has not changed
+(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/498">#498</a>). See the
+<a href="../../use/standards/">standards guide</a>.</p>
 <h2 id="correct-answers-including-cached-records">Correct answers, including cached records<a class="headerlink" href="#correct-answers-including-cached-records" title="Permanent link">&para;</a></h2>
 <p>The stabilization package set out to make Scholar MCP "answer correctly where
 2.0 answered wrongly or not at all," including for rows cached before an upgrade
@@ -2471,9 +2586,10 @@ again. Clients that can accept the remaining text in one response can set
 <h2 id="server-errors-logs-and-security">Server errors, logs and security<a class="headerlink" href="#server-errors-logs-and-security" title="Permanent link">&para;</a></h2>
 <p>This release moves to
 <a href="https://github.com/pvliesdonk/fastmcp-server-template/releases/tag/v11.0.2">fastmcp-server-template v11.0.2</a>
-and fastmcp-pvl-core 10, from template v8.1.0 and pvl-core 7.1 in 2.0
-(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/513">#513</a>). Three effects
-reach users of this server; the logging changes are under
+and fastmcp-pvl-core 10.2, from template v8.1.0 and pvl-core 7.1 in 2.0
+(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/513">#513</a>,
+<a href="https://github.com/pvliesdonk/scholar-mcp/pull/524">#524</a>). The effects that
+reach users of this server follow; the logging and session changes are under
 <a href="#upgrading">Upgrading</a>.</p>
 <p>When a tool fails with an unexpected exception, the model receives a fixed
 message, "The call failed because of a server-side error; the request itself
@@ -2498,76 +2614,26 @@ medium; all fixed in 2.14.0)
 <a href="https://github.com/pvliesdonk/scholar-mcp/pull/517">#517</a>). PyJWT reaches
 Scholar MCP only through client code in the MCP SDK; neither this server nor
 FastMCP's server-side authentication imports it. The container image installs
-from the lock. Installations that resolve dependencies themselves should
-confirm PyJWT is at 2.14.0 or later.</p>
-<h2 id="upgrading">Upgrading<a class="headerlink" href="#upgrading" title="Permanent link">&para;</a></h2>
-<p>Five areas change against v2.0.0, and synced standards need one maintenance
-step.</p>
-<h3 id="logging-variables-and-log-format">Logging variables and log format<a class="headerlink" href="#logging-variables-and-log-format" title="Permanent link">&para;</a></h3>
-<p><code>FASTMCP_LOG_LEVEL</code> is renamed <code>SCHOLAR_MCP_LOG_LEVEL</code>. The old name still
-works until the next major release and logs <code>log_level_env_deprecated</code> at
-startup. <code>FASTMCP_ENABLE_RICH_LOGGING</code> is removed; <code>SCHOLAR_MCP_LOG_FORMAT</code>
-takes <code>rich</code> or <code>json</code>. Left unset, it renders Rich lines on a terminal and one
-JSON object per record everywhere else, so container and journald logs change
-from 2.0's Rich text to JSON with <code>ts</code>, <code>level</code>, <code>logger</code> and <code>event</code> fields.
-Re-key log queries and alerts, or set <code>SCHOLAR_MCP_LOG_FORMAT=rich</code> to keep
-readable lines
-(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/513">#513</a>,
-<a href="https://github.com/pvliesdonk/fastmcp-server-template/blob/v11.0.2/upgrading/v9.0.md">template upgrade note v9.0</a>).
-Several Scholar MCP log events also changed form: <code>s2_rate_limited</code> now
-reports <code>waiting_s=</code> in place of <code>waiting=…s</code>
-(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/510">#510</a> lists each one).
-The Claude Desktop bundle and the Claude Code plugin map their log-level setting
-to the new name without any action.</p>
-<p>Over HTTP, <code>SCHOLAR_MCP_SHUTDOWN_GRACE_S</code> (default 3) now gives in-flight
-requests that many seconds to finish on SIGTERM; 2.0 dropped them at once. The
-<a href="../../reference/configuration/">configuration reference</a> lists both logging variables and
-the shutdown grace setting.</p>
-<h3 id="docker-compose-publishes-on-loopback">Docker Compose publishes on loopback<a class="headerlink" href="#docker-compose-publishes-on-loopback" title="Permanent link">&para;</a></h3>
-<p><code>compose.yml</code> now publishes the server as <code>127.0.0.1:8000:8000</code> instead of
-<code>8000:8000</code>, so the quick start is reachable only from the Docker host. A
-deployment behind a reverse proxy on a shared network is unaffected. If other
-machines reach the container directly, confirm authentication is configured and
-publish on every interface from <code>compose.override.yml</code>:</p>
-<div class="highlight"><pre><span></span><code><span class="nt">services</span><span class="p">:</span>
-<span class="w">  </span><span class="nt">scholar-mcp</span><span class="p">:</span>
-<span class="w">    </span><span class="nt">ports</span><span class="p">:</span><span class="w"> </span><span class="kt">!override</span>
-<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"8000:8000"</span>
-</code></pre></div>
-<p>See the <a href="../../deploy/docker/">Docker deployment guide</a>
-(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/513">#513</a>,
-<a href="https://github.com/pvliesdonk/fastmcp-server-template/blob/v11.0.2/upgrading/v9.3.md">template upgrade note v9.3</a>).</p>
-<h3 id="packaged-systemd-deployments">Packaged systemd deployments<a class="headerlink" href="#packaged-systemd-deployments" title="Permanent link">&para;</a></h3>
-<p>The <code>.deb</code> and <code>.rpm</code> unit no longer supplies <code>SCHOLAR_MCP_HOST=0.0.0.0</code>, and
-its generated <code>/etc/scholar-mcp/env.example</code> is fully commented. Before or
-after upgrading, set <code>SCHOLAR_MCP_CACHE_DIR=/var/lib/scholar-mcp</code> in
-<code>/etc/scholar-mcp/env</code>. If the service must accept off-host connections, also
-set <code>SCHOLAR_MCP_HOST=0.0.0.0</code>. An installation that relied on the old unit
-default otherwise binds to <code>127.0.0.1</code> after the package restarts it
-(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/423">#423</a>). See the
-<a href="../../deploy/systemd/">systemd deployment guide</a> for the complete unit and
-file layout. The journal receives JSON records under the logging change above.</p>
-<h3 id="python-library-callers">Python library callers<a class="headerlink" href="#python-library-callers" title="Permanent link">&para;</a></h3>
-<p><code>scholar_mcp.server.build_event_store</code> now uses the shared core signature
-<code>build_event_store(env_prefix, config)</code>. Replace calls with no arguments, or
-with only a URL, by passing <code>"SCHOLAR_MCP"</code> and a <code>ServerConfig</code>
-(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/422">#422</a>).</p>
-<h3 id="mcp-callers">MCP callers<a class="headerlink" href="#mcp-callers" title="Permanent link">&para;</a></h3>
-<p>Semantic Scholar 429 responses no longer return the immediate error shapes from
-v2.0.0; callers receive a job or native task handle while the lookup waits. Code
-that interpreted the old error must poll the returned handle instead
-(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/463">#463</a>).</p>
-<p>Converted-document defaults are compatible rather than removed. Follow
-<code>next_offset</code> to collect the document in pages, or pass <code>max_chars=null</code> when a
-client can receive the complete remaining text
-(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/465">#465</a>).</p>
-<h3 id="synced-standards">Synced standards<a class="headerlink" href="#synced-standards" title="Permanent link">&para;</a></h3>
-<p>Run <code>scholar-mcp sync-standards</code> once after upgrading. ISO and IEC records
-synced by 2.0 keep their shortened titles until the next sync rewrites them;
-the upgrade makes that run rewrite every ISO, IEC and IEEE record even when
-upstream has not changed
-(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/498">#498</a>). See the
-<a href="../../use/standards/">standards guide</a>.</p>
+from the lock.</p>
+<p>The lock also moves past the other advisories published against the release
+candidate's dependencies: 38 in 8 runtime packages, among them <code>pypdf</code>,
+<code>authlib</code>, <code>urllib3</code>, <code>fastmcp</code> and <code>joserfc</code>
+(<a href="https://github.com/pvliesdonk/scholar-mcp/issues/523">#523</a>,
+<a href="https://github.com/pvliesdonk/scholar-mcp/pull/524">#524</a>). The <code>pypdf</code>
+advisories almost all concern slow or memory-hungry parsing of malformed PDFs,
+and Scholar MCP parses the PDF pages EPO returns with <code>pypdf</code>. The <code>authlib</code>
+advisories include a critical one, empty JWS signatures accepted
+(<a href="https://github.com/advisories/GHSA-6v38-4h7w-rj9h">GHSA-6v38-4h7w-rj9h</a>), and
+<code>authlib</code> reaches the server through FastMCP's authentication. Whether calls
+from Scholar MCP reach the affected functions has not been assessed. The lock
+pins <code>pypdf</code> 6.21.4 and <code>authlib</code> 1.9.1; v2.0.0 locked 6.18.0 and 1.7.2.
+Installations without the lock need the upgrade step under
+<a href="#installations-without-the-lock">Upgrading</a>.</p>
+<p><code>get_server_info</code> reports the negotiated protocol version and the client's name
+and version, and each request's log line ends with the same fields when they
+are known
+(<a href="https://github.com/pvliesdonk/fastmcp-pvl-core/releases/tag/v10.2.0">fastmcp-pvl-core v10.2.0</a>,
+<a href="https://github.com/pvliesdonk/scholar-mcp/pull/524">#524</a>).</p>
 <!-- PATCH-RELEASES-START -->
 <!-- PATCH-RELEASES-END -->
 
