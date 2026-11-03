@@ -15,6 +15,7 @@ posture**; the [Upgrade](../upgrade/index.md) page says what each answers.
 
 <!-- RELEASE-PAGES-START: newest series first; one list entry per page.
      The first real entry replaces the placeholder line below. -->
+- [3.1](3.1.md)
 - [3.0](3.0.md)
 - [2.0](2.0.md)
 - [1.10](1.10.md): one background-job queue replaces two, with EPO retry and tool-surface fixes

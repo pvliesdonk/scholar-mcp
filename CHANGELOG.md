@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## 3.1.0-rc.0 (2026-11-03)
+
+### Features
+
+- offer operator-configured access links when no PDF can be fetched (#543)
+- include access links in get_paper results (#545)
+- offer a doi.org access link when none are configured (#549)
+- fill OpenURL access links from journal metadata (#552)
+
+### Bug Fixes
+
+- upgrade the lock past 75 published advisories (#524)
+
 ## 3.0.0 (2026-11-03)
 
 ### Breaking Changes
