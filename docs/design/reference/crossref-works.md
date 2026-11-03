@@ -10,6 +10,8 @@ generated:
 verified:
   - by: process:researching-references
     at: 2026-11-02T20:30:00+01:00
+  - by: process:researching-references
+    at: 2026-11-03T10:30:00+01:00
 stale_after: 2027-05-02T00:00:00+00:00
 status: draft
 sources:
@@ -31,12 +33,12 @@ say where in a journal the article appears.
 
 ## Scope
 
-- Covers: `ISSN`, `issn-type`, `volume`, `issue`, `page`, `article-number`
-  and `container-title` of a work.
+- Covers: `ISSN`, `issn-type`, `volume`, `issue`, `page`, `article-number`,
+  `container-title` and `issued` of a work.
 - Does not cover: the rest of the work, the enricher's request path, or
   rate limits.
 - Depended on by: `src/scholar_mcp/_access_links.py` (`_crossref_details`,
-  the journal title fallback).
+  the journal title fallback, `_crossref_year`).
 
 ## Claims
 
@@ -54,7 +56,16 @@ say where in a journal the article appears.
 - `container-title` is a list of strings; the sample gave `["Nature"]`.
   [source: swagger] [source: nature-sample]
   [pins: tests/test_access_links.py::test_journal_title_falls_back_when_venue_is_empty]
-- None of these fields is required by the specification; only fields such as
+- `issued` is a `DateParts` object: `date-parts` is a list of lists whose
+  items are integers or null, year first. It is one of the fields the
+  specification requires. [source: swagger] (`Work`, `DateParts`)
+  [pins: tests/test_access_links.py::test_openurl_date_falls_back_to_s2_year]
+- `issued` dates the work the DOI names: for
+  10.1145/3065386, the 2017 Communications of the ACM reprint of a 2012
+  conference paper, it was `[[2017, 5, 24]]`, and Semantic Scholar's `year`
+  for the same DOI was 2012. [observed: get_paper on v3.1.0-rc.0, 2026-11-03]
+  [pins: tests/test_access_links.py::test_openurl_date_comes_from_crossref_issued]
+- None of the journal fields above (`ISSN` to `container-title`) is required by the specification; only fields such as
   `DOI`, `type`, `publisher` and `issued` are. [source: swagger] (`Work`,
   `required`)
 - Which `type` values `issn-type` can take besides `print` and `electronic`
@@ -72,3 +83,5 @@ The access-link builder sends an untyped ISSN (one listed in `ISSN` with no
 
 How completely publishers deposit these fields, and the formats `page` takes
 besides a hyphenated range, rest on one sample.
+The definition does not say which date `issued` takes when a work has both a
+print and an online date; the one sample had the same date for both.

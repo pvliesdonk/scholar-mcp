@@ -230,7 +230,6 @@ def _citation(paper: Mapping[str, Any]) -> _Citation:
     ids = paper.get("externalIds") or {}
     doi = ids.get("DOI")
     pmid = ids.get("PubMed")
-    year = paper.get("year")
     names = [a.get("name") for a in paper.get("authors") or []]
     s2_journal = paper.get("journal") or {}
     crossref = paper.get("crossref_metadata") or {}
@@ -244,10 +243,30 @@ def _citation(paper: Mapping[str, Any]) -> _Citation:
         pmid=str(pmid) if pmid else None,
         title=paper.get("title") or None,
         journal=journal or None,
-        year=str(year) if year else None,
+        year=_crossref_year(crossref) or _s2_year(paper),
         authors=tuple(n.strip() for n in names if isinstance(n, str) and n.strip()),
         details=_journal_details(paper),
     )
+
+
+def _crossref_year(work: Mapping[str, Any]) -> str | None:
+    """The year of CrossRef's ``issued`` date, or None.
+
+    CrossRef dates the work the DOI names. S2's ``year`` can be that of an
+    earlier version, such as the conference paper a journal reprinted, and
+    would then disagree with the volume and pages the link carries.
+    """
+    issued = work.get("issued")
+    parts = issued.get("date-parts") if isinstance(issued, dict) else None
+    first = parts[0] if isinstance(parts, list) and parts else None
+    year = first[0] if isinstance(first, list) and first else None
+    return str(year) if isinstance(year, int) else None
+
+
+def _s2_year(paper: Mapping[str, Any]) -> str | None:
+    """S2's ``year``, or None."""
+    year = paper.get("year")
+    return str(year) if year else None
 
 
 def _journal_details(paper: Mapping[str, Any]) -> _JournalDetails:
