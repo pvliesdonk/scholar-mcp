@@ -2,6 +2,15 @@
 
 Newest first. One entry per research pass.
 
+## 2026-11-03
+
+### CrossRef `issued` for the OpenURL date
+
+Added `issued` to [CrossRef work journal fields](crossref-works.md) (#561).
+Re-read the Crossref swagger `Work` and `DateParts` definitions. Observed that
+for one republished article, CrossRef and Semantic Scholar disagree on the year.
+Not settled: how CrossRef chooses `issued` when print and online dates differ.
+
 ## 2026-11-02
 
 ### Journal details for OpenURL links

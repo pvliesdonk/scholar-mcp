@@ -82,7 +82,11 @@ every library it links to.
 - **CrossRef first, S2 for the gaps, field by field.** CrossRef keeps volume,
   issue, pages and each ISSN with its type in separate fields. S2 has no
   issue and can merge volume and issue into one string (`"116 6"`), so only
-  its first token is taken as the volume. CrossRef metadata is on the record
+  its first token is taken as the volume. The year follows the same rule:
+  CrossRef's `issued` year dates the work the DOI names, while S2's `year`
+  can be that of an earlier version, such as the conference paper a journal
+  reprinted, and would contradict the volume and pages beside it
+  ([#561](https://github.com/pvliesdonk/scholar-mcp/issues/561)). CrossRef metadata is on the record
   only in `get_paper`, after enrichment of a paper with a DOI; the PDF tools
   use S2's details alone. OpenAlex is not read for these details yet.
 - **A page range is split into `spage` and `epage`.** A single token, such

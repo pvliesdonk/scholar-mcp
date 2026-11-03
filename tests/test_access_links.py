@@ -412,6 +412,27 @@ def test_same_issn_is_sent_once_as_eissn() -> None:
     assert "issn" not in _details(paper)
 
 
+def test_openurl_date_comes_from_crossref_issued() -> None:
+    """CrossRef's issued year, the DOI's own, wins over S2's earlier one."""
+    crossref = {"issued": {"date-parts": [[2017, 5, 24]]}}
+    paper = {**PAPER, "year": 2012, "crossref_metadata": crossref}
+    for version in ("{openurl}", "{openurl_0_1}"):
+        pairs = dict(_query(_one(RESOLVER + version, paper)))
+        assert pairs.get("rft.date", pairs.get("date")) == "2017"
+
+
+@pytest.mark.parametrize(
+    "issued",
+    [None, {}, {"date-parts": []}, {"date-parts": [[]]}, {"date-parts": [[None]]}],
+    ids=["absent", "empty", "no-parts", "empty-part", "null-year"],
+)
+def test_openurl_date_falls_back_to_s2_year(issued: object) -> None:
+    """Without a usable CrossRef issued year, S2's year is used."""
+    crossref = {} if issued is None else {"issued": issued}
+    paper = {**PAPER, "year": 2012, "crossref_metadata": crossref}
+    assert dict(_query(_one(RESOLVER + "{openurl}", paper)))["rft.date"] == "2012"
+
+
 def test_unreadable_pages_are_left_out() -> None:
     """Pages that are neither a range nor one token give no page keys."""
     paper = {**PAPER, "journal": {"pages": "pp. 12 ff"}}
