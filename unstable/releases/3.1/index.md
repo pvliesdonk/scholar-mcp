@@ -35,3 +35,11 @@ The OpenURL forms carry the title, journal, year and authors, and, when the reco
 `scholar-mcp -v serve` logs at debug level again. In 3.0 the server set up logging a second time while starting, which reset the level to the environment's and dropped every debug line ([template#790](https://github.com/pvliesdonk/fastmcp-server-template/pull/790), [#528](https://github.com/pvliesdonk/scholar-mcp/pull/528)).
 
 Each tool carries a `group:` tag, such as `group:papers`, naming its section of the [tool reference](https://pvliesdonk.github.io/scholar-mcp/unstable/reference/tools/index.md) ([#530](https://github.com/pvliesdonk/scholar-mcp/pull/530)). The documentation site is regrouped into Get started, Deploy, Use, Reference and Upgrade, and every old page address redirects to its new place ([#532](https://github.com/pvliesdonk/scholar-mcp/pull/532), [#533](https://github.com/pvliesdonk/scholar-mcp/pull/533)).
+
+## v3.1.1
+
+OpenURL access links now carry the year of the work the DOI names, so a library resolver gets a consistent citation. No upgrade steps are needed.
+
+### OpenURL year
+
+An OpenURL access link (`{openurl}`, `{openurl_0_1}` or `{openurl_hybrid}`) took its year from Semantic Scholar, which sometimes gives the year of an earlier version of the paper. For the 2017 Communications of the ACM reprint of a 2012 conference paper, the link said 2012 next to the 2017 volume and pages. A resolver that has to match a paper without a DOI by its metadata could then miss it. The link now takes the year from the paper's CrossRef record when it has one, and from Semantic Scholar otherwise ([#561](https://github.com/pvliesdonk/scholar-mcp/issues/561), [#562](https://github.com/pvliesdonk/scholar-mcp/pull/562)).

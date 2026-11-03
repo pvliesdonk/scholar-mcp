@@ -2227,6 +2227,34 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#v311" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v3.1.1
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="v3.1.1">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#openurl-year" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OpenURL year
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2248,7 +2276,7 @@
 
 
 <h1 id="31">3.1<a class="headerlink" href="#31" title="Permanent link">&para;</a></h1>
-<!-- notes-range-end: 934db293e8a5bde34e78f36b0531ed18aec8cf0f -->
+<!-- notes-range-end: 0784a45f301611ef62a35bdad1e05e991d33d541 -->
 
 <!-- RELEASE-SUMMARY v3.1.0 START -->
 <p>A paper the server cannot fetch now comes with links to it: its doi.org link
@@ -2336,6 +2364,24 @@ Upgrade, and every old page address redirects to its new place
 (<a href="https://github.com/pvliesdonk/scholar-mcp/pull/532">#532</a>,
 <a href="https://github.com/pvliesdonk/scholar-mcp/pull/533">#533</a>).</p>
 <!-- PATCH-RELEASES-START -->
+
+<h2 id="v311">v3.1.1<a class="headerlink" href="#v311" title="Permanent link">&para;</a></h2>
+<!-- RELEASE-SUMMARY v3.1.1 START -->
+<p>OpenURL access links now carry the year of the work the DOI names, so a
+library resolver gets a consistent citation. No upgrade steps are needed.</p>
+<!-- RELEASE-SUMMARY v3.1.1 END -->
+
+<h3 id="openurl-year">OpenURL year<a class="headerlink" href="#openurl-year" title="Permanent link">&para;</a></h3>
+<p>An OpenURL access link (<code>{openurl}</code>, <code>{openurl_0_1}</code> or <code>{openurl_hybrid}</code>)
+took its year from Semantic Scholar, which sometimes gives the year of an
+earlier version of the paper. For the 2017 Communications of the ACM reprint of
+a 2012 conference paper, the link said 2012 next to the 2017 volume and pages.
+A resolver that has to match a paper without a DOI by its metadata could then
+miss it. The link now
+takes the year from the paper's CrossRef record when it has one, and from
+Semantic Scholar otherwise
+(<a href="https://github.com/pvliesdonk/scholar-mcp/issues/561">#561</a>,
+<a href="https://github.com/pvliesdonk/scholar-mcp/pull/562">#562</a>).</p>
 <!-- PATCH-RELEASES-END -->
 
 
