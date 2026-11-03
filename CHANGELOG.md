@@ -2,6 +2,12 @@
 
 <!-- version list -->
 
+## 3.1.1 (2026-11-03)
+
+### Bug Fixes
+
+- date OpenURL access links by the DOI's own year (#562)
+
 ## 3.1.0 (2026-11-03)
 
 ### Features
