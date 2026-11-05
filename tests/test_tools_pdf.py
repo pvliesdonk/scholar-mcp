@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import json
+import socket
 from contextlib import asynccontextmanager
 from pathlib import Path
 from threading import Event, Thread
@@ -29,6 +30,7 @@ from fastmcp import FastMCP
 from fastmcp.client import Client
 from fastmcp_pvl_core import Jobs, JobsConfig, register_job_tools
 
+from scholar_mcp import _url_guard
 from scholar_mcp._docling_client import DoclingClient
 from scholar_mcp._tools_pdf import (
     _cached_pdf_is_valid,
@@ -95,6 +97,20 @@ def pdf_app(service: Service, jobs: Jobs) -> FastMCP:
     register_pdf_tools(app, jobs, JobsConfig(soft_deadline_s=0.05, result_ttl_s=60.0))
     register_job_tools(app, jobs)
     return app
+
+
+@pytest.fixture(autouse=True)
+def _public_dns(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Resolve every host to a public address for the URL guard (#514).
+
+    The autouse network guard refuses real lookups, and respx mocks the
+    transport, so the guard's resolver is the one lookup left to fake.
+    """
+
+    async def resolve(host: str, port: int) -> list[str]:  # noqa: ARG001
+        return ["93.184.216.34"]
+
+    monkeypatch.setattr(_url_guard, "_resolve", resolve)
 
 
 @pytest.fixture
@@ -1694,3 +1710,104 @@ async def test_unpaywall_url_equal_to_s2_url_is_not_retried(
     data = json.loads(result.content[0].text)
     assert data["error"] == "not_pdf"
     assert [a["source"] for a in data["attempts"]] == ["s2_oa"]
+
+
+# ---------------------------------------------------------------------------
+# fetch_pdf_by_url destination guard (#514)
+# ---------------------------------------------------------------------------
+
+
+async def test_fetch_pdf_by_url_refuses_private_destination(
+    service: Service, slow_jobs: Jobs, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A URL resolving to a private address is refused before any request."""
+
+    async def resolve(host: str, port: int) -> list[str]:  # noqa: ARG001
+        return ["10.0.0.7"]
+
+    monkeypatch.setattr(_url_guard, "_resolve", resolve)
+    with respx.mock(assert_all_called=False) as router:
+        route = router.get("http://intranet.test/a.pdf").mock(
+            return_value=httpx.Response(200, content=b"%PDF-1.7")
+        )
+        async with Client(pdf_app(service, slow_jobs)) as client:
+            result = await client.call_tool(
+                "fetch_pdf_by_url",
+                {"url": "http://intranet.test/a.pdf"},
+                raise_on_error=False,
+            )
+    assert result.is_error
+    text = result.content[0].text
+    assert "'http://intranet.test/a.pdf' does not point to a public" in text
+    assert "fetch_pdf_by_url" in text
+    assert not route.called
+
+
+async def test_fetch_pdf_by_url_names_the_refused_redirect(
+    service: Service, slow_jobs: Jobs, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def resolve(host: str, port: int) -> list[str]:  # noqa: ARG001
+        return ["127.0.0.1"] if host == "internal.test" else ["93.184.216.34"]
+
+    monkeypatch.setattr(_url_guard, "_resolve", resolve)
+    with respx.mock(assert_all_called=False) as router:
+        router.get("https://example.com/r.pdf").mock(
+            return_value=httpx.Response(
+                302, headers={"Location": "http://internal.test/x.pdf"}
+            )
+        )
+        async with Client(pdf_app(service, slow_jobs)) as client:
+            result = await client.call_tool(
+                "fetch_pdf_by_url",
+                {"url": "https://example.com/r.pdf"},
+                raise_on_error=False,
+            )
+    assert result.is_error
+    assert "redirects to 'http://internal.test/x.pdf'" in result.content[0].text
+
+
+async def test_fetch_pdf_by_url_allow_private_skips_the_guard(
+    service: Service, slow_jobs: Jobs, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With the operator opt-out, private hosts and redirects are fetched."""
+
+    async def resolve(host: str, port: int) -> list[str]:  # noqa: ARG001
+        raise AssertionError("the guard must not run when private hosts are allowed")
+
+    monkeypatch.setattr(_url_guard, "_resolve", resolve)
+    monkeypatch.setattr(
+        service,
+        "config",
+        dataclasses.replace(service.config, pdf_fetch_allow_private=True),
+    )
+    with respx.mock() as router:
+        router.get("http://intranet.test/r.pdf").mock(
+            return_value=httpx.Response(
+                302, headers={"Location": "http://intranet.test/a.pdf"}
+            )
+        )
+        router.get("http://intranet.test/a.pdf").mock(
+            return_value=httpx.Response(200, content=b"%PDF-1.7 intranet")
+        )
+        async with Client(pdf_app(service, slow_jobs)) as client:
+            result = await client.call_tool(
+                "fetch_pdf_by_url", {"url": "http://intranet.test/r.pdf"}
+            )
+    data = json.loads(result.content[0].text)
+    _assert_inline(data)
+    assert "pdf_path" in data
+
+
+async def test_fetch_pdf_by_url_unresolvable_host_is_download_failed(
+    service: Service, slow_jobs: Jobs, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def resolve(host: str, port: int) -> list[str]:  # noqa: ARG001
+        raise socket.gaierror(socket.EAI_NONAME, "Name or service not known")
+
+    monkeypatch.setattr(_url_guard, "_resolve", resolve)
+    async with Client(pdf_app(service, slow_jobs)) as client:
+        result = await client.call_tool(
+            "fetch_pdf_by_url", {"url": "https://nowhere.test/a.pdf"}
+        )
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "download_failed"

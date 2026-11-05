@@ -131,6 +131,12 @@
           "description": "Links to a paper through your library, offered when no PDF can be fetched and with each paper lookup: a JSON list of objects with a label and an http(s) URL template, in priority order. Placeholders: {doi}, {doi_url} (the encoded doi.org URL, for wrapping), {openurl} (OpenURL 1.0), {openurl_0_1} and {openurl_hybrid}. Unset means one doi.org link; an empty list turns links off. The server never opens these links. See the PDF conversion guide for examples."
         },
         {
+          "name": "SCHOLAR_MCP_PDF_FETCH_ALLOW_PRIVATE",
+          "description": "When false (the default), a PDF download from a URL the caller supplies is refused if the host, or a redirect target, resolves to a loopback, private, link-local or other non-public address. Set true to allow hosts on the server's own network, such as an intranet repository.",
+          "format": "boolean",
+          "default": "false"
+        },
+        {
           "name": "SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S",
           "description": "Seconds a long-running tool call may run in the foreground before it is promoted to a background job and a job handle is returned instead.",
           "format": "number",
@@ -382,6 +388,12 @@
         {
           "name": "SCHOLAR_MCP_ACCESS_LINKS",
           "description": "Links to a paper through your library, offered when no PDF can be fetched and with each paper lookup: a JSON list of objects with a label and an http(s) URL template, in priority order. Placeholders: {doi}, {doi_url} (the encoded doi.org URL, for wrapping), {openurl} (OpenURL 1.0), {openurl_0_1} and {openurl_hybrid}. Unset means one doi.org link; an empty list turns links off. The server never opens these links. See the PDF conversion guide for examples."
+        },
+        {
+          "name": "SCHOLAR_MCP_PDF_FETCH_ALLOW_PRIVATE",
+          "description": "When false (the default), a PDF download from a URL the caller supplies is refused if the host, or a redirect target, resolves to a loopback, private, link-local or other non-public address. Set true to allow hosts on the server's own network, such as an intranet repository.",
+          "format": "boolean",
+          "default": "false"
         },
         {
           "name": "SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S",
