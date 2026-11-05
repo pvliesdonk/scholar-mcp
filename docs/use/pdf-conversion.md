@@ -147,13 +147,13 @@ converts. To force a fresh conversion, delete the cached `.md` file.
 
 ## Alternative PDF sources
 
-When a paper has no open-access PDF URL in Semantic Scholar, `fetch_paper_pdf` and `fetch_and_convert` automatically try alternative sources:
+When a paper has no open-access PDF URL in Semantic Scholar, or that URL fails or serves a landing page instead of a PDF, `fetch_paper_pdf` and `fetch_and_convert` try alternative sources in turn and stop at the first one that serves a PDF:
 
 1. **ArXiv**, If the paper has an `externalIds.ArXiv` field, the PDF is fetched from `arxiv.org/pdf/<id>.pdf`.
 2. **PubMed Central**, If the paper has a `PubMedCentral` external ID, the PDF is fetched from NCBI.
 3. **Unpaywall**, If the paper has a DOI and `SCHOLAR_MCP_CONTACT_EMAIL` is set, the [Unpaywall API](https://unpaywall.org/products/api) is queried for an OA PDF location.
 
-The `source` field in the response indicates where the PDF came from: `s2_oa`, `arxiv`, `pmc`, or `unpaywall`.
+The `source` field in the response indicates where the PDF came from: `s2_oa`, `arxiv`, `pmc`, or `unpaywall`. When no source serves a PDF, `error` and `pdf_source` describe the last source tried, and `attempts` lists every source in order with its URL, error and detail. Unpaywall is only queried once the sources before it have failed.
 
 For PDFs found through other means (author homepages, institutional repositories, etc.), use `fetch_pdf_by_url` with the direct URL.
 

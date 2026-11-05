@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import httpx
 import pytest
 import respx
 
 from scholar_mcp._pdf_url_resolver import (
     _UNPAYWALL_BASE,
+    ResolvedPdf,
     _try_arxiv,
     _try_pmc,
     _try_unpaywall,
-    resolve_alternative_pdf,
+    iter_alternative_pdfs,
 )
 
 # ---------------------------------------------------------------------------
@@ -88,29 +91,52 @@ async def test_try_unpaywall_no_pdf_url(respx_mock: respx.MockRouter) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Integration tests for resolve_alternative_pdf
+# Integration tests for iter_alternative_pdfs
 # ---------------------------------------------------------------------------
 
 
-async def test_resolve_prefers_arxiv_over_unpaywall() -> None:
-    """ArXiv is checked first, no network call to Unpaywall."""
+async def _collect(paper: dict[str, Any], email: str | None) -> list[ResolvedPdf]:
+    return [c async for c in iter_alternative_pdfs(paper, contact_email=email)]
+
+
+@pytest.mark.respx(base_url=_UNPAYWALL_BASE)
+async def test_iter_yields_every_source_in_order(respx_mock: respx.MockRouter) -> None:
+    """ArXiv, then PMC, then Unpaywall: every candidate, not only the first."""
+    respx_mock.get("/10.1234/x").mock(
+        return_value=httpx.Response(
+            200, json={"best_oa_location": {"url_for_pdf": "https://u.example/x.pdf"}}
+        )
+    )
+    paper = {
+        "externalIds": {
+            "ArXiv": "2301.00001",
+            "PubMedCentral": "42",
+            "DOI": "10.1234/x",
+        }
+    }
+    result = await _collect(paper, "test@example.com")
+    assert [c.source for c in result] == ["arxiv", "pmc", "unpaywall"]
+
+
+@pytest.mark.respx(base_url=_UNPAYWALL_BASE, assert_all_called=False)
+async def test_iter_queries_unpaywall_only_when_asked(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """A caller that stops at ArXiv makes no Unpaywall request."""
+    route = respx_mock.get("/10.1234/x").mock(return_value=httpx.Response(404))
     paper = {"externalIds": {"ArXiv": "2301.00001", "DOI": "10.1234/x"}}
-    result = await resolve_alternative_pdf(paper, contact_email="test@example.com")
-    assert result is not None
-    assert result.source == "arxiv"
+    first = await anext(iter_alternative_pdfs(paper, contact_email="test@example.com"))
+    assert first.source == "arxiv"
+    assert not route.called
 
 
-async def test_resolve_returns_none_when_nothing_available() -> None:
-    paper = {"externalIds": {}}
-    result = await resolve_alternative_pdf(paper, contact_email=None)
-    assert result is None
+async def test_iter_yields_nothing_when_nothing_available() -> None:
+    assert await _collect({"externalIds": {}}, None) == []
 
 
-async def test_resolve_skips_unpaywall_without_email() -> None:
-    paper = {"externalIds": {"DOI": "10.1234/x"}}
+async def test_iter_skips_unpaywall_without_email() -> None:
     # No network mock — Unpaywall should be skipped entirely
-    result = await resolve_alternative_pdf(paper, contact_email=None)
-    assert result is None
+    assert await _collect({"externalIds": {"DOI": "10.1234/x"}}, None) == []
 
 
 @pytest.mark.respx(base_url=_UNPAYWALL_BASE)

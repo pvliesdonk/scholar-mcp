@@ -1562,3 +1562,135 @@ async def test_no_fillable_template_adds_no_access_links(
     data = json.loads(result.content[0].text)
     assert "access_links" not in data
     assert "note" not in data
+
+
+# ---------------------------------------------------------------------------
+# Fallback after the Semantic Scholar open-access URL fails (#568)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.respx(assert_all_called=False)
+async def test_landing_page_s2_url_falls_back_to_arxiv(
+    service: Service, slow_jobs: Jobs
+) -> None:
+    """An S2 openAccessPdf URL serving HTML no longer ends the chain."""
+    landing = "https://doi.org/10.1000/fb1"
+    arxiv_pdf_url = "https://arxiv.org/pdf/2301.11111.pdf"
+    paper_json = {
+        "paperId": "fb1",
+        "openAccessPdf": {"url": landing},
+        "externalIds": {"ArXiv": "2301.11111", "DOI": "10.1000/fb1"},
+    }
+    with respx.mock(assert_all_called=False) as router:
+        router.get(f"{S2_BASE}/paper/fb1").mock(
+            return_value=httpx.Response(200, json=paper_json)
+        )
+        router.get(landing).mock(
+            return_value=httpx.Response(200, content=b"<html>landing</html>")
+        )
+        router.get(arxiv_pdf_url).mock(
+            return_value=httpx.Response(200, content=b"%PDF-1.7 from arxiv")
+        )
+        async with Client(pdf_app(service, slow_jobs)) as client:
+            result = await client.call_tool("fetch_paper_pdf", {"identifier": "fb1"})
+
+    data = json.loads(result.content[0].text)
+    _assert_inline(data)
+    assert data["source"] == "arxiv"
+    assert Path(data["path"]).read_bytes() == b"%PDF-1.7 from arxiv"
+
+
+@pytest.mark.respx(assert_all_called=False)
+async def test_every_failed_source_is_reported(
+    service: Service, slow_jobs: Jobs
+) -> None:
+    """When no source yields a PDF, the payload lists each attempt in order."""
+    landing = "https://doi.org/10.1000/fb2"
+    pmc_url = "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC77/pdf"
+    paper_json = {
+        "paperId": "fb2",
+        "openAccessPdf": {"url": landing},
+        "externalIds": {"PubMedCentral": "77", "DOI": "10.1000/fb2"},
+    }
+    with respx.mock(assert_all_called=False) as router:
+        router.get(f"{S2_BASE}/paper/fb2").mock(
+            return_value=httpx.Response(200, json=paper_json)
+        )
+        router.get(landing).mock(return_value=httpx.Response(200, content=b"<html>"))
+        router.get(pmc_url).mock(return_value=httpx.Response(403))
+        async with Client(pdf_app(service, slow_jobs)) as client:
+            result = await client.call_tool("fetch_paper_pdf", {"identifier": "fb2"})
+
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "download_failed"
+    assert data["pdf_source"] == "pmc"
+    assert [(a["source"], a["error"]) for a in data["attempts"]] == [
+        ("s2_oa", "not_pdf"),
+        ("pmc", "download_failed"),
+    ]
+    assert data["attempts"][0]["url"] == landing
+    assert "access_links" in data
+
+
+@pytest.mark.respx(assert_all_called=False)
+async def test_working_s2_url_makes_no_unpaywall_request(
+    service: Service, slow_jobs: Jobs
+) -> None:
+    """Alternatives are resolved lazily: a working S2 URL costs no lookup."""
+    pdf_url = "https://publisher.example/fb3.pdf"
+    paper_json = {
+        "paperId": "fb3",
+        "openAccessPdf": {"url": pdf_url},
+        "externalIds": {"DOI": "10.1000/fb3"},
+    }
+    service.config = dataclasses.replace(
+        service.config, contact_email="test@example.com"
+    )
+    with respx.mock(assert_all_called=False) as router:
+        router.get(f"{S2_BASE}/paper/fb3").mock(
+            return_value=httpx.Response(200, json=paper_json)
+        )
+        router.get(pdf_url).mock(
+            return_value=httpx.Response(200, content=b"%PDF-1.7 direct")
+        )
+        unpaywall = router.get(url__startswith="https://api.unpaywall.org/").mock(
+            return_value=httpx.Response(404)
+        )
+        async with Client(pdf_app(service, slow_jobs)) as client:
+            result = await client.call_tool("fetch_paper_pdf", {"identifier": "fb3"})
+
+    data = json.loads(result.content[0].text)
+    assert data["source"] == "s2_oa"
+    assert not unpaywall.called
+
+
+@pytest.mark.respx(assert_all_called=False)
+async def test_unpaywall_url_equal_to_s2_url_is_not_retried(
+    service: Service, slow_jobs: Jobs
+) -> None:
+    """A candidate URL already tried is skipped, so it appears once."""
+    landing = "https://doi.org/10.1000/fb4"
+    paper_json = {
+        "paperId": "fb4",
+        "openAccessPdf": {"url": landing},
+        "externalIds": {"DOI": "10.1000/fb4"},
+    }
+    service.config = dataclasses.replace(
+        service.config, contact_email="test@example.com"
+    )
+    with respx.mock(assert_all_called=False) as router:
+        router.get(f"{S2_BASE}/paper/fb4").mock(
+            return_value=httpx.Response(200, json=paper_json)
+        )
+        router.get(landing).mock(return_value=httpx.Response(200, content=b"<html>"))
+        router.get(url__startswith="https://api.unpaywall.org/").mock(
+            return_value=httpx.Response(
+                200, json={"best_oa_location": {"url_for_pdf": landing}}
+            )
+        )
+        async with Client(pdf_app(service, slow_jobs)) as client:
+            result = await client.call_tool("fetch_paper_pdf", {"identifier": "fb4"})
+
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "not_pdf"
+    assert [a["source"] for a in data["attempts"]] == ["s2_oa"]
