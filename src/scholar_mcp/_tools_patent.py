@@ -825,9 +825,13 @@ async def _fetch_patent_sections(
             ),
         }
 
-    for outcome in outcomes:
-        if isinstance(outcome, BaseException):
-            raise outcome
+    failures = [o for o in outcomes if isinstance(o, BaseException)]
+    if failures:
+        # A throttle or exhausted quota must reach _run_epo's retry and
+        # reporting, whichever section happened to fail first.
+        raise next(
+            (f for f in failures if isinstance(f, EPO_REPORTED_ERRORS)), failures[0]
+        )
 
     # Remove biblio if it was only fetched as a probe for not-found detection
     if "biblio" not in sections:
