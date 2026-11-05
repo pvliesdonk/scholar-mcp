@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
 from fastmcp_pvl_core import register_long_running_tool
+from requests.exceptions import HTTPError
 
 from ._chapter_parser import hint_to_dict, parse_chapter_hint
 from ._epo_client import (
@@ -630,6 +631,18 @@ def _attach_npl_chapter_info(entry: dict[str, Any], raw: str) -> None:
     entry["chapter_info"] = hint_to_dict(hint)
 
 
+def _is_http_404(exc: HTTPError) -> bool:
+    """Return whether an OPS ``HTTPError`` carries a 404 response.
+
+    Args:
+        exc: The error raised by python-epo-ops-client.
+
+    Returns:
+        ``True`` when the response status is 404.
+    """
+    return exc.response is not None and exc.response.status_code == 404
+
+
 async def _fetch_patent_sections(
     *,
     doc: DocdbNumber,
@@ -665,7 +678,14 @@ async def _fetch_patent_sections(
         if cached is not None:
             result["biblio"] = cached
             return
-        biblio = await epo.get_biblio(doc)
+        try:
+            biblio = await epo.get_biblio(doc)
+        except HTTPError as exc:
+            if not _is_http_404(exc):
+                raise
+            # OPS answers a nonexistent publication with 404 (#475).
+            result["_not_found"] = True
+            return
         if not biblio.get("title") and not biblio.get("applicants"):
             result["_not_found"] = True
             return
@@ -793,9 +813,10 @@ async def _fetch_patent_sections(
     # Always probe biblio for not-found detection, even when not requested.
     if "biblio" not in sections:
         fetchers.append(_fetch_biblio())
-    await _asyncio.gather(*fetchers)
+    outcomes = await _asyncio.gather(*fetchers, return_exceptions=True)
 
-    # Detect not-found from biblio probe
+    # Detect not-found from biblio probe.  A nonexistent patent also fails
+    # every other section, so their errors give way to the not-found answer.
     if result.pop("_not_found", False):
         return {
             "error": "patent_not_found",
@@ -803,6 +824,10 @@ async def _fetch_patent_sections(
                 f"Patent {patent_id} not found or has no data. Check the number format."
             ),
         }
+
+    for outcome in outcomes:
+        if isinstance(outcome, BaseException):
+            raise outcome
 
     # Remove biblio if it was only fetched as a probe for not-found detection
     if "biblio" not in sections:
