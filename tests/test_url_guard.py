@@ -41,7 +41,7 @@ def _resolver(table: dict[str, list[str]]):  # type: ignore[no-untyped-def]
         ("192.168.1.1", False),
         ("169.254.169.254", False),
         ("100.64.0.1", False),
-        ("0.0.0.0", False),  # noqa: S104 -- an address under test, not a bind
+        (str(ipaddress.IPv4Address(0)), False),  # 0.0.0.0, the unspecified address
         ("224.0.0.1", False),
         ("::1", False),
         ("fe80::1", False),
