@@ -147,7 +147,7 @@ converts. To force a fresh conversion, delete the cached `.md` file.
 
 ## Alternative PDF sources
 
-When a paper has no open-access PDF URL in Semantic Scholar, or that URL fails or serves a landing page instead of a PDF, `fetch_paper_pdf` and `fetch_and_convert` try alternative sources in turn and stop at the first one that serves a PDF:
+When a paper has no open-access PDF URL in Semantic Scholar, or that URL fails or serves a landing page instead of a PDF, `fetch_paper_pdf` and `fetch_and_convert` try alternative sources one after another and stop at the first one that serves a PDF:
 
 1. **ArXiv**, If the paper has an `externalIds.ArXiv` field, the PDF is fetched from `arxiv.org/pdf/<id>.pdf`.
 2. **PubMed Central**, If the paper has a `PubMedCentral` external ID, the PDF is fetched from NCBI.

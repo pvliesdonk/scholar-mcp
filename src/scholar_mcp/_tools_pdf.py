@@ -262,7 +262,7 @@ async def fetch_paper_pdf(
 
     Tries the Semantic Scholar open-access URL first. When that is
     missing, fails or serves something other than a PDF, it tries
-    alternative sources in turn: ArXiv (from ``externalIds``), PubMed
+    alternative sources, one after another: ArXiv (from ``externalIds``), PubMed
     Central, and Unpaywall (by DOI, requires ``SCHOLAR_MCP_CONTACT_EMAIL``).
     A failure lists every source tried under ``attempts``.
 
