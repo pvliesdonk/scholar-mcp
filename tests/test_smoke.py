@@ -252,3 +252,14 @@ def test_blank_overrides_fall_back_to_defaults(
     assert (server.instructions or "").startswith(
         "scholar-mcp: Scholarly papers, patents, books, standards and PDF conversion",
     )
+
+
+def test_instructions_state_the_shared_s2_budget_up_front() -> None:
+    """A caller learns about the shared S2 budget before its first throttle (#569).
+
+    The deferral reason says it only after a 429; an agent planning parallel
+    calls or subagents reads the instructions at session start.
+    """
+    text = make_server().instructions or ""
+    assert "share one rate budget across every client and agent" in text
+    assert "batch_resolve" in text

@@ -270,6 +270,20 @@ def make_server(
         ),
     )
 
+    # Stated up front, not only in the throttle deferral: an agent planning a
+    # fan-out (parallel calls, or several subagents on one server) needs it
+    # before the first 429, when the deferral reason is too late (#569).
+    # Every client shares one S2Client and so one pacing/backoff state.
+    instructions_for(mcp).add(
+        "All Semantic Scholar-backed tools share one rate budget across every "
+        "client and agent using this server, so parallel calls or parallel "
+        "agents slow each other down rather than finish sooner; for many known "
+        "identifiers, prefer one batch_resolve call over separate get_paper "
+        "calls.",
+        role=InstructionRole.WORKFLOWS,
+        requires_tools=("search_papers", "batch_resolve", "get_paper"),
+    )
+
     # -- Transfer subsystem (capability-link upload + download) ----------------
     #
     # Wiring the /transfer/{token} route needs HTTP transport (the route cannot
