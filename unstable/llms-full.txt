@@ -2091,13 +2091,13 @@ A cached result needs no job. An already-downloaded PDF is never fetched twice, 
 
 ## Alternative PDF sources
 
-When a paper has no open-access PDF URL in Semantic Scholar, `fetch_paper_pdf` and `fetch_and_convert` automatically try alternative sources:
+When a paper has no open-access PDF URL in Semantic Scholar, or that URL fails or serves a landing page instead of a PDF, `fetch_paper_pdf` and `fetch_and_convert` try alternative sources one after another and stop at the first one that serves a PDF:
 
 1. **ArXiv**, If the paper has an `externalIds.ArXiv` field, the PDF is fetched from `arxiv.org/pdf/<id>.pdf`.
 1. **PubMed Central**, If the paper has a `PubMedCentral` external ID, the PDF is fetched from NCBI.
 1. **Unpaywall**, If the paper has a DOI and `SCHOLAR_MCP_CONTACT_EMAIL` is set, the [Unpaywall API](https://unpaywall.org/products/api) is queried for an OA PDF location.
 
-The `source` field in the response indicates where the PDF came from: `s2_oa`, `arxiv`, `pmc`, or `unpaywall`.
+The `source` field in the response indicates where the PDF came from: `s2_oa`, `arxiv`, `pmc`, or `unpaywall`. When no source serves a PDF, `error` and `pdf_source` describe the last source tried, and `attempts` lists every source in order with its URL, error and detail. Unpaywall is only queried once the sources before it have failed.
 
 For PDFs found through other means (author homepages, institutional repositories, etc.), use `fetch_pdf_by_url` with the direct URL.
 
@@ -3091,7 +3091,7 @@ These tools write to the local cache, so they're hidden when `SCHOLAR_MCP_READ_O
 
 Download the PDF of a paper.
 
-Tries the Semantic Scholar open-access URL first. When that is unavailable, automatically checks alternative sources: ArXiv (from `externalIds`), PubMed Central, and Unpaywall (by DOI, requires `SCHOLAR_MCP_CONTACT_EMAIL`).
+Tries the Semantic Scholar open-access URL first. When that is missing, fails or serves something other than a PDF, it tries alternative sources, one after another: ArXiv (from `externalIds`), PubMed Central, and Unpaywall (by DOI, requires `SCHOLAR_MCP_CONTACT_EMAIL`). A failure lists every source tried under `attempts`.
 
 Skips download if the file already exists locally, which answers immediately; a fresh download usually takes 10-30 seconds and may be returned as a background job handle instead.
 
@@ -3156,7 +3156,7 @@ Requires `SCHOLAR_MCP_DOCLING_URL` to be set. VLM enrichment also requires `SCHO
 
 Resolve a paper, download its PDF, and convert to Markdown.
 
-Tries the Semantic Scholar open-access URL first, then alternative sources (ArXiv, PubMed Central, Unpaywall). Each stage fails gracefully: metadata is always returned if the paper resolves, even if PDF download or conversion fails.
+Tries the Semantic Scholar open-access URL first, then alternative sources (ArXiv, PubMed Central, Unpaywall) until one serves a PDF; a failure lists every source tried under `attempts`. Each stage fails gracefully: metadata is always returned if the paper resolves, even if PDF download or conversion fails.
 
 The full pipeline typically takes 1-5 minutes, so expect a background job handle rather than an inline result.
 

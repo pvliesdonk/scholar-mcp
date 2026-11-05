@@ -2700,13 +2700,13 @@ than converting again, so calling one twice for the same paper converts once.
 Standard and VLM results are separate files, so switching <code>use_vlm</code> still
 converts. To force a fresh conversion, delete the cached <code>.md</code> file.</p>
 <h2 id="alternative-pdf-sources">Alternative PDF sources<a class="headerlink" href="#alternative-pdf-sources" title="Permanent link">&para;</a></h2>
-<p>When a paper has no open-access PDF URL in Semantic Scholar, <code>fetch_paper_pdf</code> and <code>fetch_and_convert</code> automatically try alternative sources:</p>
+<p>When a paper has no open-access PDF URL in Semantic Scholar, or that URL fails or serves a landing page instead of a PDF, <code>fetch_paper_pdf</code> and <code>fetch_and_convert</code> try alternative sources one after another and stop at the first one that serves a PDF:</p>
 <ol>
 <li><strong>ArXiv</strong>, If the paper has an <code>externalIds.ArXiv</code> field, the PDF is fetched from <code>arxiv.org/pdf/&lt;id&gt;.pdf</code>.</li>
 <li><strong>PubMed Central</strong>, If the paper has a <code>PubMedCentral</code> external ID, the PDF is fetched from NCBI.</li>
 <li><strong>Unpaywall</strong>, If the paper has a DOI and <code>SCHOLAR_MCP_CONTACT_EMAIL</code> is set, the <a href="https://unpaywall.org/products/api">Unpaywall API</a> is queried for an OA PDF location.</li>
 </ol>
-<p>The <code>source</code> field in the response indicates where the PDF came from: <code>s2_oa</code>, <code>arxiv</code>, <code>pmc</code>, or <code>unpaywall</code>.</p>
+<p>The <code>source</code> field in the response indicates where the PDF came from: <code>s2_oa</code>, <code>arxiv</code>, <code>pmc</code>, or <code>unpaywall</code>. When no source serves a PDF, <code>error</code> and <code>pdf_source</code> describe the last source tried, and <code>attempts</code> lists every source in order with its URL, error and detail. Unpaywall is only queried once the sources before it have failed.</p>
 <p>For PDFs found through other means (author homepages, institutional repositories, etc.), use <code>fetch_pdf_by_url</code> with the direct URL.</p>
 <div class="admonition tip">
 <p class="admonition-title">Enable Unpaywall</p>

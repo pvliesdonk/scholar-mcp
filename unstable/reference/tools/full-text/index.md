@@ -8,7 +8,7 @@ These tools write to the local cache, so they're hidden when `SCHOLAR_MCP_READ_O
 
 Download the PDF of a paper.
 
-Tries the Semantic Scholar open-access URL first. When that is unavailable, automatically checks alternative sources: ArXiv (from `externalIds`), PubMed Central, and Unpaywall (by DOI, requires `SCHOLAR_MCP_CONTACT_EMAIL`).
+Tries the Semantic Scholar open-access URL first. When that is missing, fails or serves something other than a PDF, it tries alternative sources, one after another: ArXiv (from `externalIds`), PubMed Central, and Unpaywall (by DOI, requires `SCHOLAR_MCP_CONTACT_EMAIL`). A failure lists every source tried under `attempts`.
 
 Skips download if the file already exists locally, which answers immediately; a fresh download usually takes 10-30 seconds and may be returned as a background job handle instead.
 
@@ -73,7 +73,7 @@ Requires `SCHOLAR_MCP_DOCLING_URL` to be set. VLM enrichment also requires `SCHO
 
 Resolve a paper, download its PDF, and convert to Markdown.
 
-Tries the Semantic Scholar open-access URL first, then alternative sources (ArXiv, PubMed Central, Unpaywall). Each stage fails gracefully: metadata is always returned if the paper resolves, even if PDF download or conversion fails.
+Tries the Semantic Scholar open-access URL first, then alternative sources (ArXiv, PubMed Central, Unpaywall) until one serves a PDF; a failure lists every source tried under `attempts`. Each stage fails gracefully: metadata is always returned if the paper resolves, even if PDF download or conversion fails.
 
 The full pipeline typically takes 1-5 minutes, so expect a background job handle rather than an inline result.
 
