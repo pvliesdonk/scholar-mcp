@@ -28,6 +28,9 @@ MAX_REDIRECTS = 10
 
 _IPAddress = ipaddress.IPv4Address | ipaddress.IPv6Address
 
+_NAT64_PREFIX = ipaddress.IPv6Network("64:ff9b::/96")
+"""RFC 6052 well-known prefix; its last 32 bits are an IPv4 address."""
+
 
 class BlockedDestinationError(Exception):
     """A URL resolves to an address the server must not request.
@@ -54,8 +57,11 @@ class BlockedDestinationError(Exception):
 def is_public_address(address: _IPAddress) -> bool:
     """Return whether an address is a public unicast internet address.
 
-    IPv4-mapped IPv6 addresses (``::ffff:127.0.0.1``) are judged by the IPv4
-    address they carry, since the kernel connects to that address.
+    IPv6 addresses that carry an IPv4 address are judged by that address:
+    IPv4-mapped (``::ffff:127.0.0.1``), because the kernel connects to it,
+    and the NAT64 well-known prefix (``64:ff9b::/96``), because a NAT64
+    gateway forwards to it. Python already treats 6to4 (``2002::/16``) as
+    not global.
 
     Args:
         address: The address to judge.
@@ -63,8 +69,11 @@ def is_public_address(address: _IPAddress) -> bool:
     Returns:
         ``True`` only for a global, non-multicast address.
     """
-    if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped:
-        address = address.ipv4_mapped
+    if isinstance(address, ipaddress.IPv6Address):
+        if address.ipv4_mapped:
+            address = address.ipv4_mapped
+        elif address in _NAT64_PREFIX:
+            address = ipaddress.IPv4Address(int(address) & 0xFFFFFFFF)
     return address.is_global and not address.is_multicast
 
 

@@ -34,7 +34,8 @@ PDF parsing failures. See [PDF file header behaviour](reference/pdf-file-header.
 that are not public internet addresses (#514). `_url_guard.check_public_url`
 accepts only `http` and `https` URLs. It resolves the host and refuses the
 URL unless every address is a global unicast address. IPv4-mapped IPv6
-addresses are judged by the IPv4 address they carry. A host with one public
+addresses and NAT64 addresses (`64:ff9b::/96`) are judged by the IPv4
+address they carry; 6to4 (`2002::/16`) is already not global. A host with one public
 and one private address is refused, because the connection may use either.
 Redirects are followed one hop at a time (`get_public`, at most 10 hops), and
 each hop is checked before it is requested. A refusal is a `ToolError` at
