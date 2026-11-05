@@ -11,7 +11,7 @@ from fastmcp.tools import FunctionTool
 from fastmcp_pvl_core import JobsConfig, is_tool_boundary, register_job_tools
 from fastmcp_pvl_core._tool_boundary import FAULT_MESSAGE
 
-from scholar_mcp._s2_jobs import register_s2_tool
+from scholar_mcp._s2_jobs import register_s2_tool, throttle_reason
 from tests.conftest import PlainClient, tasks_server
 
 if TYPE_CHECKING:
@@ -63,3 +63,18 @@ async def test_promoted_s2_failure_reaches_the_poller_as_a_fault(jobs: Jobs) -> 
 
     assert "secret upstream detail" not in text
     assert FAULT_MESSAGE in text
+
+
+def test_throttle_reason_states_what_the_caller_needs() -> None:
+    """The deferral tells the caller to keep polling, for how long, and why (#569)."""
+    reason = throttle_reason(JobsConfig(result_ttl_s=3600.0))
+    assert "Keep polling get_job_result" in reason
+    assert "up to about 50 minutes" in reason
+    assert "shares one Semantic Scholar rate budget" in reason
+    assert "unknown, not empty" in reason
+
+
+def test_throttle_reason_follows_the_configured_ttl() -> None:
+    """The minutes promised track the retry window, with a floor of one."""
+    assert "up to about 10 minutes" in throttle_reason(JobsConfig(result_ttl_s=720.0))
+    assert "up to about 1 minute." in throttle_reason(JobsConfig(result_ttl_s=1.0))

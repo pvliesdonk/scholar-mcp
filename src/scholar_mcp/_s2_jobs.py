@@ -22,7 +22,39 @@ if TYPE_CHECKING:
     from fastmcp import FastMCP
     from fastmcp_pvl_core import Jobs
 
-_S2_THROTTLE_REASON = "Semantic Scholar is throttling requests; work continues."
+# Share of the job record's TTL a throttled body may spend retrying, so its
+# answer is recorded before the record expires.
+_RETRY_SHARE_OF_TTL = 5 / 6
+
+
+def _retry_window_s(config: JobsConfig) -> float:
+    """Return how long a throttled S2 body keeps retrying, in seconds."""
+    return config.result_ttl_s * _RETRY_SHARE_OF_TTL
+
+
+def throttle_reason(config: JobsConfig) -> str:
+    """Return the deferral text a caller reads when S2 throttles a tool.
+
+    It tells the caller that the work goes on, how long it may take, that
+    every client of this server shares one Semantic Scholar budget, and that
+    an unfinished job is no answer, not an empty one.
+
+    Args:
+        config: The job settings, which bound the retry window.
+
+    Returns:
+        The client-visible reason for the deferral.
+    """
+    minutes = max(1, round(_retry_window_s(config) / 60))
+    bound = "1 minute" if minutes == 1 else f"{minutes} minutes"
+    return (
+        "Semantic Scholar is throttling requests; the work continues in this "
+        "job. Keep polling get_job_result: under throttling the result can "
+        f"take up to about {bound}. Every client of this server "
+        "shares one Semantic Scholar rate budget, so parallel calls slow each "
+        "other down rather than finish sooner. Until the job completes, its "
+        "outcome is unknown, not empty."
+    )
 
 
 async def _await_task(task: asyncio.Task[dict[str, Any]]) -> dict[str, Any]:
@@ -54,7 +86,7 @@ async def _run_s2_body(
     loop = asyncio.get_running_loop()
     # Keep the retry window inside the record's TTL, including the inline
     # period before a job is created. At the default TTL this is 50 minutes.
-    context = S2RetryContext(deadline=loop.time() + config.result_ttl_s * 5 / 6)
+    context = S2RetryContext(deadline=loop.time() + _retry_window_s(config))
     if get_task_context() is not None:
         # The negotiated task already has a client-visible handle and owns
         # its lifecycle. A fallback Jobs handle here would be nested inside
@@ -79,7 +111,7 @@ async def _run_s2_body(
                 handle = await jobs.defer(
                     continuation,
                     tool=tool,
-                    reason=_S2_THROTTLE_REASON,
+                    reason=throttle_reason(config),
                     retry_after_s=context.retry_after_s,
                 )
             else:
