@@ -219,6 +219,20 @@ class ProjectConfig:
             "wizard": {"group": "Access links"},
         },
     )
+    pdf_fetch_allow_private: bool = field(
+        default=False,
+        metadata={
+            "help": (
+                "When false (the default), a PDF download from a URL the "
+                "caller supplies is refused if the host, or a redirect "
+                "target, resolves to a loopback, private, link-local or other "
+                "non-public address. Set true to allow hosts on the server's "
+                "own network, such as an intranet repository."
+            ),
+            "tags": ("pdf",),
+            "wizard": {"group": "PDF conversion"},
+        },
+    )
     # Populated from SCHOLAR_GITHUB_TOKEN (not SCHOLAR_MCP_GITHUB_TOKEN) — the
     # conventional GitHub-tooling env name users expect. The non-prefixed read
     # is invisible to the domain env-var scan, so the var is declared in
@@ -295,6 +309,9 @@ class ProjectConfig:
             epo_consumer_secret=env(_ENV_PREFIX, "EPO_CONSUMER_SECRET"),
             google_books_api_key=env(_ENV_PREFIX, "GOOGLE_BOOKS_API_KEY"),
             access_links=env(_ENV_PREFIX, "ACCESS_LINKS"),
+            pdf_fetch_allow_private=parse_bool(
+                env(_ENV_PREFIX, "PDF_FETCH_ALLOW_PRIVATE", "false")
+            ),
             # SCHOLAR_GITHUB_TOKEN — see the github_token field comment above.
             github_token=os.environ.get("SCHOLAR_GITHUB_TOKEN") or None,
             # CONFIG-FROM-ENV-END

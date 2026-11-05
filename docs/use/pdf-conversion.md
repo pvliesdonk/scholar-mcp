@@ -48,7 +48,7 @@ Four tools are available once configured:
 | `fetch_paper_pdf` | Downloads the PDF for a paper (tries OA, then ArXiv/PMC/Unpaywall) |
 | `convert_pdf_to_markdown` | Converts a local PDF file to Markdown |
 | `fetch_and_convert` | Full pipeline: looks up the paper and downloads and converts its PDF |
-| `fetch_pdf_by_url` | Downloads a PDF from any URL and optionally converts to Markdown |
+| `fetch_pdf_by_url` | Downloads a PDF from a public URL and optionally converts to Markdown |
 
 PDFs are stored in `$SCHOLAR_MCP_CACHE_DIR/pdfs/` and Markdown files in `$SCHOLAR_MCP_CACHE_DIR/md/`.
 
@@ -155,7 +155,7 @@ When a paper has no open-access PDF URL in Semantic Scholar, or that URL fails o
 
 The `source` field in the response indicates where the PDF came from: `s2_oa`, `arxiv`, `pmc`, or `unpaywall`. When no source serves a PDF, `error` and `pdf_source` describe the last source tried, and `attempts` lists every source in order with its URL, error and detail. Unpaywall is only queried once the sources before it have failed.
 
-For PDFs found through other means (author homepages, institutional repositories, etc.), use `fetch_pdf_by_url` with the direct URL.
+For PDFs found through other means (author homepages, institutional repositories, etc.), use `fetch_pdf_by_url` with the direct URL. By default it refuses URLs and redirects that lead to a loopback, private or link-local address; an operator who needs to fetch from an intranet repository sets `SCHOLAR_MCP_PDF_FETCH_ALLOW_PRIVATE=true`.
 
 !!! tip "Enable Unpaywall"
     Set `SCHOLAR_MCP_CONTACT_EMAIL` to your email address to enable Unpaywall lookups. This is also used for the OpenAlex polite pool.

@@ -428,6 +428,7 @@ the keepalive. Do not rely on it alone.
 | `SCHOLAR_MCP_VLM_API_URL` | (none) | No | OpenAI-compatible VLM endpoint for formula and figure enrichment during PDF conversion. |
 | `SCHOLAR_MCP_VLM_API_KEY` | (none) | No | API key for the VLM endpoint. |
 | `SCHOLAR_MCP_VLM_MODEL` | `gpt-4o` | No | Model name to use with the VLM endpoint. |
+| `SCHOLAR_MCP_PDF_FETCH_ALLOW_PRIVATE` | `false` | No | When false (the default), a PDF download from a URL the caller supplies is refused if the host, or a redirect target, resolves to a loopback, private, link-local or other non-public address. Set true to allow hosts on the server's own network, such as an intranet repository. |
 
 ### Patents (EPO OPS)
 

@@ -7,6 +7,7 @@ import hashlib
 import logging
 import os
 import re
+import socket
 import uuid
 from contextlib import aclosing
 from pathlib import Path
@@ -16,6 +17,7 @@ from urllib.parse import urlparse
 import httpx
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
+from fastmcp.exceptions import ToolError
 from fastmcp_pvl_core import register_long_running_tool
 
 from ._access_links import build_access_links, parse_access_link_templates
@@ -26,6 +28,7 @@ from ._s2_client import s2_error_payload
 from ._s2_jobs import register_s2_tool
 from ._server_deps import get_service
 from ._text_window import DEFAULT_MAX_TEXT_CHARS, page_text
+from ._url_guard import BlockedDestinationError, get_public
 from .domain import Service
 
 if TYPE_CHECKING:
@@ -490,6 +493,48 @@ async def fetch_and_convert(
     )
 
 
+async def _get_caller_url(url: str, *, allow_private: bool) -> httpx.Response:
+    """Download a caller-chosen URL, refusing non-public destinations.
+
+    Args:
+        url: The URL the caller passed to ``fetch_pdf_by_url``.
+        allow_private: The operator's ``pdf_fetch_allow_private`` setting;
+            when true, any destination is fetched, as before #514.
+
+    Returns:
+        The final response, with a success status.
+
+    Raises:
+        ToolError: The URL or a redirect hop resolves to a non-public
+            address (outcome 2: the caller must pass another URL).
+        httpx.HTTPError: The download failed or returned an error status.
+        socket.gaierror: A host does not resolve.
+    """
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        if allow_private:
+            r = await client.get(url, follow_redirects=True)
+        else:
+            try:
+                r = await get_public(client, url)
+            except BlockedDestinationError as exc:
+                logger.info(
+                    "pdf_by_url_blocked url=%s target=%s address=%s",
+                    url,
+                    exc.url,
+                    exc.address,
+                )
+                hop = "" if exc.url == url else f" redirects to '{exc.url}', which"
+                raise ToolError(
+                    f"url '{url}'{hop} does not point to a public internet "
+                    "address, and this server downloads only from public "
+                    "hosts. Pass fetch_pdf_by_url a publicly reachable url "
+                    "for the PDF instead.",
+                    log_level=logging.INFO,
+                ) from None
+        r.raise_for_status()
+    return r
+
+
 async def fetch_pdf_by_url(
     url: str,
     filename: str | None = None,
@@ -554,12 +599,12 @@ async def fetch_pdf_by_url(
     pdf_path = pdf_dir / f"{stem}.pdf"
 
     if not await asyncio.to_thread(_cached_pdf_is_valid, pdf_path):
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            try:
-                r = await client.get(url, follow_redirects=True)
-                r.raise_for_status()
-            except httpx.HTTPError as exc:
-                return {"error": "download_failed", "detail": str(exc)}
+        try:
+            r = await _get_caller_url(
+                url, allow_private=service.config.pdf_fetch_allow_private
+            )
+        except (httpx.HTTPError, socket.gaierror) as exc:
+            return {"error": "download_failed", "detail": str(exc)}
         if not r.content.startswith(_PDF_HEADER):
             return {
                 "error": "not_pdf",
