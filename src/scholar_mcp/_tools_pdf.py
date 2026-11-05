@@ -8,6 +8,7 @@ import logging
 import os
 import re
 import uuid
+from contextlib import aclosing
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
@@ -20,7 +21,7 @@ from fastmcp_pvl_core import register_long_running_tool
 from ._access_links import build_access_links, parse_access_link_templates
 from ._docling_client import DoclingClient
 from ._paper_cache import resolve_paper
-from ._pdf_url_resolver import ResolvedPdf, resolve_alternative_pdf
+from ._pdf_url_resolver import ResolvedPdf, iter_alternative_pdfs
 from ._s2_client import s2_error_payload
 from ._s2_jobs import register_s2_tool
 from ._server_deps import get_service
@@ -28,6 +29,8 @@ from ._text_window import DEFAULT_MAX_TEXT_CHARS, page_text
 from .domain import Service
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
+
     from fastmcp_pvl_core import Jobs, JobsConfig
 
     from ._record_types import PaperRecord
@@ -114,13 +117,73 @@ def _vlm_extras(docling: DoclingClient, use_vlm: bool) -> dict[str, Any]:
     return {"vlm_skip_reason": reason} if reason else {}
 
 
+async def _pdf_candidates(
+    service: Service, paper: PaperRecord, http_client: httpx.AsyncClient
+) -> AsyncGenerator[ResolvedPdf, None]:
+    """Yield a paper's PDF URLs in trial order, each URL once.
+
+    The Semantic Scholar open-access URL comes first, then the alternative
+    sources. Alternatives are resolved lazily, so a working first URL costs
+    no Unpaywall lookup.
+
+    Args:
+        service: Domain service, for the Unpaywall contact email.
+        paper: The resolved Semantic Scholar paper record.
+        http_client: Client shared with the downloads, for Unpaywall.
+
+    Yields:
+        Each distinct candidate URL with its source.
+    """
+    seen: set[str] = set()
+    oa_url: str | None = (paper.get("openAccessPdf") or {}).get("url")
+    if oa_url:
+        seen.add(oa_url)
+        yield ResolvedPdf(url=oa_url, source="s2_oa")
+    async for alt in iter_alternative_pdfs(
+        paper, contact_email=service.config.contact_email, http_client=http_client
+    ):
+        if alt.url not in seen:
+            seen.add(alt.url)
+            yield alt
+
+
+async def _download_pdf(
+    client: httpx.AsyncClient, candidate: ResolvedPdf
+) -> bytes | dict[str, Any]:
+    """Download one candidate and check that it is a PDF.
+
+    Args:
+        client: The HTTP client to download with.
+        candidate: The URL to fetch and the source it came from.
+
+    Returns:
+        The PDF bytes, or an attempt record naming the source, the URL and
+        why it yielded no PDF (``download_failed`` or ``not_pdf``).
+    """
+    attempt: dict[str, Any] = {"source": candidate.source, "url": candidate.url}
+    try:
+        r = await client.get(candidate.url, follow_redirects=True)
+        r.raise_for_status()
+    except httpx.HTTPError as exc:
+        return {**attempt, "error": "download_failed", "detail": str(exc)}
+    if not r.content.startswith(_PDF_HEADER):
+        return {
+            **attempt,
+            "error": "not_pdf",
+            "detail": "Downloaded content does not begin with the PDF header %PDF-.",
+        }
+    return r.content
+
+
 async def _ensure_paper_pdf(
     service: Service, paper: PaperRecord, identifier: str
 ) -> tuple[Path, str] | dict[str, Any]:
     """Resolve a paper's PDF URL and make sure the file is on disk.
 
     Shared by ``fetch_paper_pdf`` and ``fetch_and_convert``, which resolve and
-    download identically and differ only in what they do afterwards.
+    download identically and differ only in what they do afterwards. Tries
+    the Semantic Scholar open-access URL, then each alternative source, and
+    stops at the first response that is a PDF.
 
     Args:
         service: Domain service, for the cache directory and contact email.
@@ -130,61 +193,65 @@ async def _ensure_paper_pdf(
 
     Returns:
         ``(path, source)`` once the PDF is on disk, or an error mapping when
-        no open-access URL resolved or the download failed.
+        no URL resolved or no candidate yielded a PDF. A failure after one
+        or more downloads reports the last source tried in ``error`` and
+        ``pdf_source``, and every source in ``attempts``.
     """
-    oa = paper.get("openAccessPdf") or {}
-    url: str | None = oa.get("url")
-    source = "s2_oa"
-    if not url:
-        alt: ResolvedPdf | None = await resolve_alternative_pdf(
-            paper, contact_email=service.config.contact_email
-        )
-        if alt:
-            url, source = alt.url, alt.source
-    if not url:
-        return _with_access_links(
-            service,
-            paper,
-            {
-                "error": "no_oa_pdf",
-                "paper_id": paper.get("paperId"),
-                "title": paper.get("title"),
-            },
-        )
-
     pid = paper.get("paperId", identifier.replace("/", "_"))
     pdf_dir = service.config.cache_dir / "pdfs"
-    pdf_dir.mkdir(parents=True, exist_ok=True)
     path = pdf_dir / f"{pid}.pdf"
-    if await asyncio.to_thread(_cached_pdf_is_valid, path):
-        logger.info("pdf_already_exists path=%s", path)
-        return path, source
+    attempts: list[dict[str, Any]] = []
+    async with (
+        httpx.AsyncClient(timeout=120.0) as client,
+        aclosing(_pdf_candidates(service, paper, client)) as candidates,
+    ):
+        async for candidate in candidates:
+            if not attempts and await asyncio.to_thread(_cached_pdf_is_valid, path):
+                logger.info("pdf_already_exists path=%s", path)
+                return path, candidate.source
+            outcome = await _download_pdf(client, candidate)
+            if isinstance(outcome, bytes):
+                pdf_dir.mkdir(parents=True, exist_ok=True)
+                await asyncio.to_thread(_write_pdf_cache, path, outcome)
+                logger.info(
+                    "pdf_downloaded path=%s bytes=%d source=%s attempts=%d",
+                    path,
+                    len(outcome),
+                    candidate.source,
+                    len(attempts) + 1,
+                )
+                return path, candidate.source
+            attempts.append(outcome)
+    return _with_access_links(service, paper, _no_pdf_payload(paper, attempts))
 
-    async with httpx.AsyncClient(timeout=120.0) as client:
-        try:
-            r = await client.get(url, follow_redirects=True)
-            r.raise_for_status()
-        except httpx.HTTPError as exc:
-            return _with_access_links(
-                service,
-                paper,
-                {"error": "download_failed", "detail": str(exc), "pdf_source": source},
-            )
-    if not r.content.startswith(_PDF_HEADER):
-        return _with_access_links(
-            service,
-            paper,
-            {
-                "error": "not_pdf",
-                "detail": "Downloaded content does not begin with the PDF header %PDF-.",
-                "pdf_source": source,
-            },
-        )
-    await asyncio.to_thread(_write_pdf_cache, path, r.content)
-    logger.info(
-        "pdf_downloaded path=%s bytes=%d source=%s", path, len(r.content), source
-    )
-    return path, source
+
+def _no_pdf_payload(
+    paper: PaperRecord, attempts: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """Build the error mapping for a paper whose PDF could not be obtained.
+
+    Args:
+        paper: The resolved Semantic Scholar paper record.
+        attempts: One record per candidate tried, in order; empty when no
+            candidate URL was known.
+
+    Returns:
+        ``no_oa_pdf`` when nothing was tried; otherwise the last attempt's
+        ``error``, ``detail`` and ``pdf_source``, plus every attempt.
+    """
+    if not attempts:
+        return {
+            "error": "no_oa_pdf",
+            "paper_id": paper.get("paperId"),
+            "title": paper.get("title"),
+        }
+    last = attempts[-1]
+    return {
+        "error": last["error"],
+        "detail": last["detail"],
+        "pdf_source": last["source"],
+        "attempts": attempts,
+    }
 
 
 async def fetch_paper_pdf(
@@ -194,9 +261,10 @@ async def fetch_paper_pdf(
     """Download the PDF of a paper.
 
     Tries the Semantic Scholar open-access URL first. When that is
-    unavailable, automatically checks alternative sources: ArXiv
-    (from ``externalIds``), PubMed Central, and Unpaywall (by DOI,
-    requires ``SCHOLAR_MCP_CONTACT_EMAIL``).
+    missing, fails or serves something other than a PDF, it tries
+    alternative sources, one after another: ArXiv (from ``externalIds``), PubMed
+    Central, and Unpaywall (by DOI, requires ``SCHOLAR_MCP_CONTACT_EMAIL``).
+    A failure lists every source tried under ``attempts``.
 
     Skips download if the file already exists locally, which answers
     immediately; a fresh download usually takes 10-30 seconds and may
@@ -325,7 +393,8 @@ async def fetch_and_convert(
     """Resolve a paper, download its PDF, and convert to Markdown.
 
     Tries the Semantic Scholar open-access URL first, then alternative
-    sources (ArXiv, PubMed Central, Unpaywall). Each stage fails
+    sources (ArXiv, PubMed Central, Unpaywall) until one serves a PDF;
+    a failure lists every source tried under ``attempts``. Each stage fails
     gracefully: metadata is always returned if the paper resolves,
     even if PDF download or conversion fails.
 

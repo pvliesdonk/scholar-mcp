@@ -1,6 +1,6 @@
-"""Resolve alternative PDF URLs when openAccessPdf is unavailable.
+"""Resolve alternative PDF URLs when openAccessPdf is unavailable or fails.
 
-Tries multiple sources in order:
+Lists candidates from these sources, in order:
 1. ArXiv — construct URL from externalIds.ArXiv
 2. PubMed Central — construct URL from externalIds.PubMedCentral
 3. Unpaywall — query by DOI (requires contact_email config)
@@ -15,6 +15,8 @@ from typing import TYPE_CHECKING
 import httpx
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
+
     from ._record_types import PaperRecord
 
 logger = logging.getLogger(__name__)
@@ -101,17 +103,20 @@ async def _try_unpaywall(
     return None
 
 
-async def resolve_alternative_pdf(
+async def iter_alternative_pdfs(
     paper: PaperRecord,
     *,
     contact_email: str | None = None,
     http_client: httpx.AsyncClient | None = None,
-) -> ResolvedPdf | None:
-    """Try alternative sources for a PDF URL.
+) -> AsyncGenerator[ResolvedPdf, None]:
+    """Yield every alternative PDF URL known for a paper, in trial order.
 
-    Called when ``openAccessPdf`` is absent from Semantic Scholar metadata.
-    Checks ArXiv and PMC synchronously (URL construction only), then
-    queries Unpaywall if a DOI and contact email are available.
+    Used when the Semantic Scholar ``openAccessPdf`` URL is absent or did
+    not yield a PDF. ArXiv and PMC URLs are built without network access;
+    Unpaywall is queried only when the caller asks for the next candidate
+    after those, and only if a DOI and contact email are available. A
+    caller that stops at the first working PDF therefore makes no
+    Unpaywall request.
 
     Args:
         paper: Semantic Scholar paper metadata dict (must include
@@ -120,27 +125,20 @@ async def resolve_alternative_pdf(
             is skipped when not set.
         http_client: Optional shared httpx client for Unpaywall requests.
 
-    Returns:
-        A :class:`ResolvedPdf` if a URL was found, else None.
+    Yields:
+        Each candidate, ArXiv first, then PMC, then Unpaywall.
     """
-    # Fast, no-network checks first
-    result = _try_arxiv(paper)
-    if result:
-        logger.info("alt_pdf_resolved source=arxiv paper=%s", paper.get("paperId"))
-        return result
-
-    result = _try_pmc(paper)
-    if result:
-        logger.info("alt_pdf_resolved source=pmc paper=%s", paper.get("paperId"))
-        return result
-
-    # Network call — only if email configured
-    if contact_email:
-        result = await _try_unpaywall(paper, contact_email, http_client)
-        if result:
+    for candidate in (_try_arxiv(paper), _try_pmc(paper)):
+        if candidate:
             logger.info(
-                "alt_pdf_resolved source=unpaywall paper=%s", paper.get("paperId")
+                "alt_pdf_resolved source=%s paper=%s",
+                candidate.source,
+                paper.get("paperId"),
             )
-            return result
-
-    return None
+            yield candidate
+    if not contact_email:
+        return
+    unpaywall = await _try_unpaywall(paper, contact_email, http_client)
+    if unpaywall:
+        logger.info("alt_pdf_resolved source=unpaywall paper=%s", paper.get("paperId"))
+        yield unpaywall
