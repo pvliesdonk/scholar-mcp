@@ -45,7 +45,10 @@ The check runs before the request, not at connect time, so DNS rebinding (an
 answer that changes between the check and the connection) is not caught.
 Pinning the checked address at connect time would mean connecting without
 the configured HTTP proxy, which egress-restricted deployments need. The
-residual risk is stated in the security model.
+residual risk is stated in the security model. The check also needs the
+server to resolve host names itself. A deployment that reaches the internet
+only through a proxy and has no DNS of its own gets `download_failed` for
+every URL, because the check fails closed; it needs the opt-out below.
 
 `SCHOLAR_MCP_PDF_FETCH_ALLOW_PRIVATE=true` skips the check and restores the
 earlier behaviour, for operators who fetch from an intranet repository. The
