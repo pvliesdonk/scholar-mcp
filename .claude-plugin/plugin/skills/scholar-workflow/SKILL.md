@@ -180,6 +180,19 @@ response carries `running_for_s` and `retry_after_s`; when it finishes,
 Don't poll in a tight loop. Honour `retry_after_s`; otherwise expect 10–30
 seconds for a PDF download and 1–5 minutes for a conversion, longer with VLM.
 
+When Semantic Scholar throttles, a tool that calls it hands back a job
+straight away instead of waiting. That job is not a failure: the work goes on
+inside it, and it completes if you keep polling. Under heavy throttling that
+can take tens of minutes; if Semantic Scholar never relents, the job ends with
+`{"error": "rate_limited", "retryable": true}`. Every client of one server
+shares a single Semantic Scholar rate budget, so firing many calls in
+parallel, or running several agents against the same server, slows each call
+down rather than finishing sooner.
+
+A search whose job you stopped polling has no result, which is not the same
+as a search that found nothing. Report it as not completed, never as "searched,
+nothing found".
+
 Job records expire, so retrieve a result soon after it completes. A job id
 belongs to the caller that created it and cannot be polled by anyone else.
 
