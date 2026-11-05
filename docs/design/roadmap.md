@@ -33,13 +33,23 @@ index holds the argument for the direction and order.
 - **[evidenced: [epic #538](https://github.com/pvliesdonk/scholar-mcp/issues/538)
   and `docs/design/access-links.md`]** One generic template list covers
   OpenURL link resolvers (both OpenURL versions), inter-library loan forms,
-  login redirectors and publisher links.
-- **[stated]** With nothing configured, the server still offers a bare
-  doi.org link, since a licensed network's IP-based access often applies at
-  the publisher. Tracked as [#547](https://github.com/pvliesdonk/scholar-mcp/issues/547).
+  login redirectors and publisher links, with a bare doi.org link when nothing
+  is configured. The epic is closed; its outcome shipped in the
+  `v3.1.0 access-links` cut.
 - **[derived]** Agents running on a licensed network can open those links
   where the server cannot. Bringing such a PDF back into the server for
-  conversion is [#546](https://github.com/pvliesdonk/scholar-mcp/issues/546).
+  conversion is [#546](https://github.com/pvliesdonk/scholar-mcp/issues/546),
+  a standalone feature rather than a new epic: the story it continues is
+  done, and the open question is sizing, not direction.
+
+### Hardening shipped tools
+
+- **[derived]** Defects on tools that already shipped go ahead of new
+  capability. The lead item is
+  [#514](https://github.com/pvliesdonk/scholar-mcp/issues/514):
+  `fetch_pdf_by_url` fetches caller-chosen URLs with no private-address
+  filter, a security gap on a deployed server that should not wait for a
+  minor cut.
 
 ### Operator-provided corpus
 
@@ -86,14 +96,20 @@ index holds the argument for the direction and order.
 
 ## Packages
 
-- **[stated] [010 access-links](https://github.com/pvliesdonk/scholar-mcp/milestone/21)
-  (minor):** library access links on failed PDF fetches and on `get_paper`;
-  the maintainer chose to ship it before corpus foundations.
+- **[stated] [015 hardening](https://github.com/pvliesdonk/scholar-mcp/milestone/22)
+  (patch):** defects on shipped tools, led by
+  [#514](https://github.com/pvliesdonk/scholar-mcp/issues/514). The
+  maintainer chose to ship these before corpus foundations.
 - **[evidenced: [epic #353](https://github.com/pvliesdonk/scholar-mcp/issues/353)]
   [020 corpus foundations](https://github.com/pvliesdonk/scholar-mcp/milestone/16)
-  (minor):** follow access links with the manifest, record attachment, and
-  pointer path because those three form a useful operator workflow without the
-  optional semantic subsystem.
+  (minor):** the manifest, record attachment, and pointer path, because those
+  three form a useful operator workflow without the optional semantic
+  subsystem.
+- **[stated] [030 agent-fetched-pdfs](https://github.com/pvliesdonk/scholar-mcp/milestone/23)
+  (minor):** upload-then-convert for PDFs an agent fetched through a library
+  link ([#546](https://github.com/pvliesdonk/scholar-mcp/issues/546)). It
+  follows corpus foundations at the maintainer's choice. **[derived]** It may
+  split into several features once sized; they stay in this package.
 
 Do not copy item lists or progress here. An issue with no milestone is
 backlog; commit it to a package when it should ship in that cut.
@@ -110,6 +126,11 @@ backlog; commit it to a package when it should ship in that cut.
   When is semantic context over an identified corpus document viable?** The
   issue carries the external dependency that resolves it. The answer does not
   block the three-feature corpus foundation.
+- **[derived] Is caching licensed full text on a shared server acceptable?**
+  Raised in [#546](https://github.com/pvliesdonk/scholar-mcp/issues/546); it
+  decides whether an upload is cached for everyone. It is an operator policy
+  call, resolved when #546 is sized, before `030 agent-fetched-pdfs` is
+  committed to code.
 - **[evidenced: [#234](https://github.com/pvliesdonk/scholar-mcp/issues/234)]
   Do the recorded structural children still cover removal of the exemption?**
   Resolved by refinement
@@ -117,6 +138,15 @@ backlog; commit it to a package when it should ship in that cut.
   independently of the package sequence.
 
 ## Revisions
+
+- **2026-11-05 — [stated] package order; [derived] the rest:** Access links
+  shipped in v3.1.0, so its package left the list and the direction now
+  records it as delivered. Added `015 hardening` ahead of corpus foundations
+  and `030 agent-fetched-pdfs` after it, both at the maintainer's request.
+  The v3.1.1 patch cut had stamped and closed the corpus-foundations
+  milestone although none of its items shipped; it was reopened and renamed
+  back to `020 corpus foundations`. Backlog issues titled `feat` moved from the
+  legacy `enhancement` label to the form label `feature`.
 
 - **2026-11-02 — [stated]:** Added the library access routes direction (epic
   [#538](https://github.com/pvliesdonk/scholar-mcp/issues/538)) and its
