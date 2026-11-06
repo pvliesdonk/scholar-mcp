@@ -2,6 +2,16 @@
 
 Newest first. One entry per research pass.
 
+## 2026-11-05
+
+### OPS 404 for a nonexistent publication
+
+Added "A publication that does not exist" to
+[EPO OPS bibliographic responses](epo-ops-biblio.md) (#475), from the 404s
+observed against the deployed server. No new research: the observation is
+the issue's own. Not settled: whether the other published-data endpoints
+answer 404 the same way.
+
 ## 2026-11-03
 
 ### CrossRef `issued` for the OpenURL date

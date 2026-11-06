@@ -18,6 +18,10 @@ sources:
     title: Raw OPS biblio response for EP.3491801.B1, reported alongside the above in scholar-mcp#399
     resource: https://github.com/pvliesdonk/scholar-mcp/issues/399
     accessed: 2026-09-16
+  - id: ops-biblio-404
+    title: get_patent against the deployed server (3.0.0-rc.0) for EP9999999B1 and XX999999999Z9, both failing with "404 Client Error Not Found" on published-data/publication/docdb/biblio, reported in scholar-mcp#475
+    resource: https://github.com/pvliesdonk/scholar-mcp/issues/475
+    accessed: 2026-11-05
 ---
 
 # EPO OPS bibliographic responses
@@ -98,3 +102,16 @@ than left to expire.
   in #399 rather than a capture under `tests/fixtures/epo/`. This is why the page
   is `status: draft`. Re-capture the WO document when credentials are available,
   vendor it beside the legal fixture, and promote the page to `stable`.
+
+## A publication that does not exist
+
+For a well-formed number that names no publication, OPS answers the biblio
+request with HTTP 404, not with an empty `exchange-document`
+[ops-biblio-404]. python-epo-ops-client raises that as a `requests`
+`HTTPError`, so a caller that only checks the parsed record for an empty
+title never sees the case. The same request shape on the search service also
+returns 404 when no document matches (see `EpoClient.search`). Whether the
+claims, description, family, legal and citation endpoints also answer 404 for
+such a number is not recorded; `get_patent` treats a biblio 404 as
+not-found and lets it take precedence over the other sections' errors.
+

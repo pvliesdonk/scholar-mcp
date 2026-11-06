@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+import requests
 from fastmcp import FastMCP
 from fastmcp.client import Client
 from fastmcp_pvl_core import Jobs, JobsConfig, register_job_tools
@@ -1899,3 +1900,84 @@ def test_patent_pdf_stem_collapses_every_accepted_spelling() -> None:
     assert _patent_pdf_stem(normalize("EP 3491801 B1")) == "patent_EP3491801B1"
     assert _patent_pdf_stem(normalize("ep3491801b1")) == "patent_EP3491801B1"
     assert _patent_pdf_stem(normalize("US10123456B2")) == "patent_US10123456B2"
+
+
+# ---------------------------------------------------------------------------
+# get_patent: OPS 404 for a nonexistent publication (#475)
+# ---------------------------------------------------------------------------
+
+
+def _ops_http_error(status: int) -> requests.HTTPError:
+    """Build the ``HTTPError`` python-epo-ops-client raises for *status*."""
+    response = requests.Response()
+    response.status_code = status
+    return requests.HTTPError(f"{status} Client Error", response=response)
+
+
+async def test_get_patent_ops_404_returns_patent_not_found(
+    service: Service, slow_jobs: Jobs
+) -> None:
+    epo = _make_epo_client(raise_on_biblio=_ops_http_error(404))
+    async with Client(_citing_app(service, slow_jobs, epo)) as client:
+        result = await client.call_tool("get_patent", {"patent_number": "EP9999999B1"})
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "patent_not_found"
+    assert "EP.9999999.B1" in data["detail"]
+    assert await service.cache.get_patent("EP.9999999.B1") is None
+
+
+async def test_get_patent_ops_404_on_every_section_returns_patent_not_found(
+    service: Service, slow_jobs: Jobs
+) -> None:
+    """Sibling sections 404 too for a nonexistent patent; not-found wins."""
+    epo = _make_epo_client(raise_on_biblio=_ops_http_error(404))
+    epo.get_claims = AsyncMock(side_effect=_ops_http_error(404))  # type: ignore[method-assign]
+    async with Client(_citing_app(service, slow_jobs, epo)) as client:
+        result = await client.call_tool(
+            "get_patent",
+            {"patent_number": "EP9999999B1", "sections": ["claims"]},
+        )
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "patent_not_found"
+
+
+async def test_get_patent_ops_server_error_is_not_not_found(
+    service: Service, slow_jobs: Jobs
+) -> None:
+    """Only a 404 means not found; a 500 still fails the call."""
+    epo = _make_epo_client(raise_on_biblio=_ops_http_error(500))
+    async with Client(_citing_app(service, slow_jobs, epo)) as client:
+        result = await client.call_tool(
+            "get_patent", {"patent_number": "EP9999999B1"}, raise_on_error=False
+        )
+    assert result.is_error
+    assert "patent_not_found" not in result.content[0].text
+
+
+async def test_get_patent_section_error_on_existing_patent_still_fails(
+    service: Service, slow_jobs: Jobs
+) -> None:
+    """A failing section on a patent that exists is not masked."""
+    epo = _make_epo_client()
+    epo.get_claims = AsyncMock(side_effect=_ops_http_error(500))  # type: ignore[method-assign]
+    async with Client(_citing_app(service, slow_jobs, epo)) as client:
+        result = await client.call_tool(
+            "get_patent",
+            {"patent_number": "EP1234567A1", "sections": ["claims"]},
+            raise_on_error=False,
+        )
+    assert result.is_error
+
+
+async def test_get_patent_prefers_a_reported_epo_error_over_a_sibling_failure(
+    service: Service, slow_jobs: Jobs
+) -> None:
+    """An exhausted quota is reported even when another section failed first."""
+    epo = _make_epo_client(raise_on_biblio=EpoQuotaExhaustedError())
+    epo.get_claims = AsyncMock(side_effect=_ops_http_error(500))  # type: ignore[method-assign]
+    async with Client(_citing_app(service, slow_jobs, epo)) as client:
+        result = await client.call_tool(
+            "get_patent", {"patent_number": "EP1234567A1", "sections": ["claims"]}
+        )
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "epo_unavailable"
