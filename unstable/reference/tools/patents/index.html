@@ -2349,6 +2349,9 @@ offices). At least one parameter must be provided. For keyword search,
 <code>query</code> searches titles and abstracts. To find all patents by an
 inventor or applicant, omit <code>query</code> and use only the structured
 filters. For academic paper search, use <code>search_papers</code> instead.</p>
+<p>Returns at most 100 patents per call; a larger <code>limit</code> is capped at
+100, so page further with <code>offset</code>. EPO serves only the first 2,000
+results of a search, so narrow the query rather than paging past them.</p>
 <p>When EPO reports itself busy this waits for it to clear, which can take a
 few minutes, so the call may answer with a job handle to poll using
 <code>get_job_result</code> rather than the result itself. Do not reason about EPO
@@ -2416,7 +2419,7 @@ throttle states yourself.</p>
 <td><code>limit</code></td>
 <td><code>integer</code></td>
 <td><code>10</code></td>
-<td>Maximum results to return (default 10).</td>
+<td>Maximum results to return (default 10, max 100).</td>
 </tr>
 <tr>
 <td><code>offset</code></td>
