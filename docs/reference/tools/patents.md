@@ -24,6 +24,10 @@ offices). At least one parameter must be provided. For keyword search,
 inventor or applicant, omit ``query`` and use only the structured
 filters. For academic paper search, use `search_papers` instead.
 
+Returns at most 100 patents per call; a larger ``limit`` is capped at
+100, so page further with ``offset``. EPO serves only the first 2,000
+results of a search, so narrow the query rather than paging past them.
+
 When EPO reports itself busy this waits for it to clear, which can take a
 few minutes, so the call may answer with a job handle to poll using
 ``get_job_result`` rather than the result itself. Do not reason about EPO
@@ -41,7 +45,7 @@ throttle states yourself.
 | `date_to` | `string \| null` | `null` | Latest date (``YYYY-MM-DD``). |
 | `date_type` | `publication \| filing \| priority` | `"publication"` | Date field to apply the range to: ``"publication"``, ``"filing"`` or ``"priority"``. |
 | `jurisdiction` | `string \| null` | `null` | Restrict to a single patent authority, such as ``"EP"``, ``"WO"`` or ``"US"``. |
-| `limit` | `integer` | `10` | Maximum results to return (default 10). |
+| `limit` | `integer` | `10` | Maximum results to return (default 10, max 100). |
 | `offset` | `integer` | `0` | Pagination offset (0-based). |
 
 **Returns**
