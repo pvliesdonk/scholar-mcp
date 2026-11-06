@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from scholar_mcp._epo_xml import (
+    biblio_has_data,
     parse_biblio_xml,
     parse_citations_from_biblio,
     parse_claims_xml,
@@ -324,23 +325,29 @@ class TestParseBiblioXmlEnglishPreference:
 class TestParseBiblioXmlApplicantsInventors:
     def test_applicants_list(self) -> None:
         result = parse_biblio_xml(BIBLIO_XML_FULL)
-        assert result["applicants"] == ["ACME Corporation", "Beta Inc"]
+        assert result["applicants"] == {
+            "original": [],
+            "standardised": ["ACME Corporation", "Beta Inc"],
+        }
 
     def test_inventors_list(self) -> None:
         result = parse_biblio_xml(BIBLIO_XML_FULL)
-        assert result["inventors"] == ["Smith, John", "Doe, Jane"]
+        assert result["inventors"] == {
+            "original": [],
+            "standardised": ["Smith, John", "Doe, Jane"],
+        }
 
     def test_single_applicant(self) -> None:
         result = parse_biblio_xml(BIBLIO_XML_NON_ENGLISH_ONLY)
-        assert result["applicants"] == ["Firma GmbH"]
+        assert result["applicants"]["standardised"] == ["Firma GmbH"]
 
     def test_empty_applicants(self) -> None:
         result = parse_biblio_xml(BIBLIO_XML_MINIMAL)
-        assert result["applicants"] == []
+        assert result["applicants"] == {"original": [], "standardised": []}
 
     def test_empty_inventors(self) -> None:
         result = parse_biblio_xml(BIBLIO_XML_MINIMAL)
-        assert result["inventors"] == []
+        assert result["inventors"] == {"original": [], "standardised": []}
 
 
 class TestParseBiblioXmlClassifications:
@@ -398,13 +405,13 @@ class TestParseBiblioXmlOutputKeys:
         }
         assert set(result.keys()) == expected_keys
 
-    def test_applicants_is_list(self) -> None:
+    def test_applicants_are_split_by_format(self) -> None:
         result = parse_biblio_xml(BIBLIO_XML_FULL)
-        assert isinstance(result["applicants"], list)
+        assert set(result["applicants"]) == {"original", "standardised"}
 
-    def test_inventors_is_list(self) -> None:
+    def test_inventors_are_split_by_format(self) -> None:
         result = parse_biblio_xml(BIBLIO_XML_FULL)
-        assert isinstance(result["inventors"], list)
+        assert set(result["inventors"]) == {"original", "standardised"}
 
     def test_classifications_is_list(self) -> None:
         result = parse_biblio_xml(BIBLIO_XML_FULL)
@@ -928,3 +935,144 @@ def test_parse_search_xml_logs_a_missing_biblio_search(
         result = parse_search_xml(_OPS_ROOT % b"")
     assert result == {"total_count": 0, "references": []}
     assert "epo_search_missing element=ops:biblio-search" in caplog.messages
+
+
+# OPS lists each party once per name format (#483). The spellings are the ones
+# observed on EP3491801B1 against the deployed server.
+BIBLIO_XML_MULTI_FORMAT = b"""<?xml version="1.0" encoding="UTF-8"?>
+<ops:world-patent-data xmlns:ops="http://ops.epo.org" xmlns="http://www.epo.org/exchange">
+  <exchange-documents>
+    <exchange-document country="EP" doc-number="3491801" kind="B1">
+      <bibliographic-data>
+        <parties>
+          <applicants>
+            <applicant sequence="1" data-format="epodoc">
+              <applicant-name><name>KONINKLIJKE PHILIPS NV [NL]</name></applicant-name>
+            </applicant>
+            <applicant sequence="1" data-format="original">
+              <applicant-name><name>Koninklijke Philips N.V.</name></applicant-name>
+            </applicant>
+          </applicants>
+          <inventors>
+            <inventor sequence="1" data-format="epodoc">
+              <inventor-name><name>PLETEA DANIEL [NL]</name></inventor-name>
+            </inventor>
+            <inventor sequence="2" data-format="epodoc">
+              <inventor-name><name>VAN LIESDONK PETER PETRUS [NL]</name></inventor-name>
+            </inventor>
+            <inventor sequence="1" data-format="docdb">
+              <inventor-name><name>PLETEA DANIEL</name></inventor-name>
+            </inventor>
+            <inventor sequence="1" data-format="original">
+              <inventor-name><name>PLETEA, Daniel</name></inventor-name>
+            </inventor>
+            <inventor sequence="2" data-format="original">
+              <inventor-name><name>VAN LIESDONK, Peter, Petrus</name></inventor-name>
+            </inventor>
+          </inventors>
+        </parties>
+        <invention-title lang="en">Replication</invention-title>
+      </bibliographic-data>
+    </exchange-document>
+  </exchange-documents>
+</ops:world-patent-data>"""
+
+
+class TestParseBiblioXmlNameFormats:
+    """One list per name format, one entry per party in each (#483)."""
+
+    def test_applicants_split_original_from_standardised(self) -> None:
+        result = parse_biblio_xml(BIBLIO_XML_MULTI_FORMAT)
+        assert result["applicants"] == {
+            "original": ["Koninklijke Philips N.V."],
+            "standardised": ["KONINKLIJKE PHILIPS NV [NL]"],
+        }
+
+    def test_only_the_preferred_standardised_format_is_kept(self) -> None:
+        """docdb wins over epodoc, so no party appears twice."""
+        result = parse_biblio_xml(BIBLIO_XML_MULTI_FORMAT)
+        assert result["inventors"] == {
+            "original": ["PLETEA, Daniel", "VAN LIESDONK, Peter, Petrus"],
+            "standardised": ["PLETEA DANIEL"],
+        }
+
+    def test_data_format_on_the_name_element_is_read(self) -> None:
+        xml = BIBLIO_XML_MULTI_FORMAT.replace(
+            b'<applicant sequence="1" data-format="original">\n'
+            b"              <applicant-name>",
+            b'<applicant sequence="1">\n'
+            b'              <applicant-name data-format="original">',
+        )
+        assert xml != BIBLIO_XML_MULTI_FORMAT
+        result = parse_biblio_xml(xml)
+        assert result["applicants"]["original"] == ["Koninklijke Philips N.V."]
+
+    def test_unknown_format_only_falls_back_to_standardised(self) -> None:
+        xml = BIBLIO_XML_MULTI_FORMAT.replace(b'"epodoc"', b'"other"').replace(
+            b'"docdb"', b'"other"'
+        )
+        result = parse_biblio_xml(xml)
+        assert result["applicants"]["standardised"] == ["KONINKLIJKE PHILIPS NV [NL]"]
+
+
+def test_party_names_skip_nameless_and_repeated_entries() -> None:
+    """A party without a name is skipped, a repeated name kept once, and a
+    missing group yields empty lists."""
+    xml = b"""<?xml version="1.0" encoding="UTF-8"?>
+<ops:world-patent-data xmlns:ops="http://ops.epo.org" xmlns="http://www.epo.org/exchange">
+  <exchange-documents><exchange-document country="EP" doc-number="1" kind="A1">
+    <bibliographic-data>
+      <parties>
+        <applicants>
+          <applicant sequence="1" data-format="docdb"/>
+          <applicant sequence="2" data-format="docdb">
+            <applicant-name><name></name></applicant-name>
+          </applicant>
+          <applicant sequence="3" data-format="docdb">
+            <applicant-name><name>ACME</name></applicant-name>
+          </applicant>
+          <applicant sequence="4" data-format="docdb">
+            <applicant-name><name>ACME</name></applicant-name>
+          </applicant>
+        </applicants>
+      </parties>
+      <invention-title lang="en">T</invention-title>
+    </bibliographic-data>
+  </exchange-document></exchange-documents>
+</ops:world-patent-data>"""
+    result = parse_biblio_xml(xml)
+    assert result["applicants"] == {"original": [], "standardised": ["ACME"]}
+    assert result["inventors"] == {"original": [], "standardised": []}
+
+
+def test_a_nameless_entry_does_not_claim_its_format() -> None:
+    """A docdb entry without a name must not hide a named epodoc one."""
+    xml = BIBLIO_XML_MULTI_FORMAT.replace(
+        b"<inventor-name><name>PLETEA DANIEL</name></inventor-name>",
+        b"<inventor-name><name></name></inventor-name>",
+    )
+    assert xml != BIBLIO_XML_MULTI_FORMAT
+    result = parse_biblio_xml(xml)
+    assert result["inventors"]["standardised"] == [
+        "PLETEA DANIEL [NL]",
+        "VAN LIESDONK PETER PETRUS [NL]",
+    ]
+
+
+class TestBiblioHasData:
+    def test_title_alone_counts(self) -> None:
+        assert biblio_has_data({"title": "T"})
+
+    def test_a_party_in_any_format_counts(self) -> None:
+        assert biblio_has_data(
+            {"title": "", "applicants": {"original": ["A"], "standardised": []}}
+        )
+
+    def test_empty_record_has_no_data(self) -> None:
+        assert not biblio_has_data(
+            {"title": "", "applicants": {"original": [], "standardised": []}}
+        )
+
+    def test_a_legacy_flat_list_is_still_read(self) -> None:
+        assert biblio_has_data({"title": "", "applicants": ["A"]})
+        assert not biblio_has_data({"title": "", "applicants": []})

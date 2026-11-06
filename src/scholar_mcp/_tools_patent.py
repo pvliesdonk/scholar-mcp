@@ -27,7 +27,7 @@ from ._epo_client import (
     epo_error_payload,
     with_epo_retry,
 )
-from ._epo_xml import extract_doi
+from ._epo_xml import biblio_has_data, extract_doi
 from ._patent_numbers import DocdbNumber, normalize
 from ._protocols import CacheProtocol
 from ._rate_limiter import RateLimitedError, S2RetryDeadlineExceeded
@@ -695,7 +695,7 @@ async def _fetch_patent_sections(
             # OPS answers a nonexistent publication with 404 (#475).
             result["_not_found"] = True
             return
-        if not biblio.get("title") and not biblio.get("applicants"):
+        if not biblio_has_data(biblio):
             result["_not_found"] = True
             return
         await cache.set_patent(patent_id, biblio)

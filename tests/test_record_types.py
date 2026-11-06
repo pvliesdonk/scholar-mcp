@@ -85,8 +85,8 @@ def test_patent_record_accepts_biblio_shape() -> None:
     patent: PatentRecord = {
         "title": "Method and apparatus for ...",
         "abstract": "A system that ...",
-        "applicants": ["Acme Corp."],
-        "inventors": ["Jane Doe", "John Smith"],
+        "applicants": {"original": ["Acme Corp."], "standardised": []},
+        "inventors": {"original": ["Jane Doe", "John Smith"], "standardised": []},
         "publication_number": "EP.1234567.A1",
         "publication_date": "2020-01-15",
         "filing_date": "2019-03-10",

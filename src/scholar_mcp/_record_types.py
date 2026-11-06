@@ -109,6 +109,19 @@ class PaperRecord(TypedDict, total=False):
     crossref_metadata: dict[str, Any]
 
 
+class PatentParties(TypedDict):
+    """Applicant or inventor names of a patent, one list per name format.
+
+    ``original`` holds the names as the patent office supplied them;
+    ``standardised`` holds EPO's standardised spelling (DOCDB rules).
+    The lists are not paired: OPS does not guarantee that the n-th entry
+    of each names the same party (#483).
+    """
+
+    original: list[str]
+    standardised: list[str]
+
+
 class PatentRecord(TypedDict, total=False):
     """Typed representation of an EPO OPS patent biblio record.
 
@@ -120,8 +133,8 @@ class PatentRecord(TypedDict, total=False):
 
     title: str
     abstract: str
-    applicants: list[str]
-    inventors: list[str]
+    applicants: PatentParties
+    inventors: PatentParties
     publication_number: str
     publication_date: str
     filing_date: str

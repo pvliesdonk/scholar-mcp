@@ -282,7 +282,7 @@ async def test_get_biblio_returns_parsed_dict(
     result = await epo_client.get_biblio(doc)
 
     assert result["title"] == "Test Patent"
-    assert result["applicants"] == ["TEST CORP"]
+    assert result["applicants"] == {"original": [], "standardised": ["TEST CORP"]}
     assert result["publication_number"] == "EP.1234567.A1"
 
 

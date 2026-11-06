@@ -31,8 +31,8 @@ OA_BASE = "https://api.openalex.org"
 _BIBLIO_RESULT = {
     "title": "Test Patent",
     "abstract": "Test abstract.",
-    "applicants": ["TEST CORP"],
-    "inventors": [],
+    "applicants": {"original": [], "standardised": ["TEST CORP"]},
+    "inventors": {"original": [], "standardised": []},
     "publication_number": "EP.1234567.A1",
     "publication_date": "2020-01-15",
     "filing_date": "2019-06-01",
@@ -499,7 +499,9 @@ async def test_batch_resolve_patent_not_found_empty_biblio(
     slow_jobs: Jobs,
 ) -> None:
     """batch_resolve returns not_found when biblio has no title or applicants."""
-    service.epo = _make_epo_client(biblio_result={"title": "", "applicants": []})
+    service.epo = _make_epo_client(
+        biblio_result={"title": "", "applicants": {"original": [], "standardised": []}}
+    )
 
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
