@@ -1045,6 +1045,20 @@ def test_party_names_skip_nameless_and_repeated_entries() -> None:
     assert result["inventors"] == {"original": [], "standardised": []}
 
 
+def test_a_nameless_entry_does_not_claim_its_format() -> None:
+    """A docdb entry without a name must not hide a named epodoc one."""
+    xml = BIBLIO_XML_MULTI_FORMAT.replace(
+        b"<inventor-name><name>PLETEA DANIEL</name></inventor-name>",
+        b"<inventor-name><name></name></inventor-name>",
+    )
+    assert xml != BIBLIO_XML_MULTI_FORMAT
+    result = parse_biblio_xml(xml)
+    assert result["inventors"]["standardised"] == [
+        "PLETEA DANIEL [NL]",
+        "VAN LIESDONK PETER PETRUS [NL]",
+    ]
+
+
 class TestBiblioHasData:
     def test_title_alone_counts(self) -> None:
         assert biblio_has_data({"title": "T"})

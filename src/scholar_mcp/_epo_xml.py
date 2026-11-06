@@ -179,6 +179,27 @@ _STANDARDISED_NAME_FORMATS = ("docdb", "epodoc", "docdba")
 """OPS name formats that hold a standardised spelling, most preferred first."""
 
 
+def _member_name_and_format(member: etree._Element, party: str) -> tuple[str, str]:
+    """Return one party element's name and the OPS name format it is in.
+
+    The schema documents ``data-format`` on the name element; OPS responses
+    also carry it on the party element, which takes precedence.
+
+    Args:
+        member: An ``applicant`` or ``inventor`` element.
+        party: ``"applicant"`` or ``"inventor"``.
+
+    Returns:
+        ``(name, data_format)``; the name is ``""`` when the element has
+        none, and the format is ``""`` when neither element states one.
+    """
+    holder = member.find(f"{{{_EXCH}}}{party}-name")
+    if holder is None:
+        return "", member.get("data-format", "")
+    name = _text(holder.find(f"{{{_EXCH}}}name"))
+    return name, member.get("data-format") or holder.get("data-format", "")
+
+
 def _party_names(
     parties: etree._Element | None, group: str, party: str
 ) -> PatentParties:
@@ -204,24 +225,14 @@ def _party_names(
     """
     by_format: dict[str, list[str]] = {}
     group_el = parties.find(f"{{{_EXCH}}}{group}") if parties is not None else None
-    if group_el is not None:
-        for member in group_el.iter(f"{{{_EXCH}}}{party}"):
-            name_holder = member.find(f"{{{_EXCH}}}{party}-name")
-            name = _text(
-                name_holder.find(f"{{{_EXCH}}}name")
-                if name_holder is not None
-                else None
-            )
-            if not name:
-                continue
-            # The schema documents data-format on the name element; OPS
-            # responses also carry it on the party element.
-            fmt = member.get("data-format") or (
-                name_holder.get("data-format", "") if name_holder is not None else ""
-            )
-            names = by_format.setdefault(fmt, [])
-            if name not in names:
-                names.append(name)
+    members = group_el.iter(f"{{{_EXCH}}}{party}") if group_el is not None else ()
+    for member in members:
+        name, fmt = _member_name_and_format(member, party)
+        if not name:
+            continue
+        names = by_format.setdefault(fmt, [])
+        if name not in names:
+            names.append(name)
     original = by_format.pop("original", [])
     standardised = next(
         (by_format[f] for f in _STANDARDISED_NAME_FORMATS if f in by_format),
