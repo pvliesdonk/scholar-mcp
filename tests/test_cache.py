@@ -555,6 +555,45 @@ async def test_repair_resyncs_cc_rows_a_resolve_unsynced(tmp_path):
         await upgraded.close()
 
 
+async def test_repair_drops_patents_cached_with_flat_party_lists(tmp_path):
+    """#483: rows with the old flat lists go; rows in the new shape stay."""
+    import aiosqlite
+
+    db_path = tmp_path / "upgrade.db"
+    old = ScholarCache(db_path)
+    await old.open()
+    await old.set_patent(
+        "EP1.A1",
+        {"title": "old", "applicants": ["A", "A [NL]"]},  # type: ignore[typeddict-item]  # pre-#483 shape
+    )
+    await old.set_patent(
+        "EP2.A1",
+        {"title": "old", "inventors": ["B", "B [NL]"]},  # type: ignore[typeddict-item]  # pre-#483 shape
+    )
+    await old.set_patent(
+        "EP3.A1",
+        {
+            "title": "new",
+            "applicants": {"original": ["A"], "standardised": ["A [NL]"]},
+            "inventors": {"original": [], "standardised": []},
+        },
+    )
+    await old.close()
+
+    async with aiosqlite.connect(db_path) as db:
+        await db.execute("DELETE FROM repairs")
+        await db.commit()
+
+    upgraded = ScholarCache(db_path)
+    await upgraded.open()
+    try:
+        assert await upgraded.get_patent("EP1.A1") is None
+        assert await upgraded.get_patent("EP2.A1") is None
+        assert await upgraded.get_patent("EP3.A1") is not None
+    finally:
+        await upgraded.close()
+
+
 async def test_every_registered_repair_is_valid_sql(cache):
     """A malformed statement would otherwise only surface on a user's upgrade."""
     assert set(_REPAIRS) == {
@@ -576,6 +615,7 @@ async def test_every_registered_repair_is_valid_sql(cache):
         "480_live_relaton_rows",
         "480_standards_search_results",
         "496_resync_cc_rows",
+        "483_patent_parties_as_flat_lists",
     }
     for statement in _REPAIRS.values():
         await cache._db.execute(f"EXPLAIN {statement}")

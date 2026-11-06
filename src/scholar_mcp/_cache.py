@@ -302,6 +302,14 @@ _REPAIRS: dict[str, str] = {
     "399_empty_patent_abstract": (
         "DELETE FROM patents WHERE json_extract(data, '$.abstract') = ''"
     ),
+    # #483: applicants and inventors were cached as one flat list holding
+    # every OPS name format, so each party appeared twice. The new shape is
+    # an object per group; every row still holding a list predates the fix.
+    "483_patent_parties_as_flat_lists": (
+        "DELETE FROM patents "
+        "WHERE json_type(data, '$.applicants') = 'array' "
+        "OR json_type(data, '$.inventors') = 'array'"
+    ),
     # #405: legal events were cached without the state each one concerns. No
     # predicate narrows this -- every cached row predates the new field.
     "405_legal_events_without_country": "DELETE FROM patent_legal",

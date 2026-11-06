@@ -15,6 +15,7 @@ from ._book_enrichment import fill_authors_from_cache
 from ._cache import normalize_isbn
 from ._chapter_parser import hint_to_dict, parse_chapter_hint
 from ._epo_client import EPO_REPORTED_ERRORS, epo_error_payload, with_epo_retry
+from ._epo_xml import biblio_has_data
 from ._openalex_client import work_to_paper
 from ._openlibrary_client import normalize_book
 from ._patent_numbers import is_patent_number, normalize
@@ -210,7 +211,7 @@ async def _resolve_patent(
             "error": "resolve_failed",
             "source_type": "patent",
         }
-    if not biblio.get("title") and not biblio.get("applicants"):
+    if not biblio_has_data(biblio):
         return idx, {
             "identifier": raw,
             "error": "not_found",
