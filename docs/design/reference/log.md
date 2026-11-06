@@ -2,6 +2,15 @@
 
 Newest first. One entry per research pass.
 
+## 2026-11-06
+
+### OPS search range limits
+
+New page [EPO OPS published-data search range](epo-ops-search.md) (#488). The
+vendored OpenAPI description gives only the default range. The 100-per-request
+and 2,000-total limits come from EPO's OPS FAQ, checked verbatim against the
+live page. Not settled: what OPS answers for a range past either limit.
+
 ## 2026-11-05
 
 ### OPS 404 for a nonexistent publication

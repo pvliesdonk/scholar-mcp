@@ -1981,3 +1981,23 @@ async def test_get_patent_prefers_a_reported_epo_error_over_a_sibling_failure(
         )
     data = json.loads(result.content[0].text)
     assert data["error"] == "epo_unavailable"
+
+
+@pytest.mark.parametrize(
+    ("limit", "expected_end"),
+    [(500, 100), (100, 100), (0, 1), (-3, 1)],
+    ids=["above-max", "at-max", "zero", "negative"],
+)
+async def test_search_patents_clamps_limit_to_the_ops_range(
+    service: Service,
+    epo_client: EpoClient,
+    slow_jobs: Jobs,
+    limit: int,
+    expected_end: int,
+) -> None:
+    """A limit outside 1..100 is clamped before it becomes the OPS range (#488)."""
+    async with Client(_citing_app(service, slow_jobs, epo_client)) as client:
+        await client.call_tool("search_patents", {"query": "battery", "limit": limit})
+    call_args = epo_client.search.call_args  # type: ignore[union-attr]
+    assert call_args.kwargs["range_begin"] == 1
+    assert call_args.kwargs["range_end"] == expected_end

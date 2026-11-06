@@ -82,6 +82,11 @@ async def _run_epo(
         return epo_error_payload(exc)
 
 
+EPO_SEARCH_RANGE_MAX = 100
+"""Most results one OPS search request returns (``Range=1-100``), per EPO's
+OPS FAQ; see ``docs/design/reference/epo-ops-search.md`` (#488)."""
+
+
 def _cql_escape(s: str) -> str:
     """Escape special characters for EPO CQL double-quoted strings."""
     return s.replace("\\", "\\\\").replace('"', '\\"')
@@ -188,6 +193,10 @@ async def search_patents(
     inventor or applicant, omit ``query`` and use only the structured
     filters. For academic paper search, use search_papers instead.
 
+    Returns at most 100 patents per call; a larger ``limit`` is capped at
+    100, so page further with ``offset``. EPO serves only the first 2,000
+    results of a search, so narrow the query rather than paging past them.
+
     When EPO reports itself busy this waits for it to clear, which can take a
     few minutes, so the call may answer with a job handle to poll using
     ``get_job_result`` rather than the result itself. Do not reason about EPO
@@ -207,7 +216,7 @@ async def search_patents(
             ``"filing"`` or ``"priority"``.
         jurisdiction: Restrict to a single patent authority, such as
             ``"EP"``, ``"WO"`` or ``"US"``.
-        limit: Maximum results to return (default 10).
+        limit: Maximum results to return (default 10, max 100).
         offset: Pagination offset (0-based).
         service: Injected service.
 
@@ -241,7 +250,7 @@ async def search_patents(
     except ValueError as exc:
         return {"error": "invalid_query", "detail": str(exc)}
     range_begin = offset + 1  # EPO OPS uses 1-based ranges
-    range_end = offset + limit
+    range_end = offset + max(1, min(limit, EPO_SEARCH_RANGE_MAX))
     cache_key = f"{cql}|{range_begin}-{range_end}"
 
     cached = await service.cache.get_patent_search(cache_key)
