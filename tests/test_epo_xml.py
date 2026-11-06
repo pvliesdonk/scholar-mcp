@@ -1015,6 +1015,36 @@ class TestParseBiblioXmlNameFormats:
         assert result["applicants"]["standardised"] == ["KONINKLIJKE PHILIPS NV [NL]"]
 
 
+def test_party_names_skip_nameless_and_repeated_entries() -> None:
+    """A party without a name is skipped, a repeated name kept once, and a
+    missing group yields empty lists."""
+    xml = b"""<?xml version="1.0" encoding="UTF-8"?>
+<ops:world-patent-data xmlns:ops="http://ops.epo.org" xmlns="http://www.epo.org/exchange">
+  <exchange-documents><exchange-document country="EP" doc-number="1" kind="A1">
+    <bibliographic-data>
+      <parties>
+        <applicants>
+          <applicant sequence="1" data-format="docdb"/>
+          <applicant sequence="2" data-format="docdb">
+            <applicant-name><name></name></applicant-name>
+          </applicant>
+          <applicant sequence="3" data-format="docdb">
+            <applicant-name><name>ACME</name></applicant-name>
+          </applicant>
+          <applicant sequence="4" data-format="docdb">
+            <applicant-name><name>ACME</name></applicant-name>
+          </applicant>
+        </applicants>
+      </parties>
+      <invention-title lang="en">T</invention-title>
+    </bibliographic-data>
+  </exchange-document></exchange-documents>
+</ops:world-patent-data>"""
+    result = parse_biblio_xml(xml)
+    assert result["applicants"] == {"original": [], "standardised": ["ACME"]}
+    assert result["inventors"] == {"original": [], "standardised": []}
+
+
 class TestBiblioHasData:
     def test_title_alone_counts(self) -> None:
         assert biblio_has_data({"title": "T"})
