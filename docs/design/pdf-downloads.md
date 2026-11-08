@@ -28,7 +28,7 @@ prefix check follows PDF 1.7's required header but is not a complete structural
 or integrity validation; conversion remains responsible for detecting later
 PDF parsing failures. See [PDF file header behaviour](reference/pdf-file-header.md).
 
-## Destination check for caller-chosen URLs
+## Destination check
 
 `fetch_pdf_by_url` takes its URL from the caller, so it refuses destinations
 that are not public internet addresses (#514). `_url_guard.check_public_url`
@@ -51,11 +51,17 @@ server to resolve host names itself. A deployment that reaches the internet
 only through a proxy and has no DNS of its own gets `download_failed` for
 every URL, because the check fails closed; it needs the opt-out below.
 
-`SCHOLAR_MCP_PDF_FETCH_ALLOW_PRIVATE=true` skips the check and restores the
-earlier behaviour, for operators who fetch from an intranet repository. The
-default is to check, because the tool's caller is a model acting on prompts
-the operator does not see.
+The paper download path (`fetch_paper_pdf`, `fetch_and_convert`) runs the
+same check on every candidate URL and its redirects (#573). Its URLs come
+from Semantic Scholar, arXiv, PubMed Central and Unpaywall metadata rather
+than from the caller, but a hostile or compromised record, or a redirect on
+a host it points at, could still lead to the server's own network. A refused
+candidate is not a `ToolError`, since the caller did not choose it: it
+becomes a `download_failed` attempt whose `detail` names the refused URL,
+it is logged as `pdf_candidate_blocked` at INFO, and the next candidate is
+tried.
 
-The paper download path (`fetch_paper_pdf`, `fetch_and_convert`) is not
-checked: its URLs come from Semantic Scholar, arXiv, PubMed Central and
-Unpaywall metadata, not from the caller. Whether it should be is #573.
+`SCHOLAR_MCP_PDF_FETCH_ALLOW_PRIVATE=true` skips the check on both paths and
+restores the earlier behaviour, for operators who fetch from an intranet
+repository. The default is to check, because the tools' caller is a model
+acting on prompts the operator does not see.

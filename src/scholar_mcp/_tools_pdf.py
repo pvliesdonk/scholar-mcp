@@ -150,14 +150,44 @@ async def _pdf_candidates(
             yield alt
 
 
+async def _get(
+    client: httpx.AsyncClient, url: str, *, allow_private: bool
+) -> httpx.Response:
+    """GET ``url``, following redirects, through the public-destination guard.
+
+    Args:
+        client: The HTTP client to download with.
+        url: The URL to fetch.
+        allow_private: The operator's ``pdf_fetch_allow_private`` setting;
+            when true, any destination is fetched without the check.
+
+    Returns:
+        The final response, whatever its status.
+
+    Raises:
+        BlockedDestinationError: The URL or a redirect hop resolves to a
+            non-public address.
+        httpx.HTTPError: The request failed.
+        socket.gaierror: A host does not resolve.
+    """
+    if allow_private:
+        return await client.get(url, follow_redirects=True)
+    return await get_public(client, url)
+
+
 async def _download_pdf(
-    client: httpx.AsyncClient, candidate: ResolvedPdf
+    client: httpx.AsyncClient, candidate: ResolvedPdf, *, allow_private: bool
 ) -> bytes | dict[str, Any]:
     """Download one candidate and check that it is a PDF.
+
+    Candidate URLs come from upstream metadata, so a candidate that resolves
+    to a non-public address is refused like a caller-chosen URL (#573), and
+    the next candidate is tried.
 
     Args:
         client: The HTTP client to download with.
         candidate: The URL to fetch and the source it came from.
+        allow_private: The operator's ``pdf_fetch_allow_private`` setting.
 
     Returns:
         The PDF bytes, or an attempt record naming the source, the URL and
@@ -165,9 +195,25 @@ async def _download_pdf(
     """
     attempt: dict[str, Any] = {"source": candidate.source, "url": candidate.url}
     try:
-        r = await client.get(candidate.url, follow_redirects=True)
+        r = await _get(client, candidate.url, allow_private=allow_private)
         r.raise_for_status()
-    except httpx.HTTPError as exc:
+    except BlockedDestinationError as exc:
+        logger.info(
+            "pdf_candidate_blocked source=%s url=%s target=%s address=%s",
+            candidate.source,
+            candidate.url,
+            exc.url,
+            exc.address,
+        )
+        return {
+            **attempt,
+            "error": "download_failed",
+            "detail": (
+                f"Refused: '{exc.url}' does not point to a public internet "
+                "address, and this server downloads only from public hosts."
+            ),
+        }
+    except (httpx.HTTPError, socket.gaierror) as exc:
         return {**attempt, "error": "download_failed", "detail": str(exc)}
     if not r.content.startswith(_PDF_HEADER):
         return {
@@ -212,7 +258,11 @@ async def _ensure_paper_pdf(
             if not attempts and await asyncio.to_thread(_cached_pdf_is_valid, path):
                 logger.info("pdf_already_exists path=%s", path)
                 return path, candidate.source
-            outcome = await _download_pdf(client, candidate)
+            outcome = await _download_pdf(
+                client,
+                candidate,
+                allow_private=service.config.pdf_fetch_allow_private,
+            )
             if isinstance(outcome, bytes):
                 pdf_dir.mkdir(parents=True, exist_ok=True)
                 await asyncio.to_thread(_write_pdf_cache, path, outcome)
@@ -511,26 +561,23 @@ async def _get_caller_url(url: str, *, allow_private: bool) -> httpx.Response:
         socket.gaierror: A host does not resolve.
     """
     async with httpx.AsyncClient(timeout=120.0) as client:
-        if allow_private:
-            r = await client.get(url, follow_redirects=True)
-        else:
-            try:
-                r = await get_public(client, url)
-            except BlockedDestinationError as exc:
-                logger.info(
-                    "pdf_by_url_blocked url=%s target=%s address=%s",
-                    url,
-                    exc.url,
-                    exc.address,
-                )
-                hop = "" if exc.url == url else f" redirects to '{exc.url}', which"
-                raise ToolError(
-                    f"url '{url}'{hop} does not point to a public internet "
-                    "address, and this server downloads only from public "
-                    "hosts. Pass fetch_pdf_by_url a publicly reachable url "
-                    "for the PDF instead.",
-                    log_level=logging.INFO,
-                ) from None
+        try:
+            r = await _get(client, url, allow_private=allow_private)
+        except BlockedDestinationError as exc:
+            logger.info(
+                "pdf_by_url_blocked url=%s target=%s address=%s",
+                url,
+                exc.url,
+                exc.address,
+            )
+            hop = "" if exc.url == url else f" redirects to '{exc.url}', which"
+            raise ToolError(
+                f"url '{url}'{hop} does not point to a public internet "
+                "address, and this server downloads only from public "
+                "hosts. Pass fetch_pdf_by_url a publicly reachable url "
+                "for the PDF instead.",
+                log_level=logging.INFO,
+            ) from None
         r.raise_for_status()
     return r
 

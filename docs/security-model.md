@@ -44,17 +44,19 @@ keep what they fetch in a local cache.
   European Commission's harmonised-standards pages and GitHub (the Relaton
   datasets and the NIST catalogue releases). Every request carries the
   caller's query terms to that service.
-- **Caller-chosen URLs.** `fetch_pdf_by_url` downloads the URL the caller
-  passes and follows redirects. It refuses a URL, or a redirect, whose host
-  resolves to a loopback, private, link-local or other non-public address, so
-  a caller cannot use it to reach the server's own network or a cloud
-  metadata endpoint. The check runs on the address the host resolves to just
-  before each request; a host whose DNS answer changes between that check and
-  the connection is not caught. `SCHOLAR_MCP_PDF_FETCH_ALLOW_PRIVATE=true`
-  turns the check off for a deployment that fetches from an intranet
-  repository; the tool can then reach anything the server's network can reach. It is a write
-  tool: `SCHOLAR_MCP_READ_ONLY=true`, the default, hides it along with the
-  other download and conversion tools.
+- **PDF download URLs.** `fetch_pdf_by_url` downloads the URL the caller
+  passes, and `fetch_paper_pdf` and `fetch_and_convert` download URLs taken
+  from paper metadata; all three follow redirects. They refuse a URL, or a
+  redirect, whose host resolves to a loopback, private, link-local or other
+  non-public address, so neither a caller nor an upstream record can use them
+  to reach the server's own network or a cloud metadata endpoint. The check
+  runs on the address the host resolves to just before each request; a host
+  whose DNS answer changes between that check and the connection is not
+  caught. `SCHOLAR_MCP_PDF_FETCH_ALLOW_PRIVATE=true` turns the check off for
+  a deployment that fetches from an intranet repository; the tools can then
+  reach anything the server's network can reach. They are write tools:
+  `SCHOLAR_MCP_READ_ONLY=true`, the default, hides them along with the other
+  conversion tools.
 - **PDF conversion.** When `SCHOLAR_MCP_DOCLING_URL` is set, conversion tools
   send downloaded PDFs to that docling-serve instance. When
   `SCHOLAR_MCP_VLM_API_URL` is set, the server passes that URL and
