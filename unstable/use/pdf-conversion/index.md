@@ -136,7 +136,7 @@ When a paper has no open-access PDF URL in Semantic Scholar, or that URL fails o
 
 The `source` field in the response indicates where the PDF came from: `s2_oa`, `arxiv`, `pmc`, or `unpaywall`. When no source serves a PDF, `error` and `pdf_source` describe the last source tried, and `attempts` lists every source in order with its URL, error and detail. Unpaywall is only queried once the sources before it have failed.
 
-For PDFs found through other means (author homepages, institutional repositories, etc.), use `fetch_pdf_by_url` with the direct URL. By default it refuses URLs and redirects that lead to a loopback, private or link-local address; an operator who needs to fetch from an intranet repository sets `SCHOLAR_MCP_PDF_FETCH_ALLOW_PRIVATE=true`.
+For PDFs found through other means (author homepages, institutional repositories, etc.), use `fetch_pdf_by_url` with the direct URL. By default it refuses URLs and redirects that lead to a loopback, private or link-local address. `fetch_paper_pdf` and `fetch_and_convert` apply the same check to the URLs they find in paper metadata, and move on to the next source when one is refused. An operator who needs to fetch from an intranet repository sets `SCHOLAR_MCP_PDF_FETCH_ALLOW_PRIVATE=true`.
 
 Enable Unpaywall
 

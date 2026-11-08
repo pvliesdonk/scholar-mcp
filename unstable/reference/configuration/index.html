@@ -3461,7 +3461,7 @@ the keepalive. Do not rely on it alone.</p>
 <td><code>SCHOLAR_MCP_PDF_FETCH_ALLOW_PRIVATE</code></td>
 <td><code>false</code></td>
 <td>No</td>
-<td>When false (the default), a PDF download from a URL the caller supplies is refused if the host, or a redirect target, resolves to a loopback, private, link-local or other non-public address. Set true to allow hosts on the server's own network, such as an intranet repository.</td>
+<td>When false (the default), a PDF download is refused if the host, or a redirect target, resolves to a loopback, private, link-local or other non-public address. This covers URLs the caller supplies and URLs taken from paper metadata. Set true to allow hosts on the server's own network, such as an intranet repository.</td>
 </tr>
 </tbody>
 </table>
