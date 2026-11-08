@@ -1089,6 +1089,31 @@ class ScholarCache:
         )
         await db.commit()
 
+    async def set_book_by_work_if_absent(self, work_id: str, data: BookRecord) -> None:
+        """Cache book data by work ID unless a fresh row already exists.
+
+        One statement, so it cannot interleave with a concurrent write the
+        way a read followed by a write can (#451): the row is written when
+        none exists or the existing one is past the work TTL, and otherwise
+        left alone. A stale row is replaced, as ``get_book_by_work`` treats
+        it as absent.
+
+        Args:
+            work_id: Open Library work ID.
+            data: Book metadata dict.
+        """
+        db = _require_open(self._db)
+        now = time.time()
+        await db.execute(
+            "INSERT INTO books_openlibrary (work_id, data, cached_at) "
+            "VALUES (?, ?, ?) "
+            "ON CONFLICT(work_id) DO UPDATE SET "
+            "data = excluded.data, cached_at = excluded.cached_at "
+            "WHERE books_openlibrary.cached_at < ?",
+            (work_id, json.dumps(data), now, now - _BOOK_WORK_TTL),
+        )
+        await db.commit()
+
     async def get_book_search(self, query: str) -> list[BookRecord] | None:
         """Return cached book search results or None if missing/stale.
 

@@ -86,8 +86,10 @@ async def cache_book_record(
     ``set_book_by_work`` is INSERT OR REPLACE, so a resolver whose enrichment
     came back empty used to overwrite a work row whose authors ``_resolve_work``
     had already resolved. The work row is therefore only written when this
-    record has authors of its own, or when nothing is cached for that work yet
-    (#403). The ISBN row is always written: it is this call's own answer.
+    record has authors of its own, or when nothing fresh is cached for that
+    work yet (#403), the latter in a single statement so concurrent writes
+    cannot interleave (#451). The ISBN row is always written: it is this
+    call's own answer.
 
     ``_resolve_work`` deliberately does not go through here. It is the
     authority on authors, so it writes both rows directly.
@@ -105,11 +107,11 @@ async def cache_book_record(
     if book.get("authors"):
         await service.cache.set_book_by_work(work_id, book)
         return
-    # A stale row reads as absent here, because get_book_by_work applies the
-    # 30-day TTL. Overwriting it is the accepted trade: stale is stale, and the
-    # record re-fetches once rather than us bypassing the TTL to keep it.
-    if await service.cache.get_book_by_work(work_id) is None:
-        await service.cache.set_book_by_work(work_id, book)
+    # Written only when no fresh row exists, in one statement, so a concurrent
+    # write of the same work with authors cannot be overwritten between a
+    # read and a write (#451). A stale row counts as absent, as it does for
+    # get_book_by_work: stale is stale, and the record re-fetches once.
+    await service.cache.set_book_by_work_if_absent(work_id, book)
 
 
 async def enrich_authors_from_work(book: BookRecord, service: Service) -> None:
