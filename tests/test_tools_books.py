@@ -536,6 +536,30 @@ async def test_recommend_books_empty_subject(
     assert result.structured_content == {"books": []}
 
 
+async def test_recommend_books_serves_the_cache_as_a_mapping(
+    mcp: FastMCP, service: Service
+) -> None:
+    """A cache hit is sliced to limit and wrapped like a fresh result."""
+    await service.cache.set_book_subject(
+        "algorithms", [{"title": "A"}, {"title": "B"}, {"title": "C"}]
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "recommend_books", {"subject": "algorithms", "limit": 2}
+        )
+    assert result.structured_content == {"books": [{"title": "A"}, {"title": "B"}]}
+
+
+@pytest.mark.respx(base_url=OL_BASE)
+async def test_recommend_books_upstream_failure_is_an_empty_mapping(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    respx_mock.get("/subjects/algorithms.json").mock(return_value=httpx.Response(500))
+    async with Client(mcp) as client:
+        result = await client.call_tool("recommend_books", {"subject": "algorithms"})
+    assert result.structured_content == {"books": []}
+
+
 COVERS_BASE = "https://covers.openlibrary.org"
 
 
