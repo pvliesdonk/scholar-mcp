@@ -5,7 +5,9 @@ caller could make the server request hosts on its own network: loopback,
 RFC 1918 ranges, link-local addresses such as cloud metadata endpoints
 (#514). This module resolves a URL's host and refuses it unless every
 address it resolves to is a public unicast address. Redirects are followed
-here, one hop at a time, so each hop is checked before it is requested.
+here, one hop at a time, so each hop is checked before it is requested. The
+paper download path applies the same check to the candidate URLs it takes
+from upstream metadata (#573).
 
 The check runs before the request, not at connect time, so a host whose DNS
 answer changes between the check and the connection (DNS rebinding) is not

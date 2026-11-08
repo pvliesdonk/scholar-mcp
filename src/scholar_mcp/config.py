@@ -223,11 +223,12 @@ class ProjectConfig:
         default=False,
         metadata={
             "help": (
-                "When false (the default), a PDF download from a URL the "
-                "caller supplies is refused if the host, or a redirect "
-                "target, resolves to a loopback, private, link-local or other "
-                "non-public address. Set true to allow hosts on the server's "
-                "own network, such as an intranet repository."
+                "When false (the default), a PDF download is refused if the "
+                "host, or a redirect target, resolves to a loopback, private, "
+                "link-local or other non-public address. This covers URLs the "
+                "caller supplies and URLs taken from paper metadata. Set true "
+                "to allow hosts on the server's own network, such as an "
+                "intranet repository."
             ),
             "tags": ("pdf",),
             "wizard": {"group": "PDF conversion"},

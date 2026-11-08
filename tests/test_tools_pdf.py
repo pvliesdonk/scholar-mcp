@@ -1811,3 +1811,133 @@ async def test_fetch_pdf_by_url_unresolvable_host_is_download_failed(
         )
     data = json.loads(result.content[0].text)
     assert data["error"] == "download_failed"
+
+
+# ---------------------------------------------------------------------------
+# Paper download path destination guard (#573)
+# ---------------------------------------------------------------------------
+
+_PRIVATE_OA = "http://intranet.test/paper.pdf"
+_ARXIV_PDF = "https://arxiv.org/pdf/2301.12345.pdf"
+_GUARDED_PAPER = {
+    "paperId": "grd1",
+    "openAccessPdf": {"url": _PRIVATE_OA},
+    "externalIds": {"ArXiv": "2301.12345"},
+    "title": "Guarded",
+}
+
+
+async def _resolve_intranet_privately(host: str, port: int) -> list[str]:  # noqa: ARG001
+    return ["10.0.0.7"] if host == "intranet.test" else ["93.184.216.34"]
+
+
+async def test_fetch_paper_pdf_skips_a_private_candidate(
+    service: Service,
+    slow_jobs: Jobs,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A candidate on a non-public address is never requested; the next serves."""
+    monkeypatch.setattr(_url_guard, "_resolve", _resolve_intranet_privately)
+    caplog.set_level("INFO", logger="scholar_mcp._tools_pdf")
+    with respx.mock(assert_all_called=False) as router:
+        router.get(f"{S2_BASE}/paper/grd1").mock(
+            return_value=httpx.Response(200, json=_GUARDED_PAPER)
+        )
+        private = router.get(_PRIVATE_OA).mock(
+            return_value=httpx.Response(200, content=b"%PDF-1.7 intranet")
+        )
+        router.get(_ARXIV_PDF).mock(
+            return_value=httpx.Response(200, content=b"%PDF-1.7 arxiv")
+        )
+        async with Client(pdf_app(service, slow_jobs)) as client:
+            result = await client.call_tool("fetch_paper_pdf", {"identifier": "grd1"})
+
+    data = json.loads(result.content[0].text)
+    _assert_inline(data)
+    assert data["source"] == "arxiv"
+    assert not private.called
+    assert "pdf_candidate_blocked source=s2_oa" in caplog.text
+
+
+async def test_fetch_and_convert_reports_a_refused_redirect(
+    service: Service, slow_jobs: Jobs, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A public candidate redirecting to a private host fails that attempt."""
+    monkeypatch.setattr(_url_guard, "_resolve", _resolve_intranet_privately)
+    paper = {
+        "paperId": "grd2",
+        "openAccessPdf": {"url": "https://example.com/landing"},
+        "title": "Redirected",
+    }
+    with respx.mock(assert_all_called=False) as router:
+        router.get(f"{S2_BASE}/paper/grd2").mock(
+            return_value=httpx.Response(200, json=paper)
+        )
+        router.get("https://example.com/landing").mock(
+            return_value=httpx.Response(302, headers={"Location": _PRIVATE_OA})
+        )
+        private = router.get(_PRIVATE_OA).mock(
+            return_value=httpx.Response(200, content=b"%PDF-1.7 intranet")
+        )
+        async with Client(pdf_app(service, slow_jobs)) as client:
+            result = await client.call_tool("fetch_and_convert", {"identifier": "grd2"})
+
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "download_failed"
+    assert data["pdf_source"] == "s2_oa"
+    assert f"'{_PRIVATE_OA}' does not point to a public" in data["detail"]
+    assert not private.called
+
+
+async def test_fetch_paper_pdf_allow_private_fetches_a_private_candidate(
+    service: Service, slow_jobs: Jobs, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The operator opt-out governs the paper path as well."""
+
+    async def resolve(host: str, port: int) -> list[str]:  # noqa: ARG001
+        raise AssertionError("the guard must not run when private hosts are allowed")
+
+    monkeypatch.setattr(_url_guard, "_resolve", resolve)
+    monkeypatch.setattr(
+        service,
+        "config",
+        dataclasses.replace(service.config, pdf_fetch_allow_private=True),
+    )
+    with respx.mock(assert_all_called=False) as router:
+        router.get(f"{S2_BASE}/paper/grd1").mock(
+            return_value=httpx.Response(200, json=_GUARDED_PAPER)
+        )
+        router.get(_PRIVATE_OA).mock(
+            return_value=httpx.Response(200, content=b"%PDF-1.7 intranet")
+        )
+        async with Client(pdf_app(service, slow_jobs)) as client:
+            result = await client.call_tool("fetch_paper_pdf", {"identifier": "grd1"})
+
+    data = json.loads(result.content[0].text)
+    _assert_inline(data)
+    assert data["source"] == "s2_oa"
+
+
+async def test_fetch_paper_pdf_unresolvable_candidate_is_download_failed(
+    service: Service, slow_jobs: Jobs, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def resolve(host: str, port: int) -> list[str]:  # noqa: ARG001
+        raise socket.gaierror(socket.EAI_NONAME, "Name or service not known")
+
+    monkeypatch.setattr(_url_guard, "_resolve", resolve)
+    paper = {
+        "paperId": "grd3",
+        "openAccessPdf": {"url": "https://nowhere.test/a.pdf"},
+        "title": "Unresolvable",
+    }
+    with respx.mock(assert_all_called=False) as router:
+        router.get(f"{S2_BASE}/paper/grd3").mock(
+            return_value=httpx.Response(200, json=paper)
+        )
+        async with Client(pdf_app(service, slow_jobs)) as client:
+            result = await client.call_tool("fetch_paper_pdf", {"identifier": "grd3"})
+
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "download_failed"
+    assert data["pdf_source"] == "s2_oa"
