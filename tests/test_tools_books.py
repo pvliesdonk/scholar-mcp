@@ -758,9 +758,6 @@ async def test_get_book_excerpt_not_found(
         "error": "not_found",
         "isbn": "0000000000000",
     }
-    data = json.loads(result.content[0].text)
-    assert data["error"] == "not_found"
-    assert data["isbn"] == "0000000000000"
 
 
 @pytest.mark.respx(base_url=GB_BASE)
@@ -771,10 +768,11 @@ async def test_get_book_excerpt_reports_rate_limit_not_absence(
     respx_mock.get("/volumes").mock(return_value=httpx.Response(429))
     async with Client(mcp) as client:
         result = await client.call_tool("get_book_excerpt", {"isbn": "9780201633610"})
-    data = json.loads(result.content[0].text)
-    assert data["error"] == "rate_limited"
-    assert data["isbn"] == "9780201633610"
-    assert data["retryable"] is True
+    assert result.structured_content == {
+        "error": "rate_limited",
+        "isbn": "9780201633610",
+        "retryable": True,
+    }
 
 
 @pytest.mark.respx(base_url=GB_BASE)
@@ -785,10 +783,11 @@ async def test_get_book_excerpt_reports_upstream_error_not_absence(
     respx_mock.get("/volumes").mock(return_value=httpx.Response(500))
     async with Client(mcp) as client:
         result = await client.call_tool("get_book_excerpt", {"isbn": "9780201633610"})
-    data = json.loads(result.content[0].text)
-    assert data["error"] == "upstream_error"
-    assert data["status"] == 500
-    assert data["isbn"] == "9780201633610"
+    assert result.structured_content == {
+        "error": "upstream_error",
+        "isbn": "9780201633610",
+        "status": 500,
+    }
 
 
 @pytest.mark.respx(base_url=GB_BASE)
@@ -799,9 +798,11 @@ async def test_get_book_excerpt_reports_transport_error_not_absence(
     respx_mock.get("/volumes").mock(side_effect=httpx.ConnectError("boom"))
     async with Client(mcp) as client:
         result = await client.call_tool("get_book_excerpt", {"isbn": "9780201633610"})
-    data = json.loads(result.content[0].text)
-    assert data["error"] == "upstream_error"
-    assert data["status"] is None
+    assert result.structured_content == {
+        "error": "upstream_error",
+        "isbn": "9780201633610",
+        "status": None,
+    }
 
 
 @pytest.mark.respx(base_url=GB_BASE)
