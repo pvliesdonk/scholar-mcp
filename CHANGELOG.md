@@ -2,6 +2,22 @@
 
 <!-- version list -->
 
+## 3.1.2 (2026-11-08)
+
+### Bug Fixes
+
+- try alternative PDF sources when the S2 open-access URL fails (#570)
+- tell callers that throttled S2 work completes if polled (#571)
+- refuse non-public destinations in fetch_pdf_by_url (#574)
+- answer patent_not_found when OPS returns 404 for get_patent (#575)
+- cap search_patents limit at the 100 results one OPS request returns (#578)
+- list each applicant and inventor once per name format (#579)
+- return mappings from recommend_books and get_book_excerpt (#583)
+- return full records for every paper in a find_bridge_papers path (#584)
+- offer a fuzzy NIST example in get_standard that resolves (#586)
+- make the author-preserving work-row write atomic (#587)
+- refuse non-public destinations on the paper download path (#589)
+
 ## 3.1.1 (2026-11-03)
 
 ### Bug Fixes
