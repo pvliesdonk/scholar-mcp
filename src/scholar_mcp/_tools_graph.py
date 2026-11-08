@@ -17,6 +17,7 @@ from fastmcp.dependencies import Depends
 from ._s2_client import (
     FIELD_SETS,
     PAGE_LIMIT_MAX,
+    PAPER_RECORD_FIELDS,
     clamp_limit,
     log_s2_error,
     s2_error_payload,
@@ -875,21 +876,42 @@ async def _neighbours(
     return found, failures
 
 
-async def _path_records(service: Service, path: list[str]) -> list[dict[str, Any]]:
-    """Turn a list of paper ids into records, falling back to bare ids.
+async def _path_records(
+    service: Service, path: list[str]
+) -> tuple[list[dict[str, Any]], _UpstreamFailure | None]:
+    """Turn a list of paper ids into full paper records.
+
+    Records come from the paper cache; the ids it misses are fetched in one
+    batch request with the fields ``get_paper`` caches, and cached, so every
+    entry in a path has the same shape (#485). A paper Semantic Scholar does
+    not know, or one a failed request left unfetched, stays a bare
+    ``{"paperId": ...}``.
 
     Args:
         service: Injected service.
         path: Paper ids in path order.
 
     Returns:
-        One record per id.
+        One record per id, and the upstream failure that left records bare,
+        if there was one.
     """
-    records: list[dict[str, Any]] = []
+    records: dict[str, dict[str, Any] | None] = {}
     for pid in path:
         cached = await service.cache.get_paper(pid)
-        records.append(dict(cached) if cached else {"paperId": pid})
-    return records
+        records[pid] = dict(cached) if cached else None
+    misses = [pid for pid, record in records.items() if record is None]
+    failure: _UpstreamFailure | None = None
+    if misses:
+        try:
+            fetched = await service.s2.batch_resolve(misses, fields=PAPER_RECORD_FIELDS)
+        except httpx.HTTPError as exc:
+            failure = _failure_from(exc, "path metadata", ",".join(misses))
+            fetched = []
+        for pid, paper in zip(misses, fetched, strict=False):
+            if paper and paper.get("paperId"):
+                await service.cache.set_paper(paper["paperId"], paper)
+                records[pid] = dict(paper)
+    return [records[pid] or {"paperId": pid} for pid in path], failure
 
 
 async def find_bridge_papers(
@@ -943,13 +965,10 @@ async def find_bridge_papers(
             failures += hop_failures
             for neighbour_id in neighbours:
                 if neighbour_id == target_id:
-                    return _with_partial(
-                        {
-                            "found": True,
-                            "path": await _path_records(service, [*path, target_id]),
-                        },
-                        failures,
-                    )
+                    records, failure = await _path_records(service, [*path, target_id])
+                    if failure:
+                        failures.append(failure)
+                    return _with_partial({"found": True, "path": records}, failures)
                 if neighbour_id not in visited:
                     visited.add(neighbour_id)
                     queue.append((neighbour_id, [*path, neighbour_id]))
