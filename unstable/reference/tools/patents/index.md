@@ -73,6 +73,8 @@ A mapping with `patent_number` (normalised DOCDB format) and the requested secti
 
 `country` is the contracting state a legal event concerns. EPO sends it only on the event types that name one, such as `PG25` (lapsed in a state), `REG` and `PGFP`, so it is an empty string on the rest. It is what distinguishes the otherwise identical `PG25` events a patent accumulates as it lapses state by state.
 
+`applicants` and `inventors` each hold two lists. `original` is the names as the patent office supplied them. `standardised` is EPO's standardised spelling, upper-case and often with a country suffix. Each list names every party once. The lists aren't paired: EPO doesn't guarantee that the same position in both names the same party. Either list can be empty when EPO sends no name in that form.
+
 Sections are fetched concurrently where possible (cache lookups run in parallel; EPO API calls are serialised by the client). Each section is cached independently with appropriate TTLs.
 
 A response has keys matching the requested sections:
@@ -83,8 +85,11 @@ A response has keys matching the requested sections:
   "biblio": {
     "title": "...",
     "abstract": "...",
-    "applicants": ["..."],
-    "inventors": ["..."],
+    "applicants": {
+      "original": ["Koninklijke Philips N.V."],
+      "standardised": ["KONINKLIJKE PHILIPS NV [NL]"]
+    },
+    "inventors": {"original": ["..."], "standardised": ["..."]},
     "publication_number": "EP.1234567.A1",
     "publication_date": "2020-01-15",
     "filing_date": "2019-06-01",

@@ -2546,6 +2546,12 @@ the event types that name one, such as <code>PG25</code> (lapsed in a state), <c
 <code>PGFP</code>, so it is an empty string on the rest. It is what distinguishes the
 otherwise identical <code>PG25</code> events a patent accumulates as it lapses state by
 state.</p>
+<p><code>applicants</code> and <code>inventors</code> each hold two lists. <code>original</code> is the names as
+the patent office supplied them. <code>standardised</code> is EPO's standardised spelling,
+upper-case and often with a country suffix. Each list names every party once.
+The lists aren't paired: EPO doesn't guarantee that the same position in both
+names the same party. Either list can be empty when EPO sends no name in that
+form.</p>
 <p>Sections are fetched concurrently where possible (cache lookups run in parallel; EPO API calls are serialised by the client). Each section is cached independently with appropriate TTLs.</p>
 <p>A response has keys matching the requested sections:</p>
 <div class="highlight"><pre><span></span><code><span class="p">{</span>
@@ -2553,8 +2559,11 @@ state.</p>
 <span class="w">  </span><span class="nt">"biblio"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="nt">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"..."</span><span class="p">,</span>
 <span class="w">    </span><span class="nt">"abstract"</span><span class="p">:</span><span class="w"> </span><span class="s2">"..."</span><span class="p">,</span>
-<span class="w">    </span><span class="nt">"applicants"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"..."</span><span class="p">],</span>
-<span class="w">    </span><span class="nt">"inventors"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"..."</span><span class="p">],</span>
+<span class="w">    </span><span class="nt">"applicants"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">"original"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"Koninklijke Philips N.V."</span><span class="p">],</span>
+<span class="w">      </span><span class="nt">"standardised"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"KONINKLIJKE PHILIPS NV [NL]"</span><span class="p">]</span>
+<span class="w">    </span><span class="p">},</span>
+<span class="w">    </span><span class="nt">"inventors"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"original"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"..."</span><span class="p">],</span><span class="w"> </span><span class="nt">"standardised"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"..."</span><span class="p">]},</span>
 <span class="w">    </span><span class="nt">"publication_number"</span><span class="p">:</span><span class="w"> </span><span class="s2">"EP.1234567.A1"</span><span class="p">,</span>
 <span class="w">    </span><span class="nt">"publication_date"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2020-01-15"</span><span class="p">,</span>
 <span class="w">    </span><span class="nt">"filing_date"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2019-06-01"</span><span class="p">,</span>
