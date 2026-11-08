@@ -37,11 +37,12 @@ def test_a_stuck_block_fails_with_a_traceback() -> None:
 
 def test_a_stuck_event_loop_fails_too() -> None:
     """A coroutine waiting forever is interrupted out of the loop's select."""
+    stuck = asyncio.sleep(5)
     with (
         pytest.raises(pytest.fail.Exception, match="exceeded"),
         phase_timeout(0.2, backstop_grace=30),
     ):
-        asyncio.run(asyncio.sleep(5))
+        asyncio.run(stuck)
 
 
 def test_a_block_that_finishes_leaves_no_timer_of_its_own() -> None:
