@@ -377,3 +377,32 @@ def test_register_tools_builds_jobs_from_the_bound_config(
     server, jobs_config = seen[0]
     assert jobs_config.soft_deadline_s == 7.0
     assert server is config.server
+
+
+@pytest.mark.parametrize("server", [_EVERYTHING_VISIBLE], indirect=True, ids=["all"])
+async def test_get_standard_fuzzy_examples_resolve_to_fetchable_ids(
+    client: Client[Any],
+) -> None:
+    """Every fuzzy example get_standard offers resolves to a fetchable form (#481).
+
+    NIST catalogues SP and NISTIR publications per revision, so an example
+    that normalises to a revisionless NIST identifier invites ``not_found``.
+    """
+    import re
+
+    from scholar_mcp._standards_client import resolve_identifier_local
+
+    tool = {t.name: t for t in await client.list_tools()}["get_standard"]
+    description = tool.description or ""
+    sentence = re.search(r"Resolves fuzzy inputs \((.*?)\)", description, re.S)
+    assert sentence is not None
+    examples = re.findall(r"``([^`]+)``", sentence.group(1))
+    assert examples
+    for example in examples:
+        resolved = resolve_identifier_local(example)
+        assert resolved is not None, example
+        canonical, body = resolved
+        if body == "NIST":
+            assert "Rev." in canonical, (example, canonical)
+    identifier = tool.input_schema["properties"]["identifier"]["description"]
+    assert "per revision" in identifier
