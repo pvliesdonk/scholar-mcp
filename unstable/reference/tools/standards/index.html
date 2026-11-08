@@ -2438,8 +2438,8 @@ may still hold matches worth asking for again.</p>
 <h2 id="get_standard"><code>get_standard</code><a class="headerlink" href="#get_standard" title="Permanent link">&para;</a></h2>
 <p><strong>Get Standard.</strong> Read-only. Reaches outside the server.</p>
 <p>Retrieve a standard by identifier (canonical or fuzzy).</p>
-<p>Resolves fuzzy inputs (such as <code>rfc9000</code> or <code>nist 800-53</code>) to their
-canonical form before fetching. With <code>fetch_full_text=True</code> and
+<p>Resolves fuzzy inputs (such as <code>rfc9000</code> or <code>nist 800-53 rev 5</code>) to
+their canonical form before fetching. With <code>fetch_full_text=True</code> and
 docling configured, downloads and converts the full text.</p>
 <p>With <code>fetch_full_text=True</code> the docling conversion takes minutes, so
 such a call returns a job handle to poll with <code>get_job_result</code> rather
@@ -2449,10 +2449,6 @@ back directly.</p>
 <code>full_text_error</code>; <code>full_text_url</code> is there to fetch by hand. No
 <code>full_text</code> and no <code>full_text_error</code> means none was on offer, or
 docling is not configured; neither is worth retrying.</p>
-<p>NIST SP and NISTIR publications are catalogued per revision, so an
-identifier with no revision, such as <code>NIST SP 800-53</code>, can come back
-<code>not_found</code> even though the publication exists. <code>search_standards</code>
-lists the revisions that are published.</p>
 <p><code>not_found</code> means the source answered and holds no such standard: stop
 asking about that identifier. A lookup that never got an answer says so
 instead, as <code>rate_limited</code> (with <code>retryable</code>) or <code>upstream_error</code>
@@ -2478,7 +2474,7 @@ document in one response.</p>
 <td><code>identifier</code></td>
 <td><code>string</code></td>
 <td>required</td>
-<td>Canonical or fuzzy standard identifier.</td>
+<td>Canonical or fuzzy standard identifier. NIST SP and NISTIR publications are catalogued per revision, so include it, as in <code>NIST SP 800-53 Rev. 5</code>; <code>search_standards</code> lists the published revisions.</td>
 </tr>
 <tr>
 <td><code>fetch_full_text</code></td>
