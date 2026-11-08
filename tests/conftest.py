@@ -33,6 +33,11 @@ from scholar_mcp._standards_client import StandardsClient
 from scholar_mcp.config import _ENV_PREFIX, ProjectConfig
 from scholar_mcp.domain import Service
 from scholar_mcp.server import make_server
+from tests.fixtures.phase_timeout import (
+    PHASE_TIMEOUT_S,
+    phase_timeout,
+    timeout_applies,
+)
 
 _JOBS_TEST_DEADLINE_S = 0.05
 """Soft deadline for tests: short enough that a slow tool promotes at once.
@@ -41,6 +46,39 @@ Tests shrink the deadline rather than sleeping for real, so both branches of
 ``run_with_deadline`` -- inline result and promoted handle -- are reachable in
 milliseconds.
 """
+
+
+@pytest.hookimpl(wrapper=True)
+def pytest_runtest_setup(item: pytest.Item) -> Iterator[None]:
+    """Bound the setup phase; see :mod:`tests.fixtures.phase_timeout` (#512)."""
+    return (yield from _timed(item))
+
+
+@pytest.hookimpl(wrapper=True)
+def pytest_runtest_call(item: pytest.Item) -> Iterator[None]:
+    """Bound the call phase; see :mod:`tests.fixtures.phase_timeout` (#512)."""
+    return (yield from _timed(item))
+
+
+@pytest.hookimpl(wrapper=True)
+def pytest_runtest_teardown(item: pytest.Item) -> Iterator[None]:
+    """Bound the teardown phase; see :mod:`tests.fixtures.phase_timeout` (#512)."""
+    return (yield from _timed(item))
+
+
+def _timed(item: pytest.Item) -> Iterator[None]:
+    """Run one test phase under the per-phase timeout when it applies.
+
+    Args:
+        item: The test whose phase is running.
+
+    Yields:
+        Control to the phase itself.
+    """
+    if not timeout_applies(item):
+        return (yield)
+    with phase_timeout(PHASE_TIMEOUT_S):
+        return (yield)
 
 
 def pytest_collection_modifyitems(
