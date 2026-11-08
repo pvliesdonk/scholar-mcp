@@ -53,12 +53,16 @@ index holds the argument for the direction and order.
 
 ### Operator-provided corpus
 
-- **[evidenced: [epic #353](https://github.com/pvliesdonk/scholar-mcp/issues/353)
-  and `docs/design/operator-corpus.md`]** Operators should be able to identify
+- **[evidenced: [epic #353](https://github.com/pvliesdonk/scholar-mcp/issues/353)]**
+  Operators should be able to identify
   their own documents through a manifest, attach known documents to scholarly
   records, and retrieve them through pointers while retaining ownership of the
   files. The frozen outcome stays broader than the first package so optional
   semantic context can be decided separately.
+- **[derived]** The design notes the epic and its children cite,
+  `docs/design/operator-corpus.md`, were never committed and are lost. The
+  issue bodies are the only surviving record; the direction has to be
+  re-grounded before any corpus feature is marked ready.
 
 ### Standards discovery and use
 
@@ -68,6 +72,14 @@ index holds the argument for the direction and order.
   independently useful capabilities; refinement
   [#417](https://github.com/pvliesdonk/scholar-mcp/issues/417) must find a
   release-sized next slice before any are committed to a package.
+- **[evidenced: [#417 survey comment](https://github.com/pvliesdonk/scholar-mcp/issues/417)]**
+  Most children predate the roadmap convention and were moved under the epic
+  in bulk; its "Done when" repeats their categories rather than stating an
+  outcome. **[stated]** The "Done when" is revisited inside the refinement
+  rather than as a separate decision. **[derived]** Reliability comes first:
+  two shipped behaviours are wrong today (the ETSI source fails, and replaced
+  editions report `published`), so the first slice fixes what users see before
+  adding sources.
 
 ### Patent research workflows
 
@@ -76,6 +88,13 @@ index holds the argument for the direction and order.
   and scholarly cross-links. Refinement
   [#418](https://github.com/pvliesdonk/scholar-mcp/issues/418) must identify a
   coherent package from its independently shippable children.
+- **[evidenced: [#418 survey comment](https://github.com/pvliesdonk/scholar-mcp/issues/418)]**
+  Against today's code the epic's "Done when" is met for bibliographic data
+  and status, largely met for full text, partial for cross-links, and
+  uncovered for citation output. **[derived]** The first slice therefore takes
+  citation output and the cheap cross-links; new patent offices (USPTO, WIPO)
+  are not needed for that outcome while EPO is the only source.
+  **[stated]** The "Done when" is revisited inside the refinement.
 
 ### Book and chapter resolution
 
@@ -84,6 +103,12 @@ index holds the argument for the direction and order.
   availability, previews, citations, and reusable assets. Refinement
   [#419](https://github.com/pvliesdonk/scholar-mcp/issues/419) must identify a
   coherent package without pulling unrelated maintenance into the story.
+- **[evidenced: [#419 survey comment](https://github.com/pvliesdonk/scholar-mcp/issues/419)]**
+  Most of the April book work shipped in PR #118 and PR #119, whose issues were
+  left open because only the first issue after `Closes` was closed. What
+  remains is chapter citation: chapter records that carry their parent book,
+  CrossRef chapter metadata, and a chapter entry type in citation output.
+  **[stated]** The "Done when" is revisited inside the refinement.
 
 ### Structural health
 
@@ -96,32 +121,45 @@ index holds the argument for the direction and order.
 
 ## Packages
 
-- **[stated] [015 hardening](https://github.com/pvliesdonk/scholar-mcp/milestone/22)
-  (patch):** defects on shipped tools, led by
-  [#514](https://github.com/pvliesdonk/scholar-mcp/issues/514). The
-  maintainer chose to ship these before corpus foundations.
-- **[evidenced: [epic #353](https://github.com/pvliesdonk/scholar-mcp/issues/353)]
-  [020 corpus foundations](https://github.com/pvliesdonk/scholar-mcp/milestone/16)
-  (minor):** the manifest, record attachment, and pointer path, because those
-  three form a useful operator workflow without the optional semantic
-  subsystem.
 - **[stated] [030 agent-fetched-pdfs](https://github.com/pvliesdonk/scholar-mcp/milestone/23)
   (minor):** upload-then-convert for PDFs an agent fetched through a library
-  link ([#546](https://github.com/pvliesdonk/scholar-mcp/issues/546)). It
-  follows corpus foundations at the maintainer's choice. **[derived]** It may
-  split into several features once sized; they stay in this package.
+  link ([#546](https://github.com/pvliesdonk/scholar-mcp/issues/546)).
+  **[derived]** It may split into several features once sized; they stay in
+  this package.
+- **[stated] [040 standards-reliability](https://github.com/pvliesdonk/scholar-mcp/milestone/24)
+  (minor):** the first standards slice, approved by the maintainer.
+  **[derived]** ETSI and Relaton research first, because their verdict decides
+  how the broken ETSI source is fixed and what further sources cost; then
+  replaced-edition data and current-edition ranking; then the regulation
+  lookup over the harmonised table, after the overdue table review.
+- **[stated] [050 patent-citations](https://github.com/pvliesdonk/scholar-mcp/milestone/25)
+  (minor):** the first patent slice, approved by the maintainer.
+  **[derived]** It closes the one "Done when" term with no coverage (citation
+  output) and adds cross-links that reuse existing clients.
+- **[stated] [060 book-chapters](https://github.com/pvliesdonk/scholar-mcp/milestone/26)
+  (minor):** the chapter-citation slice, approved by the maintainer.
+- **[derived]** The order of `040`, `050` and `060` among themselves is not
+  argued beyond reliability first; reorder by renaming. Five open packages is
+  past the usual horizon: `040` to `060` are each epic's first slice rather
+  than a committed sequence, and `070` is held, not scheduled.
+- **[stated] [070 corpus foundations](https://github.com/pvliesdonk/scholar-mcp/milestone/16)
+  (minor):** postponed by the maintainer because the design notes were lost.
+  **[evidenced: [epic #353](https://github.com/pvliesdonk/scholar-mcp/issues/353)]**
+  The manifest, record attachment, and pointer path, because those three form
+  a useful operator workflow without the optional semantic subsystem.
 
 Do not copy item lists or progress here. An issue with no milestone is
 backlog; commit it to a package when it should ship in that cut.
 
 ## Known unknowns
 
-- **[derived] Which domain story should follow corpus foundations?** Resolved
-  by the standards, patent, and books refinement issues
+- **[derived] What do the standards, patent, and books epics promise once
+  their "Done when" is rewritten?** Resolved by the refinement issues
   [#417](https://github.com/pvliesdonk/scholar-mcp/issues/417),
   [#418](https://github.com/pvliesdonk/scholar-mcp/issues/418), and
-  [#419](https://github.com/pvliesdonk/scholar-mcp/issues/419). The answer does
-  not change the two committed packages.
+  [#419](https://github.com/pvliesdonk/scholar-mcp/issues/419). The first
+  slices hold under the current wording; a rewrite may move backlog children
+  in or out of each epic.
 - **[evidenced: [#357](https://github.com/pvliesdonk/scholar-mcp/issues/357)]
   When is semantic context over an identified corpus document viable?** The
   issue carries the external dependency that resolves it. The answer does not
@@ -138,6 +176,23 @@ backlog; commit it to a package when it should ship in that cut.
   independently of the package sequence.
 
 ## Revisions
+
+- **2026-11-08 — [stated] decisions; [derived] the rest:** Surveyed the
+  April-era children of the standards, patent, and books epics against the
+  code. At the maintainer's instruction: closed three as already shipped and
+  four as not planned, moved two structural issues and the harmonised-table
+  chore out of the epics, and committed a first slice of each epic to
+  `040 standards-reliability`, `050 patent-citations` and `060 book-chapters`.
+  The epics' "Done when" criteria were written over the existing children;
+  each refinement issue now carries their revisit. The surveys live in the
+  refinement issues' comments.
+
+- **2026-11-08 — [stated] package order; [derived] the rest:** Hardening
+  shipped in v3.1.2, so `015 hardening` left the list. Corpus foundations moved
+  from `020` to `070`, behind `030 agent-fetched-pdfs`, at the maintainer's
+  request: `docs/design/operator-corpus.md`, which the epic, its children and
+  this index cited, was never committed. The corpus direction no longer cites
+  it as evidence.
 
 - **2026-11-05 — [stated] package order; [derived] the rest:** Access links
   shipped in v3.1.0, so its package left the list and the direction now
