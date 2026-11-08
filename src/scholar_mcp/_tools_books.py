@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import re
 from typing import TYPE_CHECKING, Any
@@ -221,7 +220,7 @@ def _google_books_error(exc: httpx.HTTPError, isbn: str) -> dict[str, Any]:
 async def get_book_excerpt(
     isbn: str,
     service: Service = Depends(get_service),
-) -> str:
+) -> dict[str, Any]:
     """Get a book excerpt and preview info from Google Books.
 
     Returns the publisher description, text snippet, and a link to
@@ -238,7 +237,7 @@ async def get_book_excerpt(
         isbn: ISBN-10 or ISBN-13.
 
     Returns:
-        JSON with excerpt, description, preview availability, and link.
+        A mapping with excerpt, description, preview availability, and link.
 
     Example return::
 
@@ -250,9 +249,9 @@ async def get_book_excerpt(
         try:
             volume = await service.google_books.search_by_isbn(isbn)
         except httpx.HTTPError as exc:
-            return json.dumps(_google_books_error(exc, isbn))
+            return _google_books_error(exc, isbn)
         if volume is None:
-            return json.dumps({"error": "not_found", "isbn": isbn})
+            return {"error": "not_found", "isbn": isbn}
         await service.cache.set_google_books(isbn, volume)
 
     vol_info = volume.get("volumeInfo") or {}
@@ -261,22 +260,20 @@ async def get_book_excerpt(
     viewability = access_info.get("viewability", "NO_PAGES")
     preview_available = viewability in ("PARTIAL", "ALL_PAGES")
 
-    return json.dumps(
-        {
-            "excerpt": search_info.get("textSnippet"),
-            "description": vol_info.get("description"),
-            "source": "google_books",
-            "preview_available": preview_available,
-            "preview_link": vol_info.get("previewLink"),
-        }
-    )
+    return {
+        "excerpt": search_info.get("textSnippet"),
+        "description": vol_info.get("description"),
+        "source": "google_books",
+        "preview_available": preview_available,
+        "preview_link": vol_info.get("previewLink"),
+    }
 
 
 async def recommend_books(
     subject: str,
     limit: int = 10,
     service: Service = Depends(get_service),
-) -> str:
+) -> dict[str, Any]:
     """Recommend books for a subject via Open Library.
 
     Uses the Open Library subject API to find popular books on a
@@ -288,7 +285,8 @@ async def recommend_books(
         limit: Maximum results to return (max 50).
 
     Returns:
-        JSON list of book records sorted by popularity.
+        ``{"books": [...]}``, book records sorted by popularity; the list
+        is empty when Open Library knows no such subject.
     """
     limit = max(1, min(limit, 50))
     slug = normalize_subject(subject)
@@ -296,19 +294,19 @@ async def recommend_books(
     cached = await service.cache.get_book_subject(slug)
     if cached is not None:
         logger.debug("book_subject_cache_hit subject=%s", slug)
-        return json.dumps(cached[:limit])
+        return {"books": cached[:limit]}
 
     # Fetch a fixed pool of 50 so the popularity sort covers more candidates
     # than the caller's limit, and any future request for this subject is
     # served from cache with just a slice.
     subject_data = await service.openlibrary.get_subject(slug, limit=50)
     if subject_data is None:
-        return json.dumps([])
+        return {"books": []}
     works = subject_data.get("works") or []
     works.sort(key=lambda w: w.get("edition_count", 0), reverse=True)
     books = [normalize_subject_work(w) for w in works]
     await service.cache.set_book_subject(slug, books)
-    return json.dumps(books[:limit])
+    return {"books": books[:limit]}
 
 
 # The reference page these tools are listed on (scripts/gen_reference.py).

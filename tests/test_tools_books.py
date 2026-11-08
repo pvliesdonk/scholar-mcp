@@ -496,11 +496,16 @@ async def test_recommend_books_returns_results(
         result = await client.call_tool(
             "recommend_books", {"subject": "machine learning"}
         )
-    data = json.loads(result.content[0].text)
-    assert len(data) == 2
-    assert data[0]["title"] == "Pattern Recognition"
-    assert data[0]["authors"] == ["Christopher Bishop"]
-    assert data[0]["openlibrary_work_id"] == "OL8173450W"
+    # The structured result is the mapping itself, not a JSON string under
+    # "result" (#370).
+    data = result.structured_content
+    assert data is not None
+    assert set(data) == {"books"}
+    books = data["books"]
+    assert len(books) == 2
+    assert books[0]["title"] == "Pattern Recognition"
+    assert books[0]["authors"] == ["Christopher Bishop"]
+    assert books[0]["openlibrary_work_id"] == "OL8173450W"
 
 
 @pytest.mark.respx(base_url=OL_BASE)
@@ -528,8 +533,7 @@ async def test_recommend_books_empty_subject(
     )
     async with Client(mcp) as client:
         result = await client.call_tool("recommend_books", {"subject": "nonexistent"})
-    data = json.loads(result.content[0].text)
-    assert data == []
+    assert result.structured_content == {"books": []}
 
 
 COVERS_BASE = "https://covers.openlibrary.org"
@@ -705,7 +709,10 @@ async def test_get_book_excerpt_returns_data(
     )
     async with Client(mcp) as client:
         result = await client.call_tool("get_book_excerpt", {"isbn": "9780201633610"})
-    data = json.loads(result.content[0].text)
+    # The structured result is the mapping itself, not a JSON string under
+    # "result" (#370).
+    data = result.structured_content
+    assert data is not None
     assert data["source"] == "google_books"
     assert data["excerpt"] == "Gang of Four patterns explained."
     assert data["description"] == "A classic software engineering book."
@@ -723,6 +730,10 @@ async def test_get_book_excerpt_not_found(
     )
     async with Client(mcp) as client:
         result = await client.call_tool("get_book_excerpt", {"isbn": "0000000000000"})
+    assert result.structured_content == {
+        "error": "not_found",
+        "isbn": "0000000000000",
+    }
     data = json.loads(result.content[0].text)
     assert data["error"] == "not_found"
     assert data["isbn"] == "0000000000000"
