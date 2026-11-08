@@ -35,7 +35,10 @@ from scholar_mcp.domain import Service
 from scholar_mcp.server import make_server
 from tests.fixtures.phase_timeout import (
     PHASE_TIMEOUT_S,
+    TERMINAL_STDERR,
+    keep_terminal_stderr,
     phase_timeout,
+    release_terminal_stderr,
     timeout_applies,
 )
 
@@ -46,6 +49,16 @@ Tests shrink the deadline rather than sleeping for real, so both branches of
 ``run_with_deadline`` -- inline result and promoted handle -- are reachable in
 milliseconds.
 """
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Keep the terminal's stderr for the phase-timeout backstop (#512)."""
+    keep_terminal_stderr(config)
+
+
+def pytest_unconfigure(config: pytest.Config) -> None:
+    """Close the stderr copy :func:`pytest_configure` kept."""
+    release_terminal_stderr(config)
 
 
 @pytest.hookimpl(wrapper=True)
@@ -77,7 +90,8 @@ def _timed(item: pytest.Item) -> Iterator[None]:
     """
     if not timeout_applies(item):
         return (yield)
-    with phase_timeout(PHASE_TIMEOUT_S):
+    backstop_fd = item.config.stash.get(TERMINAL_STDERR, None)
+    with phase_timeout(PHASE_TIMEOUT_S, backstop_fd=backstop_fd):
         return (yield)
 
 

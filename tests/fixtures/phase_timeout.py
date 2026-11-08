@@ -6,7 +6,10 @@ of which test hung. :func:`phase_timeout` arms ``SIGALRM`` so a phase that
 overruns fails through ``pytest.fail`` with the stack where it was stuck, and
 the run continues with the next test. A ``faulthandler`` backstop a little
 later dumps every thread and exits the process, for a main thread blocked in
-C code that the signal cannot interrupt.
+C code that the signal cannot interrupt. It writes to a copy of the
+terminal's stderr taken in ``pytest_configure`` (:func:`keep_terminal_stderr`):
+the ``sys.stderr`` a test sees is pytest's capture file, and a dump written
+there is lost when the process exits.
 
 ``pytest-timeout`` does the same, but adding it would change the
 template-owned dependency groups and pytest settings; this keeps the change
@@ -16,6 +19,7 @@ in project-owned files.
 from __future__ import annotations
 
 import faulthandler
+import os
 import signal
 import sys
 import threading
@@ -24,6 +28,9 @@ from contextlib import contextmanager
 from types import FrameType
 
 import pytest
+
+TERMINAL_STDERR = pytest.StashKey[int]()
+"""Config stash key for the copy of the terminal's stderr the backstop writes to."""
 
 PHASE_TIMEOUT_S = 60.0
 """Longest a single setup, call or teardown phase may run.
@@ -37,6 +44,29 @@ BACKSTOP_GRACE_S = 30.0
 """Extra time before the faulthandler backstop exits the whole process."""
 
 
+def keep_terminal_stderr(config: pytest.Config) -> None:
+    """Keep a copy of the terminal's stderr for the backstop's dump.
+
+    Call from ``pytest_configure``, before pytest captures each test's output.
+
+    Args:
+        config: The session's pytest config, which stores the copy.
+    """
+    config.stash[TERMINAL_STDERR] = os.dup(2)  # the process stderr, not yet captured
+
+
+def release_terminal_stderr(config: pytest.Config) -> None:
+    """Close the copy :func:`keep_terminal_stderr` made, if there is one.
+
+    Args:
+        config: The session's pytest config.
+    """
+    fd = config.stash.get(TERMINAL_STDERR, None)
+    if fd is not None:
+        os.close(fd)
+        del config.stash[TERMINAL_STDERR]
+
+
 def can_time_out() -> bool:
     """Return whether this platform supports the ``SIGALRM`` timer.
 
@@ -48,7 +78,10 @@ def can_time_out() -> bool:
 
 @contextmanager
 def phase_timeout(
-    seconds: float, *, backstop_grace: float = BACKSTOP_GRACE_S
+    seconds: float,
+    *,
+    backstop_grace: float = BACKSTOP_GRACE_S,
+    backstop_fd: int | None = None,
 ) -> Iterator[None]:
     """Fail the enclosed block if it runs longer than *seconds*.
 
@@ -58,6 +91,8 @@ def phase_timeout(
     Args:
         seconds: Time limit for the block.
         backstop_grace: Extra time before the process-exiting backstop fires.
+        backstop_fd: File descriptor the backstop dumps to; ``None`` uses
+            ``sys.stderr``, which pytest captures.
 
     Yields:
         Nothing; the block runs under the timer.
@@ -78,7 +113,8 @@ def phase_timeout(
     # the outer limit back when it ends instead of switching it off.
     previous_handler = signal.signal(signal.SIGALRM, _expire)
     previous_timer = signal.setitimer(signal.ITIMER_REAL, seconds)
-    faulthandler.dump_traceback_later(seconds + backstop_grace, exit=True)
+    dump_to = sys.stderr if backstop_fd is None else backstop_fd
+    faulthandler.dump_traceback_later(seconds + backstop_grace, exit=True, file=dump_to)
     try:
         yield
     finally:
@@ -88,7 +124,7 @@ def phase_timeout(
         if previous_timer[0] > 0:
             signal.setitimer(signal.ITIMER_REAL, *previous_timer)
             faulthandler.dump_traceback_later(
-                previous_timer[0] + backstop_grace, exit=True
+                previous_timer[0] + backstop_grace, exit=True, file=dump_to
             )
 
 

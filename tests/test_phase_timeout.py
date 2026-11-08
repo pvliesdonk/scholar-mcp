@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import signal
 import threading
 import time
@@ -13,8 +14,11 @@ import pytest
 
 from tests.fixtures.phase_timeout import (
     PHASE_TIMEOUT_S,
+    TERMINAL_STDERR,
     can_time_out,
+    keep_terminal_stderr,
     phase_timeout,
+    release_terminal_stderr,
     timeout_applies,
 )
 
@@ -107,3 +111,21 @@ def test_timeout_skips_live_tests_and_debugger_sessions(
     kwargs: dict[str, bool], applies: bool
 ) -> None:
     assert timeout_applies(_item(**kwargs)) is applies
+
+
+def test_the_session_keeps_a_terminal_stderr_for_the_backstop(
+    request: pytest.FixtureRequest,
+) -> None:
+    os.fstat(request.config.stash[TERMINAL_STDERR])
+
+
+def test_keeping_and_releasing_the_terminal_stderr() -> None:
+    config: Any = SimpleNamespace(stash=pytest.Stash())
+    keep_terminal_stderr(config)
+    fd = config.stash[TERMINAL_STDERR]
+    os.fstat(fd)
+    release_terminal_stderr(config)
+    assert TERMINAL_STDERR not in config.stash
+    with pytest.raises(OSError):
+        os.fstat(fd)
+    release_terminal_stderr(config)  # a second release is a no-op
