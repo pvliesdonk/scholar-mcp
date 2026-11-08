@@ -385,6 +385,39 @@ async def test_cache_book_record_writes_the_work_row_when_none_exists(
     assert by_isbn is not None
 
 
+async def test_cache_book_record_survives_the_read_then_write_race(
+    service: Service, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A thin write that lost the race to a rich one must not clobber it (#451).
+
+    The losing interleaving: task B (no authors) reads the work row while it is
+    still absent, task A then writes the rich row, and B resumes and writes. The
+    read is patched to report that stale "absent" view after A's row exists.
+    """
+    from scholar_mcp._book_enrichment import cache_book_record
+
+    await service.cache.set_book_by_work(
+        "OL6030812W", {"title": "Design Patterns", "authors": ["Erich Gamma"]}
+    )
+
+    async def absent(work_id: str) -> None:  # noqa: ARG001
+        return None
+
+    real_get = service.cache.get_book_by_work
+    monkeypatch.setattr(service.cache, "get_book_by_work", absent)
+    thin: dict = {
+        "title": "Design Patterns",
+        "authors": [],
+        "openlibrary_work_id": "OL6030812W",
+    }
+
+    await cache_book_record(thin, service, isbn="9780201633610")
+
+    kept = await real_get("OL6030812W")
+    assert kept is not None
+    assert kept["authors"] == ["Erich Gamma"]
+
+
 async def test_fill_authors_from_cache_leaves_existing_authors_alone(
     service: Service,
 ) -> None:

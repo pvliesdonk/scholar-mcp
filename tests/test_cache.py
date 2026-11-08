@@ -677,3 +677,29 @@ async def test_a_live_batch_never_replaces_a_synced_standard(cache):
         [("ISO 9001:2015", {"identifier": "ISO 9001:2015", "title": "x"})]
     )
     assert await cache.get_standard("ISO 9001:2015") == synced
+
+
+async def test_set_book_by_work_if_absent_writes_a_missing_row(cache):
+    await cache.set_book_by_work_if_absent("OL1W", {"title": "A", "authors": []})
+    assert await cache.get_book_by_work("OL1W") == {"title": "A", "authors": []}
+
+
+async def test_set_book_by_work_if_absent_keeps_a_fresh_row(cache):
+    """A fresh row is left alone, whatever the incoming record holds (#451)."""
+    await cache.set_book_by_work("OL1W", {"title": "A", "authors": ["Gamma"]})
+    await cache.set_book_by_work_if_absent("OL1W", {"title": "A", "authors": []})
+    assert await cache.get_book_by_work("OL1W") == {
+        "title": "A",
+        "authors": ["Gamma"],
+    }
+
+
+async def test_set_book_by_work_if_absent_replaces_a_stale_row(cache):
+    """A row past the work TTL reads as absent, so it is replaced."""
+    await cache.set_book_by_work("OL1W", {"title": "old", "authors": ["Gamma"]})
+    await cache._db.execute(  # type: ignore[union-attr]
+        "UPDATE books_openlibrary SET cached_at = 0 WHERE work_id = 'OL1W'"
+    )
+    await cache._db.commit()  # type: ignore[union-attr]
+    await cache.set_book_by_work_if_absent("OL1W", {"title": "new", "authors": []})
+    assert await cache.get_book_by_work("OL1W") == {"title": "new", "authors": []}
