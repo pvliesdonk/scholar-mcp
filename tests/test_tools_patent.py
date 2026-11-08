@@ -34,8 +34,8 @@ from tests.conftest import PlainClient, tasks_server
 _BIBLIO_RESULT = {
     "title": "Test Patent",
     "abstract": "Test abstract.",
-    "applicants": ["TEST CORP"],
-    "inventors": [],
+    "applicants": {"original": [], "standardised": ["TEST CORP"]},
+    "inventors": {"original": [], "standardised": []},
     "publication_number": "EP.1234567.A1",
     "publication_date": "2020-01-15",
     "filing_date": "2019-06-01",
@@ -469,7 +469,7 @@ async def test_get_patent_cache_hit_skips_api(
     """get_patent returns cached biblio without calling EPO API."""
     cached_biblio = {
         "title": "Cached Patent",
-        "applicants": ["CACHED CORP"],
+        "applicants": {"original": [], "standardised": ["CACHED CORP"]},
         "publication_number": "EP.9999999.B1",
     }
     await service.cache.set_patent("EP.9999999.B1", cached_biblio)
@@ -575,8 +575,8 @@ async def test_get_patent_empty_biblio_returns_error(
     empty_biblio = {
         "title": "",
         "abstract": "",
-        "applicants": [],
-        "inventors": [],
+        "applicants": {"original": [], "standardised": []},
+        "inventors": {"original": [], "standardised": []},
         "publication_number": "",
         "publication_date": "",
         "filing_date": "",
@@ -613,8 +613,8 @@ async def test_get_patent_not_found_without_biblio_section(
     empty_biblio = {
         "title": "",
         "abstract": "",
-        "applicants": [],
-        "inventors": [],
+        "applicants": {"original": [], "standardised": []},
+        "inventors": {"original": [], "standardised": []},
         "publication_number": "",
         "publication_date": "",
         "filing_date": "",

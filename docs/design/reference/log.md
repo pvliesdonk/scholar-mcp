@@ -4,6 +4,14 @@ Newest first. One entry per research pass.
 
 ## 2026-11-06
 
+### OPS party name formats
+
+Added "Parties in several name formats" to
+[EPO OPS bibliographic responses](epo-ops-biblio.md) (#483), from the OPS
+v3.2 schema pages for `applicant` and `inventor` (a third-party mirror,
+read verbatim) and the doubled names observed in #483. Not settled: which
+formats each office sends, and whether `original` can be non-Latin.
+
 ### OPS search range limits
 
 New page [EPO OPS published-data search range](epo-ops-search.md) (#488). The

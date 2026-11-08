@@ -18,6 +18,14 @@ sources:
     title: Raw OPS biblio response for EP.3491801.B1, reported alongside the above in scholar-mcp#399
     resource: https://github.com/pvliesdonk/scholar-mcp/issues/399
     accessed: 2026-09-16
+  - id: ops-schema-applicant
+    title: OPS v3.2 schema documentation for the applicant and inventor elements, as mirrored by data2type (element pages el.applicant and el.inventor; text checked 2026-11-06)
+    resource: https://repository.data2type.de/EPO_OPS/v_3.2/html/el.applicant.html
+    accessed: 2026-11-06
+  - id: ops-biblio-parties
+    title: get_patent against the deployed server (3.0.0-rc.0) for EP3491801B1, listing each applicant and inventor in two spellings, reported in scholar-mcp#483
+    resource: https://github.com/pvliesdonk/scholar-mcp/issues/483
+    accessed: 2026-11-06
   - id: ops-biblio-404
     title: get_patent against the deployed server (3.0.0-rc.0) for EP9999999B1 and XX999999999Z9, both failing with "404 Client Error Not Found" on published-data/publication/docdb/biblio, reported in scholar-mcp#475
     resource: https://github.com/pvliesdonk/scholar-mcp/issues/475
@@ -114,4 +122,26 @@ returns 404 when no document matches (see `EpoClient.search`). Whether the
 claims, description, family, legal and citation endpoints also answer 404 for
 such a number is not recorded; `get_patent` treats a biblio 404 as
 not-found and lets it take precedence over the other sections' errors.
+
+## Parties in several name formats
+
+A biblio response lists every applicant and every inventor once per name
+format, all in the same `applicants` or `inventors` element, told apart by
+`data-format` [source: ops-biblio-parties]. The schema documents three
+formats on the name element: `docdb` ("standardised following DOCDB primary
+standardisation rules"), `docdba` ("DOCDB secondary rules (translation
+upper-case)") and `original` ("as supplied by the provider, converted to
+UTF8") [source: ops-schema-applicant]. The deployed server also returned
+`epodoc`-style names such as `KONINKLIJKE PHILIPS NV [NL]`, matching the
+schema's own sample markup [source: ops-biblio-parties].
+
+Formats cannot be paired by position: `sequence` "restarts with every change of
+data-format", and "applicants in different format but with identical sequence
+numbers cannot be guaranteed to be representations of one and the same"
+[source: ops-schema-applicant]. `parse_biblio_xml` therefore keeps `original`
+and one standardised format (`docdb`, else `epodoc`, else `docdba`) as separate
+lists (#483).
+
+Not recorded: which formats OPS sends for which offices. Whether `original` is
+ever in a non-Latin script for CN, JP or KR publications was not checked.
 

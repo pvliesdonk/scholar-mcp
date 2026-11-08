@@ -33,7 +33,7 @@ from typing import Any
 
 from lxml import etree
 
-from ._record_types import PatentRecord
+from ._record_types import PatentParties, PatentRecord
 
 logger = logging.getLogger(__name__)
 
@@ -175,6 +175,92 @@ def _parse_classification(cls_el: etree._Element) -> str:
 # ---------------------------------------------------------------------------
 
 
+_STANDARDISED_NAME_FORMATS = ("docdb", "epodoc", "docdba")
+"""OPS name formats that hold a standardised spelling, most preferred first."""
+
+
+def _member_name_and_format(member: etree._Element, party: str) -> tuple[str, str]:
+    """Return one party element's name and the OPS name format it is in.
+
+    The schema documents ``data-format`` on the name element; OPS responses
+    also carry it on the party element, which takes precedence.
+
+    Args:
+        member: An ``applicant`` or ``inventor`` element.
+        party: ``"applicant"`` or ``"inventor"``.
+
+    Returns:
+        ``(name, data_format)``; the name is ``""`` when the element has
+        none, and the format is ``""`` when neither element states one.
+    """
+    holder = member.find(f"{{{_EXCH}}}{party}-name")
+    if holder is None:
+        return "", member.get("data-format", "")
+    name = _text(holder.find(f"{{{_EXCH}}}name"))
+    return name, member.get("data-format") or holder.get("data-format", "")
+
+
+def _party_names(
+    parties: etree._Element | None, group: str, party: str
+) -> PatentParties:
+    """Collect one party group's names, separated by OPS name format.
+
+    OPS lists every applicant and inventor once per name format: ``original``
+    (as the office supplied it) and one or more standardised spellings
+    (``docdb``, ``epodoc``, ``docdba``). Entries in different formats cannot
+    be paired reliably, since the OPS schema says equal ``sequence`` numbers
+    across formats "cannot be guaranteed to be representations of one and the
+    same", so each format keeps its own list (#483). Of the standardised
+    formats only the most preferred one present is kept, so each list has
+    one entry per party.
+
+    Args:
+        parties: The ``parties`` element, or ``None`` when absent.
+        group: The group element name, ``"applicants"`` or ``"inventors"``.
+        party: The member element name, ``"applicant"`` or ``"inventor"``.
+
+    Returns:
+        ``{"original": [...], "standardised": [...]}``; either list may be
+        empty when OPS sends no name in that format.
+    """
+    by_format: dict[str, list[str]] = {}
+    group_el = parties.find(f"{{{_EXCH}}}{group}") if parties is not None else None
+    members = group_el.iter(f"{{{_EXCH}}}{party}") if group_el is not None else ()
+    for member in members:
+        name, fmt = _member_name_and_format(member, party)
+        if not name:
+            continue
+        names = by_format.setdefault(fmt, [])
+        if name not in names:
+            names.append(name)
+    original = by_format.pop("original", [])
+    standardised = next(
+        (by_format[f] for f in _STANDARDISED_NAME_FORMATS if f in by_format),
+        next(iter(by_format.values()), []),
+    )
+    return {"original": original, "standardised": standardised}
+
+
+def biblio_has_data(record: PatentRecord | dict[str, Any]) -> bool:
+    """Return whether a biblio record names a title or any party.
+
+    OPS answers some numbers with an empty ``exchange-document``; the tools
+    treat a record with neither as not found.
+
+    Args:
+        record: A record from :func:`parse_biblio_xml`, or the cache.
+
+    Returns:
+        ``True`` when the record has a title or at least one party name.
+    """
+    if record.get("title"):
+        return True
+    parties = record.get("applicants") or {}
+    if isinstance(parties, dict):
+        return any(parties.values())
+    return bool(parties)
+
+
 def parse_biblio_xml(xml_bytes: bytes) -> PatentRecord:
     """Parse an EPO OPS biblio endpoint XML response.
 
@@ -191,8 +277,10 @@ def parse_biblio_xml(xml_bytes: bytes) -> PatentRecord:
 
         - ``title`` (str): Patent title, preferring English.
         - ``abstract`` (str): Abstract text, preferring English.
-        - ``applicants`` (list[str]): Applicant names in document order.
-        - ``inventors`` (list[str]): Inventor names in document order.
+        - ``applicants`` (:class:`PatentParties`): Applicant names in
+          document order, one list per name format (see
+          :func:`_party_names`).
+        - ``inventors`` (:class:`PatentParties`): Inventor names, likewise.
         - ``publication_number`` (str): Dotted DOCDB number
           ``CC.number.kind``.
         - ``publication_date`` (str): Publication date ``YYYY-MM-DD``.
@@ -263,24 +351,8 @@ def parse_biblio_xml(xml_bytes: bytes) -> PatentRecord:
 
     # --- Parties ---
     parties = biblio.find(f"{{{_EXCH}}}parties")
-    applicants: list[str] = []
-    inventors: list[str] = []
-    if parties is not None:
-        applicants_el = parties.find(f"{{{_EXCH}}}applicants")
-        if applicants_el is not None:
-            for app in applicants_el.iter(f"{{{_EXCH}}}applicant"):
-                name_el = app.find(f"{{{_EXCH}}}applicant-name/{{{_EXCH}}}name")
-                name = _text(name_el)
-                if name:
-                    applicants.append(name)
-
-        inventors_el = parties.find(f"{{{_EXCH}}}inventors")
-        if inventors_el is not None:
-            for inv in inventors_el.iter(f"{{{_EXCH}}}inventor"):
-                name_el = inv.find(f"{{{_EXCH}}}inventor-name/{{{_EXCH}}}name")
-                name = _text(name_el)
-                if name:
-                    inventors.append(name)
+    applicants = _party_names(parties, "applicants", "applicant")
+    inventors = _party_names(parties, "inventors", "inventor")
 
     # --- Title (prefer English) ---
     title = _pick_lang(biblio, f"{{{_EXCH}}}invention-title", text_only=True)
@@ -629,8 +701,8 @@ def _empty_biblio() -> PatentRecord:
     return PatentRecord(
         title="",
         abstract="",
-        applicants=[],
-        inventors=[],
+        applicants={"original": [], "standardised": []},
+        inventors={"original": [], "standardised": []},
         publication_number="",
         publication_date="",
         filing_date="",
