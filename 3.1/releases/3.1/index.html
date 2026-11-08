@@ -19,7 +19,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.8.0">
+      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.8.1">
     
     
       
@@ -2255,6 +2255,95 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#v312" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v3.1.2
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="v3.1.2">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#upgrading_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Upgrading
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pdf-downloads" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PDF downloads
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="PDF downloads">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#refusing-hosts-on-the-servers-own-network" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Refusing hosts on the server's own network
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#alternative-sources-when-the-semantic-scholar-link-fails" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Alternative sources when the Semantic Scholar link fails
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#patents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Patents
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smaller-changes_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Smaller changes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2276,7 +2365,7 @@
 
 
 <h1 id="31">3.1<a class="headerlink" href="#31" title="Permanent link">&para;</a></h1>
-<!-- notes-range-end: 0784a45f301611ef62a35bdad1e05e991d33d541 -->
+<!-- notes-range-end: a7b0b5e04075b2ee2c67c5ad916c9980e6be6f10 -->
 
 <!-- RELEASE-SUMMARY v3.1.0 START -->
 <p>A paper the server cannot fetch now comes with links to it: its doi.org link
@@ -2382,6 +2471,142 @@ takes the year from the paper's CrossRef record when it has one, and from
 Semantic Scholar otherwise
 (<a href="https://github.com/pvliesdonk/scholar-mcp/issues/561">#561</a>,
 <a href="https://github.com/pvliesdonk/scholar-mcp/pull/562">#562</a>).</p>
+<h2 id="v312">v3.1.2<a class="headerlink" href="#v312" title="Permanent link">&para;</a></h2>
+<!-- RELEASE-SUMMARY v3.1.2 START -->
+<p>The PDF download tools now refuse hosts on the server's own network, for URLs a
+caller passes and URLs found in paper metadata alike, and a paper whose
+Semantic Scholar link fails now falls back to arXiv, PubMed Central and
+Unpaywall. Patent applicants and inventors are listed once per name format, and
+<code>recommend_books</code> and <code>get_book_excerpt</code> return plain mappings. Three tool
+payloads change shape and one setting is new; the upgrade steps are below.</p>
+<!-- RELEASE-SUMMARY v3.1.2 END -->
+
+<h3 id="upgrading_1">Upgrading<a class="headerlink" href="#upgrading_1" title="Permanent link">&para;</a></h3>
+<p>If your server downloads PDFs from a host on its own network, such as an
+intranet repository, set <code>SCHOLAR_MCP_PDF_FETCH_ALLOW_PRIVATE=true</code>. The same
+applies when the server reaches the internet only through an HTTP proxy and
+cannot resolve host names itself: the new check resolves every host before the
+request and refuses one it cannot resolve, so without the setting every download
+fails with <code>download_failed</code>. See <a href="#pdf-downloads">PDF downloads</a>.</p>
+<p><strong>Clients:</strong> reconnect to pick up the changed tool surface. A client that parses
+these payloads needs a change:</p>
+<ul>
+<li><code>get_patent</code>, <code>batch_resolve</code> (its <code>patent</code> record) and <code>get_citing_patents</code>:
+  <code>applicants</code> and <code>inventors</code> are objects with <code>original</code> and <code>standardised</code>
+  lists, where they were flat lists of names (see <a href="#patents">Patents</a>).</li>
+<li><code>recommend_books</code>: the result is <code>{"books": [...]}</code>, where it was a bare list.</li>
+<li><code>get_book_excerpt</code>: the structured content is the mapping itself, where it
+  was a JSON string under <code>result</code>. The text content is unchanged.</li>
+</ul>
+<p><strong>State:</strong> the cache, downloaded PDFs and converted Markdown are kept. Cached
+patent records that still hold the old flat applicant and inventor lists are
+dropped once at startup, so each such patent is fetched from EPO again on its
+next request.</p>
+<p><strong>Security posture:</strong> tightened. <code>fetch_pdf_by_url</code>, <code>fetch_paper_pdf</code> and
+<code>fetch_and_convert</code> refuse a URL, or a redirect, whose host resolves to a
+loopback, private, link-local or other non-public address.
+<code>SCHOLAR_MCP_PDF_FETCH_ALLOW_PRIVATE=true</code> restores the previous behaviour.</p>
+<h3 id="pdf-downloads">PDF downloads<a class="headerlink" href="#pdf-downloads" title="Permanent link">&para;</a></h3>
+<h4 id="refusing-hosts-on-the-servers-own-network">Refusing hosts on the server's own network<a class="headerlink" href="#refusing-hosts-on-the-servers-own-network" title="Permanent link">&para;</a></h4>
+<p><code>fetch_pdf_by_url</code> downloads whatever URL its caller passes, and its caller is
+a model acting on prompts the operator does not see. Until now it followed that
+URL, and any redirect, to any address, so a caller could make the server request
+hosts on its own network: loopback, RFC 1918 ranges and link-local addresses
+such as cloud metadata endpoints
+(<a href="https://github.com/pvliesdonk/scholar-mcp/issues/514">#514</a>). The paper
+download tools had the same gap one step removed, since a candidate URL from
+upstream metadata could redirect anywhere
+(<a href="https://github.com/pvliesdonk/scholar-mcp/issues/573">#573</a>).</p>
+<p>All three download tools now resolve each host first and download only when
+every address it resolves to is a public internet address. A host with one
+public and one private address is refused, because the connection may use
+either. IPv6 addresses that carry an IPv4 address are judged by that IPv4
+address. Redirects are followed one hop at a time, at most 10, and each hop is
+checked before it is requested
+(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/574">#574</a>,
+<a href="https://github.com/pvliesdonk/scholar-mcp/pull/589">#589</a>).</p>
+<ul>
+<li>On <code>fetch_pdf_by_url</code>, a refused URL is an error that names the URL, or the
+  redirect target, and asks for a publicly reachable URL instead.</li>
+<li>On <code>fetch_paper_pdf</code> and <code>fetch_and_convert</code>, a refused candidate becomes a
+  <code>download_failed</code> entry in <code>attempts</code>, whose <code>detail</code> names the refused URL,
+  and the next source is tried.</li>
+</ul>
+<p><code>SCHOLAR_MCP_PDF_FETCH_ALLOW_PRIVATE</code> (default <code>false</code>) turns the check off on
+all three tools (<a href="../../reference/configuration/#pdf-conversion">configuration</a>).
+The check runs just before each request, not at connect time, so a host whose
+DNS answer changes between the two is not caught; pinning the address would
+mean bypassing a configured HTTP proxy. The
+<a href="../../security-model/">security model</a> states this limit.</p>
+<h4 id="alternative-sources-when-the-semantic-scholar-link-fails">Alternative sources when the Semantic Scholar link fails<a class="headerlink" href="#alternative-sources-when-the-semantic-scholar-link-fails" title="Permanent link">&para;</a></h4>
+<p><code>fetch_paper_pdf</code> and <code>fetch_and_convert</code> tried arXiv, PubMed Central and
+Unpaywall only when Semantic Scholar listed no open-access URL. When it listed
+one that served a landing page or an error, the call ended there: "The fallback
+chain is gated on the absence of the S2 URL, not on its failure"
+(<a href="https://github.com/pvliesdonk/scholar-mcp/issues/568">#568</a>).</p>
+<p>Both tools now try the Semantic Scholar URL, then arXiv, PubMed Central and
+Unpaywall, until one serves a PDF. Unpaywall is queried only after the earlier
+sources failed, and still needs <code>SCHOLAR_MCP_CONTACT_EMAIL</code>. When every source
+fails, the response keeps its <code>error</code>, <code>detail</code> and <code>pdf_source</code> for the last
+source tried and adds <code>attempts</code>, one entry per source, so a caller can tell
+"no source known" (<code>no_oa_pdf</code>) from "every known source failed"
+(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/570">#570</a>). See
+<a href="../../use/pdf-conversion/#alternative-pdf-sources">Alternative PDF sources</a>.</p>
+<h3 id="patents">Patents<a class="headerlink" href="#patents" title="Permanent link">&para;</a></h3>
+<p><code>get_patent</code> listed every applicant and inventor twice, once in each name
+format the patent office supplied: "<code>WO2024235369A1</code> lists 12 inventors for six
+people", so "A caller counting inventors, or matching a name against another
+source, gets doubled or mismatched results"
+(<a href="https://github.com/pvliesdonk/scholar-mcp/issues/483">#483</a>). <code>applicants</code> and
+<code>inventors</code> are now objects with two lists, each naming every party once:
+<code>original</code>, the names as the office supplied them, and <code>standardised</code>, one
+standardised format. The two lists are not paired by position, because EPO does
+not guarantee that entries with the same sequence number name the same party.
+The shape appears wherever a patent record does: <code>get_patent</code>, <code>batch_resolve</code>
+and <code>get_citing_patents</code>
+(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/579">#579</a>; see the
+<a href="../../reference/tools/patents/">patent tool reference</a>).</p>
+<p><code>get_patent</code> for a number that does not exist raised a raw HTTP error naming the
+EPO URL, so "there is no <code>error</code> key for a caller to branch on"
+(<a href="https://github.com/pvliesdonk/scholar-mcp/issues/475">#475</a>). It now answers
+<code>{"error": "patent_not_found"}</code>, the same answer it gave for an empty record
+(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/575">#575</a>).</p>
+<p><code>search_patents</code> documented <code>limit</code> as at most 100 but sent any value to EPO
+(<a href="https://github.com/pvliesdonk/scholar-mcp/issues/488">#488</a>). It now caps
+<code>limit</code> at 100, the most one EPO request returns, and its description says that
+EPO serves only the first 2,000 results of a search
+(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/578">#578</a>).</p>
+<h3 id="smaller-changes_1">Smaller changes<a class="headerlink" href="#smaller-changes_1" title="Permanent link">&para;</a></h3>
+<p><code>recommend_books</code> and <code>get_book_excerpt</code> returned "a JSON string wrapped in an
+object rather than a mapping, so the caller receives double-encoded JSON"
+(<a href="https://github.com/pvliesdonk/scholar-mcp/issues/370">#370</a>). Both now return
+a mapping; <code>recommend_books</code> wraps its list as <code>{"books": [...]}</code>, like
+<code>search_books</code> (<a href="https://github.com/pvliesdonk/scholar-mcp/pull/583">#583</a>; see
+the <a href="../../reference/tools/books/">book tool reference</a>).</p>
+<p><code>find_bridge_papers</code> returned a path paper that was not in the cache as a bare
+<code>{"paperId": ...}</code>
+(<a href="https://github.com/pvliesdonk/scholar-mcp/issues/485">#485</a>). It now fetches
+the missing records in one batch request, so every path entry has the record
+shape <code>get_paper</code> returns; a failed lookup marks the result <code>partial</code>
+(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/584">#584</a>).</p>
+<p>When Semantic Scholar throttles a call, the job handle's reason now tells the
+caller to keep polling, how long the result can take, that every client of the
+server shares one Semantic Scholar budget, and that an unfinished job has no
+answer yet rather than an empty one. The server instructions carry the shared
+budget too. The motivating report found that "a \"searched, nothing found\" list
+may contain searches that never finished"
+(<a href="https://github.com/pvliesdonk/scholar-mcp/issues/569">#569</a>,
+<a href="https://github.com/pvliesdonk/scholar-mcp/pull/571">#571</a>; see
+<a href="../../use/background-jobs/">background jobs</a>).</p>
+<p><code>get_standard</code>'s description offered <code>nist 800-53</code> as an example, which returns
+<code>not_found</code> because NIST publications are catalogued per revision. The example
+is now <code>nist 800-53 rev 5</code>
+(<a href="https://github.com/pvliesdonk/scholar-mcp/issues/481">#481</a>,
+<a href="https://github.com/pvliesdonk/scholar-mcp/pull/586">#586</a>).</p>
+<p>Concurrent book enrichment can no longer replace a cached author list with an
+empty one: the write that keeps existing authors is now a single statement
+(<a href="https://github.com/pvliesdonk/scholar-mcp/issues/451">#451</a>,
+<a href="https://github.com/pvliesdonk/scholar-mcp/pull/587">#587</a>).</p>
 <!-- PATCH-RELEASES-END -->
 
 
@@ -2446,7 +2671,7 @@ Semantic Scholar otherwise
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
         <script src="../../javascripts/config-wizard/wizard.js" type="module"></script>
       

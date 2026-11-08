@@ -558,6 +558,14 @@
       "advancedGroup": "Access links"
     },
     {
+      "id": "pdf_fetch_allow_private",
+      "label": "Pdf Fetch Allow Private",
+      "type": "bool",
+      "var": "SCHOLAR_MCP_PDF_FETCH_ALLOW_PRIVATE",
+      "help": "When false (the default), a PDF download is refused if the host, or a redirect target, resolves to a loopback, private, link-local or other non-public address. This covers URLs the caller supplies and URLs taken from paper metadata. Set true to allow hosts on the server's own network, such as an intranet repository.",
+      "advancedGroup": "PDF conversion"
+    },
+    {
       "id": "jobs_soft_deadline_s",
       "label": "Jobs Soft Deadline S",
       "type": "number",

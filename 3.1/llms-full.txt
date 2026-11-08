@@ -109,7 +109,7 @@ An authenticated caller has every tool the instance exposes. Each tool runs with
 This server's tools make outbound HTTPS requests on the caller's behalf and keep what they fetch in a local cache.
 
 - **Outbound requests.** Paper, citation and author tools call Semantic Scholar, OpenAlex, Crossref and Unpaywall. PDF lookups also try arXiv and PubMed Central. Book tools call Open Library and the Google Books API. Patent tools call EPO Open Patent Services. Standards tools call the IETF (`datatracker.ietf.org`), the RFC Editor, W3C, ETSI, the Common Criteria portal, the European Commission's harmonised-standards pages and GitHub (the Relaton datasets and the NIST catalogue releases). Every request carries the caller's query terms to that service.
-- **Caller-chosen URLs.** `fetch_pdf_by_url` downloads whatever URL the caller passes and follows redirects. The server does not filter private or internal addresses, so the tool can reach anything the server's network can reach. It is a write tool: `SCHOLAR_MCP_READ_ONLY=true`, the default, hides it along with the other download and conversion tools.
+- **PDF download URLs.** `fetch_pdf_by_url` downloads the URL the caller passes, and `fetch_paper_pdf` and `fetch_and_convert` download URLs taken from paper metadata; all three follow redirects. They refuse a URL, or a redirect, whose host resolves to a loopback, private, link-local or other non-public address, so neither a caller nor an upstream record can use them to reach the server's own network or a cloud metadata endpoint. The check runs on the address the host resolves to just before each request; a host whose DNS answer changes between that check and the connection is not caught. `SCHOLAR_MCP_PDF_FETCH_ALLOW_PRIVATE=true` turns the check off for a deployment that fetches from an intranet repository; the tools can then reach anything the server's network can reach. They are write tools: `SCHOLAR_MCP_READ_ONLY=true`, the default, hides them along with the other conversion tools.
 - **PDF conversion.** When `SCHOLAR_MCP_DOCLING_URL` is set, conversion tools send downloaded PDFs to that docling-serve instance. When `SCHOLAR_MCP_VLM_API_URL` is set, the server passes that URL and `SCHOLAR_MCP_VLM_API_KEY` to docling-serve, which sends page images to the VLM endpoint.
 - **Local data.** Tools read and write the SQLite cache, downloaded PDFs, converted Markdown and book covers under `SCHOLAR_MCP_CACHE_DIR`, and write nothing outside it.
 - **Credentials.** Upstream calls use the server's own keys, never the caller's: `SCHOLAR_MCP_S2_API_KEY`, `SCHOLAR_MCP_EPO_CONSUMER_KEY` and `SCHOLAR_MCP_EPO_CONSUMER_SECRET`, `SCHOLAR_MCP_GOOGLE_BOOKS_API_KEY`, `SCHOLAR_GITHUB_TOKEN`, and the VLM key above. `SCHOLAR_MCP_CONTACT_EMAIL` is sent to OpenAlex and Unpaywall as the polite-pool contact.
@@ -1744,7 +1744,9 @@ Poll it with [`get_job_result`](https://pvliesdonk.github.io/scholar-mcp/3.1/ref
 
 ## Semantic Scholar throttling
 
-When Semantic Scholar throttles a tool that calls it, a plain MCP call returns a handle straight away, with `"reason": "Semantic Scholar is throttling requests; work continues."` and a `retry_after_s` hint. The original work keeps going inside the job, and a graph walk resumes at the node it had reached. If Semantic Scholar keeps refusing, the job completes before its record expires with `{"error": "rate_limited", "retryable": true}`. Other HTTP errors from Semantic Scholar come back as the tool's usual error response.
+When Semantic Scholar throttles a tool that calls it, a plain MCP call returns a handle straight away, with a `retry_after_s` hint and a `reason` telling the caller to keep polling. The work may run for up to five sixths of `SCHOLAR_MCP_JOBS_RESULT_TTL_S` (about 50 minutes by default), and the reason gives that bound in minutes. It also says that a job still running means no answer yet, not an empty one. The original work keeps going inside the job, and a graph walk resumes at the node it had reached. If Semantic Scholar keeps refusing, the job completes before its record expires with `{"error": "rate_limited", "retryable": true}`. Other HTTP errors from Semantic Scholar come back as the tool's usual error response.
+
+Every client of the server shares one Semantic Scholar rate budget, because the server paces its requests and backs off as a single Semantic Scholar client, not per caller. Several agents searching in parallel through one server each wait longer; they don't finish sooner. The server's instructions say this at session start, so an agent can plan for it before the first throttle rather than learn it from a deferral.
 
 ## EPO traffic light
 
@@ -2001,12 +2003,12 @@ INFO scholar_mcp.domain: docling_configured url=http://localhost:5001
 
 Four tools are available once configured:
 
-| Tool                      | What it does                                                         |
-| ------------------------- | -------------------------------------------------------------------- |
-| `fetch_paper_pdf`         | Downloads the PDF for a paper (tries OA, then ArXiv/PMC/Unpaywall)   |
-| `convert_pdf_to_markdown` | Converts a local PDF file to Markdown                                |
-| `fetch_and_convert`       | Full pipeline: looks up the paper and downloads and converts its PDF |
-| `fetch_pdf_by_url`        | Downloads a PDF from any URL and optionally converts to Markdown     |
+| Tool                      | What it does                                                          |
+| ------------------------- | --------------------------------------------------------------------- |
+| `fetch_paper_pdf`         | Downloads the PDF for a paper (tries OA, then ArXiv/PMC/Unpaywall)    |
+| `convert_pdf_to_markdown` | Converts a local PDF file to Markdown                                 |
+| `fetch_and_convert`       | Full pipeline: looks up the paper and downloads and converts its PDF  |
+| `fetch_pdf_by_url`        | Downloads a PDF from a public URL and optionally converts to Markdown |
 
 PDFs are stored in `$SCHOLAR_MCP_CACHE_DIR/pdfs/` and Markdown files in `$SCHOLAR_MCP_CACHE_DIR/md/`.
 
@@ -2091,15 +2093,15 @@ A cached result needs no job. An already-downloaded PDF is never fetched twice, 
 
 ## Alternative PDF sources
 
-When a paper has no open-access PDF URL in Semantic Scholar, `fetch_paper_pdf` and `fetch_and_convert` automatically try alternative sources:
+When a paper has no open-access PDF URL in Semantic Scholar, or that URL fails or serves a landing page instead of a PDF, `fetch_paper_pdf` and `fetch_and_convert` try alternative sources one after another and stop at the first one that serves a PDF:
 
 1. **ArXiv**, If the paper has an `externalIds.ArXiv` field, the PDF is fetched from `arxiv.org/pdf/<id>.pdf`.
 1. **PubMed Central**, If the paper has a `PubMedCentral` external ID, the PDF is fetched from NCBI.
 1. **Unpaywall**, If the paper has a DOI and `SCHOLAR_MCP_CONTACT_EMAIL` is set, the [Unpaywall API](https://unpaywall.org/products/api) is queried for an OA PDF location.
 
-The `source` field in the response indicates where the PDF came from: `s2_oa`, `arxiv`, `pmc`, or `unpaywall`.
+The `source` field in the response indicates where the PDF came from: `s2_oa`, `arxiv`, `pmc`, or `unpaywall`. When no source serves a PDF, `error` and `pdf_source` describe the last source tried, and `attempts` lists every source in order with its URL, error and detail. Unpaywall is only queried once the sources before it have failed.
 
-For PDFs found through other means (author homepages, institutional repositories, etc.), use `fetch_pdf_by_url` with the direct URL.
+For PDFs found through other means (author homepages, institutional repositories, etc.), use `fetch_pdf_by_url` with the direct URL. By default it refuses URLs and redirects that lead to a loopback, private or link-local address. `fetch_paper_pdf` and `fetch_and_convert` apply the same check to the URLs they find in paper metadata, and move on to the next source when one is refused. An operator who needs to fetch from an intranet repository sets `SCHOLAR_MCP_PDF_FETCH_ALLOW_PRIVATE=true`.
 
 Enable Unpaywall
 
@@ -2677,12 +2679,13 @@ A `403 Forbidden` remains the cheaper signal when S2 does send one: `s2_key_forb
 
 ### PDF conversion
 
-| Variable                  | Default  | Required | Description                                                                                                                                        |
-| ------------------------- | -------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SCHOLAR_MCP_DOCLING_URL` | (none)   | No       | Base URL of a running docling-serve instance for PDF conversion (such as http://localhost:5001). When unset, PDF conversion tools return an error. |
-| `SCHOLAR_MCP_VLM_API_URL` | (none)   | No       | OpenAI-compatible VLM endpoint for formula and figure enrichment during PDF conversion.                                                            |
-| `SCHOLAR_MCP_VLM_API_KEY` | (none)   | No       | API key for the VLM endpoint.                                                                                                                      |
-| `SCHOLAR_MCP_VLM_MODEL`   | `gpt-4o` | No       | Model name to use with the VLM endpoint.                                                                                                           |
+| Variable                              | Default  | Required | Description                                                                                                                                                                                                                                                                                                                   |
+| ------------------------------------- | -------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SCHOLAR_MCP_DOCLING_URL`             | (none)   | No       | Base URL of a running docling-serve instance for PDF conversion (such as http://localhost:5001). When unset, PDF conversion tools return an error.                                                                                                                                                                            |
+| `SCHOLAR_MCP_VLM_API_URL`             | (none)   | No       | OpenAI-compatible VLM endpoint for formula and figure enrichment during PDF conversion.                                                                                                                                                                                                                                       |
+| `SCHOLAR_MCP_VLM_API_KEY`             | (none)   | No       | API key for the VLM endpoint.                                                                                                                                                                                                                                                                                                 |
+| `SCHOLAR_MCP_VLM_MODEL`               | `gpt-4o` | No       | Model name to use with the VLM endpoint.                                                                                                                                                                                                                                                                                      |
+| `SCHOLAR_MCP_PDF_FETCH_ALLOW_PRIVATE` | `false`  | No       | When false (the default), a PDF download is refused if the host, or a redirect target, resolves to a loopback, private, link-local or other non-public address. This covers URLs the caller supplies and URLs taken from paper metadata. Set true to allow hosts on the server's own network, such as an intranet repository. |
 
 ### Patents (EPO OPS)
 
@@ -2990,6 +2993,8 @@ A response looks like:
 }
 ```
 
+Every entry is a full paper record, the shape `get_paper` returns. A paper missing from the cache is looked up and cached. An entry is a bare `{"paperId": "..."}` only when Semantic Scholar doesn't know the paper, or when the lookup failed. A failed lookup makes the result partial, with `path metadata` named in `warning`.
+
 If no path exists within `max_depth`, `path` is absent.
 
 Partial searches
@@ -3091,7 +3096,7 @@ These tools write to the local cache, so they're hidden when `SCHOLAR_MCP_READ_O
 
 Download the PDF of a paper.
 
-Tries the Semantic Scholar open-access URL first. When that is unavailable, automatically checks alternative sources: ArXiv (from `externalIds`), PubMed Central, and Unpaywall (by DOI, requires `SCHOLAR_MCP_CONTACT_EMAIL`).
+Tries the Semantic Scholar open-access URL first. When that is missing, fails or serves something other than a PDF, it tries alternative sources, one after another: ArXiv (from `externalIds`), PubMed Central, and Unpaywall (by DOI, requires `SCHOLAR_MCP_CONTACT_EMAIL`). A failure lists every source tried under `attempts`.
 
 Skips download if the file already exists locally, which answers immediately; a fresh download usually takes 10-30 seconds and may be returned as a background job handle instead.
 
@@ -3156,7 +3161,7 @@ Requires `SCHOLAR_MCP_DOCLING_URL` to be set. VLM enrichment also requires `SCHO
 
 Resolve a paper, download its PDF, and convert to Markdown.
 
-Tries the Semantic Scholar open-access URL first, then alternative sources (ArXiv, PubMed Central, Unpaywall). Each stage fails gracefully: metadata is always returned if the paper resolves, even if PDF download or conversion fails.
+Tries the Semantic Scholar open-access URL first, then alternative sources (ArXiv, PubMed Central, Unpaywall) until one serves a PDF; a failure lists every source tried under `attempts`. Each stage fails gracefully: metadata is always returned if the paper resolves, even if PDF download or conversion fails.
 
 The full pipeline typically takes 1-5 minutes, so expect a background job handle rather than an inline result.
 
@@ -3287,6 +3292,8 @@ Search for patents in the European Patent Office database.
 
 Covers European patents and global patents via INPADOC (100+ patent offices). At least one parameter must be provided. For keyword search, `query` searches titles and abstracts. To find all patents by an inventor or applicant, omit `query` and use only the structured filters. For academic paper search, use `search_papers` instead.
 
+Returns at most 100 patents per call; a larger `limit` is capped at 100, so page further with `offset`. EPO serves only the first 2,000 results of a search, so narrow the query rather than paging past them.
+
 When EPO reports itself busy this waits for it to clear, which can take a few minutes, so the call may answer with a job handle to poll using `get_job_result` rather than the result itself. Do not reason about EPO throttle states yourself.
 
 **Parameters**
@@ -3301,7 +3308,7 @@ When EPO reports itself busy this waits for it to clear, which can take a few mi
 | `date_to`            | `string \| null`                    | `null`          | Latest date (`YYYY-MM-DD`).                                                                                                      |
 | `date_type`          | `publication \| filing \| priority` | `"publication"` | Date field to apply the range to: `"publication"`, `"filing"` or `"priority"`.                                                   |
 | `jurisdiction`       | `string \| null`                    | `null`          | Restrict to a single patent authority, such as `"EP"`, `"WO"` or `"US"`.                                                         |
-| `limit`              | `integer`                           | `10`            | Maximum results to return (default 10).                                                                                          |
+| `limit`              | `integer`                           | `10`            | Maximum results to return (default 10, max 100).                                                                                 |
 | `offset`             | `integer`                           | `0`             | Pagination offset (0-based).                                                                                                     |
 
 **Returns**
@@ -3348,6 +3355,8 @@ A mapping with `patent_number` (normalised DOCDB format) and the requested secti
 
 `country` is the contracting state a legal event concerns. EPO sends it only on the event types that name one, such as `PG25` (lapsed in a state), `REG` and `PGFP`, so it is an empty string on the rest. It is what distinguishes the otherwise identical `PG25` events a patent accumulates as it lapses state by state.
 
+`applicants` and `inventors` each hold two lists. `original` is the names as the patent office supplied them. `standardised` is EPO's standardised spelling, upper-case and often with a country suffix. Each list names every party once. The lists aren't paired: EPO doesn't guarantee that the same position in both names the same party. Either list can be empty when EPO sends no name in that form.
+
 Sections are fetched concurrently where possible (cache lookups run in parallel; EPO API calls are serialised by the client). Each section is cached independently with appropriate TTLs.
 
 A response has keys matching the requested sections:
@@ -3358,8 +3367,11 @@ A response has keys matching the requested sections:
   "biblio": {
     "title": "...",
     "abstract": "...",
-    "applicants": ["..."],
-    "inventors": ["..."],
+    "applicants": {
+      "original": ["Koninklijke Philips N.V."],
+      "standardised": ["KONINKLIJKE PHILIPS NV [NL]"]
+    },
+    "inventors": {"original": ["..."], "standardised": ["..."]},
     "publication_number": "EP.1234567.A1",
     "publication_date": "2020-01-15",
     "filing_date": "2019-06-01",
@@ -3584,7 +3596,7 @@ An `error` of `not_found` means Google Books answered and has no such volume: st
 
 **Returns**
 
-JSON with excerpt, description, preview availability, and link.
+A mapping with excerpt, description, preview availability, and link.
 
 Example return::
 
@@ -3628,9 +3640,9 @@ Uses the Open Library subject API to find popular books on a topic, sorted by ed
 
 **Returns**
 
-JSON list of book records sorted by popularity.
+`{"books": [...]}`, book records sorted by popularity; the list is empty when Open Library knows no such subject.
 
-Each record has the same shape as `search_books` results, with fields populated from the Open Library subject API (title, authors, Open Library work ID, cover URL). ISBN and edition fields are `null` since subject results are work-level.
+The response is `{"books": [...]}`, the same wrapper `search_books` uses; an unknown subject gives `{"books": []}`. Each record has the same shape as `search_books` results, with fields populated from the Open Library subject API (title, authors, Open Library work ID, cover URL). ISBN and edition fields are `null` since subject results are work-level.
 
 Results are cached for 7 days, keyed by the normalized subject slug. Up to 50 results are fetched and cached; the `limit` parameter slices the cached pool on return.
 
@@ -3694,13 +3706,11 @@ Partial answers are never cached. A later call reaches the failing source again.
 
 Retrieve a standard by identifier (canonical or fuzzy).
 
-Resolves fuzzy inputs (such as `rfc9000` or `nist 800-53`) to their canonical form before fetching. With `fetch_full_text=True` and docling configured, downloads and converts the full text.
+Resolves fuzzy inputs (such as `rfc9000` or `nist 800-53 rev 5`) to their canonical form before fetching. With `fetch_full_text=True` and docling configured, downloads and converts the full text.
 
 With `fetch_full_text=True` the docling conversion takes minutes, so such a call returns a job handle to poll with `get_job_result` rather than the record itself. Without it, and on a cache hit, the record comes back directly.
 
 A conversion that fails still returns the record, with the reason in `full_text_error`; `full_text_url` is there to fetch by hand. No `full_text` and no `full_text_error` means none was on offer, or docling is not configured; neither is worth retrying.
-
-NIST SP and NISTIR publications are catalogued per revision, so an identifier with no revision, such as `NIST SP 800-53`, can come back `not_found` even though the publication exists. `search_standards` lists the revisions that are published.
 
 `not_found` means the source answered and holds no such standard: stop asking about that identifier. A lookup that never got an answer says so instead, as `rate_limited` (with `retryable`) or `upstream_error` with the status and what went wrong. Both are worth retrying: the standard may well exist.
 
@@ -3708,12 +3718,12 @@ Full text is returned in pages of at most 20,000 characters. When `next_offset` 
 
 **Parameters**
 
-| Name              | Type              | Default  | Description                                                                                  |
-| ----------------- | ----------------- | -------- | -------------------------------------------------------------------------------------------- |
-| `identifier`      | `string`          | required | Canonical or fuzzy standard identifier.                                                      |
-| `fetch_full_text` | `boolean`         | `false`  | If True and docling is configured, download and convert the full text PDF/HTML via docling.  |
-| `text_offset`     | `integer`         | `0`      | Character offset at which the full-text page starts.                                         |
-| `max_chars`       | `integer \| null` | `20000`  | Maximum full-text characters to return, capped at 20,000. Pass `null` for the complete text. |
+| Name              | Type              | Default  | Description                                                                                                                                                                                          |
+| ----------------- | ----------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `identifier`      | `string`          | required | Canonical or fuzzy standard identifier. NIST SP and NISTIR publications are catalogued per revision, so include it, as in `NIST SP 800-53 Rev. 5`; `search_standards` lists the published revisions. |
+| `fetch_full_text` | `boolean`         | `false`  | If True and docling is configured, download and convert the full text PDF/HTML via docling.                                                                                                          |
+| `text_offset`     | `integer`         | `0`      | Character offset at which the full-text page starts.                                                                                                                                                 |
+| `max_chars`       | `integer \| null` | `20000`  | Maximum full-text characters to return, capped at 20,000. Pass `null` for the complete text.                                                                                                         |
 
 **Returns**
 
@@ -4302,6 +4312,63 @@ OpenURL access links now carry the year of the work the DOI names, so a library 
 ### OpenURL year
 
 An OpenURL access link (`{openurl}`, `{openurl_0_1}` or `{openurl_hybrid}`) took its year from Semantic Scholar, which sometimes gives the year of an earlier version of the paper. For the 2017 Communications of the ACM reprint of a 2012 conference paper, the link said 2012 next to the 2017 volume and pages. A resolver that has to match a paper without a DOI by its metadata could then miss it. The link now takes the year from the paper's CrossRef record when it has one, and from Semantic Scholar otherwise ([#561](https://github.com/pvliesdonk/scholar-mcp/issues/561), [#562](https://github.com/pvliesdonk/scholar-mcp/pull/562)).
+
+## v3.1.2
+
+The PDF download tools now refuse hosts on the server's own network, for URLs a caller passes and URLs found in paper metadata alike, and a paper whose Semantic Scholar link fails now falls back to arXiv, PubMed Central and Unpaywall. Patent applicants and inventors are listed once per name format, and `recommend_books` and `get_book_excerpt` return plain mappings. Three tool payloads change shape and one setting is new; the upgrade steps are below.
+
+### Upgrading
+
+If your server downloads PDFs from a host on its own network, such as an intranet repository, set `SCHOLAR_MCP_PDF_FETCH_ALLOW_PRIVATE=true`. The same applies when the server reaches the internet only through an HTTP proxy and cannot resolve host names itself: the new check resolves every host before the request and refuses one it cannot resolve, so without the setting every download fails with `download_failed`. See [PDF downloads](#pdf-downloads).
+
+**Clients:** reconnect to pick up the changed tool surface. A client that parses these payloads needs a change:
+
+- `get_patent`, `batch_resolve` (its `patent` record) and `get_citing_patents`: `applicants` and `inventors` are objects with `original` and `standardised` lists, where they were flat lists of names (see [Patents](#patents)).
+- `recommend_books`: the result is `{"books": [...]}`, where it was a bare list.
+- `get_book_excerpt`: the structured content is the mapping itself, where it was a JSON string under `result`. The text content is unchanged.
+
+**State:** the cache, downloaded PDFs and converted Markdown are kept. Cached patent records that still hold the old flat applicant and inventor lists are dropped once at startup, so each such patent is fetched from EPO again on its next request.
+
+**Security posture:** tightened. `fetch_pdf_by_url`, `fetch_paper_pdf` and `fetch_and_convert` refuse a URL, or a redirect, whose host resolves to a loopback, private, link-local or other non-public address. `SCHOLAR_MCP_PDF_FETCH_ALLOW_PRIVATE=true` restores the previous behaviour.
+
+### PDF downloads
+
+#### Refusing hosts on the server's own network
+
+`fetch_pdf_by_url` downloads whatever URL its caller passes, and its caller is a model acting on prompts the operator does not see. Until now it followed that URL, and any redirect, to any address, so a caller could make the server request hosts on its own network: loopback, RFC 1918 ranges and link-local addresses such as cloud metadata endpoints ([#514](https://github.com/pvliesdonk/scholar-mcp/issues/514)). The paper download tools had the same gap one step removed, since a candidate URL from upstream metadata could redirect anywhere ([#573](https://github.com/pvliesdonk/scholar-mcp/issues/573)).
+
+All three download tools now resolve each host first and download only when every address it resolves to is a public internet address. A host with one public and one private address is refused, because the connection may use either. IPv6 addresses that carry an IPv4 address are judged by that IPv4 address. Redirects are followed one hop at a time, at most 10, and each hop is checked before it is requested ([#574](https://github.com/pvliesdonk/scholar-mcp/pull/574), [#589](https://github.com/pvliesdonk/scholar-mcp/pull/589)).
+
+- On `fetch_pdf_by_url`, a refused URL is an error that names the URL, or the redirect target, and asks for a publicly reachable URL instead.
+- On `fetch_paper_pdf` and `fetch_and_convert`, a refused candidate becomes a `download_failed` entry in `attempts`, whose `detail` names the refused URL, and the next source is tried.
+
+`SCHOLAR_MCP_PDF_FETCH_ALLOW_PRIVATE` (default `false`) turns the check off on all three tools ([configuration](https://pvliesdonk.github.io/scholar-mcp/3.1/reference/configuration/#pdf-conversion)). The check runs just before each request, not at connect time, so a host whose DNS answer changes between the two is not caught; pinning the address would mean bypassing a configured HTTP proxy. The [security model](https://pvliesdonk.github.io/scholar-mcp/3.1/security-model/index.md) states this limit.
+
+#### Alternative sources when the Semantic Scholar link fails
+
+`fetch_paper_pdf` and `fetch_and_convert` tried arXiv, PubMed Central and Unpaywall only when Semantic Scholar listed no open-access URL. When it listed one that served a landing page or an error, the call ended there: "The fallback chain is gated on the absence of the S2 URL, not on its failure" ([#568](https://github.com/pvliesdonk/scholar-mcp/issues/568)).
+
+Both tools now try the Semantic Scholar URL, then arXiv, PubMed Central and Unpaywall, until one serves a PDF. Unpaywall is queried only after the earlier sources failed, and still needs `SCHOLAR_MCP_CONTACT_EMAIL`. When every source fails, the response keeps its `error`, `detail` and `pdf_source` for the last source tried and adds `attempts`, one entry per source, so a caller can tell "no source known" (`no_oa_pdf`) from "every known source failed" ([#570](https://github.com/pvliesdonk/scholar-mcp/pull/570)). See [Alternative PDF sources](https://pvliesdonk.github.io/scholar-mcp/3.1/use/pdf-conversion/#alternative-pdf-sources).
+
+### Patents
+
+`get_patent` listed every applicant and inventor twice, once in each name format the patent office supplied: "`WO2024235369A1` lists 12 inventors for six people", so "A caller counting inventors, or matching a name against another source, gets doubled or mismatched results" ([#483](https://github.com/pvliesdonk/scholar-mcp/issues/483)). `applicants` and `inventors` are now objects with two lists, each naming every party once: `original`, the names as the office supplied them, and `standardised`, one standardised format. The two lists are not paired by position, because EPO does not guarantee that entries with the same sequence number name the same party. The shape appears wherever a patent record does: `get_patent`, `batch_resolve` and `get_citing_patents` ([#579](https://github.com/pvliesdonk/scholar-mcp/pull/579); see the [patent tool reference](https://pvliesdonk.github.io/scholar-mcp/3.1/reference/tools/patents/index.md)).
+
+`get_patent` for a number that does not exist raised a raw HTTP error naming the EPO URL, so "there is no `error` key for a caller to branch on" ([#475](https://github.com/pvliesdonk/scholar-mcp/issues/475)). It now answers `{"error": "patent_not_found"}`, the same answer it gave for an empty record ([#575](https://github.com/pvliesdonk/scholar-mcp/pull/575)).
+
+`search_patents` documented `limit` as at most 100 but sent any value to EPO ([#488](https://github.com/pvliesdonk/scholar-mcp/issues/488)). It now caps `limit` at 100, the most one EPO request returns, and its description says that EPO serves only the first 2,000 results of a search ([#578](https://github.com/pvliesdonk/scholar-mcp/pull/578)).
+
+### Smaller changes
+
+`recommend_books` and `get_book_excerpt` returned "a JSON string wrapped in an object rather than a mapping, so the caller receives double-encoded JSON" ([#370](https://github.com/pvliesdonk/scholar-mcp/issues/370)). Both now return a mapping; `recommend_books` wraps its list as `{"books": [...]}`, like `search_books` ([#583](https://github.com/pvliesdonk/scholar-mcp/pull/583); see the [book tool reference](https://pvliesdonk.github.io/scholar-mcp/3.1/reference/tools/books/index.md)).
+
+`find_bridge_papers` returned a path paper that was not in the cache as a bare `{"paperId": ...}` ([#485](https://github.com/pvliesdonk/scholar-mcp/issues/485)). It now fetches the missing records in one batch request, so every path entry has the record shape `get_paper` returns; a failed lookup marks the result `partial` ([#584](https://github.com/pvliesdonk/scholar-mcp/pull/584)).
+
+When Semantic Scholar throttles a call, the job handle's reason now tells the caller to keep polling, how long the result can take, that every client of the server shares one Semantic Scholar budget, and that an unfinished job has no answer yet rather than an empty one. The server instructions carry the shared budget too. The motivating report found that "a "searched, nothing found" list may contain searches that never finished" ([#569](https://github.com/pvliesdonk/scholar-mcp/issues/569), [#571](https://github.com/pvliesdonk/scholar-mcp/pull/571); see [background jobs](https://pvliesdonk.github.io/scholar-mcp/3.1/use/background-jobs/index.md)).
+
+`get_standard`'s description offered `nist 800-53` as an example, which returns `not_found` because NIST publications are catalogued per revision. The example is now `nist 800-53 rev 5` ([#481](https://github.com/pvliesdonk/scholar-mcp/issues/481), [#586](https://github.com/pvliesdonk/scholar-mcp/pull/586)).
+
+Concurrent book enrichment can no longer replace a cached author list with an empty one: the write that keeps existing authors is now a single statement ([#451](https://github.com/pvliesdonk/scholar-mcp/issues/451), [#587](https://github.com/pvliesdonk/scholar-mcp/pull/587)).
 # Contribute
 
 # Contribute

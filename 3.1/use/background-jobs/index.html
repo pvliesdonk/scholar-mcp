@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.8.0">
+      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.8.1">
     
     
       
@@ -2317,7 +2317,8 @@
 </code></pre></div>
 <p>Poll it with <a href="../../reference/tools/jobs/"><code>get_job_result</code></a>. Job records expire <code>SCHOLAR_MCP_JOBS_RESULT_TTL_S</code> after they're created (1 hour by default); settling a job doesn't extend that. Clients that use native MCP tasks get the same result through their task handle instead.</p>
 <h2 id="semantic-scholar-throttling">Semantic Scholar throttling<a class="headerlink" href="#semantic-scholar-throttling" title="Permanent link">&para;</a></h2>
-<p>When Semantic Scholar throttles a tool that calls it, a plain MCP call returns a handle straight away, with <code>"reason": "Semantic Scholar is throttling requests; work continues."</code> and a <code>retry_after_s</code> hint. The original work keeps going inside the job, and a graph walk resumes at the node it had reached. If Semantic Scholar keeps refusing, the job completes before its record expires with <code>{"error": "rate_limited", "retryable": true}</code>. Other HTTP errors from Semantic Scholar come back as the tool's usual error response.</p>
+<p>When Semantic Scholar throttles a tool that calls it, a plain MCP call returns a handle straight away, with a <code>retry_after_s</code> hint and a <code>reason</code> telling the caller to keep polling. The work may run for up to five sixths of <code>SCHOLAR_MCP_JOBS_RESULT_TTL_S</code> (about 50 minutes by default), and the reason gives that bound in minutes. It also says that a job still running means no answer yet, not an empty one. The original work keeps going inside the job, and a graph walk resumes at the node it had reached. If Semantic Scholar keeps refusing, the job completes before its record expires with <code>{"error": "rate_limited", "retryable": true}</code>. Other HTTP errors from Semantic Scholar come back as the tool's usual error response.</p>
+<p>Every client of the server shares one Semantic Scholar rate budget, because the server paces its requests and backs off as a single Semantic Scholar client, not per caller. Several agents searching in parallel through one server each wait longer; they don't finish sooner. The server's instructions say this at session start, so an agent can plan for it before the first throttle rather than learn it from a deferral.</p>
 <h2 id="epo-traffic-light">EPO traffic light<a class="headerlink" href="#epo-traffic-light" title="Permanent link">&para;</a></h2>
 <p>When EPO reports its traffic light amber or red, the patent tools wait for it to clear, so they often return a <code>job_id</code>. If it hasn't cleared by the time the retries run out, they answer with <code>{"error": "rate_limited", "retryable": true}</code> and a hint rather than failing with no explanation.</p>
 
@@ -2383,7 +2384,7 @@
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
         <script src="../../javascripts/config-wizard/wizard.js" type="module"></script>
       

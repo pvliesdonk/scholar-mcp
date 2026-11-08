@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.8.0">
+      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.8.1">
     
     
       
@@ -2532,7 +2532,7 @@ answer says so instead, as <code>rate_limited</code> (with <code>retryable</code
 </tbody>
 </table>
 <p><strong>Returns</strong></p>
-<p>JSON with excerpt, description, preview availability, and link.</p>
+<p>A mapping with excerpt, description, preview availability, and link.</p>
 <p>Example return::</p>
 <div class="highlight"><pre><span></span><code>{"excerpt": "...", "description": "...", "source": "`google_books`",
  "`preview_available`": true, "`preview_link`": "https://..."}
@@ -2585,9 +2585,10 @@ topic, sorted by edition count (a proxy for popularity).</p>
 </tbody>
 </table>
 <p><strong>Returns</strong></p>
-<p>JSON list of book records sorted by popularity.</p>
+<p><code>{"books": [...]}</code>, book records sorted by popularity; the list
+is empty when Open Library knows no such subject.</p>
 <!-- DOMAIN-EXAMPLE-recommend_books-START -->
-<p>Each record has the same shape as <code>search_books</code> results, with fields populated from the Open Library subject API (title, authors, Open Library work ID, cover URL). ISBN and edition fields are <code>null</code> since subject results are work-level.</p>
+<p>The response is <code>{"books": [...]}</code>, the same wrapper <code>search_books</code> uses; an unknown subject gives <code>{"books": []}</code>. Each record has the same shape as <code>search_books</code> results, with fields populated from the Open Library subject API (title, authors, Open Library work ID, cover URL). ISBN and edition fields are <code>null</code> since subject results are work-level.</p>
 <p>Results are cached for 7 days, keyed by the normalized subject slug. Up to 50 results are fetched and cached; the <code>limit</code> parameter slices the cached pool on return.</p>
 <!-- DOMAIN-EXAMPLE-recommend_books-END -->
 
@@ -2653,7 +2654,7 @@ topic, sorted by edition count (a proxy for popularity).</p>
       <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
     
     
-      <script src="../../../assets/javascripts/bundle.c21346df.min.js"></script>
+      <script src="../../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
         <script src="../../../javascripts/config-wizard/wizard.js" type="module"></script>
       

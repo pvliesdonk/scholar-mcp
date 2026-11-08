@@ -116,7 +116,7 @@ An `error` of `not_found` means Google Books answered and has no such volume: st
 
 **Returns**
 
-JSON with excerpt, description, preview availability, and link.
+A mapping with excerpt, description, preview availability, and link.
 
 Example return::
 
@@ -160,8 +160,8 @@ Uses the Open Library subject API to find popular books on a topic, sorted by ed
 
 **Returns**
 
-JSON list of book records sorted by popularity.
+`{"books": [...]}`, book records sorted by popularity; the list is empty when Open Library knows no such subject.
 
-Each record has the same shape as `search_books` results, with fields populated from the Open Library subject API (title, authors, Open Library work ID, cover URL). ISBN and edition fields are `null` since subject results are work-level.
+The response is `{"books": [...]}`, the same wrapper `search_books` uses; an unknown subject gives `{"books": []}`. Each record has the same shape as `search_books` results, with fields populated from the Open Library subject API (title, authors, Open Library work ID, cover URL). ISBN and edition fields are `null` since subject results are work-level.
 
 Results are cached for 7 days, keyed by the normalized subject slug. Up to 50 results are fetched and cached; the `limit` parameter slices the cached pool on return.

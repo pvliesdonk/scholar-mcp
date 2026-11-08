@@ -10,6 +10,8 @@ Search for patents in the European Patent Office database.
 
 Covers European patents and global patents via INPADOC (100+ patent offices). At least one parameter must be provided. For keyword search, `query` searches titles and abstracts. To find all patents by an inventor or applicant, omit `query` and use only the structured filters. For academic paper search, use `search_papers` instead.
 
+Returns at most 100 patents per call; a larger `limit` is capped at 100, so page further with `offset`. EPO serves only the first 2,000 results of a search, so narrow the query rather than paging past them.
+
 When EPO reports itself busy this waits for it to clear, which can take a few minutes, so the call may answer with a job handle to poll using `get_job_result` rather than the result itself. Do not reason about EPO throttle states yourself.
 
 **Parameters**
@@ -24,7 +26,7 @@ When EPO reports itself busy this waits for it to clear, which can take a few mi
 | `date_to`            | `string \| null`                    | `null`          | Latest date (`YYYY-MM-DD`).                                                                                                      |
 | `date_type`          | `publication \| filing \| priority` | `"publication"` | Date field to apply the range to: `"publication"`, `"filing"` or `"priority"`.                                                   |
 | `jurisdiction`       | `string \| null`                    | `null`          | Restrict to a single patent authority, such as `"EP"`, `"WO"` or `"US"`.                                                         |
-| `limit`              | `integer`                           | `10`            | Maximum results to return (default 10).                                                                                          |
+| `limit`              | `integer`                           | `10`            | Maximum results to return (default 10, max 100).                                                                                 |
 | `offset`             | `integer`                           | `0`             | Pagination offset (0-based).                                                                                                     |
 
 **Returns**
@@ -71,6 +73,8 @@ A mapping with `patent_number` (normalised DOCDB format) and the requested secti
 
 `country` is the contracting state a legal event concerns. EPO sends it only on the event types that name one, such as `PG25` (lapsed in a state), `REG` and `PGFP`, so it is an empty string on the rest. It is what distinguishes the otherwise identical `PG25` events a patent accumulates as it lapses state by state.
 
+`applicants` and `inventors` each hold two lists. `original` is the names as the patent office supplied them. `standardised` is EPO's standardised spelling, upper-case and often with a country suffix. Each list names every party once. The lists aren't paired: EPO doesn't guarantee that the same position in both names the same party. Either list can be empty when EPO sends no name in that form.
+
 Sections are fetched concurrently where possible (cache lookups run in parallel; EPO API calls are serialised by the client). Each section is cached independently with appropriate TTLs.
 
 A response has keys matching the requested sections:
@@ -81,8 +85,11 @@ A response has keys matching the requested sections:
   "biblio": {
     "title": "...",
     "abstract": "...",
-    "applicants": ["..."],
-    "inventors": ["..."],
+    "applicants": {
+      "original": ["Koninklijke Philips N.V."],
+      "standardised": ["KONINKLIJKE PHILIPS NV [NL]"]
+    },
+    "inventors": {"original": ["..."], "standardised": ["..."]},
     "publication_number": "EP.1234567.A1",
     "publication_date": "2020-01-15",
     "filing_date": "2019-06-01",

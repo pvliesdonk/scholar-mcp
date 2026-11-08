@@ -38,12 +38,12 @@ INFO scholar_mcp.domain: docling_configured url=http://localhost:5001
 
 Four tools are available once configured:
 
-| Tool                      | What it does                                                         |
-| ------------------------- | -------------------------------------------------------------------- |
-| `fetch_paper_pdf`         | Downloads the PDF for a paper (tries OA, then ArXiv/PMC/Unpaywall)   |
-| `convert_pdf_to_markdown` | Converts a local PDF file to Markdown                                |
-| `fetch_and_convert`       | Full pipeline: looks up the paper and downloads and converts its PDF |
-| `fetch_pdf_by_url`        | Downloads a PDF from any URL and optionally converts to Markdown     |
+| Tool                      | What it does                                                          |
+| ------------------------- | --------------------------------------------------------------------- |
+| `fetch_paper_pdf`         | Downloads the PDF for a paper (tries OA, then ArXiv/PMC/Unpaywall)    |
+| `convert_pdf_to_markdown` | Converts a local PDF file to Markdown                                 |
+| `fetch_and_convert`       | Full pipeline: looks up the paper and downloads and converts its PDF  |
+| `fetch_pdf_by_url`        | Downloads a PDF from a public URL and optionally converts to Markdown |
 
 PDFs are stored in `$SCHOLAR_MCP_CACHE_DIR/pdfs/` and Markdown files in `$SCHOLAR_MCP_CACHE_DIR/md/`.
 
@@ -128,15 +128,15 @@ A cached result needs no job. An already-downloaded PDF is never fetched twice, 
 
 ## Alternative PDF sources
 
-When a paper has no open-access PDF URL in Semantic Scholar, `fetch_paper_pdf` and `fetch_and_convert` automatically try alternative sources:
+When a paper has no open-access PDF URL in Semantic Scholar, or that URL fails or serves a landing page instead of a PDF, `fetch_paper_pdf` and `fetch_and_convert` try alternative sources one after another and stop at the first one that serves a PDF:
 
 1. **ArXiv**, If the paper has an `externalIds.ArXiv` field, the PDF is fetched from `arxiv.org/pdf/<id>.pdf`.
 1. **PubMed Central**, If the paper has a `PubMedCentral` external ID, the PDF is fetched from NCBI.
 1. **Unpaywall**, If the paper has a DOI and `SCHOLAR_MCP_CONTACT_EMAIL` is set, the [Unpaywall API](https://unpaywall.org/products/api) is queried for an OA PDF location.
 
-The `source` field in the response indicates where the PDF came from: `s2_oa`, `arxiv`, `pmc`, or `unpaywall`.
+The `source` field in the response indicates where the PDF came from: `s2_oa`, `arxiv`, `pmc`, or `unpaywall`. When no source serves a PDF, `error` and `pdf_source` describe the last source tried, and `attempts` lists every source in order with its URL, error and detail. Unpaywall is only queried once the sources before it have failed.
 
-For PDFs found through other means (author homepages, institutional repositories, etc.), use `fetch_pdf_by_url` with the direct URL.
+For PDFs found through other means (author homepages, institutional repositories, etc.), use `fetch_pdf_by_url` with the direct URL. By default it refuses URLs and redirects that lead to a loopback, private or link-local address. `fetch_paper_pdf` and `fetch_and_convert` apply the same check to the URLs they find in paper metadata, and move on to the next source when one is refused. An operator who needs to fetch from an intranet repository sets `SCHOLAR_MCP_PDF_FETCH_ALLOW_PRIVATE=true`.
 
 Enable Unpaywall
 

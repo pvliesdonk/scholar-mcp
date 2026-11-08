@@ -58,13 +58,11 @@ Partial answers are never cached. A later call reaches the failing source again.
 
 Retrieve a standard by identifier (canonical or fuzzy).
 
-Resolves fuzzy inputs (such as `rfc9000` or `nist 800-53`) to their canonical form before fetching. With `fetch_full_text=True` and docling configured, downloads and converts the full text.
+Resolves fuzzy inputs (such as `rfc9000` or `nist 800-53 rev 5`) to their canonical form before fetching. With `fetch_full_text=True` and docling configured, downloads and converts the full text.
 
 With `fetch_full_text=True` the docling conversion takes minutes, so such a call returns a job handle to poll with `get_job_result` rather than the record itself. Without it, and on a cache hit, the record comes back directly.
 
 A conversion that fails still returns the record, with the reason in `full_text_error`; `full_text_url` is there to fetch by hand. No `full_text` and no `full_text_error` means none was on offer, or docling is not configured; neither is worth retrying.
-
-NIST SP and NISTIR publications are catalogued per revision, so an identifier with no revision, such as `NIST SP 800-53`, can come back `not_found` even though the publication exists. `search_standards` lists the revisions that are published.
 
 `not_found` means the source answered and holds no such standard: stop asking about that identifier. A lookup that never got an answer says so instead, as `rate_limited` (with `retryable`) or `upstream_error` with the status and what went wrong. Both are worth retrying: the standard may well exist.
 
@@ -72,12 +70,12 @@ Full text is returned in pages of at most 20,000 characters. When `next_offset` 
 
 **Parameters**
 
-| Name              | Type              | Default  | Description                                                                                  |
-| ----------------- | ----------------- | -------- | -------------------------------------------------------------------------------------------- |
-| `identifier`      | `string`          | required | Canonical or fuzzy standard identifier.                                                      |
-| `fetch_full_text` | `boolean`         | `false`  | If True and docling is configured, download and convert the full text PDF/HTML via docling.  |
-| `text_offset`     | `integer`         | `0`      | Character offset at which the full-text page starts.                                         |
-| `max_chars`       | `integer \| null` | `20000`  | Maximum full-text characters to return, capped at 20,000. Pass `null` for the complete text. |
+| Name              | Type              | Default  | Description                                                                                                                                                                                          |
+| ----------------- | ----------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `identifier`      | `string`          | required | Canonical or fuzzy standard identifier. NIST SP and NISTIR publications are catalogued per revision, so include it, as in `NIST SP 800-53 Rev. 5`; `search_standards` lists the published revisions. |
+| `fetch_full_text` | `boolean`         | `false`  | If True and docling is configured, download and convert the full text PDF/HTML via docling.                                                                                                          |
+| `text_offset`     | `integer`         | `0`      | Character offset at which the full-text page starts.                                                                                                                                                 |
+| `max_chars`       | `integer \| null` | `20000`  | Maximum full-text characters to return, capped at 20,000. Pass `null` for the complete text.                                                                                                         |
 
 **Returns**
 

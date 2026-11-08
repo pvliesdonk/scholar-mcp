@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.8.0">
+      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.8.1">
     
     
       
@@ -2345,9 +2345,10 @@
 <p><strong>Fetch Paper PDF.</strong> Changes state, not destructive. Reaches outside the server. Tags: <code>write</code>.</p>
 <p>Download the PDF of a paper.</p>
 <p>Tries the Semantic Scholar open-access URL first. When that is
-unavailable, automatically checks alternative sources: ArXiv
-(from <code>externalIds</code>), PubMed Central, and Unpaywall (by DOI,
-requires <code>SCHOLAR_MCP_CONTACT_EMAIL</code>).</p>
+missing, fails or serves something other than a PDF, it tries
+alternative sources, one after another: ArXiv (from <code>externalIds</code>), PubMed
+Central, and Unpaywall (by DOI, requires <code>SCHOLAR_MCP_CONTACT_EMAIL</code>).
+A failure lists every source tried under <code>attempts</code>.</p>
 <p>Skips download if the file already exists locally, which answers
 immediately; a fresh download usually takes 10-30 seconds and may
 be returned as a background job handle instead.</p>
@@ -2454,7 +2455,8 @@ document in one response.</p>
 <p><strong>Fetch and Convert Paper.</strong> Changes state, not destructive. Reaches outside the server. Tags: <code>write</code>.</p>
 <p>Resolve a paper, download its PDF, and convert to Markdown.</p>
 <p>Tries the Semantic Scholar open-access URL first, then alternative
-sources (ArXiv, PubMed Central, Unpaywall). Each stage fails
+sources (ArXiv, PubMed Central, Unpaywall) until one serves a PDF;
+a failure lists every source tried under <code>attempts</code>. Each stage fails
 gracefully: metadata is always returned if the paper resolves,
 even if PDF download or conversion fails.</p>
 <p>The full pipeline typically takes 1-5 minutes, so expect a
@@ -2664,7 +2666,7 @@ not converted. This header check does not validate the complete PDF structure.</
       <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
     
     
-      <script src="../../../assets/javascripts/bundle.c21346df.min.js"></script>
+      <script src="../../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
         <script src="../../../javascripts/config-wizard/wizard.js" type="module"></script>
       

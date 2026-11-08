@@ -148,6 +148,8 @@ A response looks like:
 }
 ```
 
+Every entry is a full paper record, the shape `get_paper` returns. A paper missing from the cache is looked up and cached. An entry is a bare `{"paperId": "..."}` only when Semantic Scholar doesn't know the paper, or when the lookup failed. A failed lookup makes the result partial, with `path metadata` named in `warning`.
+
 If no path exists within `max_depth`, `path` is absent.
 
 Partial searches
