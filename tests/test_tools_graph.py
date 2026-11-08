@@ -200,10 +200,23 @@ async def test_get_citation_graph_max_nodes_cap(
     assert data["stats"]["total_nodes"] <= 2
 
 
+def _mock_path_batch(respx_mock: respx.MockRouter) -> respx.Route:
+    """Answer the path-record batch lookup with one titled record per id."""
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        ids = json.loads(request.content)["ids"]
+        return httpx.Response(
+            200, json=[{"paperId": pid, "title": f"Title {pid}"} for pid in ids]
+        )
+
+    return respx_mock.post("/paper/batch").mock(side_effect=answer)
+
+
 @pytest.mark.respx(base_url=S2_BASE)
 async def test_find_bridge_papers_direct(
     respx_mock: respx.MockRouter, mcp: FastMCP
 ) -> None:
+    _mock_path_batch(respx_mock)
     respx_mock.get("/paper/p1/references").mock(
         return_value=httpx.Response(
             200,
@@ -574,6 +587,7 @@ async def test_find_bridge_papers_citations_direction(
     respx_mock: respx.MockRouter, mcp: FastMCP
 ) -> None:
     """find_bridge_papers with direction=citations uses citation expansion."""
+    _mock_path_batch(respx_mock)
     respx_mock.get("/paper/p1/citations").mock(
         return_value=httpx.Response(
             200,
@@ -605,6 +619,7 @@ async def test_find_bridge_papers_both_direction(
     respx_mock: respx.MockRouter, mcp: FastMCP
 ) -> None:
     """find_bridge_papers with direction=both expands citations and references."""
+    _mock_path_batch(respx_mock)
     # references returns empty, citations finds the target
     respx_mock.get("/paper/p1/references").mock(
         return_value=httpx.Response(200, json={"data": []})
@@ -643,6 +658,7 @@ async def test_find_bridge_papers_retries_on_429(
     respx_mock: respx.MockRouter, mcp: FastMCP
 ) -> None:
     """A 429 is retried in-client; the path still comes back."""
+    _mock_path_batch(respx_mock)
     call_count = 0
 
     def _side_effect(request: httpx.Request) -> httpx.Response:  # noqa: ARG001
@@ -732,6 +748,7 @@ async def test_find_bridge_papers_multi_hop_with_cached_paper(
     respx_mock: respx.MockRouter, mcp: FastMCP, service: Service
 ) -> None:
     """find_bridge_papers finds a 2-hop path; intermediate paper uses cache."""
+    _mock_path_batch(respx_mock)
     # Pre-cache paper "mid" so line 417 (cached_paper branch) is hit
     await service.cache.set_paper(
         "mid", {"paperId": "mid", "title": "Middle Paper", "year": 2021}
@@ -782,6 +799,7 @@ async def test_find_bridge_papers_max_depth_exceeded(
     respx_mock: respx.MockRouter, mcp: FastMCP
 ) -> None:
     """find_bridge_papers stops expanding when max_depth is exceeded (line 407)."""
+    _mock_path_batch(respx_mock)
     # p1 -> mid at depth 1, mid -> p2 at depth 2, but max_depth=1 blocks it
     respx_mock.get("/paper/p1/references").mock(
         return_value=httpx.Response(
@@ -2211,6 +2229,7 @@ async def test_find_bridge_papers_flags_partiality_on_a_found_path(
     respx_mock: respx.MockRouter, mcp: FastMCP
 ) -> None:
     """A path found while another branch failed is not guaranteed shortest."""
+    _mock_path_batch(respx_mock)
     respx_mock.get("/paper/p1/references").mock(
         return_value=httpx.Response(
             200, json={"data": [{"citedPaper": {"paperId": "p2"}}]}
@@ -2263,8 +2282,13 @@ async def test_get_citation_graph_malformed_seed_response_is_not_partial(
 async def test_find_bridge_papers_cached_neighbours_report_no_failure(
     respx_mock: respx.MockRouter, mcp: FastMCP, service: Service
 ) -> None:
-    """A cached neighbour list makes no upstream call and no partiality claim."""
+    """A cached neighbour list makes no upstream call and no partiality claim.
+
+    The path papers are cached too, so their records need no lookup either.
+    """
     await service.cache.set_references("p1", ["p2"])
+    await service.cache.set_paper("p1", {"paperId": "p1", "title": "Source"})
+    await service.cache.set_paper("p2", {"paperId": "p2", "title": "Target"})
     async with Client(mcp) as client:
         result = await client.call_tool(
             "find_bridge_papers",
@@ -2388,3 +2412,69 @@ async def test_graph_page_clamps_limit_to_s2_maximum(
     async with Client(mcp) as client:
         await client.call_tool(tool, {"identifier": "p1", "limit": requested})
     assert route.calls.last.request.url.params["limit"] == str(sent)
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_find_bridge_papers_fetches_uncached_path_records(
+    respx_mock: respx.MockRouter, mcp: FastMCP, service: Service
+) -> None:
+    """An uncached path paper is fetched and cached, not returned bare (#485)."""
+    await service.cache.set_references("p1", ["p2"])
+    await service.cache.set_paper("p1", {"paperId": "p1", "title": "Source"})
+    batch = _mock_path_batch(respx_mock)
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "find_bridge_papers",
+            {"source_id": "p1", "target_id": "p2", "direction": "references"},
+        )
+    data = json.loads(result.content[0].text)
+    assert data["path"] == [
+        {"paperId": "p1", "title": "Source"},
+        {"paperId": "p2", "title": "Title p2"},
+    ]
+    assert data["partial"] is False
+    # Only the miss is asked for, and it is cached for the next caller.
+    assert json.loads(batch.calls.last.request.content) == {"ids": ["p2"]}
+    assert await service.cache.get_paper("p2") == {
+        "paperId": "p2",
+        "title": "Title p2",
+    }
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_find_bridge_papers_unknown_path_paper_stays_bare(
+    respx_mock: respx.MockRouter, mcp: FastMCP, service: Service
+) -> None:
+    """A paper S2 does not know stays a bare id and is not a failure."""
+    await service.cache.set_references("p1", ["p2"])
+    respx_mock.post("/paper/batch").mock(
+        return_value=httpx.Response(200, json=[None, None])
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "find_bridge_papers",
+            {"source_id": "p1", "target_id": "p2", "direction": "references"},
+        )
+    data = json.loads(result.content[0].text)
+    assert data["path"] == [{"paperId": "p1"}, {"paperId": "p2"}]
+    assert data["partial"] is False
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_find_bridge_papers_failed_path_lookup_is_partial(
+    respx_mock: respx.MockRouter, mcp: FastMCP, service: Service
+) -> None:
+    """A failed record lookup keeps the path but marks the result partial."""
+    await service.cache.set_references("p1", ["p2"])
+    respx_mock.post("/paper/batch").mock(return_value=httpx.Response(500))
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "find_bridge_papers",
+            {"source_id": "p1", "target_id": "p2", "direction": "references"},
+        )
+    data = json.loads(result.content[0].text)
+    assert data["found"] is True
+    assert data["path"] == [{"paperId": "p1"}, {"paperId": "p2"}]
+    assert data["partial"] is True
+    assert data["failed_requests"] == 1
+    assert "path metadata" in data["warning"]
