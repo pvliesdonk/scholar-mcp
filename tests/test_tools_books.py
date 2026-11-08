@@ -496,11 +496,16 @@ async def test_recommend_books_returns_results(
         result = await client.call_tool(
             "recommend_books", {"subject": "machine learning"}
         )
-    data = json.loads(result.content[0].text)
-    assert len(data) == 2
-    assert data[0]["title"] == "Pattern Recognition"
-    assert data[0]["authors"] == ["Christopher Bishop"]
-    assert data[0]["openlibrary_work_id"] == "OL8173450W"
+    # The structured result is the mapping itself, not a JSON string under
+    # "result" (#370).
+    data = result.structured_content
+    assert data is not None
+    assert set(data) == {"books"}
+    books = data["books"]
+    assert len(books) == 2
+    assert books[0]["title"] == "Pattern Recognition"
+    assert books[0]["authors"] == ["Christopher Bishop"]
+    assert books[0]["openlibrary_work_id"] == "OL8173450W"
 
 
 @pytest.mark.respx(base_url=OL_BASE)
@@ -528,8 +533,31 @@ async def test_recommend_books_empty_subject(
     )
     async with Client(mcp) as client:
         result = await client.call_tool("recommend_books", {"subject": "nonexistent"})
-    data = json.loads(result.content[0].text)
-    assert data == []
+    assert result.structured_content == {"books": []}
+
+
+async def test_recommend_books_serves_the_cache_as_a_mapping(
+    mcp: FastMCP, service: Service
+) -> None:
+    """A cache hit is sliced to limit and wrapped like a fresh result."""
+    await service.cache.set_book_subject(
+        "algorithms", [{"title": "A"}, {"title": "B"}, {"title": "C"}]
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "recommend_books", {"subject": "algorithms", "limit": 2}
+        )
+    assert result.structured_content == {"books": [{"title": "A"}, {"title": "B"}]}
+
+
+@pytest.mark.respx(base_url=OL_BASE)
+async def test_recommend_books_upstream_failure_is_an_empty_mapping(
+    respx_mock: respx.MockRouter, mcp: FastMCP
+) -> None:
+    respx_mock.get("/subjects/algorithms.json").mock(return_value=httpx.Response(500))
+    async with Client(mcp) as client:
+        result = await client.call_tool("recommend_books", {"subject": "algorithms"})
+    assert result.structured_content == {"books": []}
 
 
 COVERS_BASE = "https://covers.openlibrary.org"
@@ -705,7 +733,10 @@ async def test_get_book_excerpt_returns_data(
     )
     async with Client(mcp) as client:
         result = await client.call_tool("get_book_excerpt", {"isbn": "9780201633610"})
-    data = json.loads(result.content[0].text)
+    # The structured result is the mapping itself, not a JSON string under
+    # "result" (#370).
+    data = result.structured_content
+    assert data is not None
     assert data["source"] == "google_books"
     assert data["excerpt"] == "Gang of Four patterns explained."
     assert data["description"] == "A classic software engineering book."
@@ -723,9 +754,10 @@ async def test_get_book_excerpt_not_found(
     )
     async with Client(mcp) as client:
         result = await client.call_tool("get_book_excerpt", {"isbn": "0000000000000"})
-    data = json.loads(result.content[0].text)
-    assert data["error"] == "not_found"
-    assert data["isbn"] == "0000000000000"
+    assert result.structured_content == {
+        "error": "not_found",
+        "isbn": "0000000000000",
+    }
 
 
 @pytest.mark.respx(base_url=GB_BASE)
@@ -736,10 +768,11 @@ async def test_get_book_excerpt_reports_rate_limit_not_absence(
     respx_mock.get("/volumes").mock(return_value=httpx.Response(429))
     async with Client(mcp) as client:
         result = await client.call_tool("get_book_excerpt", {"isbn": "9780201633610"})
-    data = json.loads(result.content[0].text)
-    assert data["error"] == "rate_limited"
-    assert data["isbn"] == "9780201633610"
-    assert data["retryable"] is True
+    assert result.structured_content == {
+        "error": "rate_limited",
+        "isbn": "9780201633610",
+        "retryable": True,
+    }
 
 
 @pytest.mark.respx(base_url=GB_BASE)
@@ -750,10 +783,11 @@ async def test_get_book_excerpt_reports_upstream_error_not_absence(
     respx_mock.get("/volumes").mock(return_value=httpx.Response(500))
     async with Client(mcp) as client:
         result = await client.call_tool("get_book_excerpt", {"isbn": "9780201633610"})
-    data = json.loads(result.content[0].text)
-    assert data["error"] == "upstream_error"
-    assert data["status"] == 500
-    assert data["isbn"] == "9780201633610"
+    assert result.structured_content == {
+        "error": "upstream_error",
+        "isbn": "9780201633610",
+        "status": 500,
+    }
 
 
 @pytest.mark.respx(base_url=GB_BASE)
@@ -764,9 +798,11 @@ async def test_get_book_excerpt_reports_transport_error_not_absence(
     respx_mock.get("/volumes").mock(side_effect=httpx.ConnectError("boom"))
     async with Client(mcp) as client:
         result = await client.call_tool("get_book_excerpt", {"isbn": "9780201633610"})
-    data = json.loads(result.content[0].text)
-    assert data["error"] == "upstream_error"
-    assert data["status"] is None
+    assert result.structured_content == {
+        "error": "upstream_error",
+        "isbn": "9780201633610",
+        "status": None,
+    }
 
 
 @pytest.mark.respx(base_url=GB_BASE)
