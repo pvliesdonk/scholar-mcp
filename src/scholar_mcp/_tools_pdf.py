@@ -71,6 +71,38 @@ def _cached_pdf_is_valid(path: Path) -> bool:
     return _pdf_cache_identity(opened) == _pdf_cache_identity(current) and has_header
 
 
+def _pdf_identity(path: Path) -> tuple[int, int, int, int, int] | None:
+    """Return *path*'s cache identity, or ``None`` when it does not exist."""
+    try:
+        return _pdf_cache_identity(path.stat())
+    except FileNotFoundError:
+        return None
+
+
+async def _cache_markdown(
+    md_path: Path,
+    markdown: str,
+    pdf_path: Path,
+    identity: tuple[int, int, int, int, int] | None,
+) -> None:
+    """Cache *markdown* unless *pdf_path* changed while it was converted.
+
+    ``create_upload_link(replace=true)`` deletes a paper's PDF and Markdown
+    (#546). A conversion already running would otherwise write the old
+    document's text afterwards, and it would be served for the right PDF.
+
+    Args:
+        md_path: Where the Markdown is cached.
+        markdown: The converted text.
+        pdf_path: The PDF it was converted from.
+        identity: ``_pdf_identity(pdf_path)`` taken before the PDF was read.
+    """
+    if await asyncio.to_thread(_pdf_identity, pdf_path) != identity:
+        logger.info("md_cache_skipped reason=pdf_changed path=%s", pdf_path)
+        return
+    await asyncio.to_thread(md_path.write_text, markdown, encoding="utf-8")
+
+
 def _write_pdf_cache(path: Path, content: bytes) -> None:
     """Publish a verified download atomically so readers never see partial bytes."""
     temporary_path = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
@@ -430,6 +462,7 @@ async def convert_pdf_to_markdown(
             max_chars=max_chars,
         )
 
+    identity = await asyncio.to_thread(_pdf_identity, path)
     pdf_bytes = await asyncio.to_thread(path.read_bytes)
     try:
         markdown = await docling.convert(pdf_bytes, path.name, use_vlm=use_vlm)
@@ -438,7 +471,7 @@ async def convert_pdf_to_markdown(
         return {"error": "docling_error", "detail": str(exc)}
 
     md_dir.mkdir(parents=True, exist_ok=True)
-    await asyncio.to_thread(md_path.write_text, markdown, encoding="utf-8")
+    await _cache_markdown(md_path, markdown, path, identity)
     return page_text(
         {
             "markdown": markdown,
@@ -452,7 +485,9 @@ async def convert_pdf_to_markdown(
     )
 
 
-async def _upload_hint(ctx: Context, identifier: str) -> dict[str, str]:
+async def _upload_hint(
+    ctx: Context, service: Service, identifier: str
+) -> dict[str, str]:
     """Point a failed fetch at create_upload_link, when this server offers it.
 
     The tool is registered only on an HTTP deployment with a public URL, and
@@ -461,7 +496,8 @@ async def _upload_hint(ctx: Context, identifier: str) -> dict[str, str]:
     """
     from ._tools_upload import UPLOAD_TOOL  # imports this module
 
-    if await ctx.fastmcp.get_tool(UPLOAD_TOOL) is None:
+    # The tool refuses without docling, so naming it then is a dead end.
+    if service.docling is None or await ctx.fastmcp.get_tool(UPLOAD_TOOL) is None:
         return {}
     return {
         "upload": (
@@ -528,7 +564,11 @@ async def fetch_and_convert(
 
     fetched = await _ensure_paper_pdf(service, paper, identifier)
     if isinstance(fetched, dict):
-        return {"metadata": paper, **fetched, **await _upload_hint(ctx, identifier)}
+        return {
+            "metadata": paper,
+            **fetched,
+            **await _upload_hint(ctx, service, identifier),
+        }
     pdf_path, pdf_source = fetched
 
     docling = service.docling
@@ -550,6 +590,7 @@ async def fetch_and_convert(
         logger.debug("md_cache_hit path=%s", md_path)
     else:
         try:
+            identity = await asyncio.to_thread(_pdf_identity, pdf_path)
             pdf_bytes_for_convert = await asyncio.to_thread(pdf_path.read_bytes)
             markdown = await docling.convert(
                 pdf_bytes_for_convert, pdf_path.name, use_vlm=use_vlm
@@ -562,7 +603,7 @@ async def fetch_and_convert(
                 "error": "conversion_failed",
                 "detail": str(exc),
             }
-        await asyncio.to_thread(md_path.write_text, markdown, encoding="utf-8")
+        await _cache_markdown(md_path, markdown, pdf_path, identity)
 
     return page_text(
         {
@@ -712,6 +753,7 @@ async def fetch_pdf_by_url(
         markdown = await asyncio.to_thread(md_path.read_text, encoding="utf-8")
     else:
         try:
+            identity = await asyncio.to_thread(_pdf_identity, pdf_path)
             pdf_bytes = await asyncio.to_thread(pdf_path.read_bytes)
             markdown = await docling.convert(pdf_bytes, pdf_path.name, use_vlm=use_vlm)
         except Exception as exc:
@@ -721,7 +763,7 @@ async def fetch_pdf_by_url(
                 "error": "conversion_failed",
                 "detail": str(exc),
             }
-        await asyncio.to_thread(md_path.write_text, markdown, encoding="utf-8")
+        await _cache_markdown(md_path, markdown, pdf_path, identity)
 
     return page_text(
         {

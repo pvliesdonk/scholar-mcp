@@ -345,3 +345,12 @@ def test_jobs_for_requires_register_tools() -> None:
 
     with pytest.raises(RuntimeError, match="register_tools"):
         jobs_for(FastMCP("bare"))
+
+
+async def test_no_pdf_payload_silent_without_docling(
+    http_server_no_docling: FastMCP,
+) -> None:
+    # create_upload_link refuses without docling, so naming it is a dead end.
+    data = await _fetch_without_pdf(http_server_no_docling)
+    assert data["error"] == "no_oa_pdf"
+    assert "upload" not in data

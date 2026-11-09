@@ -1972,3 +1972,53 @@ async def test_fetch_paper_pdf_unresolvable_candidate_is_download_failed(
     data = json.loads(result.content[0].text)
     assert data["error"] == "download_failed"
     assert data["pdf_source"] == "s2_oa"
+
+
+async def test_fetch_and_convert_skips_markdown_cache_when_pdf_replaced(
+    service_with_docling: Service, slow_jobs: Jobs
+) -> None:
+    """A PDF removed during conversion (replace=true, #546) leaves no Markdown.
+
+    Otherwise the old document's text would be cached under the paper and
+    served once the right PDF is uploaded.
+    """
+    pdf_dir = service_with_docling.config.cache_dir / "pdfs"
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+    pdf_path = pdf_dir / "r1.pdf"
+    pdf_path.write_bytes(b"%PDF-1.7 wrong paper")
+
+    async def convert_while_replaced(*_args: Any, **_kwargs: Any) -> str:
+        pdf_path.unlink()
+        return "# Wrong paper"
+
+    service_with_docling.docling.convert = convert_while_replaced  # type: ignore[union-attr,method-assign]
+    with respx.mock(assert_all_called=False) as router:
+        router.get(f"{S2_BASE}/paper/r1").mock(
+            return_value=httpx.Response(
+                200, json={"paperId": "r1", "openAccessPdf": None, "externalIds": {}}
+            )
+        )
+        async with Client(pdf_app(service_with_docling, slow_jobs)) as client:
+            await client.call_tool("fetch_and_convert", {"identifier": "r1"})
+
+    assert not (service_with_docling.config.cache_dir / "md" / "r1.md").exists()
+
+
+async def test_convert_skips_markdown_cache_when_pdf_replaced(
+    service_with_docling: Service, slow_jobs: Jobs
+) -> None:
+    """convert_pdf_to_markdown caches nothing for a PDF replaced mid-conversion."""
+    pdf_dir = service_with_docling.config.cache_dir / "pdfs"
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+    pdf_path = pdf_dir / "r2.pdf"
+    pdf_path.write_bytes(b"%PDF-1.7 wrong paper")
+
+    async def convert_while_replaced(*_args: Any, **_kwargs: Any) -> str:
+        pdf_path.unlink()
+        return "# Wrong paper"
+
+    service_with_docling.docling.convert = convert_while_replaced  # type: ignore[union-attr,method-assign]
+    async with Client(pdf_app(service_with_docling, slow_jobs)) as client:
+        await client.call_tool("convert_pdf_to_markdown", {"file_path": str(pdf_path)})
+
+    assert not (service_with_docling.config.cache_dir / "md" / "r2.md").exists()
