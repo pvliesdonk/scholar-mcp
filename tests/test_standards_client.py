@@ -154,6 +154,30 @@ def test_resolve_nist_bare_number() -> None:
     assert result == ("NIST SP 800-53", "NIST")
 
 
+@pytest.mark.parametrize(
+    ("shorthand", "with_sp"),
+    [
+        ("nist 800-53r5", "nist sp 800-53r5"),
+        ("nist 800-171r2", "nist sp 800-171r2"),
+        ("nist 800-53 rev. 5", "nist sp 800-53 rev. 5"),
+        ("nist 800-53 rev 5", "nist sp 800-53 rev 5"),
+        ("nist 800-63b", "nist sp 800-63b"),
+        ("nist 800-63b rev 1", "nist sp 800-63b rev 1"),
+        ("nist 800-53", "nist sp 800-53"),
+    ],
+)
+def test_resolve_nist_shorthand_matches_sp_form(shorthand: str, with_sp: str) -> None:
+    # The form without "sp" names the same publication as the form with it
+    # (#585): neither the compact revision nor a letter suffix may cut the
+    # document number back to "800".
+    assert resolve_identifier_local(shorthand) == resolve_identifier_local(with_sp)
+
+
+def test_resolve_nist_shorthand_compact_revision() -> None:
+    result = resolve_identifier_local("nist 800-53r5")
+    assert result == ("NIST SP 800-53 Rev. 5", "NIST")
+
+
 def test_resolve_webauthn() -> None:
     result = resolve_identifier_local("WebAuthn Level 2")
     assert result == ("WebAuthn Level 2", "W3C")
