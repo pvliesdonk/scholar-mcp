@@ -286,3 +286,40 @@ async def test_doi_without_paper_id_uses_shared_stem(
         data = await _call(http_server, {"identifier": "10.1/x"})
     assert await _put(http_server, data["url"], b"%PDF-1.7 doi") == 200
     assert (pdf_dir / "10.1_x.pdf").exists()
+
+
+# ---------------------------------------------------------------------------
+# fetch_and_convert points at the upload tool
+# ---------------------------------------------------------------------------
+
+
+async def _fetch_without_pdf(mcp: FastMCP) -> dict[str, Any]:
+    with respx.mock(assert_all_called=False) as router:
+        _mock_paper(router, {"paperId": "p9", "openAccessPdf": None, "externalIds": {}})
+        async with Client(mcp) as client:
+            result = await client.call_tool("fetch_and_convert", {"identifier": "p9"})
+    return json.loads(result.content[0].text)
+
+
+async def test_no_pdf_payload_mentions_upload_on_http(http_server: FastMCP) -> None:
+    data = await _fetch_without_pdf(http_server)
+    assert data["error"] == "no_oa_pdf"
+    assert UPLOAD_TOOL in data["upload"]
+
+
+@pytest.fixture
+def stdio_server(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> FastMCP:
+    """A stdio server with write tools on: no upload route, so no tool."""
+    return _build(monkeypatch, tmp_path, "stdio", _HTTP_ENV)
+
+
+async def test_no_pdf_payload_silent_on_stdio(stdio_server: FastMCP) -> None:
+    data = await _fetch_without_pdf(stdio_server)
+    assert data["error"] == "no_oa_pdf"
+    assert "upload" not in data
+
+
+async def test_fetch_and_convert_schema_has_no_ctx(http_server: FastMCP) -> None:
+    async with Client(http_server) as client:
+        tools = {tool.name: tool for tool in await client.list_tools()}
+    assert "ctx" not in tools["fetch_and_convert"].input_schema["properties"]

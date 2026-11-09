@@ -15,8 +15,8 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 import httpx
-from fastmcp import FastMCP
-from fastmcp.dependencies import Depends
+from fastmcp import Context, FastMCP
+from fastmcp.dependencies import CurrentContext, Depends
 from fastmcp.exceptions import ToolError
 from fastmcp_pvl_core import register_long_running_tool
 
@@ -452,12 +452,33 @@ async def convert_pdf_to_markdown(
     )
 
 
+async def _upload_hint(ctx: Context, identifier: str) -> dict[str, str]:
+    """Point a failed fetch at create_upload_link, when this server offers it.
+
+    The tool is registered only on an HTTP deployment with a public URL, and
+    an operator can hide it; ``get_tool`` returns ``None`` for a hidden tool,
+    so the hint never names a tool the model cannot call.
+    """
+    from ._tools_upload import UPLOAD_TOOL  # imports this module
+
+    if await ctx.fastmcp.get_tool(UPLOAD_TOOL) is None:
+        return {}
+    return {
+        "upload": (
+            f"If the user can download this PDF, call {UPLOAD_TOOL} with "
+            f"identifier '{identifier}', send the file to the returned url, "
+            "then call fetch_and_convert again."
+        )
+    }
+
+
 async def fetch_and_convert(
     identifier: str,
     use_vlm: bool = False,
     text_offset: int = 0,
     max_chars: int | None = DEFAULT_MAX_TEXT_CHARS,
     service: Service = Depends(get_service),
+    ctx: Context = CurrentContext(),
 ) -> dict[str, Any]:
     """Resolve a paper, download its PDF, and convert to Markdown.
 
@@ -507,7 +528,7 @@ async def fetch_and_convert(
 
     fetched = await _ensure_paper_pdf(service, paper, identifier)
     if isinstance(fetched, dict):
-        return {"metadata": paper, **fetched}
+        return {"metadata": paper, **fetched, **await _upload_hint(ctx, identifier)}
     pdf_path, pdf_source = fetched
 
     docling = service.docling
