@@ -36,9 +36,13 @@ _NIST_SP_REV_RE = re.compile(
 )
 # NIST SP without revision: "NIST SP 800-53", "SP800-53", "nist 800-53"
 _NIST_SP_RE = re.compile(r"(?i)\b(?:nist\s+)?sp\s*(\d{3,4}(?:-\d+)?[A-Z]?)\b")
-# NIST SP shorthand: "nist 800-53 rev 5" (number only after "nist")
-_NIST_NUM_REV_RE = re.compile(r"(?i)\bnist\s+(\d{3,4}(?:-\d+)?)\s+r(?:ev\.?\s*)?(\d)\b")
-_NIST_NUM_RE = re.compile(r"(?i)\bnist\s+(\d{3,4}(?:-\d+)?)\b")
+# NIST SP shorthand: "nist 800-53 rev 5", "nist 800-53r5" (number only after
+# "nist"). The number group and the revision separator mirror the SP patterns
+# above; a narrower group lets the regex fall back to a bare "800" (#585).
+_NIST_NUM_REV_RE = re.compile(
+    r"(?i)\bnist\s+(\d{3,4}(?:-\d+)?[A-Z]?)\s*r(?:ev\.?\s*)?(\d)\b"
+)
+_NIST_NUM_RE = re.compile(r"(?i)\bnist\s+(\d{3,4}(?:-\d+)?[A-Z]?)\b")
 # NIST FIPS: "FIPS 140-3", "FIPS140-3", "FIPS PUB 140-3"
 _NIST_FIPS_RE = re.compile(r"(?i)\bfips(?:\s+pub)?\s*(\d{1,3}(?:-\d+)?)\b")
 # NIST IR: "NISTIR 8259A", "NISTIR8259A"
