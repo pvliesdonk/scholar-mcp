@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import httpx
 import pytest
 import respx
@@ -108,3 +110,41 @@ async def test_convert_task_failure(
     )
     with pytest.raises(RuntimeError, match="failed"):
         await client.convert(b"bad", "bad.pdf", use_vlm=False, poll_interval=0.0)
+
+
+@pytest.mark.respx(base_url=DOCLING_BASE)
+async def test_vlm_convert_limits_tokens_with_max_completion_tokens(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """Every VLM engine sends max_completion_tokens and never max_tokens (#603).
+
+    Current OpenAI models reject max_tokens; docling drops its own max_tokens
+    only when the engine params carry max_completion_tokens.
+    """
+    client = DoclingClient(
+        http_client=httpx.AsyncClient(base_url=DOCLING_BASE, timeout=30.0),
+        vlm_api_url="http://vlm",
+        vlm_api_key="key123",
+        vlm_model="gpt-6-luna",
+    )
+    task_id = "task-vlm"
+    submit = respx_mock.post("/v1/convert/source/async").mock(
+        return_value=httpx.Response(200, json={"task_id": task_id})
+    )
+    respx_mock.get(f"/v1/status/poll/{task_id}").mock(
+        return_value=httpx.Response(200, json={"task_status": "success"})
+    )
+    respx_mock.get(f"/v1/result/{task_id}").mock(
+        return_value=httpx.Response(200, json={"document": {"md_content": "# T"}})
+    )
+    await client.convert(b"%PDF-1.4 fake", "paper.pdf", use_vlm=True, poll_interval=0.0)
+
+    options = json.loads(submit.calls.last.request.content)["options"]
+    engines = [
+        options["code_formula_custom_config"]["engine_options"],
+        options["picture_description_custom_config"]["engine_options"],
+    ]
+    for engine in engines:
+        assert "max_tokens" not in engine["params"]
+        assert engine["params"]["max_completion_tokens"] > 0
+        assert engine["params"]["model"] == "gpt-6-luna"
