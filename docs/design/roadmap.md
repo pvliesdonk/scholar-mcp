@@ -45,11 +45,10 @@ index holds the argument for the direction and order.
 ### Hardening shipped tools
 
 - **[derived]** Defects on tools that already shipped go ahead of new
-  capability. The lead item is
-  [#514](https://github.com/pvliesdonk/scholar-mcp/issues/514):
-  `fetch_pdf_by_url` fetches caller-chosen URLs with no private-address
-  filter, a security gap on a deployed server that should not wait for a
-  minor cut.
+  capability. **[evidenced: [#514](https://github.com/pvliesdonk/scholar-mcp/issues/514)]**
+  The first such cut, led by the private-address filter for
+  `fetch_pdf_by_url`, shipped as `v3.1.2 hardening`; later defects on shipped
+  tools default to the lowest open package.
 
 ### Operator-provided corpus
 
