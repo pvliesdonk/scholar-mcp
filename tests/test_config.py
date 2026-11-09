@@ -116,3 +116,9 @@ def test_invalid_access_links_refuse_startup():
 
     with pytest.raises(ConfigurationError, match="SCHOLAR_MCP_ACCESS_LINKS"):
         ProjectConfig(access_links='[{"label": "x", "template": "https://r/{isbn}"}]')
+
+
+def test_transfer_config_reads_env(monkeypatch):
+    """The transfer settings behind upload links come from SCHOLAR_MCP_TRANSFER_*."""
+    monkeypatch.setenv("SCHOLAR_MCP_TRANSFER_MAX_UPLOAD_BYTES", "1024")
+    assert ProjectConfig.from_env().transfer.max_upload_bytes == 1024

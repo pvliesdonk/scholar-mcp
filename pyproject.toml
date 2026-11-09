@@ -522,4 +522,6 @@ strict = true
 SCHOLAR_MCP_READ_ONLY = "false"
 SCHOLAR_MCP_EPO_CONSUMER_KEY = "docs-reference"
 SCHOLAR_MCP_EPO_CONSUMER_SECRET = "docs-reference"
+# HTTP with a public URL, so create_upload_link (wired only then) is listed.
+SCHOLAR_MCP_BASE_URL = "https://example.invalid"
 # PROJECT-DOCS-CHECKS-END
