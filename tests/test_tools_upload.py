@@ -323,3 +323,25 @@ async def test_fetch_and_convert_schema_has_no_ctx(http_server: FastMCP) -> None
     async with Client(http_server) as client:
         tools = {tool.name: tool for tool in await client.list_tools()}
     assert "ctx" not in tools["fetch_and_convert"].input_schema["properties"]
+
+
+async def test_non_positive_ttl_refused(http_server: FastMCP) -> None:
+    message = await _call_error(http_server, {"ttl_s": 0})
+    assert "ttl_s" in message
+
+
+async def test_upstream_error_returns_payload(http_server: FastMCP) -> None:
+    with respx.mock(assert_all_called=False) as router:
+        router.get(url__regex=rf"{S2_BASE}/paper/.*").mock(
+            return_value=httpx.Response(400, json={"error": "bad request"})
+        )
+        data = await _call(http_server, {"identifier": "p9"})
+    assert data["error"] == "upstream_error"
+    assert data["status"] == 400
+
+
+def test_jobs_for_requires_register_tools() -> None:
+    from scholar_mcp.tools import jobs_for
+
+    with pytest.raises(RuntimeError, match="register_tools"):
+        jobs_for(FastMCP("bare"))
