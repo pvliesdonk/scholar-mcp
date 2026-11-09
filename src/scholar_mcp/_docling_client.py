@@ -5,8 +5,10 @@ from __future__ import annotations
 import asyncio
 import base64
 import html
+import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any
 
 import httpx
 
@@ -26,6 +28,30 @@ _PICTURE_PROMPT = (
 )
 
 
+def parse_vlm_params(raw: str | None) -> dict[str, Any]:
+    """Parse operator VLM request parameters from their JSON form.
+
+    Args:
+        raw: A JSON object, as ``SCHOLAR_MCP_VLM_PARAMS`` holds it, or
+            None or empty for none.
+
+    Returns:
+        The parameters as a dict; empty when *raw* is None or empty.
+
+    Raises:
+        ValueError: When *raw* is not valid JSON or not a JSON object.
+    """
+    if not raw:
+        return {}
+    try:
+        params = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"must be a JSON object: {exc.msg}") from None
+    if not isinstance(params, dict):
+        raise ValueError(f"must be a JSON object, got {type(params).__name__}")
+    return params
+
+
 @dataclass
 class DoclingClient:
     """Client for docling-serve async conversion API.
@@ -35,12 +61,29 @@ class DoclingClient:
         vlm_api_url: OpenAI-compatible VLM endpoint URL, or None.
         vlm_api_key: API key for the VLM endpoint.
         vlm_model: Model name for VLM enrichment.
+        vlm_params: Request parameters merged over the defaults in every
+            VLM call, for model-specific settings such as ``temperature``.
     """
 
     http_client: httpx.AsyncClient
     vlm_api_url: str | None
     vlm_api_key: str | None
     vlm_model: str
+    vlm_params: dict[str, Any] = field(default_factory=dict)
+
+    def _engine_params(self, max_completion_tokens: int) -> dict[str, Any]:
+        """Build the request parameters for one VLM engine.
+
+        Engine params go to /chat/completions verbatim and override docling's
+        own. Current OpenAI models reject max_tokens, and docling drops the
+        max_tokens it derives from max_new_tokens only when
+        max_completion_tokens is present (#603). Operator params win (#606).
+        """
+        return {
+            "model": self.vlm_model,
+            "max_completion_tokens": max_completion_tokens,
+            **self.vlm_params,
+        }
 
     @property
     def vlm_available(self) -> bool:
@@ -175,19 +218,12 @@ class DoclingClient:
                 "pdf_backend": "dlparse_v4",
                 "do_formula_enrichment": True,
                 "do_code_enrichment": True,
-                # Engine params go to /chat/completions verbatim. Current OpenAI
-                # models reject max_tokens, and docling drops the max_tokens it
-                # derives from max_new_tokens only when max_completion_tokens is
-                # present (#603).
                 "code_formula_custom_config": {
                     "engine_options": {
                         "engine_type": "api_openai",
                         "url": f"{self.vlm_api_url}/chat/completions",
                         "headers": {"Authorization": f"Bearer {self.vlm_api_key}"},
-                        "params": {
-                            "model": self.vlm_model,
-                            "max_completion_tokens": 1024,
-                        },
+                        "params": self._engine_params(1024),
                         "timeout": 120,
                         "concurrency": 2,
                     },
@@ -209,10 +245,7 @@ class DoclingClient:
                         "engine_type": "api_openai",
                         "url": f"{self.vlm_api_url}/chat/completions",
                         "headers": {"Authorization": f"Bearer {self.vlm_api_key}"},
-                        "params": {
-                            "model": self.vlm_model,
-                            "max_completion_tokens": 512,
-                        },
+                        "params": self._engine_params(512),
                         "timeout": 120,
                         "concurrency": 2,
                     },

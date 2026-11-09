@@ -122,3 +122,21 @@ def test_transfer_config_reads_env(monkeypatch):
     """The transfer settings behind upload links come from SCHOLAR_MCP_TRANSFER_*."""
     monkeypatch.setenv("SCHOLAR_MCP_TRANSFER_MAX_UPLOAD_BYTES", "1024")
     assert ProjectConfig.from_env().transfer.max_upload_bytes == 1024
+
+
+def test_vlm_params_read_from_env(monkeypatch):
+    """SCHOLAR_MCP_VLM_PARAMS is read verbatim; unset means none (#606)."""
+    monkeypatch.delenv("SCHOLAR_MCP_VLM_PARAMS", raising=False)
+    assert ProjectConfig.from_env().vlm_params is None
+    monkeypatch.setenv("SCHOLAR_MCP_VLM_PARAMS", '{"temperature": 1}')
+    assert ProjectConfig.from_env().vlm_params == '{"temperature": 1}'
+
+
+def test_invalid_vlm_params_refuse_startup():
+    """VLM params that are not a JSON object are a configuration error."""
+    import pytest
+    from fastmcp_pvl_core import ConfigurationError
+
+    for raw in ("{not json", "[1, 2]"):
+        with pytest.raises(ConfigurationError, match="SCHOLAR_MCP_VLM_PARAMS"):
+            ProjectConfig(vlm_params=raw)

@@ -193,3 +193,16 @@ async def test_start_failure_closes_a_partially_opened_cache(
 
     assert opened, "the service never constructed a cache"
     assert opened[0]._db is None, "the partially opened cache was not closed"
+
+
+async def test_build_docling_passes_vlm_params(monkeypatch: pytest.MonkeyPatch) -> None:
+    """SCHOLAR_MCP_VLM_PARAMS reaches the docling client parsed (#606)."""
+    monkeypatch.setenv("SCHOLAR_MCP_DOCLING_URL", "http://docling.invalid")
+    monkeypatch.setenv("SCHOLAR_MCP_VLM_PARAMS", '{"temperature": 1}')
+
+    http, docling = _build_docling(ProjectConfig.from_env())
+
+    assert docling is not None
+    assert docling.vlm_params == {"temperature": 1}
+    assert http is not None
+    await http.aclose()
