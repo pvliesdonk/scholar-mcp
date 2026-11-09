@@ -2665,6 +2665,7 @@ complete converted document in one response.</p>
 <span class="nb">export</span><span class="w"> </span><span class="nv">SCHOLAR_MCP_VLM_API_KEY</span><span class="o">=</span>sk-...
 <span class="nb">export</span><span class="w"> </span><span class="nv">SCHOLAR_MCP_VLM_MODEL</span><span class="o">=</span>gpt-4o
 </code></pre></div>
+<p>The endpoint must accept OpenAI chat completion requests that cap the output with <code>max_completion_tokens</code>, the parameter current OpenAI models require in place of <code>max_tokens</code>.</p>
 <p>When VLM is configured, tools accept a <code>use_vlm=true</code> parameter that:</p>
 <ul>
 <li>Extracts LaTeX formulas from formula images</li>

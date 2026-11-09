@@ -65,6 +65,8 @@ export SCHOLAR_MCP_VLM_API_KEY=sk-...
 export SCHOLAR_MCP_VLM_MODEL=gpt-4o
 ```
 
+The endpoint must accept OpenAI chat completion requests that cap the output with `max_completion_tokens`, the parameter current OpenAI models require in place of `max_tokens`.
+
 When VLM is configured, tools accept a `use_vlm=true` parameter that:
 
 - Extracts LaTeX formulas from formula images
