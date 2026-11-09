@@ -2666,6 +2666,9 @@ complete converted document in one response.</p>
 <span class="nb">export</span><span class="w"> </span><span class="nv">SCHOLAR_MCP_VLM_MODEL</span><span class="o">=</span>gpt-4o
 </code></pre></div>
 <p>The endpoint must accept OpenAI chat completion requests that cap the output with <code>max_completion_tokens</code>, the parameter current OpenAI models require in place of <code>max_tokens</code>.</p>
+<p>Some models accept only part of the usual request. A model that allows only its default temperature rejects the <code>temperature</code> of 0 that formula extraction sends. Set <code>SCHOLAR_MCP_VLM_PARAMS</code> to a JSON object, and its keys replace the defaults in every VLM call:</p>
+<div class="highlight"><pre><span></span><code><span class="nb">export</span><span class="w"> </span><span class="nv">SCHOLAR_MCP_VLM_PARAMS</span><span class="o">=</span><span class="s1">'{"temperature": 1}'</span>
+</code></pre></div>
 <p>When VLM is configured, tools accept a <code>use_vlm=true</code> parameter that:</p>
 <ul>
 <li>Extracts LaTeX formulas from formula images</li>
