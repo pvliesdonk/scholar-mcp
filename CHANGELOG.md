@@ -2,6 +2,16 @@
 
 <!-- version list -->
 
+## 3.2.0-rc.0 (2026-11-09)
+
+### Features
+
+- accept PDFs the server could not fetch through upload links (#600)
+
+### Bug Fixes
+
+- keep the document number in NIST shorthand without sp (#599)
+
 ## 3.1.2 (2026-11-08)
 
 ### Bug Fixes
