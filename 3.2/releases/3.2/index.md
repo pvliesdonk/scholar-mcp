@@ -1,0 +1,47 @@
+# 3.2
+
+A PDF the server cannot fetch can now reach it through a one-time upload link: the user or the agent downloads the paper through their own library and sends the file straight to the server, which converts it like any other paper. NIST shorthand such as `nist 800-53r5` now resolves to the right publication. VLM enrichment works with newer OpenAI models such as `gpt-6-luna`. A new setting passes model-specific request parameters. HTTP deployments with a public base URL gain the upload tool and its route on upgrade. See Upgrading.
+
+## Upgrading
+
+If you run the server over HTTP with `SCHOLAR_MCP_BASE_URL` set, which every OIDC deployment does, the upgrade adds the `create_upload_link` tool and an upload route under `/transfer/`. Nothing needs configuring. The tool is a write tool, so read-only mode hides it. Under stdio, or without a base URL, the server registers neither.
+
+If you use VLM enrichment, its requests now limit output with `max_completion_tokens` in place of `max_tokens`. Check that your VLM endpoint and model accept `max_completion_tokens`.
+
+**Clients:** reconnect to pick up the new tool. When `fetch_and_convert` serves a PDF the server already holds, `pdf_source` is now `"cache"`. In 3.1 it reported the first source the server would have tried.
+
+**State:** the cache, downloaded PDFs and converted Markdown are kept. Uploaded PDFs are stored in the same `pdfs` directory.
+
+**Security posture:** HTTP deployments with a base URL gain an unauthenticated upload route, guarded by single-use capability URLs as the [security model](https://pvliesdonk.github.io/scholar-mcp/3.2/security-model/index.md) describes. Each link admits one PDF into the cache under a file name the server fixed in advance. The bytes must start with `%PDF-`. A valid PDF already stored there is never overwritten. Every client that asks for the paper afterwards is served the uploaded copy.
+
+## PDFs from your own library
+
+Since 3.1, a paper the server cannot fetch comes with access links into the user's library. On an institution's licensed network such a link often opens for the user while the server, on another network, still has no copy. [#546](https://github.com/pvliesdonk/scholar-mcp/issues/546) puts the gap this way: there was "no way to get that PDF to the server for conversion" unless agent and server shared a disk.
+
+`create_upload_link` closes it ([#600](https://github.com/pvliesdonk/scholar-mcp/pull/600)):
+
+1. The agent calls `create_upload_link` with the paper's identifier and gets a one-time `url`.
+1. The user or the agent sends the PDF as the body of an HTTP `PUT` to that URL. The file goes to the server directly and never enters the conversation.
+1. The agent calls `fetch_and_convert` with the same identifier and gets the paged Markdown, as for an open-access paper.
+
+When `fetch_and_convert` finds no PDF, its response now points the agent at `create_upload_link`. A document that isn't a known paper can be uploaded without an identifier: the response then carries a `pdf_path` for `convert_pdf_to_markdown`. If a converted paper turns out to be the wrong document, `create_upload_link` with `replace` set to true removes the stored PDF and its Markdown before the new upload.
+
+An uploaded PDF joins the shared cache, so later requests for the paper get it too; the maintainer decided this on #546, and there is no per-upload opt-out. No route embeds the PDF in a tool call either: [#597](https://github.com/pvliesdonk/scholar-mcp/issues/597) closed that as not planned, because a PDF read into the conversation takes over the agent's context.
+
+The tool exists only on an HTTP deployment with `SCHOLAR_MCP_BASE_URL` set. Link lifetime and upload size follow the `SCHOLAR_MCP_TRANSFER_*` settings in the [configuration reference](https://pvliesdonk.github.io/scholar-mcp/3.2/reference/configuration/index.md); by default a link lasts an hour and an upload may be up to 100 MiB. The [PDF conversion guide](https://pvliesdonk.github.io/scholar-mcp/3.2/use/pdf-conversion/#upload-a-pdf-you-downloaded) walks through the steps, and [Transfer links](https://pvliesdonk.github.io/scholar-mcp/3.2/deploy/transfer-links/index.md) covers the operator side.
+
+## NIST shorthand
+
+`get_standard` and `resolve_standard_identifier` resolved `nist 800-53r5` to `NIST SP 800`, a different publication, while `nist sp 800-53r5` worked ([#585](https://github.com/pvliesdonk/scholar-mcp/issues/585)). The form without `sp` now resolves the same way, so `nist 800-53r5` gives `NIST SP 800-53 Rev. 5` and `nist 800-171r2` gives `NIST SP 800-171 Rev. 2` ([#599](https://github.com/pvliesdonk/scholar-mcp/pull/599)). NIST IR numbers written without `nistir`, the `NIST.SP.800-53r5` form and multi-part numbers such as `800-63-3` are still open in [#598](https://github.com/pvliesdonk/scholar-mcp/issues/598).
+
+## VLM enrichment on newer OpenAI models
+
+With `use_vlm=true`, docling-serve asks the configured vision model to read formulas and describe figures. With `gpt-6-luna`, OpenAI refused the requests 3.1 sends, because `max_tokens` "is not supported with this model"; they want `max_completion_tokens` instead ([#603](https://github.com/pvliesdonk/scholar-mcp/issues/603)). The requests now send `max_completion_tokens` with the same limits ([#605](https://github.com/pvliesdonk/scholar-mcp/pull/605)).
+
+A model can also restrict other parameters. `gpt-6-luna` accepts only its default temperature of 1, while formula extraction sends a temperature of 0 ([#606](https://github.com/pvliesdonk/scholar-mcp/issues/606)). The new `SCHOLAR_MCP_VLM_PARAMS` takes a JSON object whose keys replace the defaults in every VLM call ([#607](https://github.com/pvliesdonk/scholar-mcp/pull/607)). For such a model:
+
+```
+export SCHOLAR_MCP_VLM_PARAMS='{"temperature": 1}'
+```
+
+Left unset, the requests keep docling's defaults. A value that isn't a JSON object stops the server at startup with an error naming the variable. The [VLM section](https://pvliesdonk.github.io/scholar-mcp/3.2/use/pdf-conversion/#vlm-enrichment) of the PDF conversion guide covers the setup.

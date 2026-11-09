@@ -1,0 +1,28 @@
+# Recommendations
+
+## `recommend_papers`
+
+**Recommend Papers.** Read-only. Reaches outside the server.
+
+Recommend papers based on positive (and optionally negative) examples.
+
+Returns at most 500 recommendations; a larger `limit` is capped at 500.
+
+Answers directly in normal use. Should the call run long it continues in the background and returns a job handle to poll with `get_job_result`.
+
+**Parameters**
+
+| Name           | Type                          | Default      | Description                                    |
+| -------------- | ----------------------------- | ------------ | ---------------------------------------------- |
+| `positive_ids` | `array of string`             | required     | 1-5 S2 paper IDs to use as positive examples.  |
+| `negative_ids` | `array of string \| null`     | `null`       | Optional S2 paper IDs to steer away from.      |
+| `limit`        | `integer`                     | `10`         | Number of recommendations to return (max 500). |
+| `fields`       | `compact \| standard \| full` | `"standard"` | Field set preset for returned records.         |
+
+**Returns**
+
+`{"recommendations": [...]}`, or an error mapping.
+
+Tip
+
+Recommendations work best with 3 to 5 positive examples that represent the topic you're interested in. Adding 1 to 2 negative examples that are close but off-topic helps narrow results.

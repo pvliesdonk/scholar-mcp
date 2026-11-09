@@ -1,0 +1,55 @@
+# Cross source
+
+## `batch_resolve`
+
+**Batch Resolve Identifiers.** Read-only. Reaches outside the server.
+
+Resolve a list of paper, patent, or book identifiers to full records.
+
+Uses the S2 batch endpoint for paper IDs/DOIs, with OpenAlex fallback. An OpenAlex-sourced paper (`"source": "openalex"`) has the same keys as an S2 one for the requested `fields`, with `paperId` null. Patent numbers (such as `EP1234567A1`) are auto-detected and resolved via the EPO OPS API when configured. ISBNs (prefixed `ISBN:`) are resolved via Open Library.
+
+Identifiers fan out across three upstream sources, so a large batch runs long and is then handed back as a job handle to poll with `get_job_result` rather than the records themselves.
+
+**Parameters**
+
+| Name          | Type                          | Default      | Description                                                                                                                                                              |
+| ------------- | ----------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `identifiers` | `array of string`             | required     | List of S2 IDs, DOIs (prefixed `DOI:`), plain DOIs, patent numbers (such as `EP1234567A1` or `US11234567B2`), or ISBNs (prefixed `ISBN:`, such as `ISBN:9780201633610`). |
+| `fields`      | `compact \| standard \| full` | `"standard"` | Field set preset (applies to paper results only).                                                                                                                        |
+
+**Returns**
+
+`{"results": [...]}` in the caller's original order. Paper entries have a `paper` key, patent entries a `patent` key and `source_type: "patent"`, book entries a `book` key and `source_type: "book"`. Unresolved entries have an `error` key.
+
+- **Paper results**: the OpenAlex fallback looks the paper up by DOI. An OpenAlex `paper` also has `tldr` and `fieldsOfStudy` null, and `openAccessPdf` set only when OpenAlex has a direct PDF link. When the citation string contains chapter patterns (such as "Chapter 3" or "pp. 45-67"), a `chapter_info` dict is attached with parsed chapter/page information.
+- **Patent results**: patent numbers are auto-detected by their two-letter country prefix (such as `EP`, `US`, `WO`).
+
+## `enrich_paper`
+
+**Enrich Paper.** Read-only. Reaches outside the server.
+
+Fetch OpenAlex metadata to supplement Semantic Scholar data.
+
+Resolves the paper's DOI from S2, then queries OpenAlex for the requested enrichment fields. Results are cached for 30 days.
+
+A cached record answers immediately. Should the lookup run long it continues in the background and returns a job handle to poll with `get_job_result`.
+
+**Parameters**
+
+| Name         | Type                                                        | Default  | Description                                                   |
+| ------------ | ----------------------------------------------------------- | -------- | ------------------------------------------------------------- |
+| `identifier` | `string`                                                    | required | S2 paper ID or DOI (prefix `DOI:`).                           |
+| `fields`     | `array of affiliations \| funders \| oa_status \| concepts` | required | One or more of: affiliations, funders, `oa_status`, concepts. |
+
+**Returns**
+
+A mapping with the requested fields plus `doi`, or an error mapping.
+
+**Available fields:**
+
+| Field          | Description                                                                                  |
+| -------------- | -------------------------------------------------------------------------------------------- |
+| `affiliations` | Institution display names from author affiliations                                           |
+| `funders`      | Funding organization names                                                                   |
+| `oa_status`    | Open access status string (such as `gold`, `green`, `hybrid`); also includes `is_oa` boolean |
+| `concepts`     | List of `{"name": "...", "score": 0.95}` topic concepts                                      |
