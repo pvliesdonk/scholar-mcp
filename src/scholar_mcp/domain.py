@@ -19,7 +19,7 @@ import httpx
 
 from ._cache import ScholarCache
 from ._crossref_client import CrossRefClient
-from ._docling_client import DoclingClient
+from ._docling_client import DoclingClient, parse_vlm_params
 from ._enricher_crossref import CrossRefEnricher
 from ._enricher_openalex import OpenAlexEnricher
 from ._enrichment import EnrichmentPipeline
@@ -271,6 +271,7 @@ def _build_docling(
         vlm_api_url=config.vlm_api_url,
         vlm_api_key=config.vlm_api_key,
         vlm_model=config.vlm_model,
+        vlm_params=parse_vlm_params(config.vlm_params),
     )
     logger.info(
         "docling_configured url=%s vlm_available=%s vlm_model=%s",

@@ -103,6 +103,10 @@
           "default": "gpt-4o"
         },
         {
+          "name": "SCHOLAR_MCP_VLM_PARAMS",
+          "description": "JSON object of extra request parameters for every VLM call, overriding the defaults, for a model that needs them (e.g. {\"temperature\": 1})."
+        },
+        {
           "name": "SCHOLAR_MCP_CACHE_DIR",
           "description": "Directory for the SQLite cache database (cache.db) and downloaded PDFs (pdfs/, md/).",
           "format": "filepath",
@@ -390,6 +394,10 @@
           "name": "SCHOLAR_MCP_VLM_MODEL",
           "description": "Model name to use with the VLM endpoint.",
           "default": "gpt-4o"
+        },
+        {
+          "name": "SCHOLAR_MCP_VLM_PARAMS",
+          "description": "JSON object of extra request parameters for every VLM call, overriding the defaults, for a model that needs them (e.g. {\"temperature\": 1})."
         },
         {
           "name": "SCHOLAR_MCP_CACHE_DIR",

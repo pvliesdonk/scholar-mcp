@@ -81,6 +81,12 @@ export SCHOLAR_MCP_VLM_MODEL=gpt-4o
 
 The endpoint must accept OpenAI chat completion requests that cap the output with `max_completion_tokens`, the parameter current OpenAI models require in place of `max_tokens`.
 
+Some models accept only part of the usual request. A model that allows only its default temperature rejects the `temperature` of 0 that formula extraction sends. Set `SCHOLAR_MCP_VLM_PARAMS` to a JSON object, and its keys replace the defaults in every VLM call:
+
+```bash
+export SCHOLAR_MCP_VLM_PARAMS='{"temperature": 1}'
+```
+
 When VLM is configured, tools accept a `use_vlm=true` parameter that:
 
 - Extracts LaTeX formulas from formula images

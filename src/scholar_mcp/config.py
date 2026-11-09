@@ -157,6 +157,18 @@ class ProjectConfig:
             "wizard": {"group": "PDF conversion"},
         },
     )
+    vlm_params: str | None = field(
+        default=None,
+        metadata={
+            "help": (
+                "JSON object of extra request parameters for every VLM call, "
+                "overriding the defaults, for a model that needs them (e.g. "
+                '{"temperature": 1}).'
+            ),
+            "tags": ("pdf",),
+            "wizard": {"group": "PDF conversion"},
+        },
+    )
     cache_dir: Path = field(
         default=Path("/data/scholar-mcp"),
         metadata={
@@ -296,6 +308,14 @@ class ProjectConfig:
             raise ConfigurationError(
                 f"SCHOLAR_MCP_ACCESS_LINKS is invalid: {exc}"
             ) from None
+        from ._docling_client import parse_vlm_params
+
+        try:
+            parse_vlm_params(self.vlm_params)
+        except ValueError as exc:
+            raise ConfigurationError(
+                f"SCHOLAR_MCP_VLM_PARAMS is invalid: {exc}"
+            ) from None
         # CONFIG-VALIDATE-END
 
     @classmethod
@@ -312,6 +332,7 @@ class ProjectConfig:
             vlm_api_url=env(_ENV_PREFIX, "VLM_API_URL"),
             vlm_api_key=env(_ENV_PREFIX, "VLM_API_KEY"),
             vlm_model=env(_ENV_PREFIX, "VLM_MODEL", "gpt-4o") or "gpt-4o",
+            vlm_params=env(_ENV_PREFIX, "VLM_PARAMS"),
             cache_dir=Path(
                 env(_ENV_PREFIX, "CACHE_DIR", "/data/scholar-mcp")
                 or "/data/scholar-mcp"

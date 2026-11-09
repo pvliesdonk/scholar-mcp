@@ -512,6 +512,14 @@
       "advancedGroup": "PDF conversion"
     },
     {
+      "id": "vlm_params",
+      "label": "Vlm Params",
+      "type": "text",
+      "var": "SCHOLAR_MCP_VLM_PARAMS",
+      "help": "JSON object of extra request parameters for every VLM call, overriding the defaults, for a model that needs them (e.g. {\"temperature\": 1}).",
+      "advancedGroup": "PDF conversion"
+    },
+    {
       "id": "cache_dir",
       "label": "Cache Dir",
       "type": "text",
