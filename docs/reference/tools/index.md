@@ -29,6 +29,7 @@ Every tool runs with the server's own privileges; the [security model](../../sec
 | Full text | [`convert_pdf_to_markdown`](full-text.md#convert_pdf_to_markdown) | Convert PDF to Markdown | Convert a local PDF to Markdown using docling-serve. |
 | Full text | [`fetch_and_convert`](full-text.md#fetch_and_convert) | Fetch and Convert Paper | Resolve a paper, download its PDF, and convert to Markdown. |
 | Full text | [`fetch_pdf_by_url`](full-text.md#fetch_pdf_by_url) | Fetch PDF by URL | Download a PDF from a URL and optionally convert to Markdown. |
+| Full text | [`create_upload_link`](full-text.md#create_upload_link) | Create PDF Upload Link | Create a one-time link for uploading a PDF this server cannot fetch. |
 | Citations | [`generate_citations`](citations.md#generate_citations) | Generate Citations | Generate formatted citations for one or more papers. |
 | Patents | [`search_patents`](patents.md#search_patents) | Search Patents | Search for patents in the European Patent Office database. |
 | Patents | [`get_patent`](patents.md#get_patent) | Get Patent | Get detailed information about a single patent. |

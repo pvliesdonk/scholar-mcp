@@ -219,3 +219,36 @@ The response body must begin with `%PDF-` before it is cached or sent to
 docling. A response with another body returns `{"error": "not_pdf"}` and is
 not converted. This header check does not validate the complete PDF structure.
 <!-- DOMAIN-EXAMPLE-fetch_pdf_by_url-END -->
+
+## `create_upload_link`
+
+**Create PDF Upload Link.** Destructive. Reaches outside the server. Tags: `write`.
+
+Create a one-time link for uploading a PDF this server cannot fetch.
+
+Use it when this server could not fetch a paper's PDF and the user
+can download it through their own library. Send the file as the body
+of an HTTP PUT to the returned ``url``, outside the conversation.
+Never read it into the conversation. With an identifier, call
+`fetch_and_convert` with the same identifier once the upload is done.
+Without one, call `convert_pdf_to_markdown` with the returned `pdf_path`.
+If a converted paper turns out to be the wrong document, call this
+tool again with replace=true: the stored PDF and its conversion are
+removed at once.
+
+**Parameters**
+
+| Name | Type | Default | Description |
+|---|---|---|---|
+| `identifier` | `string \| null` | `null` | Paper identifier (DOI, S2 ID, ARXIV:, etc.) the PDF belongs to. Omit it for a document that is not a known paper. |
+| `replace` | `boolean` | `false` | Remove this paper's stored PDF and Markdown before creating the link. Needs an identifier. |
+| `ttl_s` | `number \| null` | `null` | Link lifetime in seconds. Omit it for the server default. |
+
+**Returns**
+
+``url`` and ``expires_in_s``, plus ``paper_id`` with an
+identifier or ``pdf_path`` without one.
+
+<!-- DOMAIN-EXAMPLE-create_upload_link-START -->
+<!-- A worked example for this tool; kept across regeneration. -->
+<!-- DOMAIN-EXAMPLE-create_upload_link-END -->
