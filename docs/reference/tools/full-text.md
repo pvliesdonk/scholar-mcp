@@ -250,5 +250,21 @@ removed at once.
 identifier or ``pdf_path`` without one.
 
 <!-- DOMAIN-EXAMPLE-create_upload_link-START -->
-<!-- A worked example for this tool; kept across regeneration. -->
+The tool exists only on an HTTP deployment with `SCHOLAR_MCP_BASE_URL` set. For a paper, a response looks like:
+
+```json
+{
+  "url": "https://mcp.example.com/transfer/<token>",
+  "expires_in_s": 3600.0,
+  "paper_id": "649def34f8be52c8b66281af98ae884c09aef38b"
+}
+```
+
+The file then goes up as the raw body of one request:
+
+```bash
+curl -X PUT --data-binary @paper.pdf "https://mcp.example.com/transfer/<token>"
+```
+
+After that, `fetch_and_convert` with the same identifier returns the paged Markdown.
 <!-- DOMAIN-EXAMPLE-create_upload_link-END -->

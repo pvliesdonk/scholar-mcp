@@ -163,11 +163,6 @@ backlog; commit it to a package when it should ship in that cut.
   When is semantic context over an identified corpus document viable?** The
   issue carries the external dependency that resolves it. The answer does not
   block the three-feature corpus foundation.
-- **[derived] Is caching licensed full text on a shared server acceptable?**
-  Raised in [#546](https://github.com/pvliesdonk/scholar-mcp/issues/546); it
-  decides whether an upload is cached for everyone. It is an operator policy
-  call, resolved when #546 is sized, before `030 agent-fetched-pdfs` is
-  committed to code.
 - **[evidenced: [#234](https://github.com/pvliesdonk/scholar-mcp/issues/234)]
   Do the recorded structural children still cover removal of the exemption?**
   Resolved by refinement
@@ -175,6 +170,13 @@ backlog; commit it to a package when it should ship in that cut.
   independently of the package sequence.
 
 ## Revisions
+
+- **2026-11-09 — [stated] decision; [derived] the rest:** The maintainer
+  decided that uploaded PDFs join the shared cache, like PDFs the server
+  fetches itself, which resolves the known unknown on caching licensed full
+  text. #546 is built as one feature in `030 agent-fetched-pdfs`; an inline
+  base64 route was declined
+  ([#597](https://github.com/pvliesdonk/scholar-mcp/issues/597)).
 
 - **2026-11-08 — [stated] decisions; [derived] the rest:** Surveyed the
   April-era children of the standards, patent, and books epics against the

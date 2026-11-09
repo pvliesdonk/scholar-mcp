@@ -192,6 +192,20 @@ To find your library's resolver address, turn on your library under Google Schol
 
 Which OpenURL form to use depends on the resolver. Most accept both. OCLC's resolver looks up the DOI itself when it gets `{openurl}`, which fills in missing details.
 
+## Upload a PDF you downloaded
+
+When an access link works for you but not for the server, download the PDF yourself and hand it to the server through an upload link. The PDF travels over HTTP straight to the server, so it never passes through the conversation.
+
+1. The agent calls `create_upload_link` with the paper's identifier. It gets a one-time `url`.
+2. You, or the agent, send the file as the body of a `PUT` to that URL.
+3. The agent calls `fetch_and_convert` with the same identifier. The server finds the uploaded PDF in its cache and returns the paged Markdown.
+
+Without an identifier, the link response carries a `pdf_path` instead, and `convert_pdf_to_markdown` converts that file without any paper metadata. When `fetch_and_convert` can't get a PDF, its response names `create_upload_link` under `upload`.
+
+An uploaded PDF joins the shared cache, so later requests for the same paper get it too. If it turns out to be the wrong document, call `create_upload_link` with `replace` set to true. That removes the stored PDF and its converted Markdown at once, before any new upload.
+
+Upload links exist only on an HTTP deployment with `SCHOLAR_MCP_BASE_URL` set. Under stdio, put the file on the server's disk and call `convert_pdf_to_markdown` with its path. [Transfer links](../deploy/transfer-links.md) covers what the operator configures.
+
 ## Limitations
 
 - **Paywalled papers**: Alternative resolution only finds openly available versions. Truly paywalled papers require manual download followed by `convert_pdf_to_markdown`, or use `fetch_pdf_by_url` if you find a link. [Access links](#access-links-for-licensed-papers) point you to your library's copy.
