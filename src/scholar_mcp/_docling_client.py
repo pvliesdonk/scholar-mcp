@@ -175,12 +175,19 @@ class DoclingClient:
                 "pdf_backend": "dlparse_v4",
                 "do_formula_enrichment": True,
                 "do_code_enrichment": True,
+                # Engine params go to /chat/completions verbatim. Current OpenAI
+                # models reject max_tokens, and docling drops the max_tokens it
+                # derives from max_new_tokens only when max_completion_tokens is
+                # present (#603).
                 "code_formula_custom_config": {
                     "engine_options": {
                         "engine_type": "api_openai",
                         "url": f"{self.vlm_api_url}/chat/completions",
                         "headers": {"Authorization": f"Bearer {self.vlm_api_key}"},
-                        "params": {"model": self.vlm_model, "max_tokens": 1024},
+                        "params": {
+                            "model": self.vlm_model,
+                            "max_completion_tokens": 1024,
+                        },
                         "timeout": 120,
                         "concurrency": 2,
                     },
@@ -202,7 +209,10 @@ class DoclingClient:
                         "engine_type": "api_openai",
                         "url": f"{self.vlm_api_url}/chat/completions",
                         "headers": {"Authorization": f"Bearer {self.vlm_api_key}"},
-                        "params": {"model": self.vlm_model, "max_tokens": 512},
+                        "params": {
+                            "model": self.vlm_model,
+                            "max_completion_tokens": 512,
+                        },
                         "timeout": 120,
                         "concurrency": 2,
                     },
