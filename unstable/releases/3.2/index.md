@@ -1,10 +1,12 @@
 # 3.2
 
-A PDF the server cannot fetch can now reach it through a one-time upload link: the user or the agent downloads the paper through their own library and sends the file straight to the server, which converts it like any other paper. NIST shorthand such as `nist 800-53r5` now resolves to the right publication. HTTP deployments with a public base URL gain the upload tool and its route on upgrade. See Upgrading.
+A PDF the server cannot fetch can now reach it through a one-time upload link: the user or the agent downloads the paper through their own library and sends the file straight to the server, which converts it like any other paper. NIST shorthand such as `nist 800-53r5` now resolves to the right publication. VLM enrichment works with newer OpenAI models such as `gpt-6-luna`. A new setting passes model-specific request parameters. HTTP deployments with a public base URL gain the upload tool and its route on upgrade. See Upgrading.
 
 ## Upgrading
 
 If you run the server over HTTP with `SCHOLAR_MCP_BASE_URL` set, which every OIDC deployment does, the upgrade adds the `create_upload_link` tool and an upload route under `/transfer/`. Nothing needs configuring. The tool is a write tool, so read-only mode hides it. Under stdio, or without a base URL, the server registers neither.
+
+If you use VLM enrichment, its requests now limit output with `max_completion_tokens` in place of `max_tokens`. Check that your VLM endpoint and model accept `max_completion_tokens`.
 
 **Clients:** reconnect to pick up the new tool. When `fetch_and_convert` serves a PDF the server already holds, `pdf_source` is now `"cache"`. In 3.1 it reported the first source the server would have tried.
 
@@ -31,3 +33,15 @@ The tool exists only on an HTTP deployment with `SCHOLAR_MCP_BASE_URL` set. Link
 ## NIST shorthand
 
 `get_standard` and `resolve_standard_identifier` resolved `nist 800-53r5` to `NIST SP 800`, a different publication, while `nist sp 800-53r5` worked ([#585](https://github.com/pvliesdonk/scholar-mcp/issues/585)). The form without `sp` now resolves the same way, so `nist 800-53r5` gives `NIST SP 800-53 Rev. 5` and `nist 800-171r2` gives `NIST SP 800-171 Rev. 2` ([#599](https://github.com/pvliesdonk/scholar-mcp/pull/599)). NIST IR numbers written without `nistir`, the `NIST.SP.800-53r5` form and multi-part numbers such as `800-63-3` are still open in [#598](https://github.com/pvliesdonk/scholar-mcp/issues/598).
+
+## VLM enrichment on newer OpenAI models
+
+With `use_vlm=true`, docling-serve asks the configured vision model to read formulas and describe figures. With `gpt-6-luna`, OpenAI refused the requests 3.1 sends, because `max_tokens` "is not supported with this model"; they want `max_completion_tokens` instead ([#603](https://github.com/pvliesdonk/scholar-mcp/issues/603)). The requests now send `max_completion_tokens` with the same limits ([#605](https://github.com/pvliesdonk/scholar-mcp/pull/605)).
+
+A model can also restrict other parameters. `gpt-6-luna` accepts only its default temperature of 1, while formula extraction sends a temperature of 0 ([#606](https://github.com/pvliesdonk/scholar-mcp/issues/606)). The new `SCHOLAR_MCP_VLM_PARAMS` takes a JSON object whose keys replace the defaults in every VLM call ([#607](https://github.com/pvliesdonk/scholar-mcp/pull/607)). For such a model:
+
+```
+export SCHOLAR_MCP_VLM_PARAMS='{"temperature": 1}'
+```
+
+Left unset, the requests keep docling's defaults. A value that isn't a JSON object stops the server at startup with an error naming the variable. The [VLM section](https://pvliesdonk.github.io/scholar-mcp/unstable/use/pdf-conversion/#vlm-enrichment) of the PDF conversion guide covers the setup.

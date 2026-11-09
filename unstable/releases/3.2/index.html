@@ -2199,6 +2199,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#vlm-enrichment-on-newer-openai-models" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        VLM enrichment on newer OpenAI models
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2220,13 +2231,15 @@
 
 
 <h1 id="32">3.2<a class="headerlink" href="#32" title="Permanent link">&para;</a></h1>
-<!-- notes-range-end: c1a7727f44bd208bb52cdad7b25a235bb2b7debd -->
+<!-- notes-range-end: c531a89a17329a61c11f1d930286ce8406412e81 -->
 
 <!-- RELEASE-SUMMARY v3.2.0 START -->
 <p>A PDF the server cannot fetch can now reach it through a one-time upload
 link: the user or the agent downloads the paper through their own library and
 sends the file straight to the server, which converts it like any other paper.
 NIST shorthand such as <code>nist 800-53r5</code> now resolves to the right publication.
+VLM enrichment works with newer OpenAI models such as <code>gpt-6-luna</code>. A new
+setting passes model-specific request parameters.
 HTTP deployments with a public base URL gain the upload tool and its route on
 upgrade. See Upgrading.</p>
 <!-- RELEASE-SUMMARY v3.2.0 END -->
@@ -2237,6 +2250,9 @@ OIDC deployment does, the upgrade adds the <code>create_upload_link</code> tool 
 upload route under <code>/transfer/</code>. Nothing needs configuring. The tool is a
 write tool, so read-only mode hides it. Under stdio, or without a base URL,
 the server registers neither.</p>
+<p>If you use VLM enrichment, its requests now limit output with
+<code>max_completion_tokens</code> in place of <code>max_tokens</code>. Check that your VLM endpoint
+and model accept <code>max_completion_tokens</code>.</p>
 <p><strong>Clients:</strong> reconnect to pick up the new tool. When <code>fetch_and_convert</code>
 serves a PDF the server already holds, <code>pdf_source</code> is now <code>"cache"</code>. In 3.1 it
 reported the first source the server would have tried.</p>
@@ -2295,6 +2311,26 @@ without <code>sp</code> now resolves the same way, so <code>nist 800-53r5</code>
 written without <code>nistir</code>, the <code>NIST.SP.800-53r5</code> form and multi-part numbers
 such as <code>800-63-3</code> are still open in
 <a href="https://github.com/pvliesdonk/scholar-mcp/issues/598">#598</a>.</p>
+<h2 id="vlm-enrichment-on-newer-openai-models">VLM enrichment on newer OpenAI models<a class="headerlink" href="#vlm-enrichment-on-newer-openai-models" title="Permanent link">&para;</a></h2>
+<p>With <code>use_vlm=true</code>, docling-serve asks the configured vision model to read
+formulas and describe figures. With <code>gpt-6-luna</code>, OpenAI refused the
+requests 3.1 sends, because <code>max_tokens</code> "is not supported with this
+model"; they want <code>max_completion_tokens</code> instead
+(<a href="https://github.com/pvliesdonk/scholar-mcp/issues/603">#603</a>). The requests
+now send <code>max_completion_tokens</code> with the same limits
+(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/605">#605</a>).</p>
+<p>A model can also restrict other parameters. <code>gpt-6-luna</code> accepts only its
+default temperature of 1, while formula extraction sends a temperature of 0
+(<a href="https://github.com/pvliesdonk/scholar-mcp/issues/606">#606</a>). The new
+<code>SCHOLAR_MCP_VLM_PARAMS</code> takes a JSON object whose keys replace the defaults
+in every VLM call
+(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/607">#607</a>). For such a model:</p>
+<div class="highlight"><pre><span></span><code><span class="nb">export</span><span class="w"> </span><span class="nv">SCHOLAR_MCP_VLM_PARAMS</span><span class="o">=</span><span class="s1">'{"temperature": 1}'</span>
+</code></pre></div>
+<p>Left unset, the requests keep docling's defaults. A value that isn't a JSON
+object stops the server at startup with an error naming the variable. The
+<a href="../../use/pdf-conversion/#vlm-enrichment">VLM section</a> of the PDF conversion
+guide covers the setup.</p>
 <!-- PATCH-RELEASES-START -->
 <!-- PATCH-RELEASES-END -->
 
