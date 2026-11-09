@@ -17,7 +17,7 @@ If you run the server over HTTP with `SCHOLAR_MCP_BASE_URL` set, which every
 OIDC deployment does, the upgrade adds the `create_upload_link` tool and an
 upload route under `/transfer/`. Nothing needs configuring. The tool is a
 write tool, so read-only mode hides it. Under stdio, or without a base URL,
-nothing changes.
+the server registers neither.
 
 **Clients:** reconnect to pick up the new tool. When `fetch_and_convert`
 serves a PDF the server already holds, `pdf_source` is now `"cache"`. In 3.1 it
