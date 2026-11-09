@@ -1363,6 +1363,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#upload-a-pdf-you-downloaded" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Upload a PDF you downloaded
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#limitations" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2544,6 +2555,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#upload-a-pdf-you-downloaded" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Upload a PDF you downloaded
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#limitations" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2756,9 +2778,19 @@ converts. To force a fresh conversion, delete the cached <code>.md</code> file.<
 </code></pre></div>
 <p>To find your library's resolver address, turn on your library under Google Scholar's <strong>Settings → Library links</strong>, then copy the address of its link on any search result: everything before the <code>?</code> is the base. Other templates follow the same pattern: an OpenAthens redirector is <code>https://go.openathens.net/redirector/&lt;your domain&gt;?url={doi_url}</code>, and an SFX or Alma resolver takes <code>?{openurl}</code> after its base address.</p>
 <p>Which OpenURL form to use depends on the resolver. Most accept both. OCLC's resolver looks up the DOI itself when it gets <code>{openurl}</code>, which fills in missing details.</p>
+<h2 id="upload-a-pdf-you-downloaded">Upload a PDF you downloaded<a class="headerlink" href="#upload-a-pdf-you-downloaded" title="Permanent link">&para;</a></h2>
+<p>When an access link works for you but not for the server, download the PDF yourself and hand it to the server through an upload link. The PDF travels over HTTP straight to the server, so it never passes through the conversation.</p>
+<ol>
+<li>The agent calls <code>create_upload_link</code> with the paper's identifier. It gets a one-time <code>url</code>.</li>
+<li>You, or the agent, send the file as the body of a <code>PUT</code> to that URL.</li>
+<li>The agent calls <code>fetch_and_convert</code> with the same identifier. The server finds the uploaded PDF in its cache and returns the paged Markdown.</li>
+</ol>
+<p>Without an identifier, the link response carries a <code>pdf_path</code> instead, and <code>convert_pdf_to_markdown</code> converts that file without any paper metadata. When <code>fetch_and_convert</code> can't get a PDF, its response names <code>create_upload_link</code> under <code>upload</code>.</p>
+<p>An uploaded PDF joins the shared cache, so later requests for the same paper get it too. If it turns out to be the wrong document, call <code>create_upload_link</code> with <code>replace</code> set to true. That removes the stored PDF and its converted Markdown at once, before any new upload.</p>
+<p>Upload links exist only on an HTTP deployment with <code>SCHOLAR_MCP_BASE_URL</code> set. Under stdio, put the file on the server's disk and call <code>convert_pdf_to_markdown</code> with its path. <a href="../../deploy/transfer-links/">Transfer links</a> covers what the operator configures.</p>
 <h2 id="limitations">Limitations<a class="headerlink" href="#limitations" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Paywalled papers</strong>: Alternative resolution only finds openly available versions. Truly paywalled papers require manual download followed by <code>convert_pdf_to_markdown</code>, or use <code>fetch_pdf_by_url</code> if you find a link. <a href="#access-links-for-licensed-papers">Access links</a> point you to your library's copy.</li>
+<li><strong>Paywalled papers</strong>: alternative resolution only finds openly available versions. A paywalled paper needs a manual download, which reaches the server through an <a href="#upload-a-pdf-you-downloaded">upload link</a> or a file path for <code>convert_pdf_to_markdown</code>. <a href="#access-links-for-licensed-papers">Access links</a> point you to your library's copy, and <code>fetch_pdf_by_url</code> takes a direct link you find.</li>
 <li><strong>Conversion quality varies</strong>: OCR quality depends on the PDF source. Scanned papers produce lower-quality results than born-digital PDFs.</li>
 <li><strong>docling-serve polling</strong>: Conversion is asynchronous internally. The server polls docling-serve for completion with a timeout of ~10 minutes (200 polls at 3-second intervals). This happens inside the background job, so the MCP client is not blocked.</li>
 </ul>

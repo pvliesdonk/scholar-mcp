@@ -2369,7 +2369,8 @@
 <p>A link pasted into a chat or written to a log is a live credential until it is used or expires, since nothing else guards the route. A shorter default lifetime narrows that window; the model can still ask for less with the tool's <code>ttl_s</code> argument, never for more than the ceiling.</p>
 <!-- DOMAIN-TRANSFER-EXTRA-START -->
 <!-- What a `ref` is for this server (a path, an id), which destinations an upload may name, and any overwrite rule; kept across copier update. -->
-<p>Scholar MCP registers no transfer-link tools. Downloaded PDFs and converted Markdown stay in its cache, and the tools return the converted text in pages rather than as a file to fetch.</p>
+<p>Scholar MCP mints upload links only, through its own tool <code>create_upload_link</code> in place of the generic pair, and only when <code>SCHOLAR_MCP_BASE_URL</code> is set. Without it the server starts as before, with no upload tool and no route. Converted text comes back from the conversion tools in pages, so the server mints no download links.</p>
+<p>The tool takes a paper identifier, or nothing. With an identifier, the upload lands where the PDF cache keeps that paper, so <code>fetch_and_convert</code> finds it. Without one, the server picks a fresh file name and returns its <code>pdf_path</code>. An upload whose bytes do not begin with <code>%PDF-</code> answers <code>415</code>, and the link stays usable for the right file. One sent to a paper that already has a valid stored PDF answers <code>409</code>, and keeps answering it until <code>create_upload_link</code> with <code>replace</code> removes the stored file.</p>
 <!-- DOMAIN-TRANSFER-EXTRA-END -->
 
 

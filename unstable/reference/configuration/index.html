@@ -1556,6 +1556,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#transfer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Transfer
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2694,6 +2705,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#transfer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Transfer
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -3556,6 +3578,49 @@ the keepalive. Do not rely on it alone.</p>
 <td><code>256</code></td>
 <td>No</td>
 <td>Maximum live background jobs per calling subject; further promotions are rejected until older records expire.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="transfer">Transfer<a class="headerlink" href="#transfer" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>SCHOLAR_MCP_TRANSFER_TTL_DEFAULT_S</code></td>
+<td><code>3600.0</code></td>
+<td>No</td>
+<td>Link lifetime in seconds when the caller requests no explicit TTL.</td>
+</tr>
+<tr>
+<td><code>SCHOLAR_MCP_TRANSFER_TTL_MAX_S</code></td>
+<td><code>86400.0</code></td>
+<td>No</td>
+<td>Ceiling in seconds a caller-requested link TTL is clamped to.</td>
+</tr>
+<tr>
+<td><code>SCHOLAR_MCP_TRANSFER_GRACE_TTL_S</code></td>
+<td><code>60.0</code></td>
+<td>No</td>
+<td>Post-success grace window in seconds: a served token's TTL shrinks to this so a stalled transfer can retry within it.</td>
+</tr>
+<tr>
+<td><code>SCHOLAR_MCP_TRANSFER_LEASE_S</code></td>
+<td><code>60.0</code></td>
+<td>No</td>
+<td>Crashed-handler reclaim window in seconds for an in-flight reservation.</td>
+</tr>
+<tr>
+<td><code>SCHOLAR_MCP_TRANSFER_MAX_UPLOAD_BYTES</code></td>
+<td><code>104857600</code></td>
+<td>No</td>
+<td>Maximum size in bytes of a single upload.</td>
 </tr>
 </tbody>
 </table>

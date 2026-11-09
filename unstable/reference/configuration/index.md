@@ -294,3 +294,13 @@ A `403 Forbidden` remains the cheaper signal when S2 does send one: `s2_key_forb
 | `SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S` | `25.0`   | No       | Seconds a long-running tool call may run in the foreground before it is promoted to a background job and a job handle is returned instead. |
 | `SCHOLAR_MCP_JOBS_RESULT_TTL_S`    | `3600.0` | No       | Seconds a background-job record (working or finished) is retained for polling before it expires from the store.                            |
 | `SCHOLAR_MCP_JOBS_MAX_PER_SUBJECT` | `256`    | No       | Maximum live background jobs per calling subject; further promotions are rejected until older records expire.                              |
+
+### Transfer
+
+| Variable                                | Default     | Required | Description                                                                                                           |
+| --------------------------------------- | ----------- | -------- | --------------------------------------------------------------------------------------------------------------------- |
+| `SCHOLAR_MCP_TRANSFER_TTL_DEFAULT_S`    | `3600.0`    | No       | Link lifetime in seconds when the caller requests no explicit TTL.                                                    |
+| `SCHOLAR_MCP_TRANSFER_TTL_MAX_S`        | `86400.0`   | No       | Ceiling in seconds a caller-requested link TTL is clamped to.                                                         |
+| `SCHOLAR_MCP_TRANSFER_GRACE_TTL_S`      | `60.0`      | No       | Post-success grace window in seconds: a served token's TTL shrinks to this so a stalled transfer can retry within it. |
+| `SCHOLAR_MCP_TRANSFER_LEASE_S`          | `60.0`      | No       | Crashed-handler reclaim window in seconds for an in-flight reservation.                                               |
+| `SCHOLAR_MCP_TRANSFER_MAX_UPLOAD_BYTES` | `104857600` | No       | Maximum size in bytes of a single upload.                                                                             |

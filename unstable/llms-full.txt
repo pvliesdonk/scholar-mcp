@@ -21,7 +21,7 @@ What the server can reach, what it changes and who gets in is set out in the [se
 
 ## Features
 
-Scholar MCP exposes 29 tools that let LLM-powered applications search, cross-reference, and retrieve scholarly sources across four peer domains:
+Scholar MCP exposes 30 tools that let LLM-powered applications search, cross-reference, and retrieve scholarly sources across four peer domains:
 
 - **Papers**: full-text search (year, venue, field, citation filters); single-paper lookup by DOI / S2 ID / arXiv / ACM / PubMed; author profile and name search; forward citations, backward references, BFS citation graph, shortest-path bridge discovery; recommendations from positive/negative examples; BibTeX/CSL-JSON/RIS citation generation; OpenAlex enrichment (affiliations, funders, OA status, and concepts).
 - **Patents**: search across 100+ patent offices via EPO OPS with CPC / applicant / inventor / jurisdiction filters; biblio, claims, description, family, legal and citations sections; NPL-to-paper resolution via Semantic Scholar and paper-to-patent citation discovery; patent PDF download via EPO OPS.
@@ -111,6 +111,7 @@ This server's tools make outbound HTTPS requests on the caller's behalf and keep
 - **Outbound requests.** Paper, citation and author tools call Semantic Scholar, OpenAlex, Crossref and Unpaywall. PDF lookups also try arXiv and PubMed Central. Book tools call Open Library and the Google Books API. Patent tools call EPO Open Patent Services. Standards tools call the IETF (`datatracker.ietf.org`), the RFC Editor, W3C, ETSI, the Common Criteria portal, the European Commission's harmonised-standards pages and GitHub (the Relaton datasets and the NIST catalogue releases). Every request carries the caller's query terms to that service.
 - **PDF download URLs.** `fetch_pdf_by_url` downloads the URL the caller passes, and `fetch_paper_pdf` and `fetch_and_convert` download URLs taken from paper metadata; all three follow redirects. They refuse a URL, or a redirect, whose host resolves to a loopback, private, link-local or other non-public address, so neither a caller nor an upstream record can use them to reach the server's own network or a cloud metadata endpoint. The check runs on the address the host resolves to just before each request; a host whose DNS answer changes between that check and the connection is not caught. `SCHOLAR_MCP_PDF_FETCH_ALLOW_PRIVATE=true` turns the check off for a deployment that fetches from an intranet repository; the tools can then reach anything the server's network can reach. They are write tools: `SCHOLAR_MCP_READ_ONLY=true`, the default, hides them along with the other conversion tools.
 - **PDF conversion.** When `SCHOLAR_MCP_DOCLING_URL` is set, conversion tools send downloaded PDFs to that docling-serve instance. When `SCHOLAR_MCP_VLM_API_URL` is set, the server passes that URL and `SCHOLAR_MCP_VLM_API_KEY` to docling-serve, which sends page images to the VLM endpoint.
+- **Upload links.** On an HTTP deployment with `SCHOLAR_MCP_BASE_URL` set, `create_upload_link` mints a one-time URL under `/transfer/`, outside authentication. Whoever holds it can write one PDF into the cache's `pdfs` directory, under the name fixed when the link was minted. The server accepts only bytes that begin with `%PDF-` and never overwrites a valid stored PDF. `replace` on the tool deletes a paper's stored PDF and converted Markdown before minting. The tool is a write tool, hidden in read-only mode. An uploaded PDF is trusted as-is. It joins the shared cache and is served to every client that asks for the paper, with `pdf_source` `"cache"` and nothing to mark it as an upload.
 - **Local data.** Tools read and write the SQLite cache, downloaded PDFs, converted Markdown and book covers under `SCHOLAR_MCP_CACHE_DIR`, and write nothing outside it.
 - **Credentials.** Upstream calls use the server's own keys, never the caller's: `SCHOLAR_MCP_S2_API_KEY`, `SCHOLAR_MCP_EPO_CONSUMER_KEY` and `SCHOLAR_MCP_EPO_CONSUMER_SECRET`, `SCHOLAR_MCP_GOOGLE_BOOKS_API_KEY`, `SCHOLAR_GITHUB_TOKEN`, and the VLM key above. `SCHOLAR_MCP_CONTACT_EMAIL` is sent to OpenAlex and Unpaywall as the polite-pool contact.
 
@@ -1716,7 +1717,9 @@ Where the file goes on an upload is fixed when the link is minted; whoever uploa
 
 A link pasted into a chat or written to a log is a live credential until it is used or expires, since nothing else guards the route. A shorter default lifetime narrows that window; the model can still ask for less with the tool's `ttl_s` argument, never for more than the ceiling.
 
-Scholar MCP registers no transfer-link tools. Downloaded PDFs and converted Markdown stay in its cache, and the tools return the converted text in pages rather than as a file to fetch.
+Scholar MCP mints upload links only, through its own tool `create_upload_link` in place of the generic pair, and only when `SCHOLAR_MCP_BASE_URL` is set. Without it the server starts as before, with no upload tool and no route. Converted text comes back from the conversion tools in pages, so the server mints no download links.
+
+The tool takes a paper identifier, or nothing. With an identifier, the upload lands where the PDF cache keeps that paper, so `fetch_and_convert` finds it. Without one, the server picks a fresh file name and returns its `pdf_path`. An upload whose bytes do not begin with `%PDF-` answers `415`, and the link stays usable for the right file. One sent to a paper that already has a valid stored PDF answers `409`, and keeps answering it until `create_upload_link` with `replace` removes the stored file.
 # Use
 
 # Use scholar-mcp
@@ -2139,9 +2142,23 @@ To find your library's resolver address, turn on your library under Google Schol
 
 Which OpenURL form to use depends on the resolver. Most accept both. OCLC's resolver looks up the DOI itself when it gets `{openurl}`, which fills in missing details.
 
+## Upload a PDF you downloaded
+
+When an access link works for you but not for the server, download the PDF yourself and hand it to the server through an upload link. The PDF travels over HTTP straight to the server, so it never passes through the conversation.
+
+1. The agent calls `create_upload_link` with the paper's identifier. It gets a one-time `url`.
+1. You, or the agent, send the file as the body of a `PUT` to that URL.
+1. The agent calls `fetch_and_convert` with the same identifier. The server finds the uploaded PDF in its cache and returns the paged Markdown.
+
+Without an identifier, the link response carries a `pdf_path` instead, and `convert_pdf_to_markdown` converts that file without any paper metadata. When `fetch_and_convert` can't get a PDF, its response names `create_upload_link` under `upload`.
+
+An uploaded PDF joins the shared cache, so later requests for the same paper get it too. If it turns out to be the wrong document, call `create_upload_link` with `replace` set to true. That removes the stored PDF and its converted Markdown at once, before any new upload.
+
+Upload links exist only on an HTTP deployment with `SCHOLAR_MCP_BASE_URL` set. Under stdio, put the file on the server's disk and call `convert_pdf_to_markdown` with its path. [Transfer links](https://pvliesdonk.github.io/scholar-mcp/unstable/deploy/transfer-links/index.md) covers what the operator configures.
+
 ## Limitations
 
-- **Paywalled papers**: Alternative resolution only finds openly available versions. Truly paywalled papers require manual download followed by `convert_pdf_to_markdown`, or use `fetch_pdf_by_url` if you find a link. [Access links](#access-links-for-licensed-papers) point you to your library's copy.
+- **Paywalled papers**: alternative resolution only finds openly available versions. A paywalled paper needs a manual download, which reaches the server through an [upload link](#upload-a-pdf-you-downloaded) or a file path for `convert_pdf_to_markdown`. [Access links](#access-links-for-licensed-papers) point you to your library's copy, and `fetch_pdf_by_url` takes a direct link you find.
 - **Conversion quality varies**: OCR quality depends on the PDF source. Scanned papers produce lower-quality results than born-digital PDFs.
 - **docling-serve polling**: Conversion is asynchronous internally. The server polls docling-serve for completion with a timeout of ~10 minutes (200 polls at 3-second intervals). This happens inside the background job, so the MCP client is not blocked.
 
@@ -2714,6 +2731,16 @@ A `403 Forbidden` remains the cheaper signal when S2 does send one: `s2_key_forb
 | `SCHOLAR_MCP_JOBS_RESULT_TTL_S`    | `3600.0` | No       | Seconds a background-job record (working or finished) is retained for polling before it expires from the store.                            |
 | `SCHOLAR_MCP_JOBS_MAX_PER_SUBJECT` | `256`    | No       | Maximum live background jobs per calling subject; further promotions are rejected until older records expire.                              |
 
+### Transfer
+
+| Variable                                | Default     | Required | Description                                                                                                           |
+| --------------------------------------- | ----------- | -------- | --------------------------------------------------------------------------------------------------------------------- |
+| `SCHOLAR_MCP_TRANSFER_TTL_DEFAULT_S`    | `3600.0`    | No       | Link lifetime in seconds when the caller requests no explicit TTL.                                                    |
+| `SCHOLAR_MCP_TRANSFER_TTL_MAX_S`        | `86400.0`   | No       | Ceiling in seconds a caller-requested link TTL is clamped to.                                                         |
+| `SCHOLAR_MCP_TRANSFER_GRACE_TTL_S`      | `60.0`      | No       | Post-success grace window in seconds: a served token's TTL shrinks to this so a stalled transfer can retry within it. |
+| `SCHOLAR_MCP_TRANSFER_LEASE_S`          | `60.0`      | No       | Crashed-handler reclaim window in seconds for an in-flight reservation.                                               |
+| `SCHOLAR_MCP_TRANSFER_MAX_UPLOAD_BYTES` | `104857600` | No       | Maximum size in bytes of a single upload.                                                                             |
+
 # Configuration Generator
 
 Answer a few questions and copy a ready-to-use configuration for your exact deployment. Everything runs in your browser; nothing you type is sent anywhere. Secret fields (tokens, keys) are never included in the shareable link; replace the `<YOUR_...>` placeholders if you leave them blank.
@@ -2740,6 +2767,7 @@ Every tool runs with the server's own privileges; the [security model](https://p
 | Full text       | [`convert_pdf_to_markdown`](https://pvliesdonk.github.io/scholar-mcp/unstable/reference/tools/full-text/#convert_pdf_to_markdown)         | Convert PDF to Markdown     | Convert a local PDF to Markdown using docling-serve.                                                                                                                                                                                               |
 | Full text       | [`fetch_and_convert`](https://pvliesdonk.github.io/scholar-mcp/unstable/reference/tools/full-text/#fetch_and_convert)                     | Fetch and Convert Paper     | Resolve a paper, download its PDF, and convert to Markdown.                                                                                                                                                                                        |
 | Full text       | [`fetch_pdf_by_url`](https://pvliesdonk.github.io/scholar-mcp/unstable/reference/tools/full-text/#fetch_pdf_by_url)                       | Fetch PDF by URL            | Download a PDF from a URL and optionally convert to Markdown.                                                                                                                                                                                      |
+| Full text       | [`create_upload_link`](https://pvliesdonk.github.io/scholar-mcp/unstable/reference/tools/full-text/#create_upload_link)                   | Create PDF Upload Link      | Create a one-time link for uploading a PDF this server cannot fetch.                                                                                                                                                                               |
 | Citations       | [`generate_citations`](https://pvliesdonk.github.io/scholar-mcp/unstable/reference/tools/citations/#generate_citations)                   | Generate Citations          | Generate formatted citations for one or more papers.                                                                                                                                                                                               |
 | Patents         | [`search_patents`](https://pvliesdonk.github.io/scholar-mcp/unstable/reference/tools/patents/#search_patents)                             | Search Patents              | Search for patents in the European Patent Office database.                                                                                                                                                                                         |
 | Patents         | [`get_patent`](https://pvliesdonk.github.io/scholar-mcp/unstable/reference/tools/patents/#get_patent)                                     | Get Patent                  | Get detailed information about a single patent.                                                                                                                                                                                                    |
@@ -3243,6 +3271,44 @@ On success with docling configured, a response looks like:
 The PDF is cached by filename, so subsequent calls with the same filename return immediately.
 
 The response body must begin with `%PDF-` before it is cached or sent to docling. A response with another body returns `{"error": "not_pdf"}` and is not converted. This header check does not validate the complete PDF structure.
+
+## `create_upload_link`
+
+**Create PDF Upload Link.** Destructive. Reaches outside the server. Tags: `write`.
+
+Create a one-time link for uploading a PDF this server cannot fetch.
+
+Use it when this server could not fetch a paper's PDF and the user can download it through their own library. Send the file as the body of an HTTP PUT to the returned `url`, outside the conversation. Never read it into the conversation. With an identifier, call `fetch_and_convert` with the same identifier once the upload is done. Without one, call `convert_pdf_to_markdown` with the returned `pdf_path`. If a converted paper turns out to be the wrong document, call this tool again with replace=true: the stored PDF and its conversion are removed at once.
+
+**Parameters**
+
+| Name         | Type             | Default | Description                                                                                                       |
+| ------------ | ---------------- | ------- | ----------------------------------------------------------------------------------------------------------------- |
+| `identifier` | `string \| null` | `null`  | Paper identifier (DOI, S2 ID, ARXIV:, etc.) the PDF belongs to. Omit it for a document that is not a known paper. |
+| `replace`    | `boolean`        | `false` | Remove this paper's stored PDF and Markdown before creating the link. Needs an identifier.                        |
+| `ttl_s`      | `number \| null` | `null`  | Link lifetime in seconds. Omit it for the server default. Values above the server's maximum are capped.           |
+
+**Returns**
+
+`url` and `expires_in_s`, plus `paper_id` with an identifier or `pdf_path` without one.
+
+The tool exists only on an HTTP deployment with `SCHOLAR_MCP_BASE_URL` set. For a paper, a response looks like:
+
+```
+{
+  "url": "https://mcp.example.com/transfer/<token>",
+  "expires_in_s": 3600.0,
+  "paper_id": "649def34f8be52c8b66281af98ae884c09aef38b"
+}
+```
+
+The file then goes up as the raw body of one request:
+
+```
+curl -X PUT --data-binary @paper.pdf "https://mcp.example.com/transfer/<token>"
+```
+
+After that, `fetch_and_convert` with the same identifier returns the paged Markdown.
 
 # Citations
 

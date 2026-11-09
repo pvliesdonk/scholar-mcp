@@ -1621,6 +1621,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#create_upload_link" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        create_upload_link
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2313,6 +2324,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#create_upload_link" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        create_upload_link
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2603,6 +2625,66 @@ document in one response.</p>
 docling. A response with another body returns <code>{"error": "not_pdf"}</code> and is
 not converted. This header check does not validate the complete PDF structure.</p>
 <!-- DOMAIN-EXAMPLE-fetch_pdf_by_url-END -->
+
+<h2 id="create_upload_link"><code>create_upload_link</code><a class="headerlink" href="#create_upload_link" title="Permanent link">&para;</a></h2>
+<p><strong>Create PDF Upload Link.</strong> Destructive. Reaches outside the server. Tags: <code>write</code>.</p>
+<p>Create a one-time link for uploading a PDF this server cannot fetch.</p>
+<p>Use it when this server could not fetch a paper's PDF and the user
+can download it through their own library. Send the file as the body
+of an HTTP PUT to the returned <code>url</code>, outside the conversation.
+Never read it into the conversation. With an identifier, call
+<code>fetch_and_convert</code> with the same identifier once the upload is done.
+Without one, call <code>convert_pdf_to_markdown</code> with the returned <code>pdf_path</code>.
+If a converted paper turns out to be the wrong document, call this
+tool again with replace=true: the stored PDF and its conversion are
+removed at once.</p>
+<p><strong>Parameters</strong></p>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>identifier</code></td>
+<td><code>string \| null</code></td>
+<td><code>null</code></td>
+<td>Paper identifier (DOI, S2 ID, ARXIV:, etc.) the PDF belongs to. Omit it for a document that is not a known paper.</td>
+</tr>
+<tr>
+<td><code>replace</code></td>
+<td><code>boolean</code></td>
+<td><code>false</code></td>
+<td>Remove this paper's stored PDF and Markdown before creating the link. Needs an identifier.</td>
+</tr>
+<tr>
+<td><code>ttl_s</code></td>
+<td><code>number \| null</code></td>
+<td><code>null</code></td>
+<td>Link lifetime in seconds. Omit it for the server default. Values above the server's maximum are capped.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Returns</strong></p>
+<p><code>url</code> and <code>expires_in_s</code>, plus <code>paper_id</code> with an
+identifier or <code>pdf_path</code> without one.</p>
+<!-- DOMAIN-EXAMPLE-create_upload_link-START -->
+<p>The tool exists only on an HTTP deployment with <code>SCHOLAR_MCP_BASE_URL</code> set. For a paper, a response looks like:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">"url"</span><span class="p">:</span><span class="w"> </span><span class="s2">"https://mcp.example.com/transfer/&lt;token&gt;"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"expires_in_s"</span><span class="p">:</span><span class="w"> </span><span class="mf">3600.0</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"paper_id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"649def34f8be52c8b66281af98ae884c09aef38b"</span>
+<span class="p">}</span>
+</code></pre></div>
+<p>The file then goes up as the raw body of one request:</p>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-X<span class="w"> </span>PUT<span class="w"> </span>--data-binary<span class="w"> </span>@paper.pdf<span class="w"> </span><span class="s2">"https://mcp.example.com/transfer/&lt;token&gt;"</span>
+</code></pre></div>
+<p>After that, <code>fetch_and_convert</code> with the same identifier returns the paged Markdown.</p>
+<!-- DOMAIN-EXAMPLE-create_upload_link-END -->
 
 
 
