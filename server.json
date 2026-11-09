@@ -153,6 +153,36 @@
           "description": "Maximum live background jobs per calling subject; further promotions are rejected until older records expire.",
           "format": "number",
           "default": "256"
+        },
+        {
+          "name": "SCHOLAR_MCP_TRANSFER_TTL_DEFAULT_S",
+          "description": "Link lifetime in seconds when the caller requests no explicit TTL.",
+          "format": "number",
+          "default": "3600.0"
+        },
+        {
+          "name": "SCHOLAR_MCP_TRANSFER_TTL_MAX_S",
+          "description": "Ceiling in seconds a caller-requested link TTL is clamped to.",
+          "format": "number",
+          "default": "86400.0"
+        },
+        {
+          "name": "SCHOLAR_MCP_TRANSFER_GRACE_TTL_S",
+          "description": "Post-success grace window in seconds: a served token's TTL shrinks to this so a stalled transfer can retry within it.",
+          "format": "number",
+          "default": "60.0"
+        },
+        {
+          "name": "SCHOLAR_MCP_TRANSFER_LEASE_S",
+          "description": "Crashed-handler reclaim window in seconds for an in-flight reservation.",
+          "format": "number",
+          "default": "60.0"
+        },
+        {
+          "name": "SCHOLAR_MCP_TRANSFER_MAX_UPLOAD_BYTES",
+          "description": "Maximum size in bytes of a single upload.",
+          "format": "number",
+          "default": "104857600"
         }
       ]
     },
@@ -412,6 +442,36 @@
           "description": "Maximum live background jobs per calling subject; further promotions are rejected until older records expire.",
           "format": "number",
           "default": "256"
+        },
+        {
+          "name": "SCHOLAR_MCP_TRANSFER_TTL_DEFAULT_S",
+          "description": "Link lifetime in seconds when the caller requests no explicit TTL.",
+          "format": "number",
+          "default": "3600.0"
+        },
+        {
+          "name": "SCHOLAR_MCP_TRANSFER_TTL_MAX_S",
+          "description": "Ceiling in seconds a caller-requested link TTL is clamped to.",
+          "format": "number",
+          "default": "86400.0"
+        },
+        {
+          "name": "SCHOLAR_MCP_TRANSFER_GRACE_TTL_S",
+          "description": "Post-success grace window in seconds: a served token's TTL shrinks to this so a stalled transfer can retry within it.",
+          "format": "number",
+          "default": "60.0"
+        },
+        {
+          "name": "SCHOLAR_MCP_TRANSFER_LEASE_S",
+          "description": "Crashed-handler reclaim window in seconds for an in-flight reservation.",
+          "format": "number",
+          "default": "60.0"
+        },
+        {
+          "name": "SCHOLAR_MCP_TRANSFER_MAX_UPLOAD_BYTES",
+          "description": "Maximum size in bytes of a single upload.",
+          "format": "number",
+          "default": "104857600"
         }
       ]
     }

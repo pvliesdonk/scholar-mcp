@@ -15,8 +15,8 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 import httpx
-from fastmcp import FastMCP
-from fastmcp.dependencies import Depends
+from fastmcp import Context, FastMCP
+from fastmcp.dependencies import CurrentContext, Depends
 from fastmcp.exceptions import ToolError
 from fastmcp_pvl_core import register_long_running_tool
 
@@ -69,6 +69,38 @@ def _cached_pdf_is_valid(path: Path) -> bool:
         return False
 
     return _pdf_cache_identity(opened) == _pdf_cache_identity(current) and has_header
+
+
+def _pdf_identity(path: Path) -> tuple[int, int, int, int, int] | None:
+    """Return *path*'s cache identity, or ``None`` when it does not exist."""
+    try:
+        return _pdf_cache_identity(path.stat())
+    except FileNotFoundError:
+        return None
+
+
+async def _cache_markdown(
+    md_path: Path,
+    markdown: str,
+    pdf_path: Path,
+    identity: tuple[int, int, int, int, int] | None,
+) -> None:
+    """Cache *markdown* unless *pdf_path* changed while it was converted.
+
+    ``create_upload_link(replace=true)`` deletes a paper's PDF and Markdown
+    (#546). A conversion already running would otherwise write the old
+    document's text afterwards, and it would be served for the right PDF.
+
+    Args:
+        md_path: Where the Markdown is cached.
+        markdown: The converted text.
+        pdf_path: The PDF it was converted from.
+        identity: ``_pdf_identity(pdf_path)`` taken before the PDF was read.
+    """
+    if await asyncio.to_thread(_pdf_identity, pdf_path) != identity:
+        logger.info("md_cache_skipped reason=pdf_changed path=%s", pdf_path)
+        return
+    await asyncio.to_thread(md_path.write_text, markdown, encoding="utf-8")
 
 
 def _write_pdf_cache(path: Path, content: bytes) -> None:
@@ -224,6 +256,21 @@ async def _download_pdf(
     return r.content
 
 
+def _paper_pdf_stem(paper: PaperRecord, identifier: str) -> str:
+    """Return the file stem a paper's PDF is cached under.
+
+    Args:
+        paper: The resolved Semantic Scholar paper record.
+        identifier: The caller's identifier, used when the record carries
+            no ``paperId``.
+
+    Returns:
+        The ``paperId``, or the identifier with ``/`` replaced by ``_``
+        when the record has none (absent or null).
+    """
+    return paper.get("paperId") or identifier.replace("/", "_")
+
+
 async def _ensure_paper_pdf(
     service: Service, paper: PaperRecord, identifier: str
 ) -> tuple[Path, str] | dict[str, Any]:
@@ -242,22 +289,24 @@ async def _ensure_paper_pdf(
 
     Returns:
         ``(path, source)`` once the PDF is on disk, or an error mapping when
-        no URL resolved or no candidate yielded a PDF. A failure after one
-        or more downloads reports the last source tried in ``error`` and
-        ``pdf_source``, and every source in ``attempts``.
+        no URL resolved or no candidate yielded a PDF. A PDF already in the
+        cache reports source ``"cache"``; it is checked before any source is
+        resolved, so a closed-access paper whose PDF was uploaded (#546) is
+        found too. A failure after one or more downloads reports the last
+        source tried in ``error`` and ``pdf_source``, and every source in
+        ``attempts``.
     """
-    pid = paper.get("paperId", identifier.replace("/", "_"))
     pdf_dir = service.config.cache_dir / "pdfs"
-    path = pdf_dir / f"{pid}.pdf"
+    path = pdf_dir / f"{_paper_pdf_stem(paper, identifier)}.pdf"
+    if await asyncio.to_thread(_cached_pdf_is_valid, path):
+        logger.info("pdf_already_exists path=%s", path)
+        return path, "cache"
     attempts: list[dict[str, Any]] = []
     async with (
         httpx.AsyncClient(timeout=120.0) as client,
         aclosing(_pdf_candidates(service, paper, client)) as candidates,
     ):
         async for candidate in candidates:
-            if not attempts and await asyncio.to_thread(_cached_pdf_is_valid, path):
-                logger.info("pdf_already_exists path=%s", path)
-                return path, candidate.source
             outcome = await _download_pdf(
                 client,
                 candidate,
@@ -414,6 +463,7 @@ async def convert_pdf_to_markdown(
             max_chars=max_chars,
         )
 
+    identity = await asyncio.to_thread(_pdf_identity, path)
     pdf_bytes = await asyncio.to_thread(path.read_bytes)
     try:
         markdown = await docling.convert(pdf_bytes, path.name, use_vlm=use_vlm)
@@ -422,7 +472,7 @@ async def convert_pdf_to_markdown(
         return {"error": "docling_error", "detail": str(exc)}
 
     md_dir.mkdir(parents=True, exist_ok=True)
-    await asyncio.to_thread(md_path.write_text, markdown, encoding="utf-8")
+    await _cache_markdown(md_path, markdown, path, identity)
     return page_text(
         {
             "markdown": markdown,
@@ -436,12 +486,36 @@ async def convert_pdf_to_markdown(
     )
 
 
+async def _upload_hint(
+    ctx: Context, service: Service, identifier: str
+) -> dict[str, str]:
+    """Point a failed fetch at create_upload_link, when this server offers it.
+
+    The tool is registered only on an HTTP deployment with a public URL, and
+    an operator can hide it; ``get_tool`` returns ``None`` for a hidden tool,
+    so the hint never names a tool the model cannot call.
+    """
+    from ._tools_upload import UPLOAD_TOOL  # imports this module
+
+    # The tool refuses without docling, so naming it then is a dead end.
+    if service.docling is None or await ctx.fastmcp.get_tool(UPLOAD_TOOL) is None:
+        return {}
+    return {
+        "upload": (
+            f"If the user can download this PDF, call {UPLOAD_TOOL} with "
+            f"identifier '{identifier}', send the file to the returned url, "
+            "then call fetch_and_convert again."
+        )
+    }
+
+
 async def fetch_and_convert(
     identifier: str,
     use_vlm: bool = False,
     text_offset: int = 0,
     max_chars: int | None = DEFAULT_MAX_TEXT_CHARS,
     service: Service = Depends(get_service),
+    ctx: Context = CurrentContext(),
 ) -> dict[str, Any]:
     """Resolve a paper, download its PDF, and convert to Markdown.
 
@@ -491,7 +565,11 @@ async def fetch_and_convert(
 
     fetched = await _ensure_paper_pdf(service, paper, identifier)
     if isinstance(fetched, dict):
-        return {"metadata": paper, **fetched}
+        return {
+            "metadata": paper,
+            **fetched,
+            **await _upload_hint(ctx, service, identifier),
+        }
     pdf_path, pdf_source = fetched
 
     docling = service.docling
@@ -513,6 +591,7 @@ async def fetch_and_convert(
         logger.debug("md_cache_hit path=%s", md_path)
     else:
         try:
+            identity = await asyncio.to_thread(_pdf_identity, pdf_path)
             pdf_bytes_for_convert = await asyncio.to_thread(pdf_path.read_bytes)
             markdown = await docling.convert(
                 pdf_bytes_for_convert, pdf_path.name, use_vlm=use_vlm
@@ -525,7 +604,7 @@ async def fetch_and_convert(
                 "error": "conversion_failed",
                 "detail": str(exc),
             }
-        await asyncio.to_thread(md_path.write_text, markdown, encoding="utf-8")
+        await _cache_markdown(md_path, markdown, pdf_path, identity)
 
     return page_text(
         {
@@ -675,6 +754,7 @@ async def fetch_pdf_by_url(
         markdown = await asyncio.to_thread(md_path.read_text, encoding="utf-8")
     else:
         try:
+            identity = await asyncio.to_thread(_pdf_identity, pdf_path)
             pdf_bytes = await asyncio.to_thread(pdf_path.read_bytes)
             markdown = await docling.convert(pdf_bytes, pdf_path.name, use_vlm=use_vlm)
         except Exception as exc:
@@ -684,7 +764,7 @@ async def fetch_pdf_by_url(
                 "error": "conversion_failed",
                 "detail": str(exc),
             }
-        await asyncio.to_thread(md_path.write_text, markdown, encoding="utf-8")
+        await _cache_markdown(md_path, markdown, pdf_path, identity)
 
     return page_text(
         {

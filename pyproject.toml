@@ -350,6 +350,7 @@ ignore = ["E501"]
 "src/scholar_mcp/_tools_patent.py" = ["ARG001", "B008", "TC001", "TC002", "PLR0913"]
 "src/scholar_mcp/_tools_books.py" = ["ARG001", "B008", "TC001", "TC002", "PLR0913"]
 "src/scholar_mcp/_tools_standards.py" = ["ARG001", "B008", "TC001", "TC002", "PLR0913"]
+"src/scholar_mcp/_tools_upload.py" = ["ARG001", "B008", "TC001", "TC002", "PLR0913"]
 "src/scholar_mcp/_book_enrichment.py" = ["TC001"]
 "src/scholar_mcp/_openlibrary_client.py" = ["TC001"]
 "src/scholar_mcp/_standards_client.py" = ["TC001", "TC002", "TC003"]
@@ -522,4 +523,6 @@ strict = true
 SCHOLAR_MCP_READ_ONLY = "false"
 SCHOLAR_MCP_EPO_CONSUMER_KEY = "docs-reference"
 SCHOLAR_MCP_EPO_CONSUMER_SECRET = "docs-reference"
+# HTTP with a public URL, so create_upload_link (wired only then) is listed.
+SCHOLAR_MCP_BASE_URL = "https://example.invalid"
 # PROJECT-DOCS-CHECKS-END

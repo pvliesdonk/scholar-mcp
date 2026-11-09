@@ -14,7 +14,7 @@ Scholarly papers, patents, books, standards and PDF conversion
 
 <!-- DOMAIN-README-PITCH-START -->
 
-29 tools, organised by scholarly source type.
+30 tools, organised by scholarly source type.
 
 ### Source domains
 
@@ -27,6 +27,7 @@ Scholarly papers, patents, books, standards and PDF conversion
 
 - **Enrichment pipeline**: phased enrichment from multiple sources: OpenAlex (OA status, affiliations, funders, concepts), CrossRef (publisher, page ranges, container titles), Google Books (preview links, excerpts), and Open Library (book metadata). Runs automatically on paper and book results.
 - **PDF conversion**: download open-access PDFs and convert to Markdown via [docling-serve](https://github.com/DS4SD/docling-serve), with optional VLM enrichment for formulas and figures; automatic fallback to ArXiv, PubMed Central, and Unpaywall when Semantic Scholar has no OA link; direct URL download for PDFs found elsewhere; converted text is paged so large documents fit in MCP responses.
+- **Uploads**: a one-time upload link brings a PDF you downloaded yourself into the server's cache over HTTP.
 - **Intelligent caching**: SQLite-backed cache with per-table TTLs (30 days for papers/authors, 7 days for citations/references) and identifier aliasing.
 
 ### Coverage by domain

@@ -110,3 +110,51 @@ every library it links to.
   parses it when it builds links. Parsing a short JSON list is cheap,
   and keeping config fields plain avoids imports outside the config module's
   sentinel blocks.
+
+## When the user fetches the PDF
+
+An access link often works for the user and not for the server, which sits
+on another network. [#546](https://github.com/pvliesdonk/scholar-mcp/issues/546)
+closes that gap: the user downloads the PDF, and it reaches the server over
+a one-time HTTP upload link (pvl-core's transfer subsystem), so the bytes
+never pass through the agent's context. The agent's part is a link, an
+upload done outside the conversation, and an ordinary conversion call.
+
+- **`create_upload_link` mints upload links only.** It is path 2 of the
+  transfer recipe: `build_transfer_links` plus one domain tool. The generic
+  `create_download_link` would have nothing to serve, since conversion
+  results come back in pages.
+- **The upload stores, it does not convert.** docling takes minutes and the
+  sink holds the body in memory inside the HTTP request, so the sink only
+  checks the `%PDF-` header and writes the file. Conversion stays with
+  `fetch_and_convert` (with an identifier) and `convert_pdf_to_markdown`
+  (without one).
+- **The target is fixed when the link is minted.** With an identifier, the
+  tool resolves the paper first, so a typo fails before any upload, and the
+  target is the stem `_ensure_paper_pdf` reads. Without one, the server picks
+  `upload-<hex>` and returns the `pdf_path`, so the agent can proceed even
+  when the user did the upload.
+- **The cache is read before any download source.** `_ensure_paper_pdf`
+  used to consult its cache inside the candidate loop, which never ran for a
+  closed-access paper with no source. A cache hit now reports `pdf_source`
+  `"cache"`.
+- **Uploads join the shared cache.** The maintainer decided this
+  (2026-11-09), in line with `fetch_pdf_by_url` and `convert_pdf_to_markdown`,
+  which already cache what a caller supplies. There is no per-upload opt-out.
+- **A wrong document is corrected with `replace`, not overwritten.** Minting
+  is refused while a valid PDF is stored for the paper, and the sink answers
+  `409` if one appeared since, so two links cannot race and leave stale
+  Markdown behind. `replace=true` deletes the stored PDF and both Markdown
+  conversions when the link is minted. If the right file never arrives, the
+  wrong content is gone anyway, so there is no separate remove tool.
+- **No public URL, no tool.** Upload links need `SCHOLAR_MCP_BASE_URL`. A
+  server without it starts as before and logs `pdf_upload_disabled`, rather
+  than refusing to start as the template recipe suggests, which would break
+  existing HTTP deployments on upgrade.
+- **The failure payload names the tool only when it is callable.**
+  `fetch_and_convert` adds an `upload` hint when `get_tool` finds
+  `create_upload_link`, which it does not for a hidden or unregistered tool.
+  The hint never creates a link: most failed fetches end without an upload.
+- **No inline base64 route** ([#597](https://github.com/pvliesdonk/scholar-mcp/issues/597)).
+  A PDF passed as a tool argument occupies the agent's context, which is the
+  cost this design exists to avoid.

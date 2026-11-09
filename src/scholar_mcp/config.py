@@ -31,6 +31,7 @@ from fastmcp_pvl_core import (
 from fastmcp_pvl_core import (
     JobsConfig,
     ServerConfig,
+    TransferConfig,
     # Used by `_default_server_name` below, and re-exported so CONFIG-FROM-ENV
     # additions don't need a new import.  No `noqa: F401` — that factory makes
     # the import genuinely used, and a redundant directive fails RUF100.
@@ -83,6 +84,15 @@ class ProjectConfig:
     # puts the SCHOLAR_MCP_JOBS_* vars in front of the config-surface
     # generator: `server_config_surface()` covers ServerConfig only.
     jobs: JobsConfig = field(default_factory=JobsConfig)
+    # The transfer subsystem's knobs (link TTL default/max, post-success grace,
+    # crashed-handler lease, per-upload cap) behind create_upload_link (#546).
+    # Composed as one field like `jobs`: the config-surface generator finds
+    # the SCHOLAR_MCP_TRANSFER_* vars by AST-walking TransferConfig.from_env
+    # and documents them from core's own field metadata.
+    transfer: TransferConfig = field(
+        default_factory=TransferConfig,
+        metadata={"tags": ("transfer",)},
+    )
     read_only: bool = field(
         default=True,
         metadata={
@@ -295,6 +305,7 @@ class ProjectConfig:
             server=ServerConfig.from_env(_ENV_PREFIX),
             # CONFIG-FROM-ENV-START — populate domain fields below; kept across copier update
             jobs=JobsConfig.from_env(_ENV_PREFIX),
+            transfer=TransferConfig.from_env(_ENV_PREFIX),
             read_only=parse_bool(env(_ENV_PREFIX, "READ_ONLY", "true")),
             s2_api_key=env(_ENV_PREFIX, "S2_API_KEY"),
             docling_url=env(_ENV_PREFIX, "DOCLING_URL"),

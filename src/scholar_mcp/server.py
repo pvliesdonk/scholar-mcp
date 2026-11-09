@@ -347,6 +347,29 @@ def make_server(
     #     # Contribute the core's capability-link workflow prose for your tool
     #     # (dropped automatically if the tool is hidden by TOOLS_DENY):
     #     add_transfer_workflow(mcp, download_tool="share_document")
+    #
+    # -- Upload links for PDFs the server could not fetch (#546) ---------------
+    #
+    # Path 2 above, upload only. Unlike the recipe, a missing base URL does not
+    # stop the server: it starts without the tool, as markdown-vault-mcp does,
+    # because .env.example ships BASE_URL commented out and a refusal to start
+    # would break existing HTTP deployments on upgrade.
+    if transport != "stdio" and config.server.base_url:
+        from fastmcp_pvl_core import build_transfer_links
+
+        from scholar_mcp._tools_upload import PdfUploadSink, register_upload_tool
+
+        register_upload_tool(
+            mcp,
+            build_transfer_links(
+                mcp,
+                config.server,
+                config.transfer,
+                sink=PdfUploadSink(config.cache_dir / "pdfs"),
+            ),
+        )
+    elif transport != "stdio":
+        logger.info("pdf_upload_disabled reason=%s", "base_url_unset")
     # DOMAIN-WIRING-END
 
     # Unauthenticated liveness (``<prefix>/health``, static 200) and readiness

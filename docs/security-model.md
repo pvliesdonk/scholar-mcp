@@ -62,6 +62,16 @@ keep what they fetch in a local cache.
   `SCHOLAR_MCP_VLM_API_URL` is set, the server passes that URL and
   `SCHOLAR_MCP_VLM_API_KEY` to docling-serve, which sends page images to the
   VLM endpoint.
+- **Upload links.** On an HTTP deployment with `SCHOLAR_MCP_BASE_URL` set,
+  `create_upload_link` mints a one-time URL under `/transfer/`, outside
+  authentication. Whoever holds it can write one PDF into the cache's `pdfs`
+  directory, under the name fixed when the link was minted. The server
+  accepts only bytes that begin with `%PDF-` and never overwrites a valid
+  stored PDF. `replace` on the tool deletes a paper's stored PDF and
+  converted Markdown before minting. The tool is a write tool, hidden in
+  read-only mode. An uploaded PDF is trusted as-is. It joins the shared
+  cache and is served to every client that asks for the paper, with
+  `pdf_source` `"cache"` and nothing to mark it as an upload.
 - **Local data.** Tools read and write the SQLite cache, downloaded PDFs,
   converted Markdown and book covers under `SCHOLAR_MCP_CACHE_DIR`, and write
   nothing outside it.

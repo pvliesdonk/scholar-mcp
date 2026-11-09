@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import weakref
+
 from fastmcp import FastMCP
 from fastmcp_pvl_core import Jobs, JobsConfig, build_jobs, register_job_tools
 
@@ -17,6 +19,33 @@ _JOBS_NOTE = (
     "Those calls commonly answer with a job_id rather than a result; a cache "
     "hit answers inline, with no job."
 )
+
+# The one Jobs each server's tools share, for registrations that happen after
+# register_tools (create_upload_link is wired in server.py's DOMAIN-WIRING,
+# once the transport is known). Keyed weakly so a discarded test server
+# releases its Jobs.
+_SERVER_JOBS: weakref.WeakKeyDictionary[FastMCP, tuple[Jobs, JobsConfig]] = (
+    weakref.WeakKeyDictionary()
+)
+
+
+def jobs_for(mcp: FastMCP) -> tuple[Jobs, JobsConfig]:
+    """Return the ``Jobs`` and settings :func:`register_tools` built for *mcp*.
+
+    Args:
+        mcp: A server :func:`register_tools` has run on.
+
+    Returns:
+        The server's shared ``(jobs, jobs_config)``.
+
+    Raises:
+        RuntimeError: If :func:`register_tools` has not run on *mcp*.
+    """
+    try:
+        return _SERVER_JOBS[mcp]
+    except KeyError:
+        msg = "register_tools has not run on this server; no Jobs to share"
+        raise RuntimeError(msg) from None
 
 
 def register_tools(
@@ -51,6 +80,7 @@ def register_tools(
     else:
         # Tests and embedders can inject Jobs without reading operator env.
         jobs_config = jobs_config or JobsConfig()
+    _SERVER_JOBS[mcp] = (jobs, jobs_config)
 
     # Category modules are imported here to avoid circular imports.
     # Each module registers its tools onto `mcp` and accesses the
