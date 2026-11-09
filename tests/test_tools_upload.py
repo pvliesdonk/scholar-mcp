@@ -86,7 +86,7 @@ async def test_sink_read_is_not_served(tmp_path: Path) -> None:
     assert excinfo.value.status_code == 404
 
 
-@pytest.mark.parametrize("handle", ["../x", "a/b", "a\\b", ".."])
+@pytest.mark.parametrize("handle", ["../x", "a/b", "a\\b", "..", ".", ""])
 async def test_sink_rejects_traversal_handle(tmp_path: Path, handle: str) -> None:
     sink = PdfUploadSink(tmp_path / "pdfs")
     with pytest.raises(TransferSinkError) as excinfo:
@@ -195,6 +195,9 @@ async def test_link_for_paper(http_server: FastMCP, pdf_dir: Path) -> None:
 async def test_upload_of_non_pdf_answers_415(http_server: FastMCP) -> None:
     data = await _call(http_server, {})
     assert await _put(http_server, data["url"], b"<html>login</html>") == 415
+    # The rejected upload leaves the link usable for the real file.
+    assert await _put(http_server, data["url"], b"%PDF-1.7 real") == 200
+    assert Path(data["pdf_path"]).read_bytes() == b"%PDF-1.7 real"
 
 
 async def test_link_refused_when_cached(http_server: FastMCP, pdf_dir: Path) -> None:
@@ -354,3 +357,21 @@ async def test_no_pdf_payload_silent_without_docling(
     data = await _fetch_without_pdf(http_server_no_docling)
     assert data["error"] == "no_oa_pdf"
     assert "upload" not in data
+
+
+async def test_sink_accepts_dots_inside_a_stem(tmp_path: Path) -> None:
+    # "10.1_a..b" is one path segment: a DOI suffix may contain "..".
+    sink = PdfUploadSink(tmp_path / "pdfs")
+    await sink.write("10.1_a..b", b"%PDF-1.7 x")
+    assert (tmp_path / "pdfs" / "10.1_a..b.pdf").exists()
+
+
+async def test_null_paper_id_uses_identifier_stem(
+    http_server: FastMCP, pdf_dir: Path
+) -> None:
+    with respx.mock(assert_all_called=False) as router:
+        _mock_paper(router, {"paperId": None, "title": "Null id"})
+        data = await _call(http_server, {"identifier": "10.1/a..b"})
+    assert data["paper_id"] == "10.1_a..b"
+    assert await _put(http_server, data["url"], b"%PDF-1.7 doi") == 200
+    assert (pdf_dir / "10.1_a..b.pdf").exists()

@@ -67,7 +67,9 @@ class PdfUploadSink:
 
     def _target(self, handle: str) -> Path:
         """Map a handle to its file, refusing anything that is not a bare stem."""
-        if not handle or "/" in handle or "\\" in handle or ".." in handle:
+        # One path segment: ".." inside a stem (a DOI suffix may hold one) is
+        # harmless; only separators and the bare dot names could leave pdfs/.
+        if handle in {"", ".", ".."} or "/" in handle or "\\" in handle:
             raise TransferSinkError(400, "upload handle is not a file stem")
         return self._pdf_dir / f"{handle}.pdf"
 
@@ -170,6 +172,7 @@ def register_upload_tool(mcp: FastMCP, links: TransferLinks) -> None:
             replace: Remove this paper's stored PDF and Markdown before
                 creating the link. Needs an identifier.
             ttl_s: Link lifetime in seconds. Omit it for the server default.
+                Values above the server's maximum are capped.
 
         Returns:
             ``url`` and ``expires_in_s``, plus ``paper_id`` with an

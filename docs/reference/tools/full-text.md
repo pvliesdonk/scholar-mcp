@@ -242,7 +242,7 @@ removed at once.
 |---|---|---|---|
 | `identifier` | `string \| null` | `null` | Paper identifier (DOI, S2 ID, ARXIV:, etc.) the PDF belongs to. Omit it for a document that is not a known paper. |
 | `replace` | `boolean` | `false` | Remove this paper's stored PDF and Markdown before creating the link. Needs an identifier. |
-| `ttl_s` | `number \| null` | `null` | Link lifetime in seconds. Omit it for the server default. |
+| `ttl_s` | `number \| null` | `null` | Link lifetime in seconds. Omit it for the server default. Values above the server's maximum are capped. |
 
 **Returns**
 

@@ -69,7 +69,9 @@ keep what they fetch in a local cache.
   accepts only bytes that begin with `%PDF-` and never overwrites a valid
   stored PDF. `replace` on the tool deletes a paper's stored PDF and
   converted Markdown before minting. The tool is a write tool, hidden in
-  read-only mode.
+  read-only mode. An uploaded PDF is trusted as-is. It joins the shared
+  cache and is served to every client that asks for the paper, with
+  `pdf_source` `"cache"` and nothing to mark it as an upload.
 - **Local data.** Tools read and write the SQLite cache, downloaded PDFs,
   converted Markdown and book covers under `SCHOLAR_MCP_CACHE_DIR`, and write
   nothing outside it.

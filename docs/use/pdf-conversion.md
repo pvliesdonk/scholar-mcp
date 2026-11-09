@@ -208,6 +208,6 @@ Upload links exist only on an HTTP deployment with `SCHOLAR_MCP_BASE_URL` set. U
 
 ## Limitations
 
-- **Paywalled papers**: Alternative resolution only finds openly available versions. Truly paywalled papers require manual download followed by `convert_pdf_to_markdown`, or use `fetch_pdf_by_url` if you find a link. [Access links](#access-links-for-licensed-papers) point you to your library's copy.
+- **Paywalled papers**: alternative resolution only finds openly available versions. A paywalled paper needs a manual download, which reaches the server through an [upload link](#upload-a-pdf-you-downloaded) or a file path for `convert_pdf_to_markdown`. [Access links](#access-links-for-licensed-papers) point you to your library's copy, and `fetch_pdf_by_url` takes a direct link you find.
 - **Conversion quality varies**: OCR quality depends on the PDF source. Scanned papers produce lower-quality results than born-digital PDFs.
 - **docling-serve polling**: Conversion is asynchronous internally. The server polls docling-serve for completion with a timeout of ~10 minutes (200 polls at 3-second intervals). This happens inside the background job, so the MCP client is not blocked.

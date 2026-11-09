@@ -265,9 +265,10 @@ def _paper_pdf_stem(paper: PaperRecord, identifier: str) -> str:
             no ``paperId``.
 
     Returns:
-        The ``paperId``, or the identifier with ``/`` replaced by ``_``.
+        The ``paperId``, or the identifier with ``/`` replaced by ``_``
+        when the record has none (absent or null).
     """
-    return paper.get("paperId", identifier.replace("/", "_"))
+    return paper.get("paperId") or identifier.replace("/", "_")
 
 
 async def _ensure_paper_pdf(
