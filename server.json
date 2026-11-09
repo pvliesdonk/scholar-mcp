@@ -3,7 +3,7 @@
   "name": "io.github.pvliesdonk/scholar-mcp",
   "title": "Scholar MCP",
   "description": "Scholarly papers, patents, books, standards and PDF conversion",
-  "version": "3.1.2",
+  "version": "3.2.0",
   "websiteUrl": "https://pvliesdonk.github.io/scholar-mcp/",
   "repository": {
     "url": "https://github.com/pvliesdonk/scholar-mcp",
@@ -13,7 +13,7 @@
     {
       "registryType": "pypi",
       "identifier": "pvliesdonk-scholar-mcp",
-      "version": "3.1.2",
+      "version": "3.2.0",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"
@@ -192,7 +192,7 @@
     },
     {
       "registryType": "oci",
-      "identifier": "ghcr.io/pvliesdonk/scholar-mcp:v3.1.2",
+      "identifier": "ghcr.io/pvliesdonk/scholar-mcp:v3.2.0",
       "transport": {
         "type": "streamable-http",
         "url": "http://localhost:{--port}/mcp"

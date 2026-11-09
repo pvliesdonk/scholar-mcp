@@ -2,6 +2,18 @@
 
 <!-- version list -->
 
+## 3.2.0 (2026-11-09)
+
+### Features
+
+- accept PDFs the server could not fetch through upload links (#600)
+
+### Bug Fixes
+
+- keep the document number in NIST shorthand without sp (#599)
+- cap VLM output with max_completion_tokens (#605)
+- let operators set VLM request parameters (#607)
+
 ## 3.2.0-rc.1 (2026-11-09)
 
 ### Features
