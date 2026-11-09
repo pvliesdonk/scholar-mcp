@@ -217,7 +217,7 @@ async def test_fetch_paper_pdf_cache_hit(
     data = json.loads(result.content[0].text)
     _assert_inline(data)
     assert data["path"] == str(pdf_path)
-    assert data["source"] == "s2_oa"
+    assert data["source"] == "cache"
 
 
 @pytest.mark.respx(assert_all_called=False)
@@ -625,6 +625,35 @@ async def test_fetch_and_convert_success(
     assert data["pdf_source"] == "s2_oa"
 
 
+async def test_fetch_and_convert_finds_cached_pdf_without_candidates(
+    service_with_docling: Service, slow_jobs: Jobs
+) -> None:
+    """A cached PDF serves a closed-access paper that has no download source.
+
+    An uploaded PDF (#546) is the case this covers: the paper has no
+    open-access URL and no alternative, so the cache is the only source.
+    """
+    paper_json = {"paperId": "c1", "openAccessPdf": None, "externalIds": {}}
+    pdf_dir = service_with_docling.config.cache_dir / "pdfs"
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+    (pdf_dir / "c1.pdf").write_bytes(b"%PDF-1.7 uploaded")
+    service_with_docling.docling.convert = AsyncMock(  # type: ignore[union-attr]
+        return_value="# Uploaded\n\nBody."
+    )
+
+    with respx.mock(assert_all_called=False) as router:
+        router.get(f"{S2_BASE}/paper/c1").mock(
+            return_value=httpx.Response(200, json=paper_json)
+        )
+        async with Client(pdf_app(service_with_docling, slow_jobs)) as client:
+            result = await client.call_tool("fetch_and_convert", {"identifier": "c1"})
+
+    data = json.loads(result.content[0].text)
+    _assert_inline(data)
+    assert data["markdown"].startswith("# Uploaded")
+    assert data["pdf_source"] == "cache"
+
+
 @pytest.mark.respx(assert_all_called=False)
 async def test_fetch_and_convert_reuses_cached_markdown(
     service_with_docling: Service, slow_jobs: Jobs
@@ -672,7 +701,9 @@ async def test_fetch_and_convert_reuses_cached_markdown(
     assert second_data["markdown"] == first_data["markdown"]
     assert second_data["md_path"] == first_data["md_path"]
     assert second_data["vlm_used"] is False
-    assert second_data["pdf_source"] == first_data["pdf_source"]
+    # The second call is served from the PDF cache and says so (#546).
+    assert first_data["pdf_source"] == "s2_oa"
+    assert second_data["pdf_source"] == "cache"
 
 
 @pytest.mark.respx(assert_all_called=False)

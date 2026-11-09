@@ -224,6 +224,20 @@ async def _download_pdf(
     return r.content
 
 
+def _paper_pdf_stem(paper: PaperRecord, identifier: str) -> str:
+    """Return the file stem a paper's PDF is cached under.
+
+    Args:
+        paper: The resolved Semantic Scholar paper record.
+        identifier: The caller's identifier, used when the record carries
+            no ``paperId``.
+
+    Returns:
+        The ``paperId``, or the identifier with ``/`` replaced by ``_``.
+    """
+    return paper.get("paperId", identifier.replace("/", "_"))
+
+
 async def _ensure_paper_pdf(
     service: Service, paper: PaperRecord, identifier: str
 ) -> tuple[Path, str] | dict[str, Any]:
@@ -242,22 +256,24 @@ async def _ensure_paper_pdf(
 
     Returns:
         ``(path, source)`` once the PDF is on disk, or an error mapping when
-        no URL resolved or no candidate yielded a PDF. A failure after one
-        or more downloads reports the last source tried in ``error`` and
-        ``pdf_source``, and every source in ``attempts``.
+        no URL resolved or no candidate yielded a PDF. A PDF already in the
+        cache reports source ``"cache"``; it is checked before any source is
+        resolved, so a closed-access paper whose PDF was uploaded (#546) is
+        found too. A failure after one or more downloads reports the last
+        source tried in ``error`` and ``pdf_source``, and every source in
+        ``attempts``.
     """
-    pid = paper.get("paperId", identifier.replace("/", "_"))
     pdf_dir = service.config.cache_dir / "pdfs"
-    path = pdf_dir / f"{pid}.pdf"
+    path = pdf_dir / f"{_paper_pdf_stem(paper, identifier)}.pdf"
+    if await asyncio.to_thread(_cached_pdf_is_valid, path):
+        logger.info("pdf_already_exists path=%s", path)
+        return path, "cache"
     attempts: list[dict[str, Any]] = []
     async with (
         httpx.AsyncClient(timeout=120.0) as client,
         aclosing(_pdf_candidates(service, paper, client)) as candidates,
     ):
         async for candidate in candidates:
-            if not attempts and await asyncio.to_thread(_cached_pdf_is_valid, path):
-                logger.info("pdf_already_exists path=%s", path)
-                return path, candidate.source
             outcome = await _download_pdf(
                 client,
                 candidate,
