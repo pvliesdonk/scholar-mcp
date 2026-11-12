@@ -2,6 +2,15 @@
 
 Newest first. One entry per research pass.
 
+## 2026-11-12
+
+### OpenAlex keys and limits
+
+New page [OpenAlex API keys and limits](openalex-auth.md) (#619), from the
+OpenAlex help pages on authentication, pricing, example costs and errors (all
+last updated 2026-11-03). Not settled: the response to an invalid key, and
+whether `mailto` still has any effect.
+
 ## 2026-11-06
 
 ### OPS party name formats

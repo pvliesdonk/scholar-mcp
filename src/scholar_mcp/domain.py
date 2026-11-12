@@ -144,7 +144,12 @@ class Service:
 
         self.s2 = S2Client(api_key=config.s2_api_key)
         stack.push_async_callback(self.s2.aclose)
-        self.openalex = OpenAlexClient(_http_client(stack, _OPENALEX_BASE, ua))
+        openalex_http = _http_client(stack, _OPENALEX_BASE, ua)
+        if config.openalex_api_key:
+            # A header, not the documented ``api_key=`` query parameter, so
+            # the key never appears in a URL or a request log line.
+            openalex_http.headers["Authorization"] = f"Bearer {config.openalex_api_key}"
+        self.openalex = OpenAlexClient(openalex_http)
         self.crossref = CrossRefClient(_http_client(stack, _CROSSREF_BASE, ua))
         self.google_books = GoogleBooksClient(
             _http_client(stack, _GOOGLE_BOOKS_BASE, ua),

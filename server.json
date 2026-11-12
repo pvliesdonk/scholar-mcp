@@ -117,6 +117,11 @@
           "description": "Contact email for the OpenAlex polite pool (improves rate limits). Also enables Unpaywall lookups as a PDF fallback source."
         },
         {
+          "name": "SCHOLAR_MCP_OPENALEX_API_KEY",
+          "description": "OpenAlex API key, sent as a Bearer token to OpenAlex only. Optional. Without a key, OpenAlex allows a smaller daily budget and fewer requests per second. Create one at https://openalex.org/settings/api-key.",
+          "isSecret": true
+        },
+        {
           "name": "SCHOLAR_MCP_EPO_CONSUMER_KEY",
           "description": "EPO Open Patent Services consumer key. Optional; patent tools are hidden when unset. Register at https://developers.epo.org/user/register."
         },
@@ -408,6 +413,11 @@
         {
           "name": "SCHOLAR_MCP_CONTACT_EMAIL",
           "description": "Contact email for the OpenAlex polite pool (improves rate limits). Also enables Unpaywall lookups as a PDF fallback source."
+        },
+        {
+          "name": "SCHOLAR_MCP_OPENALEX_API_KEY",
+          "description": "OpenAlex API key, sent as a Bearer token to OpenAlex only. Optional. Without a key, OpenAlex allows a smaller daily budget and fewer requests per second. Create one at https://openalex.org/settings/api-key.",
+          "isSecret": true
         },
         {
           "name": "SCHOLAR_MCP_EPO_CONSUMER_KEY",

@@ -39,6 +39,7 @@ world does. Read the relevant one before changing code that talks to it — the
 | [OpenURL 0.1 and 1.0 query strings](openurl.md) | The keys, identifier forms and encoding of OpenURL 0.1 and Z39.88-2004 KEV links, and hybrid links | `_access_links.py`: the `{openurl}` placeholders |
 | [CrossRef work journal fields](crossref-works.md) | ISSN, volume, issue, pages and container title of a CrossRef work | `_access_links.py`: `_crossref_details` |
 | [OpenAlex work objects](openalex-works.md) | The work fields Scholar MCP reads and how they map onto an S2-shaped paper | `_openalex_client.py`: `work_to_paper`, `work_venue`; `_enricher_openalex.py`; `_tools_utility.py` |
+| [OpenAlex API keys and limits](openalex-auth.md) | Passing a key, the daily budget, and the 403 and 429 refusals | `domain.py`: `_open_clients`; `_openalex_client.py`: `get_by_doi`, `OpenAlexRefusedError` |
 | [DOIs in free-text citations](doi-in-citation-text.md) | DOI syntax, and the forms a DOI takes in EPO non-patent literature citations | `_epo_xml.py`: `extract_doi`; `_tools_patent.py` NPL resolution |
 
 ## Vendored sources

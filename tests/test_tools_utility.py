@@ -1035,3 +1035,55 @@ async def test_openalex_fallback_miss_is_not_found_and_not_cached(
     entry = json.loads(result.content[0].text)["results"][0]
     assert entry == {"identifier": "DOI:10.1/missing", "error": "not_found"}
     assert await service.cache.get_openalex("10.1/missing") is None
+
+
+@pytest.mark.parametrize(
+    ("status", "error", "retryable"),
+    [(429, "rate_limited", True), (403, "openalex_unavailable", False)],
+    ids=["throttled", "key-rejected"],
+)
+async def test_enrich_paper_openalex_refusal_is_not_not_found(
+    mcp: FastMCP, service: Service, status: int, error: str, retryable: bool
+) -> None:
+    """A refused OpenAlex call is reported as such, never as not_found_in_openalex."""
+    with respx.mock:
+        respx.get(f"{OA_BASE}/works/https://doi.org/10.1/x").mock(
+            return_value=httpx.Response(status, json={"error": "key_not_activated"})
+        )
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "enrich_paper",
+                {"identifier": "DOI:10.1/x", "fields": ["oa_status"]},
+            )
+    data = json.loads(result.content[0].text)
+    assert data == {"error": error, "doi": "10.1/x", "retryable": retryable}
+    assert await service.cache.get_openalex("10.1/x") is None
+
+
+@pytest.mark.parametrize(
+    ("status", "error", "retryable"),
+    [(429, "rate_limited", True), (403, "openalex_unavailable", False)],
+    ids=["throttled", "key-rejected"],
+)
+async def test_openalex_fallback_refusal_is_not_not_found(
+    mcp: FastMCP, service: Service, status: int, error: str, retryable: bool
+) -> None:
+    """batch_resolve reports a refused OpenAlex fallback, not not_found."""
+    with respx.mock:
+        respx.post(f"{S2_BASE}/paper/batch").mock(
+            return_value=httpx.Response(200, json=[None])
+        )
+        respx.get(f"{OA_BASE}/works/https://doi.org/10.1/x").mock(
+            return_value=httpx.Response(status)
+        )
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "batch_resolve", {"identifiers": ["DOI:10.1/x"]}
+            )
+    entry = json.loads(result.content[0].text)["results"][0]
+    assert entry == {
+        "identifier": "DOI:10.1/x",
+        "error": error,
+        "retryable": retryable,
+    }
+    assert await service.cache.get_openalex("10.1/x") is None

@@ -187,3 +187,15 @@ async def test_enrich_skips_when_no_doi_in_record() -> None:
 
     assert record["venue"] == ""
     service.cache.get_openalex.assert_not_awaited()
+
+
+async def test_enrich_leaves_record_alone_when_openalex_refuses() -> None:
+    """A refused lookup is an optional extra failing: no venue, no cache row."""
+    from scholar_mcp._openalex_client import OpenAlexRefusedError
+
+    service = _make_service()
+    service.openalex.get_by_doi = AsyncMock(side_effect=OpenAlexRefusedError(429, None))
+    record: dict[str, Any] = {"externalIds": {"DOI": "10.1/x"}}
+    await OpenAlexEnricher().enrich(record, service)
+    assert "venue" not in record
+    service.cache.set_openalex.assert_not_awaited()

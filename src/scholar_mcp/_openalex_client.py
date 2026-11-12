@@ -1,6 +1,7 @@
 """OpenAlex API client for metadata enrichment.
 
-External behaviour (the work object): ``docs/design/reference/openalex-works.md``.
+External behaviour: the work object in ``docs/design/reference/openalex-works.md``;
+keys, limits and refusals in ``docs/design/reference/openalex-auth.md``.
 """
 
 from __future__ import annotations
@@ -11,6 +12,67 @@ from typing import Any
 import httpx
 
 logger = logging.getLogger(__name__)
+
+# Statuses that mean OpenAlex refused the request, not that the DOI is absent:
+# 403 for a key it rejects (``key_not_activated`` until the emailed link is
+# clicked) and 429 for an exhausted rate or daily budget.
+# External behaviour: ``docs/design/reference/openalex-auth.md``.
+_REFUSED_STATUSES = frozenset({403, 429})
+
+
+class OpenAlexRefusedError(Exception):
+    """OpenAlex refused a request: a rejected key (403) or a throttle (429).
+
+    Attributes:
+        status: The HTTP status OpenAlex answered with.
+        code: The ``error`` field of the response body, when it had one.
+        retryable: Whether the same request can succeed later unchanged.
+    """
+
+    def __init__(self, status: int, code: str | None) -> None:
+        """Record the refusal.
+
+        Args:
+            status: The HTTP status OpenAlex answered with.
+            code: The ``error`` field of the response body, or None.
+        """
+        super().__init__(f"OpenAlex refused the request with HTTP {status}")
+        self.status = status
+        self.code = code
+        self.retryable = status == 429
+
+
+def _error_code(response: httpx.Response) -> str | None:
+    """Return the ``error`` field of a JSON error body, or None."""
+    try:
+        body = response.json()
+    except ValueError:
+        return None
+    code = body.get("error") if isinstance(body, dict) else None
+    return code if isinstance(code, str) else None
+
+
+def _refusal(response: httpx.Response, doi: str) -> OpenAlexRefusedError:
+    """Log a refused request and build the exception that reports it.
+
+    A throttle heals itself, so it logs WARNING; a rejected key needs the
+    operator, so it logs ERROR. Neither line carries the key.
+    """
+    error = OpenAlexRefusedError(response.status_code, _error_code(response))
+    if error.retryable:
+        logger.warning(
+            "openalex_rate_limited doi=%s retry_after=%s",
+            doi,
+            response.headers.get("Retry-After"),
+        )
+    else:
+        logger.error(
+            "openalex_key_rejected doi=%s status=%s code=%s",
+            doi,
+            error.status,
+            error.code,
+        )
+    return error
 
 
 class OpenAlexClient:
@@ -30,13 +92,20 @@ class OpenAlexClient:
             doi: DOI string (without ``https://doi.org/`` prefix).
 
         Returns:
-            OpenAlex work dict or None if not found.
+            OpenAlex work dict, or None when OpenAlex has no such DOI or
+            answers with another error status.
+
+        Raises:
+            OpenAlexRefusedError: OpenAlex rejected the key (403) or throttled
+                the request (429), so the DOI's presence is unknown.
         """
         url = f"/works/https://doi.org/{doi}"
         try:
             r = await self._client.get(url)
             if r.status_code == 404:
                 return None
+            if r.status_code in _REFUSED_STATUSES:
+                raise _refusal(r, doi)
             r.raise_for_status()
             return r.json()  # type: ignore[no-any-return]  # httpx returns Any
         except httpx.HTTPStatusError:
@@ -170,3 +239,22 @@ def work_to_paper(work: dict[str, Any], fields: str) -> dict[str, Any]:
         "referenceCount": _reference_count(work),
     }
     return {name: mapped.get(name) for name in fields.split(",")}
+
+
+def openalex_refusal_payload(error: OpenAlexRefusedError) -> dict[str, Any]:
+    """Return the error fields a tool reports for a refused OpenAlex request.
+
+    A throttle reads as ``rate_limited`` like every other upstream throttle;
+    a rejected key reads as ``openalex_unavailable``, which only the operator
+    can clear.
+
+    Args:
+        error: The refusal raised by :meth:`OpenAlexClient.get_by_doi`.
+
+    Returns:
+        ``error`` and ``retryable`` fields to merge into a result entry.
+    """
+    return {
+        "error": "rate_limited" if error.retryable else "openalex_unavailable",
+        "retryable": error.retryable,
+    }

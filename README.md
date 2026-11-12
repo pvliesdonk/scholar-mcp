@@ -100,6 +100,7 @@ Everything is configured through environment variables with the `SCHOLAR_MCP_` p
 | `SCHOLAR_MCP_DOCLING_URL` | (none) | No | Base URL of a running docling-serve instance for PDF conversion (such as http://localhost:5001). When unset, PDF conversion tools return an error. |
 | `SCHOLAR_MCP_CACHE_DIR` | `/data/scholar-mcp` | No | Directory for the SQLite cache database (cache.db) and downloaded PDFs (pdfs/, md/). |
 | `SCHOLAR_MCP_CONTACT_EMAIL` | (none) | No | Contact email for the OpenAlex polite pool (improves rate limits). Also enables Unpaywall lookups as a PDF fallback source. |
+| `SCHOLAR_MCP_OPENALEX_API_KEY` | (none) | No | OpenAlex API key, sent as a Bearer token to OpenAlex only. Optional. Without a key, OpenAlex allows a smaller daily budget and fewer requests per second. Create one at https://openalex.org/settings/api-key. |
 <!-- GENERATED-ENV-TABLE-DOMAIN-END -->
 
 Every variable the server reads, the shared ones included, is in the [configuration reference](docs/reference/configuration.md); `.env.example` lists the same surface in copy-paste form, and the [config wizard](https://pvliesdonk.github.io/scholar-mcp/latest/reference/configuration-generator/) writes one for your deployment.

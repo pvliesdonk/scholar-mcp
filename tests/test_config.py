@@ -140,3 +140,13 @@ def test_invalid_vlm_params_refuse_startup():
     for raw in ("{not json", "[1, 2]"):
         with pytest.raises(ConfigurationError, match="SCHOLAR_MCP_VLM_PARAMS"):
             ProjectConfig(vlm_params=raw)
+
+
+def test_openalex_api_key_default_none(monkeypatch) -> None:
+    monkeypatch.delenv("SCHOLAR_MCP_OPENALEX_API_KEY", raising=False)
+    assert ProjectConfig.from_env().openalex_api_key is None
+
+
+def test_openalex_api_key_from_env(monkeypatch) -> None:
+    monkeypatch.setenv("SCHOLAR_MCP_OPENALEX_API_KEY", "oa-key")
+    assert ProjectConfig.from_env().openalex_api_key == "oa-key"
