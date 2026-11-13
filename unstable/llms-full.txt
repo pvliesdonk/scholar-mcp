@@ -1743,13 +1743,15 @@ A tool that runs past `SCHOLAR_MCP_JOBS_SOFT_DEADLINE_S` (25 seconds by default)
  "retry_after_s": 5.0, "message": "..."}
 ```
 
-Poll it with [`get_job_result`](https://pvliesdonk.github.io/scholar-mcp/unstable/reference/tools/jobs/index.md). Job records expire `SCHOLAR_MCP_JOBS_RESULT_TTL_S` after they're created (1 hour by default); settling a job doesn't extend that. Clients that use native MCP tasks get the same result through their task handle instead.
+Poll it with [`get_job_result`](https://pvliesdonk.github.io/scholar-mcp/unstable/reference/tools/jobs/index.md). Job records expire `SCHOLAR_MCP_JOBS_RESULT_TTL_S` after they're created (1 hour by default). Settling a job doesn't extend that. Clients that use native MCP tasks get the same result through their task handle instead.
+
+Each caller may hold at most `SCHOLAR_MCP_JOBS_MAX_PER_SUBJECT` job records (256 by default). A finished job still counts until its record expires, so the cap limits how many calls can become jobs within one `SCHOLAR_MCP_JOBS_RESULT_TTL_S`, not how many run at once. A call that would become a job past the cap is stopped, and the tool answers with an error telling the caller to retry later.
 
 ## Semantic Scholar throttling
 
-When Semantic Scholar throttles a tool that calls it, a plain MCP call returns a handle straight away, with a `retry_after_s` hint and a `reason` telling the caller to keep polling. The work may run for up to five sixths of `SCHOLAR_MCP_JOBS_RESULT_TTL_S` (about 50 minutes by default), and the reason gives that bound in minutes. It also says that a job still running means no answer yet, not an empty one. The original work keeps going inside the job, and a graph walk resumes at the node it had reached. If Semantic Scholar keeps refusing, the job completes before its record expires with `{"error": "rate_limited", "retryable": true}`. Other HTTP errors from Semantic Scholar come back as the tool's usual error response.
+When Semantic Scholar throttles a tool that calls it, a plain MCP call returns a handle straight away, with a `retry_after_s` hint and a `reason` telling the caller to keep polling. The work may run for up to five sixths of `SCHOLAR_MCP_JOBS_RESULT_TTL_S` (about 50 minutes by default), and the reason gives that bound in minutes. It also says that a job still running has no answer yet, so its outcome is unknown. The original work keeps going inside the job, and a graph walk resumes at the node it had reached. If Semantic Scholar keeps refusing, the job completes before its record expires with `{"error": "rate_limited", "retryable": true}`. Other HTTP errors from Semantic Scholar come back as the tool's usual error response.
 
-Every client of the server shares one Semantic Scholar rate budget, because the server paces its requests and backs off as a single Semantic Scholar client, not per caller. Several agents searching in parallel through one server each wait longer; they don't finish sooner. The server's instructions say this at session start, so an agent can plan for it before the first throttle rather than learn it from a deferral.
+Every client of the server shares one Semantic Scholar rate budget, because the server paces its requests and backs off as a single Semantic Scholar client, not per caller. Several agents searching in parallel through one server each wait longer. They don't finish sooner. The server's instructions say this at session start, so an agent can plan for it before the first throttle rather than learn it from a deferral.
 
 ## EPO traffic light
 
@@ -1760,7 +1762,7 @@ When EPO reports its traffic light amber or red, the patent tools wait for it to
 Paper and book results are filled in from more sources than the one that answered the call. Enrichment runs in two phases:
 
 - **Phase 0** (primary): OpenAlex (open-access status, affiliations, funders, concepts) and CrossRef (publisher, page ranges, container titles).
-- **Phase 1** (secondary): Open Library (book metadata for papers with an ISBN) and Google Books (preview links, excerpts, snippets).
+- **Phase 1** (secondary): from Open Library (book metadata for papers with an ISBN) and Google Books (preview links, excerpts, snippets).
 
 ## Books cited as papers
 
@@ -1782,9 +1784,24 @@ When `get_paper`, `get_citations`, `get_references` or `get_citation_graph` retu
 
 CrossRef adds publisher metadata, page ranges and container titles to a paper result that has a DOI. Google Books adds `google_books_url` and `snippet` to a book record that has an ISBN.
 
+## An OpenAlex API key
+
+OpenAlex answers without a key, at 10 requests a second and a small daily budget. A free key raises both: 30 requests a second and a budget ten times larger. The lookups scholar-mcp makes, one work by DOI, are free of charge under either.
+
+To use a key:
+
+1. Create an account at [openalex.org/signup](https://openalex.org/signup).
+1. Copy the key from [openalex.org/settings/api-key](https://openalex.org/settings/api-key).
+1. Click the activation link OpenAlex emails you. Until then OpenAlex refuses every request made with the key.
+1. Set `SCHOLAR_MCP_OPENALEX_API_KEY` to the key and restart the server.
+
+scholar-mcp sends the key to OpenAlex only, in an `Authorization` header, so it never appears in a URL or a request log.
+
 ## When a source doesn't answer
 
 Enrichment is best effort. If a source is unreachable or has no data, the record comes back without that layer. At most 10 enrichment requests run at once in each phase.
+
+An OpenAlex refusal is never reported as a missing DOI. When OpenAlex throttles a lookup, `enrich_paper` and the DOI fallback in `batch_resolve` answer `rate_limited` with `retryable: true`. When it rejects the key, they answer `openalex_unavailable` with `retryable: false`, and the server logs `openalex_key_rejected` at ERROR for the operator. The usual cause is a key that is not yet activated, or one that was revoked.
 
 # Citation Graphs
 
@@ -2689,12 +2706,13 @@ To tell a dead key from a transient upstream issue, grep the server logs for `s2
 
 A `403 Forbidden` remains the cheaper signal when S2 does send one: `s2_key_forbidden` on real tool calls, `s2_keepalive_key_forbidden` from the keepalive. Do not rely on it alone.
 
-| Variable                    | Default             | Required | Description                                                                                                                                                                                                                             |
-| --------------------------- | ------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SCHOLAR_MCP_READ_ONLY`     | `true`              | No       | When true, write-tagged tools (PDF download and conversion cache writes) are hidden. Set false to enable them.                                                                                                                          |
-| `SCHOLAR_MCP_S2_API_KEY`    | (none)              | No       | Semantic Scholar API key. Optional but strongly recommended: a key has an introductory 1 req/s allowance; anonymous users share capacity and may be throttled. Request one at https://www.semanticscholar.org/product/api#api-key-form. |
-| `SCHOLAR_MCP_CACHE_DIR`     | `/data/scholar-mcp` | No       | Directory for the SQLite cache database (cache.db) and downloaded PDFs (pdfs/, md/).                                                                                                                                                    |
-| `SCHOLAR_MCP_CONTACT_EMAIL` | (none)              | No       | Contact email for the OpenAlex polite pool (improves rate limits). Also enables Unpaywall lookups as a PDF fallback source.                                                                                                             |
+| Variable                       | Default             | Required | Description                                                                                                                                                                                                                             |
+| ------------------------------ | ------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SCHOLAR_MCP_READ_ONLY`        | `true`              | No       | When true, write-tagged tools (PDF download and conversion cache writes) are hidden. Set false to enable them.                                                                                                                          |
+| `SCHOLAR_MCP_S2_API_KEY`       | (none)              | No       | Semantic Scholar API key. Optional but strongly recommended: a key has an introductory 1 req/s allowance; anonymous users share capacity and may be throttled. Request one at https://www.semanticscholar.org/product/api#api-key-form. |
+| `SCHOLAR_MCP_CACHE_DIR`        | `/data/scholar-mcp` | No       | Directory for the SQLite cache database (cache.db) and downloaded PDFs (pdfs/, md/).                                                                                                                                                    |
+| `SCHOLAR_MCP_CONTACT_EMAIL`    | (none)              | No       | Contact email for the OpenAlex polite pool (improves rate limits). Also enables Unpaywall lookups as a PDF fallback source.                                                                                                             |
+| `SCHOLAR_MCP_OPENALEX_API_KEY` | (none)              | No       | OpenAlex API key, sent as a Bearer token to OpenAlex only. Optional. Without a key, OpenAlex allows a smaller daily budget and fewer requests per second. Create one at https://openalex.org/settings/api-key.                          |
 
 ### Standards
 

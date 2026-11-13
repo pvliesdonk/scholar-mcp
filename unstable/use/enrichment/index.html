@@ -1174,6 +1174,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#an-openalex-api-key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        An OpenAlex API key
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#when-a-source-doesnt-answer" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2278,6 +2289,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#an-openalex-api-key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        An OpenAlex API key
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#when-a-source-doesnt-answer" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2312,7 +2334,7 @@
 <p>Paper and book results are filled in from more sources than the one that answered the call. Enrichment runs in two phases:</p>
 <ul>
 <li><strong>Phase 0</strong> (primary): OpenAlex (open-access status, affiliations, funders, concepts) and CrossRef (publisher, page ranges, container titles).</li>
-<li><strong>Phase 1</strong> (secondary): Open Library (book metadata for papers with an ISBN) and Google Books (preview links, excerpts, snippets).</li>
+<li><strong>Phase 1</strong> (secondary): from Open Library (book metadata for papers with an ISBN) and Google Books (preview links, excerpts, snippets).</li>
 </ul>
 <h2 id="books-cited-as-papers">Books cited as papers<a class="headerlink" href="#books-cited-as-papers" title="Permanent link">&para;</a></h2>
 <p>When <code>get_paper</code>, <code>get_citations</code>, <code>get_references</code> or <code>get_citation_graph</code> returns a paper whose <code>externalIds.ISBN</code> is present and not empty, Open Library metadata is fetched and attached to the record as <code>book_metadata</code>:</p>
@@ -2364,8 +2386,19 @@
 </table>
 <h2 id="other-sources">Other sources<a class="headerlink" href="#other-sources" title="Permanent link">&para;</a></h2>
 <p>CrossRef adds publisher metadata, page ranges and container titles to a paper result that has a DOI. Google Books adds <code>google_books_url</code> and <code>snippet</code> to a book record that has an ISBN.</p>
+<h2 id="an-openalex-api-key">An OpenAlex API key<a class="headerlink" href="#an-openalex-api-key" title="Permanent link">&para;</a></h2>
+<p>OpenAlex answers without a key, at 10 requests a second and a small daily budget. A free key raises both: 30 requests a second and a budget ten times larger. The lookups scholar-mcp makes, one work by DOI, are free of charge under either.</p>
+<p>To use a key:</p>
+<ol>
+<li>Create an account at <a href="https://openalex.org/signup">openalex.org/signup</a>.</li>
+<li>Copy the key from <a href="https://openalex.org/settings/api-key">openalex.org/settings/api-key</a>.</li>
+<li>Click the activation link OpenAlex emails you. Until then OpenAlex refuses every request made with the key.</li>
+<li>Set <code>SCHOLAR_MCP_OPENALEX_API_KEY</code> to the key and restart the server.</li>
+</ol>
+<p>scholar-mcp sends the key to OpenAlex only, in an <code>Authorization</code> header, so it never appears in a URL or a request log.</p>
 <h2 id="when-a-source-doesnt-answer">When a source doesn't answer<a class="headerlink" href="#when-a-source-doesnt-answer" title="Permanent link">&para;</a></h2>
 <p>Enrichment is best effort. If a source is unreachable or has no data, the record comes back without that layer. At most 10 enrichment requests run at once in each phase.</p>
+<p>An OpenAlex refusal is never reported as a missing DOI. When OpenAlex throttles a lookup, <code>enrich_paper</code> and the DOI fallback in <code>batch_resolve</code> answer <code>rate_limited</code> with <code>retryable: true</code>. When it rejects the key, they answer <code>openalex_unavailable</code> with <code>retryable: false</code>, and the server logs <code>openalex_key_rejected</code> at ERROR for the operator. The usual cause is a key that is not yet activated, or one that was revoked.</p>
 
 
 

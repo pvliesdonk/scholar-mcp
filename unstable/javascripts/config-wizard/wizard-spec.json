@@ -12,6 +12,7 @@
     "SCHOLAR_GITHUB_TOKEN",
     "SCHOLAR_MCP_S2_API_KEY",
     "SCHOLAR_MCP_VLM_API_KEY",
+    "SCHOLAR_MCP_OPENALEX_API_KEY",
     "SCHOLAR_MCP_EPO_CONSUMER_SECRET",
     "SCHOLAR_MCP_GOOGLE_BOOKS_API_KEY"
   ],
@@ -532,6 +533,13 @@
       "type": "text",
       "var": "SCHOLAR_MCP_CONTACT_EMAIL",
       "help": "Contact email for the OpenAlex polite pool (improves rate limits). Also enables Unpaywall lookups as a PDF fallback source."
+    },
+    {
+      "id": "openalex_api_key",
+      "label": "Openalex Api Key",
+      "type": "text",
+      "var": "SCHOLAR_MCP_OPENALEX_API_KEY",
+      "help": "OpenAlex API key, sent as a Bearer token to OpenAlex only. Optional. Without a key, OpenAlex allows a smaller daily budget and fewer requests per second. Create one at https://openalex.org/settings/api-key."
     },
     {
       "id": "epo_consumer_key",
