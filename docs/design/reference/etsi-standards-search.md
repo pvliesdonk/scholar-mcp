@@ -147,6 +147,12 @@ is an observation or comes from reading the site's own client script.
   `STATUS_CODE`, `ACTION_TYPE`, `IsCurrent`, `superseded`, `ReviewDate`,
   `new_versions`, `Scope`, `TB` and `Keywords`. Every value is a string or
   `null`. [observed: `search=EN 303 645`, 2026-11-13]
+- `_normalize_etsi` reads seven of those keys: `ETSI_DELIVERABLE`, `TITLE`,
+  `EDSpathname`, `EDSPDFfilename`, `ACTION_TYPE`, `Scope` and `TB`. Tests
+  assert only what it derives from `ETSI_DELIVERABLE`, `EDSpathname` and
+  `EDSPDFfilename`. No ETSI test asserts the title, status, scope or
+  committee it maps from the other four. [observed: read of `_normalize_etsi`
+  and the ETSI tests, 2026-11-13]
   [pins: tests/test_standards_client.py::test_etsi_search]
 - `ETSI_DELIVERABLE` carries the identifier, version and date in one string:
   `ETSI EN 303 645 V3.1.3 (2024-09)`. [observed, as above] `_normalize_etsi`
