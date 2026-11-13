@@ -329,8 +329,9 @@ async def test_job_cap_cancels_throttled_body() -> None:
         finally:
             cancelled.set()
 
+    body = work()
     with pytest.raises(ToolError, match="Retry it later") as raised:
-        await _run_s2_body(work(), jobs=jobs, config=config, tool="blocked")
+        await _run_s2_body(body, jobs=jobs, config=config, tool="blocked")
     assert raised.value.log_level == logging.INFO
     assert cancelled.is_set()
     await asyncio.sleep(0.2)
@@ -353,6 +354,7 @@ async def test_other_job_failures_keep_their_exception() -> None:
         return {}
 
     jobs.start = broken_start  # type: ignore[method-assign]
+    body = work()
     with pytest.raises(RuntimeError, match="store down"):
-        await _run_s2_body(work(), jobs=jobs, config=config, tool="broken")
+        await _run_s2_body(body, jobs=jobs, config=config, tool="broken")
     assert cancelled.is_set()
