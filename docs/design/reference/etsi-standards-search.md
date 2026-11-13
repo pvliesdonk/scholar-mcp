@@ -149,8 +149,9 @@ is an observation or comes from reading the site's own client script.
   `null`. [observed: `search=EN 303 645`, 2026-11-13]
   [pins: tests/test_standards_client.py::test_etsi_search]
 - `ETSI_DELIVERABLE` carries the identifier, version and date in one string:
-  `ETSI EN 303 645 V3.1.3 (2024-09)`. [observed, as above]
-  [pins: tests/test_standards_client.py::test_etsi_get]
+  `ETSI EN 303 645 V3.1.3 (2024-09)`. [observed, as above] `_normalize_etsi`
+  splits it into identifier, revision and date, but no test asserts that
+  split.
 - The PDF is at `https://www.etsi.org/deliver/` + `EDSpathname` +
   `EDSPDFfilename`. [source: relaton-etsi-fetcher] [observed: the
   `/deliver/etsi_en/303600_303699/303645/` directory listing, 2026-11-13]
