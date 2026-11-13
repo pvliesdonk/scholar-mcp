@@ -38,6 +38,20 @@ the caller to retry later, the same outcome pvl-core's
 The Google Books enrichment client depends on
 [the Google Books volume-search reference](reference/google-books-api.md).
 
+The OpenAlex client depends on
+[the OpenAlex keys-and-limits reference](reference/openalex-auth.md). When
+`SCHOLAR_MCP_OPENALEX_API_KEY` is set, `_open_clients` adds an
+`Authorization: Bearer` header to the OpenAlex HTTP client alone. The header,
+not OpenAlex's `api_key=` query parameter, keeps the key out of URLs and log
+lines, and CrossRef and Google Books never see it. `get_by_doi` raises
+`OpenAlexRefusedError` for a 403 (rejected key) or a 429 (throttle) instead of
+returning `None`, so a refusal never reads as a missing DOI and is never cached.
+`enrich_paper` and the `batch_resolve` DOI fallback report it as `rate_limited`
+or `openalex_unavailable` with a `retryable` flag; the venue enricher drops it
+like any other failed optional extra (#619). The key cannot be created by the
+server through OpenAlex's `POST /api-keys`: a key returned at runtime has no
+place to persist, as the environment is read-only to the process.
+
 `start()` builds each resource inside a `contextlib.AsyncExitStack` and
 registers that resource's cleanup immediately after constructing it, then
 detaches the stack with `pop_all()` as its last statement. A failure part-way

@@ -190,6 +190,19 @@ class ProjectConfig:
             "tags": ("enrichment", "readme"),
         },
     )
+    openalex_api_key: str | None = field(
+        default=None,
+        metadata={
+            "help": (
+                "OpenAlex API key, sent as a Bearer token to OpenAlex only. "
+                "Optional. Without a key, OpenAlex allows a smaller daily "
+                "budget and fewer requests per second. Create one at "
+                "https://openalex.org/settings/api-key."
+            ),
+            "tags": ("enrichment", "readme"),
+            "wizard": {"secret": True},
+        },
+    )
     epo_consumer_key: str | None = field(
         default=None,
         metadata={
@@ -338,6 +351,7 @@ class ProjectConfig:
                 or "/data/scholar-mcp"
             ),
             contact_email=env(_ENV_PREFIX, "CONTACT_EMAIL"),
+            openalex_api_key=env(_ENV_PREFIX, "OPENALEX_API_KEY"),
             epo_consumer_key=env(_ENV_PREFIX, "EPO_CONSUMER_KEY"),
             epo_consumer_secret=env(_ENV_PREFIX, "EPO_CONSUMER_SECRET"),
             google_books_api_key=env(_ENV_PREFIX, "GOOGLE_BOOKS_API_KEY"),

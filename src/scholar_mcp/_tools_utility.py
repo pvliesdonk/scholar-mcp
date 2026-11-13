@@ -16,7 +16,11 @@ from ._cache import normalize_isbn
 from ._chapter_parser import hint_to_dict, parse_chapter_hint
 from ._epo_client import EPO_REPORTED_ERRORS, epo_error_payload, with_epo_retry
 from ._epo_xml import biblio_has_data
-from ._openalex_client import work_to_paper
+from ._openalex_client import (
+    OpenAlexRefusedError,
+    openalex_refusal_payload,
+    work_to_paper,
+)
 from ._openlibrary_client import normalize_book
 from ._patent_numbers import is_patent_number, normalize
 from ._s2_client import FIELD_SETS, log_s2_error, s2_error_payload
@@ -128,7 +132,10 @@ async def _resolve_paper(
         _attach_chapter_info(paper_result, raw)
         return paper_result
     if doi is not None:
-        oa = await _openalex_work(doi, service)
+        try:
+            oa = await _openalex_work(doi, service)
+        except OpenAlexRefusedError as exc:
+            return {"identifier": raw, **openalex_refusal_payload(exc)}
         if oa:
             paper_result = {
                 "identifier": raw,
@@ -406,7 +413,10 @@ async def enrich_paper(
 
     oa_data = await service.cache.get_openalex(doi)
     if oa_data is None:
-        oa_data = await service.openalex.get_by_doi(doi)
+        try:
+            oa_data = await service.openalex.get_by_doi(doi)
+        except OpenAlexRefusedError as exc:
+            return {"doi": doi, **openalex_refusal_payload(exc)}
         if oa_data is None:
             return {"error": "not_found_in_openalex", "doi": doi}
         await service.cache.set_openalex(doi, oa_data)

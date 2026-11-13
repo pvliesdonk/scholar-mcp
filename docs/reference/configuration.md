@@ -413,6 +413,7 @@ the keepalive. Do not rely on it alone.
 | `SCHOLAR_MCP_S2_API_KEY` | (none) | No | Semantic Scholar API key. Optional but strongly recommended: a key has an introductory 1 req/s allowance; anonymous users share capacity and may be throttled. Request one at https://www.semanticscholar.org/product/api#api-key-form. |
 | `SCHOLAR_MCP_CACHE_DIR` | `/data/scholar-mcp` | No | Directory for the SQLite cache database (cache.db) and downloaded PDFs (pdfs/, md/). |
 | `SCHOLAR_MCP_CONTACT_EMAIL` | (none) | No | Contact email for the OpenAlex polite pool (improves rate limits). Also enables Unpaywall lookups as a PDF fallback source. |
+| `SCHOLAR_MCP_OPENALEX_API_KEY` | (none) | No | OpenAlex API key, sent as a Bearer token to OpenAlex only. Optional. Without a key, OpenAlex allows a smaller daily budget and fewer requests per second. Create one at https://openalex.org/settings/api-key. |
 
 ### Standards
 
