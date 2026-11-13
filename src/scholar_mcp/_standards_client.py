@@ -1055,25 +1055,19 @@ _ETSI_JOOMLA_PARAMS: dict[str, str | int] = {
 class _ETSIFetcher:
     """Fetches ETSI standard metadata via the ETSI website Joomla JSON endpoint.
 
-    Calls ``https://www.etsi.org/?option=com_standardssearch&view=data&format=json``
-    which is the server-side AJAX endpoint backing the ETSI standards search page.
+    Calls ``https://www.etsi.org/?option=com_standardssearch&view=data&format=json``,
+    the endpoint that backed the ETSI standards search page on the old site.
 
-    [observed 2026-09-19] That request now returns ``200`` with
-    ``content-type: text/html``. The cause is this client, not ETSI being
-    down: ``option=com_standardssearch`` is a Joomla component, and
-    ``www.etsi.org`` is served by WordPress today (``wp-admin/admin-ajax.php``,
-    ``wp-content``, ``wp-json``). The query string routes nowhere, so the site
-    answers with a page. The live standards-search page mentions neither
-    ``com_standardssearch`` nor ``format=json``.
-
-    Five request shapes were tried -- plain, ``Accept: application/json``,
-    ``X-Requested-With: XMLHttpRequest``, ``Referer``, and a browser
-    ``User-Agent`` -- and every one returned the same page, so this is not a
-    header or bot-protection problem.
-
-    Which interface replaced it is unestablished: #454. Until then every such
-    answer is reported as an upstream failure, which is what it is, rather
-    than as an absent standard.
+    That Joomla route no longer exists. ``www.etsi.org`` runs WordPress, and
+    the route answers ``200`` with an HTML page, which is reported as an
+    upstream failure rather than as an absent standard. The search page now
+    reads ``https://www.etsi.org/custom/standardssearch/data.php``. That
+    endpoint takes the same parameters and returns the row shape
+    :func:`_normalize_etsi` reads. A separate web application firewall refuses
+    curl's default ``User-Agent`` with ``403``. See
+    ``docs/design/reference/etsi-standards-search.md`` (#454) before changing
+    this class, in particular its notes on ``content=1`` and exact-identifier
+    lookups.
 
     Args:
         http: Shared httpx async client.
