@@ -131,6 +131,10 @@ index holds the argument for the direction and order.
   how the broken ETSI source is fixed and what further sources cost; then
   replaced-edition data and current-edition ranking; then the regulation
   lookup over the harmonised table, after the overdue table review.
+  **[evidenced: [ETSI reference](reference/etsi-standards-search.md)]** The
+  ETSI half is answered: the data moved to a new URL with the same row shape,
+  so the ETSI fix ([#624](https://github.com/pvliesdonk/scholar-mcp/issues/624))
+  is small and does not wait for the Relaton verdict.
 - **[stated] [050 patent-citations](https://github.com/pvliesdonk/scholar-mcp/milestone/25)
   (minor):** the first patent slice, approved by the maintainer.
   **[derived]** It closes the one "Done when" term with no coverage (citation
@@ -170,6 +174,17 @@ backlog; commit it to a package when it should ship in that cut.
   independently of the package sequence.
 
 ## Revisions
+
+- **2026-11-13 — [evidenced: [ETSI reference](reference/etsi-standards-search.md)]; [derived] the rest:**
+  Research [#454](https://github.com/pvliesdonk/scholar-mcp/issues/454)
+  found that ETSI serves its catalogue from `custom/standardssearch/data.php`,
+  in the row shape the ETSI client already reads. The fix is filed as
+  [#624](https://github.com/pvliesdonk/scholar-mcp/issues/624) in
+  `040 standards-reliability`. The same rows mark replaced editions, so ETSI's
+  share of [#592](https://github.com/pvliesdonk/scholar-mcp/issues/592) needs
+  no new source. For ETSI, relaton-data-etsi is generated from this same
+  endpoint, which narrows what [#120](https://github.com/pvliesdonk/scholar-mcp/issues/120)
+  has to decide.
 
 - **2026-11-09 — [stated] decision; [derived] the rest:** The maintainer
   decided that uploaded PDFs join the shared cache, like PDFs the server
