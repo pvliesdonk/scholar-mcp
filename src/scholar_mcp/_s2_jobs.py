@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import functools
+import logging
 from typing import TYPE_CHECKING, Any, cast
 
+from fastmcp.exceptions import ToolError
 from fastmcp.utilities.tasks import TaskConfig
-from fastmcp_pvl_core import JobsConfig, tool_boundary
+from fastmcp_pvl_core import JobLimitExceededError, JobsConfig, tool_boundary
 from fastmcp_tasks.context import get_task_context
 
 from ._rate_limiter import (
@@ -54,6 +56,29 @@ def throttle_reason(config: JobsConfig) -> str:
         "shares one Semantic Scholar rate budget, so parallel calls slow each "
         "other down rather than finish sooner. Until the job completes, its "
         "outcome is unknown, not empty."
+    )
+
+
+def _job_cap_error(tool: str) -> ToolError:
+    """Return the error a caller reads when it is at its background-job cap.
+
+    The body could not get a job record, so it was stopped. Job records count
+    toward the cap until they expire, so the caller's only way out is to wait.
+    Mirrors the error pvl-core's ``register_long_running_tool`` raises for the
+    same cap (#617).
+
+    Args:
+        tool: The registered tool name.
+
+    Returns:
+        An INFO-level ``ToolError``: the caller acts on it, not an operator.
+    """
+    return ToolError(
+        f"{tool} could not finish in the foreground, because Semantic Scholar "
+        "is throttling requests or the call ran past its time limit, and this "
+        "caller already has the maximum number of background jobs, so it was "
+        "stopped. Retry it later, once older jobs have expired.",
+        log_level=logging.INFO,
     )
 
 
@@ -117,10 +142,12 @@ async def _run_s2_body(
             else:
                 handle = await jobs.start(continuation, tool=tool)
             return cast("dict[str, Any]", handle)
-        except Exception:
+        except Exception as exc:
             continuation.close()
             task.cancel()
             await asyncio.gather(task, return_exceptions=True)
+            if isinstance(exc, JobLimitExceededError):
+                raise _job_cap_error(tool) from None
             raise
     except asyncio.CancelledError:
         task.cancel()

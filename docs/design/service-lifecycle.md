@@ -29,7 +29,11 @@ does not restart. The retry deadline is five sixths of
 `SCHOLAR_MCP_JOBS_RESULT_TTL_S` from the start of the call: 50 minutes at the
 default one-hour TTL. A persistent 429 then becomes a retryable result while
 the job record can still be polled. A native MCP task already has its own
-handle and keeps the body inside that task.
+handle and keeps the body inside that task. When the caller is at its
+`SCHOLAR_MCP_JOBS_MAX_PER_SUBJECT` cap, `Jobs.defer` or `Jobs.start` refuses
+the record; the wrapper cancels the body and raises an INFO `ToolError` telling
+the caller to retry later, the same outcome pvl-core's
+`register_long_running_tool` gives (#617).
 
 The Google Books enrichment client depends on
 [the Google Books volume-search reference](reference/google-books-api.md).
