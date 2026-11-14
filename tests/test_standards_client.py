@@ -424,6 +424,30 @@ async def test_ietf_get_bcp(respx_mock: respx.MockRouter) -> None:
 
 
 @pytest.mark.respx(base_url=IETF_BASE)
+@pytest.mark.parametrize(
+    ("identifier", "name"),
+    [
+        ("RFC 793", "rfc793"),
+        ("RFC 1", "rfc1"),
+        ("RFC 9000", "rfc9000"),
+        ("BCP 47", "bcp47"),
+    ],
+)
+async def test_ietf_get_asks_for_unpadded_name(
+    respx_mock: respx.MockRouter, identifier: str, name: str
+) -> None:
+    """datatracker names RFCs without zero padding; rfc0793 matches nothing (#633)."""
+    route = respx_mock.get("/api/v1/doc/document/").mock(
+        return_value=httpx.Response(200, json={"objects": []})
+    )
+    http = httpx.AsyncClient()
+    fetcher = _IETFFetcher(http, RateLimiter(delay=0.0))
+    await fetcher.get(identifier)
+    await http.aclose()
+    assert route.calls.last.request.url.params["name"] == name
+
+
+@pytest.mark.respx(base_url=IETF_BASE)
 async def test_ietf_get_not_found(respx_mock: respx.MockRouter) -> None:
     respx_mock.get("/api/v1/doc/document/").mock(
         return_value=httpx.Response(

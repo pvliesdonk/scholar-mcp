@@ -370,8 +370,8 @@ class _IETFFetcher:
             return None
         doc_type = m.group(1).lower()
         n = int(m.group(2))
-        # Datatracker uses zero-padded names for RFC, bare numbers for BCP/STD/FYI
-        name = f"rfc{n:04d}" if doc_type == "rfc" else f"{doc_type}{n}"
+        # Datatracker names documents without zero padding: rfc793, bcp47 (#633)
+        name = f"{doc_type}{n}"
         await self._limiter.acquire()
         resp = await self._http.get(
             f"{_IETF_DATATRACKER}/api/v1/doc/document/",
