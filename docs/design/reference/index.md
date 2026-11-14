@@ -36,6 +36,7 @@ world does. Read the relevant one before changing code that talks to it — the
 | [Google Books volume search](google-books-api.md) | ISBN search, result shape, and observed anonymous 429 | `_google_books_client.py`, `_enricher_google_books.py`, `_tools_books.py` |
 | [PDF file header behaviour](pdf-file-header.md) | PDF 1.7's required header and HTTP Content-Type semantics | `_tools_pdf.py`: downloaded PDF and cache validation |
 | [ETSI standards search data endpoint](etsi-standards-search.md) | The `data.php` JSON endpoint behind ETSI's search page, its row shape, status and supersession fields, and the request filter | `_standards_client.py`: `_ETSIFetcher`, `_normalize_etsi` |
+| [Replaced-edition data for IETF, NIST and W3C](standards-supersession-sources.md) | Where each body's live service and Relaton dump says a document was replaced or withdrawn, and how far each covers it | #592; `_standards_client.py`: `_IETFFetcher`, `_NISTFetcher`, `_W3CFetcher` |
 | [Relaton bibitem titles](relaton-titles.md) | How ISO, IEC and IEEE Relaton records list a title's parts, its composed `main` title and its languages | `_sync_relaton.py`: `_full_title` (sync and `_relaton_live.py`) |
 | [OpenURL 0.1 and 1.0 query strings](openurl.md) | The keys, identifier forms and encoding of OpenURL 0.1 and Z39.88-2004 KEV links, and hybrid links | `_access_links.py`: the `{openurl}` placeholders |
 | [CrossRef work journal fields](crossref-works.md) | ISSN, volume, issue, pages and container title of a CrossRef work | `_access_links.py`: `_crossref_details` |
