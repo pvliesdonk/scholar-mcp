@@ -956,19 +956,44 @@ async def test_nist_search_nistir(respx_mock: respx.MockRouter, tmp_path) -> Non
 
 W3C_API_BASE = "https://api.w3.org"
 
+# Shape of https://api.w3.org/specifications/WCAG21 as served 2026-11-14,
+# description shortened. The object has no top-level status or date (#630).
 SAMPLE_W3C_SPEC = {
-    "shortname": "WCAG21",
+    "shortlink": "https://www.w3.org/TR/WCAG21/",
+    "description": "<p>Web Content Accessibility Guidelines (WCAG) 2.1 covers a wide range of recommendations for making Web content more accessible.</p>",
     "title": "Web Content Accessibility Guidelines (WCAG) 2.1",
-    "description": "Covers a wide range of recommendations for making Web content more accessible.",
+    "shortname": "WCAG21",
+    "editor-draft": "https://w3c.github.io/wcag/guidelines/",
     "series-version": "2.1",
-    "latest-version": "https://www.w3.org/TR/WCAG21/",
-    "latest-status": "Recommendation",
-    "published": "2018-06-05",
     "_links": {
         "self": {"href": "https://api.w3.org/specifications/WCAG21"},
+        "version-history": {
+            "href": "https://api.w3.org/specifications/WCAG21/versions"
+        },
+        "first-version": {
+            "href": "https://api.w3.org/specifications/WCAG21/versions/20170228",
+            "title": "First Public Working Draft",
+        },
         "latest-version": {
-            "href": "https://www.w3.org/TR/WCAG21/",
+            "href": "https://api.w3.org/specifications/WCAG21/versions/20250506",
             "title": "Recommendation",
+        },
+        "series": {"href": "https://api.w3.org/specification-series/wcag"},
+    },
+}
+
+# Shape of https://api.w3.org/specifications/html401 as served 2026-11-14.
+SAMPLE_W3C_RETIRED_SPEC = {
+    "shortlink": "https://www.w3.org/TR/html401/",
+    "description": "<p>This specification defines the HyperText Markup Language (HTML).</p>",
+    "title": "HTML 4.01 Specification",
+    "shortname": "html401",
+    "series-version": "4.01",
+    "_links": {
+        "self": {"href": "https://api.w3.org/specifications/html401"},
+        "latest-version": {
+            "href": "https://api.w3.org/specifications/html401/versions/20180327",
+            "title": "Retired",
         },
     },
 }
@@ -1512,38 +1537,97 @@ def test_normalize_ietf_empty_name() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_normalize_w3c_draft_status() -> None:
+def _w3c_spec_with_status(status_title: str) -> dict:  # type: ignore[type-arg]
+    links = dict(SAMPLE_W3C_SPEC["_links"])  # type: ignore[call-overload]
+    links["latest-version"] = {**links["latest-version"], "title": status_title}
+    return {**SAMPLE_W3C_SPEC, "_links": links}
+
+
+@pytest.mark.parametrize(
+    ("status_title", "expected"),
+    [
+        ("Recommendation", "published"),
+        ("Working Draft", "draft"),
+        ("Retired", "superseded"),
+        ("Superseded Recommendation", "superseded"),
+    ],
+)
+def test_normalize_w3c_status_from_latest_version(
+    status_title: str, expected: str
+) -> None:
+    """Status comes from the latest version link's title, the only place it is."""
     from scholar_mcp._standards_client import _normalize_w3c
 
-    spec = {
-        "shortname": "foo-1",
-        "title": "Foo Working Draft",
-        "latest-status": "Working Draft",
-        "latest-version": "https://www.w3.org/TR/foo-1/",
-    }
-    record = _normalize_w3c(spec)
-    assert record["status"] == "draft"
+    assert _normalize_w3c(_w3c_spec_with_status(status_title))["status"] == expected
 
 
-def test_normalize_w3c_retired_status() -> None:
+def test_normalize_w3c_reads_api_shape() -> None:
+    """URL, date and identifier come from the keys the API actually sends."""
     from scholar_mcp._standards_client import _normalize_w3c
 
-    spec = {
-        "shortname": "foo-0",
-        "title": "Foo Retired",
-        "latest-status": "Retired",
-        "latest-version": "https://www.w3.org/TR/foo-0/",
-    }
-    record = _normalize_w3c(spec)
+    record = _normalize_w3c(SAMPLE_W3C_RETIRED_SPEC)
+    assert record["identifier"] == "html401"
+    assert record["aliases"] == ["HTML 4.01 Specification"]
+    assert record["url"] == "https://www.w3.org/TR/html401/"
+    assert record["full_text_url"] == "https://www.w3.org/TR/html401/"
+    assert record["published_date"] == "2018-03-27"
     assert record["status"] == "superseded"
 
 
-def test_normalize_w3c_no_latest_url_falls_back_to_tr() -> None:
+def test_normalize_w3c_mapped_shortname_keeps_resolver_name() -> None:
+    """A shortname the resolver knows by name is reported under that name."""
     from scholar_mcp._standards_client import _normalize_w3c
 
-    spec = {"shortname": "myspec", "title": "My Spec", "status": "Recommendation"}
+    record = _normalize_w3c(SAMPLE_W3C_SPEC)
+    assert record["identifier"] == "WCAG 2.1"
+    assert record["aliases"] == [
+        "WCAG21",
+        "Web Content Accessibility Guidelines (WCAG) 2.1",
+    ]
+
+
+def test_normalize_w3c_no_shortlink_falls_back_to_tr() -> None:
+    from scholar_mcp._standards_client import _normalize_w3c
+
+    spec = {"shortname": "myspec", "title": "My Spec"}
     record = _normalize_w3c(spec)
     assert record["url"] == "https://www.w3.org/TR/myspec/"
+    assert record["status"] == "published"
+    assert record["published_date"] is None
+
+
+@pytest.mark.respx(base_url=W3C_API_BASE)
+async def test_w3c_search_identifier_round_trips_through_get(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """get() finds a record by the identifier search() returned for it (#630)."""
+    respx_mock.get("/specifications").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "page": 1,
+                "pages": 1,
+                "_links": {
+                    "specifications": [
+                        {
+                            "href": "https://api.w3.org/specifications/html401",
+                            "title": "HTML 4.01 Specification",
+                        }
+                    ]
+                },
+            },
+        )
+    )
+    respx_mock.get("/specifications/html401").mock(
+        return_value=httpx.Response(200, json=SAMPLE_W3C_RETIRED_SPEC)
+    )
+    http = httpx.AsyncClient(base_url=W3C_API_BASE)
+    fetcher = _W3CFetcher(http, RateLimiter(delay=0.0))
+    (found,) = await fetcher.search("HTML 4.01")
+    again = await fetcher.get(found["identifier"])
+    await http.aclose()
+    assert again is not None
+    assert again["identifier"] == found["identifier"]
 
 
 # ---------------------------------------------------------------------------
