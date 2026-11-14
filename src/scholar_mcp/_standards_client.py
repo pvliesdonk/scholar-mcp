@@ -386,7 +386,8 @@ class _IETFFetcher:
         objects = data.get("objects") or []
         if not objects:
             return None
-        return _normalize_ietf(objects[0])
+        dates = await self._publication_dates(objects[:1])
+        return _normalize_ietf(objects[0], dates.get(objects[0].get("name", "")))
 
     async def search(self, query: str, *, limit: int = 10) -> list[StandardRecord]:
         """Search RFCs by title keyword.
@@ -414,14 +415,65 @@ class _IETFFetcher:
             )
             return []
         objects = (resp.json().get("objects") or [])[:limit]
-        return [_normalize_ietf(obj) for obj in objects]
+        dates = await self._publication_dates(objects)
+        return [_normalize_ietf(obj, dates.get(obj.get("name", ""))) for obj in objects]
+
+    async def _publication_dates(self, objects: list[dict]) -> dict[str, str]:  # type: ignore[type-arg]
+        """Look up when each RFC in ``objects`` was published, in one request.
+
+        The document object carries no publication date; datatracker records it
+        as the document's ``published_rfc`` event (#631). A failed lookup costs
+        only the dates, so it is logged and an empty mapping returned.
+
+        Args:
+            objects: Datatracker document objects.
+
+        Returns:
+            ``{name: "YYYY-MM"}`` for each RFC that has the event.
+        """
+        names = [
+            o.get("name", "")
+            for o in objects
+            if re.match(r"(?i)^rfc\d+$", o.get("name", ""))
+        ]
+        if not names:
+            return {}
+        await self._limiter.acquire()
+        try:
+            resp = await self._http.get(
+                f"{_IETF_DATATRACKER}/api/v1/doc/docevent/",
+                params={
+                    "doc__name__in": ",".join(names),
+                    "type": "published_rfc",
+                    "format": "json",
+                    "limit": len(names),
+                },
+            )
+        except httpx.HTTPError as exc:
+            logger.warning("ietf_pub_date_request_failed error=%s", exc)
+            return {}
+        if resp.status_code != 200:
+            logger.warning(
+                "ietf_pub_date_error status=%d url=%s", resp.status_code, str(resp.url)
+            )
+            return {}
+        dates: dict[str, str] = {}
+        for event in resp.json().get("objects") or []:
+            # "doc" is a resource URI: /api/v1/doc/document/rfc9110/
+            name = (event.get("doc") or "").rstrip("/").rsplit("/", 1)[-1]
+            when = event.get("time") or ""
+            if name and len(when) >= 7:
+                dates[name] = when[:7]
+        return dates
 
 
-def _normalize_ietf(obj: dict) -> StandardRecord:  # type: ignore[type-arg]
+def _normalize_ietf(obj: dict, published_date: str | None = None) -> StandardRecord:  # type: ignore[type-arg]
     """Normalise a Datatracker document object to a StandardRecord.
 
     Args:
         obj: Raw Datatracker ``/api/v1/doc/document/`` object.
+        published_date: ``YYYY-MM`` from the document's ``published_rfc``
+            event; the document object itself carries no date.
 
     Returns:
         Populated StandardRecord.
@@ -463,7 +515,7 @@ def _normalize_ietf(obj: dict) -> StandardRecord:  # type: ignore[type-arg]
         number=number,
         revision=None,
         status=_map_ietf_status(obj.get("std_level") or ""),
-        published_date=obj.get("pub_date"),
+        published_date=published_date,
         withdrawn_date=None,
         superseded_by=None,
         supersedes=[],
@@ -478,27 +530,32 @@ def _normalize_ietf(obj: dict) -> StandardRecord:  # type: ignore[type-arg]
 
 
 def _map_ietf_status(std_level: str | None) -> str:
-    """Map IETF std_level to a human-readable status string.
+    """Map a Datatracker ``std_level`` to a record status.
+
+    Datatracker sends the level as a resource URI whose last segment is a
+    slug, e.g. ``/api/v1/name/stdlevelname/hist/`` (#631). The slugs are
+    listed at ``/api/v1/name/stdlevelname/``.
 
     Args:
-        std_level: Datatracker std_level value (may be None when API returns null).
+        std_level: The ``std_level`` URI or bare slug; None when the API sends
+            null (an Internet-Draft or a sub-series such as BCP 47).
 
     Returns:
-        Status string: "published", "withdrawn", etc.
+        ``"withdrawn"`` for Historic, ``"draft"`` for Unknown, else
+        ``"published"``.
     """
+    slug = (std_level or "").rstrip("/").rsplit("/", 1)[-1].lower()
     mapping = {
-        "proposed_standard": "published",
-        "draft_standard": "published",
-        "internet_standard": "published",
-        "informational": "published",
-        "experimental": "published",
-        "best_current_practice": "published",
-        "historic": "withdrawn",
-        "unknown": "draft",
-        "": "published",
+        "ps": "published",
+        "ds": "published",
+        "std": "published",
+        "inf": "published",
+        "exp": "published",
+        "bcp": "published",
+        "hist": "withdrawn",
+        "unkn": "draft",
     }
-    key = (std_level or "").lower()
-    return mapping.get(key, "published")
+    return mapping.get(slug, "published")
 
 
 # ---------------------------------------------------------------------------

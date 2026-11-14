@@ -24,14 +24,25 @@ IETF_BASE = "https://datatracker.ietf.org"
 ETSI_BASE = "https://www.etsi.org"
 ETSI_DATA_PATH = "/custom/standardssearch/data.php"
 
+# Shape of datatracker /api/v1/doc/docevent/?type=published_rfc (#631).
+RFC9000_PUB_EVENTS = {
+    "meta": {"total_count": 1},
+    "objects": [
+        {
+            "doc": "/api/v1/doc/document/rfc9000/",
+            "time": "2021-05-27T15:32:44Z",
+            "type": "published_rfc",
+        }
+    ],
+}
+
 SAMPLE_RFC_DOC = {
     "objects": [
         {
             "name": "rfc9000",
             "title": "QUIC: A UDP-Based Multiplexed and Secure Transport",
             "abstract": "This document defines QUIC.",
-            "std_level": "proposed_standard",
-            "pub_date": "2021-05-01",
+            "std_level": "/api/v1/name/stdlevelname/ps/",
         }
     ],
     "meta": {"total_count": 1},
@@ -52,6 +63,9 @@ def mcp(service: Service, slow_jobs: Jobs) -> FastMCP:
 @pytest.mark.respx(base_url=IETF_BASE)
 async def test_resolve_unambiguous(respx_mock: respx.MockRouter, mcp: FastMCP) -> None:
     """resolve_standard_identifier returns canonical + record for known RFC."""
+    respx_mock.get("/api/v1/doc/docevent/").mock(
+        return_value=httpx.Response(200, json=RFC9000_PUB_EVENTS)
+    )
     respx_mock.get("/api/v1/doc/document/").mock(
         return_value=httpx.Response(200, json=SAMPLE_RFC_DOC)
     )
@@ -123,6 +137,9 @@ async def test_resolve_uses_alias_cache(mcp: FastMCP, service: Service) -> None:
 async def test_search_standards_returns_results(
     respx_mock: respx.MockRouter, mcp: FastMCP
 ) -> None:
+    respx_mock.get("/api/v1/doc/docevent/").mock(
+        return_value=httpx.Response(200, json=RFC9000_PUB_EVENTS)
+    )
     respx_mock.get("/api/v1/doc/document/").mock(
         return_value=httpx.Response(200, json=SAMPLE_RFC_DOC)
     )
@@ -140,6 +157,9 @@ async def test_search_standards_returns_results(
 async def test_search_standards_caches_results(
     respx_mock: respx.MockRouter, mcp: FastMCP, service: Service
 ) -> None:
+    respx_mock.get("/api/v1/doc/docevent/").mock(
+        return_value=httpx.Response(200, json=RFC9000_PUB_EVENTS)
+    )
     respx_mock.get("/api/v1/doc/document/").mock(
         return_value=httpx.Response(200, json=SAMPLE_RFC_DOC)
     )
@@ -167,6 +187,9 @@ async def test_search_standards_cache_hit_skips_network(
         call_count += 1
         return httpx.Response(200, json=SAMPLE_RFC_DOC)
 
+    respx_mock.get("/api/v1/doc/docevent/").mock(
+        return_value=httpx.Response(200, json=RFC9000_PUB_EVENTS)
+    )
     respx_mock.get("/api/v1/doc/document/").mock(side_effect=side_effect)
     async with Client(mcp) as client:
         await client.call_tool("search_standards", {"query": "QUIC", "body": "IETF"})
@@ -183,6 +206,9 @@ async def test_search_standards_cache_hit_skips_network(
 async def test_get_standard_by_fuzzy_id(
     respx_mock: respx.MockRouter, mcp: FastMCP
 ) -> None:
+    respx_mock.get("/api/v1/doc/docevent/").mock(
+        return_value=httpx.Response(200, json=RFC9000_PUB_EVENTS)
+    )
     respx_mock.get("/api/v1/doc/document/").mock(
         return_value=httpx.Response(200, json=SAMPLE_RFC_DOC)
     )
@@ -198,6 +224,9 @@ async def test_get_standard_by_fuzzy_id(
 async def test_get_standard_caches_result(
     respx_mock: respx.MockRouter, mcp: FastMCP, service: Service
 ) -> None:
+    respx_mock.get("/api/v1/doc/docevent/").mock(
+        return_value=httpx.Response(200, json=RFC9000_PUB_EVENTS)
+    )
     respx_mock.get("/api/v1/doc/document/").mock(
         return_value=httpx.Response(200, json=SAMPLE_RFC_DOC)
     )
@@ -346,6 +375,9 @@ async def test_search_standards_states_completeness_when_nothing_failed(
     Only an affirmative "this answer is complete" lets a caller tell a gap
     from an absence.
     """
+    respx_mock.get("/api/v1/doc/docevent/").mock(
+        return_value=httpx.Response(200, json=RFC9000_PUB_EVENTS)
+    )
     respx_mock.get("/api/v1/doc/document/").mock(
         return_value=httpx.Response(200, json=SAMPLE_RFC_DOC)
     )
@@ -430,6 +462,9 @@ async def test_get_standard_fetch_full_text_after_fresh_fetch(
     respx_mock: respx.MockRouter, mcp: FastMCP, service: Service
 ) -> None:
     """get_standard with fetch_full_text=True works when record is not yet cached."""
+    respx_mock.get("/api/v1/doc/docevent/").mock(
+        return_value=httpx.Response(200, json=RFC9000_PUB_EVENTS)
+    )
     respx_mock.get("/api/v1/doc/document/").mock(
         return_value=httpx.Response(200, json=SAMPLE_RFC_DOC)
     )
@@ -666,6 +701,9 @@ async def test_get_standard_alias_cache_hit_record_not_cached(
     respx_mock: respx.MockRouter, mcp: FastMCP, service: Service
 ) -> None:
     """get_standard: alias resolves but record not cached — fetches fresh from source."""
+    respx_mock.get("/api/v1/doc/docevent/").mock(
+        return_value=httpx.Response(200, json=RFC9000_PUB_EVENTS)
+    )
     respx_mock.get("/api/v1/doc/document/").mock(
         return_value=httpx.Response(200, json=SAMPLE_RFC_DOC)
     )
