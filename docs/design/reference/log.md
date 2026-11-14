@@ -4,6 +4,16 @@ Newest first. One entry per research pass.
 
 ## 2026-11-14
 
+### Replaced-edition data for IETF, NIST and W3C
+
+New page [Replaced-edition data for IETF, NIST and W3C](standards-supersession-sources.md)
+(#120), from depth-1 clones of relaton-data-nist and relaton-data-w3c,
+samples of relaton-data-ietf, the NIST-Tech-Pubs MODS release, CSRC's
+publications export, datatracker and the W3C API. Finding: the IETF dump and
+datatracker both carry obsoleting RFCs; for NIST only the CSRC export marks
+withdrawals and replacements; for W3C only the live API links a replaced
+specification to its successor. Not settled: the dumps' licence terms.
+
 ### ETSI standards search endpoint, after the fix
 
 Updated [ETSI standards search data endpoint](etsi-standards-search.md) for

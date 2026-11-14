@@ -135,6 +135,11 @@ index holds the argument for the direction and order.
   ETSI half is answered: the data moved to a new URL with the same row shape,
   so the ETSI fix ([#624](https://github.com/pvliesdonk/scholar-mcp/issues/624))
   is small and does not wait for the Relaton verdict.
+  **[evidenced: [supersession reference](reference/standards-supersession-sources.md)]**
+  The Relaton half is answered too: the live fetchers work, and of the three
+  dumps only the IETF one carries replacement data, which datatracker also
+  serves. **[derived]** Proposed, pending the maintainer: keep the live
+  fetchers and give #592 one replacement source per body rather than migrate.
 - **[stated] [050 patent-citations](https://github.com/pvliesdonk/scholar-mcp/milestone/25)
   (minor):** the first patent slice, approved by the maintainer.
   **[derived]** It closes the one "Done when" term with no coverage (citation
@@ -174,6 +179,19 @@ backlog; commit it to a package when it should ship in that cut.
   independently of the package sequence.
 
 ## Revisions
+
+- **2026-11-14 — [evidenced: [supersession reference](reference/standards-supersession-sources.md)]; [derived] the rest:**
+  Research [#120](https://github.com/pvliesdonk/scholar-mcp/issues/120)
+  compared the Relaton dumps with the live sources for IETF, NIST and W3C.
+  The premise that three Tier 1 fetchers are broken no longer holds: all three
+  return records today. What they lack is replacement data, which is
+  [#592](https://github.com/pvliesdonk/scholar-mcp/issues/592). That data
+  sits in datatracker's `obs` relations and the IETF dump, in CSRC's
+  publications export (not in the NIST dump or the MODS file the fetcher
+  reads), and in the W3C API (not in the W3C dump). Migrating to the dumps
+  would gain IETF only, and their licence terms are unknown. The proposal is
+  to keep the live fetchers; the maintainer decides. Within the one-day
+  appetite.
 
 - **2026-11-13 — [evidenced: [ETSI reference](reference/etsi-standards-search.md)]; [derived] the rest:**
   Research [#454](https://github.com/pvliesdonk/scholar-mcp/issues/454)
