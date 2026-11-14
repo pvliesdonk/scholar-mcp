@@ -22,6 +22,7 @@ from tests.conftest import tasks_server
 
 IETF_BASE = "https://datatracker.ietf.org"
 ETSI_BASE = "https://www.etsi.org"
+ETSI_DATA_PATH = "/custom/standardssearch/data.php"
 
 SAMPLE_RFC_DOC = {
     "objects": [
@@ -232,7 +233,7 @@ async def test_get_standard_reports_upstream_failure_not_absence(
     ``not_found`` tells an LLM caller to stop asking about an identifier that
     exists, which is the opposite of what a refusal means (#401).
     """
-    respx_mock.get("/").mock(return_value=httpx.Response(403))
+    respx_mock.get(ETSI_DATA_PATH).mock(return_value=httpx.Response(403))
     async with Client(mcp) as client:
         result = await client.call_tool(
             "get_standard", {"identifier": "ETSI EN 303 645"}
@@ -251,7 +252,7 @@ async def test_get_standard_reports_a_throttle_as_retryable(
     respx_mock: respx.MockRouter, mcp: FastMCP
 ) -> None:
     """A 429 is worth retrying, and says so, matching get_book_excerpt."""
-    respx_mock.get("/").mock(return_value=httpx.Response(429))
+    respx_mock.get(ETSI_DATA_PATH).mock(return_value=httpx.Response(429))
     async with Client(mcp) as client:
         result = await client.call_tool(
             "get_standard", {"identifier": "ETSI EN 303 645"}
@@ -266,7 +267,7 @@ async def test_get_standard_does_not_cache_a_failed_lookup(
     respx_mock: respx.MockRouter, mcp: FastMCP, service: Service
 ) -> None:
     """The retry the payload invites must not be served a poisoned entry."""
-    respx_mock.get("/").mock(return_value=httpx.Response(403))
+    respx_mock.get(ETSI_DATA_PATH).mock(return_value=httpx.Response(403))
     async with Client(mcp) as client:
         await client.call_tool("get_standard", {"identifier": "ETSI EN 303 645"})
     assert await service.cache.get_standard("ETSI EN 303 645") is None
@@ -277,7 +278,7 @@ async def test_search_standards_reports_a_failing_body(
     respx_mock: respx.MockRouter, mcp: FastMCP
 ) -> None:
     """A body that never answered is named, and the answer says it is partial."""
-    respx_mock.get("/").mock(return_value=httpx.Response(403))
+    respx_mock.get(ETSI_DATA_PATH).mock(return_value=httpx.Response(403))
     async with Client(mcp) as client:
         result = await client.call_tool(
             "search_standards", {"query": "IoT security", "body": "ETSI"}
@@ -319,7 +320,7 @@ async def test_failure_warning_says_what_went_wrong(
     A bare "no answer from ETSI (200)" contradicts itself: the status says the
     source answered, and only the detail says the answer was unusable.
     """
-    route = respx_mock.get("/")
+    route = respx_mock.get(ETSI_DATA_PATH)
     if isinstance(response, Exception):
         route.mock(side_effect=response)
     else:
@@ -362,7 +363,7 @@ async def test_search_standards_does_not_cache_a_partial_result(
     respx_mock: respx.MockRouter, mcp: FastMCP, service: Service
 ) -> None:
     """A partial result cached without its flag reads as complete next call."""
-    respx_mock.get("/").mock(return_value=httpx.Response(403))
+    respx_mock.get(ETSI_DATA_PATH).mock(return_value=httpx.Response(403))
     async with Client(mcp) as client:
         await client.call_tool(
             "search_standards", {"query": "IoT security", "body": "ETSI"}
@@ -376,7 +377,7 @@ async def test_resolve_standard_identifier_warns_when_the_source_failed(
     respx_mock: respx.MockRouter, mcp: FastMCP
 ) -> None:
     """A null record must not be presented as fact when nobody could answer."""
-    respx_mock.get("/").mock(return_value=httpx.Response(403))
+    respx_mock.get(ETSI_DATA_PATH).mock(return_value=httpx.Response(403))
     async with Client(mcp) as client:
         result = await client.call_tool(
             "resolve_standard_identifier", {"raw": "ETSI EN 303 645"}

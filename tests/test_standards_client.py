@@ -1076,10 +1076,11 @@ async def test_w3c_search_non200_returns_empty(respx_mock: respx.MockRouter) -> 
 
 
 # ---------------------------------------------------------------------------
-# ETSI fetcher tests (Joomla JSON API backend)
+# ETSI fetcher tests (standards search data endpoint)
 # ---------------------------------------------------------------------------
 
 ETSI_BASE = "https://www.etsi.org"
+ETSI_DATA_PATH = "/custom/standardssearch/data.php"
 
 SAMPLE_ETSI_JSON = [
     {
@@ -1127,8 +1128,10 @@ SAMPLE_ETSI_JSON = [
 
 @pytest.mark.respx(base_url=ETSI_BASE)
 async def test_etsi_search(respx_mock: respx.MockRouter) -> None:
-    """search() calls Joomla JSON API and returns parsed records."""
-    respx_mock.get("/").mock(return_value=httpx.Response(200, json=SAMPLE_ETSI_JSON))
+    """search() calls the data endpoint and returns parsed records."""
+    respx_mock.get(ETSI_DATA_PATH).mock(
+        return_value=httpx.Response(200, json=SAMPLE_ETSI_JSON)
+    )
     http = httpx.AsyncClient(base_url=ETSI_BASE)
     fetcher = _ETSIFetcher(http, RateLimiter(delay=0.0))
     results = await fetcher.search("303 645", limit=5)
@@ -1150,7 +1153,7 @@ async def test_etsi_search_non200_raises(respx_mock: respx.MockRouter) -> None:
     is what made an outage indistinguishable from "ETSI publishes no such
     standard", which is the opposite of what a 403 means.
     """
-    respx_mock.get("/").mock(return_value=httpx.Response(403))
+    respx_mock.get(ETSI_DATA_PATH).mock(return_value=httpx.Response(403))
     http = httpx.AsyncClient(base_url=ETSI_BASE)
     fetcher = _ETSIFetcher(http, RateLimiter(delay=0.0))
     with pytest.raises(StandardsUpstreamError) as excinfo:
@@ -1168,7 +1171,7 @@ async def test_etsi_search_html_body_raises(respx_mock: respx.MockRouter) -> Non
     ``content-type: text/html`` and a body opening ``<!doctype html>``. The
     status alone reads as success, so the detail has to carry the reason.
     """
-    respx_mock.get("/").mock(
+    respx_mock.get(ETSI_DATA_PATH).mock(
         return_value=httpx.Response(
             200,
             headers={"content-type": "text/html; charset=UTF-8"},
@@ -1189,7 +1192,9 @@ async def test_etsi_search_transport_error_raises(
     respx_mock: respx.MockRouter,
 ) -> None:
     """A request that never reached ETSI carries no status."""
-    respx_mock.get("/").mock(side_effect=httpx.ConnectError("no route to host"))
+    respx_mock.get(ETSI_DATA_PATH).mock(
+        side_effect=httpx.ConnectError("no route to host")
+    )
     http = httpx.AsyncClient(base_url=ETSI_BASE)
     fetcher = _ETSIFetcher(http, RateLimiter(delay=0.0))
     with pytest.raises(StandardsUpstreamError) as excinfo:
@@ -1201,7 +1206,7 @@ async def test_etsi_search_transport_error_raises(
 @pytest.mark.respx(base_url=ETSI_BASE)
 async def test_etsi_search_non_list_json_raises(respx_mock: respx.MockRouter) -> None:
     """Valid JSON of the wrong shape is still an answer this client cannot read."""
-    respx_mock.get("/").mock(
+    respx_mock.get(ETSI_DATA_PATH).mock(
         return_value=httpx.Response(200, json={"error": "unavailable"})
     )
     http = httpx.AsyncClient(base_url=ETSI_BASE)
@@ -1216,7 +1221,7 @@ async def test_etsi_get_propagates_upstream_error(
     respx_mock: respx.MockRouter,
 ) -> None:
     """get() must not turn a refused request into None, which reads as absent."""
-    respx_mock.get("/").mock(return_value=httpx.Response(403))
+    respx_mock.get(ETSI_DATA_PATH).mock(return_value=httpx.Response(403))
     http = httpx.AsyncClient(base_url=ETSI_BASE)
     fetcher = _ETSIFetcher(http, RateLimiter(delay=0.0))
     with pytest.raises(StandardsUpstreamError):
@@ -1226,13 +1231,16 @@ async def test_etsi_get_propagates_upstream_error(
 
 @pytest.mark.respx(base_url=ETSI_BASE)
 async def test_etsi_get(respx_mock: respx.MockRouter) -> None:
-    """get() returns first result matching identifier."""
-    respx_mock.get("/").mock(return_value=httpx.Response(200, json=SAMPLE_ETSI_JSON))
+    """get() returns the row matching the identifier."""
+    respx_mock.get(ETSI_DATA_PATH).mock(
+        return_value=httpx.Response(200, json=SAMPLE_ETSI_JSON)
+    )
     http = httpx.AsyncClient(base_url=ETSI_BASE)
     fetcher = _ETSIFetcher(http, RateLimiter(delay=0.0))
     record = await fetcher.get("ETSI EN 303 645")
     await http.aclose()
     assert record is not None
+    assert record["identifier"] == "ETSI EN 303 645"
     assert record["body"] == "ETSI"
     assert record["full_text_available"] is True
 
@@ -1240,7 +1248,7 @@ async def test_etsi_get(respx_mock: respx.MockRouter) -> None:
 @pytest.mark.respx(base_url=ETSI_BASE)
 async def test_etsi_get_not_found(respx_mock: respx.MockRouter) -> None:
     """get() returns None when no match."""
-    respx_mock.get("/").mock(return_value=httpx.Response(200, json=[]))
+    respx_mock.get(ETSI_DATA_PATH).mock(return_value=httpx.Response(200, json=[]))
     http = httpx.AsyncClient(base_url=ETSI_BASE)
     fetcher = _ETSIFetcher(http, RateLimiter(delay=0.0))
     record = await fetcher.get("ETSI EN 999 999")
@@ -1251,7 +1259,9 @@ async def test_etsi_get_not_found(respx_mock: respx.MockRouter) -> None:
 @pytest.mark.respx(base_url=ETSI_BASE)
 async def test_etsi_normalize_pdf_url(respx_mock: respx.MockRouter) -> None:
     """PDF URL constructed from EDSpathname + EDSPDFfilename."""
-    respx_mock.get("/").mock(return_value=httpx.Response(200, json=SAMPLE_ETSI_JSON))
+    respx_mock.get(ETSI_DATA_PATH).mock(
+        return_value=httpx.Response(200, json=SAMPLE_ETSI_JSON)
+    )
     http = httpx.AsyncClient(base_url=ETSI_BASE)
     fetcher = _ETSIFetcher(http, RateLimiter(delay=0.0))
     results = await fetcher.search("303 645", limit=1)
@@ -1259,6 +1269,95 @@ async def test_etsi_normalize_pdf_url(respx_mock: respx.MockRouter) -> None:
     expected_pdf = "https://www.etsi.org/deliver/etsi_en/303600_303699/303645/03.01.03_60/en_303645v030103p.pdf"
     assert results[0]["full_text_url"] == expected_pdf
     assert results[0]["url"] == expected_pdf
+
+
+@pytest.mark.respx(base_url=ETSI_BASE)
+async def test_etsi_search_requests_data_endpoint(respx_mock: respx.MockRouter) -> None:
+    """search() asks data.php for title and number matches, with scope text.
+
+    ``content=1`` also matches document text, which made an unknown identifier
+    return thousands of unrelated rows; without ``includeScope=1`` every row's
+    ``Scope`` is null (#624).
+    """
+    route = respx_mock.get(ETSI_DATA_PATH).mock(
+        return_value=httpx.Response(200, json=[])
+    )
+    http = httpx.AsyncClient(base_url=ETSI_BASE)
+    fetcher = _ETSIFetcher(http, RateLimiter(delay=0.0))
+    await fetcher.search("ETSI EN 303 645")
+    await http.aclose()
+    params = route.calls.last.request.url.params
+    assert params["search"] == "ETSI EN 303 645"
+    assert params["content"] == "0"
+    assert params["includeScope"] == "1"
+    assert "option" not in params
+
+
+@pytest.mark.respx(base_url=ETSI_BASE)
+async def test_etsi_get_skips_rows_for_other_identifiers(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """get() returns the row for the requested identifier, not the first row.
+
+    A search for ``ETSI EN 303 645`` also returns ``ETSI TS 103 929``, whose
+    title mentions it, so the first row is not necessarily the one asked for.
+    """
+    other = {
+        **SAMPLE_ETSI_JSON[1],
+        "ETSI_DELIVERABLE": "ETSI TS 103 929 V1.2.1 (2023-05)",
+    }
+    respx_mock.get(ETSI_DATA_PATH).mock(
+        return_value=httpx.Response(200, json=[other, SAMPLE_ETSI_JSON[0]])
+    )
+    http = httpx.AsyncClient(base_url=ETSI_BASE)
+    fetcher = _ETSIFetcher(http, RateLimiter(delay=0.0))
+    record = await fetcher.get("etsi en  303 645")
+    await http.aclose()
+    assert record is not None
+    assert record["identifier"] == "ETSI EN 303 645"
+
+
+@pytest.mark.respx(base_url=ETSI_BASE)
+async def test_etsi_get_none_when_only_other_identifiers(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """Rows for other deliverables are not a match for the one asked for."""
+    respx_mock.get(ETSI_DATA_PATH).mock(
+        return_value=httpx.Response(200, json=[SAMPLE_ETSI_JSON[1]])
+    )
+    http = httpx.AsyncClient(base_url=ETSI_BASE)
+    fetcher = _ETSIFetcher(http, RateLimiter(delay=0.0))
+    record = await fetcher.get("ETSI EN 303 645")
+    await http.aclose()
+    assert record is None
+
+
+@pytest.mark.respx(base_url=ETSI_BASE)
+async def test_etsi_normalize_row_fields(respx_mock: respx.MockRouter) -> None:
+    """Title, version, date, status, scope and committee map from a row."""
+    withdrawn = {**SAMPLE_ETSI_JSON[1], "ACTION_TYPE": "WD"}
+    respx_mock.get(ETSI_DATA_PATH).mock(
+        return_value=httpx.Response(200, json=[SAMPLE_ETSI_JSON[0], withdrawn])
+    )
+    http = httpx.AsyncClient(base_url=ETSI_BASE)
+    fetcher = _ETSIFetcher(http, RateLimiter(delay=0.0))
+    first, second = await fetcher.search("303 645")
+    await http.aclose()
+    assert first["identifier"] == "ETSI EN 303 645"
+    assert first["aliases"] == ["ETSI EN 303 645 V3.1.3 (2024-09)"]
+    assert first["number"] == "303 645"
+    assert first["title"] == (
+        "CYBER; Cyber Security for Consumer Internet of Things: Baseline Requirements"
+    )
+    assert first["revision"] == "3.1.3"
+    assert first["published_date"] == "2024-09"
+    assert first["status"] == "published"
+    assert (
+        first["scope"] == "Transposition of TS 103 645 v3.1.1 into an updated version."
+    )
+    assert first["committee"] == "Cyber Security"
+    assert second["status"] == "withdrawn"
+    assert second["scope"] is None
 
 
 # ---------------------------------------------------------------------------
@@ -1473,7 +1572,7 @@ async def test_search_with_failures_reports_a_refused_body(
     respx_mock: respx.MockRouter,
 ) -> None:
     """A body that refused the request is reported, not returned as empty."""
-    respx_mock.get("/").mock(return_value=httpx.Response(403))
+    respx_mock.get(ETSI_DATA_PATH).mock(return_value=httpx.Response(403))
     http = httpx.AsyncClient()
     client = StandardsClient(http)
     records, failures = await client.search_with_failures("QUIC", body="ETSI", limit=5)
@@ -1513,7 +1612,7 @@ async def test_get_with_failures_reports_instead_of_reading_as_absent(
     respx_mock: respx.MockRouter,
 ) -> None:
     """A resolved body that failed yields no record *and* a failure."""
-    respx_mock.get("/").mock(return_value=httpx.Response(403))
+    respx_mock.get(ETSI_DATA_PATH).mock(return_value=httpx.Response(403))
     http = httpx.AsyncClient()
     client = StandardsClient(http)
     record, failures = await client.get_with_failures("ETSI EN 303 645")
@@ -1591,7 +1690,7 @@ async def test_resolve_returns_the_stub_when_the_source_failed(
     the failure properly is resolve()'s own change to make; #401 deliberately
     left that shape alone.
     """
-    respx_mock.get("/").mock(return_value=httpx.Response(403))
+    respx_mock.get(ETSI_DATA_PATH).mock(return_value=httpx.Response(403))
     http = httpx.AsyncClient()
     client = StandardsClient(http)
     records = await client.resolve("ETSI EN 303 645")

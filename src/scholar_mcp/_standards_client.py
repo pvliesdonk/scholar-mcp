@@ -1029,14 +1029,15 @@ def _normalize_w3c(spec: dict) -> StandardRecord:  # type: ignore[type-arg]
 
 
 # ---------------------------------------------------------------------------
-# ETSI source fetcher (Joomla JSON API)
+# ETSI source fetcher (standards search data endpoint)
 # ---------------------------------------------------------------------------
 
 _ETSI_BASE = "https://www.etsi.org"
-_ETSI_JOOMLA_PARAMS: dict[str, str | int] = {
-    "option": "com_standardssearch",
-    "view": "data",
-    "format": "json",
+_ETSI_DATA_PATH = "/custom/standardssearch/data.php"
+# One page of data.php holds 50 rows; get() reads one page and picks the
+# exact identifier from it.
+_ETSI_PAGE_SIZE = 50
+_ETSI_SEARCH_PARAMS: dict[str, str | int] = {
     "version": "0",
     "published": "1",
     "onApproval": "1",
@@ -1048,26 +1049,28 @@ _ETSI_JOOMLA_PARAMS: dict[str, str | int] = {
     "sort": "1",
     "title": "1",
     "etsiNumber": "1",
-    "content": "1",
+    # content=1 also matches document text, so an identifier ETSI does not
+    # publish still returns thousands of unrelated rows (#624).
+    "content": "0",
+    # Without it every row's Scope is null.
+    "includeScope": "1",
 }
 
 
 class _ETSIFetcher:
-    """Fetches ETSI standard metadata via the ETSI website Joomla JSON endpoint.
+    """Fetches ETSI standard metadata from the ETSI standards search data endpoint.
 
-    Calls ``https://www.etsi.org/?option=com_standardssearch&view=data&format=json``,
-    the endpoint that backed the ETSI standards search page on the old site.
+    Calls ``https://www.etsi.org/custom/standardssearch/data.php``, the JSON
+    endpoint ETSI's own standards search page reads. It replaced the Joomla
+    route ``/?option=com_standardssearch&view=data&format=json``, which now
+    answers ``200`` with an HTML page (#624). A web application firewall in
+    front of it refuses curl's default ``User-Agent`` with ``403``; httpx's
+    default passes.
 
-    That Joomla route no longer exists. ``www.etsi.org`` runs WordPress, and
-    the route answers ``200`` with an HTML page, which is reported as an
-    upstream failure rather than as an absent standard. The search page now
-    reads ``https://www.etsi.org/custom/standardssearch/data.php``. That
-    endpoint takes the same parameters and returns the row shape
-    :func:`_normalize_etsi` reads. A separate web application firewall refuses
-    curl's default ``User-Agent`` with ``403``. See
+    The endpoint answers ``[]`` both for a search with no hits and for a
+    malformed request, so the parameters here must stay well formed. See
     ``docs/design/reference/etsi-standards-search.md`` (#454) before changing
-    this class, in particular its notes on ``content=1`` and exact-identifier
-    lookups.
+    this class.
 
     Args:
         http: Shared httpx async client.
@@ -1097,11 +1100,11 @@ class _ETSIFetcher:
                 it, or answered in a shape this client cannot read.
         """
         await self._limiter.acquire()
-        params = {**_ETSI_JOOMLA_PARAMS, "search": query, "page": 1}
+        params = {**_ETSI_SEARCH_PARAMS, "search": query, "page": 1}
         # Each failure keeps logging where the detail is in hand, then raises,
         # so operators see what they saw before and callers get a decision.
         try:
-            resp = await self._http.get(f"{_ETSI_BASE}/", params=params)
+            resp = await self._http.get(f"{_ETSI_BASE}{_ETSI_DATA_PATH}", params=params)
         except httpx.HTTPError as exc:
             logger.warning("etsi_api_request_failed error=%s", exc)
             raise StandardsUpstreamError(
@@ -1120,7 +1123,7 @@ class _ETSIFetcher:
             logger.warning(
                 "etsi_api_json_decode_error url=%s err=%s", str(resp.url), exc
             )
-            # The observed failure is a 200 carrying the ETSI homepage, so the
+            # A retired route answers 200 with an HTML page (#624), so the
             # status says "success" and only the content type explains itself.
             raise StandardsUpstreamError(
                 "ETSI",
@@ -1147,6 +1150,11 @@ class _ETSIFetcher:
         which would tell the caller to stop asking about a standard that may
         well exist (#401).
 
+        The search matches titles and numbers, so its rows can include other
+        deliverables that mention the number (``ETSI EN 303 645`` also returns
+        ``ETSI TS 103 929``). Only a row whose identifier equals the requested
+        one counts, and the first of those in ETSI's order is returned.
+
         Args:
             identifier: Canonical identifier (e.g. "ETSI EN 303 645").
 
@@ -1156,15 +1164,28 @@ class _ETSIFetcher:
         Raises:
             StandardsUpstreamError: propagated from :meth:`search`.
         """
-        results = await self.search(identifier, limit=1)
-        return results[0] if results else None
+        wanted = _etsi_key(identifier)
+        results = await self.search(identifier, limit=_ETSI_PAGE_SIZE)
+        return next((r for r in results if _etsi_key(r["identifier"]) == wanted), None)
+
+
+def _etsi_key(identifier: str) -> str:
+    """Return an ETSI identifier in the form used to compare two of them.
+
+    Args:
+        identifier: An ETSI identifier, e.g. ``"ETSI EN 303 645"``.
+
+    Returns:
+        The identifier upper-cased with whitespace collapsed.
+    """
+    return " ".join(identifier.upper().split())
 
 
 def _normalize_etsi(item: dict) -> StandardRecord:  # type: ignore[type-arg]
-    """Normalise a single ETSI Joomla API result item to a StandardRecord.
+    """Normalise a single ETSI search data row to a StandardRecord.
 
     Args:
-        item: A single dict from the Joomla JSON API response array.
+        item: A single dict from the ``data.php`` response array.
 
     Returns:
         Populated StandardRecord.
