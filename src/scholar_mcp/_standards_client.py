@@ -846,6 +846,7 @@ _W3C_SHORTNAME_MAP: dict[str, str] = {
     "HTML5": "html5",
     "HTML Living Standard": "html",
 }
+_W3C_NAME_BY_SHORTNAME = {v: k for k, v in _W3C_SHORTNAME_MAP.items()}
 
 
 class _W3CFetcher:
@@ -980,6 +981,11 @@ class _W3CFetcher:
 def _normalize_w3c(spec: dict) -> StandardRecord:  # type: ignore[type-arg]
     """Normalise a W3C API specification object to a StandardRecord.
 
+    The specification object carries the document URL as ``shortlink`` and the
+    latest version as ``_links.latest-version``, whose ``title`` is that
+    version's status and whose ``href`` ends in its date. It has no top-level
+    status or date (#630).
+
     Args:
         spec: Raw W3C API specification object.
 
@@ -988,44 +994,53 @@ def _normalize_w3c(spec: dict) -> StandardRecord:  # type: ignore[type-arg]
     """
     title = spec.get("title", "")
     shortname = spec.get("shortname", "")
-    latest_url: str | None = (
-        spec.get("latest-version")
-        or ((spec.get("_links") or {}).get("latest-version", {}).get("href", ""))
-        or None
-    )
-    if not latest_url:
-        latest_url = f"{_W3C_TR}/{shortname}/"
-
-    status_raw = (spec.get("latest-status") or spec.get("status") or "").lower()
-    if "recommendation" in status_raw:
-        status = "published"
-    elif "draft" in status_raw or "working" in status_raw:
-        status = "draft"
-    elif "retired" in status_raw or "superseded" in status_raw:
-        status = "superseded"
-    else:
-        status = "published"
+    tr_url = spec.get("shortlink") or f"{_W3C_TR}/{shortname}/"
+    latest = (spec.get("_links") or {}).get("latest-version") or {}
+    status = _map_w3c_status(latest.get("title") or "")
+    date_m = re.search(r"/(\d{4})(\d{2})(\d{2})$", latest.get("href") or "")
+    published = "-".join(date_m.groups()) if date_m else None
+    # get() accepts what it is given back: a mapped name or the shortname.
+    identifier = _W3C_NAME_BY_SHORTNAME.get(shortname, shortname) or title
 
     return StandardRecord(
-        identifier=title,
-        aliases=[shortname],
+        identifier=identifier,
+        aliases=[a for a in (shortname, title) if a and a != identifier],
         title=title,
         body="W3C",
         number=shortname,
         revision=None,
         status=status,
-        published_date=spec.get("published"),
+        published_date=published,
         withdrawn_date=None,
         superseded_by=None,
         supersedes=[],
         scope=spec.get("description"),
         committee=None,
-        url=latest_url or f"{_W3C_TR}/{shortname}/",
-        full_text_url=latest_url,
-        full_text_available=bool(latest_url),
+        url=tr_url,
+        full_text_url=tr_url,
+        full_text_available=True,
         price=None,
         related=[],
     )
+
+
+def _map_w3c_status(status_title: str) -> str:
+    """Map a W3C version status (e.g. ``"Retired"``) to a record status.
+
+    Args:
+        status_title: The ``title`` of the specification's latest version link.
+
+    Returns:
+        ``"superseded"``, ``"draft"`` or ``"published"``.
+    """
+    status_raw = status_title.lower()
+    if "retired" in status_raw or "superseded" in status_raw:
+        return "superseded"
+    if "recommendation" in status_raw:
+        return "published"
+    if "draft" in status_raw or "working" in status_raw:
+        return "draft"
+    return "published"
 
 
 # ---------------------------------------------------------------------------
