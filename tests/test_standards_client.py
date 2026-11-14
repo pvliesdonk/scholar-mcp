@@ -351,14 +351,25 @@ async def test_standards_client_fetchers_ieee_instance_registered() -> None:
 IETF_BASE = "https://datatracker.ietf.org"
 RFC_EDITOR_BASE = "https://www.rfc-editor.org"
 
+# Shape of datatracker /api/v1/doc/docevent/?type=published_rfc (#631).
+RFC9000_PUB_EVENTS = {
+    "meta": {"total_count": 1},
+    "objects": [
+        {
+            "doc": "/api/v1/doc/document/rfc9000/",
+            "time": "2021-05-27T15:32:44Z",
+            "type": "published_rfc",
+        }
+    ],
+}
+
 SAMPLE_RFC9000_DOC = {
     "objects": [
         {
             "name": "rfc9000",
             "title": "QUIC: A UDP-Based Multiplexed and Secure Transport",
             "abstract": "This document defines QUIC.",
-            "std_level": "proposed_standard",
-            "pub_date": "2021-05-01",
+            "std_level": "/api/v1/name/stdlevelname/ps/",
             "resource_uri": "/api/v1/doc/document/rfc9000/",
         }
     ],
@@ -370,8 +381,7 @@ SAMPLE_RFC9000_SEARCH = {
         {
             "name": "rfc9000",
             "title": "QUIC: A UDP-Based Multiplexed and Secure Transport",
-            "std_level": "proposed_standard",
-            "pub_date": "2021-05-01",
+            "std_level": "/api/v1/name/stdlevelname/ps/",
             "resource_uri": "/api/v1/doc/document/rfc9000/",
         }
     ],
@@ -381,6 +391,9 @@ SAMPLE_RFC9000_SEARCH = {
 
 @pytest.mark.respx(base_url=IETF_BASE)
 async def test_ietf_get_rfc(respx_mock: respx.MockRouter) -> None:
+    respx_mock.get("/api/v1/doc/docevent/").mock(
+        return_value=httpx.Response(200, json=RFC9000_PUB_EVENTS)
+    )
     respx_mock.get("/api/v1/doc/document/").mock(
         return_value=httpx.Response(200, json=SAMPLE_RFC9000_DOC)
     )
@@ -394,6 +407,125 @@ async def test_ietf_get_rfc(respx_mock: respx.MockRouter) -> None:
     assert record["number"] == "9000"
     assert record["full_text_available"] is True
     assert record["full_text_url"].startswith("https://www.rfc-editor.org/")
+    assert record["published_date"] == "2021-05"
+    assert record["status"] == "published"
+
+
+@pytest.mark.respx(base_url=IETF_BASE)
+async def test_ietf_get_historic_rfc_is_withdrawn(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """std_level arrives as a URI; its slug decides the status (#631)."""
+    respx_mock.get("/api/v1/doc/docevent/").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "objects": [
+                    {
+                        "doc": "/api/v1/doc/document/rfc2246/",
+                        "time": "1999-01-01T08:00:00Z",
+                        "type": "published_rfc",
+                    }
+                ]
+            },
+        )
+    )
+    respx_mock.get("/api/v1/doc/document/").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "objects": [
+                    {
+                        "name": "rfc2246",
+                        "title": "The TLS Protocol Version 1.0",
+                        "std_level": "/api/v1/name/stdlevelname/hist/",
+                    }
+                ]
+            },
+        )
+    )
+    http = httpx.AsyncClient()
+    fetcher = _IETFFetcher(http, RateLimiter(delay=0.0))
+    record = await fetcher.get("RFC 2246")
+    await http.aclose()
+    assert record is not None
+    assert record["status"] == "withdrawn"
+    assert record["published_date"] == "1999-01"
+
+
+@pytest.mark.respx(base_url=IETF_BASE)
+@pytest.mark.parametrize(
+    "date_response",
+    [httpx.Response(503), httpx.ConnectError("no route to host")],
+    ids=["status", "transport"],
+)
+async def test_ietf_get_keeps_record_when_date_lookup_fails(
+    respx_mock: respx.MockRouter, date_response: object
+) -> None:
+    """A failed date lookup costs the date, not the record."""
+    route = respx_mock.get("/api/v1/doc/docevent/")
+    if isinstance(date_response, Exception):
+        route.mock(side_effect=date_response)
+    else:
+        route.mock(return_value=date_response)
+    respx_mock.get("/api/v1/doc/document/").mock(
+        return_value=httpx.Response(200, json=SAMPLE_RFC9000_DOC)
+    )
+    http = httpx.AsyncClient()
+    fetcher = _IETFFetcher(http, RateLimiter(delay=0.0))
+    record = await fetcher.get("RFC 9000")
+    await http.aclose()
+    assert record is not None
+    assert record["identifier"] == "RFC 9000"
+    assert record["published_date"] is None
+
+
+@pytest.mark.respx(base_url=IETF_BASE)
+async def test_ietf_search_looks_up_dates_in_one_request(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """search() asks for every result's date at once, not once per row."""
+    rows = [
+        {
+            "name": "rfc9000",
+            "title": "QUIC",
+            "std_level": "/api/v1/name/stdlevelname/ps/",
+        },
+        {
+            "name": "rfc9001",
+            "title": "QUIC TLS",
+            "std_level": "/api/v1/name/stdlevelname/ps/",
+        },
+    ]
+    events = respx_mock.get("/api/v1/doc/docevent/").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "objects": [
+                    {
+                        "doc": "/api/v1/doc/document/rfc9000/",
+                        "time": "2021-05-27T15:32:44Z",
+                    },
+                    {
+                        "doc": "/api/v1/doc/document/rfc9001/",
+                        "time": "2021-05-27T15:33:01Z",
+                    },
+                ]
+            },
+        )
+    )
+    respx_mock.get("/api/v1/doc/document/").mock(
+        return_value=httpx.Response(200, json={"objects": rows})
+    )
+    http = httpx.AsyncClient()
+    fetcher = _IETFFetcher(http, RateLimiter(delay=0.0))
+    results = await fetcher.search("QUIC", limit=5)
+    await http.aclose()
+    assert events.call_count == 1
+    params = events.calls.last.request.url.params
+    assert params["doc__name__in"] == "rfc9000,rfc9001"
+    assert params["type"] == "published_rfc"
+    assert [r["published_date"] for r in results] == ["2021-05", "2021-05"]
 
 
 @pytest.mark.respx(base_url=IETF_BASE)
@@ -407,7 +539,7 @@ async def test_ietf_get_bcp(respx_mock: respx.MockRouter) -> None:
                     {
                         "name": "bcp47",
                         "title": "Tags for Identifying Languages",
-                        "std_level": "best_current_practice",
+                        "std_level": None,
                     }
                 ]
             },
@@ -418,6 +550,8 @@ async def test_ietf_get_bcp(respx_mock: respx.MockRouter) -> None:
     record = await fetcher.get("BCP 47")
     await http.aclose()
     assert record is not None
+    # No date request for a sub-series: respx would fail an unmocked call.
+    assert record["published_date"] is None
     assert record["identifier"] == "BCP 47"
     assert record["url"] == "https://www.rfc-editor.org/info/bcp47"
     assert record["full_text_available"] is False
@@ -439,6 +573,9 @@ async def test_ietf_get_not_found(respx_mock: respx.MockRouter) -> None:
 
 @pytest.mark.respx(base_url=IETF_BASE)
 async def test_ietf_search(respx_mock: respx.MockRouter) -> None:
+    respx_mock.get("/api/v1/doc/docevent/").mock(
+        return_value=httpx.Response(200, json=RFC9000_PUB_EVENTS)
+    )
     respx_mock.get("/api/v1/doc/document/").mock(
         return_value=httpx.Response(200, json=SAMPLE_RFC9000_SEARCH)
     )
@@ -462,7 +599,6 @@ def test_normalize_ietf_null_std_level() -> None:
         "name": "rfc9000",
         "title": "QUIC",
         "std_level": None,
-        "pub_date": "2021-05-01",
     }
     record = _normalize_ietf(obj)
     assert record["status"] == "published"
@@ -474,8 +610,7 @@ def test_normalize_ietf_bcp_name() -> None:
     obj = {
         "name": "bcp47",
         "title": "Tags for Identifying Languages",
-        "std_level": "best_current_practice",
-        "pub_date": "2009-09-01",
+        "std_level": None,
     }
     record = _normalize_ietf(obj)
     assert record["identifier"] == "BCP 47"
@@ -493,10 +628,10 @@ def test_normalize_ietf_early_rfc_url() -> None:
     obj = {
         "name": "rfc0001",
         "title": "Host Software",
-        "std_level": "unknown",
-        "pub_date": "1969-04-07",
+        "std_level": "/api/v1/name/stdlevelname/unkn/",
     }
     record = _normalize_ietf(obj)
+    assert record["status"] == "draft"
     assert record["identifier"] == "RFC 1"
     assert record["number"] == "1"
     assert record["full_text_url"] is not None
@@ -1370,6 +1505,9 @@ async def test_standards_client_resolve_ietf_local(
     respx_mock: respx.MockRouter,
 ) -> None:
     """Local resolution needs no network call for well-known RFCs."""
+    respx_mock.get("/api/v1/doc/docevent/").mock(
+        return_value=httpx.Response(200, json=RFC9000_PUB_EVENTS)
+    )
     respx_mock.get("/api/v1/doc/document/").mock(
         return_value=httpx.Response(200, json=SAMPLE_RFC9000_DOC)
     )
@@ -1386,6 +1524,9 @@ async def test_standards_client_resolve_ietf_local(
 async def test_standards_client_search_body_filter(
     respx_mock: respx.MockRouter,
 ) -> None:
+    respx_mock.get("/api/v1/doc/docevent/").mock(
+        return_value=httpx.Response(200, json=RFC9000_PUB_EVENTS)
+    )
     respx_mock.get("/api/v1/doc/document/").mock(
         return_value=httpx.Response(200, json=SAMPLE_RFC9000_SEARCH)
     )
