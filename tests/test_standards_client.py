@@ -650,7 +650,7 @@ def test_normalize_ietf_early_rfc_url() -> None:
     from scholar_mcp._standards_client import _normalize_ietf
 
     obj = {
-        "name": "rfc0001",
+        "name": "rfc1",
         "title": "Host Software",
         "std_level": "/api/v1/name/stdlevelname/unkn/",
     }
@@ -659,8 +659,8 @@ def test_normalize_ietf_early_rfc_url() -> None:
     assert record["identifier"] == "RFC 1"
     assert record["number"] == "1"
     assert record["full_text_url"] is not None
-    # URL uses the raw Datatracker name (rfc0001) — RFC Editor handles both forms
-    assert record["full_text_url"].startswith("https://www.rfc-editor.org/rfc/rfc0001")
+    # datatracker names RFCs without zero padding (#633), and the URL uses that name
+    assert record["full_text_url"].startswith("https://www.rfc-editor.org/rfc/rfc1.")
 
 
 # ---------------------------------------------------------------------------

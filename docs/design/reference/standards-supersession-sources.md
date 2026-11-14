@@ -70,31 +70,42 @@ ETSI has its own page, [ETSI standards search data endpoint](etsi-standards-sear
   [Relaton bibitem titles](relaton-titles.md)), or how the project should
   model a replacement.
 - Depended on by: #592 (replaced editions report `published`). No code reads
-  these sources for supersession yet, so no claim here is pinned.
+  these sources for supersession yet; the pins below cover how the fetchers
+  read status and dates.
 
 ## Claims
 
 ### What the project's fetchers return today
 
-- The live IETF, NIST and W3C fetchers all return records:
-  `_IETFFetcher.get("RFC 2616")`, `_NISTFetcher.get("NIST SP 800-53 Rev. 4")`,
-  `_NISTFetcher.get("FIPS 186-4")` and `_W3CFetcher.get("html401")`. Every one
-  reports `status: "published"` and `superseded_by: None`, although RFC 2616
-  is obsoleted, SP 800-53 Rev. 4 and FIPS 186-4 are withdrawn, and HTML 4.01 is
-  retired. [observed: the fetchers called with a bare `httpx.AsyncClient`,
-  2026-11-14]
-- The W3C normaliser reads `latest-status` or `status` from the specification
-  object. The API puts neither key there; the latest version's status is the
-  `title` of `_links.latest-version`. So every W3C record falls through to
-  `published`. [observed: `https://api.w3.org/specifications/html401` and
-  read of `_normalize_w3c`, 2026-11-14] [source: w3c-api]
-- The W3C record's `url` and `full_text_url` are the API's version URL
-  (`https://api.w3.org/specifications/html401/versions/20180327`), not the
-  document at `www.w3.org/TR/`. Its `identifier` is the title. [observed, as
-  above]
-- The IETF record has `published_date: None` for RFC 2616 and RFC 9110. The
-  datatracker document object carries `pub_date: null` for an RFC. [observed:
-  `datatracker.ietf.org/api/v1/doc/document/rfc2616/`, 2026-11-14]
+- The live fetchers return a record for `_IETFFetcher.get("RFC 2616")`,
+  `_NISTFetcher.get("NIST SP 800-53 Rev. 4")`, `_NISTFetcher.get("FIPS 186-4")`
+  and `_W3CFetcher.get("html401")`, and every one has `superseded_by: None`,
+  although RFC 2616 is obsoleted by RFC 7230 to 7235, SP 800-53 Rev. 4 and
+  FIPS 186-4 are withdrawn, and HTML 4.01 is retired. RFC 2616 and both NIST
+  records report `status: "published"`. [observed: the NIST fetcher called
+  with a bare `httpx.AsyncClient`, 2026-11-14; the IETF and W3C fetchers
+  re-run on `main` at e42339b, 2026-11-14]
+- The W3C record takes its status from the `title` of
+  `_links.latest-version`, so HTML 4.01 reports `superseded`, and its
+  publication date from the end of that link's `href`. [observed, as above]
+  [source: w3c-api] [pins: tests/test_standards_client.py::test_normalize_w3c_status_from_latest_version, tests/test_standards_client.py::test_normalize_w3c_reads_api_shape]
+- The W3C record's `url` and `full_text_url` are the document at
+  `www.w3.org/TR/` (the API's `shortlink`, or one built from the short name).
+  Its `identifier` is the name the resolver knows (`WCAG 2.1`) or W3C's short
+  name (`html401`), and `get()` finds a record by the identifier `search()`
+  gave it. [observed, as above] [pins: tests/test_standards_client.py::test_normalize_w3c_mapped_shortname_keeps_resolver_name, tests/test_standards_client.py::test_normalize_w3c_no_shortlink_falls_back_to_tr, tests/test_standards_client.py::test_w3c_search_identifier_round_trips_through_get]
+- The datatracker document object has no `pub_date` for an RFC, and its
+  `std_level` is a URI (`/api/v1/name/stdlevelname/hist/`), not a label.
+  [observed: `datatracker.ietf.org/api/v1/doc/document/rfc2616/`, 2026-11-14]
+  The IETF record takes its status from the URI's last segment, so a historic
+  RFC such as RFC 2246 reports `withdrawn`. [observed, as above] [pins: tests/test_standards_client.py::test_ietf_get_historic_rfc_is_withdrawn]
+- The IETF record's `published_date` (`1999-06` for RFC 2616, `2022-06` for
+  RFC 9110) comes from the document's `published_rfc` event, fetched in one
+  `docevent` request per lookup or search. When that request fails the record
+  is kept without a date. [observed, as above] [pins: tests/test_standards_client.py::test_ietf_search_looks_up_dates_in_one_request, tests/test_standards_client.py::test_ietf_get_keeps_record_when_date_lookup_fails]
+- datatracker names documents without zero padding (`rfc793`, `bcp47`); a
+  request for `rfc0793` finds nothing. [observed:
+  `datatracker.ietf.org/api/v1/doc/document/?name=rfc793`, 2026-11-14] [pins: tests/test_standards_client.py::test_ietf_get_asks_for_unpadded_name]
 
 ### IETF
 
@@ -181,8 +192,8 @@ ETSI has its own page, [ETSI standards search data endpoint](etsi-standards-sear
 
 - All three fetchers drop the replacement data their sources carry or could
   carry: IETF never asks datatracker for `obs` relations, NIST reads MODS
-  rather than the CSRC export, and W3C reads status keys the API does not
-  send. This is #592.
+  rather than the CSRC export, and W3C ignores the `superseded-by` link. This
+  is #592.
 
 ## Not covered
 
