@@ -2338,7 +2338,7 @@ Common Criteria metadata is sync-only, there's no live API for the CC portal. Ru
 scholar-mcp sync-standards --body CC
 ```
 
-to populate the local cache. Two record categories load:
+to populate the local cache with core CC documents and Protection Profiles.
 
 ### Core CC documents (~15 records)
 
@@ -2446,10 +2446,10 @@ Citations that mention a standard but are papers ABOUT it:
 
 A `StandardRecord` dict, the same shape returned by `get_standard`:
 
-- `identifier`, canonical form (such as `"RFC 9000"`, `"ISO 9001:2015"`)
+- `identifier`, canonical form (such as `"RFC 9000"`, `"ISO 9001:2015"`). A W3C specification carries its common name where the server knows one (`"WCAG 2.1"`) and the short name W3C gives it otherwise (`"html401"`); `get_standard` accepts either.
 - `title`, full standard title
 - `body`, standards body (`"IETF"`, `"ISO"`, `"IEEE"`, `"CC"`, `"CEN"`, etc.)
-- `status`, `"published"`, `"withdrawn"`, `"harmonised"`, etc.
+- `status`, `"published"`, `"withdrawn"`, `"superseded"`, `"harmonised"`, etc.
 - `full_text_url`, direct link to the freely downloadable document (when available)
 - `full_text_available`, `True` for Tier 1 sources (IETF, NIST, W3C, ETSI) and CC
 - `related`, cross-linked identifiers (such as CC ↔ ISO/IEC 15408)

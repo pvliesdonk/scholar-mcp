@@ -3026,7 +3026,7 @@ the <code>standards_sync_runs</code> table:</p>
 <p>Common Criteria metadata is sync-only, there's no live API for the CC portal. Run:</p>
 <div class="highlight"><pre><span></span><code>scholar-mcp<span class="w"> </span>sync-standards<span class="w"> </span>--body<span class="w"> </span>CC
 </code></pre></div>
-<p>to populate the local cache. Two record categories load:</p>
+<p>to populate the local cache with core CC documents and Protection Profiles.</p>
 <h3 id="core-cc-documents-15-records">Core CC documents (~15 records)<a class="headerlink" href="#core-cc-documents-15-records" title="Permanent link">&para;</a></h3>
 <p>The core CC documents (<code>CC:2022</code>, <code>CC:2017</code> (CC 3.1 Revision 5), and the Common Evaluation Methodology (CEM)) are stored in a hard-coded table in <code>_sync_cc.py</code>. Updates land manually when CCRA publishes a new release (every ~5 years).</p>
 <p>CC core documents that are also published as ISO/IEC 15408 / 18045 (parts 1-3) write <strong>two records</strong> under one <code>source="CC"</code> sync, one with <code>body="CC"</code> (<code>CC:2022 Part 1</code>), one with <code>body="ISO/IEC"</code> (<code>ISO/IEC 15408-1:2022</code>). Both records share the same free CC PDF as <code>full_text_url</code>. The <code>related</code> field on each cross-links to the other.</p>
@@ -3223,10 +3223,12 @@ the <code>standards_sync_runs</code> table:</p>
 <h3 id="what-standard_metadata-contains">What <code>standard_metadata</code> contains<a class="headerlink" href="#what-standard_metadata-contains" title="Permanent link">&para;</a></h3>
 <p>A <code>StandardRecord</code> dict, the same shape returned by <code>get_standard</code>:</p>
 <ul>
-<li><code>identifier</code>, canonical form (such as <code>"RFC 9000"</code>, <code>"ISO 9001:2015"</code>)</li>
+<li><code>identifier</code>, canonical form (such as <code>"RFC 9000"</code>, <code>"ISO 9001:2015"</code>). A W3C
+  specification carries its common name where the server knows one (<code>"WCAG 2.1"</code>)
+  and the short name W3C gives it otherwise (<code>"html401"</code>); <code>get_standard</code> accepts either.</li>
 <li><code>title</code>, full standard title</li>
 <li><code>body</code>, standards body (<code>"IETF"</code>, <code>"ISO"</code>, <code>"IEEE"</code>, <code>"CC"</code>, <code>"CEN"</code>, etc.)</li>
-<li><code>status</code>, <code>"published"</code>, <code>"withdrawn"</code>, <code>"harmonised"</code>, etc.</li>
+<li><code>status</code>, <code>"published"</code>, <code>"withdrawn"</code>, <code>"superseded"</code>, <code>"harmonised"</code>, etc.</li>
 <li><code>full_text_url</code>, direct link to the freely downloadable document (when available)</li>
 <li><code>full_text_available</code>, <code>True</code> for Tier 1 sources (IETF, NIST, W3C, ETSI) and CC</li>
 <li><code>related</code>, cross-linked identifiers (such as CC ↔ ISO/IEC 15408)</li>
