@@ -2,6 +2,18 @@
 
 Newest first. One entry per research pass.
 
+## 2026-11-13
+
+### ETSI standards search endpoint
+
+New page [ETSI standards search data endpoint](etsi-standards-search.md)
+(#454), from the search page's own `script.js`, relaton-etsi's fetcher, and
+requests to the live endpoint. Finding: the data moved to
+`custom/standardssearch/data.php`, with the same row shape `_normalize_etsi`
+reads. A web application firewall refuses curl's default user agent, which is
+separate from the dead Joomla route. Not settled: ETSI's terms for automated
+access, and the meaning of `IsCurrent` and `new_versions`.
+
 ## 2026-11-12
 
 ### OpenAlex keys and limits
