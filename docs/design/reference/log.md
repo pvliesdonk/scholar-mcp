@@ -2,6 +2,17 @@
 
 Newest first. One entry per research pass.
 
+## 2026-11-14
+
+### ETSI standards search endpoint, after the fix
+
+Updated [ETSI standards search data endpoint](etsi-standards-search.md) for
+#624, which moved `_ETSIFetcher` to `data.php` with `content=0` and
+`includeScope=1`. New observation: with `content=0` a search for
+`ETSI EN 303 645` still returns `ETSI TS 103 929` as its second row, so an
+exact lookup has to match the identifier. The row-field and request claims now
+pin tests.
+
 ## 2026-11-13
 
 ### ETSI standards search endpoint

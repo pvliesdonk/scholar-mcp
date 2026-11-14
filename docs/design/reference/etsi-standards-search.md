@@ -74,7 +74,7 @@ is an observation or comes from reading the site's own client script.
   [source: relaton-etsi-fetcher] [source: relaton-data-etsi]
 - The old Joomla route
   `https://www.etsi.org/?option=com_standardssearch&view=data&format=json`,
-  which `_ETSIFetcher` still calls, answers a client the filter lets through
+  which `_ETSIFetcher` called until #624, answers a client the filter lets through
   with `200 text/html` (a page, not data). [observed: bare httpx client,
   2026-11-13] The route no longer exists, and an HTML 200 is how a request to it
   looks today.
@@ -108,12 +108,14 @@ is an observation or comes from reading the site's own client script.
   `stdType`, `frequency`, `mandate`, `collection` and `sort`. The script sends an
   unchecked checkbox as `name=0` and joins several selected options with `,,`.
   [source: etsi-page] [source: etsi-script]
-- These are the same names and values as `_ETSI_JOOMLA_PARAMS`. Sending that
-  dict unchanged to `data.php` returns data. [observed: bare httpx client with
+- These are the same names and values as `_ETSI_JOOMLA_PARAMS` (renamed
+  `_ETSI_SEARCH_PARAMS` in #624). Sending that dict unchanged to `data.php`
+  returns data. [observed: bare httpx client with
   `{**_ETSI_JOOMLA_PARAMS, "search": ..., "page": 1}`, 2026-11-13]
 - `includeScope=1` fills each row's `Scope`. Without it, `Scope` is `null`.
   [source: relaton-etsi-fetcher] [observed: `search=EN 303 645` with and
   without `includeScope=1`, 2026-11-13]
+  [pins: tests/test_standards_client.py::test_etsi_search_requests_data_endpoint]
 - `content=1` also matches document content, and that changes exact lookups.
   With `content=1`, `search=ETSI EN 303 645` returned 27,442 hits and
   `search=ETSI TS 102 690-1`, a number with no ETSI deliverable, returned
@@ -121,6 +123,12 @@ is an observation or comes from reading the site's own client script.
   searches returned 2 hits (EN 303 645 V3.1.3 first) and 0.
   [observed: bare httpx client, `_ETSI_JOOMLA_PARAMS` with `content` varied,
   2026-11-13]
+  [pins: tests/test_standards_client.py::test_etsi_search_requests_data_endpoint]
+- Even with `content=0`, a search for an identifier can return other
+  deliverables: the second of the two hits for `ETSI EN 303 645` is
+  `ETSI TS 103 929 V1.2.1`. So the first row is not necessarily the one
+  asked for. [observed: `content=0`, `includeScope=1`, 2026-11-14]
+  [pins: tests/test_standards_client.py::test_etsi_get_skips_rows_for_other_identifiers]
 - `version=1` adds earlier versions that are not flagged `superseded` (for
   example `ETSI TS 103 929 V1.1.1` beside V1.2.1). `superseded=1` adds versions
   flagged `superseded` (for example `ETSI EN 303 645 V2.1.1`). The two flags
@@ -148,16 +156,13 @@ is an observation or comes from reading the site's own client script.
   `new_versions`, `Scope`, `TB` and `Keywords`. Every value is a string or
   `null`. [observed: `search=EN 303 645`, 2026-11-13]
 - `_normalize_etsi` reads seven of those keys: `ETSI_DELIVERABLE`, `TITLE`,
-  `EDSpathname`, `EDSPDFfilename`, `ACTION_TYPE`, `Scope` and `TB`. Tests
-  assert only what it derives from `ETSI_DELIVERABLE`, `EDSpathname` and
-  `EDSPDFfilename`. No ETSI test asserts the title, status, scope or
-  committee it maps from the other four. [observed: read of `_normalize_etsi`
-  and the ETSI tests, 2026-11-13]
-  [pins: tests/test_standards_client.py::test_etsi_search]
+  `EDSpathname`, `EDSPDFfilename`, `ACTION_TYPE`, `Scope` and `TB`.
+  [observed: read of `_normalize_etsi`, 2026-11-13]
+  [pins: tests/test_standards_client.py::test_etsi_normalize_row_fields]
 - `ETSI_DELIVERABLE` carries the identifier, version and date in one string:
   `ETSI EN 303 645 V3.1.3 (2024-09)`. [observed, as above] `_normalize_etsi`
-  splits it into identifier, revision and date, but no test asserts that
-  split.
+  splits it into identifier, revision and date.
+  [pins: tests/test_standards_client.py::test_etsi_normalize_row_fields]
 - The PDF is at `https://www.etsi.org/deliver/` + `EDSpathname` +
   `EDSPDFfilename`. [source: relaton-etsi-fetcher] [observed: the
   `/deliver/etsi_en/303600_303699/303645/` directory listing, 2026-11-13]
@@ -198,14 +203,13 @@ is an observation or comes from reading the site's own client script.
 
 ## Where this project departs from the subject
 
-- `_ETSIFetcher` still sends its query to the dead Joomla route
-  (`https://www.etsi.org/` with `option=com_standardssearch`), not to
-  `data.php`. Every lookup therefore fails with a non-JSON answer. Fixing that
-  is follow-up work from #454.
-- `_ETSIFetcher.get()` takes the first search row for an identifier, and it
-  sends `content=1`. Moving the request to `data.php` without changing that
-  would return an unrelated standard for a number ETSI does not have (see
-  *Parameters*).
+- `_ETSIFetcher` sends `content=0`, so a keyword search matches titles and
+  numbers only, never document text. `get()` keeps only a row whose identifier equals the one
+  asked for (#624, see *Parameters*).
+- `_ETSIFetcher` reads an empty array as "no such standard". It cannot tell
+  that from a malformed request (see *Paging and empty answers*), so its
+  parameters are fixed in code rather than built from caller input, apart
+  from `search`.
 
 ## Not covered
 
