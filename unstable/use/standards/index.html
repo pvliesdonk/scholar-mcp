@@ -1314,6 +1314,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#removal-pass-aborted" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        "removal pass aborted"
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#withdrawal-pass-aborted" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2628,6 +2639,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#removal-pass-aborted" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        "removal pass aborted"
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#withdrawal-pass-aborted" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2901,7 +2923,8 @@
 is the community-maintained Relaton YAML dumps at
 <a href="https://github.com/relaton/relaton-data-iso"><code>relaton/relaton-data-iso</code></a>,
 <a href="https://github.com/relaton/relaton-data-iec"><code>relaton/relaton-data-iec</code></a>, and
-<a href="https://github.com/relaton/relaton-data-ieee"><code>relaton/relaton-data-ieee</code></a>.</p>
+<a href="https://github.com/relaton/relaton-data-ieee"><code>relaton/relaton-data-ieee</code></a>, read
+from their <code>v2</code> branch. Each repository's <code>main</code> branch no longer receives data.</p>
 <p>Only a sync replaces a synced record. A lookup through <code>get_standard</code> or
 <code>resolve_standard_identifier</code> caches what it fetched, but never over a synced
 record, so a synced standard stays in <code>search_standards</code> and never expires
@@ -2924,6 +2947,16 @@ changed. Until that run,
 the records keep what the earlier release stored. Release 3.0 needs this
 once: ISO and IEC titles synced before it carry only the first part of the
 title.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">After upgrading to the release that reads the <code>v2</code> branch</p>
+<p>Earlier releases synced each repository's <code>main</code> branch, whose data stops
+in 2025 or early 2026, and reported every ISO record as <code>published</code>. The
+first <code>sync-standards</code> run after the upgrade rewrites every record from
+<code>v2</code> and deletes the synced identifiers <code>v2</code> no longer lists, mostly drafts
+that have since advanced and IEEE drafts that <code>v2</code> names differently. Until
+that run, search and lookups answer from the <code>main</code> data. Standards that
+were only fetched live, never synced, are fetched again on their next lookup.</p>
 </div>
 <h2 id="running-a-sync-from-docker">Running a sync from Docker<a class="headerlink" href="#running-a-sync-from-docker" title="Permanent link">&para;</a></h2>
 <p>The <code>scholar-mcp</code> binary is on <code>PATH</code> inside the container, so no <code>bash -c</code> or
@@ -2979,14 +3012,22 @@ rarely change) and can be replaced by running <code>sync-standards</code> to pop
 synced copy.</p>
 <h2 id="joint-isoiec-standards">Joint ISO/IEC standards<a class="headerlink" href="#joint-isoiec-standards" title="Permanent link">&para;</a></h2>
 <p>Standards like <code>ISO/IEC 27001:2022</code> and <code>ISO/IEC 15408:2022</code> appear in both dumps. The
-loader detects joint documents from the YAML structure (both <code>type=ISO</code> and <code>type=IEC</code>
-<code>docidentifier</code> entries) and stores them once with <code>body="ISO/IEC"</code>. The <code>source</code> column
-on the row reflects the body that last wrote it.</p>
+loader stores each joint identifier once, and the row reflects the dump that last
+wrote it. Its <code>body</code> is that dump's body, <code>"ISO"</code> or <code>"IEC"</code>, not <code>"ISO/IEC"</code>: the
+records list identifiers of their own dump's type only, so the loader can't tell a
+joint document from the record.</p>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
-<h3 id="withdrawal-pass-aborted">"withdrawal pass aborted"<a class="headerlink" href="#withdrawal-pass-aborted" title="Permanent link">&para;</a></h3>
-<p>When a sync sees more than 50% of prior identifiers missing from a new tarball, it skips
-the withdrawal pass to avoid flipping the whole cache to <code>status="withdrawn"</code>. Run
+<h3 id="removal-pass-aborted">"removal pass aborted"<a class="headerlink" href="#removal-pass-aborted" title="Permanent link">&para;</a></h3>
+<p>A Relaton dump keeps a withdrawn edition at its withdrawn stage, so an identifier
+that disappears from it was renamed or advanced; the ISO, IEC and IEEE sync
+deletes such records. When the new dump lists fewer than half as many records as
+the sync held before, it looks truncated and the sync deletes nothing. Run
 <code>--force</code> after confirming upstream state is sane.</p>
+<h3 id="withdrawal-pass-aborted">"withdrawal pass aborted"<a class="headerlink" href="#withdrawal-pass-aborted" title="Permanent link">&para;</a></h3>
+<p>The CC and CEN syncs mark records that disappear from their source as
+<code>withdrawn</code>. When more than 50% of prior identifiers are missing, they skip that
+pass to avoid flipping the whole cache to <code>status="withdrawn"</code>. Run <code>--force</code>
+after confirming upstream state is sane.</p>
 <h3 id="rate-limit-errors-http-403">Rate-limit errors (HTTP 403)<a class="headerlink" href="#rate-limit-errors-http-403" title="Permanent link">&para;</a></h3>
 <p>Indicates the unauthenticated limit has been exhausted. Set <code>SCHOLAR_GITHUB_TOKEN</code> or
 wait an hour.</p>
@@ -3228,12 +3269,19 @@ the <code>standards_sync_runs</code> table:</p>
   and the short name W3C gives it otherwise (<code>"html401"</code>); <code>get_standard</code> accepts either.</li>
 <li><code>title</code>, full standard title</li>
 <li><code>body</code>, standards body (<code>"IETF"</code>, <code>"ISO"</code>, <code>"IEEE"</code>, <code>"CC"</code>, <code>"CEN"</code>, etc.)</li>
-<li><code>status</code>, <code>"published"</code>, <code>"withdrawn"</code>, <code>"superseded"</code>, <code>"harmonised"</code>, etc.</li>
+<li><code>status</code>, <code>"published"</code>, <code>"withdrawn"</code>, <code>"superseded"</code>, <code>"draft"</code>,
+  <code>"harmonised"</code>, etc. An ISO, IEC or IEEE record takes it from the stage the
+  Relaton dump records; a cancelled ISO project reports <code>"withdrawn"</code>.</li>
 <li><code>superseded_by</code>, a list of the identifiers that replace this edition, each one
   <code>get_standard</code> accepts. An RFC that later RFCs obsolete is <code>"superseded"</code> and
-  lists them: RFC 2616 gives <code>RFC 7230</code> to <code>RFC 7235</code>. Only RFC records fill
-  the list today; for the other bodies it stays empty even when an edition has
-  been replaced, so an empty list doesn't show that an edition is current.</li>
+  lists them: RFC 2616 gives <code>RFC 7230</code> to <code>RFC 7235</code>. A withdrawn ISO or IEEE
+  edition whose dump record names its replacement does the same:
+  ISO/IEC 27001:2005 gives <code>ISO/IEC 27001:2013</code>. An IEEE replacement keeps
+  the "Std" of its identifier (<code>IEEE Std 1588-2019</code>); <code>get_standard</code> accepts
+  it but answers from a live fetch instead of the synced copy. An IEC edition
+  replaced by a new one reports <code>"superseded"</code> with an empty list, since the
+  IEC dump links only project numbers. The other bodies leave the list empty,
+  so an empty list doesn't show that an edition is current.</li>
 <li><code>full_text_url</code>, direct link to the freely downloadable document (when available)</li>
 <li><code>full_text_available</code>, <code>True</code> for Tier 1 sources (IETF, NIST, W3C, ETSI) and CC</li>
 <li><code>related</code>, cross-linked identifiers (such as CC ↔ ISO/IEC 15408)</li>
