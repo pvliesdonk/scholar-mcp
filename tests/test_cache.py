@@ -567,6 +567,41 @@ async def test_repair_drops_relaton_rows_fetched_live_from_main(tmp_path):
         await upgraded.close()
 
 
+async def test_repair_drops_nist_rows_cached_before_csrc_was_read(tmp_path):
+    """#639: a NIST row cached before CSRC's export was read says "published".
+
+    FIPS 186-4 is withdrawn; the row would keep saying otherwise for 90 days.
+    Other bodies' rows stay.
+    """
+    import aiosqlite
+
+    db_path = tmp_path / "standards.db"
+    old = ScholarCache(db_path)
+    await old.open()
+    await old.set_standard(
+        "FIPS 186-4",
+        {"identifier": "FIPS 186-4", "body": "NIST", "status": "published"},
+    )
+    await old.set_standard(
+        "RFC 9000", {"identifier": "RFC 9000", "body": "IETF", "title": "QUIC"}
+    )
+    await old.set_standards_search("FIPS", [{"identifier": "FIPS 186-4"}])
+    await old.close()
+
+    async with aiosqlite.connect(db_path) as db:
+        await db.execute("DELETE FROM repairs WHERE name LIKE '639_%'")
+        await db.commit()
+
+    upgraded = ScholarCache(db_path)
+    await upgraded.open()
+    try:
+        assert await upgraded.get_standard("FIPS 186-4") is None
+        assert await upgraded.get_standard("RFC 9000") is not None
+        assert await upgraded.get_standards_search("FIPS") is None
+    finally:
+        await upgraded.close()
+
+
 async def test_delete_synced_standards_keeps_other_sources_and_live_rows(cache):
     """Only synced rows of the named source go, with the aliases naming them."""
     record = {"identifier": "X", "body": "ISO", "title": "t"}
@@ -703,6 +738,8 @@ async def test_every_registered_repair_is_valid_sql(cache):
         "483_patent_parties_as_flat_lists",
         "641_live_relaton_rows",
         "641_standards_search_results",
+        "639_live_nist_rows",
+        "639_standards_search_results",
     }
     for statement in _REPAIRS.values():
         await cache._db.execute(f"EXPLAIN {statement}")

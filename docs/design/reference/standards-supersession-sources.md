@@ -36,7 +36,7 @@ sources:
   - id: csrc-pubs-export
     title: CSRC publications export (pubs-export.zip)
     resource: https://csrc.nist.gov/CSRC/media/feeds/metanorma/pubs-export.zip
-    accessed: 2026-11-14
+    accessed: 2026-11-15
   - id: nist-tech-pubs
     title: usnistgov/NIST-Tech-Pubs release Oct2026, allrecords-MODS.xml
     resource: https://github.com/usnistgov/NIST-Tech-Pubs/releases/tag/Oct2026
@@ -254,6 +254,14 @@ ETSI has its own page, [ETSI standards search data endpoint](etsi-standards-sear
   superseded. The export's `SP` and `IR` become `NIST SP` and `NISTIR`; the 7
   differently spelled and 45 absent publications are not matched. A failed
   export download fails the NIST lookup rather than serving MODS alone.
+- Of the 136 distinct names the applied data puts in `superseded_by`, 92
+  resolve through `resolve_identifier_local` to themselves and to a catalogue
+  record. 28 are rewritten by the resolver, mostly by dropping a `-N` edition
+  or a `Vol.`, `Version` or `E2` suffix (`NIST SP 800-73-4` becomes `NIST SP
+  800-73`), and 16 resolve to an identifier the catalogue lacks (`FIPS
+  186-3`, `NIST SP 800-61`). 43 of the 131 superseded records name at least
+  one such replacement. [observed: every name through the resolver and the
+  Oct2026 catalogue, 2026-11-15] #598 and #653 track the two halves.
   IETF reads datatracker's `obs` relations since #637, and W3C the
   `superseded-by` link since #638.
 - A W3C specification's `supersedes` collection is not read, so a record's

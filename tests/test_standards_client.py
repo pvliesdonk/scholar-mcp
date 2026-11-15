@@ -1183,6 +1183,7 @@ async def test_nist_github_api_failure_returns_empty(
     respx_mock.get("/repos/usnistgov/NIST-Tech-Pubs/releases/latest").mock(
         return_value=httpx.Response(503)
     )
+    _mock_csrc_export(respx_mock)
     http = httpx.AsyncClient(base_url=GITHUB_RELEASES_URL)
     fetcher = _NISTFetcher(http, RateLimiter(delay=0.0), cache_dir=tmp_path)
     results = await fetcher.search("800-53", limit=5)
@@ -1304,6 +1305,7 @@ async def test_nist_invalid_mods_xml_returns_empty(
     respx_mock.get(re.compile(r".*allrecords-MODS\.xml.*")).mock(
         return_value=httpx.Response(200, content=b"<not valid xml <<")
     )
+    _mock_csrc_export(respx_mock)
     http = httpx.AsyncClient(base_url=GITHUB_RELEASES_URL)
     fetcher = _NISTFetcher(http, RateLimiter(delay=0.0), cache_dir=tmp_path)
     results = await fetcher.search("800-53", limit=5)
@@ -1455,13 +1457,11 @@ async def test_nist_export_failure_raises_and_caches_nothing(
     tmp_path: Path,
     export: httpx.Response | Exception,
 ) -> None:
-    """Without the export, a withdrawn publication would read as published."""
-    respx_mock.get("/repos/usnistgov/NIST-Tech-Pubs/releases/latest").mock(
-        return_value=httpx.Response(200, json=SAMPLE_GITHUB_RELEASE)
-    )
-    respx_mock.get(re.compile(r".*allrecords-MODS\.xml.*")).mock(
-        return_value=httpx.Response(200, content=CSRC_MODS_XML)
-    )
+    """Without the export, a withdrawn publication would read as published.
+
+    No MODS route is registered: the 84 MB catalogue is not downloaded when
+    the export already failed, and a request for it would fail this test.
+    """
     route = respx_mock.get(_CSRC_PUBS_EXPORT_URL)
     if isinstance(export, Exception):
         route.mock(side_effect=export)
@@ -2185,6 +2185,9 @@ async def test_standards_client_search_all_bodies() -> None:
             return_value=httpx.Response(200, json=SAMPLE_RFC9000_SEARCH)
         )
         mock.get(url__regex=r"api\.github\.com").mock(return_value=httpx.Response(503))
+        mock.get(url__regex=r"csrc\.nist\.gov").mock(
+            return_value=httpx.Response(200, content=_csrc_export_zip([]))
+        )
         mock.get(url__regex=r"api\.w3\.org").mock(
             return_value=httpx.Response(200, json={"results": []})
         )
@@ -2207,6 +2210,9 @@ async def test_standards_client_get_fallback_to_fetchers() -> None:
             )
         )
         mock.get(url__regex=r"api\.github\.com").mock(return_value=httpx.Response(503))
+        mock.get(url__regex=r"csrc\.nist\.gov").mock(
+            return_value=httpx.Response(200, content=_csrc_export_zip([]))
+        )
         mock.get(url__regex=r"api\.w3\.org").mock(return_value=httpx.Response(404))
         mock.get(url__regex=r"www\.etsi\.org").mock(
             return_value=httpx.Response(200, json=[])
@@ -2244,6 +2250,9 @@ async def test_search_all_bodies_keeps_results_and_reports_failures() -> None:
             return_value=httpx.Response(200, json=SAMPLE_RFC9000_SEARCH)
         )
         mock.get(url__regex=r"api\.github\.com").mock(return_value=httpx.Response(503))
+        mock.get(url__regex=r"csrc\.nist\.gov").mock(
+            return_value=httpx.Response(200, content=_csrc_export_zip([]))
+        )
         mock.get(url__regex=r"api\.w3\.org").mock(
             return_value=httpx.Response(200, json={"results": []})
         )
@@ -2285,6 +2294,9 @@ async def test_get_fallback_continues_past_a_failing_fetcher() -> None:
             )
         )
         mock.get(url__regex=r"api\.github\.com").mock(return_value=httpx.Response(503))
+        mock.get(url__regex=r"csrc\.nist\.gov").mock(
+            return_value=httpx.Response(200, content=_csrc_export_zip([]))
+        )
         mock.get(url__regex=r"api\.w3\.org").mock(return_value=httpx.Response(404))
         mock.get(url__regex=r"www\.etsi\.org").mock(return_value=httpx.Response(403))
         http = httpx.AsyncClient()

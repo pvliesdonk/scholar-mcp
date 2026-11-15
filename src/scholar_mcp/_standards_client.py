@@ -857,6 +857,9 @@ class _NISTFetcher:
                 logger.debug("nist_catalogue_loaded_from_disk count=%d", len(cached))
                 return self._catalogue
 
+            # The export first: it is 120 KB against MODS's 84 MB, and without
+            # it nothing is cached, so a CSRC outage should cost no download.
+            statuses = await self._fetch_csrc_statuses()
             mods_url = await self._fetch_mods_url()
             if mods_url is None:
                 return []
@@ -874,7 +877,7 @@ class _NISTFetcher:
             if not records:
                 logger.warning("nist_mods_empty_after_parse url=%s", mods_url)
                 return []
-            applied = _apply_csrc_statuses(records, await self._fetch_csrc_statuses())
+            applied = _apply_csrc_statuses(records, statuses)
             logger.info(
                 "nist_catalogue_parsed count=%d csrc_statuses_applied=%d",
                 len(records),

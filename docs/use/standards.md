@@ -340,7 +340,12 @@ A `StandardRecord` dict, the same shape returned by `get_standard`:
   withdrew lists what replaced it, as `NIST SP 800-53 Rev. 4` lists
   `NIST SP 800-53 Rev. 5` and `FIPS 186-4` lists `FIPS 186-5`; one withdrawn
   with no replacement named is `"withdrawn"`. CSRC lists about 550 of the more
-  than 11,000 NIST publications, and the rest always read `"published"`. An IEC edition
+  than 11,000 NIST publications, and the rest always read `"published"`. The
+  server reads the CSRC list along with the catalogue every 90 days, so a
+  withdrawal can take that long to show. Not every NIST replacement leads to a
+  record yet: `get_standard` can't find some older ones, such as `FIPS 186-3`,
+  and reads a numbered edition such as `NIST SP 800-73-4` as `NIST SP 800-73`.
+  NIST records cached before this release are fetched again. An IEC edition
   replaced by a new one reports `"superseded"` with an empty list, since the
   IEC dump links only project numbers. The other bodies leave the list empty,
   so an empty list doesn't show that an edition is current.

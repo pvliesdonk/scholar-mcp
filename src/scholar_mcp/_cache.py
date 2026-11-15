@@ -426,6 +426,14 @@ _REPAIRS: dict[str, str] = {
         "('ISO', 'IEC', 'IEEE', 'ISO/IEC', 'IEC/IEEE', 'ISO/IEC/IEEE')"
     ),
     "641_standards_search_results": "DELETE FROM standards_search",
+    # #639: NIST records were built from MODS alone, so every one read
+    # "published" with no replacement, and a live row keeps that for 90 days.
+    # NIST is never synced; every NIST row is live.
+    "639_live_nist_rows": (
+        "DELETE FROM standards WHERE synced_at IS NULL "
+        "AND json_extract(data, '$.body') = 'NIST'"
+    ),
+    "639_standards_search_results": "DELETE FROM standards_search",
 }
 
 
