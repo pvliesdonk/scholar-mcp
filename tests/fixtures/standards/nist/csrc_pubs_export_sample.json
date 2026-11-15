@@ -1,0 +1,1061 @@
+[
+ {
+  "language": "en",
+  "script": "Latn",
+  "series": "nist-sp",
+  "docnumber": "800-106",
+  "docidentifier": "SP 800-106",
+  "revision": null,
+  "edition": null,
+  "volume": null,
+  "uri": "https://csrc.nist.gov/pubs/sp/800/106/final",
+  "doi": "10.6028/NIST.SP.800-106",
+  "title-main": "Randomized Hashing for Digital Signatures",
+  "title-sub": null,
+  "iteration": "final",
+  "issued-date": "2009-02",
+  "updated-date": null,
+  "published-date": "2009-02-25",
+  "obsoleted-date": "2022-12-15",
+  "status": "final",
+  "substage": "withdrawn",
+  "authors": [
+   {
+    "title": null,
+    "givenName": "Quynh",
+    "middleName": "H.",
+    "surname": "Dang",
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": "NIST"
+    },
+    "fullName": "Quynh H. Dang"
+   }
+  ],
+  "editors": [],
+  "supersedes": [],
+  "superseded-by": [],
+  "keywords": [
+   "cryptographic hash function",
+   "hash function",
+   "collision resistance",
+   "digital signature",
+   "randomized hashing"
+  ],
+  "comment-from": null,
+  "comment-to": null
+ },
+ {
+  "language": "en",
+  "script": "Latn",
+  "series": "nist-sp",
+  "docnumber": "800-53 Rev. 4",
+  "docidentifier": "SP 800-53 Rev. 4",
+  "revision": "4",
+  "edition": null,
+  "volume": null,
+  "uri": "https://csrc.nist.gov/pubs/sp/800/53/r4/upd1/final",
+  "doi": null,
+  "title-main": "Security and Privacy Controls for Federal Information Systems and Organizations",
+  "title-sub": null,
+  "iteration": "final",
+  "issued-date": "2013-04",
+  "updated-date": "2013-05-07",
+  "published-date": "2013-05-07",
+  "obsoleted-date": "2014-01-15",
+  "status": "final",
+  "substage": "withdrawn",
+  "authors": [
+   {
+    "title": null,
+    "givenName": null,
+    "middleName": null,
+    "surname": null,
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "Joint Task Force Transformation Initiative",
+     "acronym": null
+    },
+    "fullName": null
+   }
+  ],
+  "editors": [],
+  "supersedes": [
+   {
+    "uri": "https://csrc.nist.gov/pubs/sp/800/53/r4/final",
+    "docidentifier": "SP 800-53 Rev. 4"
+   }
+  ],
+  "superseded-by": [
+   {
+    "uri": "https://csrc.nist.gov/pubs/sp/800/53/r4/upd2/final",
+    "docidentifier": "SP 800-53 Rev. 4"
+   }
+  ],
+  "keywords": [
+   "assurance",
+   "computer security",
+   "FIPS Publication 199",
+   "FIPS Publication 200",
+   "FISMA",
+   "Privacy Act",
+   "Risk Management Framework",
+   "security controls",
+   "security requirements"
+  ],
+  "comment-from": null,
+  "comment-to": null
+ },
+ {
+  "language": "en",
+  "script": "Latn",
+  "series": "nist-sp",
+  "docnumber": "800-53 Rev. 4",
+  "docidentifier": "SP 800-53 Rev. 4",
+  "revision": "4",
+  "edition": null,
+  "volume": null,
+  "uri": "https://csrc.nist.gov/pubs/sp/800/53/r4/upd2/final",
+  "doi": null,
+  "title-main": "Security and Privacy Controls for Federal Information Systems and Organizations",
+  "title-sub": null,
+  "iteration": "final",
+  "issued-date": "2013-04",
+  "updated-date": "2014-01-15",
+  "published-date": "2014-01-15",
+  "obsoleted-date": "2015-01-22",
+  "status": "final",
+  "substage": "withdrawn",
+  "authors": [
+   {
+    "title": null,
+    "givenName": null,
+    "middleName": null,
+    "surname": null,
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "Joint Task Force Transformation Initiative",
+     "acronym": null
+    },
+    "fullName": null
+   }
+  ],
+  "editors": [],
+  "supersedes": [
+   {
+    "uri": "https://csrc.nist.gov/pubs/sp/800/53/r4/upd1/final",
+    "docidentifier": "SP 800-53 Rev. 4"
+   }
+  ],
+  "superseded-by": [
+   {
+    "uri": "https://csrc.nist.gov/pubs/sp/800/53/r4/upd3/final",
+    "docidentifier": "SP 800-53 Rev. 4"
+   }
+  ],
+  "keywords": [
+   "assurance",
+   "computer security",
+   "FIPS Publication 199",
+   "FIPS Publication 200",
+   "FISMA",
+   "Privacy Act",
+   "Risk Management Framework",
+   "security controls",
+   "security requirements"
+  ],
+  "comment-from": null,
+  "comment-to": null
+ },
+ {
+  "language": "en",
+  "script": "Latn",
+  "series": "nist-sp",
+  "docnumber": "800-53 Rev. 4",
+  "docidentifier": "SP 800-53 Rev. 4",
+  "revision": "4",
+  "edition": null,
+  "volume": null,
+  "uri": "https://csrc.nist.gov/pubs/sp/800/53/r4/final",
+  "doi": null,
+  "title-main": "Security and Privacy Controls for Federal Information Systems and Organizations",
+  "title-sub": null,
+  "iteration": "final",
+  "issued-date": "2013-04",
+  "updated-date": null,
+  "published-date": "2013-04-30",
+  "obsoleted-date": "2013-05-07",
+  "status": "final",
+  "substage": "withdrawn",
+  "authors": [
+   {
+    "title": null,
+    "givenName": null,
+    "middleName": null,
+    "surname": null,
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "Joint Task Force Transformation Initiative",
+     "acronym": null
+    },
+    "fullName": null
+   }
+  ],
+  "editors": [],
+  "supersedes": [
+   {
+    "uri": "https://csrc.nist.gov/pubs/sp/800/53/r3/upd3/final",
+    "docidentifier": "SP 800-53 Rev. 3"
+   }
+  ],
+  "superseded-by": [
+   {
+    "uri": "https://csrc.nist.gov/pubs/sp/800/53/r4/upd1/final",
+    "docidentifier": "SP 800-53 Rev. 4"
+   }
+  ],
+  "keywords": [
+   "assurance",
+   "computer security",
+   "FIPS Publication 199",
+   "FIPS Publication 200",
+   "FISMA",
+   "Privacy Act",
+   "Risk Management Framework",
+   "security controls",
+   "security requirements"
+  ],
+  "comment-from": null,
+  "comment-to": null
+ },
+ {
+  "language": "en",
+  "script": "Latn",
+  "series": "nist-sp",
+  "docnumber": "800-53 Rev. 4",
+  "docidentifier": "SP 800-53 Rev. 4",
+  "revision": "4",
+  "edition": null,
+  "volume": null,
+  "uri": "https://csrc.nist.gov/pubs/sp/800/53/r4/upd3/final",
+  "doi": "10.6028/NIST.SP.800-53r4",
+  "title-main": "Security and Privacy Controls for Federal Information Systems and Organizations",
+  "title-sub": null,
+  "iteration": "final",
+  "issued-date": "2013-04",
+  "updated-date": "2015-01-22",
+  "published-date": "2015-01-22",
+  "obsoleted-date": "2021-09-23",
+  "status": "final",
+  "substage": "withdrawn",
+  "authors": [
+   {
+    "title": null,
+    "givenName": null,
+    "middleName": null,
+    "surname": null,
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "Joint Task Force Transformation Initiative",
+     "acronym": null
+    },
+    "fullName": null
+   }
+  ],
+  "editors": [],
+  "supersedes": [
+   {
+    "uri": "https://csrc.nist.gov/pubs/sp/800/53/r4/upd2/final",
+    "docidentifier": "SP 800-53 Rev. 4"
+   }
+  ],
+  "superseded-by": [
+   {
+    "uri": "https://csrc.nist.gov/pubs/sp/800/53/r5/final",
+    "docidentifier": "SP 800-53 Rev. 5"
+   }
+  ],
+  "keywords": [
+   "FISMA",
+   "Privacy Act",
+   "Risk Management Framework",
+   "security controls",
+   "security requirements &nbsp",
+   "",
+   "computer security",
+   "assurance",
+   "FIPS Publication 200",
+   "FIPS Publication 199"
+  ],
+  "comment-from": null,
+  "comment-to": null
+ },
+ {
+  "language": "en",
+  "script": "Latn",
+  "series": "nist-sp",
+  "docnumber": "800-53 Rev. 5",
+  "docidentifier": "SP 800-53 Rev. 5",
+  "revision": "5",
+  "edition": null,
+  "volume": null,
+  "uri": "https://csrc.nist.gov/pubs/sp/800/53/r5/ipd",
+  "doi": null,
+  "title-main": "Security and Privacy Controls for Information Systems and Organizations",
+  "title-sub": null,
+  "iteration": "ipd",
+  "issued-date": "2017-08",
+  "updated-date": null,
+  "published-date": "2017-08-15",
+  "obsoleted-date": "2020-03-16",
+  "status": "draft-public",
+  "substage": "withdrawn",
+  "authors": [
+   {
+    "title": null,
+    "givenName": null,
+    "middleName": null,
+    "surname": null,
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "Joint Task Force",
+     "acronym": null
+    },
+    "fullName": null
+   }
+  ],
+  "editors": [],
+  "supersedes": [],
+  "superseded-by": [],
+  "keywords": [
+   "privacy controls",
+   "privacy functions",
+   "privacy requirements",
+   "Risk Management Framework",
+   "security controls",
+   "security functions",
+   "security requirements",
+   "system",
+   "availability",
+   "computer security",
+   "confidentiality",
+   "FISMA",
+   "information security",
+   "system security",
+   "assurance",
+   "integrity",
+   "Privacy Act",
+   "personally identifiable information"
+  ],
+  "comment-from": "2017-08-15",
+  "comment-to": "2017-09-12"
+ },
+ {
+  "language": "en",
+  "script": "Latn",
+  "series": "nist-sp",
+  "docnumber": "800-53 Rev. 5",
+  "docidentifier": "SP 800-53 Rev. 5",
+  "revision": "5",
+  "edition": null,
+  "volume": null,
+  "uri": "https://csrc.nist.gov/pubs/sp/800/53/r5/final",
+  "doi": null,
+  "title-main": "Security and Privacy Controls for Information Systems and Organizations",
+  "title-sub": null,
+  "iteration": "final",
+  "issued-date": "2020-09",
+  "updated-date": null,
+  "published-date": "2020-09-23",
+  "obsoleted-date": "2020-12-10",
+  "status": "final",
+  "substage": "withdrawn",
+  "authors": [
+   {
+    "title": null,
+    "givenName": null,
+    "middleName": null,
+    "surname": null,
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "Joint Task Force",
+     "acronym": null
+    },
+    "fullName": null
+   }
+  ],
+  "editors": [],
+  "supersedes": [
+   {
+    "uri": "https://csrc.nist.gov/pubs/sp/800/53/r4/upd3/final",
+    "docidentifier": "SP 800-53 Rev. 4"
+   }
+  ],
+  "superseded-by": [
+   {
+    "uri": "https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final",
+    "docidentifier": "SP 800-53 Rev. 5"
+   }
+  ],
+  "keywords": [
+   "assurance",
+   "availability",
+   "computer security",
+   "confidentiality",
+   "control",
+   "cybersecurity",
+   "FISMA",
+   "information security",
+   "information system",
+   "integrity",
+   "personally identifiable information",
+   "Privacy Act",
+   "privacy controls",
+   "privacy functions",
+   "privacy requirements",
+   "Risk Management Framework",
+   "security controls",
+   "security functions",
+   "security requirements",
+   "system",
+   "system security"
+  ],
+  "comment-from": null,
+  "comment-to": null
+ },
+ {
+  "language": "en",
+  "script": "Latn",
+  "series": "nist-sp",
+  "docnumber": "800-53 Rev. 5",
+  "docidentifier": "SP 800-53 Rev. 5",
+  "revision": "5",
+  "edition": null,
+  "volume": null,
+  "uri": "https://csrc.nist.gov/pubs/sp/800/53/r5/fpd",
+  "doi": "10.6028/NIST.SP.800-53r5-draft",
+  "title-main": "Security and Privacy Controls for Information Systems and Organizations",
+  "title-sub": null,
+  "iteration": "final",
+  "issued-date": "2020-03",
+  "updated-date": null,
+  "published-date": "2020-03-16",
+  "obsoleted-date": "2020-09-23",
+  "status": "draft-public",
+  "substage": "withdrawn",
+  "authors": [
+   {
+    "title": null,
+    "givenName": null,
+    "middleName": null,
+    "surname": null,
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "Joint Task Force",
+     "acronym": null
+    },
+    "fullName": null
+   }
+  ],
+  "editors": [],
+  "supersedes": [],
+  "superseded-by": [],
+  "keywords": [
+   "assurance",
+   "availability",
+   "computer security",
+   "confidentiality",
+   "control",
+   "cybersecurity",
+   "FISMA",
+   "information security",
+   "information system",
+   "integrity",
+   "personally identifiable information",
+   "Privacy Act",
+   "privacy controls",
+   "privacy functions",
+   "privacy requirements",
+   "Risk Management Framework",
+   "security controls",
+   "security functions",
+   "security requirements",
+   "system",
+   "system security"
+  ],
+  "comment-from": "2020-03-16",
+  "comment-to": "2020-05-29"
+ },
+ {
+  "language": "en",
+  "script": "Latn",
+  "series": "nist-sp",
+  "docnumber": "800-53 Rev. 5",
+  "docidentifier": "SP 800-53 Rev. 5",
+  "revision": "5",
+  "edition": null,
+  "volume": null,
+  "uri": "https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final",
+  "doi": "10.6028/NIST.SP.800-53r5",
+  "title-main": "Security and Privacy Controls for Information Systems and Organizations",
+  "title-sub": null,
+  "iteration": "final",
+  "issued-date": "2020-09",
+  "updated-date": null,
+  "published-date": "2020-12-10",
+  "obsoleted-date": null,
+  "status": "final",
+  "substage": "active",
+  "authors": [
+   {
+    "title": null,
+    "givenName": null,
+    "middleName": null,
+    "surname": null,
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "Joint Task Force",
+     "acronym": null
+    },
+    "fullName": null
+   }
+  ],
+  "editors": [],
+  "supersedes": [
+   {
+    "uri": "https://csrc.nist.gov/pubs/sp/800/53/r5/final",
+    "docidentifier": "SP 800-53 Rev. 5"
+   }
+  ],
+  "superseded-by": [],
+  "keywords": [
+   "assurance",
+   "availability",
+   "computer security",
+   "confidentiality",
+   "control",
+   "cybersecurity",
+   "FISMA",
+   "information security",
+   "information system",
+   "integrity",
+   "personally identifiable information",
+   "Privacy Act",
+   "privacy controls",
+   "privacy functions",
+   "privacy requirements",
+   "Risk Management Framework",
+   "security controls",
+   "security functions",
+   "security requirements",
+   "system",
+   "system security"
+  ],
+  "comment-from": null,
+  "comment-to": null
+ },
+ {
+  "language": "en",
+  "script": "Latn",
+  "series": "nist-fips",
+  "docnumber": "140-2",
+  "docidentifier": "FIPS 140-2",
+  "revision": "2",
+  "edition": null,
+  "volume": null,
+  "uri": "https://csrc.nist.gov/pubs/fips/140-2/final",
+  "doi": null,
+  "title-main": "Security Requirements for Cryptographic Modules",
+  "title-sub": null,
+  "iteration": "final",
+  "issued-date": null,
+  "updated-date": null,
+  "published-date": "2001-05-25",
+  "obsoleted-date": "2001-10-10",
+  "status": "final",
+  "substage": "withdrawn",
+  "authors": [
+   {
+    "title": null,
+    "givenName": null,
+    "middleName": null,
+    "surname": null,
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": null
+    },
+    "fullName": null
+   }
+  ],
+  "editors": [],
+  "supersedes": [
+   {
+    "uri": "https://csrc.nist.gov/pubs/fips/140-1/upd1/final",
+    "docidentifier": "FIPS 140-1"
+   }
+  ],
+  "superseded-by": [
+   {
+    "uri": "https://csrc.nist.gov/pubs/fips/140-2/upd1/final",
+    "docidentifier": "FIPS 140-2"
+   }
+  ],
+  "keywords": [
+   "computer security",
+   "cryptographic module",
+   "FIPS 140-2",
+   "validation"
+  ],
+  "comment-from": null,
+  "comment-to": null
+ },
+ {
+  "language": "en",
+  "script": "Latn",
+  "series": "nist-fips",
+  "docnumber": "140-2",
+  "docidentifier": "FIPS 140-2",
+  "revision": "2",
+  "edition": null,
+  "volume": null,
+  "uri": "https://csrc.nist.gov/pubs/fips/140-2/upd2/final",
+  "doi": "10.6028/NIST.FIPS.140-2",
+  "title-main": "Security Requirements for Cryptographic Modules",
+  "title-sub": null,
+  "iteration": "final",
+  "issued-date": null,
+  "updated-date": null,
+  "published-date": "2002-12-03",
+  "obsoleted-date": null,
+  "status": "final",
+  "substage": "active",
+  "authors": [
+   {
+    "title": null,
+    "givenName": null,
+    "middleName": null,
+    "surname": null,
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": null
+    },
+    "fullName": null
+   }
+  ],
+  "editors": [],
+  "supersedes": [
+   {
+    "uri": "https://csrc.nist.gov/pubs/fips/140-2/upd1/final",
+    "docidentifier": "FIPS 140-2"
+   }
+  ],
+  "superseded-by": [
+   {
+    "uri": "https://csrc.nist.gov/pubs/fips/140-3/final",
+    "docidentifier": "FIPS 140-3"
+   }
+  ],
+  "keywords": [
+   "cryptographic module",
+   "FIPS 140-2",
+   "computer security",
+   "validation"
+  ],
+  "comment-from": null,
+  "comment-to": null
+ },
+ {
+  "language": "en",
+  "script": "Latn",
+  "series": "nist-fips",
+  "docnumber": "140-2",
+  "docidentifier": "FIPS 140-2",
+  "revision": "2",
+  "edition": null,
+  "volume": null,
+  "uri": "https://csrc.nist.gov/pubs/fips/140-2/upd1/final",
+  "doi": null,
+  "title-main": "Security Requirements for Cryptographic Modules",
+  "title-sub": null,
+  "iteration": "final",
+  "issued-date": null,
+  "updated-date": null,
+  "published-date": "2001-10-10",
+  "obsoleted-date": "2002-12-03",
+  "status": "final",
+  "substage": "withdrawn",
+  "authors": [
+   {
+    "title": null,
+    "givenName": null,
+    "middleName": null,
+    "surname": null,
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": null
+    },
+    "fullName": null
+   }
+  ],
+  "editors": [],
+  "supersedes": [
+   {
+    "uri": "https://csrc.nist.gov/pubs/fips/140-2/final",
+    "docidentifier": "FIPS 140-2"
+   }
+  ],
+  "superseded-by": [
+   {
+    "uri": "https://csrc.nist.gov/pubs/fips/140-2/upd2/final",
+    "docidentifier": "FIPS 140-2"
+   }
+  ],
+  "keywords": [
+   "computer security",
+   "cryptographic module",
+   "FIPS 140-2",
+   "validation"
+  ],
+  "comment-from": null,
+  "comment-to": null
+ },
+ {
+  "language": "en",
+  "script": "Latn",
+  "series": "nist-fips",
+  "docnumber": "186-4",
+  "docidentifier": "FIPS 186-4",
+  "revision": "4",
+  "edition": null,
+  "volume": null,
+  "uri": "https://csrc.nist.gov/pubs/fips/186-4/final",
+  "doi": "10.6028/NIST.FIPS.186-4",
+  "title-main": "Digital Signature Standard (DSS)",
+  "title-sub": null,
+  "iteration": "final",
+  "issued-date": null,
+  "updated-date": null,
+  "published-date": "2013-07-19",
+  "obsoleted-date": "2024-02-03",
+  "status": "final",
+  "substage": "withdrawn",
+  "authors": [
+   {
+    "title": null,
+    "givenName": null,
+    "middleName": null,
+    "surname": null,
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": null
+    },
+    "fullName": null
+   }
+  ],
+  "editors": [],
+  "supersedes": [
+   {
+    "uri": "https://csrc.nist.gov/pubs/fips/186-3/final",
+    "docidentifier": "FIPS 186-3"
+   }
+  ],
+  "superseded-by": [
+   {
+    "uri": "https://csrc.nist.gov/pubs/fips/186-5/final",
+    "docidentifier": "FIPS 186-5"
+   }
+  ],
+  "keywords": [
+   "cryptography",
+   "Digital Signature Algorithm",
+   "digital signatures",
+   "Elliptic Curve Digital Signature Algorithm",
+   "Federal Information Processing Standard",
+   "computer security",
+   "public key cryptography"
+  ],
+  "comment-from": null,
+  "comment-to": null
+ },
+ {
+  "language": "en",
+  "script": "Latn",
+  "series": "nist-fips",
+  "docnumber": "197",
+  "docidentifier": "FIPS 197",
+  "revision": null,
+  "edition": null,
+  "volume": null,
+  "uri": "https://csrc.nist.gov/pubs/fips/197/ipd",
+  "doi": "10.6028/NIST.FIPS.197-upd1.ipd",
+  "title-main": "Advanced Encryption Standard (AES)",
+  "title-sub": null,
+  "iteration": "ipd",
+  "issued-date": null,
+  "updated-date": null,
+  "published-date": "2022-12-19",
+  "obsoleted-date": "2023-05-09",
+  "status": "draft-public",
+  "substage": "withdrawn",
+  "authors": [
+   {
+    "title": null,
+    "givenName": null,
+    "middleName": null,
+    "surname": null,
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": null
+    },
+    "fullName": null
+   }
+  ],
+  "editors": [],
+  "supersedes": [],
+  "superseded-by": [],
+  "keywords": [
+   "cryptography",
+   "encryption",
+   "AES",
+   "block cipher",
+   "confidentiality",
+   "Rijndael"
+  ],
+  "comment-from": "2022-12-19",
+  "comment-to": "2023-02-13"
+ },
+ {
+  "language": "en",
+  "script": "Latn",
+  "series": "nist-fips",
+  "docnumber": "197",
+  "docidentifier": "FIPS 197",
+  "revision": null,
+  "edition": null,
+  "volume": null,
+  "uri": "https://csrc.nist.gov/pubs/fips/197/final",
+  "doi": "10.6028/NIST.FIPS.197-upd1",
+  "title-main": "Advanced Encryption Standard (AES)",
+  "title-sub": null,
+  "iteration": "final",
+  "issued-date": null,
+  "updated-date": null,
+  "published-date": "2023-05-09",
+  "obsoleted-date": null,
+  "status": "final",
+  "substage": "active",
+  "authors": [
+   {
+    "title": null,
+    "givenName": null,
+    "middleName": null,
+    "surname": null,
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": null
+    },
+    "fullName": null
+   }
+  ],
+  "editors": [],
+  "supersedes": [
+   {
+    "uri": "https://csrc.nist.gov/pubs/fips/197/final-(1)",
+    "docidentifier": "FIPS 197"
+   }
+  ],
+  "superseded-by": [],
+  "keywords": [
+   "AES",
+   "block cipher",
+   "confidentiality",
+   "cryptography",
+   "encryption",
+   "Rijndael"
+  ],
+  "comment-from": null,
+  "comment-to": null
+ },
+ {
+  "language": "en",
+  "script": "Latn",
+  "series": "nist-fips",
+  "docnumber": "197",
+  "docidentifier": "FIPS 197",
+  "revision": null,
+  "edition": null,
+  "volume": null,
+  "uri": "https://csrc.nist.gov/pubs/fips/197/final-(1)",
+  "doi": "10.6028/NIST.FIPS.197",
+  "title-main": "Advanced Encryption Standard (AES)",
+  "title-sub": null,
+  "iteration": "final",
+  "issued-date": null,
+  "updated-date": null,
+  "published-date": "2001-11-26",
+  "obsoleted-date": "2023-05-09",
+  "status": "final",
+  "substage": "withdrawn",
+  "authors": [
+   {
+    "title": null,
+    "givenName": null,
+    "middleName": null,
+    "surname": null,
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": null
+    },
+    "fullName": null
+   }
+  ],
+  "editors": [],
+  "supersedes": [],
+  "superseded-by": [
+   {
+    "uri": "https://csrc.nist.gov/pubs/fips/197/final",
+    "docidentifier": "FIPS 197"
+   }
+  ],
+  "keywords": [
+   "cryptographic keys",
+   "decryption",
+   "encryption",
+   "algorithm",
+   "block cipher",
+   "cryptographic algorithm",
+   "ciphertext"
+  ],
+  "comment-from": null,
+  "comment-to": null
+ },
+ {
+  "language": "en",
+  "script": "Latn",
+  "series": "nist-fips",
+  "docnumber": "39",
+  "docidentifier": "FIPS 39",
+  "revision": null,
+  "edition": null,
+  "volume": null,
+  "uri": "https://csrc.nist.gov/pubs/fips/39/final",
+  "doi": "10.6028/NBS.FIPS.39",
+  "title-main": "Glossary for Computer Systems Security",
+  "title-sub": null,
+  "iteration": "final",
+  "issued-date": null,
+  "updated-date": null,
+  "published-date": "1976-02-15",
+  "obsoleted-date": "1993-04-29",
+  "status": "final",
+  "substage": "withdrawn",
+  "authors": [
+   {
+    "title": null,
+    "givenName": null,
+    "middleName": null,
+    "surname": null,
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "National Bureau of Standards",
+     "acronym": null
+    },
+    "fullName": null
+   }
+  ],
+  "editors": [],
+  "supersedes": [],
+  "superseded-by": [
+   {
+    "uri": "https://csrc.nist.gov/pubs/ir/7298/final",
+    "docidentifier": "IR 7298"
+   }
+  ],
+  "keywords": [
+   "computer",
+   "data processing",
+   "definitions",
+   "Federal Information Processing Standards Publication",
+   "information processing",
+   "privacy",
+   "security",
+   "terms",
+   "vocabulary"
+  ],
+  "comment-from": null,
+  "comment-to": null
+ },
+ {
+  "language": "en",
+  "script": "Latn",
+  "series": "csrc-white-paper",
+  "docnumber": "1",
+  "docidentifier": "CSWP 1",
+  "revision": null,
+  "edition": null,
+  "volume": null,
+  "uri": "https://csrc.nist.gov/pubs/cswp/1/cybersecurity-framework-v10/final",
+  "doi": "10.6028/NIST.CSWP.1",
+  "title-main": "Framework for Improving Critical Infrastructure Cybersecurity, Version 1.0",
+  "title-sub": null,
+  "iteration": "final",
+  "issued-date": null,
+  "updated-date": null,
+  "published-date": "2014-02-12",
+  "obsoleted-date": null,
+  "status": "final",
+  "substage": "active",
+  "authors": [
+   {
+    "title": null,
+    "givenName": null,
+    "middleName": null,
+    "surname": null,
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": null
+    },
+    "fullName": null
+   }
+  ],
+  "editors": [],
+  "supersedes": [],
+  "superseded-by": [],
+  "keywords": [
+   "critical infrastructure",
+   "cybersecurity",
+   "Executive Order 13636",
+   "framework",
+   "security"
+  ],
+  "comment-from": null,
+  "comment-to": null
+ }
+]

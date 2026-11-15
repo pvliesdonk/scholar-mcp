@@ -4,6 +4,14 @@ Newest first. One entry per research pass.
 
 ## 2026-11-15
 
+### Replaced-edition data: NIST reads CSRC's export
+
+Updated [Replaced-edition data for IETF, NIST and W3C](standards-supersession-sources.md)
+for #639. New observations: the export's URL and size, how its per-update
+entries group into 553 publications and which entry is current, and how many
+of its identifiers match the MODS catalogue (179 of 231 withdrawn or replaced;
+7 spelled differently, 45 absent).
+
 ### ETSI: withdrawn, historical and replaced deliverables
 
 Updated [ETSI standards search data endpoint](etsi-standards-search.md) for

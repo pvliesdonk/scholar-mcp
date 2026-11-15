@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import json
 import logging
 import re
 import time
+import zipfile
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 from xml.etree import ElementTree as ET
@@ -678,6 +680,21 @@ _NIST_MODS_RELEASE_URL = (
 _NIST_MODS_ASSET_NAME = "allrecords-MODS.xml"
 _NIST_MODS_NS = "http://www.loc.gov/mods/v3"
 _NIST_CACHE_MAX_AGE_DAYS = 90
+# The catalogue file name changes whenever what it holds changes, so a file a
+# previous version wrote is never served for up to 90 days. "_csrc" marks the
+# catalogue that carries CSRC's withdrawal data (#639).
+_NIST_CACHE_FILE = "nist_catalogue_csrc.json"
+_NIST_LEGACY_CACHE_FILES = ("nist_catalogue.json",)
+# CSRC's publications export: the only NIST source that records which
+# publications are withdrawn and what replaced them. See
+# docs/design/reference/standards-supersession-sources.md, NIST section.
+_CSRC_PUBS_EXPORT_URL = (
+    "https://csrc.nist.gov/CSRC/media/feeds/metanorma/pubs-export.zip"
+)
+_CSRC_PUBS_EXPORT_MEMBER = "pubs-export.json"
+# The export writes "SP 800-53 Rev. 4" and "IR 7298"; the MODS catalogue, and
+# resolve_identifier_local, write "NIST SP 800-53 Rev. 4" and "NISTIR 7298".
+_CSRC_PREFIX_TO_CATALOGUE = {"SP": "NIST SP", "IR": "NISTIR"}
 
 
 class _NISTFetcher:
@@ -687,6 +704,12 @@ class _NISTFetcher:
     https://github.com/usnistgov/NIST-Tech-Pubs on first use, parses it,
     and caches parsed records to disk as JSON. Subsequent calls within 90 days
     load from disk without network I/O.
+
+    MODS barely records withdrawal, so the catalogue is built together with
+    CSRC's publications export, which marks the CSRC publications NIST
+    withdrew and names what replaced them (#639). Publications outside CSRC
+    keep the MODS reading. What each source holds and how their identifiers
+    line up: ``docs/design/reference/standards-supersession-sources.md``.
 
     Args:
         http: Shared httpx async client.
@@ -711,7 +734,7 @@ class _NISTFetcher:
     def _cache_path(self) -> Path | None:
         if self._cache_dir is None:
             return None
-        return self._cache_dir / "nist_catalogue.json"
+        return self._cache_dir / _NIST_CACHE_FILE
 
     def _load_from_disk(self) -> list[Any] | None:
         """Load cached catalogue from disk if it exists and is fresh."""
@@ -745,8 +768,52 @@ class _NISTFetcher:
         try:
             path.write_text(json.dumps(records), encoding="utf-8")
             logger.info("nist_catalogue_cached path=%s count=%d", path, len(records))
+            for legacy in _NIST_LEGACY_CACHE_FILES:
+                path.with_name(legacy).unlink(missing_ok=True)
         except OSError as exc:
             logger.warning("nist_catalogue_disk_save_failed err=%s", exc)
+
+    async def _fetch_csrc_statuses(self) -> dict[str, dict[str, Any]]:
+        """Download CSRC's publications export and read its withdrawal data.
+
+        Returns:
+            What :func:`_csrc_statuses` returns.
+
+        Raises:
+            StandardsUpstreamError: CSRC refused the request, never answered,
+                or sent something other than the export. The catalogue is
+                then neither served nor cached, because without the export
+                every withdrawn publication would read as published (#639).
+        """
+        await self._limiter.acquire()
+        try:
+            resp = await self._http.get(_CSRC_PUBS_EXPORT_URL, follow_redirects=True)
+        except httpx.HTTPError as exc:
+            logger.warning("csrc_export_request_failed error=%s", exc)
+            raise StandardsUpstreamError(
+                "NIST", detail=f"publications export never reached CSRC: {exc}"
+            ) from exc
+        if resp.status_code != 200:
+            logger.warning("csrc_export_error status=%d", resp.status_code)
+            raise StandardsUpstreamError(
+                "NIST",
+                status=resp.status_code,
+                detail="CSRC refused the publications export",
+            )
+        try:
+            with zipfile.ZipFile(io.BytesIO(resp.content)) as archive:
+                entries = json.loads(archive.read(_CSRC_PUBS_EXPORT_MEMBER))
+        except (zipfile.BadZipFile, KeyError, json.JSONDecodeError) as exc:
+            logger.warning("csrc_export_unreadable err=%s", exc)
+            raise StandardsUpstreamError(
+                "NIST", status=200, detail="CSRC's publications export is unreadable"
+            ) from exc
+        if not isinstance(entries, list):
+            logger.warning("csrc_export_not_a_list type=%s", type(entries).__name__)
+            raise StandardsUpstreamError(
+                "NIST", status=200, detail="CSRC's publications export is unreadable"
+            )
+        return _csrc_statuses(entries)
 
     async def _fetch_mods_url(self) -> str | None:
         """Get the download URL for the latest MODS XML asset from GitHub releases."""
@@ -773,7 +840,12 @@ class _NISTFetcher:
         return None
 
     async def _fetch_all(self) -> list[Any]:
-        """Return parsed NIST catalogue, using disk cache when available."""
+        """Return parsed NIST catalogue, using disk cache when available.
+
+        Raises:
+            StandardsUpstreamError: CSRC's publications export could not be
+                read; nothing is cached, so the next call tries again.
+        """
         if self._catalogue is not None:
             return self._catalogue
         async with self._lock:
@@ -785,6 +857,9 @@ class _NISTFetcher:
                 logger.debug("nist_catalogue_loaded_from_disk count=%d", len(cached))
                 return self._catalogue
 
+            # The export first: it is 120 KB against MODS's 84 MB, and without
+            # it nothing is cached, so a CSRC outage should cost no download.
+            statuses = await self._fetch_csrc_statuses()
             mods_url = await self._fetch_mods_url()
             if mods_url is None:
                 return []
@@ -802,7 +877,12 @@ class _NISTFetcher:
             if not records:
                 logger.warning("nist_mods_empty_after_parse url=%s", mods_url)
                 return []
-            logger.info("nist_catalogue_parsed count=%d", len(records))
+            applied = _apply_csrc_statuses(records, statuses)
+            logger.info(
+                "nist_catalogue_parsed count=%d csrc_statuses_applied=%d",
+                len(records),
+                applied,
+            )
             self._save_to_disk(records)
             self._catalogue = records
         return self._catalogue
@@ -816,6 +896,10 @@ class _NISTFetcher:
 
         Returns:
             List of matching StandardRecord dicts.
+
+        Raises:
+            StandardsUpstreamError: CSRC's publications export, which the
+                catalogue is built with, could not be read.
         """
         all_pubs = await self._fetch_all()
         q = query.lower()
@@ -849,6 +933,10 @@ class _NISTFetcher:
 
         Returns:
             Populated StandardRecord or None if not found.
+
+        Raises:
+            StandardsUpstreamError: CSRC's publications export, which the
+                catalogue is built with, could not be read.
         """
         all_pubs = await self._fetch_all()
         id_lower = identifier.lower()
@@ -856,6 +944,114 @@ class _NISTFetcher:
             if (pub.get("identifier") or "").lower() == id_lower:
                 return pub  # type: ignore[no-any-return]
         return None
+
+
+def _csrc_catalogue_identifier(docidentifier: str) -> str:
+    """Spell a CSRC export identifier the way the MODS catalogue does.
+
+    Args:
+        docidentifier: The export's ``docidentifier``, e.g. ``"SP 800-53 Rev. 4"``.
+
+    Returns:
+        The catalogue spelling, e.g. ``"NIST SP 800-53 Rev. 4"``; ``"FIPS
+        186-4"`` and any series without a catalogue prefix come back as given.
+    """
+    prefix, _, rest = docidentifier.partition(" ")
+    mapped = _CSRC_PREFIX_TO_CATALOGUE.get(prefix)
+    return f"{mapped} {rest}" if mapped and rest else docidentifier
+
+
+def _csrc_status(entries: list[dict[str, Any]], identifier: str) -> dict[str, Any]:
+    """Read one publication's status from its export entries.
+
+    The export lists one entry per update, and each update "supersedes" the
+    one before it under the same identifier (``SP 800-53 Rev. 4`` has four).
+    Only a ``superseded-by`` naming a different publication is a replacement,
+    and the newest entry, by publication date, says whether the publication
+    itself is still active. A replacement outranks that, as for every body
+    (#637): FIPS 140-2's newest entry is ``active`` but names FIPS 140-3.
+
+    Args:
+        entries: The export's final entries for one ``docidentifier``.
+        identifier: That ``docidentifier``.
+
+    Returns:
+        ``status``, ``superseded_by`` and ``withdrawn_date`` for the record.
+    """
+    replacements: list[str] = []
+    for entry in entries:
+        for successor in entry.get("superseded-by") or []:
+            named = (
+                successor.get("docidentifier") if isinstance(successor, dict) else None
+            )
+            if not named or named == identifier:
+                continue
+            spelled = _csrc_catalogue_identifier(named)
+            if spelled not in replacements:
+                replacements.append(spelled)
+    newest = max(entries, key=lambda e: e.get("published-date") or "")
+    withdrawn = newest.get("substage") == "withdrawn"
+    if replacements:
+        status = "superseded"
+    elif withdrawn:
+        status = "withdrawn"
+    else:
+        status = "published"
+    return {
+        "status": status,
+        "superseded_by": replacements,
+        "withdrawn_date": newest.get("obsoleted-date") if withdrawn else None,
+    }
+
+
+def _csrc_statuses(entries: list[Any]) -> dict[str, dict[str, Any]]:
+    """Group CSRC's export by publication and read each one's status.
+
+    Drafts are left out: their withdrawal says a comment period closed, not
+    that a final publication was withdrawn.
+
+    Args:
+        entries: The export's top-level list.
+
+    Returns:
+        Lower-cased catalogue identifier to what :func:`_csrc_status` returns.
+    """
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for entry in entries:
+        if not isinstance(entry, dict) or entry.get("status") != "final":
+            continue
+        identifier = entry.get("docidentifier")
+        if isinstance(identifier, str) and identifier:
+            grouped.setdefault(identifier, []).append(entry)
+    return {
+        _csrc_catalogue_identifier(identifier).lower(): _csrc_status(group, identifier)
+        for identifier, group in grouped.items()
+    }
+
+
+def _apply_csrc_statuses(
+    records: list[StandardRecord], statuses: dict[str, dict[str, Any]]
+) -> int:
+    """Write CSRC's withdrawal data onto the catalogue records it names.
+
+    A record CSRC does not list keeps the MODS reading, ``published``: the
+    export covers CSRC's publications only, about 550 of the catalogue's
+    11,000.
+
+    Args:
+        records: Records parsed from the MODS catalogue, updated in place.
+        statuses: What :func:`_csrc_statuses` returns.
+
+    Returns:
+        How many records CSRC's data was applied to.
+    """
+    applied = 0
+    for record in records:
+        status = statuses.get((record.get("identifier") or "").lower())
+        if status is not None:
+            record.update(status)  # type: ignore[typeddict-item]
+            applied += 1
+    return applied
 
 
 def _parse_nist_mods(xml_bytes: bytes) -> list[StandardRecord]:

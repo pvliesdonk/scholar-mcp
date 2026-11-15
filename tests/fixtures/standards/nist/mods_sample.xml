@@ -1,0 +1,1284 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<modsCollection xmlns="http://www.loc.gov/mods/v3"
+                xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                xsi:schemaLocation="http://www.loc.gov/mods/v3 http://www.loc.gov/standards/mods/v3/mods-3-7.xsd">
+   <mods version="3.7">
+      <titleInfo>
+         <title>Randomized hashing for digital signatures</title>
+      </titleInfo>
+      <name type="personal" usage="primary">
+         <namePart>Dang, Q. H.</namePart>
+      </name>
+      <name xmlns:xlink="http://www.w3.org/1999/xlink"
+            type="corporate"
+            xlink:href="https://id.loc.gov/authorities/names/n88112126">
+         <namePart>National Institute of Standards and Technology (U.S.).</namePart>
+         <namePart>Computer Security Division.</namePart>
+         <nameIdentifier>https://id.loc.gov/authorities/names/n88112126</nameIdentifier>
+      </name>
+      <typeOfResource>text</typeOfResource>
+      <genre authority="marcgt">technical report</genre>
+      <genre authority="marcgt">government publication</genre>
+      <genre authority="rdacontent">text</genre>
+      <genre authority="lcgft">Technical reports.</genre>
+      <genre authority="fast">Technical reports.</genre>
+      <originInfo>
+         <place>
+            <placeTerm type="code" authority="marccountry">mdu</placeTerm>
+         </place>
+         <dateIssued encoding="marc">2009</dateIssued>
+         <issuance>monographic</issuance>
+      </originInfo>
+      <originInfo eventType="publisher">
+         <place>
+            <placeTerm type="text">Gaithersburg, MD :</placeTerm>
+         </place>
+         <publisher>U.S. Dept. of Commerce, National Institute of Standards and Technology; </publisher>
+         <dateIssued>2009.</dateIssued>
+      </originInfo>
+      <language>
+         <languageTerm authority="iso639-2b" type="code">eng</languageTerm>
+      </language>
+      <physicalDescription>
+         <form type="media" authority="rdamedia">computer</form>
+         <form type="carrier" authority="rdacarrier">online resource</form>
+         <extent>1 online resource.</extent>
+      </physicalDescription>
+      <abstract displayLabel="Abstract">NIST-approved digital signature algorithms require the use of an approved cryptographic hash function in the generation and verification of signatures. Approved cryptographic hash functions and digital signature algorithms can be found in FIPS 180-3, Secure Hash Standard (SHS), and FIPS 186-3, Digital Signature Standard (DSS), respectively. The security provided by the cryptographic hash function is vital to the security of a digital signature application. This Recommendation specifies a method to enhance the security of the cryptographic hash functions used in digital signature applications by randomizing the messages that are signed.</abstract>
+      <note type="statement of responsibility">Q. H. Dang.</note>
+      <note>2009.</note>
+      <note>Title from PDF title page.</note>
+      <note type="bibliography">Includes bibliographical references.</note>
+      <note type="system details">Mode of access: World Wide Web.</note>
+      <note type="system details">Systems requirements: Adobe Acrobat PDF reader.</note>
+      <subject>
+         <topic>Collision resistance</topic>
+      </subject>
+      <subject>
+         <topic>Cryptographic hash function</topic>
+      </subject>
+      <subject>
+         <topic>Digital signature</topic>
+      </subject>
+      <subject>
+         <topic>Hash function</topic>
+      </subject>
+      <subject>
+         <topic>Randomized hashing.</topic>
+      </subject>
+      <location>
+         <url displayLabel="electronic resource" usage="primary display">https://doi.org/10.6028/NIST.SP.800-106</url>
+      </location>
+      <relatedItem type="series">
+         <titleInfo>
+            <title>NIST special publication; NIST special pub; NIST SP</title>
+            <partNumber>800-106</partNumber>
+         </titleInfo>
+      </relatedItem>
+      <identifier type="doi">10.6028/NIST.SP.800-106 </identifier>
+      <identifier type="oclc">610598075</identifier>
+      <recordInfo>
+         <descriptionStandard>rda</descriptionStandard>
+         <recordContentSource authority="marcorg">NBS</recordContentSource>
+         <recordCreationDate encoding="marc">151105</recordCreationDate>
+         <recordChangeDate encoding="iso8601">20240315120944.0</recordChangeDate>
+         <recordIdentifier>991000077719708106</recordIdentifier>
+         <recordOrigin>Converted from MARCXML to MODS version 3.7 using MARC21slim2MODS3-7.xsl
+				(Revision 1.140 20200717)</recordOrigin>
+         <languageOfCataloging>
+            <languageTerm authority="iso639-2b" type="code">eng</languageTerm>
+         </languageOfCataloging>
+      </recordInfo>
+   </mods>
+<mods version="3.7">
+      <titleInfo>
+         <title>Digital Signature Standard (DSS)</title>
+      </titleInfo>
+      <name type="personal" usage="primary">
+         <namePart>Chen, Lily.</namePart>
+      </name>
+      <name xmlns:xlink="http://www.w3.org/1999/xlink"
+            type="corporate"
+            xlink:href="https://id.loc.gov/authorities/names/n88112126">
+         <namePart>National Institute of Standards and Technology (U.S.)</namePart>
+         <nameIdentifier>https://id.loc.gov/authorities/names/n88112126</nameIdentifier>
+      </name>
+      <name xmlns:xlink="http://www.w3.org/1999/xlink"
+            type="personal"
+            xlink:href="(orcid)0000-0002-4868-6684">
+         <namePart>Moody, Dustin.</namePart>
+         <nameIdentifier>(orcid)0000-0002-4868-6684</nameIdentifier>
+      </name>
+      <name xmlns:xlink="http://www.w3.org/1999/xlink"
+            type="personal"
+            xlink:href="(orcid)0000-0002-3930-527X">
+         <namePart>Regenscheid, Andrew.</namePart>
+         <nameIdentifier>(orcid)0000-0002-3930-527X</nameIdentifier>
+      </name>
+      <name type="personal">
+         <namePart>Robinson, Angela.</namePart>
+      </name>
+      <name xmlns:xlink="http://www.w3.org/1999/xlink"
+            type="corporate"
+            xlink:href="https://id.loc.gov/authorities/names/n88112126">
+         <namePart>National Institute of Standards and Technology (U.S.)</namePart>
+         <nameIdentifier>https://id.loc.gov/authorities/names/n88112126</nameIdentifier>
+      </name>
+      <typeOfResource>text</typeOfResource>
+      <genre authority="marcgt">technical report</genre>
+      <genre authority="marcgt">government publication</genre>
+      <genre authority="rdacontent">text</genre>
+      <originInfo>
+         <place>
+            <placeTerm type="code" authority="marccountry">mdu</placeTerm>
+         </place>
+         <dateIssued encoding="marc">2023</dateIssued>
+         <issuance>monographic</issuance>
+      </originInfo>
+      <originInfo eventType="publisher">
+         <place>
+            <placeTerm type="text">Washington, D.C. :</placeTerm>
+         </place>
+         <publisher>U.S. Dept. of Commerce,</publisher>
+         <dateIssued>2023-02-03.</dateIssued>
+      </originInfo>
+      <language>
+         <languageTerm authority="iso639-2b" type="code">eng</languageTerm>
+      </language>
+      <physicalDescription>
+         <form type="carrier" authority="rdacarrier">online resource</form>
+         <extent>1 online resource (86 pages) : illustrations (black and white)</extent>
+      </physicalDescription>
+      <abstract displayLabel="Abstract">This standard specifies a suite of algorithms that can be used to generate a digital signature. Digital signatures are used to detect unauthorized modifications to data and to authenticate the identity of the signatory. In addition, the recipient of signed data can use a digital signature as evidence in demonstrating to a third party that the signature was, in fact, generated by the claimed signatory. This is known as non-repudiation since the signatory cannot easily repudiate the signature at a later time.</abstract>
+      <note type="statement of responsibility">National Institute of Standards and Technology; Lily Chen; Dustin Moody; Andrew Regenscheid; Angela Robinson.</note>
+      <note>February 2023.</note>
+      <note>Title from PDF title page (viewed May 31, 2023).</note>
+      <note type="bibliography">Includes bibliographical references.</note>
+      <note type="venue">Approved by the NIST Editorial Review Board on 2023-01-31</note>
+      <note type="system details">Mode of access: World Wide Web.</note>
+      <note type="system details">Systems requirements: Adobe Acrobat PDF reader.</note>
+      <subject authority="lcsh">
+         <titleInfo>
+            <title>Federal information processing standards publication</title>
+         </titleInfo>
+      </subject>
+      <subject authority="lcsh">
+         <topic>Computer security</topic>
+      </subject>
+      <subject authority="lcsh">
+         <topic>Cryptography</topic>
+      </subject>
+      <subject authority="lcsh">
+         <topic>Digital signatures</topic>
+      </subject>
+      <subject authority="lcsh">
+         <topic>Public key cryptography</topic>
+      </subject>
+      <location>
+         <url displayLabel="electronic resource" usage="primary display">https://doi.org/10.6028/NIST.FIPS.186-5</url>
+      </location>
+      <relatedItem type="series">
+         <titleInfo>
+            <title>Federal information processing standards publication; FIPS</title>
+            <partNumber>186-5</partNumber>
+         </titleInfo>
+      </relatedItem>
+      <identifier type="doi">10.6028/NIST.FIPS.186-5 </identifier>
+      <identifier type="oclc">1405859236</identifier>
+      <identifier type="oclc">on1405859236</identifier>
+      <recordInfo>
+         <descriptionStandard>rda</descriptionStandard>
+         <recordContentSource authority="marcorg">NBS</recordContentSource>
+         <recordCreationDate encoding="marc">231024</recordCreationDate>
+         <recordChangeDate encoding="iso8601">20240829093931.0</recordChangeDate>
+         <recordIdentifier>991000614605008106</recordIdentifier>
+         <recordOrigin>Converted from MARCXML to MODS version 3.7 using MARC21slim2MODS3-7.xsl
+				(Revision 1.140 20200717)</recordOrigin>
+         <languageOfCataloging>
+            <languageTerm authority="iso639-2b" type="code">eng</languageTerm>
+         </languageOfCataloging>
+      </recordInfo>
+   </mods>
+<mods version="3.7">
+      <titleInfo>
+         <title>Glossary of key information security terms</title>
+      </titleInfo>
+      <name type="personal" usage="primary">
+         <namePart>Kissel, Richard.</namePart>
+      </name>
+      <name type="corporate">
+         <namePart>National Institute of Standards and Technology (U.S.)</namePart>
+      </name>
+      <typeOfResource>text</typeOfResource>
+      <genre authority="marcgt">technical report</genre>
+      <genre authority="marcgt">government publication</genre>
+      <genre authority="rdacontent">text</genre>
+      <originInfo>
+         <place>
+            <placeTerm type="code" authority="marccountry">mdu</placeTerm>
+         </place>
+         <dateIssued encoding="marc">2006</dateIssued>
+         <issuance>monographic</issuance>
+      </originInfo>
+      <originInfo eventType="publisher">
+         <place>
+            <placeTerm type="text">Gaithersburg, MD :</placeTerm>
+         </place>
+         <publisher>U.S. Dept. of Commerce, National Institute of Standards and Technology ;</publisher>
+         <dateIssued>2006.</dateIssued>
+      </originInfo>
+      <language>
+         <languageTerm authority="iso639-2b" type="code">eng</languageTerm>
+      </language>
+      <physicalDescription>
+         <form type="media" authority="rdamedia">computer</form>
+         <form type="carrier" authority="rdacarrier">online resource</form>
+         <extent>1 online resource :</extent>
+      </physicalDescription>
+      <note type="statement of responsibility">Richard Kissel  .</note>
+      <note>Title from PDF title page (viewed March 14, 2024).</note>
+      <note type="bibliography">Includes bibliographical references.</note>
+      <note type="system details">Mode of access: World Wide Web.</note>
+      <note type="system details">Systems requirements: Adobe Acrobat PDF reader.</note>
+      <location>
+         <url displayLabel="electronic resource" usage="primary display">https://doi.org/10.6028/NIST.IR.7298</url>
+      </location>
+      <relatedItem type="series">
+         <titleInfo>
+            <title>NISTIR; NIST IR; NIST interagency report; NIST internal report</title>
+            <partNumber>7298</partNumber>
+         </titleInfo>
+      </relatedItem>
+      <identifier type="doi">10.6028/NIST.IR.7298 </identifier>
+      <identifier type="oclc">1427206793</identifier>
+      <identifier type="oclc">on1427206793</identifier>
+      <recordInfo>
+         <descriptionStandard>rda</descriptionStandard>
+         <recordContentSource authority="marcorg">NBS</recordContentSource>
+         <recordCreationDate encoding="marc">240318</recordCreationDate>
+         <recordChangeDate encoding="iso8601">20240318040553.0</recordChangeDate>
+         <recordIdentifier>991000626361508106</recordIdentifier>
+         <recordOrigin>Converted from MARCXML to MODS version 3.7 using MARC21slim2MODS3-7.xsl
+				(Revision 1.140 20200717)</recordOrigin>
+         <languageOfCataloging>
+            <languageTerm authority="iso639-2b" type="code">eng</languageTerm>
+         </languageOfCataloging>
+      </recordInfo>
+   </mods>
+<mods version="3.7">
+      <titleInfo>
+         <title>Security and privacy controls for information systems and organizations</title>
+      </titleInfo>
+      <name type="corporate">
+         <namePart>Joint Task Force.</namePart>
+      </name>
+      <name type="corporate">
+         <namePart>National Institute of Standards and Technology (U.S.)</namePart>
+         <namePart>Information Technology Laboratory</namePart>
+      </name>
+      <typeOfResource>text</typeOfResource>
+      <genre authority="marcgt">technical report</genre>
+      <genre authority="marcgt">government publication</genre>
+      <genre authority="rdacontent">text</genre>
+      <originInfo>
+         <place>
+            <placeTerm type="code" authority="marccountry">mdu</placeTerm>
+         </place>
+         <dateIssued encoding="marc">2020</dateIssued>
+         <issuance>monographic</issuance>
+      </originInfo>
+      <originInfo eventType="publisher">
+         <place>
+            <placeTerm type="text">Gaithersburg, MD :</placeTerm>
+         </place>
+         <publisher>U.S. Dept. of Commerce, National Institute of Standards and Technology,</publisher>
+         <dateIssued>2020-09-21.</dateIssued>
+      </originInfo>
+      <language>
+         <languageTerm authority="iso639-2b" type="code">eng</languageTerm>
+      </language>
+      <physicalDescription>
+         <form type="media" authority="rdamedia">computer</form>
+         <form type="carrier" authority="rdacarrier">online resource</form>
+         <extent>1 online resource (492 pages) : tables (color)</extent>
+      </physicalDescription>
+      <abstract displayLabel="Abstract">This publication provides a catalog of security and privacy controls for information systems and organizations to protect organizational operations and assets, individuals, other organizations, and the Nation from a diverse set of threats and risks, including hostile attacks, human errors, natural disasters, structural failures, foreign intelligence entities, and privacy risks. The controls are flexible and customizable and implemented as part of an organization-wide process to manage risk.  The controls address diverse requirements derived from mission and business needs, laws, executive orders, directives, regulations, policies, standards, and guidelines. Finally, the  consolidated control catalog addresses security and privacy from a functionality perspective (i.e., the strength of functions and mechanisms provided by the controls) and from an assurance perspective (i.e., the measure of  confidence in the security or privacy capability provided by the controls). Addressing functionality and assurance helps to ensure that information technology products and the systems that rely on those products are sufficiently trustworthy.</abstract>
+      <note type="statement of responsibility">Joint Task Force.</note>
+      <note>September 2020.</note>
+      <note>Title from PDF title page (viewed January 24, 2021).</note>
+      <note type="bibliography">Includes bibliographical references.</note>
+      <note type="system details">Mode of access: World Wide Web.</note>
+      <note type="system details">Systems requirements: Adobe Acrobat PDF reader.</note>
+      <subject authority="lcsh">
+         <name type="corporate">
+            <namePart>United States.</namePart>
+         </name>
+         <titleInfo>
+            <title>Federal Information Security Management Act of 2002</title>
+         </titleInfo>
+      </subject>
+      <subject authority="lcsh">
+         <topic>Computer security</topic>
+      </subject>
+      <subject authority="lcsh">
+         <topic>Confidential communications</topic>
+      </subject>
+      <subject authority="lcsh">
+         <topic>Data integrity</topic>
+      </subject>
+      <subject authority="lcsh">
+         <topic>Information integrity</topic>
+      </subject>
+      <subject authority="lcsh">
+         <topic>Data privacy</topic>
+      </subject>
+      <subject authority="rvm">
+         <topic>Sécurité informatique</topic>
+      </subject>
+      <subject authority="rvm">
+         <topic>Secret professionnel</topic>
+      </subject>
+      <subject authority="rvm">
+         <topic>Intégrité des données</topic>
+      </subject>
+      <subject authority="rvm">
+         <topic>Confidentialité des données</topic>
+      </subject>
+      <subject authority="fast">
+         <topic>Computer security</topic>
+      </subject>
+      <subject authority="fast">
+         <topic>Confidential communications</topic>
+      </subject>
+      <subject authority="fast">
+         <topic>Data integrity</topic>
+      </subject>
+      <subject authority="fast">
+         <topic>Data privacy</topic>
+      </subject>
+      <subject authority="fast">
+         <topic>Information integrity</topic>
+      </subject>
+      <subject>
+         <topic>Assurance</topic>
+      </subject>
+      <subject>
+         <topic>Availability</topic>
+      </subject>
+      <subject>
+         <topic>Information security</topic>
+      </subject>
+      <subject>
+         <topic>Information systems</topic>
+      </subject>
+      <subject>
+         <topic>Personally identifiable information</topic>
+      </subject>
+      <subject>
+         <topic>PII</topic>
+      </subject>
+      <subject>
+         <topic>Privacy controls</topic>
+      </subject>
+      <subject>
+         <topic>Privacy functions</topic>
+      </subject>
+      <subject>
+         <topic>Privacy requirements</topic>
+      </subject>
+      <subject>
+         <topic>Risk management framework</topic>
+      </subject>
+      <subject>
+         <topic>Security controls</topic>
+      </subject>
+      <subject>
+         <topic>Security functions</topic>
+      </subject>
+      <subject>
+         <topic>Security requirements</topic>
+      </subject>
+      <subject>
+         <topic>System security</topic>
+      </subject>
+      <location>
+         <url displayLabel="electronic resource" usage="primary display">https://doi.org/10.6028/NIST.SP.800-53r5</url>
+      </location>
+      <relatedItem type="series">
+         <titleInfo>
+            <title>NIST special publication; NIST special pub; NIST SP</title>
+            <partNumber>800-53r5</partNumber>
+         </titleInfo>
+      </relatedItem>
+      <identifier type="doi">10.6028/NIST.SP.800-53r5 </identifier>
+      <identifier type="oclc">1346124636</identifier>
+      <identifier type="oclc">on1346124636</identifier>
+      <recordInfo>
+         <descriptionStandard>rda</descriptionStandard>
+         <recordContentSource authority="marcorg">NBS</recordContentSource>
+         <recordCreationDate encoding="marc">220927</recordCreationDate>
+         <recordChangeDate encoding="iso8601">20240820003517.0</recordChangeDate>
+         <recordIdentifier>991000625736008106</recordIdentifier>
+         <recordOrigin>Converted from MARCXML to MODS version 3.7 using MARC21slim2MODS3-7.xsl
+				(Revision 1.140 20200717)</recordOrigin>
+         <languageOfCataloging>
+            <languageTerm authority="iso639-2b" type="code">eng</languageTerm>
+         </languageOfCataloging>
+      </recordInfo>
+   </mods>
+<mods version="3.7">
+      <titleInfo>
+         <title>Security requirements for cryptographic modules</title>
+      </titleInfo>
+      <name type="corporate">
+         <namePart>National Institute of Standards and Technology (U.S.)</namePart>
+      </name>
+      <name type="corporate">
+         <namePart>National Institute of Standards and Technology (U.S.)</namePart>
+      </name>
+      <typeOfResource>text</typeOfResource>
+      <genre authority="marcgt">technical report</genre>
+      <genre authority="marcgt">government publication</genre>
+      <genre authority="rdacontent">text</genre>
+      <genre authority="lcgft">Technical reports.</genre>
+      <genre authority="fast">Technical reports.</genre>
+      <originInfo>
+         <place>
+            <placeTerm type="code" authority="marccountry">mdu</placeTerm>
+         </place>
+         <dateIssued encoding="marc">2001</dateIssued>
+         <issuance>monographic</issuance>
+      </originInfo>
+      <originInfo eventType="publisher">
+         <place>
+            <placeTerm type="text">Washington, D.C. :</placeTerm>
+         </place>
+         <publisher>U.S. Dept. of Commerce,</publisher>
+         <dateIssued>2001-05.</dateIssued>
+      </originInfo>
+      <language>
+         <languageTerm authority="iso639-2b" type="code">eng</languageTerm>
+      </language>
+      <physicalDescription>
+         <form type="media" authority="rdamedia">computer</form>
+         <form type="carrier" authority="rdacarrier">online resource</form>
+         <extent>1 online resource : illustrations (color).</extent>
+      </physicalDescription>
+      <abstract displayLabel="Abstract">This Federal Information Processing Standard (140-2) specifies the security requirements that will be satisfied by a cryptographic module, providing four increasing, qualitative levels intended to cover a wide range of potential applications and environments. The areas covered, related to the secure design and implementation of a cryptographic module, include specification; ports and interfaces; roles, services, and authentication; finite state model; physical security; operational environment; cryptographic key management; electromagnetic interference/electromagnetic compatibility (EMI/EMC); self-tests; design assurance; and mitigation of other attacks. [Supersedes FIPS 140-1 (January 11, 1994)]</abstract>
+      <note type="statement of responsibility">National Institute of Standards and Technology.</note>
+      <note>May 2001.</note>
+      <note>Title from PDF title page (viewed March 6, 2017).</note>
+      <note type="bibliography">Includes bibliographical references.</note>
+      <note type="system details">Mode of access: World Wide Web.</note>
+      <note type="system details">Systems requirements: Adobe Acrobat PDF reader.</note>
+      <subject authority="lcsh">
+         <titleInfo>
+            <title>Federal information processing standards publication</title>
+         </titleInfo>
+      </subject>
+      <subject xmlns:xlink="http://www.w3.org/1999/xlink"
+               authority="lcsh"
+               xlink:href="https://id.loc.gov/authorities/subjects/sh90001862">
+         <topic>Computer security</topic>
+      </subject>
+      <subject xmlns:xlink="http://www.w3.org/1999/xlink"
+               authority="fast"
+               xlink:href="https://id.worldcat.org/fast/872484">
+         <topic>Computer security</topic>
+      </subject>
+      <subject xmlns:xlink="http://www.w3.org/1999/xlink"
+               authority="lcsh"
+               xlink:href="https://id.loc.gov/authorities/subjects/sh85029527">
+         <topic>Computer programs</topic>
+         <topic>Validation</topic>
+      </subject>
+      <subject xmlns:xlink="http://www.w3.org/1999/xlink"
+               authority="fast"
+               xlink:href="https://id.worldcat.org/fast/872447">
+         <topic>Computer programs</topic>
+         <topic>Validation</topic>
+      </subject>
+      <subject>
+         <topic>Cryptographic module</topic>
+      </subject>
+      <location>
+         <url displayLabel="electronic resource" usage="primary display">https://doi.org/10.6028/NIST.FIPS.140-2</url>
+      </location>
+      <relatedItem type="series">
+         <titleInfo>
+            <title>Federal information processing standards publication; FIPS</title>
+            <partNumber>140-2</partNumber>
+         </titleInfo>
+      </relatedItem>
+      <identifier type="doi">10.6028/NIST.FIPS.140-2 </identifier>
+      <identifier type="oclc">988943994</identifier>
+      <recordInfo>
+         <descriptionStandard>rda</descriptionStandard>
+         <recordContentSource authority="marcorg">NBS</recordContentSource>
+         <recordCreationDate encoding="marc">180420</recordCreationDate>
+         <recordChangeDate encoding="iso8601">20240829094303.0</recordChangeDate>
+         <recordIdentifier>991000189739708106</recordIdentifier>
+         <recordOrigin>Converted from MARCXML to MODS version 3.7 using MARC21slim2MODS3-7.xsl
+				(Revision 1.140 20200717)</recordOrigin>
+         <languageOfCataloging>
+            <languageTerm authority="iso639-2b" type="code">eng</languageTerm>
+         </languageOfCataloging>
+      </recordInfo>
+   </mods>
+<mods version="3.7">
+      <titleInfo>
+         <title>Advanced Encryption Standard (AES)</title>
+      </titleInfo>
+      <name type="corporate">
+         <namePart>National Institute of Standards and Technology (U.S.)</namePart>
+      </name>
+      <name type="corporate">
+         <namePart>National Institute of Standards and Technology (U.S.)</namePart>
+      </name>
+      <typeOfResource>text</typeOfResource>
+      <genre authority="marcgt">technical report</genre>
+      <genre authority="marcgt">government publication</genre>
+      <genre authority="rdacontent">text</genre>
+      <genre authority="lcgft">Technical reports.</genre>
+      <genre authority="fast">Technical reports.</genre>
+      <originInfo>
+         <place>
+            <placeTerm type="code" authority="marccountry">mdu</placeTerm>
+         </place>
+         <dateIssued encoding="marc">2001</dateIssued>
+         <issuance>monographic</issuance>
+      </originInfo>
+      <originInfo eventType="publisher">
+         <place>
+            <placeTerm type="text">Washington, D.C. :</placeTerm>
+         </place>
+         <publisher>U.S. Dept. of Commerce,</publisher>
+         <dateIssued>2001-11.</dateIssued>
+      </originInfo>
+      <language>
+         <languageTerm authority="iso639-2b" type="code">eng</languageTerm>
+      </language>
+      <physicalDescription>
+         <form type="media" authority="rdamedia">computer</form>
+         <form type="carrier" authority="rdacarrier">online resource</form>
+         <extent>1 online resource : illustrations (black and white).</extent>
+      </physicalDescription>
+      <abstract displayLabel="Abstract">The Advanced Encryption Standard (AES) specifies a FIPS-approved cryptographic algorithm that can be used to protect electronic data. The AES algorithm is a symmetric block cipher that can encrypt (encipher) and decrypt (decipher) information. Encryption converts data to an unintelligible form called ciphertext; decrypting the ciphertext converts the data back into its original form, called plaintext. The AES algorithm is capable of using cryptographic keys of 128, 192, and 256 bits to encrypt and decrypt data in blocks of 128 bits.</abstract>
+      <note type="statement of responsibility">National Institute of Standards and Technology.</note>
+      <note>November 2001.</note>
+      <note>Title from PDF title page (viewed March 6, 2017).</note>
+      <note type="bibliography">Includes bibliographical references.</note>
+      <note type="system details">Mode of access: World Wide Web.</note>
+      <note type="system details">Systems requirements: Adobe Acrobat PDF reader.</note>
+      <subject authority="lcsh">
+         <titleInfo>
+            <title>Federal information processing standards publication</title>
+         </titleInfo>
+      </subject>
+      <subject xmlns:xlink="http://www.w3.org/1999/xlink"
+               authority="lcsh"
+               xlink:href="https://id.loc.gov/authorities/subjects/sh85003487">
+         <topic>Algorithms</topic>
+      </subject>
+      <subject xmlns:xlink="http://www.w3.org/1999/xlink"
+               authority="fast"
+               xlink:href="https://id.worldcat.org/fast/805020">
+         <topic>Algorithms</topic>
+      </subject>
+      <subject xmlns:xlink="http://www.w3.org/1999/xlink"
+               authority="lcsh"
+               xlink:href="https://id.loc.gov/authorities/subjects/sh94001524">
+         <topic>Data encryption (Computer science)</topic>
+      </subject>
+      <subject xmlns:xlink="http://www.w3.org/1999/xlink"
+               authority="fast"
+               xlink:href="https://id.worldcat.org/fast/887935">
+         <topic>Data encryption (Computer science)</topic>
+      </subject>
+      <subject>
+         <topic>Block cipher</topic>
+      </subject>
+      <subject>
+         <topic>Ciphertext</topic>
+      </subject>
+      <subject>
+         <topic>Cryptographic algorithm</topic>
+      </subject>
+      <subject>
+         <topic>Cryptographic keys</topic>
+      </subject>
+      <subject>
+         <topic>Decryption</topic>
+      </subject>
+      <location>
+         <url displayLabel="electronic resource" usage="primary display">https://doi.org/10.6028/NIST.FIPS.197</url>
+      </location>
+      <relatedItem type="series">
+         <titleInfo>
+            <title>Federal information processing standards publication; FIPS</title>
+            <partNumber>197</partNumber>
+         </titleInfo>
+      </relatedItem>
+      <identifier type="doi">10.6028/NIST.FIPS.197 </identifier>
+      <identifier type="oclc">988608531</identifier>
+      <recordInfo>
+         <descriptionStandard>rda</descriptionStandard>
+         <recordContentSource authority="marcorg">NBS</recordContentSource>
+         <recordCreationDate encoding="marc">190912</recordCreationDate>
+         <recordChangeDate encoding="iso8601">20240829093802.0</recordChangeDate>
+         <recordIdentifier>991000189749708106</recordIdentifier>
+         <recordOrigin>Converted from MARCXML to MODS version 3.7 using MARC21slim2MODS3-7.xsl
+				(Revision 1.140 20200717)</recordOrigin>
+         <languageOfCataloging>
+            <languageTerm authority="iso639-2b" type="code">eng</languageTerm>
+         </languageOfCataloging>
+      </recordInfo>
+   </mods>
+<mods version="3.7">
+      <titleInfo>
+         <title>Glossary for computer systems security</title>
+      </titleInfo>
+      <name xmlns:xlink="http://www.w3.org/1999/xlink"
+            type="corporate"
+            xlink:href="https://id.loc.gov/authorities/names/n79021148">
+         <namePart>United States. </namePart>
+         <namePart>National Bureau of Standards. </namePart>
+         <nameIdentifier>https://id.loc.gov/authorities/names/n79021148</nameIdentifier>
+      </name>
+      <name xmlns:xlink="http://www.w3.org/1999/xlink"
+            type="corporate"
+            xlink:href="https://id.loc.gov/authorities/names/n88112126">
+         <namePart>National Institute of Standards and Technology (U.S.) </namePart>
+         <nameIdentifier>https://id.loc.gov/authorities/names/n88112126</nameIdentifier>
+      </name>
+      <typeOfResource>text</typeOfResource>
+      <genre authority="marcgt">technical report</genre>
+      <genre authority="marcgt">government publication</genre>
+      <genre authority="rdacontent">text</genre>
+      <genre authority="lcgft">Technical reports.</genre>
+      <genre authority="fast">Technical reports.</genre>
+      <originInfo>
+         <place>
+            <placeTerm type="code" authority="marccountry">mdu</placeTerm>
+         </place>
+         <dateIssued encoding="marc">1976</dateIssued>
+         <issuance>monographic</issuance>
+      </originInfo>
+      <originInfo eventType="publisher">
+         <place>
+            <placeTerm type="text">Washington, D.C. : </placeTerm>
+         </place>
+         <publisher>U.S. Dept. of Commerce, </publisher>
+         <dateIssued>1976.</dateIssued>
+      </originInfo>
+      <language>
+         <languageTerm authority="iso639-2b" type="code">eng</languageTerm>
+      </language>
+      <physicalDescription>
+         <form type="media" authority="rdamedia">computer</form>
+         <form type="carrier" authority="rdacarrier">online resource</form>
+         <extent>1 online resource.</extent>
+      </physicalDescription>
+      <note type="statement of responsibility">National Bureau of Standards.</note>
+      <note>February 15, 1976.</note>
+      <note>Title from PDF title page (viewed June 12, 2017).</note>
+      <note type="bibliography">Includes bibliographical references.</note>
+      <note type="system details">Mode of access: World Wide Web.</note>
+      <note type="system details">Systems requirements: Adobe Acrobat PDF reader.</note>
+      <subject authority="lcsh">
+         <titleInfo>
+            <title>Federal information processing standards publication</title>
+         </titleInfo>
+      </subject>
+      <subject xmlns:xlink="http://www.w3.org/1999/xlink"
+               authority="lcsh"
+               xlink:href="https://id.loc.gov/authorities/subjects/sh2008110032">
+         <topic>Public administration</topic>
+         <topic>Data processing</topic>
+      </subject>
+      <subject xmlns:xlink="http://www.w3.org/1999/xlink"
+               authority="fast"
+               xlink:href="https://id.worldcat.org/fast/1081992">
+         <topic>Public administration</topic>
+         <topic>Data processing</topic>
+      </subject>
+      <subject xmlns:xlink="http://www.w3.org/1999/xlink"
+               authority="lcsh"
+               xlink:href="https://id.loc.gov/authorities/subjects/sh85042288">
+         <topic>Electronic data processing</topic>
+         <topic>Public administration</topic>
+      </subject>
+      <subject xmlns:xlink="http://www.w3.org/1999/xlink"
+               authority="fast"
+               xlink:href="https://id.worldcat.org/fast/906956">
+         <topic>Electronic data processing</topic>
+      </subject>
+      <subject xmlns:xlink="http://www.w3.org/1999/xlink"
+               authority="fast"
+               xlink:href="https://id.worldcat.org/fast/1081976">
+         <topic>Public administration</topic>
+      </subject>
+      <location>
+         <url displayLabel="electronic resource" usage="primary display">https://doi.org/10.6028/NBS.FIPS.39</url>
+      </location>
+      <relatedItem type="series">
+         <titleInfo>
+            <title>Federal information processing standards publication; FIPS</title>
+            <partNumber>39</partNumber>
+         </titleInfo>
+      </relatedItem>
+      <identifier type="doi">10.6028/NBS.FIPS.39 </identifier>
+      <identifier type="oclc">1312497099</identifier>
+      <identifier type="oclc">995168041</identifier>
+      <recordInfo>
+         <descriptionStandard>rda</descriptionStandard>
+         <recordContentSource authority="marcorg">NBS</recordContentSource>
+         <recordCreationDate encoding="marc">170727</recordCreationDate>
+         <recordChangeDate encoding="iso8601">20190322070900.0</recordChangeDate>
+         <recordIdentifier>991000214559708106</recordIdentifier>
+         <recordOrigin>Converted from MARCXML to MODS version 3.7 using MARC21slim2MODS3-7.xsl
+				(Revision 1.140 20200717)</recordOrigin>
+         <languageOfCataloging>
+            <languageTerm authority="iso639-2b" type="code">eng</languageTerm>
+         </languageOfCataloging>
+      </recordInfo>
+   </mods>
+<mods version="3.7">
+      <titleInfo>
+         <title>Security requirements for cryptographic modules</title>
+      </titleInfo>
+      <name type="corporate">
+         <namePart>National Institute of Standards and Technology (U.S.)</namePart>
+      </name>
+      <name type="corporate">
+         <namePart>National Institute of Standards and Technology (U.S.)</namePart>
+      </name>
+      <typeOfResource>text</typeOfResource>
+      <genre authority="marcgt">technical report</genre>
+      <genre authority="marcgt">government publication</genre>
+      <genre authority="rdacontent">text</genre>
+      <genre authority="lcgft">Technical reports.</genre>
+      <genre authority="fast">Technical reports.</genre>
+      <originInfo>
+         <place>
+            <placeTerm type="code" authority="marccountry">mdu</placeTerm>
+         </place>
+         <dateIssued encoding="marc">2019</dateIssued>
+         <issuance>monographic</issuance>
+      </originInfo>
+      <originInfo eventType="publisher">
+         <place>
+            <placeTerm type="text">Washington, D.C. :</placeTerm>
+         </place>
+         <publisher>U.S. Dept. of Commerce,</publisher>
+         <dateIssued>2019-04.</dateIssued>
+      </originInfo>
+      <language>
+         <languageTerm authority="iso639-2b" type="code">eng</languageTerm>
+      </language>
+      <physicalDescription>
+         <form type="media" authority="rdamedia">computer</form>
+         <form type="carrier" authority="rdacarrier">online resource</form>
+         <extent>1 online resource : illustrations (black and white).</extent>
+      </physicalDescription>
+      <abstract displayLabel="Abstract">The selective application of technological and related procedural safeguards is an important responsibility of every federal organization in providing adequate security in its computer and telecommunication systems. This standard is applicable to all federal agencies that use cryptographic-based security systems to provide adequate information security for all agency operations and assets as defined in 15 U.S.C. § 278g-3. This standard shall be used in designing and implementing cryptographic modules that federal departments and agencies operate or are operated for them under contract. The standard provides four increasing, qualitative levels of security intended to cover a wide range of potential applications and environments. The security requirements cover areas related to the secure design, implementation and operation of a cryptographic module. These areas include cryptographic module specification; cryptographic module interfaces; roles, services, and authentication; software/firmware security; operating environment; physical security; non-invasive security; sensitive security parameter management; self-tests; life-cycle assurance; and mitigation of other attacks.</abstract>
+      <note type="statement of responsibility">National Institute of Standards and Technology.</note>
+      <note>April 2019.</note>
+      <note>Title from PDF title page (viewed April 11, 2019).</note>
+      <note type="bibliography">Includes bibliographical references.</note>
+      <note type="system details">Mode of access: World Wide Web.</note>
+      <note type="system details">Systems requirements: Adobe Acrobat PDF reader.</note>
+      <subject authority="lcsh">
+         <titleInfo>
+            <title>Federal information processing standards publication</title>
+         </titleInfo>
+      </subject>
+      <subject xmlns:xlink="http://www.w3.org/1999/xlink"
+               authority="lcsh"
+               xlink:href="https://id.loc.gov/authorities/subjects/sh90001862">
+         <topic>Computer security</topic>
+      </subject>
+      <subject xmlns:xlink="http://www.w3.org/1999/xlink"
+               authority="fast"
+               xlink:href="https://id.worldcat.org/fast/872484">
+         <topic>Computer security</topic>
+      </subject>
+      <subject xmlns:xlink="http://www.w3.org/1999/xlink"
+               authority="lcsh"
+               xlink:href="https://id.loc.gov/authorities/subjects/sh85029527">
+         <topic>Computer programs</topic>
+         <topic>Validation</topic>
+      </subject>
+      <subject xmlns:xlink="http://www.w3.org/1999/xlink"
+               authority="fast"
+               xlink:href="https://id.worldcat.org/fast/872447">
+         <topic>Computer programs</topic>
+         <topic>Validation</topic>
+      </subject>
+      <subject>
+         <topic>Cryptographic modules</topic>
+      </subject>
+      <location>
+         <url displayLabel="electronic resource" usage="primary display">https://doi.org/10.6028/NIST.FIPS.140-3</url>
+      </location>
+      <relatedItem type="series">
+         <titleInfo>
+            <title>Federal information processing standards publication; FIPS</title>
+            <partNumber>140-3</partNumber>
+         </titleInfo>
+      </relatedItem>
+      <identifier type="doi">10.6028/NIST.FIPS.140-3 </identifier>
+      <identifier type="oclc">1100116683</identifier>
+      <recordInfo>
+         <descriptionStandard>rda</descriptionStandard>
+         <recordContentSource authority="marcorg">NBS</recordContentSource>
+         <recordCreationDate encoding="marc">190912</recordCreationDate>
+         <recordChangeDate encoding="iso8601">20240829094230.0</recordChangeDate>
+         <recordIdentifier>991000216779708106</recordIdentifier>
+         <recordOrigin>Converted from MARCXML to MODS version 3.7 using MARC21slim2MODS3-7.xsl
+				(Revision 1.140 20200717)</recordOrigin>
+         <languageOfCataloging>
+            <languageTerm authority="iso639-2b" type="code">eng</languageTerm>
+         </languageOfCataloging>
+      </recordInfo>
+   </mods>
+<mods version="3.7">
+      <titleInfo>
+         <title>Glossary of key information security terms</title>
+      </titleInfo>
+      <name type="personal" usage="primary">
+         <namePart>Paulsen, Celia.</namePart>
+      </name>
+      <name type="personal">
+         <namePart>Byers, Robert.</namePart>
+      </name>
+      <name xmlns:xlink="http://www.w3.org/1999/xlink"
+            type="corporate"
+            xlink:href="https://id.loc.gov/authorities/names/no97056762">
+         <namePart>Information Technology Laboratory (National Institute of Standards and Technology)</namePart>
+         <nameIdentifier>https://id.loc.gov/authorities/names/no97056762</nameIdentifier>
+      </name>
+      <typeOfResource>text</typeOfResource>
+      <genre authority="marcgt">technical report</genre>
+      <genre authority="marcgt">government publication</genre>
+      <genre authority="rdacontent">text</genre>
+      <genre authority="lcgft">Dictionaries.</genre>
+      <genre authority="fast">Dictionaries.</genre>
+      <genre authority="lcgft">Technical reports.</genre>
+      <genre authority="fast">Technical reports.</genre>
+      <originInfo>
+         <place>
+            <placeTerm type="code" authority="marccountry">mdu</placeTerm>
+         </place>
+         <dateIssued encoding="marc">2019</dateIssued>
+         <issuance>monographic</issuance>
+      </originInfo>
+      <originInfo eventType="publisher">
+         <place>
+            <placeTerm type="text">Gaithersburg, MD :</placeTerm>
+         </place>
+         <publisher>U.S. Dept. of Commerce, National Institute of Standards and Technology, </publisher>
+         <dateIssued>2019-07.</dateIssued>
+      </originInfo>
+      <language>
+         <languageTerm authority="iso639-2b" type="code">eng</languageTerm>
+      </language>
+      <physicalDescription>
+         <form type="media" authority="rdamedia">computer</form>
+         <form type="carrier" authority="rdacarrier">online resource</form>
+         <extent>1 online resource : illustrations (color).</extent>
+      </physicalDescription>
+      <abstract displayLabel="Abstract">This publication describes an online glossary of terms used in National Institute of Standards and Technology (NIST) and Committee on National Security Systems (CNSS) publications. This glossary utilizes a database of terms extracted from NIST Federal Information Processing Standard Publications (FIPS), the NIST Special Publication (SP) 800 series, select NIST Interagency or Internal Reports (NISTIRs), and from the Committee for National Security Systems Instruction 4009 (CNSSI-4009).</abstract>
+      <note type="statement of responsibility">Celia Paulsen; Robert Byers.</note>
+      <note>July 2019.</note>
+      <note>Title from PDF title page (viewed July 3, 2019).</note>
+      <note type="bibliography">Includes bibliographical references.</note>
+      <note type="system details">Mode of access: World Wide Web.</note>
+      <note type="system details">Systems requirements: Adobe Acrobat PDF reader.</note>
+      <subject xmlns:xlink="http://www.w3.org/1999/xlink"
+               authority="lcsh"
+               xlink:href="https://id.loc.gov/authorities/subjects/sh90001862">
+         <topic>Computer security</topic>
+      </subject>
+      <subject xmlns:xlink="http://www.w3.org/1999/xlink"
+               authority="fast"
+               xlink:href="https://id.worldcat.org/fast/872484">
+         <topic>Computer security</topic>
+      </subject>
+      <subject xmlns:xlink="http://www.w3.org/1999/xlink"
+               authority="lcsh"
+               xlink:href="https://id.loc.gov/authorities/subjects/sh85074518">
+         <topic>Language and languages</topic>
+         <topic>Glossaries, etc</topic>
+      </subject>
+      <subject xmlns:xlink="http://www.w3.org/1999/xlink"
+               authority="fast"
+               xlink:href="https://id.worldcat.org/fast/992154">
+         <topic>Language and languages</topic>
+      </subject>
+      <subject>
+         <topic>Information assurance</topic>
+      </subject>
+      <subject>
+         <topic>Information security</topic>
+      </subject>
+      <location>
+         <url displayLabel="electronic resource" usage="primary display">https://doi.org/10.6028/NIST.IR.7298r3</url>
+      </location>
+      <relatedItem type="series">
+         <titleInfo>
+            <title>NISTIR; NIST IR; NIST interagency report; NIST internal report</title>
+            <partNumber>7298r3</partNumber>
+         </titleInfo>
+      </relatedItem>
+      <identifier type="doi">10.6028/NIST.IR.7298r3 </identifier>
+      <identifier type="oclc">1110020354</identifier>
+      <recordInfo>
+         <descriptionStandard>rda</descriptionStandard>
+         <recordContentSource authority="marcorg">NBS</recordContentSource>
+         <recordCreationDate encoding="marc">190712</recordCreationDate>
+         <recordChangeDate encoding="iso8601">20190724022415.0</recordChangeDate>
+         <recordIdentifier>991000217509708106</recordIdentifier>
+         <recordOrigin>Converted from MARCXML to MODS version 3.7 using MARC21slim2MODS3-7.xsl
+				(Revision 1.140 20200717)</recordOrigin>
+         <languageOfCataloging>
+            <languageTerm authority="iso639-2b" type="code">eng</languageTerm>
+         </languageOfCataloging>
+      </recordInfo>
+   </mods>
+<mods version="3.7">
+      <titleInfo>
+         <title>Glossary of key information security terms</title>
+      </titleInfo>
+      <name type="personal" usage="primary">
+         <namePart>Kissel, Richard.</namePart>
+      </name>
+      <name type="corporate">
+         <namePart>National Institute of Standards and Technology (U.S.)</namePart>
+      </name>
+      <typeOfResource>text</typeOfResource>
+      <genre authority="marcgt">technical report</genre>
+      <genre authority="marcgt">government publication</genre>
+      <genre authority="rdacontent">text</genre>
+      <originInfo>
+         <place>
+            <placeTerm type="code" authority="marccountry">mdu</placeTerm>
+         </place>
+         <dateIssued encoding="marc">2011</dateIssued>
+         <issuance>monographic</issuance>
+      </originInfo>
+      <originInfo eventType="publisher">
+         <place>
+            <placeTerm type="text">Gaithersburg, MD :</placeTerm>
+         </place>
+         <publisher>U.S. Dept. of Commerce, National Institute of Standards and Technology ;</publisher>
+         <dateIssued>2011.</dateIssued>
+      </originInfo>
+      <language>
+         <languageTerm authority="iso639-2b" type="code">eng</languageTerm>
+      </language>
+      <physicalDescription>
+         <form type="media" authority="rdamedia">computer</form>
+         <form type="carrier" authority="rdacarrier">online resource</form>
+         <extent>1 online resource :</extent>
+      </physicalDescription>
+      <note type="statement of responsibility">Richard Kissel  .</note>
+      <note>Title from PDF title page (viewed March 14, 2024).</note>
+      <note type="bibliography">Includes bibliographical references.</note>
+      <note type="system details">Mode of access: World Wide Web.</note>
+      <note type="system details">Systems requirements: Adobe Acrobat PDF reader.</note>
+      <location>
+         <url displayLabel="electronic resource" usage="primary display">https://doi.org/10.6028/NIST.IR.7298r1</url>
+      </location>
+      <relatedItem type="series">
+         <titleInfo>
+            <title>NISTIR; NIST IR; NIST interagency report; NIST internal report</title>
+            <partNumber>7298r1</partNumber>
+         </titleInfo>
+      </relatedItem>
+      <identifier type="doi">10.6028/NIST.IR.7298r1 </identifier>
+      <identifier type="oclc">1427206794</identifier>
+      <identifier type="oclc">on1427206794</identifier>
+      <recordInfo>
+         <descriptionStandard>rda</descriptionStandard>
+         <recordContentSource authority="marcorg">NBS</recordContentSource>
+         <recordCreationDate encoding="marc">240318</recordCreationDate>
+         <recordChangeDate encoding="iso8601">20240318040553.0</recordChangeDate>
+         <recordIdentifier>991000626361208106</recordIdentifier>
+         <recordOrigin>Converted from MARCXML to MODS version 3.7 using MARC21slim2MODS3-7.xsl
+				(Revision 1.140 20200717)</recordOrigin>
+         <languageOfCataloging>
+            <languageTerm authority="iso639-2b" type="code">eng</languageTerm>
+         </languageOfCataloging>
+      </recordInfo>
+   </mods>
+<mods version="3.7">
+      <titleInfo>
+         <title>Security and privacy controls for federal information systems and organizations</title>
+      </titleInfo>
+      <name type="corporate">
+         <namePart>United States.</namePart>
+         <namePart>Joint Task Force Transformation Initiative.</namePart>
+      </name>
+      <name type="corporate">
+         <namePart>Information Technology Laboratory (National Institute of Standards and Technology).</namePart>
+         <namePart>Computer Security Division.</namePart>
+      </name>
+      <name type="corporate">
+         <namePart>National Institute of Standards and Technology (U.S.)</namePart>
+         <namePart>Information Technology Laboratory</namePart>
+      </name>
+      <typeOfResource>text</typeOfResource>
+      <genre authority="marcgt">technical report</genre>
+      <genre authority="marcgt">government publication</genre>
+      <genre authority="rdacontent">text</genre>
+      <genre authority="lcgft">Technical reports.</genre>
+      <genre authority="fast">Technical reports.</genre>
+      <originInfo>
+         <place>
+            <placeTerm type="code" authority="marccountry">mdu</placeTerm>
+         </place>
+         <dateIssued encoding="marc">2013</dateIssued>
+         <issuance>monographic</issuance>
+      </originInfo>
+      <originInfo eventType="publisher">
+         <place>
+            <placeTerm type="text">Gaithersburg, MD :</placeTerm>
+         </place>
+         <publisher>U.S. Dept. of Commerce, National Institute of Standards and Technology, </publisher>
+         <dateIssued>2013-04.</dateIssued>
+      </originInfo>
+      <language>
+         <languageTerm authority="iso639-2b" type="code">eng</languageTerm>
+      </language>
+      <physicalDescription>
+         <form type="media" authority="rdamedia">computer</form>
+         <form type="carrier" authority="rdacarrier">online resource</form>
+         <extent>1 online resource : illustrations (black and white).</extent>
+      </physicalDescription>
+      <note type="statement of responsibility">Joint Task Force Transformation Initiative.</note>
+      <note>Title from PDF title page (viewed April 30, 2013).</note>
+      <note>April 2013.</note>
+      <note type="bibliography">Includes bibliographical references.</note>
+      <note type="system details">Mode of access: World Wide Web.</note>
+      <note type="system details">Systems requirements: Adobe Acrobat PDF reader.</note>
+      <subject xmlns:xlink="http://www.w3.org/1999/xlink"
+               authority="lcsh"
+               xlink:href="https://id.loc.gov/authorities/names/n84702517">
+         <titleInfo>
+            <title>Federal information processing standards publication</title>
+         </titleInfo>
+      </subject>
+      <subject xmlns:xlink="http://www.w3.org/1999/xlink"
+               authority="lcsh"
+               xlink:href="https://id.loc.gov/authorities/subjects/sh90001862">
+         <topic>Computer security</topic>
+      </subject>
+      <subject xmlns:xlink="http://www.w3.org/1999/xlink"
+               authority="fast"
+               xlink:href="https://id.worldcat.org/fast/872484">
+         <topic>Computer security</topic>
+      </subject>
+      <location>
+         <url displayLabel="electronic resource" usage="primary display">https://doi.org/10.6028/NIST.SP.800-53r4</url>
+      </location>
+      <relatedItem type="series">
+         <titleInfo>
+            <title>NIST special publication; NIST special pub; NIST SP</title>
+            <partNumber>800-53r4</partNumber>
+         </titleInfo>
+      </relatedItem>
+      <identifier type="doi">10.6028/NIST.SP.800-53r4 </identifier>
+      <identifier type="oclc">1312499598</identifier>
+      <recordInfo>
+         <descriptionStandard>rda</descriptionStandard>
+         <recordContentSource authority="marcorg">NBS</recordContentSource>
+         <recordCreationDate encoding="marc">190912</recordCreationDate>
+         <recordChangeDate encoding="iso8601">20240315120954.0</recordChangeDate>
+         <recordIdentifier>991000031829708106</recordIdentifier>
+         <recordOrigin>Converted from MARCXML to MODS version 3.7 using MARC21slim2MODS3-7.xsl
+				(Revision 1.140 20200717)</recordOrigin>
+         <languageOfCataloging>
+            <languageTerm authority="iso639-2b" type="code">eng</languageTerm>
+         </languageOfCataloging>
+      </recordInfo>
+   </mods>
+<mods version="3.7">
+      <titleInfo>
+         <title>Glossary of key information security terms</title>
+      </titleInfo>
+      <name type="personal" usage="primary">
+         <namePart>Kissel, Richard.</namePart>
+      </name>
+      <name xmlns:xlink="http://www.w3.org/1999/xlink"
+            type="corporate"
+            xlink:href="https://id.loc.gov/authorities/names/n88112126">
+         <namePart>National Institute of Standards and Technology (U.S.).</namePart>
+         <namePart>Computer Security Division, Information Technology Library.</namePart>
+         <nameIdentifier>https://id.loc.gov/authorities/names/n88112126</nameIdentifier>
+      </name>
+      <typeOfResource>text</typeOfResource>
+      <genre authority="marcgt">technical report</genre>
+      <genre authority="marcgt">government publication</genre>
+      <genre authority="rdacontent">text</genre>
+      <genre authority="lcgft">Dictionaries.</genre>
+      <genre authority="fast">Dictionaries.</genre>
+      <genre authority="lcgft">Technical reports.</genre>
+      <genre authority="fast">Technical reports.</genre>
+      <originInfo>
+         <place>
+            <placeTerm type="code" authority="marccountry">mdu</placeTerm>
+         </place>
+         <dateIssued encoding="marc">2013</dateIssued>
+         <issuance>monographic</issuance>
+      </originInfo>
+      <originInfo eventType="publisher">
+         <place>
+            <placeTerm type="text">Gaithersburg, MD :</placeTerm>
+         </place>
+         <publisher>U.S. Dept. of Commerce, National Institute of Standards and Technology, </publisher>
+         <dateIssued>2013-05.</dateIssued>
+      </originInfo>
+      <language>
+         <languageTerm authority="iso639-2b" type="code">eng</languageTerm>
+      </language>
+      <physicalDescription>
+         <form type="media" authority="rdamedia">computer</form>
+         <form type="carrier" authority="rdacarrier">online resource</form>
+         <extent>1 online resource.</extent>
+      </physicalDescription>
+      <note type="statement of responsibility">Richard Kissel.</note>
+      <note>Title from PDF title page (viewed June 6, 2013).</note>
+      <note>"May 2013."</note>
+      <note type="system details">Mode of access: World Wide Web.</note>
+      <note type="system details">Systems requirements: Adobe Acrobat PDF reader.</note>
+      <subject xmlns:xlink="http://www.w3.org/1999/xlink"
+               authority="lcsh"
+               xlink:href="https://id.loc.gov/authorities/subjects/sh2009127217">
+         <topic>Information technology</topic>
+         <topic>Security measures</topic>
+      </subject>
+      <subject xmlns:xlink="http://www.w3.org/1999/xlink"
+               authority="fast"
+               xlink:href="https://id.worldcat.org/fast/973129">
+         <topic>Information technology</topic>
+         <topic>Security measures</topic>
+      </subject>
+      <location>
+         <url displayLabel="electronic resource" usage="primary display">https://doi.org/10.6028/NIST.IR.7298r2</url>
+      </location>
+      <relatedItem type="series">
+         <titleInfo>
+            <title>NISTIR; NIST IR; NIST interagency report; NIST internal report</title>
+            <partNumber>7298r2</partNumber>
+         </titleInfo>
+      </relatedItem>
+      <identifier type="doi">10.6028/NIST.IR.7298r2 </identifier>
+      <identifier type="oclc">1312496161</identifier>
+      <recordInfo>
+         <descriptionStandard>rda</descriptionStandard>
+         <recordContentSource authority="marcorg">NBS</recordContentSource>
+         <recordCreationDate encoding="marc">200707</recordCreationDate>
+         <recordChangeDate encoding="iso8601">20130606024241.0</recordChangeDate>
+         <recordIdentifier>991000032229708106</recordIdentifier>
+         <recordOrigin>Converted from MARCXML to MODS version 3.7 using MARC21slim2MODS3-7.xsl
+				(Revision 1.140 20200717)</recordOrigin>
+         <languageOfCataloging>
+            <languageTerm authority="iso639-2b" type="code">eng</languageTerm>
+         </languageOfCataloging>
+      </recordInfo>
+   </mods>
+<mods version="3.7">
+      <titleInfo>
+         <title>Digital signature standard (DSS)</title>
+      </titleInfo>
+      <name type="corporate">
+         <namePart>National Institute of Standards and Technology (U.S.)</namePart>
+      </name>
+      <name type="corporate">
+         <namePart>National Institute of Standards and Technology (U.S.)</namePart>
+      </name>
+      <typeOfResource>text</typeOfResource>
+      <genre authority="marcgt">technical report</genre>
+      <genre authority="marcgt">government publication</genre>
+      <genre authority="rdacontent">text</genre>
+      <genre authority="lcgft">Technical reports.</genre>
+      <genre authority="fast">Technical reports.</genre>
+      <originInfo>
+         <place>
+            <placeTerm type="code" authority="marccountry">mdu</placeTerm>
+         </place>
+         <dateIssued encoding="marc">2013</dateIssued>
+         <issuance>monographic</issuance>
+      </originInfo>
+      <originInfo eventType="publisher">
+         <place>
+            <placeTerm type="text">Washington, D.C. :</placeTerm>
+         </place>
+         <publisher>U.S. Dept. of Commerce,</publisher>
+         <dateIssued>2013-07.</dateIssued>
+      </originInfo>
+      <language>
+         <languageTerm authority="iso639-2b" type="code">eng</languageTerm>
+      </language>
+      <physicalDescription>
+         <form type="media" authority="rdamedia">computer</form>
+         <form type="carrier" authority="rdacarrier">online resource</form>
+         <extent>1 online resource : illustrations (black and white).</extent>
+      </physicalDescription>
+      <note type="statement of responsibility">National Institute of Standards and Technology.</note>
+      <note>Title from PDF title page (viewed July 18, 2013).</note>
+      <note>July 2013.</note>
+      <note type="bibliography">Includes bibliographical references.</note>
+      <note type="system details">Mode of access: World Wide Web.</note>
+      <note type="system details">Systems requirements: Adobe Acrobat PDF reader.</note>
+      <subject authority="lcsh">
+         <titleInfo>
+            <title>Federal information processing standards publication</title>
+         </titleInfo>
+      </subject>
+      <subject xmlns:xlink="http://www.w3.org/1999/xlink"
+               authority="lcsh"
+               xlink:href="https://id.loc.gov/authorities/subjects/sh90001862">
+         <topic>Computer security</topic>
+      </subject>
+      <subject xmlns:xlink="http://www.w3.org/1999/xlink"
+               authority="fast"
+               xlink:href="https://id.worldcat.org/fast/872484">
+         <topic>Computer security</topic>
+      </subject>
+      <subject xmlns:xlink="http://www.w3.org/1999/xlink"
+               authority="lcsh"
+               xlink:href="https://id.loc.gov/authorities/subjects/sh85034453">
+         <topic>Cryptography</topic>
+      </subject>
+      <subject xmlns:xlink="http://www.w3.org/1999/xlink"
+               authority="fast"
+               xlink:href="https://id.worldcat.org/fast/884552">
+         <topic>Cryptography</topic>
+      </subject>
+      <location>
+         <url displayLabel="electronic resource" usage="primary display">https://doi.org/10.6028/NIST.FIPS.186-4</url>
+      </location>
+      <relatedItem type="series">
+         <titleInfo>
+            <title>Federal information processing standards publication; FIPS</title>
+            <partNumber>186-4</partNumber>
+         </titleInfo>
+      </relatedItem>
+      <identifier type="doi">10.6028/NIST.FIPS.186-4 </identifier>
+      <identifier type="oclc">853166937</identifier>
+      <recordInfo>
+         <descriptionStandard>rda</descriptionStandard>
+         <recordContentSource authority="marcorg">NBS</recordContentSource>
+         <recordCreationDate encoding="marc">200707</recordCreationDate>
+         <recordChangeDate encoding="iso8601">20240829094026.0</recordChangeDate>
+         <recordIdentifier>991000032769708106</recordIdentifier>
+         <recordOrigin>Converted from MARCXML to MODS version 3.7 using MARC21slim2MODS3-7.xsl
+				(Revision 1.140 20200717)</recordOrigin>
+         <languageOfCataloging>
+            <languageTerm authority="iso639-2b" type="code">eng</languageTerm>
+         </languageOfCataloging>
+      </recordInfo>
+   </mods>
+</modsCollection>
