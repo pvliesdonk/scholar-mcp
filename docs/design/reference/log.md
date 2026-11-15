@@ -4,6 +4,14 @@ Newest first. One entry per research pass.
 
 ## 2026-11-15
 
+### Replaced-edition data: W3C reads `superseded-by`
+
+Updated [Replaced-edition data for IETF, NIST and W3C](standards-supersession-sources.md)
+for #638. New observations: the `superseded-by` link is a paged collection
+holding at most six replacements; the `/specifications` list omits all 41
+replaced specifications, which only their own names reach. The W3C fetcher
+claims now describe it following the link, and pin its tests.
+
 ### Relaton data dumps: the v2 branch
 
 New page [Relaton data dumps on the v2 branch](relaton-data-v2.md) (#641),

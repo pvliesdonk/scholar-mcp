@@ -330,7 +330,10 @@ A `StandardRecord` dict, the same shape returned by `get_standard`:
   edition whose dump record names its replacement does the same:
   ISO/IEC 27001:2005 gives `ISO/IEC 27001:2013`. An IEEE replacement keeps
   the "Std" of its identifier (`IEEE Std 1588-2019`); `get_standard` accepts
-  it but answers from a live fetch instead of the synced copy. An IEC edition
+  it but answers from a live fetch instead of the synced copy. A W3C
+  specification that another one replaced lists it too, as Web Forms 2.0
+  lists `HTML5`, while a retired one with no named successor, such as
+  HTML 4.01, is `"superseded"` with an empty list. An IEC edition
   replaced by a new one reports `"superseded"` with an empty list, since the
   IEC dump links only project numbers. The other bodies leave the list empty,
   so an empty list doesn't show that an edition is current.

@@ -1,0 +1,29 @@
+{
+    "shortlink": "https://www.w3.org/TR/web-forms-2/",
+    "description": "<p>This specification defines Web Forms 2.0, an extension to the forms features found in HTML4's Forms chapter and the corresponding DOM2 HTML interfaces. Web Forms 2.0 applies to both HTML and XHTML user agents. It provides new strongly-typed input fields, new attributes for defining constraints, a repeating model for declarative repeating of form sections, new DOM interfaces, new DOM events for validation and dependency tracking, and XML submission and initialization of forms. It also standardizes and codifies existing practice in areas that have not been previously documented, and clarifies some of the interactions of HTML form controls and CSS.</p> <p>HTML4, XHTML1.1, and the DOM are thus extended in a manner that has a clear migration path from existing HTML forms, leveraging the knowledge authors have built up with their experience with HTML so far.</p>",
+    "title": "Web Forms 2.0",
+    "shortname": "web-forms-2",
+    "series-version": "2.0",
+    "_links": {
+        "self": {
+            "href": "https://api.w3.org/specifications/web-forms-2"
+        },
+        "version-history": {
+            "href": "https://api.w3.org/specifications/web-forms-2/versions"
+        },
+        "first-version": {
+            "href": "https://api.w3.org/specifications/web-forms-2/versions/20060821",
+            "title": "Working Draft"
+        },
+        "latest-version": {
+            "href": "https://api.w3.org/specifications/web-forms-2/versions/20090226",
+            "title": "Working Draft"
+        },
+        "superseded-by": {
+            "href": "https://api.w3.org/specifications/web-forms-2/superseded"
+        },
+        "series": {
+            "href": "https://api.w3.org/specification-series/web-forms"
+        }
+    }
+}

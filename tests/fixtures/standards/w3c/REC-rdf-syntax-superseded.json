@@ -1,0 +1,46 @@
+{
+    "page": 1,
+    "limit": 100,
+    "pages": 1,
+    "total": 6,
+    "_links": {
+        "up": {
+            "href": "https://api.w3.org/specifications/REC-rdf-syntax"
+        },
+        "superseded": [
+            {
+                "href": "https://api.w3.org/specifications/rdf11-xml",
+                "title": "RDF 1.1 XML Syntax"
+            },
+            {
+                "href": "https://api.w3.org/specifications/rdf10-primer",
+                "title": "RDF Primer"
+            },
+            {
+                "href": "https://api.w3.org/specifications/rdf11-schema",
+                "title": "RDF Schema 1.1"
+            },
+            {
+                "href": "https://api.w3.org/specifications/rdf10-semantics",
+                "title": "RDF Semantics"
+            },
+            {
+                "href": "https://api.w3.org/specifications/rdf-testcases",
+                "title": "RDF Test Cases"
+            },
+            {
+                "href": "https://api.w3.org/specifications/rdf-concepts-10",
+                "title": "Resource Description Framework (RDF): Concepts and Abstract Syntax"
+            }
+        ],
+        "self": {
+            "href": "https://api.w3.org/specifications/REC-rdf-syntax/superseded?page=1&items=100"
+        },
+        "first": {
+            "href": "https://api.w3.org/specifications/REC-rdf-syntax/superseded?page=1&items=100"
+        },
+        "last": {
+            "href": "https://api.w3.org/specifications/REC-rdf-syntax/superseded?page=1&items=100"
+        }
+    }
+}

@@ -1019,6 +1019,28 @@ _W3C_SHORTNAME_MAP: dict[str, str] = {
     "HTML Living Standard": "html",
 }
 _W3C_NAME_BY_SHORTNAME = {v: k for k, v in _W3C_SHORTNAME_MAP.items()}
+# One page of a specification's superseded-by collection; the most seen is 6.
+_W3C_COLLECTION_ITEMS = 100
+
+
+def _w3c_identifiers(links: list[dict]) -> list[str]:  # type: ignore[type-arg]
+    """Map W3C API specification links to the identifiers ``get`` accepts.
+
+    Args:
+        links: ``{href, title}`` links, ``href`` ending in the shortname.
+
+    Returns:
+        The mapped name (``HTML5``) or the shortname, once each, in order.
+    """
+    found: list[str] = []
+    for link in links:
+        if not isinstance(link, dict):
+            continue
+        shortname = str(link.get("href", "")).rstrip("/").rsplit("/", 1)[-1]
+        ident = _W3C_NAME_BY_SHORTNAME.get(shortname, shortname)
+        if ident and ident not in found:
+            found.append(ident)
+    return found
 
 
 class _W3CFetcher:
@@ -1101,6 +1123,10 @@ class _W3CFetcher:
 
         Returns:
             Populated StandardRecord or None if not found.
+
+        Raises:
+            StandardsUpstreamError: The specification names a replacement
+                and the lookup of it never got a usable answer.
         """
         shortname = self._to_shortname(identifier)
         await self._limiter.acquire()
@@ -1110,7 +1136,54 @@ class _W3CFetcher:
                 "w3c_api_error status=%d url=%s", resp.status_code, str(resp.url)
             )
             return None
-        return _normalize_w3c(resp.json())
+        spec = resp.json()
+        return _normalize_w3c(spec, await self._superseding_specs(spec))
+
+    async def _superseding_specs(self, spec: dict) -> list[str]:  # type: ignore[type-arg]
+        """Return the identifiers of the specifications that replace ``spec``.
+
+        A replaced specification links its replacements as a collection,
+        ``_links.superseded-by``, which takes one more request; most
+        specifications have no such link and cost none (#638). As for an
+        obsoleted RFC, a missing answer would read as the stated status and
+        be cached, so a failed lookup raises.
+
+        Args:
+            spec: W3C API specification object.
+
+        Returns:
+            Identifiers in the form ``get`` accepts; empty when nothing
+            replaces the specification.
+
+        Raises:
+            StandardsUpstreamError: The lookup never got a usable answer.
+        """
+        link = ((spec.get("_links") or {}).get("superseded-by") or {}).get("href")
+        if not link:
+            return []
+        await self._limiter.acquire()
+        try:
+            resp = await self._http.get(link, params={"items": _W3C_COLLECTION_ITEMS})
+        except httpx.HTTPError as exc:
+            logger.warning("w3c_superseded_by_request_failed error=%s", exc)
+            raise StandardsUpstreamError(
+                "W3C", detail=f"replacement lookup never reached the W3C API: {exc}"
+            ) from exc
+        if resp.status_code != 200:
+            logger.warning(
+                "w3c_superseded_by_error status=%d url=%s",
+                resp.status_code,
+                str(resp.url),
+            )
+            raise StandardsUpstreamError(
+                "W3C",
+                status=resp.status_code,
+                detail="the W3C API refused the replacement lookup",
+            )
+        payload = resp.json()
+        if (payload.get("pages") or 1) > 1:
+            logger.warning("w3c_superseded_by_truncated url=%s", link)
+        return _w3c_identifiers((payload.get("_links") or {}).get("superseded") or [])
 
     async def search(self, query: str, *, limit: int = 10) -> list[StandardRecord]:
         """Search W3C specifications by keyword against cached stubs.
@@ -1140,7 +1213,10 @@ class _W3CFetcher:
                 f"{_W3C_API}/specifications/{stub['shortname']}"
             )
             if resp.status_code == 200:
-                results.append(_normalize_w3c(resp.json()))
+                spec = resp.json()
+                results.append(
+                    _normalize_w3c(spec, await self._superseding_specs(spec))
+                )
             else:
                 logger.debug(
                     "w3c_spec_fetch_failed shortname=%s status=%d",
@@ -1150,7 +1226,10 @@ class _W3CFetcher:
         return results
 
 
-def _normalize_w3c(spec: dict) -> StandardRecord:  # type: ignore[type-arg]
+def _normalize_w3c(
+    spec: dict,  # type: ignore[type-arg]
+    superseded_by: list[str] | None = None,
+) -> StandardRecord:
     """Normalise a W3C API specification object to a StandardRecord.
 
     The specification object carries the document URL as ``shortlink`` and the
@@ -1158,8 +1237,12 @@ def _normalize_w3c(spec: dict) -> StandardRecord:  # type: ignore[type-arg]
     version's status and whose ``href`` ends in its date. It has no top-level
     status or date (#630).
 
+    A replaced specification keeps the status of its last version (Web Forms
+    2.0's is ``Working Draft``), so a replacement outranks it (#638).
+
     Args:
         spec: Raw W3C API specification object.
+        superseded_by: Identifiers of the specifications that replace it.
 
     Returns:
         Populated StandardRecord.
@@ -1168,7 +1251,9 @@ def _normalize_w3c(spec: dict) -> StandardRecord:  # type: ignore[type-arg]
     shortname = spec.get("shortname", "")
     tr_url = spec.get("shortlink") or f"{_W3C_TR}/{shortname}/"
     latest = (spec.get("_links") or {}).get("latest-version") or {}
-    status = _map_w3c_status(latest.get("title") or "")
+    status = (
+        "superseded" if superseded_by else _map_w3c_status(latest.get("title") or "")
+    )
     date_m = re.search(r"/(\d{4})(\d{2})(\d{2})$", latest.get("href") or "")
     published = "-".join(date_m.groups()) if date_m else None
     # get() accepts what it is given back: a mapped name or the shortname.
@@ -1184,7 +1269,7 @@ def _normalize_w3c(spec: dict) -> StandardRecord:  # type: ignore[type-arg]
         status=status,
         published_date=published,
         withdrawn_date=None,
-        superseded_by=[],
+        superseded_by=list(superseded_by or []),
         supersedes=[],
         scope=spec.get("description"),
         committee=None,
