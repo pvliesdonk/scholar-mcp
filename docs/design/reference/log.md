@@ -4,6 +4,16 @@ Newest first. One entry per research pass.
 
 ## 2026-11-14
 
+### Replaced-edition data, after the fetcher fixes
+
+Updated [Replaced-edition data for IETF, NIST and W3C](standards-supersession-sources.md)
+after #632, #634 and #635: the claims about the W3C status, URL and
+identifier, the IETF status and publication date, and datatracker's unpadded
+names now describe `main` and pin tests. Re-run live on e42339b: HTML 4.01
+reports `superseded`, RFC 2246 `withdrawn`, and RFC 2616 still `published`
+with no replacement (#592). Corrected the RFCs that obsolete RFC 2616 to
+7230 to 7235.
+
 ### Replaced-edition data for IETF, NIST and W3C
 
 New page [Replaced-edition data for IETF, NIST and W3C](standards-supersession-sources.md)
