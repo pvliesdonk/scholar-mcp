@@ -5,8 +5,9 @@ the cache AND no sync has been run. Avoids the "false negative until sync
 runs" trap by doing one cheap ``raw.githubusercontent.com`` GET per call.
 
 Covers pure ISO, IEC, IEEE plus their joint forms: ISO/IEC, IEC/IEEE,
-ISO/IEC/IEEE. Per-body filename conventions (ISO lowercase-hyphen vs.
-IEEE uppercase-underscore) are handled by :func:`_identifier_to_relaton_slug`.
+ISO/IEC/IEEE. Reads each repository's ``v2`` branch, where every body names
+its files the same way: :func:`_identifier_to_relaton_slug`, and
+``docs/design/reference/relaton-data-v2.md``.
 
 Lives alongside ``_sync_relaton.py``; the two modules share the same YAML
 mapper so synced and live-fetched records have identical shape.
@@ -30,67 +31,36 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _RAW_BASE = "https://raw.githubusercontent.com/relaton"
+_BRANCH = "v2"
+# v2 filenames: the identifier lowercased, every run of other characters a
+# hyphen, except + & _ [ ] which stay.
+_SLUG_SEPARATORS = re.compile(r"[^a-z0-9+&_\[\]]+")
+# The resolver drops "Std" ("IEEE 802.11-2016"); the v2 file keeps it.
+_IEEE_BARE_NUMBER = re.compile(r"^IEEE (?=C?\d)", re.IGNORECASE)
+_PREFIXES = ("IEEE ", "IEEE_", "ISO ", "ISO/", "ISO-", "IEC ", "IEC/", "IEC-")
 
 
 def _identifier_to_relaton_slug(identifier: str) -> str | None:
-    """Convert an identifier to its Relaton filename slug.
+    """Convert an identifier to its Relaton v2 filename slug.
 
-    Dispatch on body prefix:
+    The identifier is lowercased and every run of characters other than
+    letters, digits and ``+ & _ [ ]`` becomes one hyphen
+    (``ISO/IEC 27001:2022`` → ``iso-iec-27001-2022``). A plain IEEE number
+    gains the ``Std`` the resolver strips (``IEEE 802.11-2016`` →
+    ``ieee-std-802-11-2016``).
 
-    - IEEE / IEC/IEEE / ISO/IEC/IEEE → uppercase-underscore form preserving
-      internal dots and intra-token hyphens
-      (``IEEE 1003.1-2024`` → ``IEEE_1003.1-2024``;
-       ``ISO/IEC/IEEE 42010-2011`` → ``ISO_IEC_IEEE_42010-2011``).
-    - ISO / IEC / ISO/IEC → lowercase-hyphen form (unchanged from PR 2).
+    Args:
+        identifier: Canonical identifier from the resolver.
 
-    Returns ``None`` when the prefix isn't recognized.
+    Returns:
+        The slug, or ``None`` when the prefix is not ISO, IEC or IEEE.
     """
     stripped = identifier.strip()
     upper = stripped.upper()
-
-    # IEEE slugging (uppercase-underscore) — check before ISO/IEC since
-    # ISO/IEC/IEEE and IEC/IEEE are IEEE-repo joints.
-    if (
-        upper.startswith("IEEE ")
-        or (upper.startswith("IEEE") and upper[4:5] in {" ", "_"})
-        or upper.startswith("IEC/IEEE")
-        or upper.startswith("ISO/IEC/IEEE")
-    ):
-        return _ieee_slug(stripped)
-
-    # ISO / IEC / ISO/IEC slugging (lowercase-hyphen) — PR 2 behavior.
-    if not (
-        upper.startswith("ISO/IEC")
-        or upper.startswith("ISO ")
-        or upper.startswith("IEC ")
-        or (upper.startswith("ISO") and upper[3:4] in {" ", "-"})
-        or (upper.startswith("IEC") and upper[3:4] in {" ", "-"})
-    ):
+    if not upper.startswith(_PREFIXES):
         return None
-
-    slug = stripped.lower()
-    slug = slug.replace("iec/iso", "iso-iec")
-    slug = slug.replace("iso/iec", "iso-iec")
-    slug = re.sub(r"[\s:/&]+", "-", slug)
-    slug = re.sub(r"-+", "-", slug).strip("-")
-    return slug or None
-
-
-def _ieee_slug(identifier: str) -> str | None:
-    """IEEE filename slug: underscores between tokens, dots and hyphens kept.
-
-    Input is assumed to be a canonical IEEE identifier with uppercase
-    body prefixes; callers routing from ``resolve_identifier_local`` already
-    satisfy this contract. The function does not recase the input.
-
-    Examples:
-        IEEE 1003.1-2024        → IEEE_1003.1-2024
-        IEEE Std 1588-2019      → IEEE_Std_1588-2019
-        IEC/IEEE 61588-2021     → IEC_IEEE_61588-2021
-        ISO/IEC/IEEE 42010-2011 → ISO_IEC_IEEE_42010-2011
-    """
-    slug = re.sub(r"[/\s]+", "_", identifier.strip())
-    slug = re.sub(r"_+", "_", slug).strip("_")
+    stripped = _IEEE_BARE_NUMBER.sub("IEEE Std ", stripped)
+    slug = _SLUG_SEPARATORS.sub("-", stripped.lower()).strip("-")
     return slug or None
 
 
@@ -150,7 +120,7 @@ class RelatonLiveFetcher:
         self._source = source
 
     async def _try_repo(self, repo: str, slug: str) -> dict[str, object] | None:
-        url = f"{_RAW_BASE}/{repo}/main/data/{slug}.yaml"
+        url = f"{_RAW_BASE}/{repo}/{_BRANCH}/data/{slug}.yaml"
         try:
             response = await self._http.get(url)
         except httpx.HTTPError as exc:

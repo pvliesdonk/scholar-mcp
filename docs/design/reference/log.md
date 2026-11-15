@@ -4,6 +4,17 @@ Newest first. One entry per research pass.
 
 ## 2026-11-15
 
+### Relaton data dumps: the v2 branch
+
+New page [Relaton data dumps on the v2 branch](relaton-data-v2.md) (#641),
+from the full `v2` tarballs of relaton-data-iso, -iec and -ieee and their
+`main` tarballs. All three repositories moved to `v2`; `main` stopped
+receiving data (ISO's last data commit is 2025-06-02). `v2` renames the fields
+the parser read (`docidentifier.content`, `status.stage.content`, `source`,
+`date.at`, `obsoletedBy`), puts IEC work items under `data/projects/`, and names
+every file the same lowercase-hyphen way. Added a `v2` note to
+[Relaton bibitem titles](relaton-titles.md).
+
 ### Replaced-edition data: IETF reads `obs` relations
 
 Updated [Replaced-edition data for IETF, NIST and W3C](standards-supersession-sources.md)

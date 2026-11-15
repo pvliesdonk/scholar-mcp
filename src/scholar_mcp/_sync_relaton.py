@@ -4,13 +4,16 @@ Shared between the ISO and IEC sync loaders; the joint-standard detection
 logic lives in :func:`_canonical_identifier_and_body`.
 
 Design reference: ``docs/design/history/specs/2026-04-13-pr2-iso-iec-relaton-design.md``.
-External behaviour (the title list): ``docs/design/reference/relaton-titles.md``.
+External behaviour: ``docs/design/reference/relaton-data-v2.md`` (the ``v2``
+branch and its record shape) and ``docs/design/reference/relaton-titles.md``
+(the title list).
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import tarfile
 import tempfile
 import time
@@ -36,7 +39,9 @@ class RelatonConfig:
 
     body: str  # "ISO", "IEC", or "IEEE"
     repo: str  # "relaton/relaton-data-iso"
-    branch: str = "main"
+    # ``main`` stopped receiving data when the repositories moved to ``v2``
+    # (#641); ``docs/design/reference/relaton-data-v2.md``.
+    branch: str = "v2"
 
 
 _RELATON_BODIES: dict[str, RelatonConfig] = {
@@ -66,16 +71,23 @@ _RELATON_SKIP_SLUGS: dict[str, frozenset[str]] = {
     ),
 }
 
-# Map Relaton docstatus.stage codes → StandardRecord.status
-_STAGE_TO_STATUS = {
-    "60.60": "published",
-    "90.20": "published",  # periodic review
-    "90.60": "published",
-    "90.92": "published",  # confirmed
-    "90.93": "published",  # to be revised
-    "95.99": "withdrawn",
-    "95.60": "withdrawn",
+# ISO and IEC write the harmonized stage code ``NN.NN``; IEEE writes a word,
+# or nothing and leaves the state to ``ext.standard_status``.
+_HARMONIZED_STAGE = re.compile(r"\d\d\.\d\d")
+_STAGE_WORD_TO_STATUS = {
+    "draft": "draft",
+    "approved": "published",
+    "published": "published",
+    "withdrawn": "withdrawn",
+    "superseded": "superseded",
 }
+_IEEE_STANDARD_STATUS = {
+    "Active": "published",
+    "Inactive": "withdrawn",
+    "Superseded": "superseded",
+}
+# IEC names why an edition was withdrawn; these two mean a new edition.
+_IEC_REPLACED_STAGENAMES = frozenset({"REVISED", "REPLACED"})
 
 
 def _canonical_identifier_and_body(
@@ -93,7 +105,8 @@ def _canonical_identifier_and_body(
     - Otherwise fall back to the primary entry's ``type``.
 
     Entries with ``scope: trademark`` are filtered out before picking the
-    canonical identifier (they hold a ™ variant of the same id).
+    canonical identifier (they hold a ™ variant of the same id). Each entry
+    holds its identifier under ``content``.
     """
     if not docidentifiers:
         return None
@@ -112,12 +125,12 @@ def _canonical_identifier_and_body(
     ieee_entries = [d for d in non_tm if str(d.get("type", "")).upper() == "IEEE"]
 
     if iso_entries and iec_entries and ieee_entries:
-        ident = str(ieee_entries[0].get("id", "")).strip()
+        ident = str(ieee_entries[0].get("content", "")).strip()
         ident = _normalise_joint(ident, "ISO/IEC/IEEE")
         return ident, "ISO/IEC/IEEE"
 
     if iec_entries and ieee_entries:
-        ident = str(ieee_entries[0].get("id", "")).strip()
+        ident = str(ieee_entries[0].get("content", "")).strip()
         ident = _normalise_joint(ident, "IEC/IEEE")
         return ident, "IEC/IEEE"
 
@@ -126,25 +139,25 @@ def _canonical_identifier_and_body(
             (
                 d
                 for d in iso_entries + iec_entries
-                if "ISO/IEC" in str(d.get("id", ""))
-                or "IEC/ISO" in str(d.get("id", ""))
+                if "ISO/IEC" in str(d.get("content", ""))
+                or "IEC/ISO" in str(d.get("content", ""))
             ),
             iso_entries[0],
         )
-        ident = str(joint.get("id", "")).strip()
+        ident = str(joint.get("content", "")).strip()
         ident = _normalise_joint(ident, "ISO/IEC")
         return ident, "ISO/IEC"
 
     if ieee_entries:
-        return str(ieee_entries[0].get("id", "")).strip(), "IEEE"
+        return str(ieee_entries[0].get("content", "")).strip(), "IEEE"
     if iso_entries:
-        return str(iso_entries[0].get("id", "")).strip(), "ISO"
+        return str(iso_entries[0].get("content", "")).strip(), "ISO"
     if iec_entries:
-        return str(iec_entries[0].get("id", "")).strip(), "IEC"
+        return str(iec_entries[0].get("content", "")).strip(), "IEC"
 
     primary_entries = [d for d in non_tm if d.get("primary")]
     if primary_entries:
-        ident = str(primary_entries[0].get("id", "")).strip()
+        ident = str(primary_entries[0].get("content", "")).strip()
         body = str(primary_entries[0].get("type", "")).upper()
         if ident and body:
             return ident, body
@@ -232,6 +245,15 @@ def _full_title(titles: list[Any] | None) -> str:
     return _title_content(titles[0])
 
 
+def _content(value: Any) -> str:
+    """Return a Relaton ``{content: ...}`` mapping's text, or ``""``."""
+    if isinstance(value, dict):
+        content = value.get("content")
+        if isinstance(content, str):
+            return content.strip()
+    return ""
+
+
 def _published_date(dates: list[dict[str, Any]] | None) -> str | None:
     if not dates:
         return None
@@ -239,82 +261,148 @@ def _published_date(dates: list[dict[str, Any]] | None) -> str | None:
         if not isinstance(entry, dict):
             continue
         if str(entry.get("type", "")).lower() == "published":
-            value = entry.get("value")
+            value = entry.get("at")
             if isinstance(value, str):
                 return value
     return None
 
 
-def _superseded_by(relations: list[dict[str, Any]] | None) -> list[str]:
-    """Return the identifier of each ``obsoleted-by`` relation, in order.
+def _related_identifiers(
+    relations: list[dict[str, Any]] | None, relation_type: str
+) -> list[str]:
+    """Return the identifier of each related document of one type, in order.
 
-    Takes the first identifier of each related bibitem. Which relation types
-    the Relaton dumps use for a replaced edition is #641.
+    v2 writes the type in camel case (``obsoletedBy``, ``obsoletes``) and
+    gives each related bibitem one identifier, the primary one.
 
     Args:
         relations: The record's ``relation`` list, or None.
+        relation_type: The relation type to collect, as v2 spells it.
 
     Returns:
-        One identifier per replacing document; empty when none is recorded.
+        Each related identifier once, in first-seen order; empty when there
+        is none. IEEE repeats a relation (``IEEE Std 776-1992`` names
+        ``IEEE Std 776-2018`` twice).
     """
     found: list[str] = []
     for rel in relations or []:
-        if not isinstance(rel, dict):
+        if not isinstance(rel, dict) or rel.get("type") != relation_type:
             continue
-        if str(rel.get("type", "")).lower() != "obsoleted-by":
-            continue
-        bibitem = rel.get("bibitem") or {}
+        bibitem = rel.get("bibitem")
         if not isinstance(bibitem, dict):
             continue
-        idents = bibitem.get("docid") or bibitem.get("docidentifier") or []
-        ident = next((i for i in idents if isinstance(i, dict) and i.get("id")), None)
-        if ident is not None:
-            found.append(str(ident["id"]))
+        ident = next(
+            (c for c in map(_content, bibitem.get("docidentifier") or []) if c), None
+        )
+        if ident is not None and ident not in found:
+            found.append(ident)
     return found
 
 
-def _supersedes(relations: list[dict[str, Any]] | None) -> list[str]:
-    out: list[str] = []
-    if not relations:
-        return out
-    for rel in relations:
-        if not isinstance(rel, dict):
-            continue
-        if str(rel.get("type", "")).lower() != "obsoletes":
-            continue
-        bibitem = rel.get("bibitem") or {}
-        if not isinstance(bibitem, dict):
-            continue
-        idents = bibitem.get("docid") or bibitem.get("docidentifier") or []
-        for ident in idents:
-            if isinstance(ident, dict) and ident.get("id"):
-                out.append(str(ident["id"]))
-    return out
+def _harmonized_status(code: str) -> str:
+    """Map an ISO/IEC harmonized stage code (``NN.NN``) to a record status.
+
+    60.60 and every 90 code are a published edition; 95.99 and 95.60 a
+    withdrawn one. Below 60.60 the document is a draft, unless the substage
+    is 98, which ends the project.
+    """
+    major, substage = code.split(".")
+    if code in ("95.99", "95.60"):
+        return "withdrawn"
+    if code == "60.60" or major in ("90", "95"):
+        return "published"
+    if substage == "98":
+        return "withdrawn"
+    return "draft"
 
 
-def _committee(editorialgroup: dict[str, Any] | None) -> str | None:
-    if not editorialgroup:
-        return None
-    tcs = editorialgroup.get("technical_committee") or editorialgroup.get(
-        "technical-committee"
-    )
-    if not tcs:
-        return None
-    if isinstance(tcs, list) and tcs:
-        first = tcs[0]
-        if isinstance(first, dict) and first.get("name"):
-            return str(first["name"])
+def _status(doc: dict[str, Any], identifier: str) -> str:
+    """Return the record status from the stage, before any replacement.
+
+    See ``docs/design/reference/relaton-data-v2.md`` for each body's stage.
+
+    Args:
+        doc: Parsed Relaton YAML.
+        identifier: The record's identifier, for the log line only.
+
+    Returns:
+        ``published``, ``withdrawn``, ``superseded`` or ``draft``.
+    """
+    stage_block = doc.get("status") or {}
+    ext = doc.get("ext") or {}
+    stage = _content(stage_block.get("stage"))
+    substage = _content(stage_block.get("substage"))
+    code = f"{stage}.{substage}" if substage else stage
+    if _HARMONIZED_STAGE.fullmatch(code):
+        status = _harmonized_status(code)
+        replaced = _content(ext.get("stagename")) in _IEC_REPLACED_STAGENAMES
+        return "superseded" if status == "withdrawn" and replaced else status
+    if stage.lower() in _STAGE_WORD_TO_STATUS:
+        return _STAGE_WORD_TO_STATUS[stage.lower()]
+    standard_status = ext.get("standard_status")
+    if standard_status in _IEEE_STANDARD_STATUS:
+        return _IEEE_STANDARD_STATUS[standard_status]
+    logger.debug("relaton_unknown_stage stage=%s identifier=%s", code, identifier)
+    return "published"
+
+
+def _committee(contributors: list[dict[str, Any]] | None) -> str | None:
+    """Return the committee that authored the document, or None.
+
+    v2 lists it as a ``subdivision`` of the author organisation. ISO names
+    the committee in its ``identifier`` (``ISO/IEC JTC 1/SC 27``); IEC puts
+    only the number there and ``TC 65`` in the name; IEEE gives only a name.
+    """
+    for contributor in contributors or []:
+        if not isinstance(contributor, dict):
+            continue
+        roles = [
+            r.get("type") for r in contributor.get("role") or [] if isinstance(r, dict)
+        ]
+        if "author" not in roles:
+            continue
+        organization = contributor.get("organization") or {}
+        for subdivision in organization.get("subdivision") or []:
+            if not isinstance(subdivision, dict):
+                continue
+            ident = next(map(_content, subdivision.get("identifier") or []), "")
+            if any(ch.isalpha() for ch in ident):
+                return ident
+            name = next(map(_content, subdivision.get("name") or []), "")
+            if name:
+                return name
     return None
+
+
+def _aliases(docidentifiers: list[Any], identifier: str) -> list[str]:
+    """Return every other identifier of the record, except the undated one.
+
+    ISO gives each edition an ``iso-undated`` entry (``ISO/IEC 27001``); as an
+    alias it would point at whichever edition the sync wrote last.
+    """
+    aliases: list[str] = []
+    for entry in docidentifiers:
+        if not isinstance(entry, dict) or entry.get("type") == "iso-undated":
+            continue
+        alias = _content(entry)
+        if alias and alias != identifier:
+            aliases.append(alias)
+    return aliases
 
 
 def _yaml_to_record(
     doc: dict[str, Any],
 ) -> tuple[StandardRecord | None, list[str]]:
-    """Map a parsed Relaton YAML document to ``(StandardRecord, aliases)``.
+    """Map a parsed Relaton v2 YAML document to ``(StandardRecord, aliases)``.
 
     Returns ``(None, [])`` on schema mismatches that prevent extracting an
     identifier or title. Callers treat the missing record as a non-fatal
     skip and append an error message for the report.
+
+    A withdrawn record that names its replacement (``obsoletedBy``) reports
+    ``superseded`` and lists it. A record that is still current keeps an
+    empty ``superseded_by``, although ISO links a confirmed edition to the
+    draft of its revision.
 
     Args:
         doc: Parsed Relaton YAML.
@@ -322,7 +410,7 @@ def _yaml_to_record(
     Returns:
         Tuple of ``(StandardRecord | None, alias_identifiers)``.
     """
-    docidentifiers = doc.get("docid") or doc.get("docidentifier") or []
+    docidentifiers = doc.get("docidentifier") or []
     canonical = _canonical_identifier_and_body(docidentifiers)
     if canonical is None:
         logger.debug("relaton_yaml_skip reason=%s identifier=%s", "no_canonical", "")
@@ -341,24 +429,23 @@ def _yaml_to_record(
         )
         return None, []
 
-    stage = str((doc.get("docstatus") or {}).get("stage", "")).strip()
-    if stage and stage not in _STAGE_TO_STATUS:
-        logger.debug("relaton_unknown_stage stage=%s identifier=%s", stage, identifier)
-    status = _STAGE_TO_STATUS.get(stage, "published")
+    status = _status(doc, identifier)
+    superseded_by: list[str] = []
+    if status in ("withdrawn", "superseded"):
+        superseded_by = _related_identifiers(doc.get("relation"), "obsoletedBy")
+        if superseded_by:
+            status = "superseded"
 
-    url = _first_link_of_type(doc.get("link"), "src") or ""
-    full_text_url = _first_link_of_type(doc.get("link"), "obp") or _first_link_of_type(
-        doc.get("link"), "pub"
+    sources = doc.get("source")
+    url = _first_link_of_type(sources, "src") or ""
+    full_text_url = _first_link_of_type(sources, "obp") or _first_link_of_type(
+        sources, "pub"
     )
 
     scope_value: str | None = None
     abstracts = doc.get("abstract") or []
     if abstracts:
-        first = abstracts[0]
-        if isinstance(first, dict):
-            content = first.get("content")
-            if isinstance(content, str):
-                scope_value = content
+        scope_value = _content(abstracts[0]) or None
 
     record: StandardRecord = {
         "identifier": identifier,
@@ -366,29 +453,17 @@ def _yaml_to_record(
         "body": body,
         "status": status,
         "published_date": _published_date(doc.get("date")),
-        "superseded_by": _superseded_by(doc.get("relation")),
-        "supersedes": _supersedes(doc.get("relation")),
+        "superseded_by": superseded_by,
+        "supersedes": _related_identifiers(doc.get("relation"), "obsoletes"),
         "scope": scope_value,
-        "committee": _committee(doc.get("editorialgroup")),
+        "committee": _committee(doc.get("contributor")),
         "url": url,
         "full_text_url": full_text_url,
         "full_text_available": False,
         "price": None,
         "related": [],
     }
-
-    aliases: list[str] = []
-    for entry in docidentifiers:
-        if not isinstance(entry, dict):
-            continue
-        alias = entry.get("id")
-        if not isinstance(alias, str):
-            continue
-        if alias == identifier:
-            continue
-        aliases.append(alias)
-
-    return record, aliases
+    return record, _aliases(docidentifiers, identifier)
 
 
 # Fields we treat as identity for change detection. Everything else (e.g.
@@ -449,7 +524,8 @@ def _parse_tarball_sync(
                 continue
             if not member.name.endswith(".yaml"):
                 continue
-            if "/data/" not in member.name:
+            # IEC's data/projects/ holds work items, not publications.
+            if "/data/" not in member.name or "/data/projects/" in member.name:
                 continue
 
             slug = member.name.rsplit("/", 1)[-1].removesuffix(".yaml")
@@ -494,6 +570,9 @@ class RelatonLoader:
 
     The full sync algorithm is documented in
     ``docs/design/history/specs/2026-04-13-pr2-iso-iec-relaton-design.md``.
+    Since #641 it reads the ``v2`` branch and deletes, rather than
+    withdraws, the identifiers a dump stops listing; see
+    ``docs/design/reference/relaton-data-v2.md``.
     """
 
     def __init__(
@@ -567,8 +646,8 @@ class RelatonLoader:
         added = updated = unchanged = 0
         current_ids: set[str] = set()
 
-        # Snapshot prev_ids BEFORE the tarball loop so the withdrawal guard
-        # denominator reflects the prior state, not the post-insertion state.
+        # Snapshot prev_ids BEFORE the tarball loop so the removal pass
+        # compares against the prior state, not the post-insertion state.
         prev_ids = await cache.list_synced_standard_ids(source=self.body)
 
         tar_url = f"{_GITHUB_API}/repos/{self._config.repo}/tarball/{sha}"
@@ -653,49 +732,59 @@ class RelatonLoader:
             len(errors),
         )
 
-        # Withdrawal detection — guarded against partial-tarball disasters.
-        # prev_ids was snapshotted BEFORE the extraction loop so the denominator
-        # reflects the prior state (not the post-insertion state).
-        withdrawn = 0
-        missing = prev_ids - current_ids
-        if prev_ids and len(missing) > 0.5 * len(prev_ids):
-            errors.append(
-                f"withdrawal pass aborted: {len(missing)}/{len(prev_ids)} ids "
-                "missing (>50% — likely partial sync)"
-            )
-            logger.warning(
-                "sync_relaton_withdrawal_aborted body=%s missing=%s prev=%s",
-                self.body,
-                len(missing),
-                len(prev_ids),
-            )
-        else:
-            for ident in missing:
-                existing = await cache.get_standard(ident)
-                if existing is None:
-                    continue
-                updated_record = cast(
-                    "StandardRecord", {**existing, "status": "withdrawn"}
-                )
-                await cache.set_standard(
-                    ident, updated_record, source=self.body, synced=True
-                )
-                withdrawn += 1
-            if withdrawn:
-                logger.info(
-                    "sync_relaton_withdrawn body=%s count=%s",
-                    self.body,
-                    withdrawn,
-                )
+        removed = await self._remove_missing(cache, prev_ids, current_ids, errors)
 
         return SyncReport(
             body=self.body,
             added=added,
             updated=updated,
             unchanged=unchanged,
-            withdrawn=withdrawn,
+            withdrawn=0,
             errors=errors,
+            removed=removed,
             upstream_ref=sha,
             started_at=started_at,
             finished_at=time.time(),
         )
+
+    async def _remove_missing(
+        self,
+        cache: CacheProtocol,
+        prev_ids: set[str],
+        current_ids: set[str],
+        errors: list[str],
+    ) -> int:
+        """Delete the synced rows this run's dump no longer lists.
+
+        v2 keeps a withdrawn edition in the dump at stage 95.99, so an
+        identifier that disappears was renamed or advanced from draft, not
+        withdrawn. Refuses when the dump holds under half the previous count,
+        which a truncated download would.
+
+        Args:
+            cache: Open cache.
+            prev_ids: Synced identifiers of this body before the run.
+            current_ids: Identifiers parsed from this run's dump.
+            errors: The report's error list; a refusal is appended to it.
+
+        Returns:
+            How many rows were deleted.
+        """
+        missing = prev_ids - current_ids
+        if not missing:
+            return 0
+        if len(current_ids) < 0.5 * len(prev_ids):
+            errors.append(
+                f"removal pass aborted: dump lists {len(current_ids)} ids, "
+                f"under half of the {len(prev_ids)} synced before"
+            )
+            logger.warning(
+                "sync_relaton_removal_aborted body=%s current=%s prev=%s",
+                self.body,
+                len(current_ids),
+                len(prev_ids),
+            )
+            return 0
+        removed = await cache.delete_synced_standards(self.body, sorted(missing))
+        logger.info("sync_relaton_removed body=%s count=%s", self.body, removed)
+        return removed

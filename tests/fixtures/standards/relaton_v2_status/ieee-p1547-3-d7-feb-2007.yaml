@@ -1,0 +1,70 @@
+---
+id: IEEEP15473D7Feb2007
+schema_version: v1.5.6
+type: standard
+title:
+- content: Approved IEEE Draft Guide for Monitoring, Information Exchange, and Control
+    of Distributed Resources Interconnected With Electric Power Systems
+  type: main
+source:
+- type: src
+  content: https://ieeexplore.ieee.org/document/4278952
+docidentifier:
+- content: IEEE P1547.3/D7, Feb 2007
+  type: IEEE
+  primary: true
+- content: IEEE P1547.3™/D7, Feb 2007
+  type: IEEE
+  scope: trademark
+  primary: true
+- content: 978-1-5044-2995-5
+  type: ISBN
+docnumber: IEEE P1547.3/D7, Feb 2007
+date:
+- type: created
+  at: '2007'
+contributor:
+- role:
+  - type: publisher
+  organization:
+    uri:
+    - type: org
+      content: http://www.ieee.org
+    name:
+    - language: en
+      script: Latn
+      content: Institute of Electrical and Electronics Engineers
+    abbreviation:
+      content: IEEE
+language:
+- en
+script:
+- Latn
+status:
+  stage:
+    content: draft
+copyright:
+- from: '2007'
+  owner:
+  - organization:
+      uri:
+      - type: org
+        content: http://www.ieee.org
+      name:
+      - language: en
+        script: Latn
+        content: Institute of Electrical and Electronics Engineers
+      abbreviation:
+        content: IEEE
+ext:
+  schema_version: v1.1.3
+  doctype:
+    content: standard
+  flavor: ieee
+  ics:
+  - code: '27.100'
+    text: Power stations in general
+  standard_status: Inactive
+  standard_modified: Draft
+  pubstatus: Active
+  holdstatus: Hold

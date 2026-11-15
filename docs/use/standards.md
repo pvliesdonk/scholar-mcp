@@ -9,7 +9,8 @@ Scholar MCP caches ISO, IEC, and IEEE standards metadata locally. The source of 
 is the community-maintained Relaton YAML dumps at
 [`relaton/relaton-data-iso`](https://github.com/relaton/relaton-data-iso),
 [`relaton/relaton-data-iec`](https://github.com/relaton/relaton-data-iec), and
-[`relaton/relaton-data-ieee`](https://github.com/relaton/relaton-data-ieee).
+[`relaton/relaton-data-ieee`](https://github.com/relaton/relaton-data-ieee), read
+from their `v2` branch. Each repository's `main` branch no longer receives data.
 
 Only a sync replaces a synced record. A lookup through `get_standard` or
 `resolve_standard_identifier` caches what it fetched, but never over a synced
@@ -37,6 +38,15 @@ Exit codes: `0` on success (or no-op), `1` on hard failure, `3` on partial failu
     the records keep what the earlier release stored. Release 3.0 needs this
     once: ISO and IEC titles synced before it carry only the first part of the
     title.
+
+!!! note "After upgrading to the release that reads the `v2` branch"
+    Earlier releases synced each repository's `main` branch, whose data stops
+    in 2025 or early 2026, and reported every ISO record as `published`. The
+    first `sync-standards` run after the upgrade rewrites every record from
+    `v2` and deletes the synced identifiers `v2` no longer lists, mostly drafts
+    that have since advanced and IEEE drafts that `v2` names differently. Until
+    that run, search and lookups answer from the `main` data. Standards that
+    were only fetched live, never synced, are fetched again on their next lookup.
 
 ## Running a sync from Docker
 
@@ -121,17 +131,27 @@ synced copy.
 ## Joint ISO/IEC standards
 
 Standards like `ISO/IEC 27001:2022` and `ISO/IEC 15408:2022` appear in both dumps. The
-loader detects joint documents from the YAML structure (both `type=ISO` and `type=IEC`
-`docidentifier` entries) and stores them once with `body="ISO/IEC"`. The `source` column
-on the row reflects the body that last wrote it.
+loader stores each joint identifier once, and the row reflects the dump that last
+wrote it. Its `body` is that dump's body, `"ISO"` or `"IEC"`, not `"ISO/IEC"`: the
+records list identifiers of their own dump's type only, so the loader can't tell a
+joint document from the record.
 
 ## Troubleshooting
 
+### "removal pass aborted"
+
+A Relaton dump keeps a withdrawn edition at its withdrawn stage, so an identifier
+that disappears from it was renamed or advanced; the ISO, IEC and IEEE sync
+deletes such records. When the new dump lists fewer than half as many records as
+the sync held before, it looks truncated and the sync deletes nothing. Run
+`--force` after confirming upstream state is sane.
+
 ### "withdrawal pass aborted"
 
-When a sync sees more than 50% of prior identifiers missing from a new tarball, it skips
-the withdrawal pass to avoid flipping the whole cache to `status="withdrawn"`. Run
-`--force` after confirming upstream state is sane.
+The CC and CEN syncs mark records that disappear from their source as
+`withdrawn`. When more than 50% of prior identifiers are missing, they skip that
+pass to avoid flipping the whole cache to `status="withdrawn"`. Run `--force`
+after confirming upstream state is sane.
 
 ### Rate-limit errors (HTTP 403)
 
@@ -301,12 +321,19 @@ A `StandardRecord` dict, the same shape returned by `get_standard`:
   and the short name W3C gives it otherwise (`"html401"`); `get_standard` accepts either.
 - `title`, full standard title
 - `body`, standards body (`"IETF"`, `"ISO"`, `"IEEE"`, `"CC"`, `"CEN"`, etc.)
-- `status`, `"published"`, `"withdrawn"`, `"superseded"`, `"harmonised"`, etc.
+- `status`, `"published"`, `"withdrawn"`, `"superseded"`, `"draft"`,
+  `"harmonised"`, etc. An ISO, IEC or IEEE record takes it from the stage the
+  Relaton dump records; a cancelled ISO project reports `"withdrawn"`.
 - `superseded_by`, a list of the identifiers that replace this edition, each one
   `get_standard` accepts. An RFC that later RFCs obsolete is `"superseded"` and
-  lists them: RFC 2616 gives `RFC 7230` to `RFC 7235`. Only RFC records fill
-  the list today; for the other bodies it stays empty even when an edition has
-  been replaced, so an empty list doesn't show that an edition is current.
+  lists them: RFC 2616 gives `RFC 7230` to `RFC 7235`. A withdrawn ISO or IEEE
+  edition whose dump record names its replacement does the same:
+  ISO/IEC 27001:2005 gives `ISO/IEC 27001:2013`. An IEEE replacement keeps
+  the "Std" of its identifier (`IEEE Std 1588-2019`); `get_standard` accepts
+  it but answers from a live fetch instead of the synced copy. An IEC edition
+  replaced by a new one reports `"superseded"` with an empty list, since the
+  IEC dump links only project numbers. The other bodies leave the list empty,
+  so an empty list doesn't show that an edition is current.
 - `full_text_url`, direct link to the freely downloadable document (when available)
 - `full_text_available`, `True` for Tier 1 sources (IETF, NIST, W3C, ETSI) and CC
 - `related`, cross-linked identifiers (such as CC ↔ ISO/IEC 15408)

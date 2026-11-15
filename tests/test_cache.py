@@ -525,6 +525,91 @@ async def test_repair_forces_a_relaton_resync_and_drops_short_titles(tmp_path):
         await upgraded.close()
 
 
+async def test_repair_drops_relaton_rows_fetched_live_from_main(tmp_path):
+    """#641: live Relaton rows came from the frozen main branch and go.
+
+    Synced rows stay so search keeps answering until sync-standards rewrites
+    them from v2; nothing would rewrite a live row before its TTL.
+    """
+    import aiosqlite
+
+    db_path = tmp_path / "standards.db"
+    old = ScholarCache(db_path)
+    await old.open()
+    await old.set_standard(
+        "IEEE 1003.1-2024",
+        {"identifier": "IEEE 1003.1-2024", "body": "IEEE", "title": "POSIX"},
+    )
+    await old.set_standard(
+        "ISO 9001:2015",
+        {"identifier": "ISO 9001:2015", "body": "ISO", "title": "QMS"},
+        source="ISO",
+        synced=True,
+    )
+    await old.set_standard(
+        "RFC 9000", {"identifier": "RFC 9000", "body": "IETF", "title": "QUIC"}
+    )
+    await old.set_standards_search("9001", [{"identifier": "x", "title": "QMS"}])
+    await old.close()
+
+    async with aiosqlite.connect(db_path) as db:
+        await db.execute("DELETE FROM repairs WHERE name LIKE '641_%'")
+        await db.commit()
+
+    upgraded = ScholarCache(db_path)
+    await upgraded.open()
+    try:
+        assert await upgraded.get_standard("IEEE 1003.1-2024") is None
+        assert await upgraded.get_standard("ISO 9001:2015") is not None
+        assert await upgraded.get_standard("RFC 9000") is not None
+        assert await upgraded.get_standards_search("9001") is None
+    finally:
+        await upgraded.close()
+
+
+async def test_delete_synced_standards_keeps_other_sources_and_live_rows(cache):
+    """Only synced rows of the named source go, with the aliases naming them."""
+    record = {"identifier": "X", "body": "ISO", "title": "t"}
+    await cache.set_standard("ISO 1:2000", record, source="ISO", synced=True)
+    await cache.set_standard("ISO 2:2000", record, source="ISO", synced=True)
+    await cache.set_standard("ISO/IEC 3:2000", record, source="IEC", synced=True)
+    await cache.set_standard("ISO 4:2000", record)  # live
+    await cache.set_standard_alias("ISO 1:2000(E)", "ISO 1:2000")
+    await cache.set_standard_alias("ISO 2:2000(E)", "ISO 2:2000")
+
+    deleted = await cache.delete_synced_standards(
+        "ISO", ["ISO 1:2000", "ISO/IEC 3:2000", "ISO 4:2000"]
+    )
+
+    assert deleted == 1
+    assert await cache.get_standard("ISO 1:2000") is None
+    assert await cache.get_standard_alias("ISO 1:2000(E)") is None
+    assert await cache.get_standard("ISO 2:2000") is not None
+    assert await cache.get_standard_alias("ISO 2:2000(E)") == "ISO 2:2000"
+    assert await cache.get_standard("ISO/IEC 3:2000") is not None
+    assert await cache.get_standard("ISO 4:2000") is not None
+    assert await cache.delete_synced_standards("ISO", []) == 0
+
+
+async def test_delete_synced_standards_counts_only_its_own_rows(cache):
+    """Writes interleaved from another loader are not counted as deleted."""
+    import asyncio
+
+    record = {"identifier": "X", "body": "ISO", "title": "t"}
+    ids = [f"ISO {n}:2000" for n in range(50)]
+    await cache.set_standards_batch(
+        [(i, record) for i in ids], source="ISO", synced=True
+    )
+    other = [(f"IEEE Std {n}-2000", record) for n in range(50)]
+
+    deleted, _ = await asyncio.gather(
+        cache.delete_synced_standards("ISO", ids),
+        cache.set_standards_batch(other, source="IEEE", synced=True),
+    )
+
+    assert deleted == 50
+
+
 async def test_repair_resyncs_cc_rows_a_resolve_unsynced(tmp_path):
     """#496: a CC row the resolve path rewrote as live is synced again."""
     import aiosqlite
@@ -616,6 +701,8 @@ async def test_every_registered_repair_is_valid_sql(cache):
         "480_standards_search_results",
         "496_resync_cc_rows",
         "483_patent_parties_as_flat_lists",
+        "641_live_relaton_rows",
+        "641_standards_search_results",
     }
     for statement in _REPAIRS.values():
         await cache._db.execute(f"EXPLAIN {statement}")

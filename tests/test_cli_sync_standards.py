@@ -206,7 +206,7 @@ def test_sync_standards_iso_real_loader(
     runner = CliRunner()
     with respx.mock(assert_all_called=False) as router:
         router.get(
-            "https://api.github.com/repos/relaton/relaton-data-iso/commits/main"
+            "https://api.github.com/repos/relaton/relaton-data-iso/commits/v2"
         ).mock(return_value=httpx.Response(200, json={"sha": "cli-sha"}))
         router.get(
             "https://api.github.com/repos/relaton/relaton-data-iso/tarball/cli-sha"
@@ -215,7 +215,7 @@ def test_sync_standards_iso_real_loader(
         result = runner.invoke(cli, ["sync-standards", "--body", "ISO"])
 
     assert result.exit_code == 0, result.output
-    assert "ISO added=5" in result.output
+    assert "ISO added=6" in result.output
 
 
 def test_select_loaders_accepts_cc() -> None:

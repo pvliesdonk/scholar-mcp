@@ -1,33 +1,185 @@
-docidentifier:
-  - id: "ISO/IEC 27001:2022"
-    type: "ISO"
-    primary: true
-  - id: "ISO/IEC 27001:2022"
-    type: "IEC"
-  - id: "iso-iec:std:iso-iec:27001:stage-60.60:ed-3:en"
-    type: "URN"
+---
+id: ISOIEC270012022
+schema_version: v1.5.6
+type: standard
 title:
-  - content: "Information security, cybersecurity and privacy protection — Information security management systems — Requirements"
-    language: "en"
-    script: "Latn"
-    format: "text/plain"
-    type: "main"
+- language: en
+  script: Latn
+  content: Information security, cybersecurity and privacy protection
+  type: title-intro
+- language: en
+  script: Latn
+  content: Information security management systems
+  type: title-main
+- language: en
+  script: Latn
+  content: Requirements
+  type: title-part
+- language: en
+  script: Latn
+  content: Information security, cybersecurity and privacy protection - Information
+    security management systems - Requirements
+  type: main
+- language: fr
+  script: Latn
+  content: Sécurité de l'information, cybersécurité et protection de la vie privée
+  type: title-intro
+- language: fr
+  script: Latn
+  content: Systèmes de management de la sécurité de l'information
+  type: title-main
+- language: fr
+  script: Latn
+  content: Exigences
+  type: title-part
+- language: fr
+  script: Latn
+  content: Sécurité de l'information, cybersécurité et protection de la vie privée
+    - Systèmes de management de la sécurité de l'information - Exigences
+  type: main
+source:
+- type: src
+  content: https://www.iso.org/standard/82875.html
+- type: obp
+  content: https://www.iso.org/obp/ui/en/#!iso:std:82875:en
+- type: rss
+  content: https://www.iso.org/contents/data/standard/08/28/82875.detail.rss
+docidentifier:
+- content: ISO/IEC 27001:2022
+  type: ISO
+  primary: true
+- content: ISO/IEC 27001
+  type: iso-undated
+- content: ISO/IEC 27001:2022(E)
+  type: iso-reference
+- content: urn:iso:std:iso-iec:27001
+  type: URN
+docnumber: '27001'
 date:
-  - type: "published"
-    value: "2022-10-25"
-docstatus:
-  stage: "60.60"
-link:
-  - type: "src"
-    content: "https://www.iso.org/standard/82875.html"
-edition: "3"
+- type: published
+  at: '2022-10-25'
+contributor:
+- role:
+  - type: publisher
+  organization:
+    uri:
+    - content: www.iso.org
+    name:
+    - content: International Organization for Standardization
+    abbreviation:
+      content: ISO
+- role:
+  - type: publisher
+  organization:
+    uri:
+    - content: www.iec.ch
+    name:
+    - content: International Electrotechnical Commission
+    abbreviation:
+      content: IEC
+- role:
+  - type: author
+    description:
+    - content: committee
+  organization:
+    name:
+    - content: International Organization for Standardization
+    subdivision:
+    - name:
+      - content: Information security, cybersecurity and privacy protection
+      identifier:
+      - content: ISO/IEC JTC 1/SC 27
+      type: technical-committee
+      subtype: IEC
+    abbreviation:
+      content: ISO
+edition:
+  content: '3'
 language:
-  - en
+- en
+- fr
+script:
+- Latn
 abstract:
-  - content: "This document specifies requirements for an information security management system."
-    language: "en"
-    format: "text/plain"
-editorialgroup:
-  technical_committee:
-    - name: "JTC 1/SC 27"
-      number: 27
+- language: en
+  script: Latn
+  content: This document specifies the requirements for establishing, implementing,
+    maintaining and continually improving an information security management system
+    within the context of the organization. This document also includes requirements
+    for the assessment and treatment of information security risks tailored to the
+    needs of the organization. The requirements set out in this document are generic
+    and are intended to be applicable to all organizations, regardless of type, size
+    or nature. Excluding any of the requirements specified in Clauses 4 to 10 is not
+    acceptable when an organization claims conformity to this document.
+status:
+  stage:
+    content: '60'
+  substage:
+    content: '60'
+copyright:
+- from: '2022'
+  owner:
+  - organization:
+      name:
+      - content: ISO/IEC
+relation:
+- type: obsoletes
+  bibitem:
+    formattedref:
+      content: ISO/IEC 27001:2013/Cor 1:2014
+    docidentifier:
+    - content: ISO/IEC 27001:2013/Cor 1:2014
+      type: ISO
+      primary: true
+    date:
+    - type: published
+      at: '2014-09-18'
+- type: obsoletes
+  bibitem:
+    formattedref:
+      content: ISO/IEC 27001:2013/Cor 2:2015
+    docidentifier:
+    - content: ISO/IEC 27001:2013/Cor 2:2015
+      type: ISO
+      primary: true
+    date:
+    - type: published
+      at: '2015-11-12'
+- type: obsoletes
+  bibitem:
+    formattedref:
+      content: ISO/IEC 27001:2013
+    docidentifier:
+    - content: ISO/IEC 27001:2013
+      type: ISO
+      primary: true
+    date:
+    - type: published
+      at: '2013-09-25'
+- type: updatedBy
+  bibitem:
+    formattedref:
+      content: ISO/IEC 27001:2022/Amd 1:2024
+    docidentifier:
+    - content: ISO/IEC 27001:2022/Amd 1:2024
+      type: ISO
+      primary: true
+    date:
+    - type: published
+      at: '2024-02-23'
+place:
+- city: Geneva
+ext:
+  schema_version: v1.1.2
+  doctype:
+    content: international-standard
+  flavor: iso
+  ics:
+  - code: '35.030'
+    text: IT Security
+  - code: 03.100.70
+    text: Management systems
+  structuredidentifier:
+    type: ISO/IEC
+    project_number:
+      content: '82875'
