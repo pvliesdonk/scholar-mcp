@@ -3284,7 +3284,16 @@ the <code>standards_sync_runs</code> table:</p>
   HTML 4.01, is <code>"superseded"</code> with an empty list. An ETSI deliverable whose
   newest edition ETSI marks as replaced lists the other ETSI standards that
   replaced it (<code>ETSI EN 300 328-1</code> gives <code>ETSI EN 300 328</code>); a historical or
-  withdrawn one is <code>"withdrawn"</code>. An IEC edition
+  withdrawn one is <code>"withdrawn"</code>. A NIST publication on CSRC that NIST
+  withdrew lists what replaced it, as <code>NIST SP 800-53 Rev. 4</code> lists
+  <code>NIST SP 800-53 Rev. 5</code> and <code>FIPS 186-4</code> lists <code>FIPS 186-5</code>; one withdrawn
+  with no replacement named is <code>"withdrawn"</code>. CSRC lists about 550 of the more
+  than 11,000 NIST publications, and the rest always read <code>"published"</code>. The
+  server reads the CSRC list along with the catalogue every 90 days, so a
+  withdrawal can take that long to show. Not every NIST replacement leads to a
+  record yet: <code>get_standard</code> can't find some older ones, such as <code>FIPS 186-3</code>,
+  and reads a numbered edition such as <code>NIST SP 800-73-4</code> as <code>NIST SP 800-73</code>.
+  NIST records cached before this release are fetched again. An IEC edition
   replaced by a new one reports <code>"superseded"</code> with an empty list, since the
   IEC dump links only project numbers. The other bodies leave the list empty,
   so an empty list doesn't show that an edition is current.</li>
