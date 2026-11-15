@@ -24,6 +24,10 @@ IETF_BASE = "https://datatracker.ietf.org"
 ETSI_BASE = "https://www.etsi.org"
 ETSI_DATA_PATH = "/custom/standardssearch/data.php"
 
+# Shape of datatracker /api/v1/doc/relateddocument/?relationship=obs (#637)
+# for an RFC nothing obsoletes.
+NO_OBSOLETING_RFCS: dict = {"meta": {"next": None}, "objects": []}  # type: ignore[type-arg]
+
 # Shape of datatracker /api/v1/doc/docevent/?type=published_rfc (#631).
 RFC9000_PUB_EVENTS = {
     "meta": {"total_count": 1},
@@ -65,6 +69,9 @@ async def test_resolve_unambiguous(respx_mock: respx.MockRouter, mcp: FastMCP) -
     """resolve_standard_identifier returns canonical + record for known RFC."""
     respx_mock.get("/api/v1/doc/docevent/").mock(
         return_value=httpx.Response(200, json=RFC9000_PUB_EVENTS)
+    )
+    respx_mock.get("/api/v1/doc/relateddocument/").mock(
+        return_value=httpx.Response(200, json=NO_OBSOLETING_RFCS)
     )
     respx_mock.get("/api/v1/doc/document/").mock(
         return_value=httpx.Response(200, json=SAMPLE_RFC_DOC)
@@ -140,6 +147,9 @@ async def test_search_standards_returns_results(
     respx_mock.get("/api/v1/doc/docevent/").mock(
         return_value=httpx.Response(200, json=RFC9000_PUB_EVENTS)
     )
+    respx_mock.get("/api/v1/doc/relateddocument/").mock(
+        return_value=httpx.Response(200, json=NO_OBSOLETING_RFCS)
+    )
     respx_mock.get("/api/v1/doc/document/").mock(
         return_value=httpx.Response(200, json=SAMPLE_RFC_DOC)
     )
@@ -159,6 +169,9 @@ async def test_search_standards_caches_results(
 ) -> None:
     respx_mock.get("/api/v1/doc/docevent/").mock(
         return_value=httpx.Response(200, json=RFC9000_PUB_EVENTS)
+    )
+    respx_mock.get("/api/v1/doc/relateddocument/").mock(
+        return_value=httpx.Response(200, json=NO_OBSOLETING_RFCS)
     )
     respx_mock.get("/api/v1/doc/document/").mock(
         return_value=httpx.Response(200, json=SAMPLE_RFC_DOC)
@@ -190,6 +203,9 @@ async def test_search_standards_cache_hit_skips_network(
     respx_mock.get("/api/v1/doc/docevent/").mock(
         return_value=httpx.Response(200, json=RFC9000_PUB_EVENTS)
     )
+    respx_mock.get("/api/v1/doc/relateddocument/").mock(
+        return_value=httpx.Response(200, json=NO_OBSOLETING_RFCS)
+    )
     respx_mock.get("/api/v1/doc/document/").mock(side_effect=side_effect)
     async with Client(mcp) as client:
         await client.call_tool("search_standards", {"query": "QUIC", "body": "IETF"})
@@ -209,6 +225,9 @@ async def test_get_standard_by_fuzzy_id(
     respx_mock.get("/api/v1/doc/docevent/").mock(
         return_value=httpx.Response(200, json=RFC9000_PUB_EVENTS)
     )
+    respx_mock.get("/api/v1/doc/relateddocument/").mock(
+        return_value=httpx.Response(200, json=NO_OBSOLETING_RFCS)
+    )
     respx_mock.get("/api/v1/doc/document/").mock(
         return_value=httpx.Response(200, json=SAMPLE_RFC_DOC)
     )
@@ -226,6 +245,9 @@ async def test_get_standard_caches_result(
 ) -> None:
     respx_mock.get("/api/v1/doc/docevent/").mock(
         return_value=httpx.Response(200, json=RFC9000_PUB_EVENTS)
+    )
+    respx_mock.get("/api/v1/doc/relateddocument/").mock(
+        return_value=httpx.Response(200, json=NO_OBSOLETING_RFCS)
     )
     respx_mock.get("/api/v1/doc/document/").mock(
         return_value=httpx.Response(200, json=SAMPLE_RFC_DOC)
@@ -378,6 +400,9 @@ async def test_search_standards_states_completeness_when_nothing_failed(
     respx_mock.get("/api/v1/doc/docevent/").mock(
         return_value=httpx.Response(200, json=RFC9000_PUB_EVENTS)
     )
+    respx_mock.get("/api/v1/doc/relateddocument/").mock(
+        return_value=httpx.Response(200, json=NO_OBSOLETING_RFCS)
+    )
     respx_mock.get("/api/v1/doc/document/").mock(
         return_value=httpx.Response(200, json=SAMPLE_RFC_DOC)
     )
@@ -464,6 +489,9 @@ async def test_get_standard_fetch_full_text_after_fresh_fetch(
     """get_standard with fetch_full_text=True works when record is not yet cached."""
     respx_mock.get("/api/v1/doc/docevent/").mock(
         return_value=httpx.Response(200, json=RFC9000_PUB_EVENTS)
+    )
+    respx_mock.get("/api/v1/doc/relateddocument/").mock(
+        return_value=httpx.Response(200, json=NO_OBSOLETING_RFCS)
     )
     respx_mock.get("/api/v1/doc/document/").mock(
         return_value=httpx.Response(200, json=SAMPLE_RFC_DOC)
@@ -703,6 +731,9 @@ async def test_get_standard_alias_cache_hit_record_not_cached(
     """get_standard: alias resolves but record not cached — fetches fresh from source."""
     respx_mock.get("/api/v1/doc/docevent/").mock(
         return_value=httpx.Response(200, json=RFC9000_PUB_EVENTS)
+    )
+    respx_mock.get("/api/v1/doc/relateddocument/").mock(
+        return_value=httpx.Response(200, json=NO_OBSOLETING_RFCS)
     )
     respx_mock.get("/api/v1/doc/document/").mock(
         return_value=httpx.Response(200, json=SAMPLE_RFC_DOC)

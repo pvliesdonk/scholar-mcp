@@ -138,8 +138,19 @@ index holds the argument for the direction and order.
   **[evidenced: [supersession reference](reference/standards-supersession-sources.md)]**
   The Relaton half is answered too: the live fetchers work, and of the three
   dumps only the IETF one carries replacement data, which datatracker also
-  serves. **[derived]** Proposed, pending the maintainer: keep the live
-  fetchers and give #592 one replacement source per body rather than migrate.
+  serves. **[stated]** The maintainer decided on 2026-11-15 to keep the live
+  fetchers and give #592 one replacement source per body rather than migrate,
+  with `superseded_by` a list of identifiers.
+  **[derived]** #592's children, one per source, are
+  [#637](https://github.com/pvliesdonk/scholar-mcp/issues/637) (IETF, which
+  changes the field to a list),
+  [#638](https://github.com/pvliesdonk/scholar-mcp/issues/638) (W3C),
+  [#639](https://github.com/pvliesdonk/scholar-mcp/issues/639) (NIST, which
+  needs CSRC's export),
+  [#640](https://github.com/pvliesdonk/scholar-mcp/issues/640) (ETSI) and
+  [#641](https://github.com/pvliesdonk/scholar-mcp/issues/641) (the ISO
+  sync, whose status reading is broken for every record). IETF goes first
+  because it sets the field's shape; NIST is last because it is the largest.
 - **[stated] [050 patent-citations](https://github.com/pvliesdonk/scholar-mcp/milestone/25)
   (minor):** the first patent slice, approved by the maintainer.
   **[derived]** It closes the one "Done when" term with no coverage (citation
@@ -179,6 +190,13 @@ backlog; commit it to a package when it should ship in that cut.
   independently of the package sequence.
 
 ## Revisions
+
+- **2026-11-15 — [stated] the decision; [derived] the rest:**
+  The maintainer chose to keep the live fetchers (#120's proposal) and to make
+  `superseded_by` a list. Splitting #592 found two more sources than the three
+  #120 compared: ETSI, whose rows already mark replaced editions, and the ISO
+  Relaton sync, which reads every ISO record as `published` because the dump
+  nests the stage it reads (#641).
 
 - **2026-11-14 — [evidenced: [supersession reference](reference/standards-supersession-sources.md)]; [derived] the rest:**
   Research [#120](https://github.com/pvliesdonk/scholar-mcp/issues/120)

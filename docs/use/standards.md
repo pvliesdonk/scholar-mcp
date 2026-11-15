@@ -302,6 +302,11 @@ A `StandardRecord` dict, the same shape returned by `get_standard`:
 - `title`, full standard title
 - `body`, standards body (`"IETF"`, `"ISO"`, `"IEEE"`, `"CC"`, `"CEN"`, etc.)
 - `status`, `"published"`, `"withdrawn"`, `"superseded"`, `"harmonised"`, etc.
+- `superseded_by`, a list of the identifiers that replace this edition, each one
+  `get_standard` accepts. An RFC that later RFCs obsolete is `"superseded"` and
+  lists them: RFC 2616 gives `RFC 7230` to `RFC 7235`. Only RFC records fill
+  the list today; for the other bodies it stays empty even when an edition has
+  been replaced, so an empty list doesn't show that an edition is current.
 - `full_text_url`, direct link to the freely downloadable document (when available)
 - `full_text_available`, `True` for Tier 1 sources (IETF, NIST, W3C, ETSI) and CC
 - `related`, cross-linked identifiers (such as CC ↔ ISO/IEC 15408)

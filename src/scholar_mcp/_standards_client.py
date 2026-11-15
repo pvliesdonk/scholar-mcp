@@ -15,7 +15,7 @@ import httpx
 
 from ._protocols import CacheProtocol
 from ._rate_limiter import RateLimiter
-from ._record_types import StandardRecord
+from ._record_types import StandardRecord, standard_in_current_shape
 
 logger = logging.getLogger(__name__)
 
@@ -342,6 +342,8 @@ class _StandardsFetcher(Protocol):
 
 _IETF_DATATRACKER = "https://datatracker.ietf.org"
 _RFC_EDITOR_BASE = "https://www.rfc-editor.org"
+# datatracker's page-size cap; one page covers a search's worth of RFCs.
+_IETF_RELATIONS_LIMIT = 1000
 
 
 class _IETFFetcher:
@@ -364,6 +366,10 @@ class _IETFFetcher:
 
         Returns:
             Populated StandardRecord or None if not found.
+
+        Raises:
+            StandardsUpstreamError: datatracker never answered which RFCs
+                obsolete the one found.
         """
         m = re.match(r"(?i)(rfc|bcp|std|fyi)\s*(\d+)", identifier)
         if not m:
@@ -386,8 +392,10 @@ class _IETFFetcher:
         objects = data.get("objects") or []
         if not objects:
             return None
+        name = objects[0].get("name", "")
         dates = await self._publication_dates(objects[:1])
-        return _normalize_ietf(objects[0], dates.get(objects[0].get("name", "")))
+        obsoleted_by = await self._obsoleting_rfcs(objects[:1])
+        return _normalize_ietf(objects[0], dates.get(name), obsoleted_by.get(name))
 
     async def search(self, query: str, *, limit: int = 10) -> list[StandardRecord]:
         """Search RFCs by title keyword.
@@ -398,6 +406,10 @@ class _IETFFetcher:
 
         Returns:
             List of matching StandardRecord dicts.
+
+        Raises:
+            StandardsUpstreamError: datatracker never answered which RFCs
+                obsolete the ones found.
         """
         await self._limiter.acquire()
         resp = await self._http.get(
@@ -416,7 +428,15 @@ class _IETFFetcher:
             return []
         objects = (resp.json().get("objects") or [])[:limit]
         dates = await self._publication_dates(objects)
-        return [_normalize_ietf(obj, dates.get(obj.get("name", ""))) for obj in objects]
+        obsoleted_by = await self._obsoleting_rfcs(objects)
+        return [
+            _normalize_ietf(
+                obj,
+                dates.get(obj.get("name", "")),
+                obsoleted_by.get(obj.get("name", "")),
+            )
+            for obj in objects
+        ]
 
     async def _publication_dates(self, objects: list[dict]) -> dict[str, str]:  # type: ignore[type-arg]
         """Look up when each RFC in ``objects`` was published, in one request.
@@ -466,14 +486,101 @@ class _IETFFetcher:
                 dates[name] = when[:7]
         return dates
 
+    async def _obsoleting_rfcs(self, objects: list[dict]) -> dict[str, list[str]]:  # type: ignore[type-arg]
+        """Look up which RFCs obsolete each RFC in ``objects``, in one request.
 
-def _normalize_ietf(obj: dict, published_date: str | None = None) -> StandardRecord:  # type: ignore[type-arg]
+        datatracker records "RFC X obsoletes RFC Y" as a ``relateddocument``
+        with relationship ``obs``, source X and target Y (#637). Unlike a
+        missing date, a missing answer here would read as a confident
+        ``published`` and be cached as one, so a failed lookup raises.
+
+        Args:
+            objects: Datatracker document objects.
+
+        Returns:
+            ``{name: ["RFC 7230", ...]}`` for each RFC something obsoletes,
+            the obsoleting RFCs in ascending number.
+
+        Raises:
+            StandardsUpstreamError: The lookup never got a usable answer.
+        """
+        names = [o.get("name", "") for o in objects]
+        names = [n for n in names if re.match(r"(?i)^rfc\d+$", n)]
+        if not names:
+            return {}
+        await self._limiter.acquire()
+        try:
+            resp = await self._http.get(
+                f"{_IETF_DATATRACKER}/api/v1/doc/relateddocument/",
+                params={
+                    "target__name__in": ",".join(names),
+                    "relationship": "obs",
+                    "format": "json",
+                    "limit": _IETF_RELATIONS_LIMIT,
+                },
+            )
+        except httpx.HTTPError as exc:
+            logger.warning("ietf_obsoleted_by_request_failed error=%s", exc)
+            raise StandardsUpstreamError(
+                "IETF", detail=f"obsoleting-RFC lookup never reached datatracker: {exc}"
+            ) from exc
+        if resp.status_code != 200:
+            logger.warning(
+                "ietf_obsoleted_by_error status=%d url=%s",
+                resp.status_code,
+                str(resp.url),
+            )
+            raise StandardsUpstreamError(
+                "IETF",
+                status=resp.status_code,
+                detail="datatracker refused the obsoleting-RFC lookup",
+            )
+        payload = resp.json()
+        if (payload.get("meta") or {}).get("next"):
+            logger.warning("ietf_obsoleted_by_truncated names=%s", ",".join(names))
+        return _group_obsoleting_rfcs(payload.get("objects") or [])
+
+
+def _group_obsoleting_rfcs(relations: list[dict]) -> dict[str, list[str]]:  # type: ignore[type-arg]
+    """Group datatracker ``obs`` relations by the RFC they obsolete.
+
+    Only published RFCs count as replacements, so a relation whose source is
+    not an ``rfcN`` document is skipped.
+
+    Args:
+        relations: ``relateddocument`` objects, each with ``source`` and
+            ``target`` resource URIs such as ``/api/v1/doc/document/rfc7230/``.
+
+    Returns:
+        ``{target name: ["RFC N", ...]}``, each list in ascending number.
+    """
+    grouped: dict[str, list[int]] = {}
+    for rel in relations:
+        source = (rel.get("source") or "").rstrip("/").rsplit("/", 1)[-1]
+        target = (rel.get("target") or "").rstrip("/").rsplit("/", 1)[-1]
+        m = re.match(r"(?i)^rfc(\d+)$", source)
+        if m and target:
+            grouped.setdefault(target, []).append(int(m.group(1)))
+    return {t: [f"RFC {n}" for n in sorted(set(ns))] for t, ns in grouped.items()}
+
+
+def _normalize_ietf(
+    obj: dict,  # type: ignore[type-arg]
+    published_date: str | None = None,
+    obsoleted_by: list[str] | None = None,
+) -> StandardRecord:
     """Normalise a Datatracker document object to a StandardRecord.
+
+    An RFC that later RFCs obsolete is ``superseded``, whatever its standard
+    level: a Historic RFC that something replaced points the caller at the
+    replacement rather than reporting only that it was withdrawn (#637).
 
     Args:
         obj: Raw Datatracker ``/api/v1/doc/document/`` object.
         published_date: ``YYYY-MM`` from the document's ``published_rfc``
             event; the document object itself carries no date.
+        obsoleted_by: Identifiers of the RFCs that obsolete this one, from
+            datatracker's ``obs`` relations.
 
     Returns:
         Populated StandardRecord.
@@ -514,10 +621,12 @@ def _normalize_ietf(obj: dict, published_date: str | None = None) -> StandardRec
         body="IETF",
         number=number,
         revision=None,
-        status=_map_ietf_status(obj.get("std_level") or ""),
+        status=(
+            "superseded" if obsoleted_by else _map_ietf_status(obj.get("std_level"))
+        ),
         published_date=published_date,
         withdrawn_date=None,
-        superseded_by=None,
+        superseded_by=list(obsoleted_by or []),
         supersedes=[],
         scope=obj.get("abstract"),
         committee=None,
@@ -618,10 +727,16 @@ class _NISTFetcher:
             )
             return None
         try:
-            return json.loads(path.read_text(encoding="utf-8"))  # type: ignore[no-any-return]
+            stored = json.loads(path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError) as exc:
             logger.warning("nist_catalogue_disk_load_failed err=%s", exc)
             return None
+        if not isinstance(stored, list):
+            logger.warning(
+                "nist_catalogue_disk_not_a_list type=%s", type(stored).__name__
+            )
+            return None
+        return [standard_in_current_shape(r) for r in stored if isinstance(r, dict)]
 
     def _save_to_disk(self, records: list[Any]) -> None:
         path = self._cache_path()
@@ -873,7 +988,7 @@ def _normalize_nist_mods(mods: ET.Element, ns: str) -> StandardRecord | None:
         status="published",
         published_date=pub_date,
         withdrawn_date=None,
-        superseded_by=None,
+        superseded_by=[],
         supersedes=[],
         scope=scope,
         committee=None,
@@ -1069,7 +1184,7 @@ def _normalize_w3c(spec: dict) -> StandardRecord:  # type: ignore[type-arg]
         status=status,
         published_date=published,
         withdrawn_date=None,
-        superseded_by=None,
+        superseded_by=[],
         supersedes=[],
         scope=spec.get("description"),
         committee=None,
@@ -1296,7 +1411,7 @@ def _normalize_etsi(item: dict) -> StandardRecord:  # type: ignore[type-arg]
         status=status,
         published_date=pub_date,
         withdrawn_date=None,
-        superseded_by=None,
+        superseded_by=[],
         supersedes=[],
         scope=scope,
         committee=tb,

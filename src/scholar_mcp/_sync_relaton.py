@@ -245,10 +245,20 @@ def _published_date(dates: list[dict[str, Any]] | None) -> str | None:
     return None
 
 
-def _superseded_by(relations: list[dict[str, Any]] | None) -> str | None:
-    if not relations:
-        return None
-    for rel in relations:
+def _superseded_by(relations: list[dict[str, Any]] | None) -> list[str]:
+    """Return the identifier of each ``obsoleted-by`` relation, in order.
+
+    Takes the first identifier of each related bibitem. Which relation types
+    the Relaton dumps use for a replaced edition is #641.
+
+    Args:
+        relations: The record's ``relation`` list, or None.
+
+    Returns:
+        One identifier per replacing document; empty when none is recorded.
+    """
+    found: list[str] = []
+    for rel in relations or []:
         if not isinstance(rel, dict):
             continue
         if str(rel.get("type", "")).lower() != "obsoleted-by":
@@ -257,10 +267,10 @@ def _superseded_by(relations: list[dict[str, Any]] | None) -> str | None:
         if not isinstance(bibitem, dict):
             continue
         idents = bibitem.get("docid") or bibitem.get("docidentifier") or []
-        for ident in idents:
-            if isinstance(ident, dict) and ident.get("id"):
-                return str(ident["id"])
-    return None
+        ident = next((i for i in idents if isinstance(i, dict) and i.get("id")), None)
+        if ident is not None:
+            found.append(str(ident["id"]))
+    return found
 
 
 def _supersedes(relations: list[dict[str, Any]] | None) -> list[str]:
