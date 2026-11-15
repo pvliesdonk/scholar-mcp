@@ -345,10 +345,12 @@ A `StandardRecord` dict, the same shape returned by `get_standard`:
   withdrawal can take that long to show. Not every NIST replacement leads to a
   record yet: `get_standard` can't find some older ones, such as `FIPS 186-3`,
   and reads a numbered edition such as `NIST SP 800-73-4` as `NIST SP 800-73`.
-  NIST records cached before this release are fetched again. An IEC edition
+  An IEC edition
   replaced by a new one reports `"superseded"` with an empty list, since the
   IEC dump links only project numbers. The other bodies leave the list empty,
   so an empty list doesn't show that an edition is current.
+  IETF, NIST, W3C and ETSI records cached by an earlier release are
+  fetched again on their next lookup, so they pick up these fields.
 - `full_text_url`, direct link to the freely downloadable document (when available)
 - `full_text_available`, `True` for Tier 1 sources (IETF, NIST, W3C, ETSI) and CC
 - `related`, cross-linked identifiers (such as CC ↔ ISO/IEC 15408)
