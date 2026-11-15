@@ -4,6 +4,15 @@ Newest first. One entry per research pass.
 
 ## 2026-11-15
 
+### Relaton v2: how IEC links a replaced edition to its successor
+
+Updated [Relaton data dumps on the v2 branch](relaton-data-v2.md) for #644.
+IEC publications carry no relations, but name their project; the project's
+`updatedBy`, `obsoletedBy` and `mergedInto` lead to the next projects and
+their publications. New observations: what `hasSuccessor` points at, how many
+replaced editions the chain reaches, a 30-edition check against IEC's
+webstore, and why withdrawn editions are left out.
+
 ### Replaced-edition data: NIST reads CSRC's export
 
 Updated [Replaced-edition data for IETF, NIST and W3C](standards-supersession-sources.md)

@@ -97,8 +97,13 @@ record on it is shaped. Prompted by #641: the sync and the live lookup read
   IEEE filename on `main` is absent from `v2`. [source: main-tarballs]
 - IEC's `v2` also holds `data/projects/`, one record per work item: stages such
   as `30.97 MERGED` and `99.60 DELPUB`, and relations to `iec:proj:` URNs. These
-  are not publications. [source: iec-v2]
+  are not publications; the sync reads them only for their links (#644).
+  [source: iec-v2]
   [pins: tests/test_sync_relaton.py::test_parse_tarball_sync_skips_iec_projects]
+- 11 of the 32,819 project files are not valid YAML to PyYAML (control
+  characters in a title). [observed: `yaml.safe_load` over every file in the
+  tarball]
+  [pins: tests/test_sync_relaton.py::test_parse_tarball_sync_counts_unreadable_iec_projects]
 - ISO's `v2` lists drafts and projects at every stage (WD, CD, DIS, NP, PWI,
   AWI) beside the publications. [source: iso-v2]
 
@@ -172,6 +177,42 @@ record on it is shaped. Prompted by #641: the sync and the live lookup read
 - An IEC publication under `data/` carries no relations; the work items under
   `data/projects/` relate only through `iec:proj:` and `iec:pub:` URNs.
   [source: iec-v2]
+- An IEC publication names the work item that produced it in
+  `ext.structuredidentifier.project_number`; 26,093 of the 33,042 do. A work
+  item names itself with a URN, `iec:proj:14295`. [source: iec-v2]
+- A work item's `hasSuccessor` names its own output, not a replacement:
+  22,341 of its 22,353 `iec:pub:N` targets are the webstore number of a
+  publication that names the same project. [observed: targets matched against
+  each publication's `source` link `webstore.iec.ch/publication/N`]
+- The replacement is one work item further on. A work item's `updatedBy`,
+  `obsoletedBy` and `mergedInto` name the work items that followed it, and
+  their publications are the successors: IEC 60335-2-91:2002 (project 3015)
+  leads through `updatedBy iec:proj:14295` to IEC 60335-2-91:2008, which leads
+  through `obsoletedBy iec:proj:103199` to IEC 62841-4-4:2020. [source: iec-v2]
+  [pins: tests/test_sync_relaton.py::test_parse_tarball_sync_lists_iec_successors_from_project_links]
+- Followed that way, 11,778 of the 15,828 editions marked `REVISED` or
+  `REPLACED` reach at least one edition, and 11,535 of those exactly one. Of
+  the 4,050 that reach none, about 3,060 name a project the dump has no
+  record of, about 920 a project with no forward link, and the rest lead
+  only to projects with no publication or only to an amendment or a variant
+  (CSV, RLV). [observed: `_parse_tarball_sync` run over the tarball; the
+  breakdown from an earlier pass over the same tarball]
+- The successor can be undated: the 13 parts of IEC 60617 published from
+  1985 to 1997 lead to the `IEC 60617` database. A project number can have
+  more than one file (a PWI and the item it became; 59 numbers do), and the
+  links of both count. [observed: same run]
+  [pins: tests/test_sync_relaton.py::test_iec_successors_take_an_undated_edition_but_no_fragment]
+- A successor project can produce a whole family: IEC PAS 62453-4:2006
+  reaches 18 parts where IEC's webstore names 2, and 38 editions reach more
+  than 3. [observed: chain computed over the parsed tarball; webstore page
+  for the PAS]
+- Checked against IEC's webstore "replaced by" on a random sample of 30
+  editions, the chain names the same next edition for all 23 `REVISED` ones
+  and 6 of the 7 `REPLACED` ones; the miss is the PAS above.
+  [observed: 30 webstore publication pages fetched 2026-11-15]
+- Of the 1,638 editions marked `WITHDRAWN`, 334 have a forward link, and 331
+  of those are `updatedBy` links to projects that produced no publication.
+  [observed: chain computed over the parsed tarball]
 
 ### Committee
 
@@ -201,13 +242,22 @@ record on it is shaped. Prompted by #641: the sync and the live lookup read
 - `superseded_by` is filled only when the stage says the edition is withdrawn,
   so the draft links on current ISO editions are not read as replacements.
 - An IEC edition at 95.99 marked `REVISED` or `REPLACED` reports `superseded`
-  with an empty `superseded_by`, because its successor is named only by a
-  project URN (#644).
+  and lists the editions its project's `updatedBy`, `obsoletedBy` and
+  `mergedInto` lead to (#644). Amendments, corrigenda, interpretation sheets,
+  fragments and variants (CSV, RLV, CMV, EXV, SER, DB) are left out, and so is
+  the edition itself. A family reached through one project is listed whole,
+  as the dump does not say which part replaced which. An edition marked
+  `WITHDRAWN` gets no successor, because nearly all its links lead to projects
+  with no publication.
+- An IEC record fetched live, not synced, keeps an empty `superseded_by`: one
+  record does not name the projects the chain runs through.
 - A joint publication gets the body of the repository it was synced from
   (#643).
 
 ## Not covered
 
-- What `updates` and `updatedBy` mean across the dumps (amendment, revision);
-  the parser reads neither. Relaton's model documentation would settle it.
+- What `updates` and `updatedBy` mean across the dumps (amendment, revision).
+  The parser reads `updatedBy` only on IEC work items, as a forward link;
+  on IEC it leads to a revision or to the edition's own amendment, and the
+  amendment is filtered out by its identifier. Relaton's model documentation would settle it.
 - Whether Relaton announced the move to `v2` or a date for retiring `main`.

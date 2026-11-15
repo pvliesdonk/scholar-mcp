@@ -647,6 +647,42 @@ async def test_repair_drops_ietf_w3c_etsi_rows_cached_before_supersession(
         await upgraded.close()
 
 
+async def test_repair_forces_an_iec_resync_for_its_successors(tmp_path):
+    """#644: the next IEC sync reparses an unchanged dump; other bodies do not."""
+    import aiosqlite
+
+    db_path = tmp_path / "standards.db"
+    old = ScholarCache(db_path)
+    await old.open()
+    for body in ("IEC", "ISO"):
+        await old.set_sync_run(
+            body=body,
+            upstream_ref="abc123",
+            added=1,
+            updated=0,
+            unchanged=0,
+            withdrawn=0,
+            errors=[],
+            started_at=1.0,
+            finished_at=2.0,
+        )
+    await old.close()
+
+    async with aiosqlite.connect(db_path) as db:
+        await db.execute("DELETE FROM repairs WHERE name LIKE '644_%'")
+        await db.commit()
+
+    upgraded = ScholarCache(db_path)
+    await upgraded.open()
+    try:
+        iec = await upgraded.get_sync_run("IEC")
+        iso = await upgraded.get_sync_run("ISO")
+        assert iec is not None and iec["upstream_ref"] is None
+        assert iso is not None and iso["upstream_ref"] == "abc123"
+    finally:
+        await upgraded.close()
+
+
 async def test_delete_synced_standards_keeps_other_sources_and_live_rows(cache):
     """Only synced rows of the named source go, with the aliases naming them."""
     record = {"identifier": "X", "body": "ISO", "title": "t"}
@@ -786,6 +822,7 @@ async def test_every_registered_repair_is_valid_sql(cache):
         "639_live_nist_rows",
         "639_standards_search_results",
         "655_live_ietf_w3c_etsi_rows",
+        "644_resync_iec",
     }
     for statement in _REPAIRS.values():
         await cache._db.execute(f"EXPLAIN {statement}")

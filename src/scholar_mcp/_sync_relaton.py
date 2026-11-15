@@ -18,7 +18,7 @@ import tarfile
 import tempfile
 import time
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, BinaryIO, cast
 
 import httpx
@@ -403,6 +403,8 @@ def _yaml_to_record(
     ``superseded`` and lists it. A record that is still current keeps an
     empty ``superseded_by``, although ISO links a confirmed edition to the
     draft of its revision.
+    An IEC record names no replacement itself; :func:`_parse_tarball_sync`
+    fills its ``superseded_by`` from the dump's work items (#644).
 
     Args:
         doc: Parsed Relaton YAML.
@@ -494,6 +496,125 @@ def _record_changed(old: Mapping[str, Any], new: Mapping[str, Any]) -> bool:
 
 _GITHUB_API = "https://api.github.com"
 
+# IEC's publications carry no relation; the replacement is one project away
+# (#644, docs/design/reference/relaton-data-v2.md "Relations").
+_IEC_PROJECT_URN = re.compile(r"iec:proj:(\d+)")
+_IEC_FORWARD_RELATIONS = ("updatedBy", "obsoletedBy", "mergedInto")
+# An edition, dated or not (the IEC 60617 database replaced its parts): no
+# amendment, corrigendum, ISH, fragment or variant (CSV, RLV, ...) suffix.
+_PLAIN_EDITION = re.compile(r"(?!.*/FRAG)[^:]+(?::\d{4}(?:-\d\d)?)?")
+
+
+@dataclass
+class _IecSuccessors:
+    """IEC's replacement chain: edition → its project → next project → editions.
+
+    A publication names its project in ``ext.structuredidentifier``; the
+    project's ``updatedBy``, ``obsoletedBy`` and ``mergedInto`` relations
+    name the projects that followed it, and their publications are the
+    successors.
+    """
+
+    next_projects: dict[str, list[str]] = field(default_factory=dict)
+    editions: dict[str, list[str]] = field(default_factory=dict)
+    project_of: dict[str, str] = field(default_factory=dict)
+    unreadable_projects: int = 0
+
+    def add_project(self, doc: dict[str, Any] | str) -> None:
+        """Record a work item's forward links, keyed by its project number.
+
+        Args:
+            doc: The parsed project file, or why it could not be read; an
+                unreadable one is only counted.
+        """
+        if isinstance(doc, str):
+            self.unreadable_projects += 1
+            return
+        number = next(
+            (
+                match.group(1)
+                for entry in doc.get("docidentifier") or []
+                if (match := _IEC_PROJECT_URN.fullmatch(_content(entry)))
+            ),
+            None,
+        )
+        if number is None:
+            return
+        relations = doc.get("relation")
+        # A project number can have several files (a PWI and the item it
+        # became); their links add up.
+        self.next_projects.setdefault(number, []).extend(
+            match.group(1)
+            for relation_type in _IEC_FORWARD_RELATIONS
+            for target in _related_identifiers(relations, relation_type)
+            if (match := _IEC_PROJECT_URN.fullmatch(target))
+        )
+
+    def add_publication(self, identifier: str, doc: dict[str, Any]) -> None:
+        """Record which project produced the publication ``identifier``.
+
+        Args:
+            identifier: The record's canonical identifier.
+            doc: The parsed publication file.
+        """
+        ext = doc.get("ext") or {}
+        structured = ext.get("structuredidentifier") or {}
+        number = _content(structured.get("project_number"))
+        if not number:
+            return
+        self.project_of[identifier] = number
+        self.editions.setdefault(number, []).append(identifier)
+
+    def successors(self, identifier: str) -> list[str]:
+        """Return the editions that followed ``identifier``, sorted.
+
+        Args:
+            identifier: A record's canonical identifier.
+
+        Returns:
+            Each successor once; empty when the dump does not link one.
+        """
+        project = self.project_of.get(identifier)
+        found = {
+            edition
+            for target in self.next_projects.get(project or "", [])
+            for edition in self.editions.get(target, [])
+            if edition != identifier and _PLAIN_EDITION.fullmatch(edition)
+        }
+        return sorted(found)
+
+    def apply(self, records: list[tuple[str, StandardRecord, list[str]]]) -> int:
+        """Fill ``superseded_by`` on each replaced edition that lacks one.
+
+        Args:
+            records: The parsed ``(identifier, record, aliases)`` tuples,
+                changed in place.
+
+        Returns:
+            How many records gained a successor.
+        """
+        filled = 0
+        for identifier, record, _aliases in records:
+            if record.get("status") != "superseded" or record.get("superseded_by"):
+                continue
+            successors = self.successors(identifier)
+            if successors:
+                record["superseded_by"] = successors
+                filled += 1
+        return filled
+
+
+def _read_yaml(tar: tarfile.TarFile, member: tarfile.TarInfo) -> dict[str, Any] | str:
+    """Return a dump file's parsed mapping, or why it could not be read."""
+    handle = tar.extractfile(member)
+    if handle is None:  # pragma: no cover — only non-regular members, already filtered
+        return "not a regular file"
+    try:
+        doc = yaml.safe_load(handle.read())
+    except yaml.YAMLError as exc:
+        return str(exc)
+    return doc if isinstance(doc, dict) else "not a mapping"
+
 
 def _parse_tarball_sync(
     fileobj: BinaryIO,
@@ -504,6 +625,11 @@ def _parse_tarball_sync(
 
     Runs synchronously so callers can hand it to ``asyncio.to_thread()``
     to avoid blocking the event loop during CPU-bound tarfile + YAML work.
+
+    IEC's dump also holds work items under ``data/projects/``. They are not
+    records, but they link each replaced edition to the editions that
+    replaced it (#644), so they are read for that and nothing else; one that
+    cannot be read is counted in the log, not reported as an error.
 
     Args:
         fileobj: Seeked-to-zero file object containing the .tar.gz bytes.
@@ -516,16 +642,16 @@ def _parse_tarball_sync(
     """
     records: list[tuple[str, StandardRecord, list[str]]] = []
     errors: list[str] = []
+    successors = _IecSuccessors()
     _LOG_EVERY = 2000
 
     with tarfile.open(fileobj=fileobj, mode="r:gz") as tar:
         for member in tar:
-            if not member.isfile():
+            name = member.name
+            if not (member.isfile() and name.endswith(".yaml") and "/data/" in name):
                 continue
-            if not member.name.endswith(".yaml"):
-                continue
-            # IEC's data/projects/ holds work items, not publications.
-            if "/data/" not in member.name or "/data/projects/" in member.name:
+            if "/data/projects/" in name:
+                successors.add_project(_read_yaml(tar, member))
                 continue
 
             slug = member.name.rsplit("/", 1)[-1].removesuffix(".yaml")
@@ -535,18 +661,9 @@ def _parse_tarball_sync(
                 )
                 continue
 
-            handle = tar.extractfile(member)
-            if (
-                handle is None
-            ):  # pragma: no cover — only non-regular members, already filtered
-                continue
-            try:
-                doc = yaml.safe_load(handle.read())
-            except yaml.YAMLError as exc:
-                errors.append(f"unparseable: {member.name}: {exc}")
-                continue
-            if not isinstance(doc, dict):
-                errors.append(f"unparseable: {member.name}: not a mapping")
+            doc = _read_yaml(tar, member)
+            if isinstance(doc, str):
+                errors.append(f"unparseable: {member.name}: {doc}")
                 continue
 
             record, aliases = _yaml_to_record(doc)
@@ -555,13 +672,24 @@ def _parse_tarball_sync(
                 continue
 
             # _yaml_to_record guarantees identifier is set when it returns non-None
-            records.append((cast("str", record.get("identifier")), record, aliases))
+            identifier = cast("str", record.get("identifier"))
+            records.append((identifier, record, aliases))
+            successors.add_publication(identifier, doc)
 
             if len(records) % _LOG_EVERY == 0:
                 logger.info(
                     "sync_relaton_parsing body=%s parsed=%s", body, len(records)
                 )
 
+    filled = successors.apply(records)
+    if successors.next_projects or successors.unreadable_projects:
+        logger.info(
+            "sync_relaton_successors body=%s projects=%s unreadable=%s filled=%s",
+            body,
+            len(successors.next_projects),
+            successors.unreadable_projects,
+            filled,
+        )
     return records, errors
 
 
