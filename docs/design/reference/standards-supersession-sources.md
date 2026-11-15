@@ -78,13 +78,20 @@ ETSI has its own page, [ETSI standards search data endpoint](etsi-standards-sear
 
 ### What the project's fetchers return today
 
-- The live NIST and W3C fetchers return a record for
-  `_NISTFetcher.get("NIST SP 800-53 Rev. 4")`, `_NISTFetcher.get("FIPS 186-4")`
-  and `_W3CFetcher.get("html401")` with no replacement listed, although
-  SP 800-53 Rev. 4 and FIPS 186-4 are withdrawn and HTML 4.01 is retired. Both
-  NIST records report `status: "published"`. [observed: the NIST fetcher called
-  with a bare `httpx.AsyncClient`, 2026-11-14; the W3C fetcher re-run on
-  `main` at e42339b, 2026-11-14]
+- The live NIST fetcher returns a record for
+  `_NISTFetcher.get("NIST SP 800-53 Rev. 4")` and `_NISTFetcher.get("FIPS 186-4")`
+  with no replacement listed, although both are withdrawn, and both report
+  `status: "published"`. [observed: the NIST fetcher called with a bare
+  `httpx.AsyncClient`, 2026-11-14]
+- `_W3CFetcher` follows a specification's `superseded-by` link, one more
+  request only when the link is present, and lists the replacements under the
+  identifier `get()` accepts: Web Forms 2.0 reports `superseded` by `HTML5`,
+  the 1999 RDF syntax by six RDF 1.0 and 1.1 documents. A replacement outranks
+  the latest version's status (Web Forms 2.0's is `Working Draft`), and a
+  failed lookup raises. HTML 4.01, Retired with no link, reports `superseded`
+  with an empty list. [observed: `StandardsClient.get_with_failures` called
+  live, and each of the 39 distinct replacements fetched through it,
+  2026-11-15] [pins: tests/test_standards_client.py::test_w3c_get_replaced_spec_lists_its_replacement, tests/test_standards_client.py::test_w3c_get_without_replacement_link_makes_no_second_request, tests/test_standards_client.py::test_w3c_get_raises_when_replacement_lookup_fails, tests/test_standards_client.py::test_w3c_identifiers_from_a_real_collection]
 - `_IETFFetcher` asks datatracker for the `obs` relations of every RFC it
   returns, in one request per lookup or search. RFC 2616 reports
   `superseded` with `superseded_by` RFC 7230 to 7235, and RFC 2246, which is
@@ -182,6 +189,18 @@ ETSI has its own page, [ETSI standards search data endpoint](etsi-standards-sear
   `https://api.w3.org/specifications/{html401,html5,web-forms-2,WCAG20}` and
   their `superseded` and `supersedes` collections, 2026-11-14]
   [source: w3c-api]
+- The `superseded-by` link is an `href` to a paged collection,
+  `/specifications/{shortname}/superseded`, whose `_links.superseded` lists
+  `{href, title}` links to the replacing specifications. The most entries one
+  holds is six (`REC-rdf-syntax`). [observed: the collections of the 41
+  replaced specifications, 2026-11-15]
+- The `/specifications` list omits replaced specifications: none of the 41 is
+  among its 1,721 entries, and with `embed=true` no entry carries a
+  `superseded-by` link. 39 entries carry `supersedes`, and following those
+  collections yields the 41. A replaced specification is reached only by name,
+  so `search()` never returns one. [observed: both list pages with
+  `embed=true&items=1000` and the 39 `supersedes` collections, 2026-11-15]
+  [pins: tests/test_standards_client.py::test_w3c_search_lists_replacements_too]
 - relaton-data-w3c holds one record per specification and one per dated
   version. Of 17,838 records, 16,140 carry a `status.stage`, the version's
   maturity (`Working Draft`, `Recommendation`, 335 `Retired`). The
@@ -204,10 +223,11 @@ ETSI has its own page, [ETSI standards search data endpoint](etsi-standards-sear
 
 ## Where this project departs from the subject
 
-- All three fetchers drop the replacement data their sources carry or could
-  carry: NIST reads MODS rather than the CSRC export (#639), and W3C ignores
-  the `superseded-by` link (#638). IETF reads datatracker's `obs` relations
-  since #637.
+- NIST drops the replacement data CSRC's export carries, reading MODS
+  instead (#639). IETF reads datatracker's `obs` relations since #637, and
+  W3C the `superseded-by` link since #638.
+- A W3C specification's `supersedes` collection is not read, so a record's
+  `supersedes` stays empty.
 
 ## Not covered
 

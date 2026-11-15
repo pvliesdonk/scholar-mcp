@@ -2597,3 +2597,141 @@ def test_resolve_en_etsi_3part_large_version() -> None:
     result = resolve_identifier_local("EN 301 511 V12.5.1:2017")
     assert result is not None
     assert result == ("EN 301 511:2017", "CEN")
+
+
+# ---------------------------------------------------------------------------
+# W3C replacements (#638)
+# ---------------------------------------------------------------------------
+
+_W3C_FIXTURES = (
+    __import__("pathlib").Path(__file__).parent / "fixtures" / "standards" / "w3c"
+)
+
+
+def _w3c_fixture(name: str) -> dict:
+    """A W3C API response, saved verbatim on 2026-11-15."""
+    return json.loads((_W3C_FIXTURES / name).read_text())
+
+
+@pytest.mark.respx(base_url=W3C_API_BASE)
+async def test_w3c_get_replaced_spec_lists_its_replacement(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """Web Forms 2.0's last version is a Working Draft; HTML5 replaced it."""
+    respx_mock.get("/specifications/web-forms-2").mock(
+        return_value=httpx.Response(200, json=_w3c_fixture("web-forms-2.json"))
+    )
+    collection = respx_mock.get("/specifications/web-forms-2/superseded").mock(
+        return_value=httpx.Response(
+            200, json=_w3c_fixture("web-forms-2-superseded.json")
+        )
+    )
+    fetcher = _W3CFetcher(httpx.AsyncClient(), RateLimiter(delay=0.0))
+
+    record = await fetcher.get("web-forms-2")
+
+    assert record is not None
+    assert record["status"] == "superseded"
+    assert record["superseded_by"] == ["HTML5"]
+    assert collection.calls.last.request.url.params["items"] == "100"
+
+
+@pytest.mark.respx(base_url=W3C_API_BASE)
+async def test_w3c_get_without_replacement_link_makes_no_second_request(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """Retired HTML 4.01 names no replacement; only the spec itself is fetched."""
+    respx_mock.get("/specifications/html401").mock(
+        return_value=httpx.Response(200, json=SAMPLE_W3C_RETIRED_SPEC)
+    )
+    fetcher = _W3CFetcher(httpx.AsyncClient(), RateLimiter(delay=0.0))
+
+    record = await fetcher.get("html401")
+
+    assert record is not None
+    assert record["status"] == "superseded"
+    assert record["superseded_by"] == []
+    assert len(respx_mock.calls) == 1
+
+
+@pytest.mark.parametrize("failure", ["status", "transport"])
+@pytest.mark.respx(base_url=W3C_API_BASE)
+async def test_w3c_get_raises_when_replacement_lookup_fails(
+    respx_mock: respx.MockRouter, failure: str
+) -> None:
+    """A lost answer would read as the stated Working Draft, so it raises."""
+    respx_mock.get("/specifications/web-forms-2").mock(
+        return_value=httpx.Response(200, json=_w3c_fixture("web-forms-2.json"))
+    )
+    route = respx_mock.get("/specifications/web-forms-2/superseded")
+    if failure == "status":
+        route.mock(return_value=httpx.Response(503))
+    else:
+        route.mock(side_effect=httpx.ConnectError("refused"))
+    fetcher = _W3CFetcher(httpx.AsyncClient(), RateLimiter(delay=0.0))
+
+    with pytest.raises(StandardsUpstreamError) as excinfo:
+        await fetcher.get("web-forms-2")
+
+    assert excinfo.value.body == "W3C"
+    assert excinfo.value.status == (503 if failure == "status" else None)
+
+
+@pytest.mark.respx(base_url=W3C_API_BASE)
+async def test_w3c_search_lists_replacements_too(
+    respx_mock: respx.MockRouter, caplog: pytest.LogCaptureFixture
+) -> None:
+    """search() reads the link like get(); a second page is logged, not read."""
+    respx_mock.get("/specifications").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "pages": 1,
+                "_links": {
+                    "specifications": [
+                        {
+                            "href": f"{W3C_API_BASE}/specifications/web-forms-2",
+                            "title": "Web Forms 2.0",
+                        }
+                    ]
+                },
+            },
+        )
+    )
+    respx_mock.get("/specifications/web-forms-2").mock(
+        return_value=httpx.Response(200, json=_w3c_fixture("web-forms-2.json"))
+    )
+    respx_mock.get("/specifications/web-forms-2/superseded").mock(
+        return_value=httpx.Response(
+            200, json={**_w3c_fixture("web-forms-2-superseded.json"), "pages": 2}
+        )
+    )
+    fetcher = _W3CFetcher(httpx.AsyncClient(), RateLimiter(delay=0.0))
+
+    with caplog.at_level("WARNING"):
+        results = await fetcher.search("web forms")
+
+    assert [r["superseded_by"] for r in results] == [["HTML5"]]
+    assert "w3c_superseded_by_truncated" in caplog.text
+
+
+def test_w3c_identifiers_from_a_real_collection() -> None:
+    """RDF/XML's 1999 syntax was replaced by six RDF 1.0 and 1.1 documents."""
+    from scholar_mcp._standards_client import _w3c_identifiers
+
+    links = _w3c_fixture("REC-rdf-syntax-superseded.json")["_links"]["superseded"]
+    assert _w3c_identifiers(links) == [
+        "rdf11-xml",
+        "rdf10-primer",
+        "rdf11-schema",
+        "rdf10-semantics",
+        "rdf-testcases",
+        "rdf-concepts-10",
+    ]
+
+
+def test_w3c_identifiers_maps_names_and_skips_repeats_and_junk() -> None:
+    from scholar_mcp._standards_client import _w3c_identifiers
+
+    html5 = {"href": f"{W3C_API_BASE}/specifications/html5", "title": "HTML5"}
+    assert _w3c_identifiers([html5, "junk", html5, {"href": ""}]) == ["HTML5"]
