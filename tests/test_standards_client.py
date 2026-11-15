@@ -1698,6 +1698,12 @@ async def test_etsi_search_requests_data_endpoint(respx_mock: respx.MockRouter) 
     assert params["content"] == "0"
     assert params["includeScope"] == "1"
     assert "option" not in params
+    # Keyword results leave out old editions; only get() asks for them (#640).
+    assert (params["withdrawn"], params["historical"], params["superseded"]) == (
+        "0",
+        "0",
+        "0",
+    )
 
 
 @pytest.mark.respx(base_url=ETSI_BASE)
@@ -2735,3 +2741,166 @@ def test_w3c_identifiers_maps_names_and_skips_repeats_and_junk() -> None:
 
     html5 = {"href": f"{W3C_API_BASE}/specifications/html5", "title": "HTML5"}
     assert _w3c_identifiers([html5, "junk", html5, {"href": ""}]) == ["HTML5"]
+
+
+# ---------------------------------------------------------------------------
+# ETSI withdrawn, historical and replaced deliverables (#640)
+# ---------------------------------------------------------------------------
+
+_ETSI_FIXTURES = _W3C_FIXTURES.parent / "etsi"
+ETSI_SUPERSEDED_PATH = "/custom/standardssearch/superseded.php"
+
+
+def _etsi_fixture(name: str) -> str:
+    """A data.php or superseded.php response body, saved verbatim on 2026-11-15."""
+    return (_ETSI_FIXTURES / name).read_text()
+
+
+def _etsi_lookup(respx_mock: respx.MockRouter, fixture: str) -> respx.Route:
+    return respx_mock.get(ETSI_DATA_PATH).mock(
+        return_value=httpx.Response(200, text=_etsi_fixture(fixture))
+    )
+
+
+@pytest.mark.respx(base_url=ETSI_BASE)
+async def test_etsi_get_replaced_deliverable_names_its_replacement(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """EN 300 328-1's newest edition was replaced by EN 300 328 V1.4.1."""
+    lookup = _etsi_lookup(respx_mock, "lookup-en-300-328-1.json")
+    replaced = respx_mock.get(ETSI_SUPERSEDED_PATH).mock(
+        return_value=httpx.Response(
+            200, text=_etsi_fixture("superseded-en-300-328-1.json")
+        )
+    )
+    fetcher = _ETSIFetcher(httpx.AsyncClient(base_url=ETSI_BASE), RateLimiter(0.0))
+
+    record = await fetcher.get("ETSI EN 300 328-1")
+
+    assert record is not None
+    assert (record["revision"], record["status"]) == ("1.3.1", "superseded")
+    assert record["superseded_by"] == ["ETSI EN 300 328"]
+    params = lookup.calls.last.request.url.params
+    assert (params["withdrawn"], params["historical"], params["superseded"]) == (
+        "1",
+        "1",
+        "1",
+    )
+    assert replaced.calls.last.request.url.params["wki_id"] == "9863"
+
+
+@pytest.mark.respx(base_url=ETSI_BASE)
+async def test_etsi_get_historical_deliverable_is_withdrawn(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """EN 300 833 is historical (STATUS_CODE 13): found, withdrawn, no lookup."""
+    _etsi_lookup(respx_mock, "lookup-en-300-833.json")
+    fetcher = _ETSIFetcher(httpx.AsyncClient(base_url=ETSI_BASE), RateLimiter(0.0))
+
+    record = await fetcher.get("ETSI EN 300 833")
+
+    assert record is not None
+    assert record["status"] == "withdrawn"
+    assert record["superseded_by"] == []
+    # No superseded.php route: respx fails any request to it.
+
+
+@pytest.mark.respx(base_url=ETSI_BASE)
+async def test_etsi_get_picks_the_newest_edition_over_a_replaced_one(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """EN 303 645's lookup also lists the replaced V2.1.1; V3.1.3 is current."""
+    _etsi_lookup(respx_mock, "lookup-en-303-645.json")
+    fetcher = _ETSIFetcher(httpx.AsyncClient(base_url=ETSI_BASE), RateLimiter(0.0))
+
+    record = await fetcher.get("ETSI EN 303 645")
+
+    assert record is not None
+    assert (record["revision"], record["status"]) == ("3.1.3", "published")
+    # No superseded.php route: respx fails any request to it.
+
+
+@pytest.mark.respx(base_url=ETSI_BASE)
+async def test_etsi_get_replaced_edition_with_no_named_replacement(
+    respx_mock: respx.MockRouter, caplog: pytest.LogCaptureFixture
+) -> None:
+    """superseded.php's 200 error object: still superseded, on its own flag."""
+    _etsi_lookup(respx_mock, "lookup-en-300-328-1.json")
+    respx_mock.get(ETSI_SUPERSEDED_PATH).mock(
+        return_value=httpx.Response(
+            200, text=_etsi_fixture("superseded-none-named.json")
+        )
+    )
+    fetcher = _ETSIFetcher(httpx.AsyncClient(base_url=ETSI_BASE), RateLimiter(0.0))
+
+    with caplog.at_level("INFO"):
+        record = await fetcher.get("ETSI EN 300 328-1")
+
+    assert record is not None
+    assert (record["status"], record["superseded_by"]) == ("superseded", [])
+    assert "etsi_superseded_none_named" in caplog.text
+
+
+@pytest.mark.parametrize("failure", ["status", "transport", "html"])
+@pytest.mark.respx(base_url=ETSI_BASE)
+async def test_etsi_get_raises_when_replacement_lookup_fails(
+    respx_mock: respx.MockRouter, failure: str
+) -> None:
+    _etsi_lookup(respx_mock, "lookup-en-300-328-1.json")
+    route = respx_mock.get(ETSI_SUPERSEDED_PATH)
+    if failure == "status":
+        route.mock(return_value=httpx.Response(403))
+    elif failure == "transport":
+        route.mock(side_effect=httpx.ConnectError("refused"))
+    else:
+        route.mock(return_value=httpx.Response(200, text="<html></html>"))
+    fetcher = _ETSIFetcher(httpx.AsyncClient(base_url=ETSI_BASE), RateLimiter(0.0))
+
+    with pytest.raises(StandardsUpstreamError) as excinfo:
+        await fetcher.get("ETSI EN 300 328-1")
+
+    assert excinfo.value.body == "ETSI"
+
+
+def test_etsi_edition_order_by_date_then_version() -> None:
+    """An unparsable edition sorts first."""
+    from scholar_mcp._standards_client import _etsi_edition_order
+
+    assert _etsi_edition_order({"ETSI_DELIVERABLE": "ETSI EN 1"}) == ("", ())
+    assert _etsi_edition_order(
+        {"ETSI_DELIVERABLE": "ETSI EN 303 645 V3.1.3 (2024-09)"}
+    ) == ("2024-09", (3, 1, 3))
+
+
+@pytest.mark.respx(base_url=ETSI_BASE)
+async def test_etsi_replacement_list_drops_junk_and_self(
+    respx_mock: respx.MockRouter,
+) -> None:
+    _etsi_lookup(respx_mock, "lookup-en-300-328-1.json")
+    other = {"ETSI_DELIVERABLE": "ETSI EN 300 328 V1.4.1 (2003-04)"}
+    own = {"ETSI_DELIVERABLE": "ETSI EN 300 328-1 V1.4.1 (2003-04)"}
+    respx_mock.get(ETSI_SUPERSEDED_PATH).mock(
+        return_value=httpx.Response(200, json=["junk", other, own, other])
+    )
+    fetcher = _ETSIFetcher(httpx.AsyncClient(base_url=ETSI_BASE), RateLimiter(0.0))
+
+    record = await fetcher.get("ETSI EN 300 328-1")
+
+    assert record is not None
+    assert record["superseded_by"] == ["ETSI EN 300 328"]
+
+
+@pytest.mark.respx(base_url=ETSI_BASE)
+async def test_etsi_get_logs_a_lookup_longer_than_one_page(
+    respx_mock: respx.MockRouter, caplog: pytest.LogCaptureFixture
+) -> None:
+    rows = json.loads(_etsi_fixture("lookup-en-303-645.json"))
+    rows = [{**r, "total_count": "120"} for r in rows]
+    respx_mock.get(ETSI_DATA_PATH).mock(return_value=httpx.Response(200, json=rows))
+    fetcher = _ETSIFetcher(httpx.AsyncClient(base_url=ETSI_BASE), RateLimiter(0.0))
+
+    with caplog.at_level("WARNING"):
+        record = await fetcher.get("ETSI EN 303 645")
+
+    assert record is not None
+    assert "etsi_lookup_truncated" in caplog.text

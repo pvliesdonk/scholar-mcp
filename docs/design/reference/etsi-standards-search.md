@@ -155,9 +155,10 @@ is an observation or comes from reading the site's own client script.
   `STATUS_CODE`, `ACTION_TYPE`, `IsCurrent`, `superseded`, `ReviewDate`,
   `new_versions`, `Scope`, `TB` and `Keywords`. Every value is a string or
   `null`. [observed: `search=EN 303 645`, 2026-11-13]
-- `_normalize_etsi` reads seven of those keys: `ETSI_DELIVERABLE`, `TITLE`,
-  `EDSpathname`, `EDSPDFfilename`, `ACTION_TYPE`, `Scope` and `TB`.
-  [observed: read of `_normalize_etsi`, 2026-11-13]
+- `_normalize_etsi` reads nine of those keys: `ETSI_DELIVERABLE`, `TITLE`,
+  `EDSpathname`, `EDSPDFfilename`, `ACTION_TYPE`, `STATUS_CODE`, `superseded`,
+  `Scope` and `TB`; `get()` also reads `wki_id` and `total_count`.
+  [observed: read of `_normalize_etsi` and `_ETSIFetcher.get`, 2026-11-15]
   [pins: tests/test_standards_client.py::test_etsi_normalize_row_fields]
 - `ETSI_DELIVERABLE` carries the identifier, version and date in one string:
   `ETSI EN 303 645 V3.1.3 (2024-09)`. [observed, as above] `_normalize_etsi`
@@ -181,9 +182,22 @@ is an observation or comes from reading the site's own client script.
   A search restricted to withdrawn and historical documents returned `PU`/`13`
   (47 rows) and `WD`/`50` (3 rows). [observed: `search=EN 300`, only
   `withdrawn=1` and `historical=1`, 2026-11-13]
-- `_normalize_etsi` reads only `ACTION_TYPE`, so it reports a historical
-  (`STATUS_CODE` 13) edition as `published`. [observed: read of
-  `_normalize_etsi`, 2026-11-13] This is part of #592.
+- The fetcher's search flags (`withdrawn=0`, `historical=0`,
+  `superseded=0`) leave those editions out. Until #640, `get()` used them and
+  answered `None` for a deliverable whose newest edition was historical
+  (`ETSI EN 300 833`), withdrawn (`ETSI EN 300 778-1`) or replaced
+  (`ETSI EN 300 328-1`). [observed: `StandardsClient.get_with_failures`
+  live, 2026-11-15]
+- `get()` now asks with all three flags on and keeps the newest edition of the
+  requested deliverable by date, then version, since ETSI's order is not by
+  date. A historical or withdrawn edition reports `withdrawn`, a flagged one
+  `superseded`; `search()` keeps the three flags off. [observed, as above]
+  [pins: tests/test_standards_client.py::test_etsi_get_historical_deliverable_is_withdrawn, tests/test_standards_client.py::test_etsi_get_picks_the_newest_edition_over_a_replaced_one, tests/test_standards_client.py::test_etsi_search_requests_data_endpoint]
+- With the three flags on, a deliverable's own editions can fill the page:
+  `ETSI EN 301 908-1` returned exactly 50 rows (`total_count` 50, page 2
+  empty), 10 of them its own editions. A lookup whose `total_count` exceeds
+  the page is logged, not paged. [observed: pages 1 to 3, 2026-11-15]
+  [pins: tests/test_standards_client.py::test_etsi_get_logs_a_lookup_longer_than_one_page]
 - `superseded` is `"1"` on an edition ETSI marks as replaced. For example,
   `ETSI EN 303 645 V2.1.1` is `"1"` and V3.1.3 is `"0"`. Older versions of a
   TS without a later EN were `"0"` (`ETSI TS 102 690` V1.1.1 and V1.2.1 beside
@@ -194,7 +208,18 @@ is an observation or comes from reading the site's own client script.
   V2.1.1 (`wki_id` 57991). For an edition nothing replaces, it returned
   `{"error": "Error: An unexpected error occurred. Please try again later."}`
   with status `200`. [source: etsi-script] (the `superseded.php` call)
-  [observed: `wki_id=57991` and `wki_id=69970`, 2026-11-13] Two samples only.
+  [observed: `wki_id=57991` and `wki_id=69970`, 2026-11-13]
+- Of nine flagged editions sampled, seven were replaced by a later edition of
+  the same deliverable and two by another deliverable: EN 300 328-1 V1.3.1 and
+  EN 300 328-2 V1.2.1 by EN 300 328 V1.4.1. Historical and withdrawn
+  editions are not flagged, and `superseded.php` returns its error object for
+  them. [observed: the flagged editions of EN 303 645, EN 301 908 and
+  EN 300 328, and three historical and two withdrawn EN 300 editions,
+  2026-11-15]
+- `get()` calls `superseded.php` only for a newest edition that is flagged,
+  and lists the other deliverables it names; the error object leaves the list
+  empty and the status `superseded`, and a refused or non-JSON answer raises.
+  [pins: tests/test_standards_client.py::test_etsi_get_replaced_deliverable_names_its_replacement, tests/test_standards_client.py::test_etsi_get_replaced_edition_with_no_named_replacement, tests/test_standards_client.py::test_etsi_get_raises_when_replacement_lookup_fails]
 - `IsCurrent` was `"0"` on `ETSI EN 303 645 V3.1.3`, the latest edition, and
   `"1"` on `ETSI EN 300 328 V2.2.2` and `ETSI EN 301 908-2 V13.1.1`.
   [observed, 2026-11-13] Its meaning is not established. Treat it as unknown.

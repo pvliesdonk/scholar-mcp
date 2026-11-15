@@ -333,7 +333,10 @@ A `StandardRecord` dict, the same shape returned by `get_standard`:
   it but answers from a live fetch instead of the synced copy. A W3C
   specification that another one replaced lists it too, as Web Forms 2.0
   lists `HTML5`, while a retired one with no named successor, such as
-  HTML 4.01, is `"superseded"` with an empty list. An IEC edition
+  HTML 4.01, is `"superseded"` with an empty list. An ETSI deliverable whose
+  newest edition ETSI marks as replaced lists the other ETSI standards that
+  replaced it (`ETSI EN 300 328-1` gives `ETSI EN 300 328`); a historical or
+  withdrawn one is `"withdrawn"`. An IEC edition
   replaced by a new one reports `"superseded"` with an empty list, since the
   IEC dump links only project numbers. The other bodies leave the list empty,
   so an empty list doesn't show that an edition is current.
