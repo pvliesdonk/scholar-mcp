@@ -345,9 +345,14 @@ A `StandardRecord` dict, the same shape returned by `get_standard`:
   withdrawal can take that long to show. Not every NIST replacement leads to a
   record yet: `get_standard` can't find some older ones, such as `FIPS 186-3`,
   and reads a numbered edition such as `NIST SP 800-73-4` as `NIST SP 800-73`.
-  An IEC edition
-  replaced by a new one reports `"superseded"` with an empty list, since the
-  IEC dump links only project numbers. The other bodies leave the list empty,
+  An IEC edition that IEC marks as revised or replaced lists the editions that
+  followed it, as IEC 60335-2-91:2008 lists `IEC 62841-4-4:2020`. About a
+  quarter of them name no successor in the IEC dump and keep an empty list,
+  and a few list every part of the family that replaced them. A withdrawn IEC
+  edition lists nothing. The first `sync-standards` run after upgrading to the
+  release that fills these lists reads the IEC dump again, even if it has not
+  changed; until that run, IEC editions keep an empty list.
+  The other bodies leave the list empty,
   so an empty list doesn't show that an edition is current.
   IETF, NIST, W3C and ETSI records cached by an earlier release are
   fetched again on their next lookup, so they pick up these fields.

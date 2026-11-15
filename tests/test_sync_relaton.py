@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import gzip
 import io
+import logging
 import tarfile
 from pathlib import Path
 
@@ -1350,6 +1351,145 @@ def test_parse_tarball_sync_skips_iec_projects() -> None:
     records, errors = _parse_tarball_sync(_open_tarball(tb), "IEC", frozenset())
     assert errors == []
     assert [identifier for identifier, _, _ in records] == ["IEC 62443-3-3:2013"]
+
+
+def _iec_successor_tarball(extra: list[tuple[str, bytes]] | None = None) -> bytes:
+    """Tar the verbatim 60335-2-91 family, its projects and its successor."""
+    root = FIXTURES / "relaton_iec_successors"
+    entries: list[tuple[str, bytes | None]] = [
+        (path.relative_to(root).as_posix(), path.read_bytes())
+        for path in sorted(root.rglob("*.yaml"))
+    ]
+    entries.extend(extra or [])
+    return _make_tarball_raw(prefix="relaton-data-iec-v2", entries=entries)
+
+
+def test_parse_tarball_sync_lists_iec_successors_from_project_links() -> None:
+    """#644: a replaced IEC edition names the editions its project led to.
+
+    Each publication names its project; that project's ``updatedBy`` or
+    ``obsoletedBy`` names the next one, whose dated edition is the
+    successor. The 2008 edition's successor project also produced a CSV
+    and is followed by an amendment, and the 1997 edition's project is
+    followed by its own corrigendum: none of those is listed.
+    """
+    from scholar_mcp._sync_relaton import _parse_tarball_sync
+
+    records, errors = _parse_tarball_sync(
+        _open_tarball(_iec_successor_tarball()), "IEC", frozenset()
+    )
+
+    assert errors == []
+    found = {identifier: record for identifier, record, _ in records}
+    assert {
+        identifier: (record.get("status"), record.get("superseded_by"))
+        for identifier, record in found.items()
+    } == {
+        "IEC 60335-2-91:1997": ("superseded", ["IEC 60335-2-91:2002"]),
+        "IEC 60335-2-91:1997/COR1:2000": ("superseded", ["IEC 60335-2-91:2002"]),
+        "IEC 60335-2-91:2002": ("superseded", ["IEC 60335-2-91:2008"]),
+        "IEC 60335-2-91:2008": ("superseded", ["IEC 62841-4-4:2020"]),
+        "IEC 62841-4-4:2020": ("published", []),
+        "IEC 62841-4-4:2020/AMD1:2024": ("published", []),
+        "IEC 62841-4-4:2020+AMD1:2024 CSV": ("published", []),
+    }
+
+
+def test_iec_successors_leave_an_unlinked_or_already_listed_edition_alone() -> None:
+    """No chain, no successor; a list the record already has is kept."""
+    from scholar_mcp._record_types import StandardRecord
+    from scholar_mcp._sync_relaton import _IecSuccessors
+
+    successors = _IecSuccessors()
+    successors.add_project(
+        {
+            "docidentifier": [{"content": "iec:proj:1", "type": "URN"}],
+            "relation": [
+                {
+                    "type": "updatedBy",
+                    "bibitem": {"docidentifier": [{"content": "iec:proj:2"}]},
+                }
+            ],
+        }
+    )
+    project = {"ext": {"structuredidentifier": {"project_number": {"content": "1"}}}}
+    successors.add_publication("IEC 1:2000", project)
+    successors.add_publication("IEC 9:2000", {})
+    unlinked: StandardRecord = {"status": "superseded", "superseded_by": []}
+    listed: StandardRecord = {"status": "superseded", "superseded_by": ["IEC 1:2010"]}
+
+    filled = successors.apply(
+        [("IEC 1:2000", unlinked, []), ("IEC 9:2000", listed, [])]
+    )
+
+    assert filled == 0
+    assert unlinked["superseded_by"] == []
+    assert listed["superseded_by"] == ["IEC 1:2010"]
+
+
+def _iec_project(number: str, *targets: str) -> dict[str, object]:
+    """A minimal IEC work item: its URN and ``updatedBy`` links."""
+    return {
+        "docidentifier": [{"content": f"iec:proj:{number}", "type": "URN"}],
+        "relation": [
+            {
+                "type": "updatedBy",
+                "bibitem": {"docidentifier": [{"content": f"iec:proj:{target}"}]},
+            }
+            for target in targets
+        ],
+    }
+
+
+def _iec_publication(number: str) -> dict[str, object]:
+    return {"ext": {"structuredidentifier": {"project_number": {"content": number}}}}
+
+
+def test_iec_successors_take_an_undated_edition_but_no_fragment() -> None:
+    """IEC 60617's parts were replaced by the undated IEC 60617 database.
+
+    Two files can share a project number (a PWI and the item it became);
+    the links of both count.
+    """
+    from scholar_mcp._sync_relaton import _IecSuccessors
+
+    successors = _IecSuccessors()
+    successors.add_project(_iec_project("1", "2"))
+    successors.add_project(_iec_project("1", "3"))
+    successors.add_publication("IEC 60617-2:1996", _iec_publication("1"))
+    successors.add_publication("IEC 60617", _iec_publication("2"))
+    successors.add_publication("IEC 61360-4-1/FRAG1", _iec_publication("3"))
+    successors.add_publication("IEC 61360-4-1:2005", _iec_publication("3"))
+
+    assert successors.successors("IEC 60617-2:1996") == [
+        "IEC 60617",
+        "IEC 61360-4-1:2005",
+    ]
+
+
+def test_parse_tarball_sync_counts_unreadable_iec_projects(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """An unreadable work item costs only its links, never a record error.
+
+    IEC's dump has project files PyYAML refuses (control characters).
+    """
+    from scholar_mcp._sync_relaton import _parse_tarball_sync
+
+    tarball = _iec_successor_tarball(
+        [
+            ("data/projects/bad.yaml", b"title: \x07bell\n"),
+            ("data/projects/list.yaml", b"- a\n"),
+        ]
+    )
+    with caplog.at_level(logging.INFO, logger="scholar_mcp._sync_relaton"):
+        records, errors = _parse_tarball_sync(
+            _open_tarball(tarball), "IEC", frozenset()
+        )
+
+    assert errors == []
+    assert len(records) == 7
+    assert "projects=6 unreadable=2 filled=4" in caplog.text
 
 
 def test_parse_tarball_sync_reports_invalid_yaml() -> None:

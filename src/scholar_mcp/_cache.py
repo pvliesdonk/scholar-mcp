@@ -443,6 +443,14 @@ _REPAIRS: dict[str, str] = {
         "DELETE FROM standards WHERE synced_at IS NULL "
         "AND json_extract(data, '$.body') IN ('IETF', 'W3C', 'ETSI')"
     ),
+    # #644: the IEC sync now lists the editions that replaced a revised or
+    # replaced edition. Clearing the stored commit makes the next
+    # sync-standards run reparse the dump even when upstream has not moved.
+    # A live IEC row reads one record and cannot follow the chain, so it has
+    # nothing to gain from a refetch and stays.
+    "644_resync_iec": (
+        "UPDATE standards_sync_runs SET upstream_ref = NULL WHERE body = 'IEC'"
+    ),
 }
 
 
