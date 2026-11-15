@@ -366,6 +366,10 @@ class _IETFFetcher:
 
         Returns:
             Populated StandardRecord or None if not found.
+
+        Raises:
+            StandardsUpstreamError: datatracker never answered which RFCs
+                obsolete the one found.
         """
         m = re.match(r"(?i)(rfc|bcp|std|fyi)\s*(\d+)", identifier)
         if not m:
@@ -402,6 +406,10 @@ class _IETFFetcher:
 
         Returns:
             List of matching StandardRecord dicts.
+
+        Raises:
+            StandardsUpstreamError: datatracker never answered which RFCs
+                obsolete the ones found.
         """
         await self._limiter.acquire()
         resp = await self._http.get(

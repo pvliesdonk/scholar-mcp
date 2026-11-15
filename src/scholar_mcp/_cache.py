@@ -11,6 +11,8 @@ from typing import Any
 
 import aiosqlite
 
+# The record types stay runtime imports: get_type_hints() reads them. Ruff no
+# longer flags them (TC001) since the block also imports a function.
 from ._record_types import (
     BookRecord,
     PaperRecord,
