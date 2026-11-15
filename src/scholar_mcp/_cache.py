@@ -434,6 +434,15 @@ _REPAIRS: dict[str, str] = {
         "AND json_extract(data, '$.body') = 'NIST'"
     ),
     "639_standards_search_results": "DELETE FROM standards_search",
+    # #655: #637, #638 and #640 changed what the IETF, W3C and ETSI fetchers
+    # store (status and superseded_by), and a live row keeps the old reading
+    # for 90 days. None of the three is synced, so every such row is live.
+    # Cached search results need no second pass: 639_standards_search_results
+    # empties them on every database that predates these fixes.
+    "655_live_ietf_w3c_etsi_rows": (
+        "DELETE FROM standards WHERE synced_at IS NULL "
+        "AND json_extract(data, '$.body') IN ('IETF', 'W3C', 'ETSI')"
+    ),
 }
 
 

@@ -602,6 +602,51 @@ async def test_repair_drops_nist_rows_cached_before_csrc_was_read(tmp_path):
         await upgraded.close()
 
 
+async def test_repair_drops_ietf_w3c_etsi_rows_cached_before_supersession(
+    tmp_path,
+):
+    """#655: rows cached before #637, #638 and #640 lack status and successors.
+
+    RFC 2616 would keep superseded_by: [] for 90 days. Other bodies stay.
+    """
+    import aiosqlite
+
+    db_path = tmp_path / "standards.db"
+    old = ScholarCache(db_path)
+    await old.open()
+    for identifier, body in [
+        ("RFC 2616", "IETF"),
+        ("web-forms-2", "W3C"),
+        ("ETSI EN 300 328-1", "ETSI"),
+        ("NIST SP 800-53 Rev. 5", "NIST"),
+    ]:
+        await old.set_standard(
+            identifier,
+            {"identifier": identifier, "body": body, "status": "published"},
+        )
+    await old.set_standard(
+        "ISO 9001:2015",
+        {"identifier": "ISO 9001:2015", "body": "ISO", "title": "QMS"},
+        source="ISO",
+        synced=True,
+    )
+    await old.close()
+
+    async with aiosqlite.connect(db_path) as db:
+        await db.execute("DELETE FROM repairs WHERE name LIKE '655_%'")
+        await db.commit()
+
+    upgraded = ScholarCache(db_path)
+    await upgraded.open()
+    try:
+        for identifier in ["RFC 2616", "web-forms-2", "ETSI EN 300 328-1"]:
+            assert await upgraded.get_standard(identifier) is None, identifier
+        assert await upgraded.get_standard("NIST SP 800-53 Rev. 5") is not None
+        assert await upgraded.get_standard("ISO 9001:2015") is not None
+    finally:
+        await upgraded.close()
+
+
 async def test_delete_synced_standards_keeps_other_sources_and_live_rows(cache):
     """Only synced rows of the named source go, with the aliases naming them."""
     record = {"identifier": "X", "body": "ISO", "title": "t"}
@@ -740,6 +785,7 @@ async def test_every_registered_repair_is_valid_sql(cache):
         "641_standards_search_results",
         "639_live_nist_rows",
         "639_standards_search_results",
+        "655_live_ietf_w3c_etsi_rows",
     }
     for statement in _REPAIRS.values():
         await cache._db.execute(f"EXPLAIN {statement}")
