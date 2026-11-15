@@ -591,6 +591,25 @@ async def test_delete_synced_standards_keeps_other_sources_and_live_rows(cache):
     assert await cache.delete_synced_standards("ISO", []) == 0
 
 
+async def test_delete_synced_standards_counts_only_its_own_rows(cache):
+    """Writes interleaved from another loader are not counted as deleted."""
+    import asyncio
+
+    record = {"identifier": "X", "body": "ISO", "title": "t"}
+    ids = [f"ISO {n}:2000" for n in range(50)]
+    await cache.set_standards_batch(
+        [(i, record) for i in ids], source="ISO", synced=True
+    )
+    other = [(f"IEEE Std {n}-2000", record) for n in range(50)]
+
+    deleted, _ = await asyncio.gather(
+        cache.delete_synced_standards("ISO", ids),
+        cache.set_standards_batch(other, source="IEEE", synced=True),
+    )
+
+    assert deleted == 50
+
+
 async def test_repair_resyncs_cc_rows_a_resolve_unsynced(tmp_path):
     """#496: a CC row the resolve path rewrote as live is synced again."""
     import aiosqlite

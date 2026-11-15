@@ -418,6 +418,18 @@ def test_related_identifiers_lists_every_match_in_order() -> None:
     ]
 
 
+def test_related_identifiers_lists_a_repeated_relation_once() -> None:
+    from scholar_mcp._sync_relaton import _related_identifiers
+
+    relation = {
+        "type": "obsoletedBy",
+        "bibitem": {"docidentifier": [{"content": "IEEE Std 776-2018"}]},
+    }
+    assert _related_identifiers([relation, relation], "obsoletedBy") == [
+        "IEEE Std 776-2018"
+    ]
+
+
 # ---------------------------------------------------------------------------
 # _committee coverage
 # ---------------------------------------------------------------------------

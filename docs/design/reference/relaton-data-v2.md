@@ -76,8 +76,10 @@ record on it is shaped. Prompted by #641: the sync and the live lookup read
   updated on 2026-11-11 (ISO), 2026-11-14 (IEC) and 2026-09-28 (IEEE).
   [source: repo-api]
   [pins: tests/test_sync_relaton.py::test_loader_cold_sync_inserts_records]
-- A daily crawler rebuilds ISO's `data/` from the ISO Open Data feed, skipping
-  the crawl when the feed has not changed. [source: iso-readme]
+- A crawler rebuilds ISO's `data/` from the ISO Open Data feed, skipping the
+  crawl when the feed has not changed. [source: iso-readme] How often it runs
+  is not stated; `v2`'s ISO commits in November 2026 are about a week apart.
+  [observed: commit dates on `v2`]
 
 ### Files
 

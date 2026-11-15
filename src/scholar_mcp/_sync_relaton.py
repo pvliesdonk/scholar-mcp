@@ -280,7 +280,9 @@ def _related_identifiers(
         relation_type: The relation type to collect, as v2 spells it.
 
     Returns:
-        One identifier per related document; empty when there is none.
+        Each related identifier once, in first-seen order; empty when there
+        is none. IEEE repeats a relation (``IEEE Std 776-1992`` names
+        ``IEEE Std 776-2018`` twice).
     """
     found: list[str] = []
     for rel in relations or []:
@@ -292,7 +294,7 @@ def _related_identifiers(
         ident = next(
             (c for c in map(_content, bibitem.get("docidentifier") or []) if c), None
         )
-        if ident is not None:
+        if ident is not None and ident not in found:
             found.append(ident)
     return found
 

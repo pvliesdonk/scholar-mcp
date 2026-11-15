@@ -256,6 +256,8 @@ CREATE TABLE IF NOT EXISTS standards_aliases (
     cached_at  REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_standards_aliases_cached ON standards_aliases(cached_at);
+-- delete_synced_standards drops the aliases naming each deleted row (#641).
+CREATE INDEX IF NOT EXISTS idx_standards_aliases_canonical ON standards_aliases(canonical);
 
 CREATE TABLE IF NOT EXISTS standards_search (
     query_hash TEXT PRIMARY KEY,
@@ -1372,13 +1374,14 @@ class ScholarCache:
         if not identifiers:
             return 0
         db = _require_open(self._db)
-        before = db.total_changes
-        await db.executemany(
+        # The cursor's rowcount sums the statement's rows over every set of
+        # parameters; total_changes would also count another loader's writes.
+        cursor = await db.executemany(
             "DELETE FROM standards "
             "WHERE identifier = ? AND source = ? AND synced_at IS NOT NULL",
             ((ident, source) for ident in identifiers),
         )
-        deleted = db.total_changes - before
+        deleted = cursor.rowcount
         await db.executemany(
             "DELETE FROM standards_aliases WHERE canonical = ? "
             "AND NOT EXISTS (SELECT 1 FROM standards WHERE identifier = ?)",

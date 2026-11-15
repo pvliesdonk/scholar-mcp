@@ -131,9 +131,10 @@ synced copy.
 ## Joint ISO/IEC standards
 
 Standards like `ISO/IEC 27001:2022` and `ISO/IEC 15408:2022` appear in both dumps. The
-loader detects joint documents from the YAML structure (both `type=ISO` and `type=IEC`
-`docidentifier` entries) and stores them once with `body="ISO/IEC"`. The `source` column
-on the row reflects the body that last wrote it.
+loader stores each joint identifier once, and the row reflects the dump that last
+wrote it. Its `body` is that dump's body, `"ISO"` or `"IEC"`, not `"ISO/IEC"`: the
+records list identifiers of their own dump's type only, so the loader can't tell a
+joint document from the record.
 
 ## Troubleshooting
 
@@ -327,10 +328,12 @@ A `StandardRecord` dict, the same shape returned by `get_standard`:
   `get_standard` accepts. An RFC that later RFCs obsolete is `"superseded"` and
   lists them: RFC 2616 gives `RFC 7230` to `RFC 7235`. A withdrawn ISO or IEEE
   edition whose dump record names its replacement does the same:
-  ISO/IEC 27001:2005 gives `ISO/IEC 27001:2013`. An IEC edition replaced by a
-  new one reports `"superseded"` with an empty list, since the IEC dump links
-  only project numbers. The other bodies leave the list empty, so an empty list
-  doesn't show that an edition is current.
+  ISO/IEC 27001:2005 gives `ISO/IEC 27001:2013`. An IEEE replacement keeps
+  the "Std" of its identifier (`IEEE Std 1588-2019`); `get_standard` accepts
+  it but answers from a live fetch instead of the synced copy. An IEC edition
+  replaced by a new one reports `"superseded"` with an empty list, since the
+  IEC dump links only project numbers. The other bodies leave the list empty,
+  so an empty list doesn't show that an edition is current.
 - `full_text_url`, direct link to the freely downloadable document (when available)
 - `full_text_available`, `True` for Tier 1 sources (IETF, NIST, W3C, ETSI) and CC
 - `related`, cross-linked identifiers (such as CC ↔ ISO/IEC 15408)
