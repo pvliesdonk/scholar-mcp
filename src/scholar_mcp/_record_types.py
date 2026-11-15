@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, TypedDict
+from typing import Any, Literal, TypedDict, cast
 
 
 class S2Author(TypedDict, total=False):
@@ -205,7 +205,7 @@ class StandardRecord(TypedDict, total=False):
     status: str  # "published" | "withdrawn" | "superseded" | "draft"
     published_date: str | None
     withdrawn_date: str | None
-    superseded_by: str | None
+    superseded_by: list[str]  # identifiers of the documents that replace this one
     supersedes: list[str]
     scope: str | None  # abstract / scope statement
     committee: str | None
@@ -214,3 +214,25 @@ class StandardRecord(TypedDict, total=False):
     full_text_available: bool  # True for all Tier 1 sources
     price: str | None  # None for Tier 1; populated for Tier 2
     related: list[str]  # related standard identifiers
+
+
+def standard_in_current_shape(record: dict[str, Any]) -> StandardRecord:
+    """Return a stored standard record in the current record shape.
+
+    ``superseded_by`` was a string or ``None`` before it became a list
+    (#637). Records stored in the old shape outlive their TTL in two places:
+    synced rows never expire, and the NIST catalogue file is kept for weeks.
+    So every reader of a stored record passes it through here.
+
+    Args:
+        record: A record decoded from storage.
+
+    Returns:
+        The same record, with ``superseded_by`` as a list when it is present.
+    """
+    value = record.get("superseded_by", [])
+    if isinstance(value, str):
+        record["superseded_by"] = [value]
+    elif value is None:
+        record["superseded_by"] = []
+    return cast("StandardRecord", record)

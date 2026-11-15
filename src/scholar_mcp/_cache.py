@@ -12,10 +12,11 @@ from typing import Any
 import aiosqlite
 
 from ._record_types import (
-    BookRecord,  # noqa: TC001 — runtime import needed for get_type_hints()
-    PaperRecord,  # noqa: TC001 — runtime import needed for get_type_hints()
-    PatentRecord,  # noqa: TC001 — runtime import needed for get_type_hints()
-    StandardRecord,  # noqa: TC001 — runtime import needed for get_type_hints()
+    BookRecord,
+    PaperRecord,
+    PatentRecord,
+    StandardRecord,
+    standard_in_current_shape,
 )
 
 logger = logging.getLogger(__name__)
@@ -1284,7 +1285,7 @@ class ScholarCache:
         synced_at = row[2]
         if synced_at is None and time.time() - row[1] > _STANDARD_TTL:
             return None
-        return json.loads(row[0])  # type: ignore[no-any-return]
+        return standard_in_current_shape(json.loads(row[0]))
 
     async def set_standard(
         self,
@@ -1380,7 +1381,7 @@ class ScholarCache:
         sql = "SELECT data FROM standards WHERE " + " AND ".join(where) + " LIMIT ?"
         async with db.execute(sql, params) as cur:
             rows = await cur.fetchall()
-        return [json.loads(row[0]) for row in rows]
+        return [standard_in_current_shape(json.loads(row[0])) for row in rows]
 
     async def get_standard_full_text(self, url: str) -> str | None:
         """Return converted full text for a standard's document, or None.
@@ -1520,7 +1521,7 @@ class ScholarCache:
             row = await cur.fetchone()
         if row is None or time.time() - row[1] > _STANDARD_SEARCH_TTL:
             return None
-        return json.loads(row[0])  # type: ignore[no-any-return]
+        return [standard_in_current_shape(r) for r in json.loads(row[0])]
 
     async def set_standards_search(
         self, query: str, data: list[StandardRecord]

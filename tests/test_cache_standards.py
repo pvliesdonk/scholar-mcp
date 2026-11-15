@@ -37,6 +37,41 @@ async def test_set_and_get_standard(cache: ScholarCache) -> None:
     assert result["title"] == "QUIC: A UDP-Based Multiplexed and Secure Transport"
 
 
+@pytest.mark.parametrize(
+    ("stored", "expected"),
+    [("RFC 7230", ["RFC 7230"]), (None, []), (["RFC 4346"], ["RFC 4346"])],
+    ids=["string", "null", "list"],
+)
+async def test_every_standard_read_returns_superseded_by_as_a_list(
+    cache: ScholarCache, stored: object, expected: list[str]
+) -> None:
+    """Records cached before #637 held a string or None; reads return a list."""
+    # Any: the old shape is exactly what StandardRecord no longer allows.
+    old: Any = {**SAMPLE_STANDARD, "superseded_by": stored}
+    synced_old: Any = {**old, "identifier": "ISO 1:2000", "title": "Synced"}
+    await cache.set_standard("RFC 9000", old)
+    await cache.set_standard("ISO 1:2000", synced_old, source="ISO", synced=True)
+    await cache.set_standards_search("quic", [old])
+
+    record = await cache.get_standard("RFC 9000")
+    searched = await cache.get_standards_search("quic")
+    synced = await cache.search_synced_standards("Synced")
+
+    assert record is not None and searched is not None
+    assert record["superseded_by"] == expected
+    assert searched[0]["superseded_by"] == expected
+    assert synced[0]["superseded_by"] == expected
+
+
+async def test_standard_read_leaves_an_absent_superseded_by_absent(
+    cache: ScholarCache,
+) -> None:
+    await cache.set_standard("RFC 9000", SAMPLE_STANDARD)
+    record = await cache.get_standard("RFC 9000")
+    assert record is not None
+    assert "superseded_by" not in record
+
+
 async def test_get_standard_alias_miss(cache: ScholarCache) -> None:
     result = await cache.get_standard_alias("rfc9000")
     assert result is None

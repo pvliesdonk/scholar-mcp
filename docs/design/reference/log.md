@@ -2,6 +2,16 @@
 
 Newest first. One entry per research pass.
 
+## 2026-11-15
+
+### Replaced-edition data: IETF reads `obs` relations
+
+Updated [Replaced-edition data for IETF, NIST and W3C](standards-supersession-sources.md)
+for #637. New observations: datatracker's `relateddocument` endpoint batches
+with `target__name__in`, caps a page at 1000 rows, and rejects a filter on the
+source name; no `obs` source seen was a draft. The IETF claims now describe the
+fetcher reading those relations, and pin its tests.
+
 ## 2026-11-14
 
 ### Replaced-edition data, after the fetcher fixes

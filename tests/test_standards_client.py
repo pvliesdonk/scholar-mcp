@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 
 import httpx
@@ -351,6 +352,10 @@ async def test_standards_client_fetchers_ieee_instance_registered() -> None:
 IETF_BASE = "https://datatracker.ietf.org"
 RFC_EDITOR_BASE = "https://www.rfc-editor.org"
 
+# Shape of datatracker /api/v1/doc/relateddocument/?relationship=obs (#637)
+# for an RFC nothing obsoletes.
+NO_OBSOLETING_RFCS: dict = {"meta": {"next": None}, "objects": []}  # type: ignore[type-arg]
+
 # Shape of datatracker /api/v1/doc/docevent/?type=published_rfc (#631).
 RFC9000_PUB_EVENTS = {
     "meta": {"total_count": 1},
@@ -394,6 +399,9 @@ async def test_ietf_get_rfc(respx_mock: respx.MockRouter) -> None:
     respx_mock.get("/api/v1/doc/docevent/").mock(
         return_value=httpx.Response(200, json=RFC9000_PUB_EVENTS)
     )
+    respx_mock.get("/api/v1/doc/relateddocument/").mock(
+        return_value=httpx.Response(200, json=NO_OBSOLETING_RFCS)
+    )
     respx_mock.get("/api/v1/doc/document/").mock(
         return_value=httpx.Response(200, json=SAMPLE_RFC9000_DOC)
     )
@@ -429,6 +437,9 @@ async def test_ietf_get_historic_rfc_is_withdrawn(
                 ]
             },
         )
+    )
+    respx_mock.get("/api/v1/doc/relateddocument/").mock(
+        return_value=httpx.Response(200, json=NO_OBSOLETING_RFCS)
     )
     respx_mock.get("/api/v1/doc/document/").mock(
         return_value=httpx.Response(
@@ -468,6 +479,9 @@ async def test_ietf_get_keeps_record_when_date_lookup_fails(
         route.mock(side_effect=date_response)
     else:
         route.mock(return_value=date_response)
+    respx_mock.get("/api/v1/doc/relateddocument/").mock(
+        return_value=httpx.Response(200, json=NO_OBSOLETING_RFCS)
+    )
     respx_mock.get("/api/v1/doc/document/").mock(
         return_value=httpx.Response(200, json=SAMPLE_RFC9000_DOC)
     )
@@ -514,6 +528,9 @@ async def test_ietf_search_looks_up_dates_in_one_request(
             },
         )
     )
+    respx_mock.get("/api/v1/doc/relateddocument/").mock(
+        return_value=httpx.Response(200, json=NO_OBSOLETING_RFCS)
+    )
     respx_mock.get("/api/v1/doc/document/").mock(
         return_value=httpx.Response(200, json={"objects": rows})
     )
@@ -526,6 +543,162 @@ async def test_ietf_search_looks_up_dates_in_one_request(
     assert params["doc__name__in"] == "rfc9000,rfc9001"
     assert params["type"] == "published_rfc"
     assert [r["published_date"] for r in results] == ["2021-05", "2021-05"]
+
+
+def _obs(source: str, target: str) -> dict:  # type: ignore[type-arg]
+    """One datatracker relateddocument row: ``source`` obsoletes ``target``."""
+    return {
+        "relationship": "/api/v1/name/docrelationshipname/obs/",
+        "source": f"/api/v1/doc/document/{source}/",
+        "target": f"/api/v1/doc/document/{target}/",
+    }
+
+
+def _rfc_doc(name: str, std_level: str) -> dict:  # type: ignore[type-arg]
+    return {
+        "objects": [
+            {
+                "name": name,
+                "title": name.upper(),
+                "std_level": f"/api/v1/name/stdlevelname/{std_level}/",
+            }
+        ]
+    }
+
+
+@pytest.mark.respx(base_url=IETF_BASE)
+async def test_ietf_get_obsoleted_rfc_lists_replacements(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """An obsoleted RFC is superseded, listing every obsoleting RFC (#637)."""
+    respx_mock.get("/api/v1/doc/docevent/").mock(
+        return_value=httpx.Response(200, json={"objects": []})
+    )
+    relations = respx_mock.get("/api/v1/doc/relateddocument/").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "meta": {"next": None},
+                # datatracker returns rows in no promised order
+                "objects": [_obs(f"rfc{n}", "rfc2616") for n in (7235, 7230, 7231)],
+            },
+        )
+    )
+    respx_mock.get("/api/v1/doc/document/").mock(
+        return_value=httpx.Response(200, json=_rfc_doc("rfc2616", "ds"))
+    )
+    http = httpx.AsyncClient()
+    record = await _IETFFetcher(http, RateLimiter(delay=0.0)).get("RFC 2616")
+    await http.aclose()
+    assert record is not None
+    assert record["status"] == "superseded"
+    assert record["superseded_by"] == ["RFC 7230", "RFC 7231", "RFC 7235"]
+    params = relations.calls.last.request.url.params
+    assert params["target__name__in"] == "rfc2616"
+    assert params["relationship"] == "obs"
+
+
+@pytest.mark.respx(base_url=IETF_BASE)
+async def test_ietf_get_obsoleted_historic_rfc_is_superseded(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """Replacement outranks Historic: RFC 2246 points at RFC 4346 (#637)."""
+    respx_mock.get("/api/v1/doc/docevent/").mock(
+        return_value=httpx.Response(200, json={"objects": []})
+    )
+    respx_mock.get("/api/v1/doc/relateddocument/").mock(
+        return_value=httpx.Response(200, json={"objects": [_obs("rfc4346", "rfc2246")]})
+    )
+    respx_mock.get("/api/v1/doc/document/").mock(
+        return_value=httpx.Response(200, json=_rfc_doc("rfc2246", "hist"))
+    )
+    http = httpx.AsyncClient()
+    record = await _IETFFetcher(http, RateLimiter(delay=0.0)).get("RFC 2246")
+    await http.aclose()
+    assert record is not None
+    assert record["status"] == "superseded"
+    assert record["superseded_by"] == ["RFC 4346"]
+
+
+@pytest.mark.respx(base_url=IETF_BASE)
+@pytest.mark.parametrize(
+    "obs_response",
+    [httpx.Response(503), httpx.ConnectError("no route to host")],
+    ids=["status", "transport"],
+)
+async def test_ietf_get_raises_when_obsoleted_by_lookup_fails(
+    respx_mock: respx.MockRouter, obs_response: object
+) -> None:
+    """No answer on replacements must not read, and cache, as published."""
+    respx_mock.get("/api/v1/doc/docevent/").mock(
+        return_value=httpx.Response(200, json=RFC9000_PUB_EVENTS)
+    )
+    route = respx_mock.get("/api/v1/doc/relateddocument/")
+    if isinstance(obs_response, Exception):
+        route.mock(side_effect=obs_response)
+    else:
+        route.mock(return_value=obs_response)
+    respx_mock.get("/api/v1/doc/document/").mock(
+        return_value=httpx.Response(200, json=SAMPLE_RFC9000_DOC)
+    )
+    http = httpx.AsyncClient()
+    fetcher = _IETFFetcher(http, RateLimiter(delay=0.0))
+    with pytest.raises(StandardsUpstreamError) as exc_info:
+        await fetcher.get("RFC 9000")
+    await http.aclose()
+    assert exc_info.value.body == "IETF"
+
+
+@pytest.mark.respx(base_url=IETF_BASE)
+async def test_ietf_search_looks_up_replacements_in_one_request(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """search() asks which RFCs obsolete each hit in a single request."""
+    rows = [
+        {"name": "rfc2616", "title": "HTTP/1.1", "std_level": "ds"},
+        {"name": "rfc9110", "title": "HTTP Semantics", "std_level": "std"},
+    ]
+    respx_mock.get("/api/v1/doc/docevent/").mock(
+        return_value=httpx.Response(200, json={"objects": []})
+    )
+    relations = respx_mock.get("/api/v1/doc/relateddocument/").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "meta": {"next": "/api/v1/doc/relateddocument/?offset=1000"},
+                "objects": [_obs("rfc7230", "rfc2616")],
+            },
+        )
+    )
+    respx_mock.get("/api/v1/doc/document/").mock(
+        return_value=httpx.Response(200, json={"objects": rows})
+    )
+    http = httpx.AsyncClient()
+    results = await _IETFFetcher(http, RateLimiter(delay=0.0)).search("HTTP")
+    await http.aclose()
+    assert relations.call_count == 1
+    assert relations.calls.last.request.url.params["target__name__in"] == (
+        "rfc2616,rfc9110"
+    )
+    assert [(r["status"], r["superseded_by"]) for r in results] == [
+        ("superseded", ["RFC 7230"]),
+        ("published", []),
+    ]
+
+
+def test_group_obsoleting_rfcs_skips_non_rfc_sources() -> None:
+    """Only a published RFC replaces one; a draft source is ignored."""
+    from scholar_mcp._standards_client import _group_obsoleting_rfcs
+
+    grouped = _group_obsoleting_rfcs(
+        [
+            _obs("draft-ietf-httpbis-semantics", "rfc7231"),
+            _obs("rfc9110", "rfc7231"),
+            _obs("rfc9110", "rfc7231"),
+            {"source": None, "target": "/api/v1/doc/document/rfc1/"},
+        ]
+    )
+    assert grouped == {"rfc7231": ["RFC 9110"]}
 
 
 @pytest.mark.respx(base_url=IETF_BASE)
@@ -599,6 +772,9 @@ async def test_ietf_get_not_found(respx_mock: respx.MockRouter) -> None:
 async def test_ietf_search(respx_mock: respx.MockRouter) -> None:
     respx_mock.get("/api/v1/doc/docevent/").mock(
         return_value=httpx.Response(200, json=RFC9000_PUB_EVENTS)
+    )
+    respx_mock.get("/api/v1/doc/relateddocument/").mock(
+        return_value=httpx.Response(200, json=NO_OBSOLETING_RFCS)
     )
     respx_mock.get("/api/v1/doc/document/").mock(
         return_value=httpx.Response(200, json=SAMPLE_RFC9000_SEARCH)
@@ -1014,6 +1190,53 @@ async def test_nist_corrupted_disk_cache_triggers_re_download(
     cache_path = tmp_path / "nist_catalogue.json"
     cache_path.write_text("not valid json {{", encoding="utf-8")
 
+    respx_mock.get("/repos/usnistgov/NIST-Tech-Pubs/releases/latest").mock(
+        return_value=httpx.Response(200, json=SAMPLE_GITHUB_RELEASE)
+    )
+    respx_mock.get(re.compile(r".*allrecords-MODS\.xml.*")).mock(
+        return_value=httpx.Response(200, content=SAMPLE_MODS_XML)
+    )
+    http = httpx.AsyncClient(base_url=GITHUB_RELEASES_URL)
+    fetcher = _NISTFetcher(http, RateLimiter(delay=0.0), cache_dir=tmp_path)
+    results = await fetcher.search("800-53", limit=5)
+    await http.aclose()
+    assert len(results) == 1
+
+
+async def test_nist_disk_cache_from_before_637_reads_superseded_by_as_a_list(
+    tmp_path,
+) -> None:
+    """A catalogue file written with superseded_by: null is still served.
+
+    No route is mocked, so a download attempt would fail the test.
+    """
+    cache_path = tmp_path / "nist_catalogue.json"
+    cache_path.write_text(
+        json.dumps(
+            [
+                {
+                    "identifier": "NIST SP 800-53 Rev. 5",
+                    "title": "Security and Privacy Controls",
+                    "number": "800-53",
+                    "superseded_by": None,
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    http = httpx.AsyncClient(base_url=GITHUB_RELEASES_URL)
+    fetcher = _NISTFetcher(http, RateLimiter(delay=0.0), cache_dir=tmp_path)
+    results = await fetcher.search("800-53", limit=5)
+    await http.aclose()
+    assert [r["superseded_by"] for r in results] == [[]]
+
+
+@pytest.mark.respx(base_url=GITHUB_RELEASES_URL)
+async def test_nist_disk_cache_that_is_not_a_list_triggers_re_download(
+    respx_mock: respx.MockRouter, tmp_path
+) -> None:
+    cache_path = tmp_path / "nist_catalogue.json"
+    cache_path.write_text('{"not": "a list"}', encoding="utf-8")
     respx_mock.get("/repos/usnistgov/NIST-Tech-Pubs/releases/latest").mock(
         return_value=httpx.Response(200, json=SAMPLE_GITHUB_RELEASE)
     )
@@ -1557,6 +1780,9 @@ async def test_standards_client_resolve_ietf_local(
     respx_mock.get("/api/v1/doc/docevent/").mock(
         return_value=httpx.Response(200, json=RFC9000_PUB_EVENTS)
     )
+    respx_mock.get("/api/v1/doc/relateddocument/").mock(
+        return_value=httpx.Response(200, json=NO_OBSOLETING_RFCS)
+    )
     respx_mock.get("/api/v1/doc/document/").mock(
         return_value=httpx.Response(200, json=SAMPLE_RFC9000_DOC)
     )
@@ -1575,6 +1801,9 @@ async def test_standards_client_search_body_filter(
 ) -> None:
     respx_mock.get("/api/v1/doc/docevent/").mock(
         return_value=httpx.Response(200, json=RFC9000_PUB_EVENTS)
+    )
+    respx_mock.get("/api/v1/doc/relateddocument/").mock(
+        return_value=httpx.Response(200, json=NO_OBSOLETING_RFCS)
     )
     respx_mock.get("/api/v1/doc/document/").mock(
         return_value=httpx.Response(200, json=SAMPLE_RFC9000_SEARCH)

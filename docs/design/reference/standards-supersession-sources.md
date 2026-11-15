@@ -68,7 +68,8 @@ ETSI has its own page, [ETSI standards search data endpoint](etsi-standards-sear
 - Does not cover: titles, authors and the other bibliographic fields, the
   Relaton dumps for ISO, IEC and IEEE (already synced, see
   [Relaton bibitem titles](relaton-titles.md)), or how the project should
-  model a replacement.
+  model a replacement (it holds `superseded_by` as a list of identifiers,
+  #637).
 - Depended on by: #592 (replaced editions report `published`). No code reads
   these sources for supersession yet; the pins below cover how the fetchers
   read status and dates.
@@ -77,14 +78,19 @@ ETSI has its own page, [ETSI standards search data endpoint](etsi-standards-sear
 
 ### What the project's fetchers return today
 
-- The live fetchers return a record for `_IETFFetcher.get("RFC 2616")`,
+- The live NIST and W3C fetchers return a record for
   `_NISTFetcher.get("NIST SP 800-53 Rev. 4")`, `_NISTFetcher.get("FIPS 186-4")`
-  and `_W3CFetcher.get("html401")`, and every one has `superseded_by: None`,
-  although RFC 2616 is obsoleted by RFC 7230 to 7235, SP 800-53 Rev. 4 and
-  FIPS 186-4 are withdrawn, and HTML 4.01 is retired. RFC 2616 and both NIST
-  records report `status: "published"`. [observed: the NIST fetcher called
-  with a bare `httpx.AsyncClient`, 2026-11-14; the IETF and W3C fetchers
-  re-run on `main` at e42339b, 2026-11-14]
+  and `_W3CFetcher.get("html401")` with no replacement listed, although
+  SP 800-53 Rev. 4 and FIPS 186-4 are withdrawn and HTML 4.01 is retired. Both
+  NIST records report `status: "published"`. [observed: the NIST fetcher called
+  with a bare `httpx.AsyncClient`, 2026-11-14; the W3C fetcher re-run on
+  `main` at e42339b, 2026-11-14]
+- `_IETFFetcher` asks datatracker for the `obs` relations of every RFC it
+  returns, in one request per lookup or search. RFC 2616 reports
+  `superseded` with `superseded_by` RFC 7230 to 7235, and RFC 2246, which is
+  also Historic, reports `superseded` by RFC 4346: a replacement outranks the
+  Historic level. A failed lookup raises rather than report `published`.
+  [observed: the fetcher called live, 2026-11-15] [pins: tests/test_standards_client.py::test_ietf_get_obsoleted_rfc_lists_replacements, tests/test_standards_client.py::test_ietf_get_obsoleted_historic_rfc_is_superseded, tests/test_standards_client.py::test_ietf_search_looks_up_replacements_in_one_request, tests/test_standards_client.py::test_ietf_get_raises_when_obsoleted_by_lookup_fails]
 - The W3C record takes its status from the `title` of
   `_links.latest-version`, so HTML 4.01 reports `superseded`, and its
   publication date from the end of that link's `href`. [observed, as above]
@@ -113,6 +119,14 @@ ETSI has its own page, [ETSI standards search data endpoint](etsi-standards-sear
   `/api/v1/doc/relateddocument/?target__name=rfc2616&relationship=obs`. Each
   object's `source` is the obsoleting document. For RFC 2616 it returned RFC
   7230 to 7235. [observed, 2026-11-14] [source: datatracker-api]
+- The same endpoint takes `target__name__in=rfc2616,rfc2246,rfc9110` and
+  answers for all of them at once. Its page size is capped at 1000 (`limit`
+  above that answers 1000). The endpoint rejects a filter on the source's
+  name. No obsoleting source seen was an Internet-Draft, and the unpublished
+  `draft-ietf-httpbis-rfc6265bis` has no `obs` row against RFC 6265.
+  [observed, 2026-11-15] [unverified] That drafts never carry `obs` relations
+  is not documented, so the fetcher keeps only `rfcN` sources.
+  [pins: tests/test_standards_client.py::test_group_obsoleting_rfcs_skips_non_rfc_sources]
 - relaton-data-ietf carries the same fact in each record as
   `relation: - type: obsoletedBy`, and a `status.stage` that is the RFC's
   standards level (`DRAFT STANDARD`, `HISTORIC`). On four samples the
@@ -191,9 +205,9 @@ ETSI has its own page, [ETSI standards search data endpoint](etsi-standards-sear
 ## Where this project departs from the subject
 
 - All three fetchers drop the replacement data their sources carry or could
-  carry: IETF never asks datatracker for `obs` relations, NIST reads MODS
-  rather than the CSRC export, and W3C ignores the `superseded-by` link. This
-  is #592.
+  carry: NIST reads MODS rather than the CSRC export (#639), and W3C ignores
+  the `superseded-by` link (#638). IETF reads datatracker's `obs` relations
+  since #637.
 
 ## Not covered
 

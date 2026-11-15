@@ -72,7 +72,7 @@ def test_yaml_to_record_withdrawn_status() -> None:
 
     assert record is not None
     assert record["status"] == "withdrawn"
-    assert record["superseded_by"] == "ISO 9001:2015"
+    assert record["superseded_by"] == ["ISO 9001:2015"]
 
 
 def test_yaml_to_record_missing_identifier_returns_none() -> None:
@@ -253,10 +253,10 @@ def test_published_date_no_date_key_returns_none() -> None:
 def test_superseded_by_relation_absent() -> None:
     from scholar_mcp._sync_relaton import _superseded_by
 
-    assert _superseded_by(None) is None
+    assert _superseded_by(None) == []
 
 
-def test_superseded_by_non_obsoleted_relation_returns_none() -> None:
+def test_superseded_by_non_obsoleted_relation_returns_empty() -> None:
     """A 'replaces' relation should NOT match."""
     from scholar_mcp._sync_relaton import _superseded_by
 
@@ -266,7 +266,7 @@ def test_superseded_by_non_obsoleted_relation_returns_none() -> None:
             "bibitem": {"docidentifier": [{"id": "ISO 9001:2008"}]},
         }
     ]
-    assert _superseded_by(relations) is None
+    assert _superseded_by(relations) == []
 
 
 def test_superseded_by_happy_path() -> None:
@@ -274,7 +274,19 @@ def test_superseded_by_happy_path() -> None:
     from scholar_mcp._sync_relaton import _superseded_by
 
     doc = _load_fixture("relaton_iso_sample/iso-9001-2008.yaml")
-    assert _superseded_by(doc.get("relation")) == "ISO 9001:2015"
+    assert _superseded_by(doc.get("relation")) == ["ISO 9001:2015"]
+
+
+def test_superseded_by_lists_every_replacement() -> None:
+    """Each obsoleted-by relation contributes one identifier, in order (#637)."""
+    from scholar_mcp._sync_relaton import _superseded_by
+
+    relations = [
+        {"type": "obsoleted-by", "bibitem": {"docid": [{"id": "ISO 1:2020"}]}},
+        {"type": "updates", "bibitem": {"docid": [{"id": "ISO 1:2019/Amd 1"}]}},
+        {"type": "obsoleted-by", "bibitem": {"docid": [{"id": "ISO 2:2021"}]}},
+    ]
+    assert _superseded_by(relations) == ["ISO 1:2020", "ISO 2:2021"]
 
 
 # ---------------------------------------------------------------------------
@@ -311,7 +323,7 @@ def test_superseded_by_reads_docid_key_in_relation() -> None:
             "bibitem": {"docid": [{"id": "ISO 9001:2015"}]},
         }
     ]
-    assert _superseded_by(relations) == "ISO 9001:2015"
+    assert _superseded_by(relations) == ["ISO 9001:2015"]
 
 
 def test_supersedes_reads_docid_key_in_relation() -> None:
@@ -1460,7 +1472,7 @@ def test_yaml_to_record_string_relation_entries_skipped() -> None:
     record, _ = _yaml_to_record(doc)
 
     assert record is not None
-    assert record["superseded_by"] == "ISO 9001:2015"
+    assert record["superseded_by"] == ["ISO 9001:2015"]
 
 
 def test_yaml_to_record_string_bibitem_skipped() -> None:
@@ -1480,7 +1492,7 @@ def test_yaml_to_record_string_bibitem_skipped() -> None:
     record, _ = _yaml_to_record(doc)
 
     assert record is not None
-    assert record["superseded_by"] is None
+    assert record["superseded_by"] == []
 
 
 def test_yaml_to_record_string_ident_in_bibitem_skipped() -> None:
@@ -1502,7 +1514,7 @@ def test_yaml_to_record_string_ident_in_bibitem_skipped() -> None:
     record, _ = _yaml_to_record(doc)
 
     assert record is not None
-    assert record["superseded_by"] is None
+    assert record["superseded_by"] == []
 
 
 def test_yaml_to_record_string_link_entries_skipped() -> None:
