@@ -570,6 +570,9 @@ class RelatonLoader:
 
     The full sync algorithm is documented in
     ``docs/design/history/specs/2026-04-13-pr2-iso-iec-relaton-design.md``.
+    Since #641 it reads the ``v2`` branch and deletes, rather than
+    withdraws, the identifiers a dump stops listing; see
+    ``docs/design/reference/relaton-data-v2.md``.
     """
 
     def __init__(
@@ -643,8 +646,8 @@ class RelatonLoader:
         added = updated = unchanged = 0
         current_ids: set[str] = set()
 
-        # Snapshot prev_ids BEFORE the tarball loop so the withdrawal guard
-        # denominator reflects the prior state, not the post-insertion state.
+        # Snapshot prev_ids BEFORE the tarball loop so the removal pass
+        # compares against the prior state, not the post-insertion state.
         prev_ids = await cache.list_synced_standard_ids(source=self.body)
 
         tar_url = f"{_GITHUB_API}/repos/{self._config.repo}/tarball/{sha}"
