@@ -4,6 +4,14 @@ Newest first. One entry per research pass.
 
 ## 2026-11-15
 
+### ETSI: withdrawn, historical and replaced deliverables
+
+Updated [ETSI standards search data endpoint](etsi-standards-search.md) for
+#640. The fetcher's search flags left withdrawn, historical and replaced
+editions out, so `get()` answered `None` for such deliverables. Seven more
+`superseded.php` samples: replacement is mostly within a deliverable; EN 300
+328-1 and -2 were replaced by EN 300 328. ETSI's row order is not by date.
+
 ### Replaced-edition data: W3C reads `superseded-by`
 
 Updated [Replaced-edition data for IETF, NIST and W3C](standards-supersession-sources.md)

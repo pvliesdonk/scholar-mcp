@@ -1307,8 +1307,7 @@ def _map_w3c_status(status_title: str) -> str:
 _ETSI_BASE = "https://www.etsi.org"
 _ETSI_DATA_PATH = "/custom/standardssearch/data.php"
 # One page of data.php holds 50 rows; get() reads one page and picks the
-# exact identifier from it.
-_ETSI_PAGE_SIZE = 50
+# newest edition of the exact identifier from it.
 _ETSI_SEARCH_PARAMS: dict[str, str | int] = {
     "version": "0",
     "published": "1",
@@ -1327,6 +1326,17 @@ _ETSI_SEARCH_PARAMS: dict[str, str | int] = {
     # Without it every row's Scope is null.
     "includeScope": "1",
 }
+# get() also asks for withdrawn, historical and replaced editions: without
+# them a deliverable whose newest edition is one of those is "not found"
+# (#640). search() keeps them out, or keyword results fill with old editions.
+_ETSI_LOOKUP_PARAMS: dict[str, str | int] = {
+    **_ETSI_SEARCH_PARAMS,
+    "withdrawn": "1",
+    "historical": "1",
+    "superseded": "1",
+}
+_ETSI_SUPERSEDED_PATH = "/custom/standardssearch/superseded.php"
+_ETSI_EDITION_RE = re.compile(r"V(\d+(?:\.\d+)*)\s+\((\d{4}-\d{2})\)")
 
 
 class _ETSIFetcher:
@@ -1371,8 +1381,25 @@ class _ETSIFetcher:
             StandardsUpstreamError: ETSI refused the request, never received
                 it, or answered in a shape this client cannot read.
         """
+        items = await self._rows(query, _ETSI_SEARCH_PARAMS)
+        return [_normalize_etsi(item) for item in items[:limit]]
+
+    async def _rows(self, query: str, flags: dict[str, str | int]) -> list[dict]:  # type: ignore[type-arg]
+        """Return the raw ``data.php`` rows for ``query`` under ``flags``.
+
+        Args:
+            query: Search string.
+            flags: The form fields to send beside ``search`` and ``page``.
+
+        Returns:
+            One page of rows, in ETSI's order.
+
+        Raises:
+            StandardsUpstreamError: ETSI refused the request, never received
+                it, or answered in a shape this client cannot read.
+        """
         await self._limiter.acquire()
-        params = {**_ETSI_SEARCH_PARAMS, "search": query, "page": 1}
+        params = {**flags, "search": query, "page": 1}
         # Each failure keeps logging where the detail is in hand, then raises,
         # so operators see what they saw before and callers get a decision.
         try:
@@ -1412,20 +1439,21 @@ class _ETSIFetcher:
                 status=resp.status_code,
                 detail=f"expected a JSON array, got {type(items).__name__}",
             )
-        return [_normalize_etsi(item) for item in items[:limit]]
+        return items
 
     async def get(self, identifier: str) -> StandardRecord | None:
         """Fetch a single ETSI standard by canonical identifier.
 
         ``None`` means ETSI answered and holds no such standard. A failure
-        propagates from :meth:`search` rather than collapsing into ``None``,
-        which would tell the caller to stop asking about a standard that may
-        well exist (#401).
+        propagates rather than collapsing into ``None``, which would tell the
+        caller to stop asking about a standard that may well exist (#401).
 
         The search matches titles and numbers, so its rows can include other
         deliverables that mention the number (``ETSI EN 303 645`` also returns
-        ``ETSI TS 103 929``). Only a row whose identifier equals the requested
-        one counts, and the first of those in ETSI's order is returned.
+        ``ETSI TS 103 929``). Only rows whose identifier equals the requested
+        one count, and of those the newest edition is returned. The lookup
+        includes withdrawn, historical and replaced editions, so a deliverable
+        whose newest edition is one of them reports that status (#640).
 
         Args:
             identifier: Canonical identifier (e.g. "ETSI EN 303 645").
@@ -1434,11 +1462,111 @@ class _ETSIFetcher:
             Populated StandardRecord, or None when ETSI reports no match.
 
         Raises:
-            StandardsUpstreamError: propagated from :meth:`search`.
+            StandardsUpstreamError: ETSI never gave a usable answer to the
+                search or to the replacement lookup.
         """
         wanted = _etsi_key(identifier)
-        results = await self.search(identifier, limit=_ETSI_PAGE_SIZE)
-        return next((r for r in results if _etsi_key(r["identifier"]) == wanted), None)
+        rows = await self._rows(identifier, _ETSI_LOOKUP_PARAMS)
+        total = str(
+            (rows[0] if rows and isinstance(rows[0], dict) else {}).get(
+                "total_count", ""
+            )
+        )
+        if total.isdigit() and int(total) > len(rows):
+            # Only page 1 is read, and ETSI's order is not by date.
+            logger.warning(
+                "etsi_lookup_truncated identifier=%s total=%s read=%s",
+                identifier,
+                total,
+                len(rows),
+            )
+        mine = [
+            r
+            for r in rows
+            if isinstance(r, dict) and _etsi_key(_etsi_canonical(r)) == wanted
+        ]
+        if not mine:
+            return None
+        newest = max(mine, key=_etsi_edition_order)
+        replaced_by: list[str] = []
+        if newest.get("superseded") == "1":
+            replaced_by = await self._replacing_deliverables(newest, wanted)
+        return _normalize_etsi(newest, replaced_by)
+
+    async def _replacing_deliverables(self, row: dict, wanted: str) -> list[str]:  # type: ignore[type-arg]
+        """Return the deliverables ``superseded.php`` names as replacing ``row``.
+
+        ETSI answers ``200`` with an ``{"error": ...}`` object when it names
+        no replacement. The edition stays ``superseded`` on its own flag, so
+        that answer yields an empty list; a refused or unreadable request
+        raises, as the search does.
+
+        Args:
+            row: The ``data.php`` row of an edition flagged ``superseded``.
+            wanted: The requested identifier in :func:`_etsi_key` form, left
+                out of the result.
+
+        Returns:
+            Identifiers of the replacing deliverables, once each, in ETSI's
+            order.
+
+        Raises:
+            StandardsUpstreamError: The lookup never got a usable answer.
+        """
+        await self._limiter.acquire()
+        url = f"{_ETSI_BASE}{_ETSI_SUPERSEDED_PATH}"
+        try:
+            resp = await self._http.get(url, params={"wki_id": row.get("wki_id", "")})
+        except httpx.HTTPError as exc:
+            logger.warning("etsi_superseded_request_failed error=%s", exc)
+            raise StandardsUpstreamError(
+                "ETSI", detail=f"replacement lookup never reached ETSI: {exc}"
+            ) from exc
+        if resp.status_code != 200:
+            logger.warning(
+                "etsi_superseded_error status=%d url=%s",
+                resp.status_code,
+                str(resp.url),
+            )
+            raise StandardsUpstreamError(
+                "ETSI",
+                status=resp.status_code,
+                detail="ETSI refused the replacement lookup",
+            )
+        try:
+            payload = resp.json()
+        except json.JSONDecodeError as exc:
+            logger.warning("etsi_superseded_json_decode_error url=%s", str(resp.url))
+            raise StandardsUpstreamError(
+                "ETSI", status=200, detail="replacement lookup answered non-JSON"
+            ) from exc
+        if not isinstance(payload, list):
+            logger.info("etsi_superseded_none_named wki_id=%s", row.get("wki_id", ""))
+            return []
+        found: list[str] = []
+        for item in payload:
+            if not isinstance(item, dict):
+                continue
+            ident = _etsi_canonical(item)
+            if ident and _etsi_key(ident) != wanted and ident not in found:
+                found.append(ident)
+        return found
+
+
+def _etsi_canonical(row: dict) -> str:  # type: ignore[type-arg]
+    """Return a row's identifier without its version and date.
+
+    ``"ETSI EN 303 645 V3.1.3 (2024-09)"`` gives ``"ETSI EN 303 645"``.
+    """
+    return str(row.get("ETSI_DELIVERABLE") or "").split(" V")[0].strip()
+
+
+def _etsi_edition_order(row: dict) -> tuple[str, tuple[int, ...]]:  # type: ignore[type-arg]
+    """Sort key putting a deliverable's newest edition last: date, then version."""
+    m = _ETSI_EDITION_RE.search(str(row.get("ETSI_DELIVERABLE") or ""))
+    if not m:
+        return ("", ())
+    return (m.group(2), tuple(int(n) for n in m.group(1).split(".")))
 
 
 def _etsi_key(identifier: str) -> str:
@@ -1453,11 +1581,20 @@ def _etsi_key(identifier: str) -> str:
     return " ".join(identifier.upper().split())
 
 
-def _normalize_etsi(item: dict) -> StandardRecord:  # type: ignore[type-arg]
+def _normalize_etsi(
+    item: dict,  # type: ignore[type-arg]
+    superseded_by: list[str] | None = None,
+) -> StandardRecord:
     """Normalise a single ETSI search data row to a StandardRecord.
+
+    An edition ETSI flags ``superseded`` reports ``superseded``; one that is
+    withdrawn (``ACTION_TYPE`` ``WD``) or historical (``STATUS_CODE`` 13)
+    reports ``withdrawn``, the reading relaton-etsi uses. See
+    ``docs/design/reference/etsi-standards-search.md``.
 
     Args:
         item: A single dict from the ``data.php`` response array.
+        superseded_by: Identifiers of the deliverables that replace it.
 
     Returns:
         Populated StandardRecord.
@@ -1480,7 +1617,12 @@ def _normalize_etsi(item: dict) -> StandardRecord:  # type: ignore[type-arg]
     pub_date = vm.group(2) if vm else None
 
     action_type = (item.get("ACTION_TYPE") or "").upper()
-    status = "withdrawn" if action_type == "WD" else "published"
+    if superseded_by or item.get("superseded") == "1":
+        status = "superseded"
+    elif action_type == "WD" or item.get("STATUS_CODE") == "13":
+        status = "withdrawn"
+    else:
+        status = "published"
 
     pdf_url: str | None = None
     if pathname and pdffile:
@@ -1496,7 +1638,7 @@ def _normalize_etsi(item: dict) -> StandardRecord:  # type: ignore[type-arg]
         status=status,
         published_date=pub_date,
         withdrawn_date=None,
-        superseded_by=[],
+        superseded_by=list(superseded_by or []),
         supersedes=[],
         scope=scope,
         committee=tb,
