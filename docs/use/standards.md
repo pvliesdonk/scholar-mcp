@@ -336,7 +336,11 @@ A `StandardRecord` dict, the same shape returned by `get_standard`:
   HTML 4.01, is `"superseded"` with an empty list. An ETSI deliverable whose
   newest edition ETSI marks as replaced lists the other ETSI standards that
   replaced it (`ETSI EN 300 328-1` gives `ETSI EN 300 328`); a historical or
-  withdrawn one is `"withdrawn"`. An IEC edition
+  withdrawn one is `"withdrawn"`. A NIST publication on CSRC that NIST
+  withdrew lists what replaced it, as `NIST SP 800-53 Rev. 4` lists
+  `NIST SP 800-53 Rev. 5` and `FIPS 186-4` lists `FIPS 186-5`; one withdrawn
+  with no replacement named is `"withdrawn"`. CSRC lists about 550 of the more
+  than 11,000 NIST publications, and the rest always read `"published"`. An IEC edition
   replaced by a new one reports `"superseded"` with an empty list, since the
   IEC dump links only project numbers. The other bodies leave the list empty,
   so an empty list doesn't show that an edition is current.

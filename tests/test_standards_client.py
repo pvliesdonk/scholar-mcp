@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import io
 import json
 import re
+import zipfile
+from pathlib import Path
 
 import httpx
 import pytest
@@ -11,6 +14,8 @@ import respx
 
 from scholar_mcp._rate_limiter import RateLimiter
 from scholar_mcp._standards_client import (
+    _CSRC_PUBS_EXPORT_URL,
+    _NIST_CACHE_FILE,
     StandardsClient,
     StandardsUpstreamError,
     _ETSIFetcher,
@@ -857,6 +862,32 @@ SAMPLE_GITHUB_RELEASE = {
     ],
 }
 
+NIST_FIXTURES = Path(__file__).parent / "fixtures" / "standards" / "nist"
+# Verbatim entries of CSRC's pubs-export.json (Last-Modified 2026-11-14) and
+# the matching <mods> records of NIST-Tech-Pubs release Oct2026 (#639).
+CSRC_EXPORT_ENTRIES = json.loads(
+    (NIST_FIXTURES / "csrc_pubs_export_sample.json").read_text(encoding="utf-8")
+)
+CSRC_MODS_XML = (NIST_FIXTURES / "mods_sample.xml").read_bytes()
+
+
+def _csrc_export_zip(entries: object) -> bytes:
+    """Pack export entries the way CSRC serves them: one JSON file in a zip."""
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("pubs-export.json", json.dumps(entries))
+    return buffer.getvalue()
+
+
+def _mock_csrc_export(
+    respx_mock: respx.MockRouter, response: httpx.Response | None = None
+) -> respx.Route:
+    """Serve CSRC's publications export, by default with no entries."""
+    return respx_mock.get(_CSRC_PUBS_EXPORT_URL).mock(
+        return_value=response or httpx.Response(200, content=_csrc_export_zip([]))
+    )
+
+
 SAMPLE_MODS_XML = b"""<?xml version="1.0" encoding="UTF-8"?>
 <modsCollection xmlns="http://www.loc.gov/mods/v3">
   <mods version="3.7">
@@ -945,6 +976,7 @@ async def test_nist_search_sp(respx_mock: respx.MockRouter, tmp_path) -> None:
     respx_mock.get(re.compile(r".*allrecords-MODS\.xml.*")).mock(
         return_value=httpx.Response(200, content=SAMPLE_MODS_XML)
     )
+    _mock_csrc_export(respx_mock)
     http = httpx.AsyncClient(base_url=GITHUB_RELEASES_URL)
     fetcher = _NISTFetcher(http, RateLimiter(delay=0.0), cache_dir=tmp_path)
     results = await fetcher.search("800-53", limit=5)
@@ -967,6 +999,7 @@ async def test_nist_search_fips(respx_mock: respx.MockRouter, tmp_path) -> None:
     respx_mock.get(re.compile(r".*allrecords-MODS\.xml.*")).mock(
         return_value=httpx.Response(200, content=SAMPLE_MODS_XML)
     )
+    _mock_csrc_export(respx_mock)
     http = httpx.AsyncClient(base_url=GITHUB_RELEASES_URL)
     fetcher = _NISTFetcher(http, RateLimiter(delay=0.0), cache_dir=tmp_path)
     results = await fetcher.search("FIPS 200", limit=5)
@@ -985,6 +1018,7 @@ async def test_nist_get(respx_mock: respx.MockRouter, tmp_path) -> None:
     respx_mock.get(re.compile(r".*allrecords-MODS\.xml.*")).mock(
         return_value=httpx.Response(200, content=SAMPLE_MODS_XML)
     )
+    _mock_csrc_export(respx_mock)
     http = httpx.AsyncClient(base_url=GITHUB_RELEASES_URL)
     fetcher = _NISTFetcher(http, RateLimiter(delay=0.0), cache_dir=tmp_path)
     record = await fetcher.get("NIST SP 800-53 Rev. 5")
@@ -1003,6 +1037,7 @@ async def test_nist_get_not_found(respx_mock: respx.MockRouter, tmp_path) -> Non
     respx_mock.get(re.compile(r".*allrecords-MODS\.xml.*")).mock(
         return_value=httpx.Response(200, content=SAMPLE_MODS_XML)
     )
+    _mock_csrc_export(respx_mock)
     http = httpx.AsyncClient(base_url=GITHUB_RELEASES_URL)
     fetcher = _NISTFetcher(http, RateLimiter(delay=0.0), cache_dir=tmp_path)
     record = await fetcher.get("NIST SP 999-99")
@@ -1027,6 +1062,7 @@ async def test_nist_get_ignores_malformed_catalogue_entry(
     respx_mock.get(re.compile(r".*allrecords-MODS\.xml.*")).mock(
         return_value=httpx.Response(200, content=SAMPLE_MODS_XML)
     )
+    _mock_csrc_export(respx_mock)
     http = httpx.AsyncClient(base_url=GITHUB_RELEASES_URL)
     fetcher = _NISTFetcher(http, RateLimiter(delay=0.0), cache_dir=tmp_path)
     record = await fetcher.get("NIST SP 800-53 Rev. 5")
@@ -1046,6 +1082,7 @@ async def test_nist_get_absent_identifier_does_not_match_a_prefix(
     respx_mock.get(re.compile(r".*allrecords-MODS\.xml.*")).mock(
         return_value=httpx.Response(200, content=SAMPLE_MODS_XML)
     )
+    _mock_csrc_export(respx_mock)
     http = httpx.AsyncClient(base_url=GITHUB_RELEASES_URL)
     fetcher = _NISTFetcher(http, RateLimiter(delay=0.0), cache_dir=tmp_path)
     record = await fetcher.get("NIST SP 800-92")
@@ -1070,6 +1107,7 @@ async def test_nist_get_does_not_widen_to_a_longer_identifier(
     respx_mock.get(re.compile(r".*allrecords-MODS\.xml.*")).mock(
         return_value=httpx.Response(200, content=SAMPLE_MODS_XML)
     )
+    _mock_csrc_export(respx_mock)
     http = httpx.AsyncClient(base_url=GITHUB_RELEASES_URL)
     fetcher = _NISTFetcher(http, RateLimiter(delay=0.0), cache_dir=tmp_path)
     record = await fetcher.get("NIST SP 800-53")
@@ -1095,6 +1133,7 @@ async def test_nist_disk_cache_used_on_second_call(
     respx_mock.get(re.compile(r".*allrecords-MODS\.xml.*")).mock(
         side_effect=side_effect
     )
+    _mock_csrc_export(respx_mock)
     http = httpx.AsyncClient(base_url=GITHUB_RELEASES_URL)
 
     # First fetcher: downloads XML, saves to disk
@@ -1127,6 +1166,7 @@ async def test_nist_in_memory_cache_used_on_second_search(
     respx_mock.get(re.compile(r".*allrecords-MODS\.xml.*")).mock(
         side_effect=side_effect
     )
+    _mock_csrc_export(respx_mock)
     http = httpx.AsyncClient(base_url=GITHUB_RELEASES_URL)
     fetcher = _NISTFetcher(http, RateLimiter(delay=0.0), cache_dir=tmp_path)
     await fetcher.search("800-53", limit=1)
@@ -1160,7 +1200,7 @@ async def test_nist_stale_disk_cache_triggers_re_download(
     from scholar_mcp._standards_client import _NIST_CACHE_MAX_AGE_DAYS
 
     # Write a stale cache file (mtime > 90 days ago)
-    cache_path = tmp_path / "nist_catalogue.json"
+    cache_path = tmp_path / _NIST_CACHE_FILE
     cache_path.write_text("[]", encoding="utf-8")
     stale_ts = time.time() - (_NIST_CACHE_MAX_AGE_DAYS + 1) * 86400
     import os
@@ -1173,6 +1213,7 @@ async def test_nist_stale_disk_cache_triggers_re_download(
     respx_mock.get(re.compile(r".*allrecords-MODS\.xml.*")).mock(
         return_value=httpx.Response(200, content=SAMPLE_MODS_XML)
     )
+    _mock_csrc_export(respx_mock)
     http = httpx.AsyncClient(base_url=GITHUB_RELEASES_URL)
     fetcher = _NISTFetcher(http, RateLimiter(delay=0.0), cache_dir=tmp_path)
     results = await fetcher.search("800-53", limit=5)
@@ -1187,7 +1228,7 @@ async def test_nist_corrupted_disk_cache_triggers_re_download(
     respx_mock: respx.MockRouter, tmp_path
 ) -> None:
     """Corrupted JSON in disk cache falls back to fresh download."""
-    cache_path = tmp_path / "nist_catalogue.json"
+    cache_path = tmp_path / _NIST_CACHE_FILE
     cache_path.write_text("not valid json {{", encoding="utf-8")
 
     respx_mock.get("/repos/usnistgov/NIST-Tech-Pubs/releases/latest").mock(
@@ -1196,6 +1237,7 @@ async def test_nist_corrupted_disk_cache_triggers_re_download(
     respx_mock.get(re.compile(r".*allrecords-MODS\.xml.*")).mock(
         return_value=httpx.Response(200, content=SAMPLE_MODS_XML)
     )
+    _mock_csrc_export(respx_mock)
     http = httpx.AsyncClient(base_url=GITHUB_RELEASES_URL)
     fetcher = _NISTFetcher(http, RateLimiter(delay=0.0), cache_dir=tmp_path)
     results = await fetcher.search("800-53", limit=5)
@@ -1210,7 +1252,7 @@ async def test_nist_disk_cache_from_before_637_reads_superseded_by_as_a_list(
 
     No route is mocked, so a download attempt would fail the test.
     """
-    cache_path = tmp_path / "nist_catalogue.json"
+    cache_path = tmp_path / _NIST_CACHE_FILE
     cache_path.write_text(
         json.dumps(
             [
@@ -1235,7 +1277,7 @@ async def test_nist_disk_cache_from_before_637_reads_superseded_by_as_a_list(
 async def test_nist_disk_cache_that_is_not_a_list_triggers_re_download(
     respx_mock: respx.MockRouter, tmp_path
 ) -> None:
-    cache_path = tmp_path / "nist_catalogue.json"
+    cache_path = tmp_path / _NIST_CACHE_FILE
     cache_path.write_text('{"not": "a list"}', encoding="utf-8")
     respx_mock.get("/repos/usnistgov/NIST-Tech-Pubs/releases/latest").mock(
         return_value=httpx.Response(200, json=SAMPLE_GITHUB_RELEASE)
@@ -1243,6 +1285,7 @@ async def test_nist_disk_cache_that_is_not_a_list_triggers_re_download(
     respx_mock.get(re.compile(r".*allrecords-MODS\.xml.*")).mock(
         return_value=httpx.Response(200, content=SAMPLE_MODS_XML)
     )
+    _mock_csrc_export(respx_mock)
     http = httpx.AsyncClient(base_url=GITHUB_RELEASES_URL)
     fetcher = _NISTFetcher(http, RateLimiter(delay=0.0), cache_dir=tmp_path)
     results = await fetcher.search("800-53", limit=5)
@@ -1299,6 +1342,7 @@ async def test_nist_search_nistir(respx_mock: respx.MockRouter, tmp_path) -> Non
     respx_mock.get(re.compile(r".*allrecords-MODS\.xml.*")).mock(
         return_value=httpx.Response(200, content=nistir_mods_xml)
     )
+    _mock_csrc_export(respx_mock)
     http = httpx.AsyncClient(base_url=GITHUB_RELEASES_URL)
     fetcher = _NISTFetcher(http, RateLimiter(delay=0.0), cache_dir=tmp_path)
     results = await fetcher.search("8166", limit=5)
@@ -1306,6 +1350,129 @@ async def test_nist_search_nistir(respx_mock: respx.MockRouter, tmp_path) -> Non
     assert len(results) == 1
     assert results[0]["identifier"] == "NISTIR 8166"
     assert results[0]["body"] == "NIST"
+
+
+async def _csrc_fetcher_get(
+    respx_mock: respx.MockRouter, tmp_path: Path, identifier: str
+) -> dict[str, object] | None:
+    """Look ``identifier`` up in the real-data fixtures, CSRC export included."""
+    respx_mock.get("/repos/usnistgov/NIST-Tech-Pubs/releases/latest").mock(
+        return_value=httpx.Response(200, json=SAMPLE_GITHUB_RELEASE)
+    )
+    respx_mock.get(re.compile(r".*allrecords-MODS\.xml.*")).mock(
+        return_value=httpx.Response(200, content=CSRC_MODS_XML)
+    )
+    _mock_csrc_export(
+        respx_mock,
+        httpx.Response(200, content=_csrc_export_zip(CSRC_EXPORT_ENTRIES)),
+    )
+    async with httpx.AsyncClient(base_url=GITHUB_RELEASES_URL) as http:
+        fetcher = _NISTFetcher(http, RateLimiter(delay=0.0), cache_dir=tmp_path)
+        record = await fetcher.get(identifier)
+    return dict(record) if record is not None else None
+
+
+@pytest.mark.respx(base_url=GITHUB_RELEASES_URL)
+@pytest.mark.parametrize(
+    ("identifier", "expected"),
+    [
+        # The issue's example: one entry, withdrawn, naming its replacement.
+        ("FIPS 186-4", ("superseded", ["FIPS 186-5"], "2024-02-03")),
+        # Four update entries; three "supersede" each other under the same
+        # identifier, only upd3 names a different publication.
+        (
+            "NIST SP 800-53 Rev. 4",
+            ("superseded", ["NIST SP 800-53 Rev. 5"], "2021-09-23"),
+        ),
+        # The newest entry is active, yet names FIPS 140-3: the replacement
+        # outranks the stated status (#637).
+        ("FIPS 140-2", ("superseded", ["FIPS 140-3"], None)),
+        # A replacement in the IR series is spelled the catalogue's way.
+        ("FIPS 39", ("superseded", ["NISTIR 7298"], "1993-04-29")),
+        # Withdrawn with no replacement named.
+        ("NIST SP 800-106", ("withdrawn", [], "2022-12-15")),
+        # An older final entry and a draft are withdrawn; the newest final
+        # entry is active.
+        ("FIPS 197", ("published", [], None)),
+        ("NIST SP 800-53 Rev. 5", ("published", [], None)),
+        # CSRC does not list it: the MODS reading stands.
+        ("NISTIR 7298", ("published", [], None)),
+    ],
+)
+async def test_nist_get_reports_csrc_withdrawal_and_replacement(
+    respx_mock: respx.MockRouter,
+    tmp_path: Path,
+    identifier: str,
+    expected: tuple[str, list[str], str | None],
+) -> None:
+    """Status, superseded_by and withdrawn_date, in that order."""
+    record = await _csrc_fetcher_get(respx_mock, tmp_path, identifier)
+    assert record is not None
+    assert (
+        record["status"],
+        record["superseded_by"],
+        record["withdrawn_date"],
+    ) == expected
+
+
+@pytest.mark.respx(base_url=GITHUB_RELEASES_URL)
+async def test_nist_catalogue_cached_with_csrc_data_and_legacy_file_removed(
+    respx_mock: respx.MockRouter, tmp_path: Path
+) -> None:
+    """The catalogue on disk carries CSRC's data; the pre-#639 file is gone.
+
+    A file written before #639 says every publication is published, so it is
+    neither read nor left behind.
+    """
+    legacy = tmp_path / "nist_catalogue.json"
+    legacy.write_text(
+        json.dumps([{"identifier": "FIPS 186-4", "status": "published"}]),
+        encoding="utf-8",
+    )
+    record = await _csrc_fetcher_get(respx_mock, tmp_path, "FIPS 186-4")
+    assert record is not None
+    assert record["status"] == "superseded"
+    assert not legacy.exists()
+    stored = json.loads((tmp_path / _NIST_CACHE_FILE).read_text(encoding="utf-8"))
+    assert {r["identifier"]: r["status"] for r in stored}["FIPS 186-4"] == (
+        "superseded"
+    )
+
+
+@pytest.mark.respx(base_url=GITHUB_RELEASES_URL)
+@pytest.mark.parametrize(
+    "export",
+    [
+        httpx.Response(503),
+        httpx.Response(200, content=b"<html>maintenance</html>"),
+        httpx.Response(200, content=_csrc_export_zip({"not": "a list"})),
+        httpx.ConnectError("refused"),
+    ],
+    ids=["refused", "not-a-zip", "not-a-list", "unreachable"],
+)
+async def test_nist_export_failure_raises_and_caches_nothing(
+    respx_mock: respx.MockRouter,
+    tmp_path: Path,
+    export: httpx.Response | Exception,
+) -> None:
+    """Without the export, a withdrawn publication would read as published."""
+    respx_mock.get("/repos/usnistgov/NIST-Tech-Pubs/releases/latest").mock(
+        return_value=httpx.Response(200, json=SAMPLE_GITHUB_RELEASE)
+    )
+    respx_mock.get(re.compile(r".*allrecords-MODS\.xml.*")).mock(
+        return_value=httpx.Response(200, content=CSRC_MODS_XML)
+    )
+    route = respx_mock.get(_CSRC_PUBS_EXPORT_URL)
+    if isinstance(export, Exception):
+        route.mock(side_effect=export)
+    else:
+        route.mock(return_value=export)
+    async with httpx.AsyncClient(base_url=GITHUB_RELEASES_URL) as http:
+        fetcher = _NISTFetcher(http, RateLimiter(delay=0.0), cache_dir=tmp_path)
+        with pytest.raises(StandardsUpstreamError) as caught:
+            await fetcher.get("FIPS 186-4")
+    assert caught.value.body == "NIST"
+    assert not (tmp_path / _NIST_CACHE_FILE).exists()
 
 
 # ---------------------------------------------------------------------------

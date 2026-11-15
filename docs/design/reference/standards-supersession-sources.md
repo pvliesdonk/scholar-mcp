@@ -178,6 +178,31 @@ ETSI has its own page, [ETSI standards search data endpoint](etsi-standards-sear
   "superseded" by its own later updates (`.../r4/upd1/final`). Only the entry
   whose `superseded-by` points at a different `docidentifier` (`SP 800-53
   Rev. 5`) records the replacement. [observed, as above]
+- The export downloads from
+  `https://csrc.nist.gov/CSRC/media/feeds/metanorma/pubs-export.zip`, a
+  120 KB zip holding one file, `pubs-export.json` (1.5 MB). Its series are
+  `nist-sp` (785 entries), `nist-fips` (72) and `csrc-white-paper` (85).
+  [observed: download, `Last-Modified` 2026-11-14, 2026-11-15]
+  [pins: tests/test_standards_client.py::test_nist_export_failure_raises_and_caches_nothing]
+- Grouped by `docidentifier`, the 621 final entries name 553 publications:
+  300 with only `active` entries, 234 with only `withdrawn` ones, and 19
+  mixed. In a mixed group the newest entry by `published-date` is the
+  current one: FIPS 197's 2001 entry is `withdrawn`, its 2023 entry `active`.
+  FIPS 140-2 is the one group whose newest entry is `active` while an entry
+  names a different publication, FIPS 140-3, in `superseded-by`. A draft's
+  `withdrawn` marks the end of its comment period, not a withdrawn
+  publication. [observed: `pubs-export.json`, 2026-11-15]
+  [pins: tests/test_standards_client.py::test_nist_get_reports_csrc_withdrawal_and_replacement]
+- 180 groups name 187 different publications as replacements: 164 in the
+  SP series, 21 FIPS, `IR 7298` (FIPS 39's) and `CSWP 39upd1`. [observed, as
+  above]
+- Spelled with `NIST SP` for `SP`, 409 of the 505 final SP and FIPS
+  identifiers equal a catalogue identifier that `_parse_nist_mods` derives
+  from release Oct2026, case-insensitively, and none matches two. Of the 231
+  withdrawn or replaced ones, 179 match. 7 are spelled differently in MODS
+  (`SP 800-57 Part 1 Rev. 4` is `800-57pt1r4`, `SP 800-160 Vol. 1` is
+  `800-160v1`). 45 have no MODS record at all, among them the 2005 SP 800-53,
+  FIPS 46-3, FIPS 180-2 and FIPS 201. [observed: both files, 2026-11-15]
 
 ### W3C
 
@@ -223,9 +248,14 @@ ETSI has its own page, [ETSI standards search data endpoint](etsi-standards-sear
 
 ## Where this project departs from the subject
 
-- NIST drops the replacement data CSRC's export carries, reading MODS
-  instead (#639). IETF reads datatracker's `obs` relations since #637, and
-  W3C the `superseded-by` link since #638.
+- NIST reads CSRC's export alongside MODS since #639 and writes its status,
+  replacements and `obsoleted-date` onto the catalogue records it matches. A
+  replacement outranks the newest entry's `substage`, so FIPS 140-2 is
+  superseded. The export's `SP` and `IR` become `NIST SP` and `NISTIR`; the 7
+  differently spelled and 45 absent publications are not matched. A failed
+  export download fails the NIST lookup rather than serving MODS alone.
+  IETF reads datatracker's `obs` relations since #637, and W3C the
+  `superseded-by` link since #638.
 - A W3C specification's `supersedes` collection is not read, so a record's
   `supersedes` stays empty.
 
