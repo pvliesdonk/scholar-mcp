@@ -3229,6 +3229,11 @@ the <code>standards_sync_runs</code> table:</p>
 <li><code>title</code>, full standard title</li>
 <li><code>body</code>, standards body (<code>"IETF"</code>, <code>"ISO"</code>, <code>"IEEE"</code>, <code>"CC"</code>, <code>"CEN"</code>, etc.)</li>
 <li><code>status</code>, <code>"published"</code>, <code>"withdrawn"</code>, <code>"superseded"</code>, <code>"harmonised"</code>, etc.</li>
+<li><code>superseded_by</code>, a list of the identifiers that replace this edition, each one
+  <code>get_standard</code> accepts. An RFC that later RFCs obsolete is <code>"superseded"</code> and
+  lists them: RFC 2616 gives <code>RFC 7230</code> to <code>RFC 7235</code>. Only RFC records fill
+  the list today; for the other bodies it stays empty even when an edition has
+  been replaced, so an empty list doesn't show that an edition is current.</li>
 <li><code>full_text_url</code>, direct link to the freely downloadable document (when available)</li>
 <li><code>full_text_available</code>, <code>True</code> for Tier 1 sources (IETF, NIST, W3C, ETSI) and CC</li>
 <li><code>related</code>, cross-linked identifiers (such as CC ↔ ISO/IEC 15408)</li>
