@@ -85,6 +85,10 @@ every synced ISO record carried only its introductory element, so ISO/IEC
   a bare string (`"en"`) in relaton-data-iec, and absent or null in the IEEE
   records sampled. [source: iso-27002] [source: iec-cispr] [source: ieee-ire]
   [pins: tests/test_sync_relaton.py::test_full_title_prefers_the_english_main_title]
+  These sources are on each repository's `main` branch, which no longer
+  receives data. On `v2`, which the sync reads since #641, ISO writes a bare
+  string too, and every ISO, IEC and IEEE record has a `main` title; see
+  [Relaton data dumps on the v2 branch](relaton-data-v2.md).
 - That English always comes first is not established; six ISO, two IEC and
   two IEEE records were read. [unverified] A scan of each repository's
   `title` lists would settle it.

@@ -1,0 +1,127 @@
+---
+id: IEEEStd5242016Redline
+schema_version: v1.5.6
+type: standard
+title:
+- content: IEEE Guide for the Installation of Overhead Transmission Line Conductors
+  type: main
+source:
+- type: src
+  content: https://ieeexplore.ieee.org/document/8082768
+docidentifier:
+- content: IEEE Std 524-2016 - Redline
+  type: IEEE
+  primary: true
+- content: IEEE Std 524™-2016 - Redline
+  type: IEEE
+  scope: trademark
+  primary: true
+- content: 978-1-5044-4453-8
+  type: ISBN
+docnumber: IEEE Std 524-2016 - Redline
+date:
+- type: created
+  at: '2017-04-28'
+- type: published
+  at: '2017-10-25'
+- type: issued
+  at: '2016-06-30'
+contributor:
+- role:
+  - type: publisher
+  organization:
+    address:
+    - city: New York
+      country: USA
+    uri:
+    - type: org
+      content: http://www.ieee.org
+    name:
+    - language: en
+      script: Latn
+      content: Institute of Electrical and Electronics Engineers
+    abbreviation:
+      content: IEEE
+- role:
+  - type: author
+    description:
+    - language: en
+      script: Latn
+      content: committee
+  organization:
+    name:
+    - language: en
+      script: Latn
+      content: Institute of Electrical and Electronics Engineers
+    subdivision:
+    - name:
+      - language: en
+        script: Latn
+        content: Transmission and Distribution of the IEEE Power and Energy Society
+      type: committee
+    abbreviation:
+      content: IEEE
+language:
+- en
+script:
+- Latn
+abstract:
+- language: en
+  script: Latn
+  content: General recommendations for the selection of methods, equipment, and tools
+    that have been found to be practical for the stringing of overhead transmission
+    line conductors and overhead groundwires are provided.
+copyright:
+- from: '2016'
+  owner:
+  - organization:
+      uri:
+      - type: org
+        content: http://www.ieee.org
+      name:
+      - language: en
+        script: Latn
+        content: Institute of Electrical and Electronics Engineers
+      abbreviation:
+        content: IEEE
+keyword:
+- vocab:
+    language: en
+    script: Latn
+    content: IEEE Standards
+- vocab:
+    language: en
+    script: Latn
+    content: Power transmission lines
+- vocab:
+    language: en
+    script: Latn
+    content: Grounding
+- vocab:
+    language: en
+    script: Latn
+    content: Wiring
+- vocab:
+    language: en
+    script: Latn
+    content: IEEE 524
+- vocab:
+    language: en
+    script: Latn
+    content: overhead groundwires
+- vocab:
+    language: en
+    script: Latn
+    content: overhead transmission line conductors
+ext:
+  schema_version: v1.1.3
+  doctype:
+    content: redline
+  flavor: ieee
+  ics:
+  - code: 29.240.20
+    text: Power transmission and distribution lines
+  standard_status: Active
+  standard_modified: Redline
+  pubstatus: Active
+  holdstatus: Publish

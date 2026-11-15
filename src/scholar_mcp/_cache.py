@@ -413,6 +413,17 @@ _REPAIRS: dict[str, str] = {
         "UPDATE standards SET source = 'CC', synced_at = cached_at "
         "WHERE synced_at IS NULL AND json_extract(data, '$.body') = 'CC'"
     ),
+    # #641: Relaton records came from each repository's main branch, which
+    # stopped receiving data. Synced rows stay until the next sync-standards
+    # run rewrites them from v2 and deletes the identifiers v2 no longer
+    # lists, so search keeps working meanwhile. Live-fetched rows carry the
+    # main data and no sync touches them, so they go for one refetch each.
+    "641_live_relaton_rows": (
+        "DELETE FROM standards WHERE synced_at IS NULL "
+        "AND json_extract(data, '$.body') IN "
+        "('ISO', 'IEC', 'IEEE', 'ISO/IEC', 'IEC/IEEE', 'ISO/IEC/IEEE')"
+    ),
+    "641_standards_search_results": "DELETE FROM standards_search",
 }
 
 
@@ -1342,6 +1353,39 @@ class ScholarCache:
         ) as cur:
             rows = await cur.fetchall()
         return {row[0] for row in rows}
+
+    async def delete_synced_standards(self, source: str, identifiers: list[str]) -> int:
+        """Delete synced standards of one source, and the aliases naming them.
+
+        Only rows with ``synced_at IS NOT NULL`` and the given ``source`` go;
+        a live-fetched row with the same identifier stays. Aliases are read
+        before the identifier itself, so one left pointing at a deleted row
+        would hide a record synced under that text.
+
+        Args:
+            source: Standards body key the rows were synced under.
+            identifiers: Canonical identifiers to delete.
+
+        Returns:
+            How many standards rows were deleted.
+        """
+        if not identifiers:
+            return 0
+        db = _require_open(self._db)
+        before = db.total_changes
+        await db.executemany(
+            "DELETE FROM standards "
+            "WHERE identifier = ? AND source = ? AND synced_at IS NOT NULL",
+            ((ident, source) for ident in identifiers),
+        )
+        deleted = db.total_changes - before
+        await db.executemany(
+            "DELETE FROM standards_aliases WHERE canonical = ? "
+            "AND NOT EXISTS (SELECT 1 FROM standards WHERE identifier = ?)",
+            ((ident, ident) for ident in identifiers),
+        )
+        await db.commit()
+        return deleted
 
     async def search_synced_standards(
         self,

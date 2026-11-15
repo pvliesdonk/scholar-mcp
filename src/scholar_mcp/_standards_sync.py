@@ -33,6 +33,8 @@ class SyncReport:
         unchanged: Number of records unchanged since last sync.
         withdrawn: Number of records marked ``status="withdrawn"``
             because they disappeared from the upstream dump.
+        removed: Number of synced records deleted because they disappeared
+            from an upstream dump that keeps withdrawn records (Relaton).
         errors: Non-fatal error strings encountered during the run.
             Fatal errors should raise instead.
         upstream_ref: Commit SHA, ``Last-Modified`` header, or similar
@@ -48,6 +50,7 @@ class SyncReport:
     unchanged: int
     withdrawn: int
     errors: list[str] = field(default_factory=list)
+    removed: int = 0
     upstream_ref: str | None = None
     started_at: float = 0.0
     finished_at: float = 0.0
@@ -80,7 +83,10 @@ class Loader(Protocol):
         * Write records via ``cache.set_standard(..., source=body,
           synced=True)`` so they bypass TTL expiry.
         * Mark removed identifiers with ``status="withdrawn"`` rather
-          than deleting them.
+          than deleting them. The exception is a source whose dump keeps
+          its withdrawn records, such as Relaton's: an identifier missing
+          from it was renamed or advanced, so the loader deletes the row
+          and counts it in ``removed``.
         * Accumulate non-fatal errors into the report; re-raise fatal
           ones.
         """
@@ -167,21 +173,23 @@ def format_reports(reports: list[SyncReport]) -> str:
     if not reports:
         return "no loaders registered"
     lines = []
-    total_added = total_updated = total_unchanged = total_withdrawn = total_errors = 0
+    total_added = total_updated = total_unchanged = total_withdrawn = 0
+    total_removed = total_errors = 0
     for r in reports:
         lines.append(
             f"{r.body} added={r.added} updated={r.updated} "
             f"unchanged={r.unchanged} withdrawn={r.withdrawn} "
-            f"errors={len(r.errors)}"
+            f"removed={r.removed} errors={len(r.errors)}"
         )
         total_added += r.added
         total_updated += r.updated
         total_unchanged += r.unchanged
         total_withdrawn += r.withdrawn
+        total_removed += r.removed
         total_errors += len(r.errors)
     lines.append(
         f"total added={total_added} updated={total_updated} "
         f"unchanged={total_unchanged} withdrawn={total_withdrawn} "
-        f"errors={total_errors}"
+        f"removed={total_removed} errors={total_errors}"
     )
     return "\n".join(lines)

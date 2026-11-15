@@ -176,6 +176,8 @@ def test_format_reports_renders_lines() -> None:
             _report("IEC", added=5, errors=["bad yaml"]),
         ]
     )
-    assert "ISO added=10 updated=2 unchanged=500 withdrawn=0 errors=0" in out
-    assert "IEC added=5 updated=0 unchanged=0 withdrawn=0 errors=1" in out
-    assert "total added=15 updated=2 unchanged=500 withdrawn=0 errors=1" in out
+    assert "ISO added=10 updated=2 unchanged=500 withdrawn=0 removed=0 errors=0" in out
+    assert "IEC added=5 updated=0 unchanged=0 withdrawn=0 removed=0 errors=1" in out
+    assert (
+        "total added=15 updated=2 unchanged=500 withdrawn=0 removed=0 errors=1" in out
+    )

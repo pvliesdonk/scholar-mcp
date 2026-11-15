@@ -1,16 +1,194 @@
-docid:
-  - id: "IEC/IEEE 61588-2021"
-    type: "IEEE"
-    primary: true
-  - id: "IEC/IEEE 61588-2021"
-    type: "IEC"
-    primary: true
+---
+id: IECIEEE615882021
+schema_version: v1.5.6
+type: standard
 title:
-  - content: "Precision clock synchronization protocol for networked measurement and control systems"
-    format: "text/plain"
-    type: "main"
-link:
-  - content: "https://ieeexplore.ieee.org/document/9543623"
-    type: "src"
-docstatus:
-  stage: "60.60"
+- content: IEC/IEEE International Standard - Precision Clock Synchronization Protocol
+    for Networked Measurement and Control Systems
+  type: main
+source:
+- type: src
+  content: https://ieeexplore.ieee.org/document/9456762
+docidentifier:
+- content: IEC/IEEE 61588-2021
+  type: IEEE
+  primary: true
+- content: IEC/IEEE 61588™-2021
+  type: IEEE
+  scope: trademark
+  primary: true
+- content: 978-1-5044-7667-6
+  type: ISBN
+- content: 10.1109/IEEESTD.2021.9456762
+  type: DOI
+docnumber: IEC/IEEE 61588-2021
+date:
+- type: created
+  at: '2021-06-08'
+- type: published
+  at: '2021-06-15'
+- type: issued
+  at: '2021'
+contributor:
+- role:
+  - type: publisher
+  organization:
+    address:
+    - city: New York
+      country: USA
+    uri:
+    - type: org
+      content: http://www.ieee.org
+    name:
+    - language: en
+      script: Latn
+      content: Institute of Electrical and Electronics Engineers
+    abbreviation:
+      content: IEEE
+- role:
+  - type: author
+    description:
+    - language: en
+      script: Latn
+      content: committee
+  organization:
+    name:
+    - language: en
+      script: Latn
+      content: Institute of Electrical and Electronics Engineers
+    subdivision:
+    - name:
+      - language: en
+        script: Latn
+        content: TC9 - Sensor Technology of the IEEE Instrumentation and Measurement
+          Society
+      type: committee
+    abbreviation:
+      content: IEEE
+language:
+- en
+script:
+- Latn
+abstract:
+- language: en
+  script: Latn
+  content: In this standard, a protocol is defined that provides precise synchronization
+    of clocks in packet-based networked systems. Synchronization of clocks can be
+    achieved in heterogeneous systems that include clocks of different inherent precision,
+    resolution, and stability. The protocol supports synchronization accuracy and
+    precision in the sub-microsecond range with minimal network and local computing
+    resources. Customization is supported by means of profiles. The protocol includes
+    default profiles that permit simple systems to be installed and operated without
+    the need for user management. Sub-nanosecond time transfer accuracy can be achieved
+    in a properly designed network.
+status:
+  stage:
+    content: approved
+copyright:
+- from: '2021'
+  owner:
+  - organization:
+      uri:
+      - type: org
+        content: http://www.ieee.org
+      name:
+      - language: en
+        script: Latn
+        content: Institute of Electrical and Electronics Engineers
+      abbreviation:
+        content: IEEE
+  - organization:
+      name:
+      - language: en
+        script: Latn
+        content: IEC
+relation:
+- type: adoptedFrom
+  bibitem:
+    formattedref:
+      content: IEEE Std 1588-2019 (Revision ofIEEE Std 1588-2008)
+    docidentifier:
+    - content: IEEE Std 1588-2019 (Revision ofIEEE Std 1588-2008)
+      type: IEEE
+      primary: true
+keyword:
+- vocab:
+    language: en
+    script: Latn
+    content: IEEE Standards
+- vocab:
+    language: en
+    script: Latn
+    content: IEC Standards
+- vocab:
+    language: en
+    script: Latn
+    content: Synchronization
+- vocab:
+    language: en
+    script: Latn
+    content: Protocols
+- vocab:
+    language: en
+    script: Latn
+    content: Networked control systems
+- vocab:
+    language: en
+    script: Latn
+    content: Clocks
+- vocab:
+    language: en
+    script: Latn
+    content: Security
+- vocab:
+    language: en
+    script: Latn
+    content: Precision engineering
+- vocab:
+    language: en
+    script: Latn
+    content: Boundary Clock
+- vocab:
+    language: en
+    script: Latn
+    content: clock
+- vocab:
+    language: en
+    script: Latn
+    content: Grandmaster Clock
+- vocab:
+    language: en
+    script: Latn
+    content: IEEE 1588TM
+- vocab:
+    language: en
+    script: Latn
+    content: management
+- vocab:
+    language: en
+    script: Latn
+    content: Ordinary Clock
+- vocab:
+    language: en
+    script: Latn
+    content: security
+- vocab:
+    language: en
+    script: Latn
+    content: synchronization
+- vocab:
+    language: en
+    script: Latn
+    content: Transparent Clock
+ext:
+  schema_version: v1.1.3
+  doctype:
+    content: standard
+  flavor: ieee
+  ics:
+  - code: 39.040.99
+    text: Other time-measuring instruments
+  standard_status: Active
+  standard_modified: Approved
+  pubstatus: Active
+  holdstatus: Publish

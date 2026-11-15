@@ -151,6 +151,12 @@ index holds the argument for the direction and order.
   [#641](https://github.com/pvliesdonk/scholar-mcp/issues/641) (the ISO
   sync, whose status reading is broken for every record). IETF goes first
   because it sets the field's shape; NIST is last because it is the largest.
+  **[evidenced: [Relaton v2 reference](reference/relaton-data-v2.md)]** #641
+  turned out larger: the ISO, IEC and IEEE sync read each repository's `main`
+  branch, which stopped receiving data, so the Tier 2 catalogue was up to 17
+  months old as well as mislabelled. **[stated]** The maintainer chose on
+  2026-11-15 to move the sync and the live lookup to `v2` in one change rather
+  than patch the reading of `main`.
 - **[stated] [050 patent-citations](https://github.com/pvliesdonk/scholar-mcp/milestone/25)
   (minor):** the first patent slice, approved by the maintainer.
   **[derived]** It closes the one "Done when" term with no coverage (citation
@@ -190,6 +196,11 @@ backlog; commit it to a package when it should ship in that cut.
   independently of the package sequence.
 
 ## Revisions
+
+- **2026-11-15 (later) — [stated] the decision; [evidenced] the finding:**
+  #641 was diagnosed on the frozen `main` branch. The maintainer chose to move
+  the Relaton sync and live lookup to `v2`, which carries current data and
+  names each replacement under `obsoletedBy`.
 
 - **2026-11-15 — [stated] the decision; [derived] the rest:**
   The maintainer chose to keep the live fetchers (#120's proposal) and to make

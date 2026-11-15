@@ -1,24 +1,165 @@
-docidentifier:
-  - id: "ISO 9001:2008"
-    type: "ISO"
-    primary: true
+---
+id: ISO90012008
+schema_version: v1.5.6
+type: standard
 title:
-  - content: "Quality management systems — Requirements"
-    language: "en"
-    script: "Latn"
-    format: "text/plain"
-    type: "main"
+- language: en
+  script: Latn
+  content: Quality management systems
+  type: title-intro
+- language: en
+  script: Latn
+  content: Requirements
+  type: title-main
+- language: en
+  script: Latn
+  content: Quality management systems - Requirements
+  type: main
+- language: fr
+  script: Latn
+  content: Systèmes de management de la qualité
+  type: title-intro
+- language: fr
+  script: Latn
+  content: Exigences
+  type: title-main
+- language: fr
+  script: Latn
+  content: Systèmes de management de la qualité - Exigences
+  type: main
+source:
+- type: src
+  content: https://www.iso.org/standard/46486.html
+- type: obp
+  content: https://www.iso.org/obp/ui/en/#!iso:std:46486:en
+- type: rss
+  content: https://www.iso.org/contents/data/standard/04/64/46486.detail.rss
+docidentifier:
+- content: ISO 9001:2008
+  type: ISO
+  primary: true
+- content: ISO 9001
+  type: iso-undated
+- content: ISO 9001:2008(E)
+  type: iso-reference
+- content: urn:iso:std:iso:9001:stage-95.99
+  type: URN
+docnumber: '9001'
 date:
-  - type: "published"
-    value: "2008-11-15"
-docstatus:
-  stage: "95.99"
-link:
-  - type: "src"
-    content: "https://www.iso.org/standard/46486.html"
+- type: published
+  at: '2008-11-13'
+contributor:
+- role:
+  - type: publisher
+  organization:
+    uri:
+    - content: www.iso.org
+    name:
+    - content: International Organization for Standardization
+    abbreviation:
+      content: ISO
+- role:
+  - type: author
+    description:
+    - content: committee
+  organization:
+    name:
+    - content: International Organization for Standardization
+    subdivision:
+    - name:
+      - content: Quality systems
+      identifier:
+      - content: ISO/TC 176/SC 2
+      type: technical-committee
+      subtype: TC
+    abbreviation:
+      content: ISO
+edition:
+  content: '4'
+language:
+- ar
+- en
+- es
+- fr
+- ru
+script:
+- Latn
+- Cyrl
+abstract:
+- language: en
+  script: Latn
+  content: ISO 9001:2008 specifies requirements for a quality management system where
+    an organization needs to demonstrate its ability to consistently provide product
+    that meets customer and applicable statutory and regulatory requirements, and
+    aims to enhance customer satisfaction through the effective application of the
+    system, including processes for continual improvement of the system and the assurance
+    of conformity to customer and applicable statutory and regulatory requirements.
+    All requirements of ISO 9001:2008 are generic and are intended to be applicable
+    to all organizations, regardless of type, size and product provided. Where any
+    requirement(s) of ISO 9001:2008 cannot be applied due to the nature of an organization
+    and its product, this can be considered for exclusion. Where exclusions are made,
+    claims of conformity to ISO 9001:2008 are not acceptable unless these exclusions
+    are limited to requirements within Clause 7, and such exclusions do not affect
+    the organization's ability, or responsibility, to provide product that meets customer
+    and applicable statutory and regulatory requirements.
+status:
+  stage:
+    content: '95'
+  substage:
+    content: '99'
+copyright:
+- from: '2008'
+  owner:
+  - organization:
+      name:
+      - content: ISO
 relation:
-  - type: "obsoleted-by"
-    bibitem:
-      docidentifier:
-        - id: "ISO 9001:2015"
-          type: "ISO"
+- type: obsoletes
+  bibitem:
+    formattedref:
+      content: ISO 9001:2000
+    docidentifier:
+    - content: ISO 9001:2000
+      type: ISO
+      primary: true
+    date:
+    - type: published
+      at: '2000-12-08'
+- type: obsoletedBy
+  bibitem:
+    formattedref:
+      content: ISO 9001:2015
+    docidentifier:
+    - content: ISO 9001:2015
+      type: ISO
+      primary: true
+    date:
+    - type: published
+      at: '2015-09-22'
+- type: updatedBy
+  bibitem:
+    formattedref:
+      content: ISO 9001:2008/Cor 1:2009
+    docidentifier:
+    - content: ISO 9001:2008/Cor 1:2009
+      type: ISO
+      primary: true
+    date:
+    - type: published
+      at: '2009-07-17'
+place:
+- city: Geneva
+ext:
+  schema_version: v1.1.2
+  doctype:
+    content: international-standard
+  flavor: iso
+  ics:
+  - code: 03.120.10
+    text: Quality management and quality assurance
+  - code: 03.100.70
+    text: Management systems
+  structuredidentifier:
+    type: ISO
+    project_number:
+      content: '46486'

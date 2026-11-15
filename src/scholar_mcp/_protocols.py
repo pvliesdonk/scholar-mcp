@@ -108,6 +108,9 @@ class CacheProtocol(Protocol):
         aliases: list[tuple[str, str]],
     ) -> None: ...
     async def list_synced_standard_ids(self, source: str) -> set[str]: ...
+    async def delete_synced_standards(
+        self, source: str, identifiers: list[str]
+    ) -> int: ...
     async def search_synced_standards(
         self,
         query: str,

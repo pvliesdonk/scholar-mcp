@@ -8,7 +8,7 @@ import respx
 
 ISO_9001_YAML = """
 docidentifier:
-  - id: "ISO 9001:2015"
+  - content: "ISO 9001:2015"
     type: "ISO"
     primary: true
 title:
@@ -16,16 +16,19 @@ title:
     language: "en"
     format: "text/plain"
     type: "main"
-docstatus:
-  stage: "60.60"
-link:
+status:
+  stage:
+    content: "60"
+  substage:
+    content: "60"
+source:
   - type: "src"
     content: "https://www.iso.org/standard/62085.html"
 """
 
 IEC_62443_YAML = """
 docidentifier:
-  - id: "IEC 62443-3-3:2020"
+  - content: "IEC 62443-3-3:2020"
     type: "IEC"
     primary: true
 title:
@@ -33,9 +36,12 @@ title:
     language: "en"
     format: "text/plain"
     type: "main"
-docstatus:
-  stage: "60.60"
-link:
+status:
+  stage:
+    content: "60"
+  substage:
+    content: "60"
+source:
   - type: "src"
     content: "https://webstore.iec.ch/publication/1234"
 """
@@ -88,7 +94,7 @@ async def test_live_fetch_iso_hit() -> None:
 
     with respx.mock(assert_all_called=False) as router:
         router.get(
-            "https://raw.githubusercontent.com/relaton/relaton-data-iso/main/data/iso-9001-2015.yaml"
+            "https://raw.githubusercontent.com/relaton/relaton-data-iso/v2/data/iso-9001-2015.yaml"
         ).mock(return_value=httpx.Response(200, text=ISO_9001_YAML))
 
         async with httpx.AsyncClient() as http:
@@ -113,11 +119,11 @@ async def test_live_fetch_falls_back_to_iec_when_iso_404() -> None:
     with respx.mock(assert_all_called=True) as router:
         # ISO repo is called first and returns 404
         router.get(
-            "https://raw.githubusercontent.com/relaton/relaton-data-iso/main/data/iso-9001-2015.yaml"
+            "https://raw.githubusercontent.com/relaton/relaton-data-iso/v2/data/iso-9001-2015.yaml"
         ).mock(side_effect=lambda _: (call_order.append("iso"), httpx.Response(404))[1])
         # IEC repo is called as fallback and succeeds
         router.get(
-            "https://raw.githubusercontent.com/relaton/relaton-data-iec/main/data/iso-9001-2015.yaml"
+            "https://raw.githubusercontent.com/relaton/relaton-data-iec/v2/data/iso-9001-2015.yaml"
         ).mock(
             side_effect=lambda _: (
                 call_order.append("iec"),
@@ -148,11 +154,11 @@ async def test_live_fetch_falls_back_to_iso_when_iec_404() -> None:
     with respx.mock(assert_all_called=True) as router:
         # IEC repo is called first and returns 404
         router.get(
-            "https://raw.githubusercontent.com/relaton/relaton-data-iec/main/data/iec-62443-3-3-2020.yaml"
+            "https://raw.githubusercontent.com/relaton/relaton-data-iec/v2/data/iec-62443-3-3-2020.yaml"
         ).mock(side_effect=lambda _: (call_order.append("iec"), httpx.Response(404))[1])
         # ISO repo is called as fallback and succeeds
         router.get(
-            "https://raw.githubusercontent.com/relaton/relaton-data-iso/main/data/iec-62443-3-3-2020.yaml"
+            "https://raw.githubusercontent.com/relaton/relaton-data-iso/v2/data/iec-62443-3-3-2020.yaml"
         ).mock(
             side_effect=lambda _: (
                 call_order.append("iso"),
@@ -177,10 +183,10 @@ async def test_live_fetch_returns_stub_when_both_404() -> None:
 
     with respx.mock(assert_all_called=False) as router:
         router.get(
-            "https://raw.githubusercontent.com/relaton/relaton-data-iso/main/data/iso-99999-2099.yaml"
+            "https://raw.githubusercontent.com/relaton/relaton-data-iso/v2/data/iso-99999-2099.yaml"
         ).mock(return_value=httpx.Response(404))
         router.get(
-            "https://raw.githubusercontent.com/relaton/relaton-data-iec/main/data/iso-99999-2099.yaml"
+            "https://raw.githubusercontent.com/relaton/relaton-data-iec/v2/data/iso-99999-2099.yaml"
         ).mock(return_value=httpx.Response(404))
 
         async with httpx.AsyncClient() as http:
@@ -213,10 +219,10 @@ async def test_live_fetch_returns_stub_on_server_error() -> None:
 
     with respx.mock(assert_all_called=True) as router:
         router.get(
-            "https://raw.githubusercontent.com/relaton/relaton-data-iso/main/data/iso-9001-2015.yaml"
+            "https://raw.githubusercontent.com/relaton/relaton-data-iso/v2/data/iso-9001-2015.yaml"
         ).mock(return_value=httpx.Response(500))
         router.get(
-            "https://raw.githubusercontent.com/relaton/relaton-data-iec/main/data/iso-9001-2015.yaml"
+            "https://raw.githubusercontent.com/relaton/relaton-data-iec/v2/data/iso-9001-2015.yaml"
         ).mock(return_value=httpx.Response(500))
 
         async with httpx.AsyncClient() as http:
@@ -241,11 +247,11 @@ async def test_live_fetch_returns_stub_on_yaml_parse_error() -> None:
     with respx.mock(assert_all_called=True) as router:
         # ISO repo returns malformed YAML
         router.get(
-            "https://raw.githubusercontent.com/relaton/relaton-data-iso/main/data/iso-9001-2015.yaml"
+            "https://raw.githubusercontent.com/relaton/relaton-data-iso/v2/data/iso-9001-2015.yaml"
         ).mock(return_value=httpx.Response(200, text=bad_yaml))
         # IEC repo returns 404
         router.get(
-            "https://raw.githubusercontent.com/relaton/relaton-data-iec/main/data/iso-9001-2015.yaml"
+            "https://raw.githubusercontent.com/relaton/relaton-data-iec/v2/data/iso-9001-2015.yaml"
         ).mock(return_value=httpx.Response(404))
 
         async with httpx.AsyncClient() as http:
@@ -320,44 +326,32 @@ async def test_live_fetcher_search_returns_empty_without_cache() -> None:
     assert results == []
 
 
-def test_identifier_to_slug_ieee_plain() -> None:
-    """IEEE identifiers use uppercase-underscore form, preserving dots."""
+@pytest.mark.parametrize(
+    ("identifier", "slug"),
+    [
+        # The resolver strips "Std"; the v2 file keeps it (#641).
+        ("IEEE 1003.1-2024", "ieee-std-1003-1-2024"),
+        ("IEEE C37.60-2018", "ieee-std-c37-60-2018"),
+        ("IEEE Std 1588-2019", "ieee-std-1588-2019"),
+        ("IEEE P802.11ai", "ieee-p802-11ai"),
+        ("IEC/IEEE 61588-2021", "iec-ieee-61588-2021"),
+        ("ISO/IEC/IEEE 42010-2011", "iso-iec-ieee-42010-2011"),
+        ("ISO/TR 20693:2019", "iso-tr-20693-2019"),
+        # + & _ [ ] survive in v2 filenames.
+        ("IEC 60601-1:2005+AMD1:2012 CSV", "iec-60601-1-2005+amd1-2012-csv"),
+    ],
+)
+def test_identifier_to_slug_matches_v2_filenames(identifier: str, slug: str) -> None:
+    """Every body names its v2 files the same lowercase-hyphen way."""
     from scholar_mcp._relaton_live import _identifier_to_relaton_slug
 
-    assert _identifier_to_relaton_slug("IEEE 1003.1-2024") == "IEEE_1003.1-2024"
+    assert _identifier_to_relaton_slug(identifier) == slug
 
 
-def test_identifier_to_slug_ieee_std_variant() -> None:
-    """`IEEE Std 1588-2019` keeps the 'Std' token, underscore-joined."""
+def test_identifier_to_slug_rejects_compact_ieee() -> None:
     from scholar_mcp._relaton_live import _identifier_to_relaton_slug
 
-    assert _identifier_to_relaton_slug("IEEE Std 1588-2019") == "IEEE_Std_1588-2019"
-
-
-def test_identifier_to_slug_iec_ieee_joint() -> None:
-    """IEC/IEEE joint → IEC_IEEE_NUMBER-YEAR uppercase."""
-    from scholar_mcp._relaton_live import _identifier_to_relaton_slug
-
-    assert _identifier_to_relaton_slug("IEC/IEEE 61588-2021") == "IEC_IEEE_61588-2021"
-
-
-def test_identifier_to_slug_iso_iec_ieee_joint() -> None:
-    """ISO/IEC/IEEE triple-joint → ISO_IEC_IEEE_NUMBER-YEAR uppercase."""
-    from scholar_mcp._relaton_live import _identifier_to_relaton_slug
-
-    assert (
-        _identifier_to_relaton_slug("ISO/IEC/IEEE 42010-2011")
-        == "ISO_IEC_IEEE_42010-2011"
-    )
-
-
-def test_identifier_to_slug_preserves_iso_lowercase_hyphen() -> None:
-    """Pre-PR-3 ISO/IEC slug form (lowercase-hyphen) must not regress."""
-    from scholar_mcp._relaton_live import _identifier_to_relaton_slug
-
-    assert _identifier_to_relaton_slug("ISO 9001:2015") == "iso-9001-2015"
-    assert _identifier_to_relaton_slug("IEC 62443-3-3:2020") == "iec-62443-3-3-2020"
-    assert _identifier_to_relaton_slug("ISO/IEC 27001:2022") == "iso-iec-27001-2022"
+    assert _identifier_to_relaton_slug("IEEE1003") is None
 
 
 @pytest.mark.asyncio
@@ -366,24 +360,27 @@ async def test_live_fetch_ieee_hit() -> None:
     from scholar_mcp._relaton_live import RelatonLiveFetcher
 
     ieee_yaml = """
-docid:
-  - id: "IEEE 1003.1-2024"
+docidentifier:
+  - content: "IEEE 1003.1-2024"
     type: "IEEE"
     primary: true
 title:
   - content: "POSIX Base Specifications"
     format: "text/plain"
     type: "main"
-docstatus:
-  stage: "60.60"
-link:
+status:
+  stage:
+    content: "60"
+  substage:
+    content: "60"
+source:
   - type: "src"
     content: "https://ieeexplore.ieee.org/document/10555529"
 """
 
     with respx.mock(assert_all_called=True) as router:
         router.get(
-            "https://raw.githubusercontent.com/relaton/relaton-data-ieee/main/data/IEEE_1003.1-2024.yaml"
+            "https://raw.githubusercontent.com/relaton/relaton-data-ieee/v2/data/ieee-std-1003-1-2024.yaml"
         ).mock(return_value=httpx.Response(200, text=ieee_yaml))
 
         async with httpx.AsyncClient() as http:
@@ -402,30 +399,33 @@ async def test_live_fetch_ieee_joint_falls_back_to_iso() -> None:
     from scholar_mcp._relaton_live import RelatonLiveFetcher
 
     joint_yaml = """
-docid:
-  - id: "ISO/IEC/IEEE 42010-2011"
+docidentifier:
+  - content: "ISO/IEC/IEEE 42010-2011"
     type: "IEEE"
     primary: true
-  - id: "ISO/IEC/IEEE 42010:2011"
+  - content: "ISO/IEC/IEEE 42010:2011"
     type: "ISO"
     primary: true
-  - id: "ISO/IEC/IEEE 42010:2011"
+  - content: "ISO/IEC/IEEE 42010:2011"
     type: "IEC"
     primary: true
 title:
   - content: "Architecture description"
     format: "text/plain"
     type: "main"
-docstatus:
-  stage: "60.60"
+status:
+  stage:
+    content: "60"
+  substage:
+    content: "60"
 """
 
     with respx.mock(assert_all_called=True) as router:
         router.get(
-            "https://raw.githubusercontent.com/relaton/relaton-data-ieee/main/data/ISO_IEC_IEEE_42010-2011.yaml"
+            "https://raw.githubusercontent.com/relaton/relaton-data-ieee/v2/data/iso-iec-ieee-42010-2011.yaml"
         ).mock(return_value=httpx.Response(404))
         router.get(
-            "https://raw.githubusercontent.com/relaton/relaton-data-iso/main/data/ISO_IEC_IEEE_42010-2011.yaml"
+            "https://raw.githubusercontent.com/relaton/relaton-data-iso/v2/data/iso-iec-ieee-42010-2011.yaml"
         ).mock(return_value=httpx.Response(200, text=joint_yaml))
 
         async with httpx.AsyncClient() as http:
@@ -447,7 +447,7 @@ async def test_live_fetch_ieee_1003_1_2024_real() -> None:
         record = await fetcher.get("IEEE 1003.1-2024")
 
     assert record is not None
-    assert record["identifier"] == "IEEE 1003.1-2024"
+    assert record["identifier"] == "IEEE Std 1003.1-2024"
     assert record["body"] == "IEEE"
     assert record["title"]
 
@@ -481,7 +481,7 @@ async def test_live_fetch_ieee_all_repos_fail_returns_stub() -> None:
 
     with respx.mock(assert_all_called=True) as router:
         router.get(
-            "https://raw.githubusercontent.com/relaton/relaton-data-ieee/main/data/IEEE_1003.1-2024.yaml"
+            "https://raw.githubusercontent.com/relaton/relaton-data-ieee/v2/data/ieee-std-1003-1-2024.yaml"
         ).mock(return_value=httpx.Response(404))
 
         async with httpx.AsyncClient() as http:
@@ -507,10 +507,10 @@ async def test_live_fetch_iec_ieee_all_repos_fail_returns_stub() -> None:
 
     with respx.mock(assert_all_called=True) as router:
         router.get(
-            "https://raw.githubusercontent.com/relaton/relaton-data-ieee/main/data/IEC_IEEE_61588-2021.yaml"
+            "https://raw.githubusercontent.com/relaton/relaton-data-ieee/v2/data/iec-ieee-61588-2021.yaml"
         ).mock(return_value=httpx.Response(404))
         router.get(
-            "https://raw.githubusercontent.com/relaton/relaton-data-iec/main/data/IEC_IEEE_61588-2021.yaml"
+            "https://raw.githubusercontent.com/relaton/relaton-data-iec/v2/data/iec-ieee-61588-2021.yaml"
         ).mock(return_value=httpx.Response(404))
 
         async with httpx.AsyncClient() as http:
@@ -530,13 +530,13 @@ async def test_live_fetch_iso_iec_ieee_all_repos_fail_returns_stub() -> None:
 
     with respx.mock(assert_all_called=True) as router:
         router.get(
-            "https://raw.githubusercontent.com/relaton/relaton-data-ieee/main/data/ISO_IEC_IEEE_42010-2011.yaml"
+            "https://raw.githubusercontent.com/relaton/relaton-data-ieee/v2/data/iso-iec-ieee-42010-2011.yaml"
         ).mock(return_value=httpx.Response(404))
         router.get(
-            "https://raw.githubusercontent.com/relaton/relaton-data-iso/main/data/ISO_IEC_IEEE_42010-2011.yaml"
+            "https://raw.githubusercontent.com/relaton/relaton-data-iso/v2/data/iso-iec-ieee-42010-2011.yaml"
         ).mock(return_value=httpx.Response(404))
         router.get(
-            "https://raw.githubusercontent.com/relaton/relaton-data-iec/main/data/ISO_IEC_IEEE_42010-2011.yaml"
+            "https://raw.githubusercontent.com/relaton/relaton-data-iec/v2/data/iso-iec-ieee-42010-2011.yaml"
         ).mock(return_value=httpx.Response(404))
 
         async with httpx.AsyncClient() as http:
@@ -557,27 +557,30 @@ async def test_live_fetch_iec_ieee_iec_repo_wins() -> None:
     from scholar_mcp._relaton_live import RelatonLiveFetcher
 
     iec_ieee_yaml = """
-docid:
-  - id: "IEC/IEEE 61588-2021"
+docidentifier:
+  - content: "IEC/IEEE 61588-2021"
     type: "IEEE"
     primary: true
-  - id: "IEC/IEEE 61588-2021"
+  - content: "IEC/IEEE 61588-2021"
     type: "IEC"
     primary: true
 title:
   - content: "Precision clock synchronization"
     format: "text/plain"
     type: "main"
-docstatus:
-  stage: "60.60"
+status:
+  stage:
+    content: "60"
+  substage:
+    content: "60"
 """
 
     with respx.mock(assert_all_called=True) as router:
         router.get(
-            "https://raw.githubusercontent.com/relaton/relaton-data-ieee/main/data/IEC_IEEE_61588-2021.yaml"
+            "https://raw.githubusercontent.com/relaton/relaton-data-ieee/v2/data/iec-ieee-61588-2021.yaml"
         ).mock(return_value=httpx.Response(404))
         router.get(
-            "https://raw.githubusercontent.com/relaton/relaton-data-iec/main/data/IEC_IEEE_61588-2021.yaml"
+            "https://raw.githubusercontent.com/relaton/relaton-data-iec/v2/data/iec-ieee-61588-2021.yaml"
         ).mock(return_value=httpx.Response(200, text=iec_ieee_yaml))
 
         async with httpx.AsyncClient() as http:
