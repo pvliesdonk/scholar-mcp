@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from contextlib import asynccontextmanager
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -1104,3 +1105,75 @@ async def test_get_sync_status_description_carries_no_docstring_sections(
     description = tools["get_sync_status"].description or ""
     assert "Returns:" not in description
     assert '{"runs": [...]}' in description
+
+
+# ---------------------------------------------------------------------------
+# #645: a synced identifier is answered from its row, before the resolver
+# rewrites it. tests/conftest.py's _no_network fails any live fetch.
+# ---------------------------------------------------------------------------
+
+_IEEE_1588_2008: dict[str, Any] = {
+    "identifier": "IEEE Std 1588-2008",
+    "title": "IEEE Standard for a Precision Clock Synchronization Protocol",
+    "body": "IEEE",
+    "status": "superseded",
+    "superseded_by": ["IEC 61588-2009"],
+    "full_text_available": False,
+}
+
+
+async def test_get_standard_answers_a_synced_ieee_identifier_as_given(
+    mcp: FastMCP, service: Service
+) -> None:
+    """The resolver would ask for "IEEE 1588-2008"; the synced row keeps "Std"."""
+    await service.cache.set_standard(
+        "IEEE Std 1588-2008", _IEEE_1588_2008, source="IEEE", synced=True
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_standard", {"identifier": "IEEE Std 1588-2008"}
+        )
+    data = json.loads(result.content[0].text)
+    assert data["identifier"] == "IEEE Std 1588-2008"
+    assert data["superseded_by"] == ["IEC 61588-2009"]
+
+
+async def test_resolve_answers_a_synced_joint_identifier_as_given(
+    mcp: FastMCP, service: Service
+) -> None:
+    """The resolver would turn ":2011" into "-2011"; the synced row keeps it."""
+    record = {
+        "identifier": "ISO/IEC/IEEE 60559:2011",
+        "title": "Floating-point arithmetic",
+        "body": "ISO",
+        "full_text_available": False,
+    }
+    await service.cache.set_standard(
+        "ISO/IEC/IEEE 60559:2011", record, source="ISO", synced=True
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "resolve_standard_identifier", {"raw": "ISO/IEC/IEEE 60559:2011"}
+        )
+    data = json.loads(result.content[0].text)
+    assert data["canonical"] == "ISO/IEC/IEEE 60559:2011"
+    assert data["record"]["title"] == "Floating-point arithmetic"
+
+
+async def test_get_standard_alias_still_wins_over_the_text_as_given(
+    mcp: FastMCP, service: Service
+) -> None:
+    """An alias names the canonical record even when a row sits under the text."""
+    await service.cache.set_standard_alias("IEEE Std 1588-2008", "IEEE Std 1588-2019")
+    await service.cache.set_standard("IEEE Std 1588-2008", _IEEE_1588_2008)
+    newer: Any = {
+        **_IEEE_1588_2008,
+        "identifier": "IEEE Std 1588-2019",
+        "superseded_by": [],
+    }
+    await service.cache.set_standard("IEEE Std 1588-2019", newer)
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_standard", {"identifier": "IEEE Std 1588-2008"}
+        )
+    assert json.loads(result.content[0].text)["identifier"] == "IEEE Std 1588-2019"

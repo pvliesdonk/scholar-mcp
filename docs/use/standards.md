@@ -329,8 +329,8 @@ A `StandardRecord` dict, the same shape returned by `get_standard`:
   lists them: RFC 2616 gives `RFC 7230` to `RFC 7235`. A withdrawn ISO or IEEE
   edition whose dump record names its replacement does the same:
   ISO/IEC 27001:2005 gives `ISO/IEC 27001:2013`. An IEEE replacement keeps
-  the "Std" of its identifier (`IEEE Std 1588-2019`); `get_standard` accepts
-  it but answers from a live fetch instead of the synced copy. A W3C
+  the "Std" of its identifier (`IEEE Std 1588-2019`), and `get_standard`
+  answers it from the synced copy. A W3C
   specification that another one replaced lists it too, as Web Forms 2.0
   lists `HTML5`, while a retired one with no named successor, such as
   HTML 4.01, is `"superseded"` with an empty list. An ETSI deliverable whose

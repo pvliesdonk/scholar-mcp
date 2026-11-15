@@ -106,6 +106,27 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+async def _cached_as_given(service: Service, identifier: str) -> StandardRecord | None:
+    """Return the cached record stored under ``identifier`` exactly, if any.
+
+    The resolver rewrites some identifiers a dump writes in full: it strips
+    the "Std" of ``IEEE Std 1588-2008`` and turns ``ISO/IEC/IEEE 60559:2011``
+    into ``ISO/IEC/IEEE 60559-2011``. Read the cache under the identifier as
+    given first, so a synced record is found by its own identifier (#645).
+
+    Args:
+        service: Domain service holding the cache.
+        identifier: The identifier as the caller gave it, stripped.
+
+    Returns:
+        The cached record, or None when nothing is stored under that text.
+    """
+    record = await service.cache.get_standard(identifier)
+    if record is not None:
+        logger.debug("standard_cache_hit_as_given identifier=%s", identifier)
+    return record
+
+
 async def resolve_standard_identifier(
     raw: str,
     service: Service = Depends(get_service),
@@ -153,7 +174,13 @@ async def resolve_standard_identifier(
                 "record": cached_record,
             }
 
-    # 2. Try local regex
+    # 2. A record stored under the text as given, before the resolver
+    # rewrites it.
+    as_given = await _cached_as_given(service, raw)
+    if as_given is not None:
+        return {"canonical": raw, "body": as_given.get("body"), "record": as_given}
+
+    # 3. Try local regex
     resolved = resolve_identifier_local(raw)
     if resolved is not None:
         canonical, body = resolved
@@ -173,7 +200,7 @@ async def resolve_standard_identifier(
             }
         return {"canonical": canonical, "body": body, "record": None}
 
-    # 3. API fallback — search all sources
+    # 4. API fallback — search all sources
     candidates = await service.standards.resolve(raw)
     if not candidates:
         return {"canonical": None, "body": None, "record": None}
@@ -316,16 +343,21 @@ async def get_standard(
     """
     identifier = identifier.strip()
 
-    # 1. Resolve identifier to canonical form (alias cache → regex → passthrough)
+    # 1. Resolve identifier to canonical form (alias cache → the text as
+    # given, when a record is stored under it → regex → passthrough)
     cached_canonical = await service.cache.get_standard_alias(identifier)
+    cached: StandardRecord | None = None
     if cached_canonical is not None:
         canonical = cached_canonical
+    elif (cached := await _cached_as_given(service, identifier)) is not None:
+        canonical = identifier
     else:
         resolved = resolve_identifier_local(identifier)
         canonical = resolved[0] if resolved else identifier
 
     # 2. Check cache
-    cached = await service.cache.get_standard(canonical)
+    if cached is None:
+        cached = await service.cache.get_standard(canonical)
     if cached is not None:
         logger.debug("standard_cache_hit identifier=%s", canonical)
         if fetch_full_text:
