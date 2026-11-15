@@ -3293,10 +3293,12 @@ the <code>standards_sync_runs</code> table:</p>
   withdrawal can take that long to show. Not every NIST replacement leads to a
   record yet: <code>get_standard</code> can't find some older ones, such as <code>FIPS 186-3</code>,
   and reads a numbered edition such as <code>NIST SP 800-73-4</code> as <code>NIST SP 800-73</code>.
-  NIST records cached before this release are fetched again. An IEC edition
+  An IEC edition
   replaced by a new one reports <code>"superseded"</code> with an empty list, since the
   IEC dump links only project numbers. The other bodies leave the list empty,
-  so an empty list doesn't show that an edition is current.</li>
+  so an empty list doesn't show that an edition is current.
+  IETF, NIST, W3C and ETSI records cached by an earlier release are
+  fetched again on their next lookup, so they pick up these fields.</li>
 <li><code>full_text_url</code>, direct link to the freely downloadable document (when available)</li>
 <li><code>full_text_available</code>, <code>True</code> for Tier 1 sources (IETF, NIST, W3C, ETSI) and CC</li>
 <li><code>related</code>, cross-linked identifiers (such as CC ↔ ISO/IEC 15408)</li>
