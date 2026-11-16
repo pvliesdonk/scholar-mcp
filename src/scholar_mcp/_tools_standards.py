@@ -133,7 +133,7 @@ async def resolve_standard_identifier(
 ) -> dict[str, Any]:
     """Normalise a messy standard citation string to its canonical form.
 
-    Tries local regex first (fast, no network). Falls back to querying
+    Tries local patterns first, which is fast and offline. Falls back to querying
     source APIs when local patterns don't match. Returns all candidates
     when the input is ambiguous.
 
@@ -226,6 +226,10 @@ async def search_standards(
     Searches NIST, IETF, W3C, and ETSI. Use ``body`` to restrict to one
     source body.
 
+    Results come ranked with the current edition first. An identifier equal
+    to the query leads, and documents that name the standard only in their
+    title come last.
+
     A cold catalogue makes this slow: the first call after a fresh install or
     a cleared cache downloads and parses each body's index, which runs well
     past the soft deadline. Such a call returns a job handle to poll with
@@ -234,8 +238,8 @@ async def search_standards(
     Every answer states its own completeness. ``partial`` is always present,
     and when it is true ``failed_bodies`` names each source that did not
     answer and ``warning`` describes it. A partial answer is deliberately not
-    an ``error``: the results that did arrive are usable, and the named bodies
-    may still hold matches worth asking for again.
+    an ``error``: the results that did arrive are usable, and the bodies in
+    ``failed_bodies`` may still hold matches worth asking for again.
 
     Examples:
         search_standards("TLS 1.3")
@@ -305,7 +309,7 @@ async def get_standard(
     A conversion that fails still returns the record, with the reason in
     ``full_text_error``; ``full_text_url`` is there to fetch by hand. No
     ``full_text`` and no ``full_text_error`` means none was on offer, or
-    docling is not configured; neither is worth retrying.
+    docling is not configured. Neither is worth retrying.
 
     ``not_found`` means the source answered and holds no such standard: stop
     asking about that identifier. A lookup that never got an answer says so
@@ -315,7 +319,7 @@ async def get_standard(
 
     Full text is returned in pages of at most 20,000 characters. When
     ``next_offset`` is present, call this tool again with that value as
-    ``text_offset``; the cached conversion makes later pages inexpensive.
+    ``text_offset``. The cached conversion makes later pages inexpensive.
     Set ``max_chars`` to null only when the client can accept the complete
     document in one response.
 
@@ -328,7 +332,7 @@ async def get_standard(
     Args:
         identifier: Canonical or fuzzy standard identifier. NIST SP and
             NISTIR publications are catalogued per revision, so include it,
-            as in ``NIST SP 800-53 Rev. 5``; ``search_standards`` lists the
+            as in ``NIST SP 800-53 Rev. 5``. ``search_standards`` lists the
             published revisions.
         fetch_full_text: If True and docling is configured, download and
             convert the full text PDF/HTML via docling.

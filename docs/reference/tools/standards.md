@@ -9,7 +9,7 @@ kind: reference
 
 <!-- DOMAIN-INTRO-START -->
 <!-- A short orientation for this page; task guidance belongs under Use. Kept across regeneration. -->
-Tier 1 bodies (NIST, IETF, W3C, ETSI) come with full metadata and optional full-text conversion. Tier 2 bodies (ISO, IEC, IEEE) are synced from Relaton data by `scholar-mcp sync-standards`; see the [standards guide](../../use/standards.md).
+Tier 1 bodies (NIST, IETF, W3C, ETSI) come with full metadata and optional full-text conversion. Tier 2 bodies (ISO, IEC, IEEE) are synced from Relaton data by `scholar-mcp sync-standards`, which the [standards guide](../../use/standards.md) covers.
 <!-- DOMAIN-INTRO-END -->
 
 ## `resolve_standard_identifier`
@@ -18,7 +18,7 @@ Tier 1 bodies (NIST, IETF, W3C, ETSI) come with full metadata and optional full-
 
 Normalise a messy standard citation string to its canonical form.
 
-Tries local regex first (fast, no network). Falls back to querying
+Tries local patterns first, which is fast and offline. Falls back to querying
 source APIs when local patterns don't match. Returns all candidates
 when the input is ambiguous.
 
@@ -58,6 +58,10 @@ Search technical standards by identifier, title, or free text.
 Searches NIST, IETF, W3C, and ETSI. Use ``body`` to restrict to one
 source body.
 
+Results come ranked with the current edition first. An identifier equal
+to the query leads, and documents that name the standard only in their
+title come last.
+
 A cold catalogue makes this slow: the first call after a fresh install or
 a cleared cache downloads and parses each body's index, which runs well
 past the soft deadline. Such a call returns a job handle to poll with
@@ -66,8 +70,8 @@ past the soft deadline. Such a call returns a job handle to poll with
 Every answer states its own completeness. ``partial`` is always present,
 and when it is true ``failed_bodies`` names each source that did not
 answer and ``warning`` describes it. A partial answer is deliberately not
-an ``error``: the results that did arrive are usable, and the named bodies
-may still hold matches worth asking for again.
+an ``error``: the results that did arrive are usable, and the bodies in
+``failed_bodies`` may still hold matches worth asking for again.
 
 **Parameters**
 
@@ -82,6 +86,8 @@ may still hold matches worth asking for again.
 ``{"results": [...]}``, the matching ``StandardRecord`` entries.
 
 <!-- DOMAIN-EXAMPLE-search_standards-START -->
+NIST, ETSI and the synced bodies (ISO, IEC, IEEE, CC, CEN) rank every match before `limit` applies. IETF and W3C rank only the first `limit` matches their source returns, so a larger `limit` can bring up a current edition they list further down.
+
 `warning` gives each failed source's HTTP status and what went wrong, such as `ETSI (HTTP 200: answered with a non-JSON body, content-type: text/html)`: a 200 alone would read as success.
 
 Partial answers are never cached. A later call reaches the failing source again.
@@ -105,7 +111,7 @@ back directly.
 A conversion that fails still returns the record, with the reason in
 ``full_text_error``; ``full_text_url`` is there to fetch by hand. No
 ``full_text`` and no ``full_text_error`` means none was on offer, or
-docling is not configured; neither is worth retrying.
+docling is not configured. Neither is worth retrying.
 
 ``not_found`` means the source answered and holds no such standard: stop
 asking about that identifier. A lookup that never got an answer says so
@@ -115,7 +121,7 @@ standard may well exist.
 
 Full text is returned in pages of at most 20,000 characters. When
 ``next_offset`` is present, call this tool again with that value as
-``text_offset``; the cached conversion makes later pages inexpensive.
+``text_offset``. The cached conversion makes later pages inexpensive.
 Set ``max_chars`` to null only when the client can accept the complete
 document in one response.
 
@@ -123,7 +129,7 @@ document in one response.
 
 | Name | Type | Default | Description |
 |---|---|---|---|
-| `identifier` | `string` | required | Canonical or fuzzy standard identifier. NIST SP and NISTIR publications are catalogued per revision, so include it, as in ``NIST SP 800-53 Rev. 5``; ``search_standards`` lists the published revisions. |
+| `identifier` | `string` | required | Canonical or fuzzy standard identifier. NIST SP and NISTIR publications are catalogued per revision, so include it, as in ``NIST SP 800-53 Rev. 5``. ``search_standards`` lists the published revisions. |
 | `fetch_full_text` | `boolean` | `false` | If True and docling is configured, download and convert the full text PDF/HTML via docling. |
 | `text_offset` | `integer` | `0` | Character offset at which the full-text page starts. |
 | `max_chars` | `integer \| null` | `20000` | Maximum full-text characters to return, capped at 20,000. Pass ``null`` for the complete text. |

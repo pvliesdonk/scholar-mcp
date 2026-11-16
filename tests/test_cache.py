@@ -683,6 +683,28 @@ async def test_repair_forces_an_iec_resync_for_its_successors(tmp_path):
         await upgraded.close()
 
 
+async def test_repair_drops_search_results_cached_before_ranking(tmp_path):
+    """#487: a cached search keeps storage order; the upgrade empties them."""
+    import aiosqlite
+
+    db_path = tmp_path / "standards.db"
+    old = ScholarCache(db_path)
+    await old.open()
+    await old.set_standards_search("q", [{"identifier": "ISO 1:2000"}])
+    await old.close()
+
+    async with aiosqlite.connect(db_path) as db:
+        await db.execute("DELETE FROM repairs WHERE name LIKE '487_%'")
+        await db.commit()
+
+    upgraded = ScholarCache(db_path)
+    await upgraded.open()
+    try:
+        assert await upgraded.get_standards_search("q") is None
+    finally:
+        await upgraded.close()
+
+
 async def test_delete_synced_standards_keeps_other_sources_and_live_rows(cache):
     """Only synced rows of the named source go, with the aliases naming them."""
     record = {"identifier": "X", "body": "ISO", "title": "t"}
@@ -823,6 +845,7 @@ async def test_every_registered_repair_is_valid_sql(cache):
         "639_standards_search_results",
         "655_live_ietf_w3c_etsi_rows",
         "644_resync_iec",
+        "487_standards_search_results",
     }
     for statement in _REPAIRS.values():
         await cache._db.execute(f"EXPLAIN {statement}")
