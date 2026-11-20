@@ -21,6 +21,7 @@ from scholar_mcp._standards_client import (
     _ETSIFetcher,
     _IETFFetcher,
     _NISTFetcher,
+    _spell_mods_sp_number,
     _W3CFetcher,
     resolve_identifier_local,
 )
@@ -89,6 +90,58 @@ def test_resolve_nist_sp_space_rev() -> None:
 def test_resolve_nist_sp_no_rev() -> None:
     result = resolve_identifier_local("NIST SP 800-53")
     assert result == ("NIST SP 800-53", "NIST")
+
+
+@pytest.mark.parametrize(
+    ("raw", "canonical"),
+    [
+        # The IR series with a space or NIST's DOI dots (#598).
+        ("nist ir 8259", "NISTIR 8259"),
+        ("NIST.IR.8259", "NISTIR 8259"),
+        # NIST's DOI form of an SP.
+        ("NIST.SP.800-53r5", "NIST SP 800-53 Rev. 5"),
+        # An edition dash is part of the number: 800-63-3 is not 800-63.
+        ("nist sp 800-63-3", "NIST SP 800-63-3"),
+        ("NIST SP 800-73-4", "NIST SP 800-73-4"),
+        ("NIST SP 800-63B-4", "NIST SP 800-63B-4"),
+        # A letter before a compact revision stays with the number.
+        ("SP800-53Ar4", "NIST SP 800-53A Rev. 4"),
+        # Part, volume, version and edition, spelled out or compact.
+        ("NIST SP 800-57 Part 1 Rev. 4", "NIST SP 800-57 Part 1 Rev. 4"),
+        ("NIST.SP.800-57pt1r5", "NIST SP 800-57 Part 1 Rev. 5"),
+        ("NIST SP 800-160 Vol. 2", "NIST SP 800-160 Vol. 2"),
+        ("NIST.SP.800-160v1r1", "NIST SP 800-160 Vol. 1 Rev. 1"),
+        ("NIST SP 800-55 Volume 1", "NIST SP 800-55 Vol. 1"),
+        ("NIST SP 800-40 Version 2", "NIST SP 800-40 Version 2"),
+        ("NIST SP 800-21 E2", "NIST SP 800-21 E2"),
+        # A compact marker after a space is a page reference, not a part.
+        ("NIST SP 800-53 p 12", "NIST SP 800-53"),
+    ],
+)
+def test_resolve_nist_keeps_the_whole_document_number(raw: str, canonical: str) -> None:
+    """Each form names one publication; none may lose part of its number."""
+    assert resolve_identifier_local(raw) == (canonical, "NIST")
+
+
+@pytest.mark.parametrize(
+    ("number", "spelled"),
+    [
+        ("800-57pt1", "800-57 Part 1"),
+        ("800-57p2", "800-57 Part 2"),
+        ("800-160v2", "800-160 Vol. 2"),
+        ("800-28ver2", "800-28 Version 2"),
+        ("800-21e2", "800-21 E2"),
+        # A four-digit "e" is a year, not an edition.
+        ("260e1969", "260e1969"),
+        # Two markers, or a dotted volume, are left as MODS writes them.
+        ("535v1p1", "535v1p1"),
+        ("500-268v1.1", "500-268v1.1"),
+        ("800-53", "800-53"),
+    ],
+)
+def test_mods_sp_number_spells_out_parts_and_volumes(number: str, spelled: str) -> None:
+    """The catalogue spells an SP the way CSRC and the resolver do (#598)."""
+    assert _spell_mods_sp_number(number) == spelled
 
 
 def test_resolve_nist_fips() -> None:
@@ -1399,6 +1452,13 @@ async def _csrc_fetcher_get(
         ("NIST SP 800-53 Rev. 5", ("published", [], None)),
         # CSRC does not list it: the MODS reading stands.
         ("NISTIR 7298", ("published", [], None)),
+        # MODS writes "800-57pt1r4" and "800-28ver2"; CSRC spells them out,
+        # and so does the catalogue now (#598).
+        (
+            "NIST SP 800-57 Part 1 Rev. 4",
+            ("superseded", ["NIST SP 800-57 Part 1 Rev. 5"], "2020-05-04"),
+        ),
+        ("NIST SP 800-28 Version 2", ("published", [], None)),
     ],
 )
 async def test_nist_get_reports_csrc_withdrawal_and_replacement(
@@ -1418,15 +1478,19 @@ async def test_nist_get_reports_csrc_withdrawal_and_replacement(
 
 
 @pytest.mark.respx(base_url=GITHUB_RELEASES_URL)
+@pytest.mark.parametrize(
+    "legacy_name", ["nist_catalogue.json", "nist_catalogue_csrc.json"]
+)
 async def test_nist_catalogue_cached_with_csrc_data_and_legacy_file_removed(
-    respx_mock: respx.MockRouter, tmp_path: Path
+    respx_mock: respx.MockRouter, tmp_path: Path, legacy_name: str
 ) -> None:
-    """The catalogue on disk carries CSRC's data; the pre-#639 file is gone.
+    """The catalogue on disk carries CSRC's data; older files are gone.
 
-    A file written before #639 says every publication is published, so it is
-    neither read nor left behind.
+    A file written before #639 says every publication is published, and one
+    written before #598 names SP parts and volumes the old way, so neither is
+    read nor left behind.
     """
-    legacy = tmp_path / "nist_catalogue.json"
+    legacy = tmp_path / legacy_name
     legacy.write_text(
         json.dumps([{"identifier": "FIPS 186-4", "status": "published"}]),
         encoding="utf-8",

@@ -705,6 +705,38 @@ async def test_repair_drops_search_results_cached_before_ranking(tmp_path):
         await upgraded.close()
 
 
+async def test_repair_drops_nist_rows_and_sp_aliases_named_the_old_way(tmp_path):
+    """#598: NIST SP records are spelled differently; old rows and aliases go."""
+    import aiosqlite
+
+    db_path = tmp_path / "standards.db"
+    old = ScholarCache(db_path)
+    await old.open()
+    nist = {"identifier": "NIST SP 800-57pt1 Rev. 4", "body": "NIST"}
+    await old.set_standard("NIST SP 800-57pt1 Rev. 4", nist)
+    await old.set_standard("RFC 9000", {"identifier": "RFC 9000", "body": "IETF"})
+    await old.set_standard_alias("nist sp 800-63-3", "NIST SP 800-63")
+    await old.set_standard_alias("FIPS PUB 140-3", "FIPS 140-3")
+    await old.set_standards_search("q", [nist])
+    await old.close()
+
+    async with aiosqlite.connect(db_path) as db:
+        await db.execute("DELETE FROM repairs WHERE name LIKE '598_%'")
+        await db.commit()
+
+    upgraded = ScholarCache(db_path)
+    await upgraded.open()
+    try:
+        assert await upgraded.get_standard("NIST SP 800-57pt1 Rev. 4") is None
+        assert await upgraded.get_standard_alias("nist sp 800-63-3") is None
+        assert await upgraded.get_standards_search("q") is None
+        # Other bodies, and NIST aliases outside the SP series, stay.
+        assert await upgraded.get_standard("RFC 9000") is not None
+        assert await upgraded.get_standard_alias("FIPS PUB 140-3") == "FIPS 140-3"
+    finally:
+        await upgraded.close()
+
+
 async def test_delete_synced_standards_keeps_other_sources_and_live_rows(cache):
     """Only synced rows of the named source go, with the aliases naming them."""
     record = {"identifier": "X", "body": "ISO", "title": "t"}
@@ -846,6 +878,9 @@ async def test_every_registered_repair_is_valid_sql(cache):
         "655_live_ietf_w3c_etsi_rows",
         "644_resync_iec",
         "487_standards_search_results",
+        "598_live_nist_rows",
+        "598_nist_sp_aliases",
+        "598_standards_search_results",
     }
     for statement in _REPAIRS.values():
         await cache._db.execute(f"EXPLAIN {statement}")

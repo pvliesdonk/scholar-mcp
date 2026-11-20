@@ -33,23 +33,35 @@ _IETF_BCP_RE = re.compile(r"(?i)\bbcp[-\s]?(\d+)\b")
 # IETF STD: "STD 66", "STD66"
 _IETF_STD_RE = re.compile(r"(?i)\bstd[-\s]?(\d+)\b")
 
-# NIST SP with optional revision: "SP 800-53 Rev. 5", "SP800-53r5", "NIST SP 800-53 Rev 5"
-_NIST_SP_REV_RE = re.compile(
-    r"(?i)\b(?:nist\s+)?sp\s*(\d{3,4}(?:-\d+)?[A-Z]?)\s*r(?:ev\.?\s*)?(\d)\b"
+# NIST SP, every spelling in one pattern (#598): "NIST SP 800-53 Rev. 5",
+# "SP800-53r5", "nist 800-53 rev 5", and NIST's DOI form "NIST.SP.800-53r5".
+# An edition dash belongs to the number ("800-63-3", "800-63B-4"). A part,
+# volume, version or edition comes before the revision, spelled out or in
+# the DOI's compact form: "800-57 Part 1 Rev. 5" or "800-57pt1r5",
+# "800-160 Vol. 2" or "800-160v2", "800-40 Version 2", "800-21 E2". The
+# compact "pt", "p" and "v" must follow the number directly, so a page
+# reference ("800-53 p 12") is not read as a part.
+# _nist_sp_identifier writes the catalogue's spelling of each.
+_NIST_SP_RE = re.compile(
+    r"(?i)\b(?:nist[\s.]+sp[\s.]*|sp[\s.]*|nist\s+)"
+    r"(?P<number>\d{3,4}(?:-\d+)?(?:[a-z](?!\d))?(?:-\d+)?)"
+    r"(?:(?:\s*part\s*|pt|p)(?P<part>\d+)"
+    r"|(?:\s*vol(?:ume)?\.?\s*|v)(?P<vol>\d+)"
+    r"|\s*(?:version|ver\.?)\s*(?P<version>\d+)"
+    r"|\s*e(?P<edition>\d)(?!\d))?"
+    r"(?:\s*r(?:ev(?:ision)?\.?)?\s*(?P<rev>\d+))?\b"
 )
-# NIST SP without revision: "NIST SP 800-53", "SP800-53", "nist 800-53"
-_NIST_SP_RE = re.compile(r"(?i)\b(?:nist\s+)?sp\s*(\d{3,4}(?:-\d+)?[A-Z]?)\b")
-# NIST SP shorthand: "nist 800-53 rev 5", "nist 800-53r5" (number only after
-# "nist"). The number group and the revision separator mirror the SP patterns
-# above; a narrower group lets the regex fall back to a bare "800" (#585).
-_NIST_NUM_REV_RE = re.compile(
-    r"(?i)\bnist\s+(\d{3,4}(?:-\d+)?[A-Z]?)\s*r(?:ev\.?\s*)?(\d)\b"
+# The catalogue's spelling of each _NIST_SP_RE suffix group, in order.
+_NIST_SP_SUFFIXES = (
+    ("part", " Part "),
+    ("vol", " Vol. "),
+    ("version", " Version "),
+    ("edition", " E"),
 )
-_NIST_NUM_RE = re.compile(r"(?i)\bnist\s+(\d{3,4}(?:-\d+)?[A-Z]?)\b")
 # NIST FIPS: "FIPS 140-3", "FIPS140-3", "FIPS PUB 140-3"
 _NIST_FIPS_RE = re.compile(r"(?i)\bfips(?:\s+pub)?\s*(\d{1,3}(?:-\d+)?)\b")
-# NIST IR: "NISTIR 8259A", "NISTIR8259A"
-_NIST_IR_RE = re.compile(r"(?i)\bnistir\s*(\d{4}[A-Z]?)\b")
+# NIST IR: "NISTIR 8259A", "NISTIR8259A", "NIST IR 8259", "NIST.IR.8259"
+_NIST_IR_RE = re.compile(r"(?i)\bnist[\s.]*ir[\s.]*(\d{4}[A-Z]?)\b")
 
 # W3C: "WCAG 2.1", "WCAG2.1", "W3C WCAG 2.1", "WebAuthn Level 2"
 _W3C_WCAG_RE = re.compile(r"(?i)\bwcag\s*(\d+\.\d+)\b")
@@ -138,6 +150,25 @@ _CC_PP_RE = re.compile(
 )
 
 
+def _nist_sp_identifier(match: re.Match[str]) -> str:
+    """Spell a :data:`_NIST_SP_RE` match the way the NIST catalogue does.
+
+    Args:
+        match: A match of :data:`_NIST_SP_RE`.
+
+    Returns:
+        The identifier, e.g. ``"NIST SP 800-57 Part 1 Rev. 5"`` for
+        ``"NIST.SP.800-57pt1r5"``.
+    """
+    identifier = f"NIST SP {match['number']}"
+    for group, label in _NIST_SP_SUFFIXES:
+        if match[group]:
+            identifier += f"{label}{int(match[group])}"
+    if match["rev"]:
+        identifier += f" Rev. {int(match['rev'])}"
+    return identifier
+
+
 def resolve_identifier_local(raw: str) -> tuple[str, str] | None:
     """Attempt to resolve *raw* to (canonical_identifier, body) using only regex.
 
@@ -217,25 +248,10 @@ def resolve_identifier_local(raw: str) -> tuple[str, str] | None:
     if m:
         return f"NISTIR {m.group(1).upper()}", "NIST"
 
-    # NIST SP with revision (must check before without-revision to capture rev)
-    m = _NIST_SP_REV_RE.search(s)
-    if m:
-        return f"NIST SP {m.group(1)} Rev. {m.group(2)}", "NIST"
-
-    # NIST SP without revision
+    # NIST SP, including the "nist 800-53" shorthand
     m = _NIST_SP_RE.search(s)
     if m:
-        return f"NIST SP {m.group(1)}", "NIST"
-
-    # NIST shorthand with revision: "nist 800-53 rev 5"
-    m = _NIST_NUM_REV_RE.search(s)
-    if m:
-        return f"NIST SP {m.group(1)} Rev. {m.group(2)}", "NIST"
-
-    # NIST shorthand without revision: "nist 800-53"
-    m = _NIST_NUM_RE.search(s)
-    if m:
-        return f"NIST SP {m.group(1)}", "NIST"
+        return _nist_sp_identifier(m), "NIST"
 
     # W3C WCAG
     m = _W3C_WCAG_RE.search(s)
@@ -682,10 +698,11 @@ _NIST_MODS_ASSET_NAME = "allrecords-MODS.xml"
 _NIST_MODS_NS = "http://www.loc.gov/mods/v3"
 _NIST_CACHE_MAX_AGE_DAYS = 90
 # The catalogue file name changes whenever what it holds changes, so a file a
-# previous version wrote is never served for up to 90 days. "_csrc" marks the
-# catalogue that carries CSRC's withdrawal data (#639).
-_NIST_CACHE_FILE = "nist_catalogue_csrc.json"
-_NIST_LEGACY_CACHE_FILES = ("nist_catalogue.json",)
+# previous version wrote is never served for up to 90 days. "_csrc" marked
+# the catalogue that carries CSRC's withdrawal data (#639); "_parts" the one
+# that spells out SP parts, volumes, versions and editions (#598).
+_NIST_CACHE_FILE = "nist_catalogue_parts.json"
+_NIST_LEGACY_CACHE_FILES = ("nist_catalogue.json", "nist_catalogue_csrc.json")
 # CSRC's publications export: the only NIST source that records which
 # publications are withdrawn and what replaced them. See
 # docs/design/reference/standards-supersession-sources.md, NIST section.
@@ -696,6 +713,18 @@ _CSRC_PUBS_EXPORT_MEMBER = "pubs-export.json"
 # The export writes "SP 800-53 Rev. 4" and "IR 7298"; the MODS catalogue, and
 # resolve_identifier_local, write "NIST SP 800-53 Rev. 4" and "NISTIR 7298".
 _CSRC_PREFIX_TO_CATALOGUE = {"SP": "NIST SP", "IR": "NISTIR"}
+# MODS writes an SP's part, volume, version or single-digit edition into the
+# series number ("800-57pt1", "800-57p2", "800-160v2", "800-28ver2",
+# "800-21e2"). CSRC, NIST's citations and resolve_identifier_local spell it
+# out (#598). A four-digit "e" is a year ("260e1969") and stays as written.
+_MODS_SP_SUFFIX_RE = re.compile(r"^(\d{3,4}(?:-\d+)?)(?:(pt|p|ver|v)(\d+)|e(\d))$")
+_MODS_SP_SUFFIX_LABELS = {
+    "pt": " Part ",
+    "p": " Part ",
+    "v": " Vol. ",
+    "ver": " Version ",
+    "e": " E",
+}
 
 
 class _NISTFetcher:
@@ -1083,6 +1112,25 @@ def _parse_nist_mods(xml_bytes: bytes) -> list[StandardRecord]:
     return records
 
 
+def _spell_mods_sp_number(number: str) -> str:
+    """Spell out the part, volume, version or edition in a MODS SP number.
+
+    Args:
+        number: The series number without its revision, e.g. ``"800-57pt1"``.
+
+    Returns:
+        The number as CSRC writes it, e.g. ``"800-57 Part 1"``; any other
+        number comes back as given.
+    """
+    match = _MODS_SP_SUFFIX_RE.match(number)
+    if match is None:
+        return number
+    base, kind, count, edition = match.groups()
+    if edition is not None:
+        kind, count = "e", edition
+    return f"{base}{_MODS_SP_SUFFIX_LABELS[kind]}{int(count)}"
+
+
 def _normalize_nist_mods(mods: ET.Element, ns: str) -> StandardRecord | None:
     """Normalise a single <mods> element to a StandardRecord.
 
@@ -1123,8 +1171,9 @@ def _normalize_nist_mods(mods: ET.Element, ns: str) -> StandardRecord | None:
     else:
         return None  # skip unrecognised series
 
-    # partNumber → number + optional revision (e.g. "800-53r5" → "800-53", "5")
-    m = re.match(r"^(.*?)r(\d+)$", part_number)
+    # partNumber → number + optional revision (e.g. "800-53r5" → "800-53", "5").
+    # The "r" of a version ("800-28ver2") is not a revision.
+    m = re.match(r"^(.*?)(?<!ve)r(\d+)$", part_number)
     if m:
         number = m.group(1)
         revision = m.group(2)
@@ -1134,6 +1183,7 @@ def _normalize_nist_mods(mods: ET.Element, ns: str) -> StandardRecord | None:
 
     # Canonical identifier
     if body_prefix == "NIST SP":
+        number = _spell_mods_sp_number(number)
         canonical = f"NIST SP {number}"
         if revision:
             canonical += f" Rev. {revision}"

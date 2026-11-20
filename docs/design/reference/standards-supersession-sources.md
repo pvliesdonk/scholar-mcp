@@ -203,6 +203,11 @@ ETSI has its own page, [ETSI standards search data endpoint](etsi-standards-sear
   (`SP 800-57 Part 1 Rev. 4` is `800-57pt1r4`, `SP 800-160 Vol. 1` is
   `800-160v1`). 45 have no MODS record at all, among them the 2005 SP 800-53,
   FIPS 46-3, FIPS 180-2 and FIPS 201. [observed: both files, 2026-11-15]
+- MODS writes an SP's part, volume, version or single-digit edition into
+  the series `partNumber`, in more than one way: `800-57pt1r4` and
+  `800-57p1r3` for parts, `800-160v1`, `800-28ver2`, `800-21e2`. A
+  four-digit `e` is a year (`260e1969`). [observed: every SP `partNumber`
+  in release Oct2026, 2026-11-20]
 
 ### W3C
 
@@ -251,17 +256,26 @@ ETSI has its own page, [ETSI standards search data endpoint](etsi-standards-sear
 - NIST reads CSRC's export alongside MODS since #639 and writes its status,
   replacements and `obsoleted-date` onto the catalogue records it matches. A
   replacement outranks the newest entry's `substage`, so FIPS 140-2 is
-  superseded. The export's `SP` and `IR` become `NIST SP` and `NISTIR`; the 7
-  differently spelled and 45 absent publications are not matched. A failed
-  export download fails the NIST lookup rather than serving MODS alone.
-- Of the 136 distinct names the applied data puts in `superseded_by`, 92
+  superseded. The export's `SP` and `IR` become `NIST SP` and `NISTIR`.
+  Since #598 the catalogue spells an SP part, volume, version or edition the
+  export's way (`NIST SP 800-57 Part 1 Rev. 4`, `NIST SP 800-160 Vol. 1`,
+  `NIST SP 800-28 Version 2`, `NIST SP 800-21 E2`), so 430 of the 505 final
+  SP and FIPS identifiers match, and 186 of the 231 withdrawn or replaced
+  ones. The 45 absent publications are not matched (#653). A failed export
+  download fails the NIST lookup rather than serving MODS alone. [observed:
+  `_parse_nist_mods` on release Oct2026 and the export, 2026-11-20]
+  [pins: tests/test_standards_client.py::test_mods_sp_number_spells_out_parts_and_volumes]
+- Of the 144 distinct names the applied data puts in `superseded_by`, 121
   resolve through `resolve_identifier_local` to themselves and to a catalogue
-  record. 28 are rewritten by the resolver, mostly by dropping a `-N` edition
-  or a `Vol.`, `Version` or `E2` suffix (`NIST SP 800-73-4` becomes `NIST SP
-  800-73`), and 16 resolve to an identifier the catalogue lacks (`FIPS
-  186-3`, `NIST SP 800-61`). 43 of the 131 superseded records name at least
-  one such replacement. [observed: every name through the resolver and the
-  Oct2026 catalogue, 2026-11-15] #598 and #653 track the two halves.
+  record. One is rewritten by the resolver: `NIST SP 800-27 Revision (r)`
+  becomes `NIST SP 800-27`. 22 resolve to an identifier the catalogue lacks
+  (`FIPS 186-3`, `NIST SP 800-61`, `NIST SP 800-57 Part 1 Rev. 1`), the
+  publications #653 tracks. 23 of the 138 superseded records name at least
+  one such replacement. Before #598 the resolver rewrote 28 names, mostly by
+  dropping a `-N` edition or a `Vol.`, `Version` or `E2` suffix (`NIST SP
+  800-73-4` became `NIST SP 800-73`). [observed: every name through the
+  resolver and the Oct2026 catalogue, 2026-11-20]
+  [pins: tests/test_standards_client.py::test_resolve_nist_keeps_the_whole_document_number]
   IETF reads datatracker's `obs` relations since #637, and W3C the
   `superseded-by` link since #638.
 - A W3C specification's `supersedes` collection is not read, so a record's
