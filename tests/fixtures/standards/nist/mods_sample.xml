@@ -1470,4 +1470,143 @@
          </languageOfCataloging>
       </recordInfo>
    </mods>
+   <mods version="3.7">
+      <titleInfo>
+         <title>Module-lattice-based key-encapsulation mechanism standard</title>
+      </titleInfo>
+      <name xmlns:xlink="http://www.w3.org/1999/xlink"
+            type="corporate"
+            xlink:href="https://id.loc.gov/authorities/names/n88112126">
+         <namePart>National Institute of Standards and Technology (U.S.)</namePart>
+         <nameIdentifier>https://id.loc.gov/authorities/names/n88112126</nameIdentifier>
+      </name>
+      <name type="personal">
+         <namePart>Alagic, Gorjan.</namePart>
+      </name>
+      <name xmlns:xlink="http://www.w3.org/1999/xlink"
+            type="personal"
+            xlink:href="(orcid)0009-0005-9801-6805">
+         <namePart>Dang, Quynh.</namePart>
+         <nameIdentifier>(orcid)0009-0005-9801-6805</nameIdentifier>
+      </name>
+      <name xmlns:xlink="http://www.w3.org/1999/xlink"
+            type="personal"
+            xlink:href="(orcid)0000-0002-4868-6684">
+         <namePart>Moody, Dustin.</namePart>
+         <nameIdentifier>(orcid)0000-0002-4868-6684</nameIdentifier>
+      </name>
+      <name xmlns:xlink="http://www.w3.org/1999/xlink"
+            type="personal"
+            xlink:href="(orcid)0000-0002-1209-0379">
+         <namePart>Robinson, Angela.</namePart>
+         <nameIdentifier>(orcid)0000-0002-1209-0379</nameIdentifier>
+      </name>
+      <name type="personal">
+         <namePart>Silberg, Hamilton.</namePart>
+      </name>
+      <name xmlns:xlink="http://www.w3.org/1999/xlink"
+            type="personal"
+            xlink:href="(orcid)0000-0002-7995-8734">
+         <namePart>Smith-Tone, Daniel.</namePart>
+         <nameIdentifier>(orcid)0000-0002-7995-8734</nameIdentifier>
+      </name>
+      <name xmlns:xlink="http://www.w3.org/1999/xlink"
+            type="corporate"
+            xlink:href="https://id.loc.gov/authorities/names/n88112126">
+         <namePart>National Institute of Standards and Technology (U.S.)</namePart>
+         <nameIdentifier>https://id.loc.gov/authorities/names/n88112126</nameIdentifier>
+      </name>
+      <typeOfResource>text</typeOfResource>
+      <genre authority="marcgt">technical report</genre>
+      <genre authority="marcgt">government publication</genre>
+      <genre authority="rdacontent">text</genre>
+      <originInfo>
+         <place>
+            <placeTerm type="code" authority="marccountry">mdu</placeTerm>
+         </place>
+         <dateIssued encoding="marc">2024</dateIssued>
+         <issuance>monographic</issuance>
+      </originInfo>
+      <originInfo eventType="publisher">
+         <place>
+            <placeTerm type="text">Washington, D.C. :</placeTerm>
+         </place>
+         <publisher>U.S. Dept. of Commerce,</publisher>
+         <dateIssued>2024-08-13.</dateIssued>
+      </originInfo>
+      <language>
+         <languageTerm authority="iso639-2b" type="code">eng</languageTerm>
+      </language>
+      <physicalDescription>
+         <form type="media" authority="rdamedia">computer</form>
+         <form type="carrier" authority="rdacarrier">online resource</form>
+         <extent>1 online resource: illustrations (color)</extent>
+      </physicalDescription>
+      <abstract displayLabel="Abstract">A key-encapsulation mechanism (KEM) is a set of algorithms that, under certain conditions, can be used by two parties to establish a shared secret key over a public channel. A shared secret key that is securely established using a KEM can then be used with symmetric-key cryptographic algorithms to perform basic tasks in secure   communications, such as encryption and authentication. This standard specifies a key-encapsulation mechanism called ML-KEM. The security of ML-KEM is related to the computational difficulty of the Module Learning with Errors problem. At present,ML-KEM is believed to be secure, even against adversaries who possess a quantum computer. This standard specifies three parameter sets for ML-KEM. In order of increasing security strength and decreasing performance, these are ML-KEM-512, ML-KEM-768, and ML-KEM-1024.</abstract>
+      <note type="statement of responsibility">National Institute of Standards and Technology.</note>
+      <note>August 2024.</note>
+      <note>Title from PDF title page (viewed November 06, 2024).</note>
+      <note type="bibliography">Includes bibliographical references.</note>
+      <note type="venue">Approved by the NIST Editorial Review Board on 2024-08-09</note>
+      <note type="system details">Mode of access: World Wide Web.</note>
+      <note type="system details">Systems requirements: Adobe Acrobat PDF reader.</note>
+      <subject authority="lcsh">
+         <titleInfo>
+            <title>Federal information processing standards publication</title>
+         </titleInfo>
+      </subject>
+      <subject authority="lcsh">
+         <topic>Public key cryptography</topic>
+      </subject>
+      <subject authority="lcsh">
+         <topic>Computer security</topic>
+      </subject>
+      <subject authority="lcsh">
+         <topic>Cryptography</topic>
+      </subject>
+      <subject>
+         <topic>Post-quantum</topic>
+      </subject>
+      <subject>
+         <topic>Attice-based cryptography</topic>
+      </subject>
+      <subject>
+         <topic>key-encapsulation mechanism</topic>
+      </subject>
+      <subject>
+         <topic>Federal Information Processing Standards</topic>
+      </subject>
+      <subject>
+         <topic>Encryption</topic>
+      </subject>
+      <location>
+         <url displayLabel="electronic resource" usage="primary display">https://doi.org/10.6028/NIST.FIPS.203</url>
+      </location>
+      <relatedItem type="series">
+         <titleInfo>
+            <title>NIST federal information processing standards publication</title>
+            <partNumber>203</partNumber>
+         </titleInfo>
+      </relatedItem>
+      <relatedItem type="series">
+         <titleInfo>
+            <title>NIST federal information processing standards publication; NIST FIPS</title>
+            <partNumber>203</partNumber>
+         </titleInfo>
+      </relatedItem>
+      <identifier type="doi">10.6028/NIST.FIPS.203 </identifier>
+      <identifier type="oclc">1493333510</identifier>
+      <recordInfo>
+         <descriptionStandard>rda</descriptionStandard>
+         <recordContentSource authority="marcorg">NBS</recordContentSource>
+         <recordCreationDate encoding="marc">250203</recordCreationDate>
+         <recordChangeDate encoding="iso8601">20241121084106.0</recordChangeDate>
+         <recordIdentifier>991000639009108106</recordIdentifier>
+         <recordOrigin>Converted from MARCXML to MODS version 3.7 using MARC21slim2MODS3-7.xsl
+				(Revision 1.140 20200717)</recordOrigin>
+         <languageOfCataloging>
+            <languageTerm authority="iso639-2b" type="code">eng</languageTerm>
+         </languageOfCataloging>
+      </recordInfo>
+   </mods>
 </modsCollection>

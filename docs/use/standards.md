@@ -345,8 +345,10 @@ A `StandardRecord` dict, the same shape returned by `get_standard`:
   withdrawal can take that long to show. NIST identifiers spell out a part,
   volume or version, as `NIST SP 800-57 Part 1 Rev. 5` and
   `NIST SP 800-160 Vol. 2`, and keep a numbered edition such as
-  `NIST SP 800-73-4`. Not every NIST replacement leads to a record yet:
-  `get_standard` can't find some older ones, such as `FIPS 186-3`.
+  `NIST SP 800-73-4`. A publication on CSRC that the NIST catalogue lacks,
+  such as `FIPS 186-3` or the 2005 `NIST SP 800-53`, has a record built from
+  the CSRC list: its title, date, status and link, with no abstract
+  (`scope` is empty). The CSRC white papers (CSWP) have no records.
   An IEC edition that IEC marks as revised or replaced lists the editions that
   followed it, as IEC 60335-2-91:2008 lists `IEC 62841-4-4:2020`. About a
   quarter of them name no successor in the IEC dump and keep an empty list,

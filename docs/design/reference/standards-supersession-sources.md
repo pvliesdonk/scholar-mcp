@@ -259,22 +259,40 @@ ETSI has its own page, [ETSI standards search data endpoint](etsi-standards-sear
   superseded. The export's `SP` and `IR` become `NIST SP` and `NISTIR`.
   Since #598 the catalogue spells an SP part, volume, version or edition the
   export's way (`NIST SP 800-57 Part 1 Rev. 4`, `NIST SP 800-160 Vol. 1`,
-  `NIST SP 800-28 Version 2`, `NIST SP 800-21 E2`), so 430 of the 505 final
-  SP and FIPS identifiers match, and 186 of the 231 withdrawn or replaced
-  ones. The 45 absent publications are not matched (#653). A failed export
-  download fails the NIST lookup rather than serving MODS alone. [observed:
-  `_parse_nist_mods` on release Oct2026 and the export, 2026-11-20]
+  `NIST SP 800-28 Version 2`, `NIST SP 800-21 E2`), and since #671 it reads
+  the long FIPS series title, so 434 of the 505 final SP and FIPS
+  identifiers match a MODS record, and 187 of the 231 withdrawn or replaced
+  ones. A failed export download fails the NIST lookup rather than serving
+  MODS alone. [observed: `_parse_nist_mods` on release Oct2026 and the
+  export, 2026-11-20]
   [pins: tests/test_standards_client.py::test_mods_sp_number_spells_out_parts_and_volumes]
-- Of the 144 distinct names the applied data puts in `superseded_by`, 121
+- Since #653, each final SP, IR or FIPS publication on CSRC that MODS lacks
+  gets a record built from its export entries: the newest entry's title,
+  the first entry's `published-date` (the edition's issue date), the DOI
+  link when an entry has one and the CSRC page otherwise, and the status
+  above. With release Oct2026 that adds 71 records, 44 of them withdrawn or
+  replaced, among them the 2005 SP 800-53 and FIPS 186-3. CSRC's white
+  papers (CSWP) are another series and get none (#672). [observed: same
+  files, 2026-11-20]
+  [pins: tests/test_standards_client.py::test_nist_record_built_from_csrc_export_carries_its_metadata]
+- 9 of those 71 share a DOI with a MODS record that spells the publication
+  another way: `800-1400B Rev. 1` for SP 800-140B Rev. 1, `800-57p1r2006`
+  for SP 800-57 Part 1 Rev. 1, `800-22r1a` for SP 800-22 Rev. 1, and `FIPS
+  71` carries FIPS 180's DOI. Both records are kept; the MODS one is not
+  renamed after a DOI. [observed: same files, 2026-11-20]
+- MODS also has five FIPS whose series title is `NIST federal information
+  processing standards publication`, without "FIPS": 203, 204, 205,
+  197-upd1 and 46-1. `_normalize_nist_mods` reads that title as FIPS since
+  #671. [observed: every series title in release Oct2026, 2026-11-20]
+  [pins: tests/test_standards_client.py::test_nist_fips_with_the_long_series_title_is_in_the_catalogue]
+- Of the 180 distinct names the applied data puts in `superseded_by`, 179
   resolve through `resolve_identifier_local` to themselves and to a catalogue
   record. One is rewritten by the resolver: `NIST SP 800-27 Revision (r)`
-  becomes `NIST SP 800-27`. 22 resolve to an identifier the catalogue lacks
-  (`FIPS 186-3`, `NIST SP 800-61`, `NIST SP 800-57 Part 1 Rev. 1`), the
-  publications #653 tracks. 23 of the 138 superseded records name at least
-  one such replacement. Before #598 the resolver rewrote 28 names, mostly by
-  dropping a `-N` edition or a `Vol.`, `Version` or `E2` suffix (`NIST SP
-  800-73-4` became `NIST SP 800-73`). [observed: every name through the
-  resolver and the Oct2026 catalogue, 2026-11-20]
+  becomes `NIST SP 800-27`. Before #598 the resolver rewrote 28 names,
+  mostly by dropping a `-N` edition or a `Vol.`, `Version` or `E2` suffix
+  (`NIST SP 800-73-4` became `NIST SP 800-73`), and before #653 22 names led
+  to no record. [observed: every name through the resolver and the Oct2026
+  catalogue, 2026-11-20]
   [pins: tests/test_standards_client.py::test_resolve_nist_keeps_the_whole_document_number]
   IETF reads datatracker's `obs` relations since #637, and W3C the
   `superseded-by` link since #638.
