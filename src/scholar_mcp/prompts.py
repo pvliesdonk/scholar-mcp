@@ -18,4 +18,4 @@ def register_prompts(mcp: FastMCP) -> None:
     Args:
         mcp: The :class:`~fastmcp.FastMCP` instance to register prompts on.
     """
-    # TODO: Add your domain prompts here.
+    # This server registers no prompts.

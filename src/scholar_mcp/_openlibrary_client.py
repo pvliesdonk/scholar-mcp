@@ -295,6 +295,23 @@ def normalize_subject_work(work: dict[str, Any]) -> BookRecord:
     )
 
 
+def _cover_url(isbn_13: str | None, cover_id: object) -> str | None:
+    """Return a medium cover image URL, by ISBN-13 when there is one.
+
+    Args:
+        isbn_13: The edition's ISBN-13, if known.
+        cover_id: Open Library's cover id (``cover_i``), if any.
+
+    Returns:
+        The cover URL, or None when neither is known.
+    """
+    if isbn_13:
+        return f"{_COVER_BASE}/{isbn_13}-M.jpg"
+    if cover_id:
+        return f"https://covers.openlibrary.org/b/id/{cover_id}-M.jpg"
+    return None
+
+
 def normalize_book(
     data: dict[str, Any], *, source: Literal["search", "edition"] = "search"
 ) -> BookRecord:
@@ -326,15 +343,7 @@ def normalize_book(
             "isbn_13": isbn_13,
             "openlibrary_work_id": work_match.group(0) if work_match else None,
             "openlibrary_edition_id": edition_keys[0] if edition_keys else None,
-            "cover_url": (
-                f"{_COVER_BASE}/{isbn_13}-M.jpg"
-                if isbn_13
-                else (
-                    f"https://covers.openlibrary.org/b/id/{cover_id}-M.jpg"
-                    if cover_id
-                    else None
-                )
-            ),
+            "cover_url": _cover_url(isbn_13, cover_id),
             "google_books_url": None,
             "subjects": data.get("subject") or [],
             "page_count": data.get("number_of_pages_median"),

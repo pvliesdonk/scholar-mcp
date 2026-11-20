@@ -23,4 +23,4 @@ def register_resources(mcp: FastMCP) -> None:
     Args:
         mcp: The :class:`~fastmcp.FastMCP` instance to register resources on.
     """
-    # TODO: Add your domain resources here.
+    # This server registers no resources.
