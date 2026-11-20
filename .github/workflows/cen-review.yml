@@ -1,0 +1,135 @@
+name: CEN table review
+
+# Each quarter, Claude Code checks the CEN harmonised-standards table in
+# src/scholar_mcp/_sync_cen.py against the Official Journal and files what
+# it finds as an issue labelled cen-review (#594). The procedure it follows
+# is docs/design/cen-table-review.md.
+#
+# The agent reads web pages, so what it can reach is narrow: the prompt
+# carries the table; its tools are web fetch on the EU and ETSI hosts below,
+# scripts/fetch_oj.sh and writing one findings file; any other call that
+# needs approval is refused in a non-interactive run. A separate step with no
+# agent in it opens the issue, and refuses to post text shaped like a token.
+
+on:
+  schedule:
+    - cron: "0 6 2 1,4,7,10 *"  # 06:00 UTC on 2 January, April, July, October
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cen-review
+  cancel-in-progress: false
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      LABEL: cen-review
+    steps:
+      - name: Skip while an earlier review is open
+        id: open
+        run: |
+          set -euo pipefail
+          open=$(gh issue list --repo "$GITHUB_REPOSITORY" --label "$LABEL" --state open --json number --jq 'length' || echo 0)
+          echo "count=$open" >> "$GITHUB_OUTPUT"
+          if [ "$open" != "0" ]; then
+            echo "An open $LABEL issue exists; skipping this quarter's review." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Checkout repository
+        if: steps.open.outputs.count == '0'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          # The agent may read files in the working directory; keep the
+          # token out of .git/config.
+          persist-credentials: false
+
+      - name: Build the prompt
+        if: steps.open.outputs.count == '0'
+        id: prompt
+        run: |
+          set -euo pipefail
+          {
+            echo 'text<<CEN_REVIEW_PROMPT_EOF'
+            python3 scripts/cen_review_prompt.py
+            echo 'CEN_REVIEW_PROMPT_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Install pinned Claude Code (2.1.197, pre-background-subagents)
+        if: steps.open.outputs.count == '0'
+        env:
+          CLAUDE_CODE_VERSION: "2.1.197"
+          CLAUDE_CODE_SHA256: f54e69cbc89b2da61a415700af7ff52a147e862517d4f1b0eecf768448cf7f83
+        run: |
+          set -euo pipefail
+          DL="$RUNNER_TEMP/claude-$CLAUDE_CODE_VERSION"
+          curl -fsSL --proto '=https' --tlsv1.2 --retry 3 -o "$DL" \
+            "https://downloads.claude.ai/claude-code-releases/$CLAUDE_CODE_VERSION/linux-x64/claude"
+          echo "$CLAUDE_CODE_SHA256  $DL" | sha256sum -c -
+          chmod +x "$DL"
+          "$DL" install "$CLAUDE_CODE_VERSION"
+          rm -f "$DL"
+          BIN="$HOME/.local/bin/claude"
+          test -x "$BIN"
+          "$BIN" --version
+          echo "CLAUDE_BIN=$BIN" >> "$GITHUB_ENV"
+
+      - name: Review the table
+        if: steps.open.outputs.count == '0'
+        uses: anthropics/claude-code-action@d535f5172dec02b204866b393d6b20b9b2aaf98d  # v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          path_to_claude_code_executable: ${{ env.CLAUDE_BIN }}
+          github_token: ${{ github.token }}
+          prompt: ${{ steps.prompt.outputs.text }}
+          # Sonnet matched Opus on a trial of the hardest act (MDR) and Haiku
+          # missed the newest decision (#594).
+          # Edit(...) is how a rule grants the Write tool a path; a Write(...)
+          # rule is never matched.
+          claude_args: >-
+            --model claude-sonnet-5-5
+            --max-turns 120
+            --permission-mode default
+            --allowedTools "Bash(scripts/fetch_oj.sh:*),Edit(./cen-review-findings.md),WebFetch(domain:single-market-economy.ec.europa.eu),WebFetch(domain:health.ec.europa.eu),WebFetch(domain:ec.europa.eu),WebFetch(domain:webgate.ec.europa.eu),WebFetch(domain:eur-lex.europa.eu),WebFetch(domain:publications.europa.eu),WebFetch(domain:www.etsi.org)"
+            --disallowedTools "Read,Glob,Grep,NotebookEdit,Agent,WebSearch"
+          display_report: true
+
+      - name: File the findings
+        if: steps.open.outputs.count == '0'
+        run: |
+          set -euo pipefail
+          if [ ! -s cen-review-findings.md ]; then
+            echo "The review wrote no findings file." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          # Defence in depth: the agent read untrusted pages. Never post
+          # anything shaped like an Anthropic or GitHub token.
+          if grep -Eq 'sk-ant-|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_' cen-review-findings.md; then
+            echo "The findings contain text shaped like a token; not posting them." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          if head -n 1 cen-review-findings.md | grep -qx 'NO CHANGES'; then
+            { echo "## CEN table review: no changes"; echo; cat cen-review-findings.md; } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          gh label create "$LABEL" --repo "$GITHUB_REPOSITORY" --color 1d76db \
+            --description "Quarterly CEN harmonised-standards table review" 2>/dev/null || true
+          {
+            echo "The quarterly review of \`_HARMONISED_STANDARDS\` in \`src/scholar_mcp/_sync_cen.py\` against the Official Journal found the discrepancies below. Procedure: \`docs/design/cen-table-review.md\`. Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo
+            cat cen-review-findings.md
+            echo
+            echo '---'
+            echo '_Agent-authored: written by [Claude Code](https://claude.ai/code) in the scheduled CEN review workflow. Findings to check, not a decision by the account holder._'
+          } > issue-body.md
+          gh issue create --repo "$GITHUB_REPOSITORY" --label "$LABEL" \
+            --title "CEN harmonised-standards table: review of $(date -u +%Y-%m-%d)" \
+            --body-file issue-body.md
