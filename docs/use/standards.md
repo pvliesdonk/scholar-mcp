@@ -281,7 +281,7 @@ All dispatch to `body="CEN"`. No cross-linking to the ISO/IEC records, the `EN I
 
 ### Table maintenance
 
-The `_HARMONISED_STANDARDS` table in `_sync_cen.py` needs periodic review when the EU Commission issues new decisions. See [#139](https://github.com/pvliesdonk/scholar-mcp/issues/139) for the quarterly cadence. If EUR-Lex infrastructure stabilises, [#137](https://github.com/pvliesdonk/scholar-mcp/issues/137) would automate this via Formex XML parsing.
+The `_HARMONISED_STANDARDS` table in `_sync_cen.py` needs periodic review when the EU Commission issues new decisions. A scheduled workflow checks it against the Official Journal each quarter and files what it finds as an issue labelled `cen-review`. It follows the procedure in `docs/design/cen-table-review.md`. If EUR-Lex infrastructure stabilises, [#137](https://github.com/pvliesdonk/scholar-mcp/issues/137) would automate this via Formex XML parsing.
 
 ### Not yet supported
 
