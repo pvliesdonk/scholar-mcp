@@ -1507,6 +1507,44 @@ def test_parse_tarball_sync_reports_invalid_yaml() -> None:
     assert "bad.yaml" in errors[0]
 
 
+def test_parse_tarball_sync_reads_c1_controls_as_windows_1252() -> None:
+    """C1 controls are Windows-1252 punctuation; the file still syncs (#675).
+
+    Bytes as relaton-data-iso 9b9469f holds them: iso-iec-30142-2020.yaml
+    writes an en dash as U+0096, iso-iec-cd-24779-2.yaml has U+0081, which
+    Windows-1252 leaves undefined, inside a word.
+    """
+    from scholar_mcp._sync_relaton import _parse_tarball_sync
+
+    body = (
+        "docidentifier:\n- content: ISO/IEC 30142:2020\n  type: ISO\n"
+        "  primary: true\n"
+        "title:\n- content: Cross\u0081-jurisdictional \u0093sensor\u0094"
+        " \u0096 networks\n"
+    ).encode()
+    tb = _make_tarball_raw(
+        prefix="repo-main", entries=[("data/iso-iec-30142-2020.yaml", body)]
+    )
+    records, errors = _parse_tarball_sync(_open_tarball(tb), "ISO", frozenset())
+    assert errors == []
+    assert [record["title"] for _, record, _ in records] == [
+        "Cross-jurisdictional \u201csensor\u201d \u2013 networks"
+    ]
+
+
+def test_parse_tarball_sync_reports_a_file_that_is_not_utf8() -> None:
+    """Bytes that are not UTF-8 are reported, not guessed at."""
+    from scholar_mcp._sync_relaton import _parse_tarball_sync
+
+    tb = _make_tarball_raw(
+        prefix="repo-main", entries=[("data/latin1.yaml", b"title: caf\xe9\n")]
+    )
+    records, errors = _parse_tarball_sync(_open_tarball(tb), "ISO", frozenset())
+    assert records == []
+    assert len(errors) == 1
+    assert "not UTF-8" in errors[0]
+
+
 def test_parse_tarball_sync_reports_non_mapping_yaml() -> None:
     """A YAML file that parses to a list (not a dict) produces an error entry."""
     from scholar_mcp._sync_relaton import _parse_tarball_sync

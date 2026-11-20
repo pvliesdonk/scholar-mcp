@@ -102,10 +102,22 @@ record on it is shaped. Prompted by #641: the sync and the live lookup read
   [pins: tests/test_sync_relaton.py::test_parse_tarball_sync_skips_iec_projects]
 - 11 of the 32,819 project files are not valid YAML to PyYAML (control
   characters in a title). [observed: `yaml.safe_load` over every file in the
-  tarball]
+  tarball] All 11 are C1 characters, and at 1d901c5 every one parses once
+  they are mapped as below (#675). [observed: `yaml.safe_load` over the
+  project files at 1d901c5, before and after the mapping, 2026-11-20]
   [pins: tests/test_sync_relaton.py::test_parse_tarball_sync_counts_unreadable_iec_projects]
 - ISO's `v2` lists drafts and projects at every stage (WD, CD, DIS, NP, PWI,
   AWI) beside the publications. [source: iso-v2]
+- At 9b9469f, 22 ISO files hold C1 control characters (U+0080 to U+009F),
+  where the dump at dd368d8 held none: Windows-1252 punctuation decoded as
+  Latin-1, such as U+0096 for an en dash (9 times), U+0095 for a bullet
+  (22) and U+0093/U+0094 for curly quotes. U+0081, which Windows-1252
+  leaves undefined, appears 4 times inside a word (`Cross\x81-jurisdictional`).
+  PyYAML rejects a stream holding any C1 character, so each file failed
+  whole. The sync maps each to its Windows-1252 character and drops the
+  undefined ones (#675); all 22 then parse. [observed: the 22 files fetched
+  at 9b9469f, `yaml.safe_load` before and after, 2026-11-20]
+  [pins: tests/test_sync_relaton.py::test_parse_tarball_sync_reads_c1_controls_as_windows_1252]
 
 ### Identifiers
 
