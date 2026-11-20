@@ -1325,10 +1325,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#withdrawal-pass-aborted" class="md-nav__link">
+  <a href="#withdrawal-pass-aborted-or-removal-pass-aborted" class="md-nav__link">
     <span class="md-ellipsis">
       
-        "withdrawal pass aborted"
+        "withdrawal pass aborted" or "removal pass aborted"
       
     </span>
   </a>
@@ -2650,10 +2650,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#withdrawal-pass-aborted" class="md-nav__link">
+  <a href="#withdrawal-pass-aborted-or-removal-pass-aborted" class="md-nav__link">
     <span class="md-ellipsis">
       
-        "withdrawal pass aborted"
+        "withdrawal pass aborted" or "removal pass aborted"
       
     </span>
   </a>
@@ -3023,11 +3023,13 @@ that disappears from it was renamed or advanced; the ISO, IEC and IEEE sync
 deletes such records. When the new dump lists fewer than half as many records as
 the sync held before, it looks truncated and the sync deletes nothing. Run
 <code>--force</code> after confirming upstream state is sane.</p>
-<h3 id="withdrawal-pass-aborted">"withdrawal pass aborted"<a class="headerlink" href="#withdrawal-pass-aborted" title="Permanent link">&para;</a></h3>
-<p>The CC and CEN syncs mark records that disappear from their source as
-<code>withdrawn</code>. When more than 50% of prior identifiers are missing, they skip that
-pass to avoid flipping the whole cache to <code>status="withdrawn"</code>. Run <code>--force</code>
-after confirming upstream state is sane.</p>
+<h3 id="withdrawal-pass-aborted-or-removal-pass-aborted">"withdrawal pass aborted" or "removal pass aborted"<a class="headerlink" href="#withdrawal-pass-aborted-or-removal-pass-aborted" title="Permanent link">&para;</a></h3>
+<p>The CC sync marks records that disappear from its source as <code>withdrawn</code>. The
+CEN table lists withdrawn standards itself, so the CEN sync deletes a record
+whose entry left the table, which means it was never a harmonised standard.
+Either sync skips that pass when more than 50% of prior identifiers are
+missing, which protects the whole cache from a broken edit. Run <code>--force</code> after
+confirming upstream state is sane.</p>
 <h3 id="rate-limit-errors-http-403">Rate-limit errors (HTTP 403)<a class="headerlink" href="#rate-limit-errors-http-403" title="Permanent link">&para;</a></h3>
 <p>Indicates the unauthenticated limit has been exhausted. Set <code>SCHOLAR_GITHUB_TOKEN</code> or
 wait an hour.</p>
@@ -3164,17 +3166,17 @@ the <code>standards_sync_runs</code> table:</p>
 <tr>
 <td>Medical Devices 2017/745</td>
 <td>MDR</td>
-<td>EN ISO 13485, EN 62304</td>
+<td>EN ISO 13485, EN ISO 14971</td>
 </tr>
 <tr>
-<td>Cyber Resilience Act</td>
-<td>CRA</td>
-<td>EN IEC 62443-series</td>
+<td>Toy Safety 2009/48/EC</td>
+<td>Toys</td>
+<td>EN 71-series</td>
 </tr>
 <tr>
-<td>General Product Safety</td>
+<td>General Product Safety 2023/988</td>
 <td>GPSR</td>
-<td>EN 71-series (toys)</td>
+<td>EN 14988, EN 1130 (childcare articles)</td>
 </tr>
 <tr>
 <td>Low Voltage 2014/35/EU</td>
@@ -3183,6 +3185,13 @@ the <code>standards_sync_runs</code> table:</p>
 </tr>
 </tbody>
 </table>
+<p>A record is <code>"harmonised"</code> while the Official Journal cites it. A
+withdrawn one is <code>"withdrawn"</code>, with the date its presumption of conformity
+ended in <code>withdrawn_date</code> and its replacement in <code>superseded_by</code>, as
+EN 62061:2005 lists <code>EN IEC 62061:2021</code>. The Cyber Resilience Act has no
+harmonised standards yet, so the table has no CRA entries. The Machinery
+Directive's list ends on January 20, 2027, when the Machinery Regulation
+(EU) 2023/1230 replaces it.</p>
 <h3 id="supported-identifier-forms_2">Supported identifier forms<a class="headerlink" href="#supported-identifier-forms_2" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>EN 55032:2015</code>, plain European Norm</li>
