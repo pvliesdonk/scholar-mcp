@@ -3293,8 +3293,10 @@ the <code>standards_sync_runs</code> table:</p>
   withdrawal can take that long to show. NIST identifiers spell out a part,
   volume or version, as <code>NIST SP 800-57 Part 1 Rev. 5</code> and
   <code>NIST SP 800-160 Vol. 2</code>, and keep a numbered edition such as
-  <code>NIST SP 800-73-4</code>. Not every NIST replacement leads to a record yet:
-  <code>get_standard</code> can't find some older ones, such as <code>FIPS 186-3</code>.
+  <code>NIST SP 800-73-4</code>. A publication on CSRC that the NIST catalogue lacks,
+  such as <code>FIPS 186-3</code> or the 2005 <code>NIST SP 800-53</code>, has a record built from
+  the CSRC list: its title, date, status and link, with no abstract
+  (<code>scope</code> is empty). The CSRC white papers (CSWP) have no records.
   An IEC edition that IEC marks as revised or replaced lists the editions that
   followed it, as IEC 60335-2-91:2008 lists <code>IEC 62841-4-4:2020</code>. About a
   quarter of them name no successor in the IEC dump and keep an empty list,
