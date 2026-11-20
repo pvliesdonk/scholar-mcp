@@ -882,6 +882,7 @@ async def test_every_registered_repair_is_valid_sql(cache):
         "598_nist_sp_aliases",
         "598_standards_search_results",
         "653_standards_search_results",
+        "674_standards_search_results",
     }
     for statement in _REPAIRS.values():
         await cache._db.execute(f"EXPLAIN {statement}")

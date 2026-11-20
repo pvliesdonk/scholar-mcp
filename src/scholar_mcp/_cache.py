@@ -494,6 +494,10 @@ _REPAIRS: dict[str, str] = {
     # and five FIPS it skipped. A cached search lacks them. A lookup that
     # found nothing was never cached, so no standards row needs dropping.
     "653_standards_search_results": _CLEAR_STANDARDS_SEARCH,
+    # #674: another document whose identifier contains the query (ISO 29001
+    # for "9001", a "-HBK" handbook) no longer outranks the standard's own
+    # editions. A cached list keeps the old order for the 30 days it lives.
+    "674_standards_search_results": _CLEAR_STANDARDS_SEARCH,
 }
 
 

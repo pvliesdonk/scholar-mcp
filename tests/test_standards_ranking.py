@@ -77,6 +77,46 @@ def test_a_companion_document_ranks_below_the_document_itself() -> None:
     assert _ids(rank_standards(records, "SP 800-53"))[0] == "NIST SP 800-53 Rev. 5"
 
 
+def test_another_document_ranks_below_the_standards_replaced_editions() -> None:
+    """A published document whose number contains the query is another
+    document, as a handbook is (#674): it follows ISO 9001's own editions."""
+    records = [
+        _std("ISO 29001:2020", "published", "2020-11"),
+        _std("ISO/IEC 9001-HBK:2024", "published", "2024-05-03"),
+        _std("ISO 9001:2008", "withdrawn", "2008-11"),
+        _std("ISO 9001:2015", "published", "2015-09"),
+        _std("ISO 9001:2015/Amd 1:2024", "published", "2024-02"),
+    ]
+    assert _ids(rank_standards(records, "9001")) == [
+        "ISO 9001:2015",
+        "ISO 9001:2015/Amd 1:2024",
+        "ISO 9001:2008",
+        "ISO/IEC 9001-HBK:2024",
+        "ISO 29001:2020",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("current", "other", "query"),
+    [
+        # A dash and digits is an edition, a part or a year of the same number.
+        ("FIPS 140-3", "FIPS 1400", "FIPS 140"),
+        ("IEEE Std 1588-2019", "IEEE Std 1588c-2024", "1588"),
+        # A dot and more of a number is another document.
+        ("IEEE Std 802-2014", "IEEE Std 802.11-2024", "802"),
+    ],
+)
+def test_an_edition_suffix_names_the_same_document(
+    current: str, other: str, query: str
+) -> None:
+    """The standard's replaced edition still outranks the other document."""
+    records = [
+        _std(other, "published", "2024"),
+        _std(current, "superseded", "2019"),
+    ]
+    assert _ids(rank_standards(records, query)) == [current, other]
+
+
 def test_statuses_rank_published_draft_superseded_withdrawn() -> None:
     """An unknown status sits with draft."""
     records = [

@@ -227,8 +227,8 @@ async def search_standards(
     source body.
 
     Results come ranked with the current edition first. An identifier equal
-    to the query leads, and documents that name the standard only in their
-    title come last.
+    to the query leads. The standard's own editions precede other documents
+    whose number contains the query. Title-only matches come last.
 
     A cold catalogue makes this slow: the first call after a fresh install or
     a cleared cache downloads and parses each body's index, which runs well
