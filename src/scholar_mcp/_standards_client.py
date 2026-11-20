@@ -1010,6 +1010,30 @@ def _csrc_catalogue_identifier(docidentifier: str) -> str:
     return f"{mapped} {rest}" if mapped and rest else docidentifier
 
 
+def _csrc_replacements(entries: list[dict[str, Any]], identifier: str) -> list[str]:
+    """List the other publications a publication's export entries name.
+
+    Args:
+        entries: The export's final entries for one ``docidentifier``.
+        identifier: That ``docidentifier``; an update naming it is skipped.
+
+    Returns:
+        Each replacement once, in the catalogue's spelling, in entry order.
+    """
+    named = [
+        successor.get("docidentifier")
+        for entry in entries
+        for successor in entry.get("superseded-by") or []
+        if isinstance(successor, dict)
+    ]
+    spelled = [
+        _csrc_catalogue_identifier(name)
+        for name in named
+        if name and name != identifier
+    ]
+    return list(dict.fromkeys(spelled))
+
+
 def _csrc_status(entries: list[dict[str, Any]], identifier: str) -> dict[str, Any]:
     """Read one publication's status from its export entries.
 
@@ -1027,17 +1051,7 @@ def _csrc_status(entries: list[dict[str, Any]], identifier: str) -> dict[str, An
     Returns:
         ``status``, ``superseded_by`` and ``withdrawn_date`` for the record.
     """
-    replacements: list[str] = []
-    for entry in entries:
-        for successor in entry.get("superseded-by") or []:
-            named = (
-                successor.get("docidentifier") if isinstance(successor, dict) else None
-            )
-            if not named or named == identifier:
-                continue
-            spelled = _csrc_catalogue_identifier(named)
-            if spelled not in replacements:
-                replacements.append(spelled)
+    replacements = _csrc_replacements(entries, identifier)
     newest = max(entries, key=lambda e: e.get("published-date") or "")
     withdrawn = newest.get("substage") == "withdrawn"
     if replacements:

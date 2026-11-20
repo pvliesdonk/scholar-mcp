@@ -346,36 +346,16 @@ async def get_standard(
         ``full_text_error`` is present.
     """
     identifier = identifier.strip()
+    canonical, cached, aliased = await _canonical_for_lookup(service, identifier)
 
-    # 1. Resolve identifier to canonical form (alias cache → the text as
-    # given, when a record is stored under it → regex → passthrough)
-    cached_canonical = await service.cache.get_standard_alias(identifier)
-    cached: StandardRecord | None = None
-    if cached_canonical is not None:
-        canonical = cached_canonical
-    elif (cached := await _cached_as_given(service, identifier)) is not None:
-        canonical = identifier
-    else:
-        resolved = resolve_identifier_local(identifier)
-        canonical = resolved[0] if resolved else identifier
-
-    # 2. Check cache
     if cached is None:
         cached = await service.cache.get_standard(canonical)
     if cached is not None:
         logger.debug("standard_cache_hit identifier=%s", canonical)
-        if fetch_full_text:
-            result = await _handle_full_text(cached, service)
-        else:
-            result = dict(cached)
-        return page_text(
-            result,
-            "full_text",
-            text_offset=text_offset,
-            max_chars=max_chars,
+        return await _standard_payload(
+            cached, service, fetch_full_text, text_offset, max_chars
         )
 
-    # 3. Fetch from source
     record, failures = await service.standards.get_with_failures(canonical)
     if record is None:
         # Nothing is cached on this path, so the retry the payload invites is
@@ -384,21 +364,65 @@ async def get_standard(
             return _upstream_error_payload(failures, identifier)
         return {"error": "not_found", "identifier": identifier}
 
-    # 4. Cache result
     await service.cache.set_standard(canonical, record)
-    if cached_canonical is None:
+    if not aliased:
         await service.cache.set_standard_alias(identifier, canonical)
+    return await _standard_payload(
+        record, service, fetch_full_text, text_offset, max_chars
+    )
 
+
+async def _canonical_for_lookup(
+    service: Service, identifier: str
+) -> tuple[str, StandardRecord | None, bool]:
+    """Resolve *identifier* to the key ``get_standard`` reads and caches under.
+
+    The alias cache comes first, then a record stored under the text as
+    given, then the local resolver; an identifier none of them knows is used
+    as it is.
+
+    Args:
+        service: The server's services.
+        identifier: The identifier as the caller wrote it, stripped.
+
+    Returns:
+        The canonical identifier, the record already found under the text as
+        given (or None), and whether an alias for it is already cached.
+    """
+    cached_canonical = await service.cache.get_standard_alias(identifier)
+    if cached_canonical is not None:
+        return cached_canonical, None, True
+    as_given = await _cached_as_given(service, identifier)
+    if as_given is not None:
+        return identifier, as_given, False
+    resolved = resolve_identifier_local(identifier)
+    return (resolved[0] if resolved else identifier), None, False
+
+
+async def _standard_payload(
+    record: StandardRecord,
+    service: Service,
+    fetch_full_text: bool,
+    text_offset: int,
+    max_chars: int | None,
+) -> dict[str, Any]:
+    """Return *record* as ``get_standard`` answers it, full text paged.
+
+    Args:
+        record: The standard's record.
+        service: The server's services.
+        fetch_full_text: Whether to fetch and convert the full text.
+        text_offset: Character offset of the full-text page.
+        max_chars: Maximum full-text characters, or None for all of it.
+
+    Returns:
+        The record, with ``full_text`` or ``full_text_error`` when asked.
+    """
     if fetch_full_text:
         result = await _handle_full_text(record, service)
     else:
         result = dict(record)
-    return page_text(
-        result,
-        "full_text",
-        text_offset=text_offset,
-        max_chars=max_chars,
-    )
+    return page_text(result, "full_text", text_offset=text_offset, max_chars=max_chars)
 
 
 # The single source of get_sync_status's model-facing text; see its docstring.
