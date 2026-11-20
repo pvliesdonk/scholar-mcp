@@ -3290,9 +3290,11 @@ the <code>standards_sync_runs</code> table:</p>
   with no replacement named is <code>"withdrawn"</code>. CSRC lists about 550 of the more
   than 11,000 NIST publications, and the rest always read <code>"published"</code>. The
   server reads the CSRC list along with the catalogue every 90 days, so a
-  withdrawal can take that long to show. Not every NIST replacement leads to a
-  record yet: <code>get_standard</code> can't find some older ones, such as <code>FIPS 186-3</code>,
-  and reads a numbered edition such as <code>NIST SP 800-73-4</code> as <code>NIST SP 800-73</code>.
+  withdrawal can take that long to show. NIST identifiers spell out a part,
+  volume or version, as <code>NIST SP 800-57 Part 1 Rev. 5</code> and
+  <code>NIST SP 800-160 Vol. 2</code>, and keep a numbered edition such as
+  <code>NIST SP 800-73-4</code>. Not every NIST replacement leads to a record yet:
+  <code>get_standard</code> can't find some older ones, such as <code>FIPS 186-3</code>.
   An IEC edition that IEC marks as revised or replaced lists the editions that
   followed it, as IEC 60335-2-91:2008 lists <code>IEC 62841-4-4:2020</code>. About a
   quarter of them name no successor in the IEC dump and keep an empty list,
