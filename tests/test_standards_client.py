@@ -1459,6 +1459,9 @@ async def _csrc_fetcher_get(
             ("superseded", ["NIST SP 800-57 Part 1 Rev. 5"], "2020-05-04"),
         ),
         ("NIST SP 800-28 Version 2", ("published", [], None)),
+        # MODS has no record of these; the export's entries make one (#653).
+        ("FIPS 186-3", ("superseded", ["FIPS 186-4"], "2013-07-19")),
+        ("NIST SP 800-53", ("superseded", ["NIST SP 800-53 Rev. 1"], "2007-12-19")),
     ],
 )
 async def test_nist_get_reports_csrc_withdrawal_and_replacement(
@@ -1478,16 +1481,68 @@ async def test_nist_get_reports_csrc_withdrawal_and_replacement(
 
 
 @pytest.mark.respx(base_url=GITHUB_RELEASES_URL)
+async def test_nist_record_built_from_csrc_export_carries_its_metadata(
+    respx_mock: respx.MockRouter, tmp_path: Path
+) -> None:
+    """The 2005 SP 800-53 is on CSRC only: three update entries, one record.
+
+    The date is the first entry's, the edition's issue date; the link is the
+    DOI, as MODS gives it.
+    """
+    record = await _csrc_fetcher_get(respx_mock, tmp_path, "NIST SP 800-53")
+    assert record is not None
+    assert {
+        k: record[k]
+        for k in ("title", "number", "revision", "published_date", "url", "body")
+    } == {
+        "title": "Recommended Security Controls for Federal Information Systems",
+        "number": "800-53",
+        "revision": None,
+        "published_date": "2005-02-28",
+        "url": "https://doi.org/10.6028/NIST.SP.800-53",
+        "body": "NIST",
+    }
+
+
+@pytest.mark.respx(base_url=GITHUB_RELEASES_URL)
+async def test_nist_csrc_export_adds_no_record_beside_a_mods_one_or_for_white_papers(
+    respx_mock: respx.MockRouter, tmp_path: Path
+) -> None:
+    """FIPS 186-4 is in MODS, so CSRC adds no second record; CSWP 39 is a
+    white paper, a series the catalogue does not carry (#672)."""
+    await _csrc_fetcher_get(respx_mock, tmp_path, "FIPS 186-4")
+    stored = json.loads((tmp_path / _NIST_CACHE_FILE).read_text(encoding="utf-8"))
+    identifiers = [r["identifier"] for r in stored]
+    assert identifiers.count("FIPS 186-4") == 1
+    assert not [i for i in identifiers if "CSWP" in i]
+
+
+@pytest.mark.respx(base_url=GITHUB_RELEASES_URL)
+async def test_nist_fips_with_the_long_series_title_is_in_the_catalogue(
+    respx_mock: respx.MockRouter, tmp_path: Path
+) -> None:
+    """FIPS 203's series reads "NIST federal information processing standards
+    publication", without "FIPS" (#671)."""
+    record = await _csrc_fetcher_get(respx_mock, tmp_path, "FIPS 203")
+    assert record is not None
+    assert record["title"] == (
+        "Module-lattice-based key-encapsulation mechanism standard"
+    )
+
+
+@pytest.mark.respx(base_url=GITHUB_RELEASES_URL)
 @pytest.mark.parametrize(
-    "legacy_name", ["nist_catalogue.json", "nist_catalogue_csrc.json"]
+    "legacy_name",
+    ["nist_catalogue.json", "nist_catalogue_csrc.json", "nist_catalogue_parts.json"],
 )
 async def test_nist_catalogue_cached_with_csrc_data_and_legacy_file_removed(
     respx_mock: respx.MockRouter, tmp_path: Path, legacy_name: str
 ) -> None:
     """The catalogue on disk carries CSRC's data; older files are gone.
 
-    A file written before #639 says every publication is published, and one
-    written before #598 names SP parts and volumes the old way, so neither is
+    A file written before #639 says every publication is published, one
+    written before #598 names SP parts and volumes the old way, and one
+    written before #653 lacks the publications only CSRC lists, so none is
     read nor left behind.
     """
     legacy = tmp_path / legacy_name

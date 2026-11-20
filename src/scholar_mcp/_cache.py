@@ -490,6 +490,10 @@ _REPAIRS: dict[str, str] = {
         "DELETE FROM standards_aliases WHERE canonical LIKE 'NIST SP %'"
     ),
     "598_standards_search_results": _CLEAR_STANDARDS_SEARCH,
+    # #653, #671: the NIST catalogue gained the publications only CSRC lists
+    # and five FIPS it skipped. A cached search lacks them. A lookup that
+    # found nothing was never cached, so no standards row needs dropping.
+    "653_standards_search_results": _CLEAR_STANDARDS_SEARCH,
 }
 
 

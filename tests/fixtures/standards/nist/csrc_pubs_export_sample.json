@@ -1214,5 +1214,985 @@
   ],
   "comment-from": null,
   "comment-to": null
+ },
+ {
+  "language": "en",
+  "script": "Latn",
+  "series": "nist-sp",
+  "docnumber": "800-53",
+  "docidentifier": "SP 800-53",
+  "revision": null,
+  "edition": null,
+  "volume": null,
+  "uri": "https://csrc.nist.gov/pubs/sp/800/53/upd2/final",
+  "doi": "10.6028/NIST.SP.800-53",
+  "title-main": "Recommended Security Controls for Federal Information Systems",
+  "title-sub": null,
+  "iteration": "final",
+  "issued-date": "2005-02",
+  "updated-date": "2005-06-17",
+  "published-date": "2005-06-17",
+  "obsoleted-date": "2007-12-19",
+  "status": "final",
+  "substage": "withdrawn",
+  "authors": [
+   {
+    "title": "Dr.",
+    "givenName": "Ron",
+    "middleName": "S.",
+    "surname": "Ross",
+    "suffix": null,
+    "nickname": "Ron",
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": "NIST"
+    },
+    "fullName": "Ron S. Ross"
+   },
+   {
+    "title": null,
+    "givenName": "Stuart",
+    "middleName": "W.",
+    "surname": "Katzke",
+    "suffix": null,
+    "nickname": "Stu",
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": "NIST"
+    },
+    "fullName": "Stuart W. Katzke"
+   },
+   {
+    "title": null,
+    "givenName": "L.",
+    "middleName": "Arnold",
+    "surname": "Johnson",
+    "suffix": null,
+    "nickname": "Arnold",
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": "NIST"
+    },
+    "fullName": "L. Arnold Johnson"
+   },
+   {
+    "title": null,
+    "givenName": "Marianne",
+    "middleName": "A.",
+    "surname": "Swanson",
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": "NIST"
+    },
+    "fullName": "Marianne A. Swanson"
+   },
+   {
+    "title": null,
+    "givenName": "Gary",
+    "middleName": null,
+    "surname": "Stoneburner",
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "Johns Hopkins University Applied Physics Laboratory",
+     "acronym": "APL"
+    },
+    "fullName": "Gary Stoneburner"
+   },
+   {
+    "title": null,
+    "givenName": "George",
+    "middleName": null,
+    "surname": "Rogers",
+    "suffix": null,
+    "nickname": null,
+    "affiliation": null,
+    "fullName": "George Rogers"
+   },
+   {
+    "title": null,
+    "givenName": "Annabelle",
+    "middleName": null,
+    "surname": "Lee",
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": "NIST"
+    },
+    "fullName": "Annabelle Lee"
+   }
+  ],
+  "editors": [],
+  "supersedes": [
+   {
+    "uri": "https://csrc.nist.gov/pubs/sp/800/53/upd1/final",
+    "docidentifier": "SP 800-53"
+   }
+  ],
+  "superseded-by": [
+   {
+    "uri": "https://csrc.nist.gov/pubs/sp/800/53/r1/final",
+    "docidentifier": "SP 800-53 Rev. 1"
+   }
+  ],
+  "keywords": [
+   "accreditation",
+   "assurance requirements",
+   "common security controls",
+   "information technology",
+   "operational controls",
+   "organizational responsibilities",
+   "risk assessment",
+   "security controls",
+   "technical controls"
+  ],
+  "comment-from": null,
+  "comment-to": null
+ },
+ {
+  "language": "en",
+  "script": "Latn",
+  "series": "nist-sp",
+  "docnumber": "800-53",
+  "docidentifier": "SP 800-53",
+  "revision": null,
+  "edition": null,
+  "volume": null,
+  "uri": "https://csrc.nist.gov/pubs/sp/800/53/upd1/final",
+  "doi": null,
+  "title-main": "Recommended Security Controls for Federal Information Systems",
+  "title-sub": null,
+  "iteration": "final",
+  "issued-date": "2005-02",
+  "updated-date": "2005-04-22",
+  "published-date": "2005-04-22",
+  "obsoleted-date": "2005-06-17",
+  "status": "final",
+  "substage": "withdrawn",
+  "authors": [
+   {
+    "title": "Dr.",
+    "givenName": "Ron",
+    "middleName": "S.",
+    "surname": "Ross",
+    "suffix": null,
+    "nickname": "Ron",
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": "NIST"
+    },
+    "fullName": "Ron S. Ross"
+   },
+   {
+    "title": null,
+    "givenName": "Stuart",
+    "middleName": "W.",
+    "surname": "Katzke",
+    "suffix": null,
+    "nickname": "Stu",
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": "NIST"
+    },
+    "fullName": "Stuart W. Katzke"
+   },
+   {
+    "title": null,
+    "givenName": "L.",
+    "middleName": "Arnold",
+    "surname": "Johnson",
+    "suffix": null,
+    "nickname": "Arnold",
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": "NIST"
+    },
+    "fullName": "L. Arnold Johnson"
+   },
+   {
+    "title": null,
+    "givenName": "Marianne",
+    "middleName": "A.",
+    "surname": "Swanson",
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": "NIST"
+    },
+    "fullName": "Marianne A. Swanson"
+   },
+   {
+    "title": null,
+    "givenName": "Gary",
+    "middleName": null,
+    "surname": "Stoneburner",
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "Johns Hopkins University Applied Physics Laboratory",
+     "acronym": "APL"
+    },
+    "fullName": "Gary Stoneburner"
+   },
+   {
+    "title": null,
+    "givenName": "George",
+    "middleName": null,
+    "surname": "Rogers",
+    "suffix": null,
+    "nickname": null,
+    "affiliation": null,
+    "fullName": "George Rogers"
+   },
+   {
+    "title": null,
+    "givenName": "Annabelle",
+    "middleName": null,
+    "surname": "Lee",
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": "NIST"
+    },
+    "fullName": "Annabelle Lee"
+   }
+  ],
+  "editors": [],
+  "supersedes": [
+   {
+    "uri": "https://csrc.nist.gov/pubs/sp/800/53/final",
+    "docidentifier": "SP 800-53"
+   }
+  ],
+  "superseded-by": [
+   {
+    "uri": "https://csrc.nist.gov/pubs/sp/800/53/upd2/final",
+    "docidentifier": "SP 800-53"
+   }
+  ],
+  "keywords": [
+   "accreditation",
+   "assurance requirements",
+   "common security controls",
+   "information technology",
+   "operational controls",
+   "organizational responsibilities",
+   "risk assessment",
+   "security controls",
+   "technical controls"
+  ],
+  "comment-from": null,
+  "comment-to": null
+ },
+ {
+  "language": "en",
+  "script": "Latn",
+  "series": "nist-sp",
+  "docnumber": "800-53",
+  "docidentifier": "SP 800-53",
+  "revision": null,
+  "edition": null,
+  "volume": null,
+  "uri": "https://csrc.nist.gov/pubs/sp/800/53/final",
+  "doi": null,
+  "title-main": "Recommended Security Controls for Federal Information Systems",
+  "title-sub": null,
+  "iteration": "final",
+  "issued-date": "2005-02",
+  "updated-date": null,
+  "published-date": "2005-02-28",
+  "obsoleted-date": "2005-04-22",
+  "status": "final",
+  "substage": "withdrawn",
+  "authors": [
+   {
+    "title": "Dr.",
+    "givenName": "Ron",
+    "middleName": "S.",
+    "surname": "Ross",
+    "suffix": null,
+    "nickname": "Ron",
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": "NIST"
+    },
+    "fullName": "Ron S. Ross"
+   },
+   {
+    "title": null,
+    "givenName": "Stuart",
+    "middleName": "W.",
+    "surname": "Katzke",
+    "suffix": null,
+    "nickname": "Stu",
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": "NIST"
+    },
+    "fullName": "Stuart W. Katzke"
+   },
+   {
+    "title": null,
+    "givenName": "L.",
+    "middleName": "Arnold",
+    "surname": "Johnson",
+    "suffix": null,
+    "nickname": "Arnold",
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": "NIST"
+    },
+    "fullName": "L. Arnold Johnson"
+   },
+   {
+    "title": null,
+    "givenName": "Marianne",
+    "middleName": "A.",
+    "surname": "Swanson",
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": "NIST"
+    },
+    "fullName": "Marianne A. Swanson"
+   },
+   {
+    "title": null,
+    "givenName": "Gary",
+    "middleName": null,
+    "surname": "Stoneburner",
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "Johns Hopkins University Applied Physics Laboratory",
+     "acronym": "APL"
+    },
+    "fullName": "Gary Stoneburner"
+   },
+   {
+    "title": null,
+    "givenName": "George",
+    "middleName": null,
+    "surname": "Rogers",
+    "suffix": null,
+    "nickname": null,
+    "affiliation": null,
+    "fullName": "George Rogers"
+   },
+   {
+    "title": null,
+    "givenName": "Annabelle",
+    "middleName": null,
+    "surname": "Lee",
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": "NIST"
+    },
+    "fullName": "Annabelle Lee"
+   }
+  ],
+  "editors": [],
+  "supersedes": [],
+  "superseded-by": [
+   {
+    "uri": "https://csrc.nist.gov/pubs/sp/800/53/upd1/final",
+    "docidentifier": "SP 800-53"
+   }
+  ],
+  "keywords": [
+   "accreditation",
+   "assurance requirements",
+   "common security controls",
+   "information technology",
+   "operational controls",
+   "organizational responsibilities",
+   "risk assessment",
+   "security controls",
+   "technical controls"
+  ],
+  "comment-from": null,
+  "comment-to": null
+ },
+ {
+  "language": "en",
+  "script": "Latn",
+  "series": "nist-fips",
+  "docnumber": "186-3",
+  "docidentifier": "FIPS 186-3",
+  "revision": "3",
+  "edition": null,
+  "volume": null,
+  "uri": "https://csrc.nist.gov/pubs/fips/186-3/final",
+  "doi": null,
+  "title-main": "Digital Signature Standard (DSS)",
+  "title-sub": null,
+  "iteration": "final",
+  "issued-date": null,
+  "updated-date": null,
+  "published-date": "2009-06-25",
+  "obsoleted-date": "2013-07-19",
+  "status": "final",
+  "substage": "withdrawn",
+  "authors": [
+   {
+    "title": null,
+    "givenName": null,
+    "middleName": null,
+    "surname": null,
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": null
+    },
+    "fullName": null
+   }
+  ],
+  "editors": [],
+  "supersedes": [
+   {
+    "uri": "https://csrc.nist.gov/pubs/fips/186-2/upd1/final",
+    "docidentifier": "FIPS 186-2"
+   }
+  ],
+  "superseded-by": [
+   {
+    "uri": "https://csrc.nist.gov/pubs/fips/186-4/final",
+    "docidentifier": "FIPS 186-4"
+   }
+  ],
+  "keywords": [
+   "computer security",
+   "cryptography",
+   "Digital Signature Algorithm",
+   "digital signatures",
+   "Elliptic Curve Digital Signature Algorithm",
+   "Federal Information Processing Standard",
+   "public key cryptography",
+   "RSA"
+  ],
+  "comment-from": null,
+  "comment-to": null
+ },
+ {
+  "language": "en",
+  "script": "Latn",
+  "series": "csrc-white-paper",
+  "docnumber": "39",
+  "docidentifier": "CSWP 39",
+  "revision": null,
+  "edition": null,
+  "volume": null,
+  "uri": "https://csrc.nist.gov/pubs/cswp/39/considerations-for-achieving-cryptographic-agility/ipd",
+  "doi": "10.6028/NIST.CSWP.39.ipd",
+  "title-main": "Considerations for Achieving Cryptographic Agility",
+  "title-sub": "Strategies and Practices",
+  "iteration": "ipd",
+  "issued-date": null,
+  "updated-date": null,
+  "published-date": "2025-03-05",
+  "obsoleted-date": "2025-07-17",
+  "status": "draft-public",
+  "substage": "withdrawn",
+  "authors": [
+   {
+    "title": null,
+    "givenName": "Elaine",
+    "middleName": "B.",
+    "surname": "Barker",
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": "NIST"
+    },
+    "fullName": "Elaine B. Barker"
+   },
+   {
+    "title": null,
+    "givenName": "Lily",
+    "middleName": null,
+    "surname": "Chen",
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": "NIST"
+    },
+    "fullName": "Lily Chen"
+   },
+   {
+    "title": "Dr.",
+    "givenName": "David",
+    "middleName": "A.",
+    "surname": "Cooper",
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": "NIST"
+    },
+    "fullName": "David A. Cooper"
+   },
+   {
+    "title": "Dr.",
+    "givenName": "Dustin",
+    "middleName": null,
+    "surname": "Moody",
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": "NIST"
+    },
+    "fullName": "Dustin Moody"
+   },
+   {
+    "title": null,
+    "givenName": "Andrew",
+    "middleName": "R.",
+    "surname": "Regenscheid",
+    "suffix": null,
+    "nickname": "Andy",
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": "NIST"
+    },
+    "fullName": "Andrew R. Regenscheid"
+   },
+   {
+    "title": null,
+    "givenName": "Murugiah",
+    "middleName": "P.",
+    "surname": "Souppaya",
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": "NIST"
+    },
+    "fullName": "Murugiah P. Souppaya"
+   },
+   {
+    "title": null,
+    "givenName": "William",
+    "middleName": "D.",
+    "surname": "Newhouse",
+    "suffix": null,
+    "nickname": "Bill",
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": "NIST"
+    },
+    "fullName": "William D. Newhouse"
+   },
+   {
+    "title": null,
+    "givenName": "Russ",
+    "middleName": null,
+    "surname": "Housley",
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "Vigil Security",
+     "acronym": null
+    },
+    "fullName": "Russ Housley"
+   },
+   {
+    "title": null,
+    "givenName": "Sean",
+    "middleName": null,
+    "surname": "Turner",
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "sn3rd",
+     "acronym": null
+    },
+    "fullName": "Sean Turner"
+   }
+  ],
+  "editors": [],
+  "supersedes": [],
+  "superseded-by": [],
+  "keywords": [
+   "cryptographic agility",
+   "cryptographic transition",
+   "cryptography",
+   "interoperability",
+   "security protocol"
+  ],
+  "comment-from": "2025-03-05",
+  "comment-to": "2025-04-30"
+ },
+ {
+  "language": "en",
+  "script": "Latn",
+  "series": "csrc-white-paper",
+  "docnumber": "39",
+  "docidentifier": "CSWP 39",
+  "revision": null,
+  "edition": null,
+  "volume": null,
+  "uri": "https://csrc.nist.gov/pubs/cswp/39/considerations-for-achieving-cryptographic-agility/2pd",
+  "doi": "10.6028/NIST.CSWP.39.2pd",
+  "title-main": "Considerations for Achieving Cryptographic Agility",
+  "title-sub": "Strategies and Practices",
+  "iteration": "2pd",
+  "issued-date": null,
+  "updated-date": null,
+  "published-date": "2025-07-17",
+  "obsoleted-date": "2025-12-19",
+  "status": "draft-public",
+  "substage": "withdrawn",
+  "authors": [
+   {
+    "title": null,
+    "givenName": "Elaine",
+    "middleName": "B.",
+    "surname": "Barker",
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": "NIST"
+    },
+    "fullName": "Elaine B. Barker"
+   },
+   {
+    "title": null,
+    "givenName": "Lily",
+    "middleName": null,
+    "surname": "Chen",
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": "NIST"
+    },
+    "fullName": "Lily Chen"
+   },
+   {
+    "title": "Dr.",
+    "givenName": "David",
+    "middleName": "A.",
+    "surname": "Cooper",
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": "NIST"
+    },
+    "fullName": "David A. Cooper"
+   },
+   {
+    "title": "Dr.",
+    "givenName": "Dustin",
+    "middleName": null,
+    "surname": "Moody",
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": "NIST"
+    },
+    "fullName": "Dustin Moody"
+   },
+   {
+    "title": null,
+    "givenName": "Andrew",
+    "middleName": "R.",
+    "surname": "Regenscheid",
+    "suffix": null,
+    "nickname": "Andy",
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": "NIST"
+    },
+    "fullName": "Andrew R. Regenscheid"
+   },
+   {
+    "title": null,
+    "givenName": "Murugiah",
+    "middleName": "P.",
+    "surname": "Souppaya",
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": "NIST"
+    },
+    "fullName": "Murugiah P. Souppaya"
+   },
+   {
+    "title": null,
+    "givenName": "William",
+    "middleName": "D.",
+    "surname": "Newhouse",
+    "suffix": null,
+    "nickname": "Bill",
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": "NIST"
+    },
+    "fullName": "William D. Newhouse"
+   },
+   {
+    "title": null,
+    "givenName": "Russ",
+    "middleName": null,
+    "surname": "Housley",
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "Vigil Security",
+     "acronym": null
+    },
+    "fullName": "Russ Housley"
+   },
+   {
+    "title": null,
+    "givenName": "Sean",
+    "middleName": null,
+    "surname": "Turner",
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "sn3rd",
+     "acronym": null
+    },
+    "fullName": "Sean Turner"
+   },
+   {
+    "title": null,
+    "givenName": "William",
+    "middleName": "C.",
+    "surname": "Barker",
+    "suffix": null,
+    "nickname": "Curt",
+    "affiliation": {
+     "name": "Dakota Consulting",
+     "acronym": null
+    },
+    "fullName": "William C. Barker"
+   },
+   {
+    "title": null,
+    "givenName": "Karen",
+    "middleName": "A.",
+    "surname": "Scarfone",
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "Scarfone Cybersecurity",
+     "acronym": null
+    },
+    "fullName": "Karen A. Scarfone"
+   }
+  ],
+  "editors": [],
+  "supersedes": [],
+  "superseded-by": [],
+  "keywords": [
+   "cryptographic agility",
+   "cryptographic algorithm",
+   "cryptographic application programming interface (API)",
+   "cryptographic risk management",
+   "cryptographic transition"
+  ],
+  "comment-from": "2025-07-17",
+  "comment-to": "2025-08-15"
+ },
+ {
+  "language": "en",
+  "script": "Latn",
+  "series": "csrc-white-paper",
+  "docnumber": "39",
+  "docidentifier": "CSWP 39",
+  "revision": null,
+  "edition": null,
+  "volume": null,
+  "uri": "https://csrc.nist.gov/pubs/cswp/39/considerations-for-achieving-cryptographic-agility/final",
+  "doi": "10.6028/NIST.CSWP.39",
+  "title-main": "Considerations for Achieving Cryptographic Agility",
+  "title-sub": "Strategies and Practices",
+  "iteration": "final",
+  "issued-date": null,
+  "updated-date": null,
+  "published-date": "2025-12-19",
+  "obsoleted-date": "2026-06-29",
+  "status": "final",
+  "substage": "withdrawn",
+  "authors": [
+   {
+    "title": null,
+    "givenName": "Elaine",
+    "middleName": "B.",
+    "surname": "Barker",
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": "NIST"
+    },
+    "fullName": "Elaine B. Barker"
+   },
+   {
+    "title": null,
+    "givenName": "Lily",
+    "middleName": null,
+    "surname": "Chen",
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": "NIST"
+    },
+    "fullName": "Lily Chen"
+   },
+   {
+    "title": "Dr.",
+    "givenName": "David",
+    "middleName": "A.",
+    "surname": "Cooper",
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": "NIST"
+    },
+    "fullName": "David A. Cooper"
+   },
+   {
+    "title": "Dr.",
+    "givenName": "Dustin",
+    "middleName": null,
+    "surname": "Moody",
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": "NIST"
+    },
+    "fullName": "Dustin Moody"
+   },
+   {
+    "title": null,
+    "givenName": "Andrew",
+    "middleName": "R.",
+    "surname": "Regenscheid",
+    "suffix": null,
+    "nickname": "Andy",
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": "NIST"
+    },
+    "fullName": "Andrew R. Regenscheid"
+   },
+   {
+    "title": null,
+    "givenName": "Murugiah",
+    "middleName": "P.",
+    "surname": "Souppaya",
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": "NIST"
+    },
+    "fullName": "Murugiah P. Souppaya"
+   },
+   {
+    "title": null,
+    "givenName": "William",
+    "middleName": "D.",
+    "surname": "Newhouse",
+    "suffix": null,
+    "nickname": "Bill",
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": "NIST"
+    },
+    "fullName": "William D. Newhouse"
+   },
+   {
+    "title": null,
+    "givenName": "Russ",
+    "middleName": null,
+    "surname": "Housley",
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "Vigil Security",
+     "acronym": null
+    },
+    "fullName": "Russ Housley"
+   },
+   {
+    "title": null,
+    "givenName": "Sean",
+    "middleName": null,
+    "surname": "Turner",
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "sn3rd",
+     "acronym": null
+    },
+    "fullName": "Sean Turner"
+   },
+   {
+    "title": null,
+    "givenName": "William",
+    "middleName": "C.",
+    "surname": "Barker",
+    "suffix": null,
+    "nickname": "Curt",
+    "affiliation": {
+     "name": "Strativia",
+     "acronym": null
+    },
+    "fullName": "William C. Barker"
+   },
+   {
+    "title": null,
+    "givenName": "Karen",
+    "middleName": "A.",
+    "surname": "Kent",
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "Trusted Cyber Annex",
+     "acronym": null
+    },
+    "fullName": "Karen A. Kent"
+   }
+  ],
+  "editors": [],
+  "supersedes": [],
+  "superseded-by": [
+   {
+    "uri": "https://csrc.nist.gov/pubs/cswp/39/upd1/considerations-for-achieving-crypto-agility/final",
+    "docidentifier": "CSWP 39upd1"
+   }
+  ],
+  "keywords": [
+   "cryptographic agility",
+   "cryptographic algorithm",
+   "cryptographic application programming interface (API)",
+   "cryptographic risk management",
+   "cryptographic transition"
+  ],
+  "comment-from": null,
+  "comment-to": null
  }
 ]

@@ -4,6 +4,13 @@ Newest first. One entry per research pass.
 
 ## 2026-11-20
 
+### Replaced-edition data: NIST records from CSRC's export
+
+Updated [Replaced-edition data for IETF, NIST and W3C](standards-supersession-sources.md)
+for #653 and #671. New observations: which export fields make a record, how
+many publications only CSRC lists, the 9 that share a DOI with a MODS record
+spelled another way, and the FIPS series title the parser missed.
+
 ### Replaced-edition data: NIST part and volume spellings
 
 Updated [Replaced-edition data for IETF, NIST and W3C](standards-supersession-sources.md)

@@ -700,9 +700,14 @@ _NIST_CACHE_MAX_AGE_DAYS = 90
 # The catalogue file name changes whenever what it holds changes, so a file a
 # previous version wrote is never served for up to 90 days. "_csrc" marked
 # the catalogue that carries CSRC's withdrawal data (#639); "_parts" the one
-# that spells out SP parts, volumes, versions and editions (#598).
-_NIST_CACHE_FILE = "nist_catalogue_parts.json"
-_NIST_LEGACY_CACHE_FILES = ("nist_catalogue.json", "nist_catalogue_csrc.json")
+# that spells out SP parts, volumes, versions and editions (#598); "_full"
+# the one that adds the publications only CSRC lists (#653).
+_NIST_CACHE_FILE = "nist_catalogue_full.json"
+_NIST_LEGACY_CACHE_FILES = (
+    "nist_catalogue.json",
+    "nist_catalogue_csrc.json",
+    "nist_catalogue_parts.json",
+)
 # CSRC's publications export: the only NIST source that records which
 # publications are withdrawn and what replaced them. See
 # docs/design/reference/standards-supersession-sources.md, NIST section.
@@ -713,6 +718,9 @@ _CSRC_PUBS_EXPORT_MEMBER = "pubs-export.json"
 # The export writes "SP 800-53 Rev. 4" and "IR 7298"; the MODS catalogue, and
 # resolve_identifier_local, write "NIST SP 800-53 Rev. 4" and "NISTIR 7298".
 _CSRC_PREFIX_TO_CATALOGUE = {"SP": "NIST SP", "IR": "NISTIR"}
+# The export's series the catalogue carries, so the ones a record is built
+# for when MODS lacks the publication (#653).
+_CSRC_RECORD_SERIES = ("SP", "IR", "FIPS")
 # MODS writes an SP's part, volume, version or single-digit edition into the
 # series number ("800-57pt1", "800-57p2", "800-160v2", "800-28ver2",
 # "800-21e2"). CSRC, NIST's citations and resolve_identifier_local spell it
@@ -738,7 +746,8 @@ class _NISTFetcher:
     MODS barely records withdrawal, so the catalogue is built together with
     CSRC's publications export, which marks the CSRC publications NIST
     withdrew and names what replaced them (#639). Publications outside CSRC
-    keep the MODS reading. What each source holds and how their identifiers
+    keep the MODS reading; a CSRC publication MODS lacks gets a record built
+    from the export (#653). What each source holds and how their identifiers
     line up: ``docs/design/reference/standards-supersession-sources.md``.
 
     Args:
@@ -803,11 +812,11 @@ class _NISTFetcher:
         except OSError as exc:
             logger.warning("nist_catalogue_disk_save_failed err=%s", exc)
 
-    async def _fetch_csrc_statuses(self) -> dict[str, dict[str, Any]]:
-        """Download CSRC's publications export and read its withdrawal data.
+    async def _fetch_csrc_export(self) -> list[Any]:
+        """Download CSRC's publications export.
 
         Returns:
-            What :func:`_csrc_statuses` returns.
+            The export's top-level list of entries.
 
         Raises:
             StandardsUpstreamError: CSRC refused the request, never answered,
@@ -843,7 +852,7 @@ class _NISTFetcher:
             raise StandardsUpstreamError(
                 "NIST", status=200, detail="CSRC's publications export is unreadable"
             )
-        return _csrc_statuses(entries)
+        return entries
 
     async def _fetch_mods_url(self) -> str | None:
         """Get the download URL for the latest MODS XML asset from GitHub releases."""
@@ -889,7 +898,7 @@ class _NISTFetcher:
 
             # The export first: it is 120 KB against MODS's 84 MB, and without
             # it nothing is cached, so a CSRC outage should cost no download.
-            statuses = await self._fetch_csrc_statuses()
+            export = await self._fetch_csrc_export()
             mods_url = await self._fetch_mods_url()
             if mods_url is None:
                 return []
@@ -907,11 +916,15 @@ class _NISTFetcher:
             if not records:
                 logger.warning("nist_mods_empty_after_parse url=%s", mods_url)
                 return []
-            applied = _apply_csrc_statuses(records, statuses)
+            applied = _apply_csrc_statuses(records, _csrc_statuses(export))
+            added = _csrc_only_records(export, records)
+            records.extend(added)
             logger.info(
-                "nist_catalogue_parsed count=%d csrc_statuses_applied=%d",
+                "nist_catalogue_parsed count=%d csrc_statuses_applied=%d "
+                "csrc_records_added=%d",
                 len(records),
                 applied,
+                len(added),
             )
             self._save_to_disk(records)
             self._catalogue = records
@@ -1034,8 +1047,8 @@ def _csrc_status(entries: list[dict[str, Any]], identifier: str) -> dict[str, An
     }
 
 
-def _csrc_statuses(entries: list[Any]) -> dict[str, dict[str, Any]]:
-    """Group CSRC's export by publication and read each one's status.
+def _csrc_final_publications(entries: list[Any]) -> dict[str, list[dict[str, Any]]]:
+    """Group CSRC's export entries by publication, final entries only.
 
     Drafts are left out: their withdrawal says a comment period closed, not
     that a final publication was withdrawn.
@@ -1044,7 +1057,7 @@ def _csrc_statuses(entries: list[Any]) -> dict[str, dict[str, Any]]:
         entries: The export's top-level list.
 
     Returns:
-        Lower-cased catalogue identifier to what :func:`_csrc_status` returns.
+        Each ``docidentifier`` to its final entries, one per update.
     """
     grouped: dict[str, list[dict[str, Any]]] = {}
     for entry in entries:
@@ -1053,10 +1066,98 @@ def _csrc_statuses(entries: list[Any]) -> dict[str, dict[str, Any]]:
         identifier = entry.get("docidentifier")
         if isinstance(identifier, str) and identifier:
             grouped.setdefault(identifier, []).append(entry)
+    return grouped
+
+
+def _csrc_statuses(entries: list[Any]) -> dict[str, dict[str, Any]]:
+    """Read each publication's status from CSRC's export.
+
+    Args:
+        entries: The export's top-level list.
+
+    Returns:
+        Lower-cased catalogue identifier to what :func:`_csrc_status` returns.
+    """
     return {
         _csrc_catalogue_identifier(identifier).lower(): _csrc_status(group, identifier)
-        for identifier, group in grouped.items()
+        for identifier, group in _csrc_final_publications(entries).items()
     }
+
+
+def _csrc_only_records(
+    entries: list[Any], catalogue: list[StandardRecord]
+) -> list[StandardRecord]:
+    """Build a record for each publication CSRC lists that MODS lacks (#653).
+
+    MODS has no record of 44 withdrawn or replaced publications CSRC lists,
+    among them the 2005 SP 800-53 and FIPS 186-3, nor of 27 current ones.
+    Without one, ``get_standard`` reports them not found and a
+    ``superseded_by`` naming them leads nowhere. The export holds what a
+    record needs, except an abstract. Only the series the catalogue carries
+    are built: CSRC's white papers are another series (#672).
+
+    Args:
+        entries: The export's top-level list.
+        catalogue: The records parsed from MODS.
+
+    Returns:
+        The new records, in the export's order.
+    """
+    known = {(r.get("identifier") or "").lower() for r in catalogue}
+    added: list[StandardRecord] = []
+    for identifier, group in _csrc_final_publications(entries).items():
+        if identifier.partition(" ")[0] not in _CSRC_RECORD_SERIES:
+            continue
+        spelled = _csrc_catalogue_identifier(identifier)
+        if spelled.lower() in known:
+            continue
+        known.add(spelled.lower())
+        added.append(_csrc_record(spelled, group, identifier))
+    return added
+
+
+def _csrc_record(
+    spelled: str, entries: list[dict[str, Any]], identifier: str
+) -> StandardRecord:
+    """Build one catalogue record from a publication's export entries.
+
+    Args:
+        spelled: The identifier in the catalogue's spelling.
+        entries: The publication's final entries, one per update.
+        identifier: Its ``docidentifier``.
+
+    Returns:
+        The record, with the status :func:`_csrc_status` reads.
+    """
+    first = min(entries, key=lambda e: e.get("published-date") or "")
+    newest = max(entries, key=lambda e: e.get("published-date") or "")
+    title = newest.get("title-main") or ""
+    if newest.get("title-sub"):
+        title = f"{title}: {newest['title-sub']}"
+    # Like MODS, link the DOI when the publication has one.
+    doi = next((e["doi"] for e in (newest, *entries) if e.get("doi")), None)
+    number, _, revision = identifier.partition(" ")[2].partition(" Rev. ")
+    status = _csrc_status(entries, identifier)
+    return StandardRecord(
+        identifier=spelled,
+        aliases=[],
+        title=title,
+        body="NIST",
+        number=number,
+        revision=f"Rev. {revision}" if revision else None,
+        published_date=first.get("published-date"),
+        scope=None,
+        committee=None,
+        url=f"https://doi.org/{doi}" if doi else first.get("uri") or "",
+        full_text_url=None,
+        full_text_available=False,
+        price=None,
+        related=[],
+        supersedes=[],
+        status=status["status"],
+        superseded_by=status["superseded_by"],
+        withdrawn_date=status["withdrawn_date"],
+    )
 
 
 def _apply_csrc_statuses(
@@ -1166,7 +1267,8 @@ def _normalize_nist_mods(mods: ET.Element, ns: str) -> StandardRecord | None:
         or "internal report" in series_title
     ):
         body_prefix = "NISTIR"
-    elif "fips" in series_title:
+    elif "fips" in series_title or "federal information processing" in series_title:
+        # FIPS 203, 204 and 205 carry the long title alone (#671).
         body_prefix = "FIPS"
     else:
         return None  # skip unrecognised series
