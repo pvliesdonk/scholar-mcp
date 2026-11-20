@@ -32,6 +32,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Joint-body names, as the record's ``body`` and an identifier prefix.
+_ISO_IEC_IEEE = "ISO/IEC/IEEE"
+_IEC_IEEE = "IEC/IEEE"
+_ISO_IEC = "ISO/IEC"
+
 
 @dataclass(frozen=True)
 class RelatonConfig:
@@ -97,9 +102,9 @@ def _canonical_identifier_and_body(
 
     Joint detection rules (checked in order of specificity):
 
-    - ISO + IEC + IEEE types present → ``body="ISO/IEC/IEEE"``
-    - IEC + IEEE types present (no ISO) → ``body="IEC/IEEE"``
-    - ISO + IEC types present (no IEEE) → ``body="ISO/IEC"``
+    - ISO + IEC + IEEE types present → ``body=_ISO_IEC_IEEE``
+    - IEC + IEEE types present (no ISO) → ``body=_IEC_IEEE``
+    - ISO + IEC types present (no IEEE) → ``body=_ISO_IEC``
     - IEEE-only → ``body="IEEE"``
     - ISO-only / IEC-only → respective body
     - Otherwise fall back to the primary entry's ``type``.
@@ -126,27 +131,27 @@ def _canonical_identifier_and_body(
 
     if iso_entries and iec_entries and ieee_entries:
         ident = str(ieee_entries[0].get("content", "")).strip()
-        ident = _normalise_joint(ident, "ISO/IEC/IEEE")
-        return ident, "ISO/IEC/IEEE"
+        ident = _normalise_joint(ident, _ISO_IEC_IEEE)
+        return ident, _ISO_IEC_IEEE
 
     if iec_entries and ieee_entries:
         ident = str(ieee_entries[0].get("content", "")).strip()
-        ident = _normalise_joint(ident, "IEC/IEEE")
-        return ident, "IEC/IEEE"
+        ident = _normalise_joint(ident, _IEC_IEEE)
+        return ident, _IEC_IEEE
 
     if iso_entries and iec_entries:
         joint = next(
             (
                 d
                 for d in iso_entries + iec_entries
-                if "ISO/IEC" in str(d.get("content", ""))
+                if _ISO_IEC in str(d.get("content", ""))
                 or "IEC/ISO" in str(d.get("content", ""))
             ),
             iso_entries[0],
         )
         ident = str(joint.get("content", "")).strip()
-        ident = _normalise_joint(ident, "ISO/IEC")
-        return ident, "ISO/IEC"
+        ident = _normalise_joint(ident, _ISO_IEC)
+        return ident, _ISO_IEC
 
     if ieee_entries:
         return str(ieee_entries[0].get("content", "")).strip(), "IEEE"
@@ -172,9 +177,9 @@ def _normalise_joint(ident: str, joint_prefix: str) -> str:
     """
     if ident.startswith(joint_prefix):
         return ident
-    ident = ident.replace("IEC/ISO", "ISO/IEC")
-    ident = ident.replace("IEEE/IEC", "IEC/IEEE")
-    ident = ident.replace("IEEE/ISO/IEC", "ISO/IEC/IEEE")
+    ident = ident.replace("IEC/ISO", _ISO_IEC)
+    ident = ident.replace("IEEE/IEC", _IEC_IEEE)
+    ident = ident.replace("IEEE/ISO/IEC", _ISO_IEC_IEEE)
     if ident.startswith(joint_prefix):
         return ident
     for prefix in ("ISO/IEC/IEEE ", "IEC/IEEE ", "ISO/IEC ", "IEEE ", "IEC ", "ISO "):

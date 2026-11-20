@@ -151,6 +151,10 @@ if TYPE_CHECKING:
 
     from scholar_mcp._standards_sync import Loader
 
+# The cache database under the cache directory, and the --cache-dir help.
+_CACHE_DB_NAME = "cache.db"
+_CACHE_DIR_HELP = "Override cache directory."
+
 cache_app = typer.Typer(
     name="cache",
     help="Manage the Scholar MCP local cache.",
@@ -182,9 +186,7 @@ def sync_standards(
     force: bool = typer.Option(
         False, "--force", help="Bypass upstream-freshness checks and re-sync."
     ),
-    cache_dir: Path | None = typer.Option(
-        None, "--cache-dir", help="Override cache directory."
-    ),
+    cache_dir: Path | None = typer.Option(None, "--cache-dir", help=_CACHE_DIR_HELP),
 ) -> None:
     """Sync Tier 2 standards catalogue data into the local cache.
 
@@ -204,7 +206,7 @@ def sync_standards(
         from scholar_mcp._standards_sync import SyncReport
 
         config = ProjectConfig.from_env()
-        db_path = (cache_dir or config.cache_dir) / "cache.db"
+        db_path = (cache_dir or config.cache_dir) / _CACHE_DB_NAME
         c = ScholarCache(db_path)
         await c.open()
         http = httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0))
@@ -236,16 +238,14 @@ def sync_standards(
 
 @cache_app.command("stats")
 def cache_stats(
-    cache_dir: Path | None = typer.Option(
-        None, "--cache-dir", help="Override cache directory."
-    ),
+    cache_dir: Path | None = typer.Option(None, "--cache-dir", help=_CACHE_DIR_HELP),
 ) -> None:
     """Show cache statistics (row counts, file size)."""
     from scholar_mcp._cache import ScholarCache
 
     async def _run() -> None:
         config = ProjectConfig.from_env()
-        db_path = (cache_dir or config.cache_dir) / "cache.db"
+        db_path = (cache_dir or config.cache_dir) / _CACHE_DB_NAME
         if not db_path.exists():
             typer.echo("No cache database found.")
             return
@@ -266,9 +266,7 @@ def cache_clear(
         "--older-than",
         help="Only remove entries older than this many days.",
     ),
-    cache_dir: Path | None = typer.Option(
-        None, "--cache-dir", help="Override cache directory."
-    ),
+    cache_dir: Path | None = typer.Option(None, "--cache-dir", help=_CACHE_DIR_HELP),
 ) -> None:
     """Clear cache entries.
 
@@ -279,7 +277,7 @@ def cache_clear(
 
     async def _run() -> None:
         config = ProjectConfig.from_env()
-        db_path = (cache_dir or config.cache_dir) / "cache.db"
+        db_path = (cache_dir or config.cache_dir) / _CACHE_DB_NAME
         if not db_path.exists():
             typer.echo("No cache database found.")
             return
