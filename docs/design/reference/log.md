@@ -2,6 +2,15 @@
 
 Newest first. One entry per research pass.
 
+## 2026-11-20
+
+### Replaced-edition data: NIST part and volume spellings
+
+Updated [Replaced-edition data for IETF, NIST and W3C](standards-supersession-sources.md)
+for #598. New observation: the ways MODS writes an SP part, volume, version
+or edition into `partNumber`. The departures section now gives the match and
+resolution counts with the catalogue spelling those out.
+
 ## 2026-11-15
 
 ### Relaton v2: how IEC links a replaced edition to its successor

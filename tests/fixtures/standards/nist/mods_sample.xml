@@ -1281,4 +1281,193 @@
          </languageOfCataloging>
       </recordInfo>
    </mods>
+   <mods version="3.7">
+      <titleInfo>
+         <title>Recommendation for key management part 1</title>
+         <subTitle>general</subTitle>
+      </titleInfo>
+      <name type="personal" usage="primary">
+         <namePart>Barker, Elaine B.</namePart>
+      </name>
+      <name xmlns:xlink="http://www.w3.org/1999/xlink"
+            type="corporate"
+            xlink:href="https://id.loc.gov/authorities/names/n88112126">
+         <namePart>National Institute of Standards and Technology (U.S.)</namePart>
+         <nameIdentifier>https://id.loc.gov/authorities/names/n88112126</nameIdentifier>
+      </name>
+      <typeOfResource>text</typeOfResource>
+      <genre authority="marcgt">technical report</genre>
+      <genre authority="marcgt">government publication</genre>
+      <genre authority="rdacontent">text</genre>
+      <genre authority="lcgft">Technical reports.</genre>
+      <genre authority="fast">Technical reports.</genre>
+      <originInfo>
+         <place>
+            <placeTerm type="code" authority="marccountry">mdu</placeTerm>
+         </place>
+         <dateIssued encoding="marc">2016</dateIssued>
+         <issuance>monographic</issuance>
+      </originInfo>
+      <originInfo eventType="publisher">
+         <place>
+            <placeTerm type="text">Gaithersburg, MD :</placeTerm>
+         </place>
+         <publisher>U.S. Dept. of Commerce, National Institute of Standards and Technology, </publisher>
+         <dateIssued>2016-01.</dateIssued>
+      </originInfo>
+      <language>
+         <languageTerm authority="iso639-2b" type="code">eng</languageTerm>
+      </language>
+      <physicalDescription>
+         <form type="media" authority="rdamedia">computer</form>
+         <form type="carrier" authority="rdacarrier">online resource</form>
+         <extent>1 online resource : illustrations (chiefly color).</extent>
+      </physicalDescription>
+      <note type="statement of responsibility">Elaine Barker.</note>
+      <note>January 2016.</note>
+      <note>Title from PDF title page (viewed January 31, 2016).</note>
+      <note type="bibliography">Includes bibliographical references.</note>
+      <note type="system details">Mode of access: World Wide Web.</note>
+      <note type="system details">Systems requirements: Adobe Acrobat PDF reader.</note>
+      <subject xmlns:xlink="http://www.w3.org/1999/xlink"
+               authority="lcsh"
+               xlink:href="https://id.loc.gov/authorities/subjects/sh85009783">
+         <topic>Authentication</topic>
+      </subject>
+      <subject xmlns:xlink="http://www.w3.org/1999/xlink"
+               authority="fast"
+               xlink:href="https://id.worldcat.org/fast/821630">
+         <topic>Authentication</topic>
+      </subject>
+      <subject authority="lcsh">
+         <topic>Private key cryptography</topic>
+      </subject>
+      <subject xmlns:xlink="http://www.w3.org/1999/xlink"
+               authority="lcsh"
+               xlink:href="https://id.loc.gov/authorities/subjects/sh00004804">
+         <topic>Public key cryptography</topic>
+      </subject>
+      <subject xmlns:xlink="http://www.w3.org/1999/xlink"
+               authority="fast"
+               xlink:href="https://id.worldcat.org/fast/1082562">
+         <topic>Public key cryptography</topic>
+      </subject>
+      <location>
+         <url displayLabel="electronic resource" usage="primary display">https://doi.org/10.6028/NIST.SP.800-57pt1r4</url>
+      </location>
+      <relatedItem type="series">
+         <titleInfo>
+            <title>NIST special publication; NIST special pub; NIST SP</title>
+            <partNumber>800-57pt1r4</partNumber>
+         </titleInfo>
+      </relatedItem>
+      <identifier type="doi">10.6028/NIST.SP.800-57pt1r4 </identifier>
+      <identifier type="oclc">950543977</identifier>
+      <recordInfo>
+         <descriptionStandard>rda</descriptionStandard>
+         <recordContentSource authority="marcorg">NBS</recordContentSource>
+         <recordCreationDate encoding="marc">150205</recordCreationDate>
+         <recordChangeDate encoding="iso8601">20240315120949.0</recordChangeDate>
+         <recordIdentifier>991000152559708106</recordIdentifier>
+         <recordOrigin>Converted from MARCXML to MODS version 3.7 using MARC21slim2MODS3-7.xsl
+				(Revision 1.140 20200717)</recordOrigin>
+         <languageOfCataloging>
+            <languageTerm authority="iso639-2b" type="code">eng</languageTerm>
+         </languageOfCataloging>
+      </recordInfo>
+   </mods>
+   <mods version="3.7">
+      <titleInfo>
+         <title>Guidelines on active content and mobile code</title>
+      </titleInfo>
+      <name type="personal" usage="primary">
+         <namePart>Jansen, Wayne A.</namePart>
+      </name>
+      <name type="personal">
+         <namePart>Winograd, T.</namePart>
+      </name>
+      <name type="personal">
+         <namePart>Scarfone, K. A.</namePart>
+      </name>
+      <name xmlns:xlink="http://www.w3.org/1999/xlink"
+            type="corporate"
+            xlink:href="https://id.loc.gov/authorities/names/n88112126">
+         <namePart>National Institute of Standards and Technology (U.S.).</namePart>
+         <namePart>Computer Security Division.</namePart>
+         <nameIdentifier>https://id.loc.gov/authorities/names/n88112126</nameIdentifier>
+      </name>
+      <typeOfResource>text</typeOfResource>
+      <genre authority="marcgt">technical report</genre>
+      <genre authority="marcgt">government publication</genre>
+      <genre authority="rdacontent">text</genre>
+      <genre authority="lcgft">Technical reports.</genre>
+      <genre authority="fast">Technical reports.</genre>
+      <originInfo>
+         <place>
+            <placeTerm type="code" authority="marccountry">mdu</placeTerm>
+         </place>
+         <dateIssued encoding="marc">2008</dateIssued>
+         <issuance>monographic</issuance>
+      </originInfo>
+      <originInfo eventType="publisher">
+         <place>
+            <placeTerm type="text">Gaithersburg, MD :</placeTerm>
+         </place>
+         <publisher>U.S. Dept. of Commerce, National Institute of Standards and Technology;</publisher>
+         <dateIssued>2008.</dateIssued>
+      </originInfo>
+      <language>
+         <languageTerm authority="iso639-2b" type="code">eng</languageTerm>
+      </language>
+      <physicalDescription>
+         <form type="media" authority="rdamedia">computer</form>
+         <form type="carrier" authority="rdacarrier">online resource</form>
+         <extent>1 online resource.</extent>
+      </physicalDescription>
+      <abstract displayLabel="Abstract">Active content technologies allow code, in the form of a script, macro, or other kind of portable instruction representation, to execute when the document is rendered.  Like any technology, active content can be used to deliver essential services, but it can also become a source of vulnerability for exploitation by an attacker.  The purpose of this document is to provide an overview of active content and mobile code technologies in use today and offer insights for making informed IT security decisions on their application and treatment.  The discussion gives details about the threats, technology risks, and safeguards for end user systems, such as desktops and laptops.  Although various end user applications, such as email clients, can involve active content, Web browsers remain the primary vehicle for delivery and are underscored in the discussion.  The tenets presented for Web browsers apply equally well to other end user applications and can be inferred directly.</abstract>
+      <note type="statement of responsibility">W. Jansen; T. Winograd; K. A. Scarfone.</note>
+      <note>2008.</note>
+      <note>Title from PDF title page.</note>
+      <note type="bibliography">Includes bibliographical references.</note>
+      <note type="system details">Mode of access: World Wide Web.</note>
+      <note type="system details">Systems requirements: Adobe Acrobat PDF reader.</note>
+      <subject>
+         <topic>Active content</topic>
+      </subject>
+      <subject>
+         <topic>Email security</topic>
+      </subject>
+      <subject>
+         <topic>Malware</topic>
+      </subject>
+      <subject>
+         <topic>Mobile code</topic>
+      </subject>
+      <subject>
+         <topic>Web security</topic>
+      </subject>
+      <location>
+         <url displayLabel="electronic resource" usage="primary display">https://doi.org/10.6028/NIST.SP.800-28ver2</url>
+      </location>
+      <relatedItem type="series">
+         <titleInfo>
+            <title>NIST special publication; NIST special pub; NIST SP</title>
+            <partNumber>800-28ver2</partNumber>
+         </titleInfo>
+      </relatedItem>
+      <identifier type="doi">10.6028/NIST.SP.800-28ver2 </identifier>
+      <identifier type="oclc">927735516</identifier>
+      <recordInfo>
+         <descriptionStandard>rda</descriptionStandard>
+         <recordContentSource authority="marcorg">NBS</recordContentSource>
+         <recordCreationDate encoding="marc">151105</recordCreationDate>
+         <recordChangeDate encoding="iso8601">20241231092510.0</recordChangeDate>
+         <recordIdentifier>991000076919708106</recordIdentifier>
+         <recordOrigin>Converted from MARCXML to MODS version 3.7 using MARC21slim2MODS3-7.xsl
+				(Revision 1.140 20200717)</recordOrigin>
+         <languageOfCataloging>
+            <languageTerm authority="iso639-2b" type="code">eng</languageTerm>
+         </languageOfCataloging>
+      </recordInfo>
+   </mods>
 </modsCollection>

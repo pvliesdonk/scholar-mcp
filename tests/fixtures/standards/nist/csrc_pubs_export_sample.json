@@ -1057,5 +1057,162 @@
   ],
   "comment-from": null,
   "comment-to": null
+ },
+ {
+  "language": "en",
+  "script": "Latn",
+  "series": "nist-sp",
+  "docnumber": "800-28 Version 2",
+  "docidentifier": "SP 800-28 Version 2",
+  "revision": "2",
+  "edition": null,
+  "volume": null,
+  "uri": "https://csrc.nist.gov/pubs/sp/800/28/ver2/final",
+  "doi": "10.6028/NIST.SP.800-28ver2",
+  "title-main": "Guidelines on Active Content and Mobile Code",
+  "title-sub": null,
+  "iteration": "final",
+  "issued-date": "2008-03",
+  "updated-date": null,
+  "published-date": "2008-03-07",
+  "obsoleted-date": null,
+  "status": "final",
+  "substage": "active",
+  "authors": [
+   {
+    "title": null,
+    "givenName": "Wayne",
+    "middleName": null,
+    "surname": "Jansen",
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": "NIST"
+    },
+    "fullName": "Wayne Jansen"
+   },
+   {
+    "title": null,
+    "givenName": "Theodore",
+    "middleName": null,
+    "surname": "Winograd",
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "Booz Allen Hamilton",
+     "acronym": "BAH"
+    },
+    "fullName": "Theodore Winograd"
+   },
+   {
+    "title": null,
+    "givenName": "Karen",
+    "middleName": "A.",
+    "surname": "Scarfone",
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": "NIST"
+    },
+    "fullName": "Karen A. Scarfone"
+   }
+  ],
+  "editors": [],
+  "supersedes": [
+   {
+    "uri": "https://csrc.nist.gov/pubs/sp/800/28/final",
+    "docidentifier": "SP 800-28"
+   }
+  ],
+  "superseded-by": [],
+  "keywords": [
+   "Active content",
+   "email security",
+   "malware",
+   "mobile code",
+   "Web security"
+  ],
+  "comment-from": null,
+  "comment-to": null
+ },
+ {
+  "language": "en",
+  "script": "Latn",
+  "series": "nist-sp",
+  "docnumber": "800-57 Part 1 Rev. 4",
+  "docidentifier": "SP 800-57 Part 1 Rev. 4",
+  "revision": "4",
+  "edition": null,
+  "volume": null,
+  "uri": "https://csrc.nist.gov/pubs/sp/800/57/pt1/r4/final",
+  "doi": "10.6028/NIST.SP.800-57pt1r4",
+  "title-main": "Recommendation for Key Management",
+  "title-sub": "Part 1: General",
+  "iteration": "final",
+  "issued-date": "2016-01",
+  "updated-date": null,
+  "published-date": "2016-01-28",
+  "obsoleted-date": "2020-05-04",
+  "status": "final",
+  "substage": "withdrawn",
+  "authors": [
+   {
+    "title": null,
+    "givenName": "Elaine",
+    "middleName": "B.",
+    "surname": "Barker",
+    "suffix": null,
+    "nickname": null,
+    "affiliation": {
+     "name": "National Institute of Standards and Technology",
+     "acronym": "NIST"
+    },
+    "fullName": "Elaine B. Barker"
+   }
+  ],
+  "editors": [],
+  "supersedes": [
+   {
+    "uri": "https://csrc.nist.gov/pubs/sp/800/57/pt1/r3/final",
+    "docidentifier": "SP 800-57 Part 1 Rev. 3"
+   }
+  ],
+  "superseded-by": [
+   {
+    "uri": "https://csrc.nist.gov/pubs/sp/800/57/pt1/r5/final",
+    "docidentifier": "SP 800-57 Part 1 Rev. 5"
+   }
+  ],
+  "keywords": [
+   "archive",
+   "assurances",
+   "authentication",
+   "authorization",
+   "availability",
+   "backup",
+   "compromise",
+   "confidentiality",
+   "cryptanalysis",
+   "cryptographic key",
+   "cryptographic module",
+   "digital signature",
+   "hash function",
+   "key agreement",
+   "key management",
+   "key management policy",
+   "key recovery",
+   "key transport",
+   "originator-usage period",
+   "private key",
+   "public key",
+   "recipient-usage period",
+   "secret key",
+   "split knowledge",
+   "trust anchor"
+  ],
+  "comment-from": null,
+  "comment-to": null
  }
 ]

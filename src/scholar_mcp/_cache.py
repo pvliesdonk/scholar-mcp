@@ -476,6 +476,20 @@ _REPAIRS: dict[str, str] = {
     # list keeps the old storage order, and can lack the current edition
     # altogether, for the 30 days it lives.
     "487_standards_search_results": _CLEAR_STANDARDS_SEARCH,
+    # #598: NIST SP records spell out a part, volume, version or edition now
+    # ("NIST SP 800-57 Part 1 Rev. 5", formerly "NIST SP 800-57pt1 Rev. 5"),
+    # so a live row or a cached search result can name a record that no
+    # longer exists. The resolver also stopped cutting an edition off the
+    # number ("800-63-3" became "800-63"), so an alias written by the old
+    # resolver can point at a different publication.
+    "598_live_nist_rows": (
+        "DELETE FROM standards WHERE synced_at IS NULL "
+        "AND json_extract(data, '$.body') = 'NIST'"
+    ),
+    "598_nist_sp_aliases": (
+        "DELETE FROM standards_aliases WHERE canonical LIKE 'NIST SP %'"
+    ),
+    "598_standards_search_results": _CLEAR_STANDARDS_SEARCH,
 }
 
 
