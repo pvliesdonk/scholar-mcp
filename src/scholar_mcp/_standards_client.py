@@ -18,6 +18,7 @@ import httpx
 from ._protocols import CacheProtocol
 from ._rate_limiter import RateLimiter
 from ._record_types import StandardRecord, standard_in_current_shape
+from ._standards_ranking import rank_standards
 
 logger = logging.getLogger(__name__)
 
@@ -910,7 +911,7 @@ class _NISTFetcher:
             or q in (p.get("title") or "").lower()
             or q in (p.get("number") or "").lower()
         ]
-        return matches[:limit]
+        return rank_standards(matches, query)[:limit]
 
     async def get(self, identifier: str) -> StandardRecord | None:
         """Fetch a single NIST publication by canonical identifier.
@@ -1578,7 +1579,8 @@ class _ETSIFetcher:
                 it, or answered in a shape this client cannot read.
         """
         items = await self._rows(query, _ETSI_SEARCH_PARAMS)
-        return [_normalize_etsi(item) for item in items[:limit]]
+        # One response holds every match, so all of them are ranked (#487).
+        return rank_standards(map(_normalize_etsi, items), query)[:limit]
 
     async def _rows(self, query: str, flags: dict[str, str | int]) -> list[dict]:  # type: ignore[type-arg]
         """Return the raw ``data.php`` rows for ``query`` under ``flags``.
@@ -1944,6 +1946,7 @@ class _CENFetcher:
 
 def _collect_search(
     outcomes: list[Any],
+    query: str,
     limit: int,
 ) -> tuple[list[StandardRecord], list[StandardsUpstreamError]]:
     """Split gathered search outcomes into records and reportable failures.
@@ -1957,10 +1960,12 @@ def _collect_search(
 
     Args:
         outcomes: Results of ``asyncio.gather(..., return_exceptions=True)``.
+        query: The query searched for, which ranks the merged records.
         limit: Maximum records to return.
 
     Returns:
-        The merged records, capped at ``limit``, and the failures to report.
+        The merged records, ranked across bodies (#487) and capped at
+        ``limit``, and the failures to report.
     """
     merged: list[StandardRecord] = []
     failures: list[StandardsUpstreamError] = []
@@ -1976,7 +1981,7 @@ def _collect_search(
             # and mypy make anything else unreachable, but extending on a
             # non-list would splice a string apart rather than skip it.
             merged.extend(outcome)
-    return merged[:limit], failures
+    return rank_standards(merged, query)[:limit], failures
 
 
 class StandardsClient:
@@ -2070,9 +2075,10 @@ class StandardsClient:
             if fetcher is None:
                 return [], []
             try:
-                return await fetcher.search(query, limit=limit), []
+                found = await fetcher.search(query, limit=limit)
             except StandardsUpstreamError as exc:
                 return [], [exc]
+            return rank_standards(found, query)[:limit], []
 
         # Search all sources concurrently, one call per fetcher type. For
         # RelatonLiveFetcher specifically, the ISO/IEC variant (source=None)
@@ -2086,7 +2092,7 @@ class StandardsClient:
             *(f.search(query, limit=limit) for f in one_per_type),
             return_exceptions=True,
         )
-        return _collect_search(list(outcomes), limit)
+        return _collect_search(list(outcomes), query, limit)
 
     async def get(self, identifier: str) -> StandardRecord | None:
         """Resolve and fetch a single standard by identifier.

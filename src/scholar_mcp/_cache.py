@@ -20,6 +20,7 @@ from ._record_types import (
     StandardRecord,
     standard_in_current_shape,
 )
+from ._standards_ranking import rank_standards
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +88,26 @@ _GOOGLE_BOOKS_TTL = 30 * 86400  # 30 days
 _STANDARD_TTL = 90 * 86400  # 90 days — standards rarely change
 _STANDARD_ALIAS_TTL = 90 * 86400  # 90 days
 _STANDARD_SEARCH_TTL = 30 * 86400  # 30 days — standards are effectively append-only
+# Synced matches read per search before ranking (#487). A short query matches
+# tens of thousands of synced rows; SQL orders them by the coarse ranking keys
+# so the candidates kept are the ones the exact ranking would put first.
+_SYNCED_SEARCH_CANDIDATES = 500
+_SYNCED_SEARCH_SQL = (
+    "SELECT data FROM standards WHERE synced_at IS NOT NULL"
+    " AND (? IS NULL OR source = ?)"
+    " AND (identifier LIKE ? ESCAPE '\\'"
+    " OR json_extract(data, '$.title') LIKE ? ESCAPE '\\')"
+    " ORDER BY identifier = ? COLLATE NOCASE DESC,"
+    " identifier LIKE ? ESCAPE '\\' DESC,"
+    " CASE json_extract(data, '$.status')"
+    " WHEN 'published' THEN 0 WHEN 'superseded' THEN 2"
+    " WHEN 'withdrawn' THEN 3 ELSE 1 END,"
+    " json_extract(data, '$.published_date') DESC"
+    " LIMIT ?"
+)
+# Emptying the standards search cache: a repair registers it whenever cached
+# results no longer match what a fresh search would return.
+_CLEAR_STANDARDS_SEARCH = "DELETE FROM standards_search"
 _STANDARD_INDEX_TTL = 30 * 86400  # 30 days — re-scrape monthly
 
 _SCHEMA = """
@@ -405,7 +426,7 @@ _REPAIRS: dict[str, str] = {
     ),
     # Cached search results hold the short titles too, and nothing in a
     # cached list says which body each record came from.
-    "480_standards_search_results": "DELETE FROM standards_search",
+    "480_standards_search_results": _CLEAR_STANDARDS_SEARCH,
     # #496: resolve_standard_identifier rewrote a synced row as a live one.
     # The same statement as 479_resync_cc_rows, registered again because a
     # database that already ran that repair can have been unsynced since.
@@ -425,7 +446,7 @@ _REPAIRS: dict[str, str] = {
         "AND json_extract(data, '$.body') IN "
         "('ISO', 'IEC', 'IEEE', 'ISO/IEC', 'IEC/IEEE', 'ISO/IEC/IEEE')"
     ),
-    "641_standards_search_results": "DELETE FROM standards_search",
+    "641_standards_search_results": _CLEAR_STANDARDS_SEARCH,
     # #639: NIST records were built from MODS alone, so every one read
     # "published" with no replacement, and a live row keeps that for 90 days.
     # NIST is never synced; every NIST row is live.
@@ -433,7 +454,7 @@ _REPAIRS: dict[str, str] = {
         "DELETE FROM standards WHERE synced_at IS NULL "
         "AND json_extract(data, '$.body') = 'NIST'"
     ),
-    "639_standards_search_results": "DELETE FROM standards_search",
+    "639_standards_search_results": _CLEAR_STANDARDS_SEARCH,
     # #655: #637, #638 and #640 changed what the IETF, W3C and ETSI fetchers
     # store (status and superseded_by), and a live row keeps the old reading
     # for 90 days. None of the three is synced, so every such row is live.
@@ -451,6 +472,10 @@ _REPAIRS: dict[str, str] = {
     "644_resync_iec": (
         "UPDATE standards_sync_runs SET upstream_ref = NULL WHERE body = 'IEC'"
     ),
+    # #487: search results are ranked now, current edition first. A cached
+    # list keeps the old storage order, and can lack the current edition
+    # altogether, for the 30 days it lives.
+    "487_standards_search_results": _CLEAR_STANDARDS_SEARCH,
 }
 
 
@@ -1428,6 +1453,11 @@ class ScholarCache:
         (``synced_at IS NOT NULL``). Case-insensitive on ASCII because SQLite
         LIKE is case-insensitive for ASCII by default.
 
+        The matches come back ranked, current edition first
+        (:func:`~scholar_mcp._standards_ranking.rank_standards`). SQL orders
+        them by the same keys, coarsely, and the first
+        ``_SYNCED_SEARCH_CANDIDATES`` are ranked exactly.
+
         Args:
             query: Substring to match against the identifier column and the
                 title field (via json_extract). ``%`` and ``_`` in the query
@@ -1437,25 +1467,25 @@ class ScholarCache:
             limit: Maximum number of results.
 
         Returns:
-            List of matching ``StandardRecord`` dicts.
+            List of matching ``StandardRecord`` dicts, ranked.
         """
         db = _require_open(self._db)
         escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         pattern = f"%{escaped}%"
-        where = ["synced_at IS NOT NULL"]
-        params: list[object] = []
-        if source is not None:
-            where.append("source = ?")
-            params.append(source)
-        where.append(
-            "(identifier LIKE ? ESCAPE '\\' "
-            "OR json_extract(data, '$.title') LIKE ? ESCAPE '\\')"
+        # In placeholder order: the body filter, the match, the ordering.
+        params = (
+            source,
+            source,
+            pattern,
+            pattern,
+            query.strip(),
+            pattern,
+            max(limit, _SYNCED_SEARCH_CANDIDATES),
         )
-        params.extend([pattern, pattern, limit])
-        sql = "SELECT data FROM standards WHERE " + " AND ".join(where) + " LIMIT ?"
-        async with db.execute(sql, params) as cur:
+        async with db.execute(_SYNCED_SEARCH_SQL, params) as cur:
             rows = await cur.fetchall()
-        return [standard_in_current_shape(json.loads(row[0])) for row in rows]
+        records = [standard_in_current_shape(json.loads(row[0])) for row in rows]
+        return rank_standards(records, query)[:limit]
 
     async def get_standard_full_text(self, url: str) -> str | None:
         """Return converted full text for a standard's document, or None.
