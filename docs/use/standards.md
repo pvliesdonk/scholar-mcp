@@ -146,12 +146,14 @@ deletes such records. When the new dump lists fewer than half as many records as
 the sync held before, it looks truncated and the sync deletes nothing. Run
 `--force` after confirming upstream state is sane.
 
-### "withdrawal pass aborted"
+### "withdrawal pass aborted" or "removal pass aborted"
 
-The CC and CEN syncs mark records that disappear from their source as
-`withdrawn`. When more than 50% of prior identifiers are missing, they skip that
-pass to avoid flipping the whole cache to `status="withdrawn"`. Run `--force`
-after confirming upstream state is sane.
+The CC sync marks records that disappear from its source as `withdrawn`. The
+CEN table lists withdrawn standards itself, so the CEN sync deletes a record
+whose entry left the table, which means it was never a harmonised standard.
+Either sync skips that pass when more than 50% of prior identifiers are
+missing, which protects the whole cache from a broken edit. Run `--force` after
+confirming upstream state is sane.
 
 ### Rate-limit errors (HTTP 403)
 
@@ -265,10 +267,18 @@ to populate the local cache. Unlike ISO/IEC/IEEE (which sync from upstream Relat
 | Electromagnetic Compatibility 2014/30/EU | EMC | EN 55032, EN 61000-series |
 | Radio Equipment 2014/53/EU | RED | EN 300 328, EN 301 489-series |
 | Machinery 2006/42/EC | Machinery | EN ISO 12100, EN ISO 13849-1 |
-| Medical Devices 2017/745 | MDR | EN ISO 13485, EN 62304 |
-| Cyber Resilience Act | CRA | EN IEC 62443-series |
-| General Product Safety | GPSR | EN 71-series (toys) |
+| Medical Devices 2017/745 | MDR | EN ISO 13485, EN ISO 14971 |
+| Toy Safety 2009/48/EC | Toys | EN 71-series |
+| General Product Safety 2023/988 | GPSR | EN 14988, EN 1130 (childcare articles) |
 | Low Voltage 2014/35/EU | LVD | EN 62368-1, EN 60335-1 |
+
+A record is `"harmonised"` while the Official Journal cites it. A
+withdrawn one is `"withdrawn"`, with the date its presumption of conformity
+ended in `withdrawn_date` and its replacement in `superseded_by`, as
+EN 62061:2005 lists `EN IEC 62061:2021`. The Cyber Resilience Act has no
+harmonised standards yet, so the table has no CRA entries. The Machinery
+Directive's list ends on January 20, 2027, when the Machinery Regulation
+(EU) 2023/1230 replaces it.
 
 ### Supported identifier forms
 

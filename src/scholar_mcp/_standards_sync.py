@@ -84,9 +84,10 @@ class Loader(Protocol):
           synced=True)`` so they bypass TTL expiry.
         * Mark removed identifiers with ``status="withdrawn"`` rather
           than deleting them. The exception is a source whose dump keeps
-          its withdrawn records, such as Relaton's: an identifier missing
-          from it was renamed or advanced, so the loader deletes the row
-          and counts it in ``removed``.
+          its withdrawn records, such as Relaton's or the CEN table: an
+          identifier missing from it was renamed, advanced or never
+          belonged there, so the loader deletes the row and counts it in
+          ``removed``.
         * Accumulate non-fatal errors into the report; re-raise fatal
           ones.
         """

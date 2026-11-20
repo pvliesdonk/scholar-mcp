@@ -259,3 +259,119 @@ async def test_cen_loader_etsi_3part_identifier_findable(tmp_path: Path) -> None
         assert rec is not None, "3-part EN number not findable"
     finally:
         await cache.close()
+
+
+# ---------------------------------------------------------------------------
+# Withdrawn entries and removal (#139)
+# ---------------------------------------------------------------------------
+
+
+def test_withdrawn_entries_name_their_date_and_a_table_successor() -> None:
+    """A withdrawn entry says when, and what replaced it, as a table entry.
+
+    Each ``superseded_by`` name must be an entry in the table, or
+    ``get_standard`` could not follow it.
+    """
+    from scholar_mcp._sync_cen import _HARMONISED_STANDARDS, _normalise_en_identifier
+
+    stored = {_normalise_en_identifier(e.identifier) for e in _HARMONISED_STANDARDS}
+    withdrawn = [e for e in _HARMONISED_STANDARDS if e.status == "withdrawn"]
+    assert withdrawn
+    for entry in withdrawn:
+        assert entry.withdrawn_date, entry.identifier
+        assert entry.superseded_by, entry.identifier
+        for successor in entry.superseded_by:
+            assert _normalise_en_identifier(successor) in stored, successor
+
+
+def test_hs_to_record_carries_withdrawal_and_successor() -> None:
+    """The record lists the successor under the identifier it is stored as."""
+    from scholar_mcp._sync_cen import HarmonisedStandard, _hs_to_record
+
+    record = _hs_to_record(
+        HarmonisedStandard(
+            identifier="EN 62061:2005+A2:2015",
+            title="t",
+            directive="Machinery",
+            status="withdrawn",
+            withdrawn_date="2023-10-11",
+            superseded_by=("EN IEC 62061:2021+A1:2024",),
+        )
+    )
+    assert (record["status"], record["withdrawn_date"], record["superseded_by"]) == (
+        "withdrawn",
+        "2023-10-11",
+        ["EN IEC 62061:2021"],
+    )
+
+
+def test_harmonised_standards_directives_are_known() -> None:
+    """Toys are filed under the Toy Safety Directive, not GPSR; no CRA entry,
+    since nothing is cited under the CRA yet."""
+    from scholar_mcp._sync_cen import _HARMONISED_STANDARDS
+
+    known = {"EMC", "RED", "Machinery", "MDR", "LVD", "Toys", "GPSR"}
+    assert {e.directive for e in _HARMONISED_STANDARDS} <= known
+    assert not [
+        e.identifier
+        for e in _HARMONISED_STANDARDS
+        if e.identifier.startswith("EN 71-") and e.directive != "Toys"
+    ]
+
+
+@pytest.mark.asyncio
+async def test_cen_loader_deletes_an_entry_dropped_from_the_table(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A dropped entry never belonged in the table: its row goes, rather
+    than reading as a withdrawn harmonised standard."""
+    from scholar_mcp import _sync_cen
+    from scholar_mcp._cache import ScholarCache
+    from scholar_mcp._sync_cen import CENLoader, HarmonisedStandard
+
+    table = [
+        HarmonisedStandard(identifier=f"EN {n}:2020", title="t", directive="EMC")
+        for n in range(1, 5)
+    ]
+    cache = ScholarCache(tmp_path / "cache.db")
+    await cache.open()
+    try:
+        monkeypatch.setattr(_sync_cen, "_HARMONISED_STANDARDS", table)
+        await CENLoader().sync(cache)
+        monkeypatch.setattr(_sync_cen, "_HARMONISED_STANDARDS", table[1:])
+        report = await CENLoader().sync(cache)
+
+        assert report.removed == 1
+        assert report.errors == []
+        assert await cache.get_standard("EN 1:2020") is None
+        assert await cache.get_standard("EN 2:2020") is not None
+    finally:
+        await cache.close()
+
+
+@pytest.mark.asyncio
+async def test_cen_loader_keeps_rows_when_most_of_the_table_disappears(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """More than half missing looks like a broken edit: nothing is deleted."""
+    from scholar_mcp import _sync_cen
+    from scholar_mcp._cache import ScholarCache
+    from scholar_mcp._sync_cen import CENLoader, HarmonisedStandard
+
+    table = [
+        HarmonisedStandard(identifier=f"EN {n}:2020", title="t", directive="EMC")
+        for n in range(1, 5)
+    ]
+    cache = ScholarCache(tmp_path / "cache.db")
+    await cache.open()
+    try:
+        monkeypatch.setattr(_sync_cen, "_HARMONISED_STANDARDS", table)
+        await CENLoader().sync(cache)
+        monkeypatch.setattr(_sync_cen, "_HARMONISED_STANDARDS", table[3:])
+        report = await CENLoader().sync(cache)
+
+        assert report.removed == 0
+        assert "removal pass aborted" in report.errors[0]
+        assert await cache.get_standard("EN 1:2020") is not None
+    finally:
+        await cache.close()
