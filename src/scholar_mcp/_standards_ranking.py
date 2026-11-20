@@ -9,16 +9,24 @@ The order, most significant first:
 
 1. An identifier equal to the query. A caller who names an edition exactly,
    replaced or not, gets that edition.
-2. A match in the identifier before a match in the title only. Status alone
-   would put any published document that names the standard in its title
-   (ISO/IEC 27013, an integration guide for ISO/IEC 27001) above the
-   standard's own replaced editions.
+2. Which document the identifier names: the queried one, another one whose
+   identifier contains the query, or one that matches in its title only.
+   Status alone would put any published document that contains the number
+   or names the standard (ISO 29001 for ``9001``, a handbook
+   ``ISO/IEC 27001-HBK``, ISO/IEC 27013, an integration guide for ISO/IEC
+   27001) above the standard's own replaced editions (#674).
 3. Status: published, then draft, then superseded, then withdrawn.
-4. How the query sits in the identifier: as the whole document number before
-   part of a longer one (``800-53`` in ``800-53A``) or of an amendment,
-   corrigendum or consolidated version (anything after a ``/`` or ``+``).
+4. The edition before its amendments: the query as the whole document
+   number before the query followed by an amendment, corrigendum or
+   consolidated-version suffix (anything after a ``/`` or ``+``) or a dash
+   and digits (an edition, part or year: ``140-3``, ``62443-3-3``,
+   ``1588-2019``).
 5. Publication date, newest first, undated last.
 6. Identifier, for a deterministic order.
+
+Another document is the query inside a longer number (``29001``,
+``800-53A``, ``1588c``) or followed by a dash and a letter (``27001-HBK``)
+or by a dot and more of a number (``802.11`` for ``802``).
 
 Where each source applies it: ``docs/design/standards-search-ranking.md``.
 """
@@ -36,10 +44,12 @@ if TYPE_CHECKING:
 _STATUS_RANK = {"published": 0, "draft": 1, "superseded": 2, "withdrawn": 3}
 _UNKNOWN_STATUS_RANK = 1
 
-# Match ranks, see the module docstring.
+# Match ranks, see the module docstring: the queried document (its edition,
+# then its amendments), another document, a title-only match.
 _WHOLE_NUMBER = 0
-_PART_OF_IDENTIFIER = 1
-_TITLE_ONLY = 2
+_AMENDMENT = 1
+_OTHER_DOCUMENT = 2
+_TITLE_ONLY = 3
 
 
 def _status_rank(status: str | None) -> int:
@@ -70,9 +80,15 @@ def _match_rank(identifier: str, query: str) -> int:
         return _TITLE_ONLY
     before = identifier[position - 1] if position else " "
     rest = identifier[position + len(query) :]
-    inside_a_longer_number = before.isalnum() or (rest[:1].isalnum())
-    if inside_a_longer_number or "/" in rest or "+" in rest:
-        return _PART_OF_IDENTIFIER
+    if before.isalnum() or rest[:1].isalnum():
+        return _OTHER_DOCUMENT
+    separator, follows = rest[:1], rest[1:2]
+    if (separator == "-" and follows.isalpha()) or (
+        separator == "." and follows.isalnum()
+    ):
+        return _OTHER_DOCUMENT
+    if "/" in rest or "+" in rest or (separator == "-" and follows.isdigit()):
+        return _AMENDMENT
     return _WHOLE_NUMBER
 
 
@@ -90,12 +106,12 @@ def rank_standards(
     """
     wanted = query.strip().lower()
 
-    def key(record: StandardRecord) -> tuple[bool, bool, int, int]:
+    def key(record: StandardRecord) -> tuple[bool, int, int, int]:
         identifier = (record.get("identifier") or "").lower()
         match = _match_rank(identifier, wanted)
         return (
             identifier != wanted,
-            match == _TITLE_ONLY,
+            max(match, _AMENDMENT),  # the queried document, another, a title
             _status_rank(record.get("status")),
             match,
         )
