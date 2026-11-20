@@ -57,7 +57,8 @@ async def test_every_standard_read_returns_superseded_by_as_a_list(
     searched = await cache.get_standards_search("quic")
     synced = await cache.search_synced_standards("Synced")
 
-    assert record is not None and searched is not None
+    assert record is not None
+    assert searched is not None
     assert record["superseded_by"] == expected
     assert searched[0]["superseded_by"] == expected
     assert synced[0]["superseded_by"] == expected
@@ -506,8 +507,10 @@ async def test_set_standards_batch_inserts_all(tmp_path: Path) -> None:
     r2 = await cache2.get_standard("ISO 14001:2015")
     await cache2.close()
 
-    assert r1 is not None and r1["title"] == "QMS"
-    assert r2 is not None and r2["title"] == "EMS"
+    assert r1 is not None
+    assert r1["title"] == "QMS"
+    assert r2 is not None
+    assert r2["title"] == "EMS"
 
 
 @pytest.mark.asyncio

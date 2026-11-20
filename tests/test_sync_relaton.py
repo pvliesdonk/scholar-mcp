@@ -1987,5 +1987,6 @@ def test_iso_27001_and_27002_no_longer_share_a_title() -> None:
             "title": _ISO_27002_TITLES,
         }
     )
-    assert first is not None and second is not None
+    assert first is not None
+    assert second is not None
     assert first["title"] != second["title"]
