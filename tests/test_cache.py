@@ -780,6 +780,43 @@ async def test_delete_synced_standards_counts_only_its_own_rows(cache):
     assert deleted == 50
 
 
+async def test_repair_forces_an_iso_and_iec_resync_for_c1_files(tmp_path):
+    """#675: ISO and IEC reparse an unchanged dump; IEEE does not."""
+    import aiosqlite
+
+    db_path = tmp_path / "standards.db"
+    old = ScholarCache(db_path)
+    await old.open()
+    for body in ("ISO", "IEC", "IEEE"):
+        await old.set_sync_run(
+            body=body,
+            upstream_ref="abc123",
+            added=1,
+            updated=0,
+            unchanged=0,
+            withdrawn=0,
+            errors=[],
+            started_at=1.0,
+            finished_at=2.0,
+        )
+    await old.close()
+
+    async with aiosqlite.connect(db_path) as db:
+        await db.execute("DELETE FROM repairs WHERE name LIKE '675_%'")
+        await db.commit()
+
+    upgraded = ScholarCache(db_path)
+    await upgraded.open()
+    try:
+        refs = {
+            body: (await upgraded.get_sync_run(body) or {}).get("upstream_ref")
+            for body in ("ISO", "IEC", "IEEE")
+        }
+        assert refs == {"ISO": None, "IEC": None, "IEEE": "abc123"}
+    finally:
+        await upgraded.close()
+
+
 async def test_repair_resyncs_cc_rows_a_resolve_unsynced(tmp_path):
     """#496: a CC row the resolve path rewrote as live is synced again."""
     import aiosqlite
@@ -883,6 +920,7 @@ async def test_every_registered_repair_is_valid_sql(cache):
         "598_standards_search_results",
         "653_standards_search_results",
         "674_standards_search_results",
+        "675_resync_iso_iec",
     }
     for statement in _REPAIRS.values():
         await cache._db.execute(f"EXPLAIN {statement}")

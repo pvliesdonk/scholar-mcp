@@ -498,6 +498,15 @@ _REPAIRS: dict[str, str] = {
     # for "9001", a "-HBK" handbook) no longer outranks the standard's own
     # editions. A cached list keeps the old order for the 30 days it lives.
     "674_standards_search_results": _CLEAR_STANDARDS_SEARCH,
+    # #675: dump files holding C1 control characters failed to parse, so
+    # their records were left out (22 ISO files at 9b9469f) and 11 IEC
+    # project files gave no successor links. The run still stored the
+    # commit, so an unchanged dump would be skipped; clearing it makes the
+    # next sync-standards run reparse both.
+    "675_resync_iso_iec": (
+        "UPDATE standards_sync_runs SET upstream_ref = NULL "
+        "WHERE body IN ('ISO', 'IEC')"
+    ),
 }
 
 

@@ -4,6 +4,12 @@ Newest first. One entry per research pass.
 
 ## 2026-11-20
 
+### Relaton v2: C1 control characters in the ISO dump
+
+Updated [Relaton data dumps on the v2 branch](relaton-data-v2.md) for #675.
+New observation: which C1 characters 22 ISO files at 9b9469f hold, what
+they stand for, and that each file then parses.
+
 ### Replaced-edition data: NIST records from CSRC's export
 
 Updated [Replaced-edition data for IETF, NIST and W3C](standards-supersession-sources.md)

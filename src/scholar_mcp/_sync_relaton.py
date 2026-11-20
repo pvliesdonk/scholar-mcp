@@ -604,13 +604,35 @@ class _IecSuccessors:
         return filled
 
 
+def _windows_1252_for_c1(code: int) -> str | None:
+    """Return the Windows-1252 character a C1 control stands for, or None."""
+    try:
+        return bytes([code]).decode("cp1252")
+    except UnicodeDecodeError:
+        return None
+
+
+# Some dump files hold C1 control characters (U+0080 to U+009F): Windows-1252
+# punctuation decoded as Latin-1 upstream, such as U+0096 for an en dash.
+# PyYAML rejects a stream holding any, so the whole file was lost (#675).
+# Each becomes the character Windows-1252 gives it; the five it leaves
+# undefined (0x81, 0x8D, 0x8F, 0x90, 0x9D) are dropped.
+_C1_AS_WINDOWS_1252 = str.maketrans(
+    {code: _windows_1252_for_c1(code) for code in range(0x80, 0xA0)}
+)
+
+
 def _read_yaml(tar: tarfile.TarFile, member: tarfile.TarInfo) -> dict[str, Any] | str:
     """Return a dump file's parsed mapping, or why it could not be read."""
     handle = tar.extractfile(member)
     if handle is None:  # pragma: no cover — only non-regular members, already filtered
         return "not a regular file"
     try:
-        doc = yaml.safe_load(handle.read())
+        text = handle.read().decode("utf-8")
+    except UnicodeDecodeError as exc:
+        return f"not UTF-8: {exc}"
+    try:
+        doc = yaml.safe_load(text.translate(_C1_AS_WINDOWS_1252))
     except yaml.YAMLError as exc:
         return str(exc)
     return doc if isinstance(doc, dict) else "not a mapping"
