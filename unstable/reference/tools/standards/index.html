@@ -2338,13 +2338,13 @@
 <h1 id="standards">Standards<a class="headerlink" href="#standards" title="Permanent link">&para;</a></h1>
 <!-- DOMAIN-INTRO-START -->
 <!-- A short orientation for this page; task guidance belongs under Use. Kept across regeneration. -->
-<p>Tier 1 bodies (NIST, IETF, W3C, ETSI) come with full metadata and optional full-text conversion. Tier 2 bodies (ISO, IEC, IEEE) are synced from Relaton data by <code>scholar-mcp sync-standards</code>; see the <a href="../../../use/standards/">standards guide</a>.</p>
+<p>Tier 1 bodies (NIST, IETF, W3C, ETSI) come with full metadata and optional full-text conversion. Tier 2 bodies (ISO, IEC, IEEE) are synced from Relaton data by <code>scholar-mcp sync-standards</code>, which the <a href="../../../use/standards/">standards guide</a> covers.</p>
 <!-- DOMAIN-INTRO-END -->
 
 <h2 id="resolve_standard_identifier"><code>resolve_standard_identifier</code><a class="headerlink" href="#resolve_standard_identifier" title="Permanent link">&para;</a></h2>
 <p><strong>Resolve Standard Identifier.</strong> Read-only.</p>
 <p>Normalise a messy standard citation string to its canonical form.</p>
-<p>Tries local regex first (fast, no network). Falls back to querying
+<p>Tries local patterns first, which is fast and offline. Falls back to querying
 source APIs when local patterns don't match. Returns all candidates
 when the input is ambiguous.</p>
 <p>A cold catalogue makes this slow: the first call after a fresh install or
@@ -2388,6 +2388,9 @@ unambiguous;
 <p>Search technical standards by identifier, title, or free text.</p>
 <p>Searches NIST, IETF, W3C, and ETSI. Use <code>body</code> to restrict to one
 source body.</p>
+<p>Results come ranked with the current edition first. An identifier equal
+to the query leads, and documents that name the standard only in their
+title come last.</p>
 <p>A cold catalogue makes this slow: the first call after a fresh install or
 a cleared cache downloads and parses each body's index, which runs well
 past the soft deadline. Such a call returns a job handle to poll with
@@ -2395,8 +2398,8 @@ past the soft deadline. Such a call returns a job handle to poll with
 <p>Every answer states its own completeness. <code>partial</code> is always present,
 and when it is true <code>failed_bodies</code> names each source that did not
 answer and <code>warning</code> describes it. A partial answer is deliberately not
-an <code>error</code>: the results that did arrive are usable, and the named bodies
-may still hold matches worth asking for again.</p>
+an <code>error</code>: the results that did arrive are usable, and the bodies in
+<code>failed_bodies</code> may still hold matches worth asking for again.</p>
 <p><strong>Parameters</strong></p>
 <table>
 <thead>
@@ -2431,6 +2434,7 @@ may still hold matches worth asking for again.</p>
 <p><strong>Returns</strong></p>
 <p><code>{"results": [...]}</code>, the matching <code>StandardRecord</code> entries.</p>
 <!-- DOMAIN-EXAMPLE-search_standards-START -->
+<p>NIST, ETSI and the synced bodies (ISO, IEC, IEEE, CC, CEN) rank every match before <code>limit</code> applies. IETF and W3C rank only the first <code>limit</code> matches their source returns, so a larger <code>limit</code> can bring up a current edition they list further down.</p>
 <p><code>warning</code> gives each failed source's HTTP status and what went wrong, such as <code>ETSI (HTTP 200: answered with a non-JSON body, content-type: text/html)</code>: a 200 alone would read as success.</p>
 <p>Partial answers are never cached. A later call reaches the failing source again.</p>
 <!-- DOMAIN-EXAMPLE-search_standards-END -->
@@ -2448,7 +2452,7 @@ back directly.</p>
 <p>A conversion that fails still returns the record, with the reason in
 <code>full_text_error</code>; <code>full_text_url</code> is there to fetch by hand. No
 <code>full_text</code> and no <code>full_text_error</code> means none was on offer, or
-docling is not configured; neither is worth retrying.</p>
+docling is not configured. Neither is worth retrying.</p>
 <p><code>not_found</code> means the source answered and holds no such standard: stop
 asking about that identifier. A lookup that never got an answer says so
 instead, as <code>rate_limited</code> (with <code>retryable</code>) or <code>upstream_error</code>
@@ -2456,7 +2460,7 @@ with the status and what went wrong. Both are worth retrying: the
 standard may well exist.</p>
 <p>Full text is returned in pages of at most 20,000 characters. When
 <code>next_offset</code> is present, call this tool again with that value as
-<code>text_offset</code>; the cached conversion makes later pages inexpensive.
+<code>text_offset</code>. The cached conversion makes later pages inexpensive.
 Set <code>max_chars</code> to null only when the client can accept the complete
 document in one response.</p>
 <p><strong>Parameters</strong></p>
@@ -2474,7 +2478,7 @@ document in one response.</p>
 <td><code>identifier</code></td>
 <td><code>string</code></td>
 <td>required</td>
-<td>Canonical or fuzzy standard identifier. NIST SP and NISTIR publications are catalogued per revision, so include it, as in <code>NIST SP 800-53 Rev. 5</code>; <code>search_standards</code> lists the published revisions.</td>
+<td>Canonical or fuzzy standard identifier. NIST SP and NISTIR publications are catalogued per revision, so include it, as in <code>NIST SP 800-53 Rev. 5</code>. <code>search_standards</code> lists the published revisions.</td>
 </tr>
 <tr>
 <td><code>fetch_full_text</code></td>
