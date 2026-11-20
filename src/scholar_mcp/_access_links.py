@@ -46,8 +46,11 @@ _KEV_ADMIN: tuple[tuple[str, str], ...] = (
 _SID_0_1 = "scholarmcp:scholarmcp"
 # Bounds the URL: Z39.88 asks resolvers to accept 2,048 bytes (App. E.1).
 _MAX_LISTED_AUTHORS = 5
-# A page range as S2 ("116 - 135") and CrossRef ("436-444") write it.
-_PAGE_RANGE = re.compile(r"^(\S+?)\s*[-\u2013\u2014]+\s*(\S+)$")
+# A page range as S2 ("116 - 135") and CrossRef ("436-444") write it. The
+# quantifiers are possessive and a longer value is never a page range, so a
+# malformed one (thousands of dashes) cannot backtrack for seconds (#680).
+_PAGE_RANGE = re.compile(r"^(\S+?)\s*+[-\u2013\u2014]++\s*+(\S+)$")
+_MAX_PAGES_LENGTH = 64
 _DOI_URL_PREFIX = re.compile(r"^(?:https?://(?:dx\.)?doi\.org/|doi:)", re.IGNORECASE)
 _TEMPLATE_KEYS = frozenset({"label", "template"})
 
@@ -322,7 +325,7 @@ def _s2_details(paper: Mapping[str, Any]) -> _JournalDetails:
 
 def _page_range(pages: str | None) -> tuple[str | None, str | None]:
     """Split ``"116 - 135"`` into start and end; a single token is the start."""
-    if pages is None:
+    if pages is None or len(pages) > _MAX_PAGES_LENGTH:
         return None, None
     match = _PAGE_RANGE.match(pages)
     if match:

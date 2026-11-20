@@ -56,7 +56,7 @@ _EXCH = "http://www.epo.org/exchange"
 # set would truncate early Wiley DOIs, some of which contain "<" and ">".
 # See docs/design/reference/doi-in-citation-text.md.
 _DOI_RE = re.compile(
-    r"(?:\bdoi\s*:?\s*|doi\.org/)(10\.\d{4,9}/[^\s\[\]{}\"']+)", re.IGNORECASE
+    r"(?:\bdoi(?:\s*:)?\s*|doi\.org/)(10\.\d{4,9}/[^\s\[\]{}\"']+)", re.IGNORECASE
 )
 
 # Closing characters that end a DOI only when the DOI never opened them.

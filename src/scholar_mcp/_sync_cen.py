@@ -51,7 +51,7 @@ def _normalise_en_identifier(identifier: str) -> str:
     # Strip amendment suffix: +A1:2008, +A2:2019, +A11:2020
     ident = _AMENDMENT_SUFFIX_RE.sub("", identifier)
     # Strip ETSI-style version notation: V2.2.2, V1.1.1 etc.
-    ident = re.sub(r"\s+V[\d.]+(?=\s*[:\s-]\s*\d{4})", "", ident)
+    ident = re.sub(r"(?<=\S)\s+V[\d.]+(?=(?:\s*[:-]\s*|\s+)\d{4})", "", ident)
     return ident.strip()
 
 

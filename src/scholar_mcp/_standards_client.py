@@ -70,7 +70,7 @@ _W3C_WEBAUTHN_RE = re.compile(r"(?i)\bwebauthn\s+level\s+(\d+)\b")
 # ETSI: "ETSI EN 303 645", "etsi en 303645", "ETSI TS 102 165"
 # Require explicit "etsi" prefix to avoid false positives with other European bodies (CEN, CENELEC)
 _ETSI_RE = re.compile(
-    r"(?i)\betsi\s+(EN|TS|TR|ES|EG)\s*(\d{3})\s*[\s-]?\s*(\d{3}(?:-\d+)?)\b"
+    r"(?i)\betsi\s+(EN|TS|TR|ES|EG)\s*(\d{3})\s*(?:-\s*)?(\d{3}(?:-\d+)?)\b"
 )
 
 # CEN/CENELEC: European Norm identifiers.
@@ -78,10 +78,14 @@ _ETSI_RE = re.compile(
 # "ETSI EN 303 645" matching the generic EN pattern.
 # Order: EN ISO/IEC > EN ISO > EN IEC > plain EN (most-specific first).
 _EN_ISO_IEC_RE = re.compile(
-    r"(?i)\bEN\s+ISO/IEC\s+(\d{1,5}(?:-\d+)*)\s*[:\s-]\s*(\d{4})\b"
+    r"(?i)\bEN\s+ISO/IEC\s+(\d{1,5}(?:-\d+)*)(?:\s*[:-]\s*|\s+)(\d{4})\b"
 )
-_EN_ISO_RE = re.compile(r"(?i)\bEN\s+ISO\s+(\d{1,5}(?:-\d+)*)\s*[:\s-]\s*(\d{4})\b")
-_EN_IEC_RE = re.compile(r"(?i)\bEN\s+IEC\s+(\d{1,5}(?:-\d+)*)\s*[:\s-]\s*(\d{4})\b")
+_EN_ISO_RE = re.compile(
+    r"(?i)\bEN\s+ISO\s+(\d{1,5}(?:-\d+)*)(?:\s*[:-]\s*|\s+)(\d{4})\b"
+)
+_EN_IEC_RE = re.compile(
+    r"(?i)\bEN\s+IEC\s+(\d{1,5}(?:-\d+)*)(?:\s*[:-]\s*|\s+)(\d{4})\b"
+)
 _EN_RE = re.compile(
     r"(?i)\bEN\s+"
     r"("
@@ -89,31 +93,31 @@ _EN_RE = re.compile(
     r"|\d{1,5}(?:-\d+)*(?:\.\d+)*"  # plain: 55032, 61000-3-2
     r")"
     r"(?:\s+V[\d.]+)?"  # optional version: V2.2.2
-    r"\s*[:\s-]\s*(\d{4})\b"
+    r"(?:\s*[:-]\s*|\s+)(\d{4})\b"
 )
 
 # IEEE triple-joint with ISO and IEC (must precede other IEEE and joint patterns):
 #   "ISO/IEC/IEEE 42010-2011", "ISO/IEC/IEEE 42010:2011"
 _ISO_IEC_IEEE_JOINT_RE = re.compile(
     r"(?i)\biso[/\s]*iec[/\s]*ieee\s*"
-    r"(\d{1,5}(?:-\d+)*(?:\.\d+)*)\s*[:\s-]\s*(\d{4})\b"
+    r"(\d{1,5}(?:-\d+)*(?:\.\d+)*)(?:\s*[:-]\s*|\s+)(\d{4})\b"
 )
 # IEEE joint with IEC (must precede plain IEEE and the ISO/IEC joint):
 #   "IEC/IEEE 61588-2021", "IEEE/IEC 61588-2021"
 _IEC_IEEE_JOINT_RE = re.compile(
     r"(?i)\b(?:iec[/\s]*ieee|ieee[/\s]*iec)\s*"
-    r"(\d{1,5}(?:-\d+)*(?:\.\d+)*)\s*[:\s-]\s*(\d{4})\b"
+    r"(\d{1,5}(?:-\d+)*(?:\.\d+)*)(?:\s*[:-]\s*|\s+)(\d{4})\b"
 )
 # ISO joint with IEC (must precede plain ISO and plain IEC):
 #   "ISO/IEC 27001:2022", "ISO IEC 27001:2022", "IEC/ISO 27001:2022"
 _ISO_IEC_JOINT_RE = re.compile(
     r"(?i)\b(?:iso[/\s]*iec|iec[/\s]*iso)\s*"
-    r"(\d{1,5}(?:-\d+)*)\s*[:\s-]\s*(\d{4})\b"
+    r"(\d{1,5}(?:-\d+)*)(?:\s*[:-]\s*|\s+)(\d{4})\b"
 )
 # ISO alone: "ISO 9001:2015", "ISO9001:2015", "iso 15189-2:2022"
-_ISO_RE = re.compile(r"(?i)\biso\s*(\d{1,5}(?:-\d+)*)\s*[:\s-]\s*(\d{4})\b")
+_ISO_RE = re.compile(r"(?i)\biso\s*(\d{1,5}(?:-\d+)*)(?:\s*[:-]\s*|\s+)(\d{4})\b")
 # IEC alone: "IEC 62443-3-3:2020"
-_IEC_RE = re.compile(r"(?i)\biec\s*(\d{1,5}(?:-\d+)*)\s*[:\s-]\s*(\d{4})\b")
+_IEC_RE = re.compile(r"(?i)\biec\s*(\d{1,5}(?:-\d+)*)(?:\s*[:-]\s*|\s+)(\d{4})\b")
 # IEEE alone (with optional 'Std' token):
 #   "IEEE 802.11-2020", "IEEE Std 1588-2019", "IEEE 1003.1-2024"
 _IEEE_RE = re.compile(
