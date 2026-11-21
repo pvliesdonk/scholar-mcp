@@ -4,13 +4,13 @@ Converted documents remain whole in the server cache. MCP tools expose a
 window of that text so response size does not grow with document length.
 
 `convert_pdf_to_markdown`, `fetch_and_convert`, `fetch_pdf_by_url`,
-`fetch_patent_pdf`, and `get_standard` share the `_text_window.page_text()`
-contract. The default page is 20,000 characters. Integer page sizes are
+`fetch_patent_pdf`, `get_standard`, and `get_patent` (its `description`
+section) share the `_text_window.page_text()` contract. The default page is 20,000 characters. Integer page sizes are
 clamped to that ceiling, while `max_chars=null` explicitly requests the
 complete remaining text for clients that can accept it.
 
 The original content field stays stable: `markdown` for PDF and patent tools,
-and `full_text` for standards. Every response containing one of those fields
+`full_text` for standards, and `description` for `get_patent`. Every response containing one of those fields
 also carries:
 
 - `text_offset`: the page's starting character;

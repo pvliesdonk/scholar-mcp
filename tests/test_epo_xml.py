@@ -553,7 +553,8 @@ class TestParseClaimsXml:
     def test_real_wo_response(self) -> None:
         xml = (_EPO_FIXTURES / "claims_wo2018019652a1.xml").read_bytes()
         result = parse_claims_xml(xml)
-        assert result.startswith("CLAIMS\n1 . Method for transmission of a video")
+        assert result.startswith("1. Method for transmission of a video")
+        assert "\n\n14. Computer program (P)" in result
 
     def test_claim_texts_stay_apart(self) -> None:
         """Consecutive claim-text elements are not glued together."""
@@ -594,26 +595,26 @@ class TestParseDescriptionXml:
     def test_real_ep_response(self) -> None:
         xml = (_EPO_FIXTURES / "description_ep3491801b1.xml").read_bytes()
         result = parse_description_xml(xml)
-        assert result.startswith("TECHNICAL FIELD\n\n[0001]")
+        assert result.startswith("## TECHNICAL FIELD\n\n[0001] Various")
         assert len(result) > 40_000
 
     def test_real_wo_response(self) -> None:
         xml = (_EPO_FIXTURES / "description_wo2018019652a1.xml").read_bytes()
         result = parse_description_xml(xml)
-        assert "\n\nFIELD OF THE INVENTION\n\n" in result
+        assert "\n\n## FIELD OF THE INVENTION\n\n" in result
 
     def test_english_chosen_case_insensitively(self) -> None:
         xml = _fulltext(
             '<description lang="DE"><p>GEBIET</p></description>'
             '<description lang="EN"><p>FIELD</p><p>Text.</p></description>'
         )
-        assert parse_description_xml(xml) == "FIELD\n\nText."
+        assert parse_description_xml(xml) == "## FIELD\n\nText."
 
     def test_fallback_to_first_language(self) -> None:
         xml = _fulltext(
             '<description lang="DE"><p>GEBIET DER ERFINDUNG</p></description>'
         )
-        assert parse_description_xml(xml) == "GEBIET DER ERFINDUNG"
+        assert parse_description_xml(xml) == "## GEBIET DER ERFINDUNG"
 
     def test_exchange_shape_is_not_read(self) -> None:
         assert parse_description_xml(_EXCHANGE_SHAPE_XML) == ""

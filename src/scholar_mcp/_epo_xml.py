@@ -33,6 +33,7 @@ from typing import Any
 
 from lxml import etree
 
+from ._patent_text import claims_markdown, description_markdown
 from ._record_types import PatentParties, PatentRecord
 
 logger = logging.getLogger(__name__)
@@ -431,43 +432,42 @@ def _element_text(element: etree._Element) -> str:
 
 
 def parse_claims_xml(xml_data: bytes) -> str:
-    """Parse an EPO OPS claims response into plain text.
+    """Parse an EPO OPS claims response into Markdown.
 
-    Prefers English claims. Each ``claim-text`` is kept apart from the next,
-    since one claim set is a single ``claim`` element holding many of them.
+    Prefers English claims. Each claim becomes one numbered block (see
+    :func:`scholar_mcp._patent_text.claims_markdown`).
 
     Args:
         xml_data: Raw XML bytes from the published-data/claims endpoint.
 
     Returns:
-        Claims text, one ``claim-text`` per paragraph, or an empty string if
-        unavailable.
+        Claims Markdown, or an empty string if unavailable.
     """
     claims_el = _fulltext_section(xml_data, "claims")
     if claims_el is None:
         return ""
     texts = claims_el.findall(f"{{{_FTXT}}}claim/{{{_FTXT}}}claim-text")
-    parts = [_element_text(t) for t in texts]
-    return "\n\n".join(p for p in parts if p)
+    return claims_markdown([_element_text(t) for t in texts])
 
 
 def parse_description_xml(xml_data: bytes) -> str:
-    """Parse an EPO OPS description response into plain text.
+    """Parse an EPO OPS description response into Markdown.
 
-    Prefers the English description.
+    Prefers the English description. Headings become ``##`` lines and
+    paragraphs keep their numbers (see
+    :func:`scholar_mcp._patent_text.description_markdown`).
 
     Args:
         xml_data: Raw XML bytes from the published-data/description endpoint.
 
     Returns:
-        Description text, one paragraph per ``p`` element, or an empty string
-        if unavailable.
+        Description Markdown, or an empty string if unavailable.
     """
     desc_el = _fulltext_section(xml_data, "description")
     if desc_el is None:
         return ""
     paragraphs = [_element_text(p) for p in desc_el.findall(f"{{{_FTXT}}}p")]
-    return "\n\n".join(p for p in paragraphs if p)
+    return description_markdown(paragraphs)
 
 
 def parse_search_xml(xml_bytes: bytes) -> dict[str, Any]:
