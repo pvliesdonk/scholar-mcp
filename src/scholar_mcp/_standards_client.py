@@ -10,7 +10,7 @@ import re
 import time
 import zipfile
 from pathlib import Path
-from typing import Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 from xml.etree import ElementTree as ET
 
 import httpx
@@ -19,6 +19,9 @@ from ._protocols import CacheProtocol
 from ._rate_limiter import RateLimiter
 from ._record_types import StandardRecord, standard_in_current_shape
 from ._standards_ranking import rank_standards
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -177,10 +180,74 @@ def _nist_sp_identifier(match: re.Match[str]) -> str:
     return identifier
 
 
+# Tier 1 identifier patterns, in priority order: the first that matches wins.
+# Each rule is (pattern, canonical identifier from the match, body).
+_LOCAL_RULES: tuple[
+    tuple[re.Pattern[str], Callable[[re.Match[str]], str], str], ...
+] = (
+    # CC Protection Profile (very specific scheme prefix — check first)
+    (_CC_PP_RE, lambda m: m.group(1), "CC"),
+    # CC with part: "CC:2022 Part 1" / "Common Criteria 2022 Part 1"
+    (_CC_PART_RE, lambda m: f"CC:{m.group(1)} Part {m.group(2)}", "CC"),
+    # CC 3.1 Revision: "CC 3.1 R5" / "CC 3.1 Revision 5"
+    (_CC_REV_RE, lambda _m: "CC:2017 Part 1", "CC"),
+    # CEM: "CEM:2022" / "Common Evaluation Methodology 2022"
+    (_CEM_RE, lambda m: f"CEM:{m.group(1)}", "CC"),
+    # CC version only: "CC:2022" / "Common Criteria 2022"
+    (_CC_VERSION_RE, lambda m: f"CC:{m.group(1)}", "CC"),
+    # IEEE patterns (check before IETF STD to prevent "IEEE Std X" from matching _IETF_STD_RE)
+    # ISO/IEC/IEEE triple-joint (must precede other IEEE joints and plain IEEE)
+    (
+        _ISO_IEC_IEEE_JOINT_RE,
+        lambda m: f"ISO/IEC/IEEE {m.group(1)}-{m.group(2)}",
+        "IEEE",
+    ),
+    # IEC/IEEE joint (precedes plain IEEE and the plain ISO/IEC joint)
+    (_IEC_IEEE_JOINT_RE, lambda m: f"IEC/IEEE {m.group(1)}-{m.group(2)}", "IEEE"),
+    # IEEE alone (must come before IETF STD check to prevent "IEEE Std X" from matching STD)
+    (_IEEE_RE, lambda m: f"IEEE {m.group(1)}-{m.group(2)}", "IEEE"),
+    # IETF RFC (check before NIST to avoid "RFC" matching NIST patterns)
+    (_IETF_RFC_RE, lambda m: f"RFC {int(m.group(1))}", "IETF"),
+    # IETF BCP
+    (_IETF_BCP_RE, lambda m: f"BCP {int(m.group(1))}", "IETF"),
+    # IETF STD
+    (_IETF_STD_RE, lambda m: f"STD {int(m.group(1))}", "IETF"),
+    # NIST FIPS
+    (_NIST_FIPS_RE, lambda m: f"FIPS {m.group(1)}", "NIST"),
+    # NIST IR
+    (_NIST_IR_RE, lambda m: f"NISTIR {m.group(1).upper()}", "NIST"),
+    # NIST SP, including the "nist 800-53" shorthand
+    (_NIST_SP_RE, lambda m: _nist_sp_identifier(m), "NIST"),
+    # W3C WCAG
+    (_W3C_WCAG_RE, lambda m: f"WCAG {m.group(1)}", "W3C"),
+    # W3C WebAuthn
+    (_W3C_WEBAUTHN_RE, lambda m: f"WebAuthn Level {m.group(1)}", "W3C"),
+    # ETSI
+    (
+        _ETSI_RE,
+        lambda m: f"ETSI {m.group(1).upper()} {m.group(2)} {m.group(3)}",
+        "ETSI",
+    ),
+    # CEN/CENELEC EN (must come after ETSI to avoid "ETSI EN" collision)
+    (_EN_ISO_IEC_RE, lambda m: f"EN ISO/IEC {m.group(1)}:{m.group(2)}", "CEN"),
+    (_EN_ISO_RE, lambda m: f"EN ISO {m.group(1)}:{m.group(2)}", "CEN"),
+    (_EN_IEC_RE, lambda m: f"EN IEC {m.group(1)}:{m.group(2)}", "CEN"),
+    (_EN_RE, lambda m: f"EN {m.group(1)}:{m.group(2)}", "CEN"),
+    # ISO/IEC joint (check before plain ISO and plain IEC)
+    (_ISO_IEC_JOINT_RE, lambda m: f"ISO/IEC {m.group(1)}:{m.group(2)}", "ISO/IEC"),
+    # ISO
+    (_ISO_RE, lambda m: f"ISO {m.group(1)}:{m.group(2)}", "ISO"),
+    # IEC
+    (_IEC_RE, lambda m: f"IEC {m.group(1)}:{m.group(2)}", "IEC"),
+)
+
+
 def resolve_identifier_local(raw: str) -> tuple[str, str] | None:
     """Attempt to resolve *raw* to (canonical_identifier, body) using only regex.
 
-    Returns ``None`` when no Tier 1 pattern matches.
+    Returns ``None`` when no Tier 1 pattern matches. The patterns are tried
+    in :data:`_LOCAL_RULES` order, so a more specific one shadows a broader
+    one.
 
     Args:
         raw: Raw citation string from a paper reference.
@@ -189,125 +256,10 @@ def resolve_identifier_local(raw: str) -> tuple[str, str] | None:
         Tuple of (canonical_identifier, body) or None.
     """
     s = raw.strip()
-
-    # CC Protection Profile (very specific scheme prefix — check first)
-    m = _CC_PP_RE.search(s)
-    if m:
-        return m.group(1), "CC"
-
-    # CC with part: "CC:2022 Part 1" / "Common Criteria 2022 Part 1"
-    m = _CC_PART_RE.search(s)
-    if m:
-        return f"CC:{m.group(1)} Part {m.group(2)}", "CC"
-
-    # CC 3.1 Revision: "CC 3.1 R5" / "CC 3.1 Revision 5"
-    m = _CC_REV_RE.search(s)
-    if m:
-        return "CC:2017 Part 1", "CC"
-
-    # CEM: "CEM:2022" / "Common Evaluation Methodology 2022"
-    m = _CEM_RE.search(s)
-    if m:
-        return f"CEM:{m.group(1)}", "CC"
-
-    # CC version only: "CC:2022" / "Common Criteria 2022"
-    m = _CC_VERSION_RE.search(s)
-    if m:
-        return f"CC:{m.group(1)}", "CC"
-
-    # IEEE patterns (check before IETF STD to prevent "IEEE Std X" from matching _IETF_STD_RE)
-    # ISO/IEC/IEEE triple-joint (must precede other IEEE joints and plain IEEE)
-    m = _ISO_IEC_IEEE_JOINT_RE.search(s)
-    if m:
-        return f"ISO/IEC/IEEE {m.group(1)}-{m.group(2)}", "IEEE"
-
-    # IEC/IEEE joint (precedes plain IEEE and the plain ISO/IEC joint)
-    m = _IEC_IEEE_JOINT_RE.search(s)
-    if m:
-        return f"IEC/IEEE {m.group(1)}-{m.group(2)}", "IEEE"
-
-    # IEEE alone (must come before IETF STD check to prevent "IEEE Std X" from matching STD)
-    m = _IEEE_RE.search(s)
-    if m:
-        return f"IEEE {m.group(1)}-{m.group(2)}", "IEEE"
-
-    # IETF RFC (check before NIST to avoid "RFC" matching NIST patterns)
-    m = _IETF_RFC_RE.search(s)
-    if m:
-        return f"RFC {int(m.group(1))}", "IETF"
-
-    # IETF BCP
-    m = _IETF_BCP_RE.search(s)
-    if m:
-        return f"BCP {int(m.group(1))}", "IETF"
-
-    # IETF STD
-    m = _IETF_STD_RE.search(s)
-    if m:
-        return f"STD {int(m.group(1))}", "IETF"
-
-    # NIST FIPS
-    m = _NIST_FIPS_RE.search(s)
-    if m:
-        return f"FIPS {m.group(1)}", "NIST"
-
-    # NIST IR
-    m = _NIST_IR_RE.search(s)
-    if m:
-        return f"NISTIR {m.group(1).upper()}", "NIST"
-
-    # NIST SP, including the "nist 800-53" shorthand
-    m = _NIST_SP_RE.search(s)
-    if m:
-        return _nist_sp_identifier(m), "NIST"
-
-    # W3C WCAG
-    m = _W3C_WCAG_RE.search(s)
-    if m:
-        return f"WCAG {m.group(1)}", "W3C"
-
-    # W3C WebAuthn
-    m = _W3C_WEBAUTHN_RE.search(s)
-    if m:
-        return f"WebAuthn Level {m.group(1)}", "W3C"
-
-    # ETSI
-    m = _ETSI_RE.search(s)
-    if m:
-        return f"ETSI {m.group(1).upper()} {m.group(2)} {m.group(3)}", "ETSI"
-
-    # CEN/CENELEC EN (must come after ETSI to avoid "ETSI EN" collision)
-    m = _EN_ISO_IEC_RE.search(s)
-    if m:
-        return f"EN ISO/IEC {m.group(1)}:{m.group(2)}", "CEN"
-
-    m = _EN_ISO_RE.search(s)
-    if m:
-        return f"EN ISO {m.group(1)}:{m.group(2)}", "CEN"
-
-    m = _EN_IEC_RE.search(s)
-    if m:
-        return f"EN IEC {m.group(1)}:{m.group(2)}", "CEN"
-
-    m = _EN_RE.search(s)
-    if m:
-        return f"EN {m.group(1)}:{m.group(2)}", "CEN"
-
-    # ISO/IEC joint (check before plain ISO and plain IEC)
-    m = _ISO_IEC_JOINT_RE.search(s)
-    if m:
-        return f"ISO/IEC {m.group(1)}:{m.group(2)}", "ISO/IEC"
-
-    # ISO
-    m = _ISO_RE.search(s)
-    if m:
-        return f"ISO {m.group(1)}:{m.group(2)}", "ISO"
-
-    # IEC
-    m = _IEC_RE.search(s)
-    if m:
-        return f"IEC {m.group(1)}:{m.group(2)}", "IEC"
-
+    for pattern, identifier, body in _LOCAL_RULES:
+        m = pattern.search(s)
+        if m:
+            return identifier(m), body
     return None
 
 
@@ -1252,6 +1204,130 @@ def _spell_mods_sp_number(number: str) -> str:
     return f"{base}{_MODS_SP_SUFFIX_LABELS[kind]}{int(count)}"
 
 
+def _mods_series(mods: ET.Element, ns: str) -> tuple[str, str] | None:
+    """Return a MODS record's NIST series prefix and series part number.
+
+    Args:
+        mods: A ``<mods>`` XML element.
+        ns: Namespace prefix string.
+
+    Returns:
+        ``(prefix, part_number)`` with prefix ``NIST SP``, ``NISTIR`` or
+        ``FIPS``, or ``None`` when the record is in no recognised series.
+    """
+    series_el = None
+    for ri in mods.findall(f"{ns}relatedItem"):
+        if ri.get("type") == "series":
+            series_el = ri
+            break
+    if series_el is None:
+        return None
+    series_title_el = series_el.find(f"{ns}titleInfo/{ns}title")
+    part_el = series_el.find(f"{ns}titleInfo/{ns}partNumber")
+    series_title = (
+        (series_title_el.text or "").lower() if series_title_el is not None else ""
+    )
+    part_number = part_el.text.strip() if part_el is not None and part_el.text else ""
+    prefix = _nist_series_prefix(series_title)
+    return (prefix, part_number) if prefix is not None else None
+
+
+def _nist_series_prefix(series_title: str) -> str | None:
+    """Map a lower-cased MODS series title to its NIST identifier prefix.
+
+    Args:
+        series_title: The series title, lower-cased.
+
+    Returns:
+        ``NIST SP``, ``NISTIR`` or ``FIPS``, or ``None`` for another series.
+    """
+    if "special publication" in series_title or "nist sp" in series_title:
+        return _NIST_SP
+    if any(k in series_title for k in ("nistir", "interagency", "internal report")):
+        return "NISTIR"
+    if "fips" in series_title or "federal information processing" in series_title:
+        # FIPS 203, 204 and 205 carry the long title alone (#671).
+        return "FIPS"
+    return None
+
+
+def _nist_canonical(prefix: str, part_number: str) -> tuple[str, str, str | None]:
+    """Build the canonical identifier from a series prefix and part number.
+
+    The part number carries an optional revision ("800-53r5" is 800-53,
+    revision 5); the "r" of a version ("800-28ver2") is not a revision.
+
+    Args:
+        prefix: ``NIST SP``, ``NISTIR`` or ``FIPS``.
+        part_number: The series part number.
+
+    Returns:
+        ``(canonical, number, revision)``; *revision* is ``None`` when absent.
+    """
+    m = re.match(r"^(.*?)(?<!ve)r(\d+)$", part_number)
+    number, revision = (m.group(1), m.group(2)) if m else (part_number, None)
+    if prefix == _NIST_SP:
+        number = _spell_mods_sp_number(number)
+        canonical = f"NIST SP {number}"
+        if revision:
+            canonical += f" Rev. {revision}"
+        return canonical, number, revision
+    if prefix == "NISTIR":
+        return f"NISTIR {number.upper()}", number, revision
+    return f"FIPS {number}", number, revision
+
+
+def _mods_title(mods: ET.Element, ns: str) -> str:
+    """Return a MODS record's title, with its subtitle after a colon.
+
+    Args:
+        mods: A ``<mods>`` XML element.
+        ns: Namespace prefix string.
+
+    Returns:
+        The title, or an empty string.
+    """
+    title_el = mods.find(f"{ns}titleInfo/{ns}title")
+    subtitle_el = mods.find(f"{ns}titleInfo/{ns}subTitle")
+    title = (title_el.text or "").strip() if title_el is not None else ""
+    if subtitle_el is not None and subtitle_el.text:
+        title = f"{title}: {subtitle_el.text.strip()}"
+    return title
+
+
+def _mods_url(mods: ET.Element, ns: str) -> str:
+    """Return a MODS record's primary display URL, else its first URL.
+
+    Args:
+        mods: A ``<mods>`` XML element.
+        ns: Namespace prefix string.
+
+    Returns:
+        The URL, or an empty string.
+    """
+    for url_el in mods.findall(f"{ns}location/{ns}url"):
+        if url_el.get("usage") == "primary display":
+            return (url_el.text or "").strip()
+    fallback = mods.find(f"{ns}location/{ns}url")
+    return (fallback.text or "").strip() if fallback is not None else ""
+
+
+def _mods_date(mods: ET.Element, ns: str) -> str | None:
+    """Return a MODS record's first issue date, trailing dot stripped.
+
+    Args:
+        mods: A ``<mods>`` XML element.
+        ns: Namespace prefix string.
+
+    Returns:
+        The date text, or ``None``.
+    """
+    for date_el in mods.iter(f"{ns}dateIssued"):
+        if date_el.text:
+            return date_el.text.strip().rstrip(".")
+    return None
+
+
 def _normalize_nist_mods(mods: ET.Element, ns: str) -> StandardRecord | None:
     """Normalise a single <mods> element to a StandardRecord.
 
@@ -1263,89 +1339,19 @@ def _normalize_nist_mods(mods: ET.Element, ns: str) -> StandardRecord | None:
         Populated StandardRecord or None if the record is not a recognised
         NIST series publication.
     """
-    # Series metadata
-    series_el = None
-    for ri in mods.findall(f"{ns}relatedItem"):
-        if ri.get("type") == "series":
-            series_el = ri
-            break
-    if series_el is None:
-        return None
-
-    series_title_el = series_el.find(f"{ns}titleInfo/{ns}title")
-    part_el = series_el.find(f"{ns}titleInfo/{ns}partNumber")
-    series_title = (
-        (series_title_el.text or "").lower() if series_title_el is not None else ""
-    )
-    part_number = part_el.text.strip() if part_el is not None and part_el.text else ""
-
-    if "special publication" in series_title or "nist sp" in series_title:
-        body_prefix = _NIST_SP
-    elif (
-        "nistir" in series_title
-        or "interagency" in series_title
-        or "internal report" in series_title
-    ):
-        body_prefix = "NISTIR"
-    elif "fips" in series_title or "federal information processing" in series_title:
-        # FIPS 203, 204 and 205 carry the long title alone (#671).
-        body_prefix = "FIPS"
-    else:
+    series = _mods_series(mods, ns)
+    if series is None:
         return None  # skip unrecognised series
-
-    # partNumber → number + optional revision (e.g. "800-53r5" → "800-53", "5").
-    # The "r" of a version ("800-28ver2") is not a revision.
-    m = re.match(r"^(.*?)(?<!ve)r(\d+)$", part_number)
-    if m:
-        number = m.group(1)
-        revision = m.group(2)
-    else:
-        number = part_number
-        revision = None
-
-    # Canonical identifier
-    if body_prefix == _NIST_SP:
-        number = _spell_mods_sp_number(number)
-        canonical = f"NIST SP {number}"
-        if revision:
-            canonical += f" Rev. {revision}"
-    elif body_prefix == "NISTIR":
-        canonical = f"NISTIR {number.upper()}"
-    else:
-        canonical = f"FIPS {number}"
-
-    # Title
-    title_el = mods.find(f"{ns}titleInfo/{ns}title")
-    subtitle_el = mods.find(f"{ns}titleInfo/{ns}subTitle")
-    title = (title_el.text or "").strip() if title_el is not None else ""
-    if subtitle_el is not None and subtitle_el.text:
-        title = f"{title}: {subtitle_el.text.strip()}"
-
-    # Abstract
+    canonical, number, revision = _nist_canonical(*series)
+    title = _mods_title(mods, ns)
     abstract_el = mods.find(f"{ns}abstract")
     scope = (
         abstract_el.text.strip()
         if abstract_el is not None and abstract_el.text
         else None
     )
-
-    # URL (primary display location)
-    url = ""
-    for url_el in mods.findall(f"{ns}location/{ns}url"):
-        if url_el.get("usage") == "primary display":
-            url = (url_el.text or "").strip()
-            break
-    if not url:
-        url_el_fallback = mods.find(f"{ns}location/{ns}url")
-        if url_el_fallback is not None:
-            url = (url_el_fallback.text or "").strip()
-
-    # Publication date (strip trailing dot)
-    pub_date = None
-    for date_el in mods.iter(f"{ns}dateIssued"):
-        if date_el.text:
-            pub_date = date_el.text.strip().rstrip(".")
-            break
+    url = _mods_url(mods, ns)
+    pub_date = _mods_date(mods, ns)
 
     return StandardRecord(
         identifier=canonical,
