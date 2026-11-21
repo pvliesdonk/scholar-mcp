@@ -175,16 +175,30 @@ def _extract_isbn(paper: dict[str, Any]) -> str | None:
     return None
 
 
-async def resolve_book_by_isbn(isbn: str, service: Service) -> BookRecord | None:
+async def resolve_book_by_isbn(
+    isbn: str,
+    service: Service,
+    *,
+    fetch_authors: bool = False,
+    enrich: bool = False,
+) -> BookRecord | None:
     """Look a book up by ISBN: the cache first, then Open Library.
 
-    Makes at most one Open Library request: authors come from the cached work
-    record only (:func:`fill_authors_from_cache`), because callers fan this
-    out over many ISBNs at once (#403). A found record is cached.
+    The one ISBN lookup every caller shares (#706). Callers that fan out over
+    many ISBNs at once leave ``fetch_authors`` off: they make one Open Library
+    request per ISBN, take authors from the cached work record only (#403),
+    and write only the ISBN row, since an edition-derived record would be a
+    thin answer for ``get_book(work_id)`` to serve for that row's 30-day TTL.
+    A single lookup turns ``fetch_authors`` on to fetch the work's authors and
+    cache through :func:`cache_book_record`.
 
     Args:
         isbn: ISBN-10 or ISBN-13.
         service: Domain service with the cache and Open Library client.
+        fetch_authors: Fetch authors from the work record when the cache has
+            none, and cache the work row too.
+        enrich: Run book enrichment before caching, so the cached record
+            carries it (``get_book``).
 
     Returns:
         The book record, or ``None`` when Open Library has no edition.
@@ -197,10 +211,16 @@ async def resolve_book_by_isbn(isbn: str, service: Service) -> BookRecord | None
     if edition is None:
         return None
     book: BookRecord = normalize_book(edition, source="edition")
-    # It writes no work row: an edition-derived record would be a thin answer
-    # for get_book(work_id) to serve for that row's 30-day TTL.
-    await fill_authors_from_cache(book, service)
-    await service.cache.set_book_by_isbn(isbn, book)
+    if not fetch_authors:
+        await fill_authors_from_cache(book, service)
+    else:
+        await enrich_authors_from_work(book, service)
+    if enrich:
+        await service.enrichment.enrich([book], service, tags=frozenset({"books"}))
+    if fetch_authors:
+        await cache_book_record(book, service, isbn=isbn)
+    else:
+        await service.cache.set_book_by_isbn(isbn, book)
     return book
 
 
@@ -216,19 +236,9 @@ async def _enrich_one(paper: dict[str, Any], service: Service) -> None:
         return
 
     try:
-        cached = await service.cache.get_book_by_isbn(isbn)
-        if cached is not None:
-            paper["book_metadata"] = _to_enrichment_dict(cached)
-            return
-
-        edition = await service.openlibrary.get_by_isbn(isbn)
-        if edition is None:
-            return
-
-        book: BookRecord = normalize_book(edition, source="edition")
-        await enrich_authors_from_work(book, service)
-        await cache_book_record(book, service, isbn=isbn)
-        paper["book_metadata"] = _to_enrichment_dict(book)
+        book = await resolve_book_by_isbn(isbn, service, fetch_authors=True)
+        if book is not None:
+            paper["book_metadata"] = _to_enrichment_dict(book)
     except RateLimitedError:
         raise
     except Exception:

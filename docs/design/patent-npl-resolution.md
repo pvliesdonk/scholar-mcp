@@ -21,9 +21,10 @@ validated ISBN-13 as `isbn` when Open Library has no edition or fails.
   `chapter_info.isbn`, checked by `checked_isbn13`: free text holds other
   10- and 13-digit numbers, and only a valid check digit makes one an ISBN
   ([ISBNs in free-text citations](reference/isbn-in-citation-text.md)).
-- The lookup is `resolve_book_by_isbn`, shared with `batch_resolve`: the
-  cache first, then one Open Library request, with authors filled from the
-  cache only, because a patent can cite many books at once (#403).
+- The lookup is `resolve_book_by_isbn`, the one ISBN lookup every caller
+  shares (#706). Like `batch_resolve`, this path leaves `fetch_authors` off:
+  the cache first, then one Open Library request, with authors filled from
+  the cache only, because a patent can cite many books at once (#403).
 - A failing Open Library is logged at WARNING and leaves the reference with
   its `isbn`; it never fails the call.
 - A chapter reference keeps its `chapter_info` next to the `book`, which is
