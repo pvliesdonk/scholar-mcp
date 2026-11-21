@@ -222,3 +222,5 @@ scaffolded
 # --- Library access (OpenURL resolvers, access links) ---
 OCLC
 redirector
+# --- Standards bodies (ETSI calls its documents deliverables) ---
+[Dd]eliverables?
