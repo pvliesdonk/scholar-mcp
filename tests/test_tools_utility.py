@@ -1087,3 +1087,40 @@ async def test_openalex_fallback_refusal_is_not_not_found(
         "retryable": retryable,
     }
     assert await service.cache.get_openalex("10.1/x") is None
+
+
+def _ops_404() -> Exception:
+    """The HTTPError python-epo-ops-client raises for a 404."""
+    import requests
+
+    response = requests.Response()
+    response.status_code = 404
+    return requests.HTTPError("404 Client Error", response=response)
+
+
+async def test_batch_resolve_patent_404_is_not_found(
+    service: Service, slow_jobs: Jobs, caplog: pytest.LogCaptureFixture
+) -> None:
+    """#728: OPS's 404 for a nonexistent publication is not_found, at INFO."""
+    import logging
+
+    service.epo = _make_epo_client(raise_on_biblio=_ops_404())
+
+    @asynccontextmanager
+    async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001
+        yield {"service": service}
+
+    app = tasks_server("test", lifespan=lifespan)
+    register_utility_tools(app, slow_jobs)
+    with caplog.at_level(logging.INFO, logger="scholar_mcp._tools_utility"):
+        async with Client(app) as client:
+            result = await client.call_tool(
+                "batch_resolve", {"identifiers": ["EP99999999A1"]}
+            )
+    entry = json.loads(result.content[0].text)["results"][0]
+    assert entry["error"] == "not_found"
+    assert entry["source_type"] == "patent"
+    records = [r for r in caplog.records if r.getMessage().startswith("batch_patent")]
+    assert [(r.levelname, r.getMessage()) for r in records] == [
+        ("INFO", "batch_patent_not_found id=EP99999999A1")
+    ]

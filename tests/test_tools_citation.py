@@ -405,3 +405,24 @@ async def test_unknown_doi_does_not_lose_the_patents(
     text = json.loads(result.content[0].text)["output"]
     assert "% Could not resolve: DOI:10.1038/nature14539 (not found)" in text
     assert "@patent{ep3491801b1," in text
+
+
+async def test_nonexistent_patent_is_reported_not_found(
+    mcp: FastMCP, service: Service
+) -> None:
+    """#728: a wrong patent number says not_found, not resolve_failed."""
+    import requests
+
+    response = requests.Response()
+    response.status_code = 404
+    service.epo = _epo_returning(
+        ep3491801b1(), requests.HTTPError("404", response=response)
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "generate_citations",
+            {"paper_ids": ["EP3491801B1", "EP99999999A1"], "citation_format": "ris"},
+        )
+    text = json.loads(result.content[0].text)["output"]
+    assert text.startswith("% Could not resolve: EP99999999A1 (not_found)")
+    assert "TY  - PAT" in text
