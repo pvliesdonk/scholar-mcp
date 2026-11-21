@@ -77,7 +77,9 @@ Get detailed information about a single patent.
 Accepts patent numbers in any format (EP, WO, US, etc.). By default
 returns bibliographic data only; use the sections parameter to
 request additional detail (claims, description, family members, legal
-status, cited references). When sections includes 'citations',
+status, cited references). Claims and description are null when EPO
+holds no full text for the publication; `fetch_patent_pdf` then has the
+document. When sections includes 'citations',
 non-patent literature references are resolved to Semantic Scholar
 papers on a best-effort basis; unresolved references are returned as
 raw citation strings.

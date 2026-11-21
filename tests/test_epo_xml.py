@@ -495,78 +495,45 @@ class TestParseSearchXmlOutputKeys:
 # Fixtures for claims and description parsers
 # ---------------------------------------------------------------------------
 
-CLAIMS_XML = b"""\
+_EPO_FIXTURES = Path(__file__).parent / "fixtures" / "epo"
+
+
+def _fulltext(body: str) -> bytes:
+    """Wrap claims or description markup in an OPS full-text envelope.
+
+    The envelope is the one OPS returns (``tests/fixtures/epo/claims_*.xml``):
+    ``ftxt:fulltext-document`` in the fulltext namespace (#701).
+    """
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<ops:world-patent-data xmlns="http://www.epo.org/exchange" '
+        'xmlns:ops="http://ops.epo.org">'
+        '<ftxt:fulltext-documents xmlns="http://www.epo.org/fulltext" '
+        'xmlns:ftxt="http://www.epo.org/fulltext">'
+        '<ftxt:fulltext-document system="ops.epo.org" fulltext-format="text-only">'
+        f"{body}</ftxt:fulltext-document></ftxt:fulltext-documents>"
+        "</ops:world-patent-data>"
+    ).encode()
+
+
+# The exchange-namespace shape the parsers were first written against (#701).
+# OPS never sends it for these endpoints.
+_EXCHANGE_SHAPE_XML = b"""\
 <?xml version="1.0" encoding="UTF-8"?>
 <ops:world-patent-data xmlns:ops="http://ops.epo.org"
     xmlns="http://www.epo.org/exchange">
   <exchange-documents>
     <exchange-document country="EP" doc-number="1234567" kind="A1">
-      <claims lang="en">
-        <claim>
-          <claim-text>1. A method for processing widgets comprising:
-            <claim-text>a) receiving input data;</claim-text>
-            <claim-text>b) transforming the input data.</claim-text>
-          </claim-text>
-        </claim>
-        <claim>
-          <claim-text>2. The method of claim 1, wherein the input data is digital.</claim-text>
-        </claim>
-      </claims>
-      <claims lang="de">
-        <claim>
-          <claim-text>1. Ein Verfahren zur Verarbeitung...</claim-text>
-        </claim>
-      </claims>
+      <claims lang="en"><claim><claim-text>1. A method.</claim-text></claim></claims>
+      <description lang="en"><p num="0001">Text.</p></description>
     </exchange-document>
   </exchange-documents>
 </ops:world-patent-data>"""
 
-DESCRIPTION_XML = b"""\
-<?xml version="1.0" encoding="UTF-8"?>
-<ops:world-patent-data xmlns:ops="http://ops.epo.org"
-    xmlns="http://www.epo.org/exchange">
-  <exchange-documents>
-    <exchange-document country="EP" doc-number="1234567" kind="A1">
-      <description lang="en">
-        <p num="0001">FIELD OF THE INVENTION</p>
-        <p num="0002">The present invention relates to widget processing.</p>
-        <p num="0003">BACKGROUND</p>
-        <p num="0004">Prior art widgets have limitations.</p>
-      </description>
-    </exchange-document>
-  </exchange-documents>
-</ops:world-patent-data>"""
-
-DESCRIPTION_MULTILANG_XML = b"""\
-<?xml version="1.0" encoding="UTF-8"?>
-<ops:world-patent-data xmlns:ops="http://ops.epo.org"
-    xmlns="http://www.epo.org/exchange">
-  <exchange-documents>
-    <exchange-document country="EP" doc-number="1234567" kind="A1">
-      <description lang="de">
-        <p num="0001">GEBIET DER ERFINDUNG</p>
-        <p num="0002">Die vorliegende Erfindung betrifft die Widget-Verarbeitung.</p>
-      </description>
-      <description lang="en">
-        <p num="0001">FIELD OF THE INVENTION</p>
-        <p num="0002">The present invention relates to widget processing.</p>
-      </description>
-    </exchange-document>
-  </exchange-documents>
-</ops:world-patent-data>"""
-
-DESCRIPTION_FALLBACK_XML = b"""\
-<?xml version="1.0" encoding="UTF-8"?>
-<ops:world-patent-data xmlns:ops="http://ops.epo.org"
-    xmlns="http://www.epo.org/exchange">
-  <exchange-documents>
-    <exchange-document country="EP" doc-number="1234567" kind="A1">
-      <description lang="de">
-        <p num="0001">GEBIET DER ERFINDUNG</p>
-      </description>
-    </exchange-document>
-  </exchange-documents>
-</ops:world-patent-data>"""
+_EMPTY_XML = (
+    b'<?xml version="1.0"?>'
+    b'<ops:world-patent-data xmlns:ops="http://ops.epo.org"></ops:world-patent-data>'
+)
 
 
 # ---------------------------------------------------------------------------
@@ -575,20 +542,47 @@ DESCRIPTION_FALLBACK_XML = b"""\
 
 
 class TestParseClaimsXml:
-    def test_english_preferred(self) -> None:
-        result = parse_claims_xml(CLAIMS_XML)
-        assert "processing widgets" in result
+    def test_real_ep_response(self) -> None:
+        """The EP fixture holds DE, FR and EN claims; the English set is read."""
+        xml = (_EPO_FIXTURES / "claims_ep3491801b1.xml").read_bytes()
+        result = parse_claims_xml(xml)
+        assert result.startswith("1. A method (200) performed by a device")
+        assert "10. A non-transitory machine-readable medium" in result
         assert "Verfahren" not in result
 
-    def test_multiple_claims(self) -> None:
-        result = parse_claims_xml(CLAIMS_XML)
-        assert "1." in result
-        assert "2." in result
+    def test_real_wo_response(self) -> None:
+        xml = (_EPO_FIXTURES / "claims_wo2018019652a1.xml").read_bytes()
+        result = parse_claims_xml(xml)
+        assert result.startswith("CLAIMS\n1 . Method for transmission of a video")
+
+    def test_claim_texts_stay_apart(self) -> None:
+        """Consecutive claim-text elements are not glued together."""
+        xml = (_EPO_FIXTURES / "claims_ep3491801b1.xml").read_bytes()
+        result = parse_claims_xml(xml)
+        assert "\n\n2. The method of claim 1" in result
+        assert "network.2." not in result
+
+    def test_english_chosen_case_insensitively(self) -> None:
+        xml = _fulltext(
+            '<claims lang="DE"><claim><claim-text>1. Verfahren.</claim-text>'
+            '</claim></claims><claims lang="EN"><claim>'
+            "<claim-text>1. A method.</claim-text></claim></claims>"
+        )
+        assert parse_claims_xml(xml) == "1. A method."
+
+    def test_fallback_to_first_language(self) -> None:
+        xml = _fulltext(
+            '<claims lang="DE"><claim><claim-text>1. Verfahren.</claim-text>'
+            '</claim></claims><claims lang="FR"><claim>'
+            "<claim-text>1. Procédé.</claim-text></claim></claims>"
+        )
+        assert parse_claims_xml(xml) == "1. Verfahren."
+
+    def test_exchange_shape_is_not_read(self) -> None:
+        assert parse_claims_xml(_EXCHANGE_SHAPE_XML) == ""
 
     def test_empty_xml(self) -> None:
-        empty = b'<?xml version="1.0"?><ops:world-patent-data xmlns:ops="http://ops.epo.org"></ops:world-patent-data>'
-        result = parse_claims_xml(empty)
-        assert result == ""
+        assert parse_claims_xml(_EMPTY_XML) == ""
 
 
 # ---------------------------------------------------------------------------
@@ -597,28 +591,35 @@ class TestParseClaimsXml:
 
 
 class TestParseDescriptionXml:
-    def test_paragraphs_joined(self) -> None:
-        result = parse_description_xml(DESCRIPTION_XML)
-        assert "FIELD OF THE INVENTION" in result
-        assert "widget processing" in result
+    def test_real_ep_response(self) -> None:
+        xml = (_EPO_FIXTURES / "description_ep3491801b1.xml").read_bytes()
+        result = parse_description_xml(xml)
+        assert result.startswith("TECHNICAL FIELD\n\n[0001]")
+        assert len(result) > 40_000
 
-    def test_not_empty(self) -> None:
-        result = parse_description_xml(DESCRIPTION_XML)
-        assert len(result) > 50
+    def test_real_wo_response(self) -> None:
+        xml = (_EPO_FIXTURES / "description_wo2018019652a1.xml").read_bytes()
+        result = parse_description_xml(xml)
+        assert "\n\nFIELD OF THE INVENTION\n\n" in result
 
-    def test_english_preferred(self) -> None:
-        result = parse_description_xml(DESCRIPTION_MULTILANG_XML)
-        assert "widget processing" in result
-        assert "Erfindung" not in result
+    def test_english_chosen_case_insensitively(self) -> None:
+        xml = _fulltext(
+            '<description lang="DE"><p>GEBIET</p></description>'
+            '<description lang="EN"><p>FIELD</p><p>Text.</p></description>'
+        )
+        assert parse_description_xml(xml) == "FIELD\n\nText."
 
-    def test_fallback_to_non_english(self) -> None:
-        result = parse_description_xml(DESCRIPTION_FALLBACK_XML)
-        assert "GEBIET DER ERFINDUNG" in result
+    def test_fallback_to_first_language(self) -> None:
+        xml = _fulltext(
+            '<description lang="DE"><p>GEBIET DER ERFINDUNG</p></description>'
+        )
+        assert parse_description_xml(xml) == "GEBIET DER ERFINDUNG"
+
+    def test_exchange_shape_is_not_read(self) -> None:
+        assert parse_description_xml(_EXCHANGE_SHAPE_XML) == ""
 
     def test_empty_xml(self) -> None:
-        empty = b'<?xml version="1.0"?><ops:world-patent-data xmlns:ops="http://ops.epo.org"></ops:world-patent-data>'
-        result = parse_description_xml(empty)
-        assert result == ""
+        assert parse_description_xml(_EMPTY_XML) == ""
 
 
 # ---------------------------------------------------------------------------

@@ -4,6 +4,14 @@ Newest first. One entry per research pass.
 
 ## 2026-11-21
 
+### EPO OPS full-text claims and description
+
+New page [EPO OPS full-text claims and description](epo-ops-fulltext.md) for
+#701: observed against the deployed service, the fulltext namespace, the
+upper-case `lang`, how EP and WO split claims across `claim-text`, the
+heading-as-paragraph description, and the 404 for publications without full
+text. The four responses are vendored as fixtures.
+
 ### Patent entries in biblatex, CSL-JSON and RIS
 
 New page [Patent entries in biblatex, CSL-JSON and RIS](patent-citation-formats.md)

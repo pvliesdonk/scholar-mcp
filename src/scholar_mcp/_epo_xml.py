@@ -48,6 +48,8 @@ _NS: dict[str, str] = {
 
 # Default namespace URI (used on exchange-document and most biblio elements).
 _EXCH = "http://www.epo.org/exchange"
+# Claims and description responses use their own namespace (#701).
+_FTXT = "http://www.epo.org/fulltext"
 
 # A DOI in non-patent literature citation text, after the marker that
 # introduces it: "doi:10.", "DOI 10.", "DOI: 10." or a doi.org resolver URL
@@ -393,82 +395,79 @@ def parse_biblio_xml(xml_bytes: bytes) -> PatentRecord:
     )
 
 
-def parse_claims_xml(xml_data: bytes) -> str:
-    """Parse EPO OPS claims response into plain text.
+def _fulltext_section(xml_data: bytes, tag: str) -> etree._Element | None:
+    """Pick one language's section from an OPS full-text response.
 
-    Prefers English claims. Returns all claim text joined with newlines.
+    OPS answers the claims and description endpoints with
+    ``ftxt:fulltext-documents`` in the fulltext namespace, one element per
+    language with an upper-case ``lang`` (see
+    ``docs/design/reference/epo-ops-fulltext.md``).
+
+    Args:
+        xml_data: Raw XML bytes from the claims or description endpoint.
+        tag: ``"claims"`` or ``"description"``.
+
+    Returns:
+        The English element, else the first one, else ``None``.
+    """
+    root = etree.fromstring(xml_data)
+    sections = root.findall(f".//{{{_FTXT}}}fulltext-document/{{{_FTXT}}}{tag}")
+    for section in sections:
+        if section.get("lang", "").lower() == "en":
+            return section
+    return sections[0] if sections else None
+
+
+def _element_text(element: etree._Element) -> str:
+    """Return an element's text content, stripped.
+
+    Args:
+        element: Any XML element.
+
+    Returns:
+        The concatenated text of the element and its descendants.
+    """
+    return str(etree.tostring(element, method="text", encoding="unicode")).strip()
+
+
+def parse_claims_xml(xml_data: bytes) -> str:
+    """Parse an EPO OPS claims response into plain text.
+
+    Prefers English claims. Each ``claim-text`` is kept apart from the next,
+    since one claim set is a single ``claim`` element holding many of them.
 
     Args:
         xml_data: Raw XML bytes from the published-data/claims endpoint.
 
     Returns:
-        Claims text as a single string, or empty string if unavailable.
+        Claims text, one ``claim-text`` per paragraph, or an empty string if
+        unavailable.
     """
-    root = etree.fromstring(xml_data)
-    doc = root.find(f".//{{{_EXCH}}}exchange-document")
-    if doc is None:
-        return ""
-
-    # Prefer English claims; fall back to first available language
-    claims_el = None
-    fallback = None
-    for c in doc.findall(f"{{{_EXCH}}}claims"):
-        if c.get("lang", "") == "en":
-            claims_el = c
-            break
-        if fallback is None:
-            fallback = c
-    if claims_el is None:
-        claims_el = fallback
-
+    claims_el = _fulltext_section(xml_data, "claims")
     if claims_el is None:
         return ""
-
-    parts: list[str] = []
-    for claim in claims_el.findall(f"{{{_EXCH}}}claim"):
-        text = etree.tostring(claim, method="text", encoding="unicode").strip()
-        if text:
-            parts.append(text)
-
-    return "\n\n".join(parts)
+    texts = claims_el.findall(f"{{{_FTXT}}}claim/{{{_FTXT}}}claim-text")
+    parts = [_element_text(t) for t in texts]
+    return "\n\n".join(p for p in parts if p)
 
 
 def parse_description_xml(xml_data: bytes) -> str:
-    """Parse EPO OPS description response into plain text.
+    """Parse an EPO OPS description response into plain text.
+
+    Prefers the English description.
 
     Args:
         xml_data: Raw XML bytes from the published-data/description endpoint.
 
     Returns:
-        Description text as a single string, or empty string if unavailable.
+        Description text, one paragraph per ``p`` element, or an empty string
+        if unavailable.
     """
-    root = etree.fromstring(xml_data)
-    doc = root.find(f".//{{{_EXCH}}}exchange-document")
-    if doc is None:
-        return ""
-
-    # Prefer English description; fall back to first available language
-    desc_el = None
-    fallback = None
-    for d in doc.findall(f"{{{_EXCH}}}description"):
-        if d.get("lang", "") == "en":
-            desc_el = d
-            break
-        if fallback is None:
-            fallback = d
-    if desc_el is None:
-        desc_el = fallback
-
+    desc_el = _fulltext_section(xml_data, "description")
     if desc_el is None:
         return ""
-
-    paragraphs: list[str] = []
-    for p in desc_el.findall(f"{{{_EXCH}}}p"):
-        text = etree.tostring(p, method="text", encoding="unicode").strip()
-        if text:
-            paragraphs.append(text)
-
-    return "\n\n".join(paragraphs)
+    paragraphs = [_element_text(p) for p in desc_el.findall(f"{{{_FTXT}}}p")]
+    return "\n\n".join(p for p in paragraphs if p)
 
 
 def parse_search_xml(xml_bytes: bytes) -> dict[str, Any]:

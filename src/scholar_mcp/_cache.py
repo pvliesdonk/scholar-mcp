@@ -516,6 +516,12 @@ _REPAIRS: dict[str, str] = {
         "UPDATE standards_sync_runs SET upstream_ref = NULL "
         "WHERE body IN ('ISO', 'IEC')"
     ),
+    # #701: the claims and description parsers looked for an element OPS never
+    # sends, so every row cached before the fix holds "". A publication OPS
+    # has no full text for answers 404 and is never cached, so an empty row
+    # is always the bug's.
+    "701_empty_patent_claims": "DELETE FROM patent_claims WHERE data = ''",
+    "701_empty_patent_descriptions": "DELETE FROM patent_descriptions WHERE data = ''",
 }
 
 
