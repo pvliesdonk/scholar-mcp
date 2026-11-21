@@ -2244,6 +2244,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#a-sync-beside-the-running-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A sync beside the running server
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#hostile-input" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2275,7 +2286,7 @@
 
 
 <h1 id="33">3.3<a class="headerlink" href="#33" title="Permanent link">&para;</a></h1>
-<!-- notes-range-end: 3775fd9dd22f6f6c2f34844f86de16de3c364b3b -->
+<!-- notes-range-end: f154f3f30902a66fdfc8235dbbb8ea60d1c3bbdb -->
 
 <!-- RELEASE-SUMMARY v3.3.0 START -->
 <p>Standards now say when they have been replaced. A withdrawn or replaced RFC,
@@ -2298,7 +2309,9 @@ deletes synced identifiers that <code>v2</code> no longer lists. For CEN it dele
 table entries that were never harmonised standards and adds the ones the
 table lacked
 (<a href="https://github.com/pvliesdonk/scholar-mcp/pull/678">#678</a>). Until that run,
-lookups and searches answer from the records the previous release synced.</p>
+lookups and searches answer from the records the previous release synced.
+The server can keep answering while the sync runs
+(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/693">#693</a>).</p>
 <p>If you use NIST standards, the first NIST lookup after upgrading downloads the
 catalogue again, and every catalogue download now also reads the CSRC
 publications export from <code>csrc.nist.gov</code>. When CSRC cannot be reached, the
@@ -2314,7 +2327,9 @@ identifiers spell out a part, volume, version or edition
 fetched live from IETF, W3C, ETSI, NIST and the Relaton bodies, the cached
 standards searches and the cached NIST SP aliases, so each is fetched again on
 its next use. Synced records stay until the next <code>sync-standards</code> run replaces
-them.</p>
+them. The cache database switches to WAL mode on first open, which keeps
+<code>cache.db-wal</code> and <code>cache.db-shm</code> beside <code>cache.db</code>. A backup taken while the
+server runs must copy all three.</p>
 <p><strong>Security posture:</strong> no change to what the server exposes or accepts. It now
 also reaches <code>csrc.nist.gov</code> for NIST data. An OpenAlex API key, when set, is
 sent to OpenAlex only.</p>
@@ -2439,6 +2454,19 @@ caller to retry later, rather than the generic fault message
 unchanged: <code>SCHOLAR_MCP_JOBS_MAX_PER_SUBJECT</code>, 256 by default, counts every
 job until its record expires
 (<a href="../../use/background-jobs/">background jobs</a>).</p>
+<h2 id="a-sync-beside-the-running-server">A sync beside the running server<a class="headerlink" href="#a-sync-beside-the-running-server" title="Permanent link">&para;</a></h2>
+<p><code>sync-standards</code> runs in its own process, often inside the server's container
+as the <a href="../../use/standards/">standards guide</a> shows, and both write to the
+same cache. In 3.2, a lookup that tried to cache its result during a sync
+could fail with a "database is locked" error, although its upstream fetch
+had succeeded. The failed write also kept its lock, so later writes from the sync
+failed too until the server restarted
+(<a href="https://github.com/pvliesdonk/scholar-mcp/issues/692">#692</a>).</p>
+<p>The cache now uses WAL mode, so reads never wait for the sync. A write that
+meets the sync's write waits up to 30 seconds instead of failing, and a write
+that fails releases its lock. A body whose sync result cannot be recorded no
+longer stops the other bodies
+(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/693">#693</a>).</p>
 <h2 id="hostile-input">Hostile input<a class="headerlink" href="#hostile-input" title="Permanent link">&para;</a></h2>
 <p>Several patterns that read text from callers and upstream sources took
 quadratic or worse time on long malformed input. A page range of 2,000 dashes

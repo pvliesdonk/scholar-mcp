@@ -4536,13 +4536,13 @@ Standards now say when they have been replaced. A withdrawn or replaced RFC, W3C
 
 ## Upgrading
 
-If you sync ISO, IEC, IEEE or CEN, run `scholar-mcp sync-standards` after upgrading. The sync now reads the Relaton repositories' `v2` branch, because their `main` branch stopped receiving data ([#641](https://github.com/pvliesdonk/scholar-mcp/issues/641)). The first run rewrites every ISO, IEC and IEEE record even if upstream has not changed, and deletes synced identifiers that `v2` no longer lists. For CEN it deletes the table entries that were never harmonised standards and adds the ones the table lacked ([#678](https://github.com/pvliesdonk/scholar-mcp/pull/678)). Until that run, lookups and searches answer from the records the previous release synced.
+If you sync ISO, IEC, IEEE or CEN, run `scholar-mcp sync-standards` after upgrading. The sync now reads the Relaton repositories' `v2` branch, because their `main` branch stopped receiving data ([#641](https://github.com/pvliesdonk/scholar-mcp/issues/641)). The first run rewrites every ISO, IEC and IEEE record even if upstream has not changed, and deletes synced identifiers that `v2` no longer lists. For CEN it deletes the table entries that were never harmonised standards and adds the ones the table lacked ([#678](https://github.com/pvliesdonk/scholar-mcp/pull/678)). Until that run, lookups and searches answer from the records the previous release synced. The server can keep answering while the sync runs ([#693](https://github.com/pvliesdonk/scholar-mcp/pull/693)).
 
 If you use NIST standards, the first NIST lookup after upgrading downloads the catalogue again, and every catalogue download now also reads the CSRC publications export from `csrc.nist.gov`. When CSRC cannot be reached, the lookup reports an upstream error instead of answering without withdrawal data, caches nothing, and tries again on the next call ([#654](https://github.com/pvliesdonk/scholar-mcp/pull/654)).
 
 **Clients:** nothing beyond reconnecting. A standard's `superseded_by` is now always a list of identifiers, where 3.2 sent a string or null. NIST SP identifiers spell out a part, volume, version or edition (`NIST SP 800-57 Part 1 Rev. 5`, `NIST SP 800-160 Vol. 2`), and `search_standards` returns results in a new order.
 
-**State:** the cache is kept. On first open the server drops standards rows it fetched live from IETF, W3C, ETSI, NIST and the Relaton bodies, the cached standards searches and the cached NIST SP aliases, so each is fetched again on its next use. Synced records stay until the next `sync-standards` run replaces them.
+**State:** the cache is kept. On first open the server drops standards rows it fetched live from IETF, W3C, ETSI, NIST and the Relaton bodies, the cached standards searches and the cached NIST SP aliases, so each is fetched again on its next use. Synced records stay until the next `sync-standards` run replaces them. The cache database switches to WAL mode on first open, which keeps `cache.db-wal` and `cache.db-shm` beside `cache.db`. A backup taken while the server runs must copy all three.
 
 **Security posture:** no change to what the server exposes or accepts. It now also reaches `csrc.nist.gov` for NIST data. An OpenAlex API key, when set, is sent to OpenAlex only.
 
@@ -4590,6 +4590,12 @@ An OpenAlex refusal no longer reads as "this DOI is not in OpenAlex." `enrich_pa
 ## Background jobs at the cap
 
 When a caller already holds the maximum number of background jobs, a Semantic Scholar tool that would become one now answers with an error telling the caller to retry later, rather than the generic fault message ([#618](https://github.com/pvliesdonk/scholar-mcp/pull/618)). The cap is unchanged: `SCHOLAR_MCP_JOBS_MAX_PER_SUBJECT`, 256 by default, counts every job until its record expires ([background jobs](https://pvliesdonk.github.io/scholar-mcp/unstable/use/background-jobs/index.md)).
+
+## A sync beside the running server
+
+`sync-standards` runs in its own process, often inside the server's container as the [standards guide](https://pvliesdonk.github.io/scholar-mcp/unstable/use/standards/index.md) shows, and both write to the same cache. In 3.2, a lookup that tried to cache its result during a sync could fail with a "database is locked" error, although its upstream fetch had succeeded. The failed write also kept its lock, so later writes from the sync failed too until the server restarted ([#692](https://github.com/pvliesdonk/scholar-mcp/issues/692)).
+
+The cache now uses WAL mode, so reads never wait for the sync. A write that meets the sync's write waits up to 30 seconds instead of failing, and a write that fails releases its lock. A body whose sync result cannot be recorded no longer stops the other bodies ([#693](https://github.com/pvliesdonk/scholar-mcp/pull/693)).
 
 ## Hostile input
 
