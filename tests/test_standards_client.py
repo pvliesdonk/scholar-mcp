@@ -3202,3 +3202,43 @@ async def test_etsi_get_logs_a_lookup_longer_than_one_page(
 
     assert record is not None
     assert "etsi_lookup_truncated" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# NIST MODS edge records (#711)
+# ---------------------------------------------------------------------------
+
+
+def _mods(*records: str) -> bytes:
+    body = "".join(f"<mods>{r}</mods>" for r in records)
+    return f'<modsCollection xmlns="http://www.loc.gov/mods/v3">{body}</modsCollection>'.encode()
+
+
+_SP_SERIES = (
+    '<relatedItem type="series"><titleInfo><title>NIST Special Publication</title>'
+    "<partNumber>800-53r5</partNumber></titleInfo></relatedItem>"
+)
+
+
+def test_mods_without_a_series_is_skipped() -> None:
+    from scholar_mcp._standards_client import _parse_nist_mods
+
+    no_series = (
+        '<relatedItem type="host"><titleInfo><title>x</title></titleInfo></relatedItem>'
+    )
+    assert _parse_nist_mods(_mods(no_series)) == []
+
+
+def test_mods_url_falls_back_and_date_may_be_absent() -> None:
+    from scholar_mcp._standards_client import _parse_nist_mods
+
+    (result,) = _parse_nist_mods(
+        _mods(
+            _SP_SERIES
+            + "<titleInfo><title>Security Controls</title></titleInfo>"
+            + '<location><url usage="other">https://doi.org/10.6028/x</url></location>'
+        )
+    )
+    assert result["identifier"] == "NIST SP 800-53 Rev. 5"
+    assert result["url"] == "https://doi.org/10.6028/x"
+    assert result["published_date"] is None
