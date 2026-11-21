@@ -48,6 +48,30 @@ def isbn10_to_isbn13(isbn10: str) -> str:
     return stem + str(check)
 
 
+def checked_isbn13(raw: str) -> str | None:
+    """Return *raw* as an ISBN-13 when its check digit is valid.
+
+    Unlike :func:`normalize_isbn`, a string of the right length is not enough:
+    the check digit must match, so a 10- or 13-digit number that merely
+    follows the word "ISBN" in free text is rejected.
+
+    Args:
+        raw: ISBN-10 or ISBN-13, optionally with hyphens or spaces.
+
+    Returns:
+        The ISBN-13 digits, or ``None`` when *raw* is not a valid ISBN.
+    """
+    cleaned = raw.replace("-", "").replace(" ", "").upper()
+    if len(cleaned) == 13 and cleaned.isdigit():
+        total = sum(int(d) * (1 if i % 2 == 0 else 3) for i, d in enumerate(cleaned))
+        return cleaned if total % 10 == 0 else None
+    if len(cleaned) == 10 and cleaned[:9].isdigit() and cleaned[9] in "0123456789X":
+        digits = [10 if c == "X" else int(c) for c in cleaned]
+        total = sum(d * (10 - i) for i, d in enumerate(digits))
+        return isbn10_to_isbn13(cleaned) if total % 11 == 0 else None
+    return None
+
+
 def normalize_isbn(isbn: str) -> str:
     """Normalize ISBN to 13-digit form with no hyphens.
 

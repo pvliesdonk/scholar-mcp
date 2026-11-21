@@ -11,8 +11,7 @@ import httpx
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
 
-from ._book_enrichment import fill_authors_from_cache
-from ._cache import normalize_isbn
+from ._book_enrichment import resolve_book_by_isbn
 from ._chapter_parser import hint_to_dict, parse_chapter_hint
 from ._epo_client import EPO_REPORTED_ERRORS, epo_error_payload, with_epo_retry
 from ._epo_xml import biblio_has_data
@@ -21,7 +20,6 @@ from ._openalex_client import (
     openalex_refusal_payload,
     work_to_paper,
 )
-from ._openlibrary_client import normalize_book
 from ._patent_numbers import is_patent_number, normalize
 from ._s2_client import FIELD_SETS, log_s2_error, s2_error_payload
 from ._s2_jobs import register_s2_tool
@@ -241,24 +239,13 @@ async def _resolve_isbn(
         ``(idx, entry)`` so the caller can restore the original order.
     """
     identifier = f"ISBN:{raw_isbn}"
-    isbn = normalize_isbn(raw_isbn)
-    cached = await service.cache.get_book_by_isbn(isbn)
-    if cached is not None:
-        return idx, {"identifier": identifier, "book": cached, "source_type": "book"}
-    edition = await service.openlibrary.get_by_isbn(isbn)
-    if edition is None:
+    book = await resolve_book_by_isbn(raw_isbn, service)
+    if book is None:
         return idx, {
             "identifier": identifier,
             "error": "not_found",
             "source_type": "book",
         }
-    book = normalize_book(edition, source="edition")
-    # Cache-only: this path fans out concurrently, so it must not add a network
-    # round-trip per ISBN (#403). It writes no work row either -- it never has,
-    # and an edition-derived record would be a thin answer for get_book(work_id)
-    # to serve for that row's 30-day TTL.
-    await fill_authors_from_cache(book, service)
-    await service.cache.set_book_by_isbn(isbn, book)
     return idx, {"identifier": identifier, "book": book, "source_type": "book"}
 
 

@@ -13,13 +13,18 @@ if TYPE_CHECKING:
 
     from fastmcp_pvl_core import Jobs, JobsConfig
 
-    from ._record_types import PaperRecord
+    from ._record_types import BookRecord, PaperRecord
+
+    # Looks a book up by ISBN; None when no record is found.
+    BookResolver = Callable[[str], Awaitable[BookRecord | None]]
 
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
 from fastmcp_pvl_core import register_long_running_tool
 from requests.exceptions import HTTPError
 
+from ._book_enrichment import resolve_book_by_isbn
+from ._cache import checked_isbn13
 from ._chapter_parser import hint_to_dict, parse_chapter_hint
 from ._epo_client import (
     EPO_REPORTED_ERRORS,
@@ -288,10 +293,11 @@ async def get_patent(
     description is paged; when ``next_offset`` is present, call again with
     that value as ``text_offset``. Claims and description are null when EPO
     holds no full text for the publication; fetch_patent_pdf then has the
-    document. When sections includes 'citations',
-    non-patent literature references are resolved to Semantic Scholar
-    papers on a best-effort basis; unresolved references are returned as
-    raw citation strings.
+    document. When sections includes 'citations', non-patent literature
+    references are resolved on a best-effort basis: one with a DOI to a
+    Semantic Scholar ``paper``, otherwise one with an ISBN to an Open Library
+    ``book``. An unresolved reference keeps its raw citation string, plus its
+    ``isbn`` when it has one.
 
     When EPO reports itself busy this waits for it to clear, which can take a
     few minutes, so the call may answer with a job handle to poll using
@@ -303,9 +309,7 @@ async def get_patent(
             ``"EP1234567A1"``, ``"WO2024/123456"`` or ``"US11,234,567B2"``.
         sections: Sections to include in the response. Defaults to
             ``["biblio"]``. Available sections: biblio, claims,
-            description, family, legal, citations. When citations
-            is included, NPL references are resolved via Semantic
-            Scholar on a best-effort basis.
+            description, family, legal, citations.
         text_offset: Character offset in the description at which the page
             starts.
         max_chars: Maximum description characters to return, capped at
@@ -347,6 +351,7 @@ async def get_patent(
             epo=epo,
             cache=service.cache,
             s2=service.s2,
+            resolve_book=lambda isbn: resolve_book_by_isbn(isbn, service),
         )
     )
     return page_text(
@@ -670,6 +675,64 @@ def _is_http_404(exc: HTTPError) -> bool:
     return exc.response is not None and exc.response.status_code == 404
 
 
+async def _lookup_npl_book(
+    resolve_book: BookResolver, isbn: str, patent_id: str
+) -> BookRecord | None:
+    """Resolve one cited book, treating any failure as not found.
+
+    Book resolution is best-effort, like the DOI lookup: a failing Open
+    Library leaves the reference with its ISBN rather than failing the call.
+
+    Args:
+        resolve_book: ISBN lookup.
+        isbn: Validated ISBN-13.
+        patent_id: Patent the reference is cited by, for the log.
+
+    Returns:
+        The book record, or ``None``.
+    """
+    try:
+        return await resolve_book(isbn)
+    except Exception:
+        logger.warning(
+            "npl_book_resolution_failed patent=%s isbn=%s",
+            patent_id,
+            isbn,
+            exc_info=True,
+        )
+        return None
+
+
+async def _attach_npl_books(
+    entries: list[dict[str, Any]], resolve_book: BookResolver, patent_id: str
+) -> None:
+    """Attach the cited book to NPL references that carry a valid ISBN (#70).
+
+    Only references no paper was found for are tried. A found book is added
+    as ``book`` with ``confidence: "high"``; otherwise the reference keeps
+    its validated ``isbn`` so a caller can look it up elsewhere.
+
+    Args:
+        entries: Resolved NPL entries, changed in place.
+        resolve_book: ISBN lookup.
+        patent_id: Patent the references are cited by, for the log.
+    """
+    pending: list[tuple[dict[str, Any], str]] = []
+    for entry in entries:
+        isbn = checked_isbn13((entry.get("chapter_info") or {}).get("isbn") or "")
+        if isbn is not None and "paper" not in entry:
+            pending.append((entry, isbn))
+    books = await _asyncio.gather(
+        *(_lookup_npl_book(resolve_book, isbn, patent_id) for _, isbn in pending)
+    )
+    for (entry, isbn), book in zip(pending, books, strict=True):
+        if book is None:
+            entry["isbn"] = isbn
+        else:
+            entry["book"] = book
+            entry["confidence"] = "high"
+
+
 async def _fetch_fulltext(
     get_cached: Callable[[], Awaitable[str | None]],
     fetch: Callable[[], Awaitable[str]],
@@ -709,6 +772,7 @@ async def _fetch_patent_sections(
     epo: EpoClient,
     cache: CacheProtocol,
     s2: S2Client | None = None,
+    resolve_book: BookResolver | None = None,
 ) -> dict[str, Any]:
     """Fetch requested sections for a patent, with caching.
 
@@ -725,6 +789,8 @@ async def _fetch_patent_sections(
         epo: EPO client instance.
         cache: Cache instance with patent get/set methods.
         s2: Optional S2 client for NPL resolution.
+        resolve_book: Optional ISBN lookup for NPL references that cite a
+            book; without it, no book is resolved.
 
     Returns:
         A mapping with patent_number and the requested section data.
@@ -850,6 +916,8 @@ async def _fetch_patent_sections(
                 _attach_npl_chapter_info(entry, n["raw"])
                 resolved_npl.append(entry)
 
+        if resolve_book is not None:
+            await _attach_npl_books(resolved_npl, resolve_book, patent_id)
         result["citations"] = {
             "patent_refs": patent_refs,
             "npl_refs": resolved_npl,

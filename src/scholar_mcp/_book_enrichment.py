@@ -175,6 +175,35 @@ def _extract_isbn(paper: dict[str, Any]) -> str | None:
     return None
 
 
+async def resolve_book_by_isbn(isbn: str, service: Service) -> BookRecord | None:
+    """Look a book up by ISBN: the cache first, then Open Library.
+
+    Makes at most one Open Library request: authors come from the cached work
+    record only (:func:`fill_authors_from_cache`), because callers fan this
+    out over many ISBNs at once (#403). A found record is cached.
+
+    Args:
+        isbn: ISBN-10 or ISBN-13.
+        service: Domain service with the cache and Open Library client.
+
+    Returns:
+        The book record, or ``None`` when Open Library has no edition.
+    """
+    isbn = normalize_isbn(isbn)
+    cached = await service.cache.get_book_by_isbn(isbn)
+    if cached is not None:
+        return cached
+    edition = await service.openlibrary.get_by_isbn(isbn)
+    if edition is None:
+        return None
+    book: BookRecord = normalize_book(edition, source="edition")
+    # It writes no work row: an edition-derived record would be a thin answer
+    # for get_book(work_id) to serve for that row's 30-day TTL.
+    await fill_authors_from_cache(book, service)
+    await service.cache.set_book_by_isbn(isbn, book)
+    return book
+
+
 async def _enrich_one(paper: dict[str, Any], service: Service) -> None:
     """Enrich a single paper dict in-place with book metadata.
 

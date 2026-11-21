@@ -83,10 +83,11 @@ section headings with their paragraph numbers (``[0001]``). The
 description is paged; when ``next_offset`` is present, call again with
 that value as ``text_offset``. Claims and description are null when EPO
 holds no full text for the publication; `fetch_patent_pdf` then has the
-document. When sections includes 'citations',
-non-patent literature references are resolved to Semantic Scholar
-papers on a best-effort basis; unresolved references are returned as
-raw citation strings.
+document. When sections includes 'citations', non-patent literature
+references are resolved on a best-effort basis: one with a DOI to a
+Semantic Scholar ``paper``, otherwise one with an ISBN to an Open Library
+``book``. An unresolved reference keeps its raw citation string, plus its
+``isbn`` when it has one.
 
 When EPO reports itself busy this waits for it to clear, which can take a
 few minutes, so the call may answer with a job handle to poll using
@@ -98,7 +99,7 @@ throttle states yourself.
 | Name | Type | Default | Description |
 |---|---|---|---|
 | `patent_number` | `string` | required | Patent number in any common format, such as ``"EP1234567A1"``, ``"WO2024/123456"`` or ``"US11,234,567B2"``. |
-| `sections` | `array of biblio \| claims \| description \| family \| legal \| citations \| null` | `null` | Sections to include in the response. Defaults to ``["biblio"]``. Available sections: biblio, claims, description, family, legal, citations. When citations is included, NPL references are resolved via Semantic Scholar on a best-effort basis. |
+| `sections` | `array of biblio \| claims \| description \| family \| legal \| citations \| null` | `null` | Sections to include in the response. Defaults to ``["biblio"]``. Available sections: biblio, claims, description, family, legal, citations. |
 | `text_offset` | `integer` | `0` | Character offset in the description at which the page starts. |
 | `max_chars` | `integer \| null` | `20000` | Maximum description characters to return, capped at 20,000; null returns the rest of the description. |
 
