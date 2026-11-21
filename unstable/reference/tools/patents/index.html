@@ -2460,10 +2460,11 @@ section headings with their paragraph numbers (<code>[0001]</code>). The
 description is paged; when <code>next_offset</code> is present, call again with
 that value as <code>text_offset</code>. Claims and description are null when EPO
 holds no full text for the publication; <code>fetch_patent_pdf</code> then has the
-document. When sections includes 'citations',
-non-patent literature references are resolved to Semantic Scholar
-papers on a best-effort basis; unresolved references are returned as
-raw citation strings.</p>
+document. When sections includes 'citations', non-patent literature
+references are resolved on a best-effort basis: one with a DOI to a
+Semantic Scholar <code>paper</code>, otherwise one with an ISBN to an Open Library
+<code>book</code>. An unresolved reference keeps its raw citation string, plus its
+<code>isbn</code> when it has one.</p>
 <p>When EPO reports itself busy this waits for it to clear, which can take a
 few minutes, so the call may answer with a job handle to poll using
 <code>get_job_result</code> rather than the result itself. Do not reason about EPO
@@ -2489,7 +2490,7 @@ throttle states yourself.</p>
 <td><code>sections</code></td>
 <td><code>array of biblio \| claims \| description \| family \| legal \| citations \| null</code></td>
 <td><code>null</code></td>
-<td>Sections to include in the response. Defaults to <code>["biblio"]</code>. Available sections: biblio, claims, description, family, legal, citations. When citations is included, NPL references are resolved via Semantic Scholar on a best-effort basis.</td>
+<td>Sections to include in the response. Defaults to <code>["biblio"]</code>. Available sections: biblio, claims, description, family, legal, citations.</td>
 </tr>
 <tr>
 <td><code>text_offset</code></td>
