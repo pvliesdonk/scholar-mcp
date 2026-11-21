@@ -7,6 +7,7 @@ Responses captured from EPO OPS against live credentials on 2026-09-10:
 | `images_inquiry_*.xml` | `published_data(..., endpoint='images')` | #371 |
 | `legal_ep1000000a1.xml` | `legal('publication', ...)` | #388, #390 |
 | `claims_*.xml`, `description_*.xml` | `published_data(..., endpoint='claims' / 'description')`, captured 2026-11-21 | #701 |
+| `biblio_us11234567b2.xml` | `published_data(..., endpoint='biblio')`, captured 2026-11-21 | #727 |
 
 The behaviour they evidence is written up under `docs/design/reference/`.
 

@@ -277,7 +277,12 @@ async def test_registered_repairs_drop_what_their_bugs_cached(tmp_path):
     await old.close()
 
     async with aiosqlite.connect(db_path) as db:
-        await db.execute("DELETE FROM repairs")
+        # #727's repair drops every biblio row, which would hide what the
+        # predicates under test keep; it has a test of its own.
+        await db.execute(
+            "DELETE FROM repairs WHERE name != ?",
+            ("727_patent_parties_spelled_twice",),
+        )
         await db.commit()
 
     upgraded = ScholarCache(db_path)
@@ -442,6 +447,36 @@ async def test_repair_drops_plain_text_claims_and_descriptions(tmp_path):
     try:
         assert await upgraded.get_patent_claims("EP.3491801.B1") is None
         assert await upgraded.get_patent_description("EP.3491801.B1") is None
+    finally:
+        await upgraded.close()
+
+
+async def test_repair_drops_biblio_cached_with_repeated_parties(tmp_path):
+    """#727: every cached biblio row is fetched once more."""
+    import aiosqlite
+
+    db_path = tmp_path / "repeated-parties.db"
+    old = ScholarCache(db_path)
+    await old.open()
+    await old.set_patent(
+        "US.11234567.B2",
+        {
+            "title": "Tool",
+            "inventors": {"original": ["THORNE, J.", "Thorne, J."], "standardised": []},
+        },
+    )
+    await old.close()
+
+    async with aiosqlite.connect(db_path) as db:
+        await db.execute(
+            "DELETE FROM repairs WHERE name = ?", ("727_patent_parties_spelled_twice",)
+        )
+        await db.commit()
+
+    upgraded = ScholarCache(db_path)
+    await upgraded.open()
+    try:
+        assert await upgraded.get_patent("US.11234567.B2") is None
     finally:
         await upgraded.close()
 
@@ -932,7 +967,12 @@ async def test_repair_drops_patents_cached_with_flat_party_lists(tmp_path):
     await old.close()
 
     async with aiosqlite.connect(db_path) as db:
-        await db.execute("DELETE FROM repairs")
+        # #727's repair drops every biblio row, which would hide what the
+        # predicates under test keep; it has a test of its own.
+        await db.execute(
+            "DELETE FROM repairs WHERE name != ?",
+            ("727_patent_parties_spelled_twice",),
+        )
         await db.commit()
 
     upgraded = ScholarCache(db_path)
@@ -984,6 +1024,7 @@ async def test_every_registered_repair_is_valid_sql(cache):
         "701_empty_patent_descriptions",
         "44_patent_claims_as_markdown",
         "44_patent_descriptions_as_markdown",
+        "727_patent_parties_spelled_twice",
     }
     for statement in _REPAIRS.values():
         await cache._db.execute(f"EXPLAIN {statement}")

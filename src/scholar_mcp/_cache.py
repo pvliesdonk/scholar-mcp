@@ -551,6 +551,10 @@ _REPAIRS: dict[str, str] = {
     # apart from Markdown, so every row is fetched once more.
     "44_patent_claims_as_markdown": "DELETE FROM patent_claims",
     "44_patent_descriptions_as_markdown": "DELETE FROM patent_descriptions",
+    # #727: a party OPS repeats in another spelling was kept twice. A list with
+    # a repeat cannot be told from one without in SQL, so every biblio row is
+    # fetched once more, as #405 did for legal events.
+    "727_patent_parties_spelled_twice": "DELETE FROM patents",
 }
 
 

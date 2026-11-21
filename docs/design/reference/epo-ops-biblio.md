@@ -142,6 +142,15 @@ numbers cannot be guaranteed to be representations of one and the same"
 and one standardised format (`docdb`, else `epodoc`, else `docdba`) as separate
 lists (#483).
 
+Within one format a party can appear more than once, in different
+spellings, in one continuous `sequence` run: US11234567B2's `original`
+inventors are sequences 1 to 8 in upper case ("THORNE, Jason B.") and 9 to 16
+again in title case ("Thorne, Jason B."), and its applicant is sequence 1
+"SharkNinja Operating, LLC" and sequence 3 "SharkNinja Operating LLC".
+[observed: `tests/fixtures/epo/biblio_us11234567b2.xml`, captured 2026-11-21]
+`parse_biblio_xml` keeps the first spelling of names whose letters and digits
+match ignoring case (#727).
+[pins: tests/test_epo_xml.py::TestPartyNamesSpelledTwice::test_us_inventors_and_applicants_are_listed_once]
+
 Not recorded: which formats OPS sends for which offices. Whether `original` is
 ever in a non-Latin script for CN, JP or KR publications was not checked.
-
