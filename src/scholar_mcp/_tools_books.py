@@ -12,7 +12,11 @@ from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
 from fastmcp_pvl_core import register_long_running_tool, tool_boundary
 
-from ._book_enrichment import cache_book_record, enrich_authors_from_work
+from ._book_enrichment import (
+    cache_book_record,
+    enrich_authors_from_work,
+    resolve_book_by_isbn,
+)
 from ._cache import normalize_isbn
 from ._openlibrary_client import (
     normalize_book,
@@ -374,18 +378,9 @@ async def _resolve_isbn(isbn: str, service: Service) -> dict[str, Any]:
     Returns:
         The book record, or ``{"error": "not_found"}`` if not found.
     """
-    cached = await service.cache.get_book_by_isbn(isbn)
-    if cached is not None:
-        return dict(cached)
-
-    edition = await service.openlibrary.get_by_isbn(isbn)
-    if edition is None:
+    book = await resolve_book_by_isbn(isbn, service, fetch_authors=True, enrich=True)
+    if book is None:
         return {"error": "not_found", "identifier": isbn}
-
-    book: BookRecord = normalize_book(edition, source="edition")
-    await enrich_authors_from_work(book, service)
-    await service.enrichment.enrich([book], service, tags=frozenset({"books"}))
-    await cache_book_record(book, service, isbn=isbn)
     return dict(book)
 
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import httpx
 import pytest
 import respx
@@ -10,6 +12,7 @@ from scholar_mcp._book_enrichment import (
     _extract_author_keys,
     enrich_authors_from_work,
     enrich_books,
+    resolve_book_by_isbn,
 )
 from scholar_mcp._rate_limiter import RateLimitedError
 from scholar_mcp.domain import Service
@@ -449,3 +452,94 @@ async def test_fill_authors_from_cache_no_ops_without_a_work_id(
     await fill_authors_from_cache(book, service)
 
     assert book["authors"] == []
+
+
+# ---------------------------------------------------------------------------
+# resolve_book_by_isbn: the one ISBN lookup (#706)
+# ---------------------------------------------------------------------------
+
+_ISBN_EDITION = {
+    "title": "CAx für Ingenieure",
+    "publishers": ["Springer"],
+    "publish_date": "2018",
+    "isbn_13": ["9783662546239"],
+    "key": "/books/OL1M",
+    "works": [{"key": "/works/OL77W"}],
+    "authors": [],
+}
+
+
+def _stub_open_library(service: Service, *, work_authors: list[str]) -> Any:
+    from unittest.mock import AsyncMock
+
+    from scholar_mcp import _book_enrichment
+
+    service.openlibrary.get_by_isbn = AsyncMock(return_value=_ISBN_EDITION)  # type: ignore[method-assign]
+    service.openlibrary.get_work = AsyncMock(  # type: ignore[method-assign]
+        return_value={"authors": [{"author": {"key": "/authors/OL1A"}}]}
+    )
+    return AsyncMock(return_value=work_authors), _book_enrichment
+
+
+async def test_fan_out_lookup_writes_only_the_isbn_row(
+    service: Service, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The default makes one request and caches no thin work row (#403)."""
+    resolve_keys, module = _stub_open_library(service, work_authors=["Vajna"])
+    monkeypatch.setattr(module, "_resolve_author_keys", resolve_keys)
+
+    book = await resolve_book_by_isbn("978-3-662-54623-9", service)
+
+    assert book is not None
+    assert book["title"] == "CAx für Ingenieure"
+    service.openlibrary.get_work.assert_not_called()
+    assert await service.cache.get_book_by_isbn("9783662546239") is not None
+    assert await service.cache.get_book_by_work("OL77W") is None
+
+
+async def test_single_lookup_fetches_authors_and_caches_the_work(
+    service: Service, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    resolve_keys, module = _stub_open_library(service, work_authors=["Vajna"])
+    monkeypatch.setattr(module, "_resolve_author_keys", resolve_keys)
+
+    book = await resolve_book_by_isbn("9783662546239", service, fetch_authors=True)
+
+    assert book is not None
+    assert book["authors"] == ["Vajna"]
+    cached_work = await service.cache.get_book_by_work("OL77W")
+    assert cached_work is not None
+    assert cached_work["authors"] == ["Vajna"]
+
+
+async def test_enrichment_runs_before_the_record_is_cached(
+    service: Service, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """get_book's cached record carries its enrichment."""
+    from unittest.mock import AsyncMock
+
+    resolve_keys, module = _stub_open_library(service, work_authors=["Vajna"])
+    monkeypatch.setattr(module, "_resolve_author_keys", resolve_keys)
+
+    async def mark(books: list[Any], *_: Any, **__: Any) -> None:
+        books[0]["description"] = "enriched"
+
+    service.enrichment.enrich = AsyncMock(side_effect=mark)  # type: ignore[method-assign]
+
+    await resolve_book_by_isbn(
+        "9783662546239", service, fetch_authors=True, enrich=True
+    )
+
+    cached = await service.cache.get_book_by_isbn("9783662546239")
+    assert cached is not None
+    assert cached["description"] == "enriched"
+
+
+async def test_cached_book_makes_no_request(service: Service) -> None:
+    from unittest.mock import AsyncMock
+
+    await service.cache.set_book_by_isbn("9783662546239", {"title": "Cached"})
+    service.openlibrary.get_by_isbn = AsyncMock()  # type: ignore[method-assign]
+    book = await resolve_book_by_isbn("978-3-662-54623-9", service, fetch_authors=True)
+    assert book == {"title": "Cached"}
+    service.openlibrary.get_by_isbn.assert_not_called()
