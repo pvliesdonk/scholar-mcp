@@ -2461,10 +2461,12 @@ description is paged; when <code>next_offset</code> is present, call again with
 that value as <code>text_offset</code>. Claims and description are null when EPO
 holds no full text for the publication; <code>fetch_patent_pdf</code> then has the
 document. When sections includes 'citations', non-patent literature
-references are resolved on a best-effort basis: one with a DOI to a
-Semantic Scholar <code>paper</code>, otherwise one with an ISBN to an Open Library
-<code>book</code>. An unresolved reference keeps its raw citation string, plus its
-<code>isbn</code> when it has one.</p>
+references are resolved on a best-effort basis: one with a DOI or arXiv
+ID to a Semantic Scholar <code>paper</code>, otherwise one with an ISBN to an Open
+Library <code>book</code>. A reference with neither may carry a title-matched
+<code>candidate</code> with <code>confidence: "unconfirmed"</code>: verify it before citing
+it. Every reference keeps its raw citation string, plus its <code>isbn</code> when
+it has one.</p>
 <p>When EPO reports itself busy this waits for it to clear, which can take a
 few minutes, so the call may answer with a job handle to poll using
 <code>get_job_result</code> rather than the result itself. Do not reason about EPO
