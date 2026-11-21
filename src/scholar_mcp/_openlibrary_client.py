@@ -312,6 +312,86 @@ def _cover_url(isbn_13: str | None, cover_id: object) -> str | None:
     return None
 
 
+def _first(values: list[Any]) -> Any:
+    """Return the first element of *values*, or ``None`` when empty."""
+    return values[0] if values else None
+
+
+def _matched_id(pattern: re.Pattern[str], key: str) -> str | None:
+    """Return the Open Library id *pattern* finds in *key*, or ``None``."""
+    match = pattern.search(key)
+    return match.group(0) if match else None
+
+
+def _worldcat_url(isbn_13: str | None) -> str | None:
+    """Return the WorldCat permalink for an ISBN-13, or ``None``."""
+    return f"https://www.worldcat.org/isbn/{isbn_13}" if isbn_13 else None
+
+
+def _normalize_search_doc(data: dict[str, Any]) -> BookRecord:
+    """Normalize an Open Library search document.
+
+    Args:
+        data: One ``docs`` entry of a search response.
+
+    Returns:
+        Normalized book record dict.
+    """
+    isbn_list = data.get("isbn") or []
+    isbn_13 = next((i for i in isbn_list if len(i) == 13), None)
+    isbn_10 = next((i for i in isbn_list if len(i) == 10), None)
+    return {
+        "title": data.get("title", ""),
+        "authors": data.get("author_name") or [],
+        "publisher": _first(data.get("publisher") or []),
+        "year": data.get("first_publish_year"),
+        "edition": None,
+        "isbn_10": isbn_10,
+        "isbn_13": isbn_13,
+        "openlibrary_work_id": _matched_id(_OL_WORK_RE, data.get("key") or ""),
+        "openlibrary_edition_id": _first(data.get("edition_key") or []),
+        "cover_url": _cover_url(isbn_13, data.get("cover_i")),
+        "google_books_url": None,
+        "subjects": data.get("subject") or [],
+        "page_count": data.get("number_of_pages_median"),
+        "description": None,
+        "worldcat_url": _worldcat_url(isbn_13),
+    }
+
+
+def _normalize_edition(data: dict[str, Any]) -> BookRecord:
+    """Normalize an Open Library edition record.
+
+    Args:
+        data: An ``/isbn/`` or ``/books/`` edition response.
+
+    Returns:
+        Normalized book record dict; edition records lack author names, so
+        ``authors`` is empty for the caller to fill from the work.
+    """
+    isbn_13 = _first(data.get("isbn_13") or [])
+    works = data.get("works") or []
+    work_key = works[0]["key"] if works else ""
+    year_match = re.search(r"\d{4}", data.get("publish_date") or "")
+    return {
+        "title": data.get("title", ""),
+        "authors": [],
+        "publisher": _first(data.get("publishers") or []),
+        "year": int(year_match.group(0)) if year_match else None,
+        "edition": data.get("edition_name"),
+        "isbn_10": _first(data.get("isbn_10") or []),
+        "isbn_13": isbn_13,
+        "openlibrary_work_id": _matched_id(_OL_WORK_RE, work_key),
+        "openlibrary_edition_id": _matched_id(_OL_EDITION_RE, data.get("key") or ""),
+        "cover_url": (f"{_COVER_BASE}/{isbn_13}-M.jpg" if isbn_13 else None),
+        "google_books_url": None,
+        "subjects": data.get("subjects") or [],
+        "page_count": data.get("number_of_pages"),
+        "description": None,
+        "worldcat_url": _worldcat_url(isbn_13),
+    }
+
+
 def normalize_book(
     data: dict[str, Any], *, source: Literal["search", "edition"] = "search"
 ) -> BookRecord:
@@ -325,66 +405,5 @@ def normalize_book(
         Normalized book record dict.
     """
     if source == "search":
-        isbn_list = data.get("isbn") or []
-        isbn_13 = next((i for i in isbn_list if len(i) == 13), None)
-        isbn_10 = next((i for i in isbn_list if len(i) == 10), None)
-        publishers = data.get("publisher") or []
-        work_key = data.get("key") or ""
-        work_match = _OL_WORK_RE.search(work_key)
-        edition_keys = data.get("edition_key") or []
-        cover_id = data.get("cover_i")
-        return {
-            "title": data.get("title", ""),
-            "authors": data.get("author_name") or [],
-            "publisher": publishers[0] if publishers else None,
-            "year": data.get("first_publish_year"),
-            "edition": None,
-            "isbn_10": isbn_10,
-            "isbn_13": isbn_13,
-            "openlibrary_work_id": work_match.group(0) if work_match else None,
-            "openlibrary_edition_id": edition_keys[0] if edition_keys else None,
-            "cover_url": _cover_url(isbn_13, cover_id),
-            "google_books_url": None,
-            "subjects": data.get("subject") or [],
-            "page_count": data.get("number_of_pages_median"),
-            "description": None,
-            "worldcat_url": (
-                f"https://www.worldcat.org/isbn/{isbn_13}" if isbn_13 else None
-            ),
-        }
-
-    # source == "edition"
-    isbn_13_list = data.get("isbn_13") or []
-    isbn_10_list = data.get("isbn_10") or []
-    isbn_13 = isbn_13_list[0] if isbn_13_list else None
-    isbn_10 = isbn_10_list[0] if isbn_10_list else None
-    publishers = data.get("publishers") or []
-    works = data.get("works") or []
-    work_key = works[0]["key"] if works else ""
-    work_match = _OL_WORK_RE.search(work_key)
-    edition_key = data.get("key") or ""
-    edition_match = _OL_EDITION_RE.search(edition_key)
-    publish_date = data.get("publish_date") or ""
-    year = None
-    year_match = re.search(r"\d{4}", publish_date)
-    if year_match:
-        year = int(year_match.group(0))
-    return {
-        "title": data.get("title", ""),
-        "authors": [],  # edition records lack author names; enrich from work
-        "publisher": publishers[0] if publishers else None,
-        "year": year,
-        "edition": data.get("edition_name"),
-        "isbn_10": isbn_10,
-        "isbn_13": isbn_13,
-        "openlibrary_work_id": work_match.group(0) if work_match else None,
-        "openlibrary_edition_id": (edition_match.group(0) if edition_match else None),
-        "cover_url": (f"{_COVER_BASE}/{isbn_13}-M.jpg" if isbn_13 else None),
-        "google_books_url": None,
-        "subjects": data.get("subjects") or [],
-        "page_count": data.get("number_of_pages"),
-        "description": None,
-        "worldcat_url": (
-            f"https://www.worldcat.org/isbn/{isbn_13}" if isbn_13 else None
-        ),
-    }
+        return _normalize_search_doc(data)
+    return _normalize_edition(data)
