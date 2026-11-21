@@ -126,39 +126,78 @@ async def with_s2_retry(
     context = S2_RETRY_CONTEXT.get()
     attempt = 0
     while True:
-        if context is not None and context.throttled.is_set():
-            remaining = context.deadline - asyncio.get_running_loop().time()
-            if remaining <= 0:
-                raise S2RetryDeadlineExceeded()
-            try:
-                await asyncio.wait_for(limiter.acquire(), timeout=remaining)
-            except TimeoutError as exc:
-                raise S2RetryDeadlineExceeded() from exc
-        else:
-            await limiter.acquire()
+        await _acquire_within_deadline(limiter, context)
         try:
             return await coro_func()
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code != 429:
                 raise
-            wait = min(delay_base * (2 ** min(attempt, 16)), 60.0)
-            limiter.cooldown(wait)
-            if context is not None:
-                context.notify(wait)
-            elif attempt == retries:
+            if _back_off(limiter, context, attempt, retries, delay_base):
                 raise
-            if context is not None:
-                logger.warning(
-                    "s2_rate_limited attempt=%d waiting_s=%.1f", attempt + 1, wait
-                )
-            else:
-                logger.warning(
-                    "s2_rate_limited attempt=%d max_attempts=%d waiting_s=%.1f",
-                    attempt + 1,
-                    retries + 1,
-                    wait,
-                )
             attempt += 1
+
+
+async def _acquire_within_deadline(
+    limiter: RateLimiter, context: S2RetryContext | None
+) -> None:
+    """Acquire the limiter, within the job's deadline once S2 has throttled.
+
+    Args:
+        limiter: Rate limiter to acquire.
+        context: The S2 tool's retry context, or ``None`` for a direct call.
+
+    Raises:
+        S2RetryDeadlineExceeded: If the context's retry window has closed.
+    """
+    if context is None or not context.throttled.is_set():
+        await limiter.acquire()
+        return
+    remaining = context.deadline - asyncio.get_running_loop().time()
+    if remaining <= 0:
+        raise S2RetryDeadlineExceeded()
+    try:
+        await asyncio.wait_for(limiter.acquire(), timeout=remaining)
+    except TimeoutError as exc:
+        raise S2RetryDeadlineExceeded() from exc
+
+
+def _back_off(
+    limiter: RateLimiter,
+    context: S2RetryContext | None,
+    attempt: int,
+    retries: int,
+    delay_base: float,
+) -> bool:
+    """Start the shared cooldown after a 429 and say whether to give up.
+
+    Under an S2 tool context the job is told how long to wait and the retry
+    continues until its deadline; a direct call gives up after *retries*.
+
+    Args:
+        limiter: Rate limiter whose cooldown every caller shares.
+        context: The S2 tool's retry context, or ``None`` for a direct call.
+        attempt: Attempts that have failed so far, minus one.
+        retries: Attempts a direct call may make after the first failure.
+        delay_base: Base delay in seconds for exponential backoff.
+
+    Returns:
+        True when a direct call has used up its retries and should re-raise.
+    """
+    wait = min(delay_base * (2 ** min(attempt, 16)), 60.0)
+    limiter.cooldown(wait)
+    if context is not None:
+        context.notify(wait)
+        logger.warning("s2_rate_limited attempt=%d waiting_s=%.1f", attempt + 1, wait)
+        return False
+    if attempt == retries:
+        return True
+    logger.warning(
+        "s2_rate_limited attempt=%d max_attempts=%d waiting_s=%.1f",
+        attempt + 1,
+        retries + 1,
+        wait,
+    )
+    return False
 
 
 async def with_s2_try_once(
