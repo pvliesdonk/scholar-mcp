@@ -264,6 +264,104 @@ def biblio_has_data(record: PatentRecord | dict[str, Any]) -> bool:
     return bool(parties)
 
 
+def _first_exchange_document(root: etree._Element) -> etree._Element | None:
+    """Return the first ``exchange-document`` in a biblio response.
+
+    Args:
+        root: Parsed response root.
+
+    Returns:
+        The element, or ``None``.
+    """
+    exchange_doc = root.find(".//exch:exchange-documents/exch:exchange-document", _NS)
+    if exchange_doc is None:
+        # Fall back: search without exch prefix (default namespace handling)
+        exchange_doc = root.find(f".//{{{_EXCH}}}exchange-document")
+    return exchange_doc
+
+
+def _publication_reference(
+    biblio: etree._Element, document_country: str
+) -> tuple[str, str, str, str]:
+    """Read the DOCDB publication reference.
+
+    Args:
+        biblio: The ``bibliographic-data`` element.
+        document_country: The ``exchange-document``'s ``country``, used when
+            the reference names none.
+
+    Returns:
+        ``(country, number, kind, date)``; missing parts are empty strings.
+    """
+    country = number = kind = date = ""
+    pub_ref = biblio.find(f"{{{_EXCH}}}publication-reference")
+    docdb_id = _find_docdb_id(pub_ref) if pub_ref is not None else None
+    if docdb_id is not None:
+        country = _text(docdb_id.find(f"{{{_EXCH}}}country"))
+        number = _text(docdb_id.find(f"{{{_EXCH}}}doc-number"))
+        kind = _text(docdb_id.find(f"{{{_EXCH}}}kind"))
+        date = _date_fmt(_text(docdb_id.find(f"{{{_EXCH}}}date")))
+    return country or document_country, number, kind, date
+
+
+def _filing_date(biblio: etree._Element) -> str:
+    """Read the filing date from the DOCDB application reference.
+
+    Args:
+        biblio: The ``bibliographic-data`` element.
+
+    Returns:
+        ``YYYY-MM-DD``, or an empty string.
+    """
+    app_ref = biblio.find(f"{{{_EXCH}}}application-reference")
+    docdb_id = _find_docdb_id(app_ref) if app_ref is not None else None
+    if docdb_id is None:
+        return ""
+    return _date_fmt(_text(docdb_id.find(f"{{{_EXCH}}}date")))
+
+
+def _priority_date(biblio: etree._Element) -> str:
+    """Read the earliest priority date over all DOCDB priority claims.
+
+    Args:
+        biblio: The ``bibliographic-data`` element.
+
+    Returns:
+        ``YYYY-MM-DD``, or an empty string.
+    """
+    priority_claims = biblio.find(f"{{{_EXCH}}}priority-claims")
+    if priority_claims is None:
+        return ""
+    dates: list[str] = []
+    for claim in priority_claims.iter(f"{{{_EXCH}}}priority-claim"):
+        docdb_id = _find_docdb_id(claim)
+        raw_date = (
+            _text(docdb_id.find(f"{{{_EXCH}}}date")) if docdb_id is not None else ""
+        )
+        if raw_date:
+            dates.append(raw_date)
+    return _date_fmt(min(dates)) if dates else ""
+
+
+def _classifications(biblio: etree._Element) -> list[str]:
+    """Read the CPC classification codes.
+
+    Args:
+        biblio: The ``bibliographic-data`` element.
+
+    Returns:
+        The codes, in document order.
+    """
+    patent_cls = biblio.find(f"{{{_EXCH}}}patent-classifications")
+    if patent_cls is None:
+        return []
+    codes = (
+        _parse_classification(el)
+        for el in patent_cls.iter(f"{{{_EXCH}}}patent-classification")
+    )
+    return [code for code in codes if code]
+
+
 def parse_biblio_xml(xml_bytes: bytes) -> PatentRecord:
     """Parse an EPO OPS biblio endpoint XML response.
 
@@ -294,68 +392,21 @@ def parse_biblio_xml(xml_bytes: bytes) -> PatentRecord:
         - ``url`` (str): Espacenet URL for the patent.
     """
     root = etree.fromstring(xml_bytes)
-
-    # Locate the first exchange-document element.
-    exchange_doc = root.find(".//exch:exchange-documents/exch:exchange-document", _NS)
-    if exchange_doc is None:
-        # Fall back: search without exch prefix (default namespace handling)
-        exchange_doc = root.find(f".//{{{_EXCH}}}exchange-document")
+    exchange_doc = _first_exchange_document(root)
     if exchange_doc is None:
         logger.warning("epo_biblio_missing element=exchange-document")
         return _empty_biblio()
 
     family_id = exchange_doc.get("family-id", "")
-    country = exchange_doc.get("country", "")
-
     biblio = exchange_doc.find(f"{{{_EXCH}}}bibliographic-data")
     if biblio is None:
         logger.warning("epo_biblio_missing element=bibliographic-data")
         return _empty_biblio()
 
-    # --- Publication reference ---
-    pub_ref = biblio.find(f"{{{_EXCH}}}publication-reference")
-    pub_country = ""
-    pub_number = ""
-    pub_kind = ""
-    pub_date = ""
-    if pub_ref is not None:
-        docdb_id = _find_docdb_id(pub_ref)
-        if docdb_id is not None:
-            pub_country = _text(docdb_id.find(f"{{{_EXCH}}}country"))
-            pub_number = _text(docdb_id.find(f"{{{_EXCH}}}doc-number"))
-            pub_kind = _text(docdb_id.find(f"{{{_EXCH}}}kind"))
-            pub_date = _date_fmt(_text(docdb_id.find(f"{{{_EXCH}}}date")))
-
-    if not pub_country:
-        pub_country = country
-    publication_number = f"{pub_country}.{pub_number}.{pub_kind}"
-
-    # --- Filing date (application reference) ---
-    app_ref = biblio.find(f"{{{_EXCH}}}application-reference")
-    filing_date = ""
-    if app_ref is not None:
-        docdb_id = _find_docdb_id(app_ref)
-        if docdb_id is not None:
-            filing_date = _date_fmt(_text(docdb_id.find(f"{{{_EXCH}}}date")))
-
-    # --- Priority date (earliest priority claim) ---
-    priority_date = ""
-    priority_claims = biblio.find(f"{{{_EXCH}}}priority-claims")
-    if priority_claims is not None:
-        dates: list[str] = []
-        for claim in priority_claims.iter(f"{{{_EXCH}}}priority-claim"):
-            docdb_id = _find_docdb_id(claim)
-            if docdb_id is not None:
-                raw_date = _text(docdb_id.find(f"{{{_EXCH}}}date"))
-                if raw_date:
-                    dates.append(raw_date)
-        if dates:
-            priority_date = _date_fmt(min(dates))
-
-    # --- Parties ---
+    pub_country, pub_number, pub_kind, pub_date = _publication_reference(
+        biblio, exchange_doc.get("country", "")
+    )
     parties = biblio.find(f"{{{_EXCH}}}parties")
-    applicants = _party_names(parties, "applicants", "applicant")
-    inventors = _party_names(parties, "inventors", "inventor")
 
     # --- Title (prefer English) ---
     title = _pick_lang(biblio, f"{{{_EXCH}}}invention-title", text_only=True)
@@ -367,19 +418,16 @@ def parse_biblio_xml(xml_bytes: bytes) -> PatentRecord:
     # patent (#399). See docs/design/reference/epo-ops-biblio.md.
     abstract = _pick_lang(exchange_doc, f"{{{_EXCH}}}abstract", text_only=False)
 
-    # --- Classifications ---
-    classifications: list[str] = []
-    patent_cls = biblio.find(f"{{{_EXCH}}}patent-classifications")
-    if patent_cls is not None:
-        for cls_el in patent_cls.iter(f"{{{_EXCH}}}patent-classification"):
-            code = _parse_classification(cls_el)
-            if code:
-                classifications.append(code)
-
     # --- Espacenet URL ---
     # Strip dots from publication_number for URL: EP.1234567.A1 -> EP1234567A1
     url_num = pub_country + pub_number + pub_kind
     url = f"https://worldwide.espacenet.com/patent/search/family/{family_id}/publication/{url_num}"
+    applicants = _party_names(parties, "applicants", "applicant")
+    inventors = _party_names(parties, "inventors", "inventor")
+    publication_number = f"{pub_country}.{pub_number}.{pub_kind}"
+    filing_date = _filing_date(biblio)
+    priority_date = _priority_date(biblio)
+    classifications = _classifications(biblio)
 
     return PatentRecord(
         title=title,
