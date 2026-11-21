@@ -127,7 +127,7 @@ def _parse_pdf_instance(inquiry_xml: bytes) -> _PdfInstance | None:
             if "application/pdf" in formats and link is not None:
                 return _PdfInstance(str(link), _page_count_of(el))
         return None
-    except (RateLimitedError, EpoRateLimitedError):
+    except RateLimitedError:  # EpoRateLimitedError among them
         raise
     except _lxml_etree.LxmlError as exc:
         logger.warning("epo_pdf_link_parse_failed err=%s", exc)

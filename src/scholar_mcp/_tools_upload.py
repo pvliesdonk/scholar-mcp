@@ -184,6 +184,7 @@ def register_upload_tool(mcp: FastMCP, links: TransferLinks) -> None:
                 "read. Tell the user PDF conversion is not available here.",
                 log_level=logging.INFO,
             )
+        # "not > 0" also refuses NaN, which "<= 0" would let through.
         if ttl_s is not None and not ttl_s > 0:
             raise ToolError(
                 f"ttl_s must be greater than 0, got {ttl_s}; omit it to use "
