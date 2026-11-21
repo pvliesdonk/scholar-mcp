@@ -54,7 +54,7 @@ cited yet:
   where a decision (EU) 2026/2479 is CELEX `32026D2479`. EUR-Lex often
   answers automated requests with HTTP 202 and an empty body, or 429.
 - The Publications Office serves the same Official Journal text at
-  `http://publications.europa.eu/resource/celex/<CELEX>` when the request
+  `https://publications.europa.eu/resource/celex/<CELEX>` when the request
   asks for `application/xhtml+xml` and English. `scripts/fetch_oj.sh
   <CELEX>` makes that request.
 - The Commission's summary lists (xlsx or pdf) consolidate every citation

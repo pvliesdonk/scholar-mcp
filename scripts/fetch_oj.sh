@@ -15,9 +15,40 @@ if [[ $# -ne 1 || ! "$1" =~ ^[0-9]{5}[A-Z]{1,2}[0-9]{4}(\([0-9]{2}\))?(-[0-9]{8}
   exit 2
 fi
 
-curl --silent --show-error --fail --location --max-time 60 \
-  --proto '=https,http' --max-redirs 5 \
-  --header 'Accept: application/xhtml+xml' \
-  --header 'Accept-Language: eng' \
-  "http://publications.europa.eu/resource/celex/$1" |
-  sed -e 's/<[^>]*>/ /g' -e 's/&nbsp;/ /g' | tr -s ' \t' ' ' | grep -v '^ *$'
+# Cellar answers with redirects to http:// URLs on its own host. Follow them
+# here, over HTTPS only, so nothing is fetched in clear text (#680) and no
+# redirect can lead to another host.
+body=$(mktemp)
+trap 'rm -f "$body"' EXIT
+url="https://publications.europa.eu/resource/celex/$1"
+for _ in 1 2 3 4 5; do
+  result=$(curl --silent --show-error --max-time 60 --proto '=https' \
+    --header 'Accept: application/xhtml+xml' \
+    --header 'Accept-Language: eng' \
+    --output "$body" --write-out '%{http_code} %{redirect_url}' "$url")
+  status=${result%% *}
+  case "$status" in
+    200)
+      sed -e 's/<[^>]*>/ /g' -e 's/&nbsp;/ /g' "$body" | tr -s ' \t' ' ' | grep -v '^ *$'
+      exit 0
+      ;;
+    30[12378])
+      next=${result#* }
+      if [[ -z "$next" ]]; then
+        echo "fetch_oj.sh: HTTP $status from $url names no Location" >&2
+        exit 1
+      fi
+      if [[ ! "$next" =~ ^https?://publications\.europa\.eu/ ]]; then
+        echo "fetch_oj.sh: refusing a redirect off publications.europa.eu" >&2
+        exit 1
+      fi
+      url="https://${next#*://}"
+      ;;
+    *)
+      echo "fetch_oj.sh: HTTP $status from $url" >&2
+      exit 1
+      ;;
+  esac
+done
+echo "fetch_oj.sh: too many redirects" >&2
+exit 1
