@@ -351,31 +351,64 @@ def _status(doc: dict[str, Any], identifier: str) -> str:
     return "published"
 
 
+def _is_author(contributor: Any) -> bool:
+    """Say whether a Relaton contributor has the ``author`` role.
+
+    Args:
+        contributor: One entry of a record's ``contributor`` list.
+
+    Returns:
+        True for a dict whose roles include ``author``.
+    """
+    if not isinstance(contributor, dict):
+        return False
+    roles = contributor.get("role") or []
+    return "author" in [r.get("type") for r in roles if isinstance(r, dict)]
+
+
+def _subdivision_committee(subdivision: Any) -> str | None:
+    """Name the committee a Relaton organisation subdivision stands for.
+
+    An identifier with letters in it is the committee (``ISO/IEC JTC 1/SC
+    27``); a bare number is not, and the name is used instead (IEC's
+    ``TC 65``, IEEE's name).
+
+    Args:
+        subdivision: One entry of an organisation's ``subdivision`` list.
+
+    Returns:
+        The committee, or ``None`` when the subdivision names none.
+    """
+    if not isinstance(subdivision, dict):
+        return None
+    ident = next(map(_content, subdivision.get("identifier") or []), "")
+    if any(ch.isalpha() for ch in ident):
+        return ident
+    name = next(map(_content, subdivision.get("name") or []), "")
+    return name or None
+
+
 def _committee(contributors: list[dict[str, Any]] | None) -> str | None:
     """Return the committee that authored the document, or None.
 
     v2 lists it as a ``subdivision`` of the author organisation. ISO names
     the committee in its ``identifier`` (``ISO/IEC JTC 1/SC 27``); IEC puts
     only the number there and ``TC 65`` in the name; IEEE gives only a name.
+
+    Args:
+        contributors: A record's ``contributor`` list, or ``None``.
+
+    Returns:
+        The first committee an author organisation names, or ``None``.
     """
     for contributor in contributors or []:
-        if not isinstance(contributor, dict):
-            continue
-        roles = [
-            r.get("type") for r in contributor.get("role") or [] if isinstance(r, dict)
-        ]
-        if "author" not in roles:
+        if not _is_author(contributor):
             continue
         organization = contributor.get("organization") or {}
         for subdivision in organization.get("subdivision") or []:
-            if not isinstance(subdivision, dict):
-                continue
-            ident = next(map(_content, subdivision.get("identifier") or []), "")
-            if any(ch.isalpha() for ch in ident):
-                return ident
-            name = next(map(_content, subdivision.get("name") or []), "")
-            if name:
-                return name
+            committee = _subdivision_committee(subdivision)
+            if committee:
+                return committee
     return None
 
 
