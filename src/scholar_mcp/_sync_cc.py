@@ -21,7 +21,7 @@ import io
 import logging
 import re
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
@@ -395,6 +395,40 @@ def _cc_record_changed(
 _PP_CSV_URL = "https://www.commoncriteriaportal.org/pps/pps.csv"
 
 
+@dataclass
+class _Tally:
+    """What one CC sync run has counted so far."""
+
+    body: str
+    started_at: float
+    added: int = 0
+    updated: int = 0
+    unchanged: int = 0
+    withdrawn: int = 0
+    errors: list[str] = field(default_factory=list)
+
+    def report(self, *, upstream_ref: str | None) -> SyncReport:
+        """Build the run's report.
+
+        Args:
+            upstream_ref: The CSV hash the run synced, or ``None``.
+
+        Returns:
+            The SyncReport, finished now.
+        """
+        return SyncReport(
+            body=self.body,
+            added=self.added,
+            updated=self.updated,
+            unchanged=self.unchanged,
+            withdrawn=self.withdrawn,
+            errors=self.errors,
+            upstream_ref=upstream_ref,
+            started_at=self.started_at,
+            finished_at=time.time(),
+        )
+
+
 class CCLoader:
     """Common Criteria sync loader. Conforms to the Loader Protocol.
 
@@ -430,48 +464,20 @@ class CCLoader:
             force: If True, bypass the content-hash freshness check and
                 re-process the CSV unconditionally.
         """
-        started_at = time.time()
-        errors: list[str] = []
-        added = updated = unchanged = withdrawn = 0
+        tally = _Tally(body=self.body, started_at=time.time())
         current_ids: set[str] = set()
-
         prev_ids = await cache.list_synced_standard_ids(source=self.body)
 
         # Phase 1 — framework documents (no network)
-        for entry in _FRAMEWORK_DOCS:
-            for record in _framework_to_records(entry):
-                ident = record["identifier"]
-                current_ids.add(ident)
-                existing = await cache.get_standard(ident)
-                if existing is None:
-                    added += 1
-                elif _cc_record_changed(existing, record):
-                    updated += 1
-                else:
-                    unchanged += 1
-                await cache.set_standard(ident, record, source=self.body, synced=True)
-            for alias in _framework_aliases(entry):
-                await cache.set_standard_alias(alias, entry.cc_identifier)
+        await self._sync_framework(cache, tally, current_ids)
 
         # Phase 2 — Protection Profiles, content-hash gated
         try:
-            response = await self._http.get(_PP_CSV_URL, follow_redirects=True)
-            response.raise_for_status()
-            csv_bytes = response.content
+            csv_bytes = await self._fetch_pp_csv()
         except httpx.HTTPError as exc:
             logger.error("cc_pp_fetch_failed err=%s", exc, exc_info=True)
-            errors.append(f"pps.csv fetch failed: {exc}")
-            return SyncReport(
-                body=self.body,
-                added=added,
-                updated=updated,
-                unchanged=unchanged,
-                withdrawn=0,
-                errors=errors,
-                upstream_ref=None,
-                started_at=started_at,
-                finished_at=time.time(),
-            )
+            tally.errors.append(f"pps.csv fetch failed: {exc}")
+            return tally.report(upstream_ref=None)
 
         csv_hash = hashlib.sha256(csv_bytes).hexdigest()
         previous = await cache.get_sync_run(self.body)
@@ -480,52 +486,133 @@ class CCLoader:
             existing_pp_count = len(prev_ids) - sum(
                 2 if e.iso_identifier else 1 for e in _FRAMEWORK_DOCS
             )
-            unchanged += max(existing_pp_count, 0)
+            tally.unchanged += max(existing_pp_count, 0)
             logger.info(
                 "sync_cc_unchanged hash=%s pp_count=%s", csv_hash, existing_pp_count
             )
-            return SyncReport(
-                body=self.body,
-                added=added,
-                updated=updated,
-                unchanged=unchanged,
-                withdrawn=0,
-                errors=errors,
-                upstream_ref=csv_hash,
-                started_at=started_at,
-                finished_at=time.time(),
-            )
+            return tally.report(upstream_ref=csv_hash)
 
+        await self._sync_pps(cache, csv_bytes, tally, current_ids)
+
+        # Phase 3 — withdrawal detection (same >50% guard as RelatonLoader)
+        await self._withdraw_missing(cache, prev_ids, current_ids, tally)
+
+        logger.info(
+            "sync_cc_done hash=%s added=%s updated=%s unchanged=%s withdrawn=%s errors=%s",
+            csv_hash,
+            tally.added,
+            tally.updated,
+            tally.unchanged,
+            tally.withdrawn,
+            len(tally.errors),
+        )
+        return tally.report(upstream_ref=csv_hash)
+
+    async def _store(
+        self, cache: CacheProtocol, record: StandardRecord, tally: _Tally
+    ) -> str:
+        """Count a record as added, updated or unchanged, then cache it.
+
+        Args:
+            cache: Open cache.
+            record: The record to store.
+            tally: Counts for this run, updated in place.
+
+        Returns:
+            The record's identifier.
+        """
+        ident = record["identifier"]
+        existing = await cache.get_standard(ident)
+        if existing is None:
+            tally.added += 1
+        elif _cc_record_changed(existing, record):
+            tally.updated += 1
+        else:
+            tally.unchanged += 1
+        await cache.set_standard(ident, record, source=self.body, synced=True)
+        return ident
+
+    async def _sync_framework(
+        self, cache: CacheProtocol, tally: _Tally, current_ids: set[str]
+    ) -> None:
+        """Store the CC framework documents and their aliases.
+
+        Args:
+            cache: Open cache.
+            tally: Counts for this run, updated in place.
+            current_ids: Identifiers seen in this run, added to in place.
+        """
+        for entry in _FRAMEWORK_DOCS:
+            for record in _framework_to_records(entry):
+                current_ids.add(await self._store(cache, record, tally))
+            for alias in _framework_aliases(entry):
+                await cache.set_standard_alias(alias, entry.cc_identifier)
+
+    async def _fetch_pp_csv(self) -> bytes:
+        """Download the Protection Profile CSV.
+
+        Returns:
+            The CSV bytes.
+
+        Raises:
+            httpx.HTTPError: When the download fails.
+        """
+        response = await self._http.get(_PP_CSV_URL, follow_redirects=True)
+        response.raise_for_status()
+        return response.content
+
+    async def _sync_pps(
+        self,
+        cache: CacheProtocol,
+        csv_bytes: bytes,
+        tally: _Tally,
+        current_ids: set[str],
+    ) -> None:
+        """Store every parseable Protection Profile row of the CSV.
+
+        Args:
+            cache: Open cache.
+            csv_bytes: The Protection Profile CSV.
+            tally: Counts for this run, updated in place.
+            current_ids: Identifiers seen in this run, added to in place.
+        """
         for row in csv.DictReader(io.StringIO(csv_bytes.decode("utf-8"))):
             pp_record: StandardRecord | None = _pp_row_to_record(row)
             if pp_record is None:
                 name = row.get("Name", "?")
                 logger.warning("cc_pp_row_parse_error name=%s", name)
-                errors.append(f"unparseable PP row: {name}")
+                tally.errors.append(f"unparseable PP row: {name}")
                 continue
-            ident = pp_record["identifier"]
-            current_ids.add(ident)
-            existing = await cache.get_standard(ident)
-            if existing is None:
-                added += 1
-            elif _cc_record_changed(existing, pp_record):
-                updated += 1
-            else:
-                unchanged += 1
-            await cache.set_standard(ident, pp_record, source=self.body, synced=True)
+            current_ids.add(await self._store(cache, pp_record, tally))
 
-        # Phase 3 — withdrawal detection (same >50% guard as RelatonLoader)
-        # Guard checks only PP records (framework docs are constant),
-        # so we compare against prev_ids minus framework identifiers.
-        framework_ids = set()
-        for entry in _FRAMEWORK_DOCS:
-            for record in _framework_to_records(entry):
-                framework_ids.add(record["identifier"])
+    async def _withdraw_missing(
+        self,
+        cache: CacheProtocol,
+        prev_ids: set[str],
+        current_ids: set[str],
+        tally: _Tally,
+    ) -> None:
+        """Mark Protection Profiles gone from the CSV as withdrawn.
+
+        The guard checks only PP records (framework docs are constant), so it
+        compares against the previous ids minus the framework identifiers,
+        and skips the pass when more than half went missing at once.
+
+        Args:
+            cache: Open cache.
+            prev_ids: Identifiers the previous run stored.
+            current_ids: Identifiers this run stored.
+            tally: Counts for this run, updated in place.
+        """
+        framework_ids = {
+            record["identifier"]
+            for entry in _FRAMEWORK_DOCS
+            for record in _framework_to_records(entry)
+        }
         prev_pp_ids = prev_ids - framework_ids
-        current_pp_ids = current_ids - framework_ids
-        missing = prev_pp_ids - current_pp_ids
+        missing = prev_pp_ids - (current_ids - framework_ids)
         if prev_pp_ids and len(missing) > 0.5 * len(prev_pp_ids):
-            errors.append(
+            tally.errors.append(
                 f"withdrawal pass aborted: {len(missing)}/{len(prev_pp_ids)} "
                 "PP ids missing (>50% — likely partial sync)"
             )
@@ -534,38 +621,13 @@ class CCLoader:
                 len(missing),
                 len(prev_pp_ids),
             )
-        else:
-            for ident in missing:
-                existing = await cache.get_standard(ident)
-                if existing is None:
-                    continue
-                updated_record: StandardRecord = {
-                    **existing,
-                    "status": "withdrawn",
-                }
-                await cache.set_standard(
-                    ident, updated_record, source=self.body, synced=True
-                )
-                withdrawn += 1
-
-        logger.info(
-            "sync_cc_done hash=%s added=%s updated=%s unchanged=%s withdrawn=%s errors=%s",
-            csv_hash,
-            added,
-            updated,
-            unchanged,
-            withdrawn,
-            len(errors),
-        )
-
-        return SyncReport(
-            body=self.body,
-            added=added,
-            updated=updated,
-            unchanged=unchanged,
-            withdrawn=withdrawn,
-            errors=errors,
-            upstream_ref=csv_hash,
-            started_at=started_at,
-            finished_at=time.time(),
-        )
+            return
+        for ident in missing:
+            existing = await cache.get_standard(ident)
+            if existing is None:
+                continue
+            updated_record: StandardRecord = {**existing, "status": "withdrawn"}
+            await cache.set_standard(
+                ident, updated_record, source=self.body, synced=True
+            )
+            tally.withdrawn += 1
