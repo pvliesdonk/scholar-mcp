@@ -2,6 +2,16 @@
 
 Newest first. One entry per research pass.
 
+## 2026-11-21
+
+### Patent entries in biblatex, CSL-JSON and RIS
+
+New page [Patent entries in biblatex, CSL-JSON and RIS](patent-citation-formats.md)
+for #50: the biblatex `@patent` fields and its twelve patent keys, what
+pandoc and classic BibTeX do with the entry, the CSL variables patent styles
+read and Zotero's patent maps, and the application and grant kind codes of
+EP, US, WO and DE. The original RIS tag table was not retrieved.
+
 ## 2026-11-20
 
 ### Relaton v2: C1 control characters in the ISO dump
