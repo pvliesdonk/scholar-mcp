@@ -122,7 +122,7 @@ _IEC_RE = re.compile(r"(?i)\biec\s*(\d{1,5}(?:-\d+)*)(?:\s*[:-]\s*|\s+)(\d{4})\b
 #   "IEEE 802.11-2020", "IEEE Std 1588-2019", "IEEE 1003.1-2024"
 _IEEE_RE = re.compile(
     r"(?i)\bieee(?:\s+std)?\s+"
-    r"(\d{1,5}(?:-\d+)*(?:\.\d+)*)\s*[-\s]\s*(\d{4})\b"
+    r"(\d{1,5}(?:-\d+)*(?:\.\d+)*)(?:\s*-\s*|\s+)(\d{4})\b"
 )
 
 # CC version: "CC:2022", "CC 2022", "Common Criteria 2022"

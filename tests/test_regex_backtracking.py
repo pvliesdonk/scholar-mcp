@@ -33,8 +33,9 @@ def test_a_page_range_still_splits() -> None:
         "iso 9001" + " " * _RUN + "x",
         "EN ISO 13849-1" + " " * _RUN + "x",
         "etsi en 303" + " " * _RUN + "x",
+        "IEEE 802" + " " * _RUN + "x",
     ],
-    ids=["iso", "en-iso", "etsi"],
+    ids=["iso", "en-iso", "etsi", "ieee"],
 )
 def test_a_long_run_of_spaces_does_not_resolve(raw: str) -> None:
     assert resolve_identifier_local(raw) is None
@@ -47,6 +48,8 @@ def test_a_long_run_of_spaces_does_not_resolve(raw: str) -> None:
         ("ISO 9001 - 2015", "ISO 9001:2015"),
         ("ISO 9001 : 2015", "ISO 9001:2015"),
         ("etsi en 303 - 645", "ETSI EN 303 645"),
+        ("IEEE 802.11 2020", "IEEE 802.11-2020"),
+        ("IEEE Std 1588 - 2019", "IEEE 1588-2019"),
     ],
 )
 def test_every_separator_still_resolves(raw: str, canonical: str) -> None:
