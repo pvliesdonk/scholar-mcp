@@ -33,11 +33,10 @@ _ARXIV_DOI_PREFIX = "10.48550/arxiv."
 # EPO appends where a citation was found: "* citation found in description *".
 _EPO_NOTE_RE = re.compile(r"\*[^*]*\*\s*$")
 _QUOTED_RE = re.compile(r"[\"“„]([^\"“”„]{10,300})[\"”“]")
-# "AUTHOR, First ; AUTHOR, First [et al.]: Title. In: …" (German examiner style).
-# "In:" introduces the containing work, never the end of the author list.
-_AFTER_AUTHORS_RE = re.compile(r"^[^:]{2,200}?(?:\]|[A-Za-z.])(?<!\bIn)\s*:\s+(.+)$")
+# How far into a citation the author list may run.
+_MAX_AUTHORS_CHARS = 200
 # "Lee KB, Cheon S (2017) Title; Venue" (short style).
-_AFTER_YEAR_RE = re.compile(r"\((?:19|20)\d{2}\)\s*;?\s*(.+)$")
+_BRACKETED_YEAR_RE = re.compile(r"\((?:19|20)\d\d\)")
 _YEAR_RE = re.compile(r"\b(?:19|20)\d{2}\b")
 _WORD_RE = re.compile(r"[a-z0-9]+")
 _STOPWORDS = frozenset(
@@ -112,7 +111,47 @@ def _first_sentence(text: str) -> str:
     Returns:
         The text up to the first ". ", ";" or ". In:".
     """
-    return re.split(r"\.\s|;|\.$", text, maxsplit=1)[0].strip()
+    return re.split(r"\.(?:\s|$)|;", text, maxsplit=1)[0].strip()
+
+
+def _after_authors(text: str) -> str | None:
+    """Return what follows the author list in ``AUTHORS: Title. In: …``.
+
+    The author list ends at the first ": " within its first
+    :data:`_MAX_AUTHORS_CHARS` characters, except one after the word "In",
+    which introduces the containing work. Plain string scanning, so the time
+    stays linear in the length of the citation.
+
+    Args:
+        text: Cleaned citation string.
+
+    Returns:
+        The text after the author list, or ``None``.
+    """
+    start = 0
+    while True:
+        colon = text.find(": ", start, _MAX_AUTHORS_CHARS + 2)
+        if colon < 2:
+            return None
+        words = text[:colon].split()
+        if words and words[-1] != "In":
+            return text[colon + 2 :].strip() or None
+        start = colon + 2
+
+
+def _after_bracketed_year(text: str) -> str | None:
+    """Return what follows a bracketed year in ``AUTHORS (2017) Title;``.
+
+    Args:
+        text: Cleaned citation string.
+
+    Returns:
+        The text after the year, or ``None``.
+    """
+    match = _BRACKETED_YEAR_RE.search(text)
+    if match is None:
+        return None
+    return text[match.end() :].lstrip(" ;") or None
 
 
 def guess_title(raw: str) -> str | None:
@@ -134,10 +173,10 @@ def guess_title(raw: str) -> str | None:
     # A quoted title is the title: what follows the authors is then the
     # quoted string plus dates and publishers, not a better guess.
     candidates = [quoted.group(1)] if quoted else []
-    for pattern in () if quoted else (_AFTER_AUTHORS_RE, _AFTER_YEAR_RE):
-        match = pattern.search(text)
-        if match:
-            candidates.append(_first_sentence(match.group(1)))
+    if not quoted:
+        for rest in (_after_authors(text), _after_bracketed_year(text)):
+            if rest:
+                candidates.append(_first_sentence(rest))
     for title in candidates:
         if len(_significant_words(title)) >= _MIN_TITLE_WORDS:
             return title

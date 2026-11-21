@@ -197,7 +197,8 @@ async def test_match_title_returns_the_best_match(s2_client: S2Client) -> None:
         )
     )
     paper = await s2_client.match_title("Xception", fields="title,year")
-    assert paper is not None and paper["paperId"] == "5b6e"
+    assert paper is not None
+    assert paper["paperId"] == "5b6e"
     assert route.calls[0].request.url.params["query"] == "Xception"
 
 
@@ -262,3 +263,22 @@ async def test_match_without_a_year_to_compare_is_kept() -> None:
     candidate = {k: v for k, v in _XCEPTION.items() if k != "year"}
     await attach_title_candidates(entries, _s2(return_value=candidate), "EP.1.A1")
     assert entries[0]["candidate"] == candidate
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "In: " * 50_000,
+        "(" + "1999 " * 50_000,
+        "a" * 200_000 + ": title words here",
+        ". " * 100_000,
+    ],
+    ids=["many-in-colons", "unclosed-years", "long-authors", "many-sentences"],
+)
+def test_guess_title_stays_fast_on_hostile_text(raw: str) -> None:
+    """Citation text is untrusted: no input may make the guess slow."""
+    import time
+
+    started = time.perf_counter()
+    guess_title(raw)
+    assert time.perf_counter() - started < 1.0
