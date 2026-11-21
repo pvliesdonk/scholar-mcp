@@ -4,6 +4,13 @@ Newest first. One entry per research pass.
 
 ## 2026-11-21
 
+### ISBNs in free-text citations
+
+New page [ISBNs in free-text citations](isbn-in-citation-text.md) for #70:
+the ISBN-13 check digit from the 2012 Users' Manual (the ISBN-10 rule is
+marked unverified), how often OPS citations carry an ISBN, the forms they
+take in eight DE publications, and Open Library's hit rate on five of them.
+
 ### EPO OPS full-text claims and description
 
 New page [EPO OPS full-text claims and description](epo-ops-fulltext.md) for
