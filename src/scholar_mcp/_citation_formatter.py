@@ -4,15 +4,19 @@ from __future__ import annotations
 
 import json
 import unicodedata
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from ._bibtex_escape import escape_bibtex
 from ._citation_names import parse_author_name
+from ._patent_citation import patent_bibtex_entry, patent_csl_entry, patent_ris_record
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+    from typing import TypeAlias
 
-    from ._record_types import PaperRecord
+    from ._record_types import PaperRecord, PatentRecord
+
+    CitationRecord: TypeAlias = PaperRecord | PatentRecord
 
 # Conference keywords for entry type inference.
 _CONFERENCE_KEYWORDS = ("conference", "proceedings", "workshop", "symposium")
@@ -29,6 +33,18 @@ def _ascii_fold(text: str) -> str:
     """Fold Unicode to ASCII for BibTeX keys."""
     nfkd = unicodedata.normalize("NFKD", text)
     return "".join(c for c in nfkd if unicodedata.category(c) != "Mn").lower()
+
+
+def is_patent_record(record: CitationRecord) -> bool:
+    """Say whether a citation record is a patent rather than a paper.
+
+    Args:
+        record: A paper or patent record.
+
+    Returns:
+        ``True`` when the record carries ``publication_number``.
+    """
+    return "publication_number" in record
 
 
 def generate_bibtex_key(paper: PaperRecord, seen_keys: set[str]) -> str:
@@ -165,11 +181,17 @@ def _book_authors_as_paper(paper: PaperRecord) -> PaperRecord:
     return {"authors": [{"name": a} for a in bm.get("authors") or []]}
 
 
-def format_bibtex(papers: Sequence[PaperRecord], errors: list[dict[str, Any]]) -> str:
-    """Format papers as BibTeX entries.
+def format_bibtex(
+    papers: Sequence[CitationRecord], errors: list[dict[str, Any]]
+) -> str:
+    """Format papers and patents as BibTeX entries.
+
+    Papers become ``@article``, ``@inproceedings``, ``@book`` or ``@misc``
+    entries; patents become biblatex ``@patent`` entries. Entries keep the
+    order of *papers*, and all share one citation-key namespace.
 
     Args:
-        papers: List of paper metadata dicts.
+        papers: Paper and patent records, in output order.
         errors: List of error dicts with ``identifier`` and ``reason`` keys.
 
     Returns:
@@ -186,8 +208,11 @@ def format_bibtex(papers: Sequence[PaperRecord], errors: list[dict[str, Any]]) -
         lines.append("")
 
     seen_keys: set[str] = set()
-    for paper in papers:
-        lines.append(_paper_bibtex_entry(paper, seen_keys))
+    for record in papers:
+        if is_patent_record(record):
+            lines.append(patent_bibtex_entry(cast("PatentRecord", record), seen_keys))
+        else:
+            lines.append(_paper_bibtex_entry(cast("PaperRecord", record), seen_keys))
 
     return "\n\n".join(lines)
 
@@ -348,11 +373,16 @@ def _csl_author(paper: PaperRecord) -> list[dict[str, str]]:
     return result
 
 
-def format_csl_json(papers: Sequence[PaperRecord], errors: list[dict[str, Any]]) -> str:
-    """Format papers as CSL-JSON.
+def format_csl_json(
+    papers: Sequence[CitationRecord], errors: list[dict[str, Any]]
+) -> str:
+    """Format papers and patents as CSL-JSON.
+
+    Patents become CSL ``patent`` items. Items keep the order of *papers*,
+    and all share one citation-key namespace.
 
     Args:
-        papers: List of paper metadata dicts.
+        papers: Paper and patent records, in output order.
         errors: List of error dicts with ``identifier`` and ``reason`` keys.
 
     Returns:
@@ -361,8 +391,11 @@ def format_csl_json(papers: Sequence[PaperRecord], errors: list[dict[str, Any]])
     seen_keys: set[str] = set()
     citations: list[dict[str, Any]] = []
 
-    for paper in papers:
-        citations.append(_paper_csl_entry(paper, seen_keys))
+    for record in papers:
+        if is_patent_record(record):
+            citations.append(patent_csl_entry(cast("PatentRecord", record), seen_keys))
+        else:
+            citations.append(_paper_csl_entry(cast("PaperRecord", record), seen_keys))
 
     error_list = [
         {
@@ -483,11 +516,13 @@ def _ris_author_line(paper: PaperRecord) -> list[str]:
     return lines
 
 
-def format_ris(papers: Sequence[PaperRecord], errors: list[dict[str, Any]]) -> str:
-    """Format papers as RIS records.
+def format_ris(papers: Sequence[CitationRecord], errors: list[dict[str, Any]]) -> str:
+    """Format papers and patents as RIS records.
+
+    Patents become ``PAT`` records. Records keep the order of *papers*.
 
     Args:
-        papers: List of paper metadata dicts.
+        papers: Paper and patent records, in output order.
         errors: List of error dicts with ``identifier`` and ``reason`` keys.
 
     Returns:
@@ -500,8 +535,11 @@ def format_ris(papers: Sequence[PaperRecord], errors: list[dict[str, Any]]) -> s
         reason = error.get("reason", _UNKNOWN_ERROR)
         blocks.append(f"% Could not resolve: {ident} ({reason})")
 
-    for paper in papers:
-        blocks.append(_paper_ris_record(paper))
+    for record in papers:
+        if is_patent_record(record):
+            blocks.append(patent_ris_record(cast("PatentRecord", record)))
+        else:
+            blocks.append(_paper_ris_record(cast("PaperRecord", record)))
 
     return "\n\n".join(blocks)
 

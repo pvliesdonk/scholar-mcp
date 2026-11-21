@@ -175,6 +175,7 @@ worldcat_url
 XPath
 Xplore
 Zotero
+biblatex
 
 # --- Abbreviations and acronyms ---
 APIs

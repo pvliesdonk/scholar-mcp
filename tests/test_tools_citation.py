@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import json
 from contextlib import asynccontextmanager
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
@@ -13,9 +15,11 @@ from fastmcp import FastMCP
 from fastmcp.client import Client
 from fastmcp_pvl_core import Jobs, JobsConfig, register_job_tools
 
+from scholar_mcp._epo_client import EpoClient, EpoRateLimitedError
 from scholar_mcp._tools_citation import register_citation_tools
 from scholar_mcp.domain import Service
 from tests.conftest import PlainClient, tasks_server
+from tests.fixtures.patent_records import ep3491801b1
 
 S2_BASE = "https://api.semanticscholar.org/graph/v1"
 OA_BASE = "https://api.openalex.org"
@@ -283,3 +287,99 @@ async def test_generate_citations_promotes_when_slow(
     assert settled["status"] == "completed"
     assert settled["result"]["format"] == "bibtex"
     assert "Slow Paper" in settled["result"]["output"]
+
+
+# --- Patents (#50) ---------------------------------------------------------
+
+
+def _epo_returning(*outcomes: object) -> EpoClient:
+    """Return an EpoClient whose get_biblio yields *outcomes* in call order."""
+    stub = "k"
+    client = EpoClient(consumer_key=stub, consumer_secret=stub, _client=MagicMock())
+    client.get_biblio = AsyncMock(side_effect=list(outcomes))  # type: ignore[method-assign]
+    return client
+
+
+async def _call(mcp: FastMCP, paper_ids: list[str], fmt: str = "bibtex") -> Any:
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "generate_citations",
+            {"paper_ids": paper_ids, "citation_format": fmt, "enrich": False},
+        )
+    return json.loads(result.content[0].text)
+
+
+async def test_all_patents_make_no_s2_call(mcp: FastMCP, service: Service) -> None:
+    service.epo = _epo_returning(ep3491801b1())
+    with respx.mock(assert_all_called=False):
+        route = respx.post(f"{S2_BASE}/paper/batch").mock(
+            return_value=httpx.Response(200, json=[])
+        )
+        data = await _call(mcp, ["EP3491801B1"])
+        assert not route.called
+    assert data["output"].startswith("@patent{ep3491801b1,\n")
+
+
+async def test_mixed_input_keeps_order(mcp: FastMCP, service: Service) -> None:
+    service.epo = _epo_returning(ep3491801b1())
+    with respx.mock:
+        respx.post(f"{S2_BASE}/paper/batch").mock(
+            return_value=httpx.Response(200, json=[SAMPLE_PAPER])
+        )
+        data = await _call(mcp, ["EP3491801B1", "abc123"], "csl-json")
+    citations = json.loads(data["output"])["citations"]
+    assert [c["id"] for c in citations] == ["ep3491801b1", "vaswani2017"]
+    assert citations[0]["type"] == "patent"
+
+
+async def test_s2_hex_id_is_not_sent_to_epo(mcp: FastMCP, service: Service) -> None:
+    hex_id = "ca1b2c3d4e5f60718293a4b5c6d7e8f901234567"
+    epo = _epo_returning()
+    service.epo = epo
+    with respx.mock:
+        route = respx.post(f"{S2_BASE}/paper/batch").mock(
+            return_value=httpx.Response(200, json=[SAMPLE_PAPER])
+        )
+        data = await _call(mcp, [hex_id])
+        assert json.loads(route.calls.last.request.content)["ids"] == [hex_id]
+    assert "@article{vaswani2017," in data["output"]
+    epo.get_biblio.assert_not_called()  # type: ignore[attr-defined]
+
+
+async def test_epo_not_configured_is_a_comment(mcp: FastMCP, service: Service) -> None:
+    service.epo = None
+    with respx.mock:
+        respx.post(f"{S2_BASE}/paper/batch").mock(
+            return_value=httpx.Response(200, json=[SAMPLE_PAPER])
+        )
+        data = await _call(mcp, ["EP3491801B1", "abc123"])
+    output = data["output"]
+    assert "% Could not resolve: EP3491801B1 (epo_not_configured)" in output
+    assert "@article{vaswani2017," in output
+
+
+async def test_patent_throttle_is_a_comment(mcp: FastMCP, service: Service) -> None:
+    service.epo = _epo_returning(*[EpoRateLimitedError("red")] * 10)
+    with respx.mock:
+        respx.post(f"{S2_BASE}/paper/batch").mock(
+            return_value=httpx.Response(200, json=[SAMPLE_PAPER])
+        )
+        data = await _call(mcp, ["abc123", "EP3491801B1"], "ris")
+    output = data["output"]
+    assert "% Could not resolve: EP3491801B1 (rate_limited)" in output
+    assert "TY  - JOUR" in output
+
+
+async def test_all_fail_lists_reasons(mcp: FastMCP, service: Service) -> None:
+    service.epo = None
+    with respx.mock:
+        respx.post(f"{S2_BASE}/paper/batch").mock(
+            return_value=httpx.Response(200, json=[None])
+        )
+        data = await _call(mcp, ["EP3491801B1", "bad1"])
+    assert data["error"] == "no_papers_resolved"
+    assert data["failed"] == ["EP3491801B1", "bad1"]
+    assert data["errors"] == [
+        {"identifier": "EP3491801B1", "reason": "epo_not_configured"},
+        {"identifier": "bad1", "reason": "not found"},
+    ]

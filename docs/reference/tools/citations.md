@@ -15,10 +15,13 @@ kind: reference
 
 **Generate Citations.** Read-only. Reaches outside the server.
 
-Generate formatted citations for one or more papers.
+Generate formatted citations for papers and patents.
 
 Papers are resolved through Semantic Scholar and can be enriched with
-OpenAlex metadata. The output is BibTeX, CSL-JSON or RIS.
+OpenAlex metadata. Patent numbers such as ``EP1234567A1`` may be mixed
+into ``paper_ids``; they are resolved through EPO and come out as patent
+entries. Entries keep the order of ``paper_ids``. The output is BibTeX,
+CSL-JSON or RIS.
 
 Enrichment fans out per paper, so a large batch can take a while; such a
 call answers with a job handle to poll using ``get_job_result`` instead
@@ -28,15 +31,24 @@ of the citations themselves.
 
 | Name | Type | Default | Description |
 |---|---|---|---|
-| `paper_ids` | `array of string` | required | List of paper identifiers (S2 IDs, DOIs, arXiv IDs, etc.). Maximum 100. |
+| `paper_ids` | `array of string` | required | Paper identifiers (S2 IDs, DOIs, arXiv IDs, etc.) and patent numbers (``EP1234567A1``, ``US11234567B2``), in the order the citations should appear. Maximum 100. |
 | `citation_format` | `bibtex \| csl-json \| ris` | `"bibtex"` | Output format: ``bibtex``, ``csl-json`` or ``ris``. |
 | `enrich` | `boolean` | `true` | If True, attempt OpenAlex enrichment for missing venue data when a DOI is available. |
 
 **Returns**
 
 ``{"format": ..., "output": ...}`` where ``output`` is the formatted
-text, with unresolved identifiers included as comments in the
-comment style of the chosen format. An error mapping on failure.
+text: papers as ``@article``-style entries and patents as biblatex
+``@patent``, CSL ``patent`` or RIS ``PAT`` entries. Unresolved
+identifiers are included as comments in the comment style of the
+chosen format, each with its reason: ``not found`` for a paper, or
+the EPO outcome for a patent (``not_found``, ``epo_not_configured``,
+``rate_limited``, ``epo_unavailable``, ``invalid_patent_number``,
+``resolve_failed``).
+
+When nothing resolves, ``{"error": "no_papers_resolved", "failed":
+[...], "errors": [{"identifier": ..., "reason": ...}, ...]}``. Other
+failures return an error mapping.
 
 The key is ``output`` rather than ``citations`` because the CSL-JSON
 formatter emits its own ``citations`` key, which would collide.
