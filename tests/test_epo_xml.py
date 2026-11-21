@@ -1078,3 +1078,40 @@ class TestBiblioHasData:
     def test_a_legacy_flat_list_is_still_read(self) -> None:
         assert biblio_has_data({"title": "", "applicants": ["A"]})
         assert not biblio_has_data({"title": "", "applicants": []})
+
+
+class TestPartyNamesSpelledTwice:
+    """#727: OPS can repeat a party in another spelling within one format."""
+
+    def test_us_inventors_and_applicants_are_listed_once(self) -> None:
+        xml = (_EPO_FIXTURES / "biblio_us11234567b2.xml").read_bytes()
+        result = parse_biblio_xml(xml)
+        assert result["inventors"]["original"] == [
+            "THORNE, Jason B.",
+            "CALVINO, Alexander",
+            "SU, Mingshun",
+            "YANG, Robert",
+            "CAI, Charlie",
+            "HOWES, Gordon",
+            "BOND, Brian M.",
+            "CORNELIUS, Leanna",
+        ]
+        assert result["applicants"]["original"] == ["SharkNinja Operating, LLC"]
+
+    def test_distinct_names_are_kept(self) -> None:
+        """Folding ignores case and punctuation, not letters."""
+        xml = BIBLIO_XML_MULTI_FORMAT
+        result = parse_biblio_xml(xml)
+        assert result["inventors"]["original"] == [
+            "PLETEA, Daniel",
+            "VAN LIESDONK, Peter, Petrus",
+        ]
+
+    def test_citation_lists_each_inventor_once(self) -> None:
+        from scholar_mcp._patent_citation import patent_bibtex_entry
+
+        xml = (_EPO_FIXTURES / "biblio_us11234567b2.xml").read_bytes()
+        entry = patent_bibtex_entry(parse_biblio_xml(xml), set())
+        assert entry.count("THORNE") == 1
+        assert entry.count("Thorne") == 0
+        assert "  holder = {{SharkNinja Operating, LLC}}" in entry

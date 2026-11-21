@@ -203,6 +203,19 @@ def _member_name_and_format(member: etree._Element, party: str) -> tuple[str, st
     return name, member.get("data-format") or holder.get("data-format", "")
 
 
+def _name_key(name: str) -> str:
+    """Fold a party name to its letters and digits, ignoring case.
+
+    Args:
+        name: A party name as OPS supplies it.
+
+    Returns:
+        The key two spellings of one name share: "SharkNinja Operating, LLC"
+        and "SharkNinja Operating LLC" both give ``sharkninjaoperatingllc``.
+    """
+    return "".join(ch for ch in name.casefold() if ch.isalnum())
+
+
 def _party_names(
     parties: etree._Element | None, group: str, party: str
 ) -> PatentParties:
@@ -215,7 +228,10 @@ def _party_names(
     across formats "cannot be guaranteed to be representations of one and the
     same", so each format keeps its own list (#483). Of the standardised
     formats only the most preferred one present is kept, so each list has
-    one entry per party.
+    one entry per party. Within one format OPS can repeat a party in another
+    spelling (US11234567B2 lists every inventor as "THORNE, Jason B." and
+    again as "Thorne, Jason B."), so a name whose letters and digits match an
+    earlier one, ignoring case, is dropped (#727).
 
     Args:
         parties: The ``parties`` element, or ``None`` when absent.
@@ -234,7 +250,7 @@ def _party_names(
         if not name:
             continue
         names = by_format.setdefault(fmt, [])
-        if name not in names:
+        if _name_key(name) not in {_name_key(n) for n in names}:
             names.append(name)
     original = by_format.pop("original", [])
     standardised = next(
