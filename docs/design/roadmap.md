@@ -41,6 +41,8 @@ index holds the argument for the direction and order.
   conversion is [#546](https://github.com/pvliesdonk/scholar-mcp/issues/546),
   a standalone feature rather than a new epic: the story it continues is
   done, and the open question is sizing, not direction.
+  **[evidenced: milestone `v3.2.0 agent-fetched-pdfs`]** It shipped in that
+  cut as upload links.
 
 ### Hardening shipped tools
 
@@ -80,6 +82,14 @@ index holds the argument for the direction and order.
   editions report `published`), so the first slice fixes what users see before
   adding sources.
 
+- **[evidenced: milestone `v3.3.0 standards-reliability` and
+  [the 3.3 release notes](../releases/3.3.md)]** The first standards slice
+  shipped in v3.3.0: the ETSI fix, replaced-edition data for IETF, W3C, ETSI,
+  NIST and the Relaton bodies, current-edition ranking, and the CEN table
+  review. The research that ordered it is kept in the
+  [ETSI](reference/etsi-standards-search.md) and
+  [supersession](reference/standards-supersession-sources.md) references.
+
 ### Patent research workflows
 
 - **[derived]** [Epic #413](https://github.com/pvliesdonk/scholar-mcp/issues/413)
@@ -94,6 +104,25 @@ index holds the argument for the direction and order.
   citation output and the cheap cross-links; new patent offices (USPTO, WIPO)
   are not needed for that outcome while EPO is the only source.
   **[stated]** The "Done when" is revisited inside the refinement.
+- **[evidenced: [#701](https://github.com/pvliesdonk/scholar-mcp/issues/701)]**
+  The survey's "largely met for full text" was wrong: `get_patent`'s claims
+  and description had never returned text, because the parsers were written
+  against a response shape OPS does not send. Fixed in
+  [#702](https://github.com/pvliesdonk/scholar-mcp/pull/702), with real OPS
+  responses as fixtures ([full-text reference](reference/epo-ops-fulltext.md)).
+  **[derived]** Parsers written against hand-made fixtures have now failed
+  this way three times (#371, #390, #701); a parser for a new OPS endpoint
+  starts from a captured response.
+- **[evidenced: PRs [#700](https://github.com/pvliesdonk/scholar-mcp/pull/700),
+  [#703](https://github.com/pvliesdonk/scholar-mcp/pull/703),
+  [#707](https://github.com/pvliesdonk/scholar-mcp/pull/707) and
+  [#708](https://github.com/pvliesdonk/scholar-mcp/pull/708)]** The first slice
+  covers citation output (biblatex, CSL-JSON and RIS patent entries), readable
+  full text (Markdown claims and a paged description), and two cross-links
+  from a patent's cited literature (books by ISBN, papers by arXiv
+  identifier). **[stated]** A title-matched paper may be returned when it is
+  marked unconfirmed, since an agent can deal with that; it is a `candidate`,
+  never the `paper`.
 
 ### Book and chapter resolution
 
@@ -117,56 +146,24 @@ index holds the argument for the direction and order.
   exemption can be removed; refinement
   [#416](https://github.com/pvliesdonk/scholar-mcp/issues/416) checks that the
   recorded children still cover that outcome.
+- **[evidenced: [#688](https://github.com/pvliesdonk/scholar-mcp/issues/688)]**
+  Every `src/` function at SonarQube cognitive complexity 22 or more was split,
+  one module per PR, each checked against the previous code on real data.
+  **[derived]** Functions at 16 to 21 stay until a change touches them, as
+  #688 proposed.
 
 ## Packages
 
-- **[stated] [030 agent-fetched-pdfs](https://github.com/pvliesdonk/scholar-mcp/milestone/23)
-  (minor):** upload-then-convert for PDFs an agent fetched through a library
-  link ([#546](https://github.com/pvliesdonk/scholar-mcp/issues/546)).
-  **[derived]** It may split into several features once sized; they stay in
-  this package.
-- **[stated] [040 standards-reliability](https://github.com/pvliesdonk/scholar-mcp/milestone/24)
-  (minor):** the first standards slice, approved by the maintainer.
-  **[derived]** ETSI and Relaton research first, because their verdict decides
-  how the broken ETSI source is fixed and what further sources cost; then
-  replaced-edition data and current-edition ranking; then the regulation
-  lookup over the harmonised table, after the overdue table review.
-  **[evidenced: [ETSI reference](reference/etsi-standards-search.md)]** The
-  ETSI half is answered: the data moved to a new URL with the same row shape,
-  so the ETSI fix ([#624](https://github.com/pvliesdonk/scholar-mcp/issues/624))
-  is small and does not wait for the Relaton verdict.
-  **[evidenced: [supersession reference](reference/standards-supersession-sources.md)]**
-  The Relaton half is answered too: the live fetchers work, and of the three
-  dumps only the IETF one carries replacement data, which datatracker also
-  serves. **[stated]** The maintainer decided on 2026-11-15 to keep the live
-  fetchers and give #592 one replacement source per body rather than migrate,
-  with `superseded_by` a list of identifiers.
-  **[derived]** #592's children, one per source, are
-  [#637](https://github.com/pvliesdonk/scholar-mcp/issues/637) (IETF, which
-  changes the field to a list),
-  [#638](https://github.com/pvliesdonk/scholar-mcp/issues/638) (W3C),
-  [#639](https://github.com/pvliesdonk/scholar-mcp/issues/639) (NIST, which
-  needs CSRC's export),
-  [#640](https://github.com/pvliesdonk/scholar-mcp/issues/640) (ETSI) and
-  [#641](https://github.com/pvliesdonk/scholar-mcp/issues/641) (the ISO
-  sync, whose status reading is broken for every record). IETF goes first
-  because it sets the field's shape; NIST is last because it is the largest.
-  **[evidenced: [Relaton v2 reference](reference/relaton-data-v2.md)]** #641
-  turned out larger: the ISO, IEC and IEEE sync read each repository's `main`
-  branch, which stopped receiving data, so the Tier 2 catalogue was up to 17
-  months old as well as mislabelled. **[stated]** The maintainer chose on
-  2026-11-15 to move the sync and the live lookup to `v2` in one change rather
-  than patch the reading of `main`.
 - **[stated] [050 patent-citations](https://github.com/pvliesdonk/scholar-mcp/milestone/25)
   (minor):** the first patent slice, approved by the maintainer.
   **[derived]** It closes the one "Done when" term with no coverage (citation
   output) and adds cross-links that reuse existing clients.
+  **[stated]** The maintainer also put the cognitive-complexity work (#688)
+  and the shared ISBN lookup (#706) in this cut.
 - **[stated] [060 book-chapters](https://github.com/pvliesdonk/scholar-mcp/milestone/26)
   (minor):** the chapter-citation slice, approved by the maintainer.
-- **[derived]** The order of `040`, `050` and `060` among themselves is not
-  argued beyond reliability first; reorder by renaming. Five open packages is
-  past the usual horizon: `040` to `060` are each epic's first slice rather
-  than a committed sequence, and `070` is held, not scheduled.
+- **[derived]** `050` and `060` are each epic's first slice rather than a
+  committed sequence; reorder by renaming. `070` is held, not scheduled.
 - **[stated] [070 corpus foundations](https://github.com/pvliesdonk/scholar-mcp/milestone/16)
   (minor):** postponed by the maintainer because the design notes were lost.
   **[evidenced: [epic #353](https://github.com/pvliesdonk/scholar-mcp/issues/353)]**
@@ -177,6 +174,13 @@ Do not copy item lists or progress here. An issue with no milestone is
 backlog; commit it to a package when it should ship in that cut.
 
 ## Known unknowns
+
+- **[derived] Does the patent epic need a second slice, and which?** Resolved
+  by refinement [#418](https://github.com/pvliesdonk/scholar-mcp/issues/418):
+  after `050`, the cross-links the slice did not add remain, such as
+  patent–paper co-citation (#47) and citing patents from OpenAlex (#60), and
+  the survey left open whether "relevant status" needs EP Register procedural
+  status beyond legal events.
 
 - **[derived] What do the standards, patent, and books epics promise once
   their "Done when" is rewritten?** Resolved by the refinement issues
@@ -196,6 +200,15 @@ backlog; commit it to a package when it should ship in that cut.
   independently of the package sequence.
 
 ## Revisions
+
+- **2026-11-21 — [evidenced] what shipped; [stated] scope; [derived] the
+  rest:** `030 agent-fetched-pdfs` and `040 standards-reliability` shipped in
+  v3.2.0 and v3.3.0 and left the package list; their directions now record
+  them as delivered. The `050 patent-citations` children are done, ahead of
+  its cut: the patent direction records what the slice covers and that the
+  #418 survey's full-text reading was wrong (#701). At the maintainer's
+  request `050` also carried #688 and #706. A known unknown now asks whether
+  the patent epic needs a second slice.
 
 - **2026-11-15 (later) — [stated] the decision; [evidenced] the finding:**
   #641 was diagnosed on the frozen `main` branch. The maintainer chose to move
