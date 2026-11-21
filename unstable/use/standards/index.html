@@ -2974,6 +2974,12 @@ shared volume.</p>
 <p>The <code>docker compose run</code> form is preferred when running outside of an already-running
 stack, it picks up the correct UID/GID from the entrypoint and inherits all env vars
 from the <code>environment:</code> / <code>env_file:</code> declarations in <code>compose.yml</code>.</p>
+<p>A sync can run while the server keeps answering. The cache opens its
+database in WAL mode, so lookups read without waiting for the sync, and a
+lookup that writes waits for the sync's current batch to finish, up to 30
+seconds, rather than failing. WAL keeps two files beside <code>cache.db</code>,
+<code>cache.db-wal</code> and <code>cache.db-shm</code>. Copy all three, or stop the server first,
+when you back up the cache.</p>
 <p>To sync only a specific body:</p>
 <div class="highlight"><pre><span></span><code>docker<span class="w"> </span>compose<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-u<span class="w"> </span>appuser<span class="w"> </span>scholar-mcp<span class="w"> </span>scholar-mcp<span class="w"> </span>sync-standards<span class="w"> </span>--body<span class="w"> </span>ISO
 docker<span class="w"> </span>compose<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>scholar-mcp<span class="w"> </span>scholar-mcp<span class="w"> </span>sync-standards<span class="w"> </span>--body<span class="w"> </span>ISO

@@ -2232,6 +2232,8 @@ docker compose run --rm scholar-mcp scholar-mcp sync-standards
 
 The `docker compose run` form is preferred when running outside of an already-running stack, it picks up the correct UID/GID from the entrypoint and inherits all env vars from the `environment:` / `env_file:` declarations in `compose.yml`.
 
+A sync can run while the server keeps answering. The cache opens its database in WAL mode, so lookups read without waiting for the sync, and a lookup that writes waits for the sync's current batch to finish, up to 30 seconds, rather than failing. WAL keeps two files beside `cache.db`, `cache.db-wal` and `cache.db-shm`. Copy all three, or stop the server first, when you back up the cache.
+
 To sync only a specific body:
 
 ```
