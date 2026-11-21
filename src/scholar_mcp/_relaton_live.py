@@ -23,7 +23,7 @@ import httpx
 import yaml
 
 from ._record_types import StandardRecord
-from ._sync_relaton import _yaml_to_record
+from ._sync_relaton import _IEC_IEEE, _ISO_IEC_IEEE, _yaml_to_record
 
 if TYPE_CHECKING:
     from ._protocols import CacheProtocol
@@ -77,12 +77,12 @@ def _repo_order_for(identifier: str) -> list[str]:
     if (
         upper.startswith("IEEE ")
         or (upper.startswith("IEEE") and upper[4:5] in {" ", "_"})
-        or upper.startswith("IEC/IEEE")
-        or upper.startswith("ISO/IEC/IEEE")
+        or upper.startswith(_IEC_IEEE)
+        or upper.startswith(_ISO_IEC_IEEE)
     ):
-        if upper.startswith("ISO/IEC/IEEE"):
+        if upper.startswith(_ISO_IEC_IEEE):
             return ["relaton-data-ieee", "relaton-data-iso", "relaton-data-iec"]
-        if upper.startswith("IEC/IEEE"):
+        if upper.startswith(_IEC_IEEE):
             return ["relaton-data-ieee", "relaton-data-iec"]
         return ["relaton-data-ieee"]
     if upper.startswith("IEC "):
@@ -184,10 +184,10 @@ class RelatonLiveFetcher:
         # callers can surface "resolved but catalogue entry unavailable"
         # rather than None.
         upper = identifier.strip().upper()
-        if upper.startswith("ISO/IEC/IEEE"):
-            body = "ISO/IEC/IEEE"
-        elif upper.startswith("IEC/IEEE"):
-            body = "IEC/IEEE"
+        if upper.startswith(_ISO_IEC_IEEE):
+            body = _ISO_IEC_IEEE
+        elif upper.startswith(_IEC_IEEE):
+            body = _IEC_IEEE
         elif upper.startswith("IEEE"):
             body = "IEEE"
         elif upper.startswith("ISO/IEC"):

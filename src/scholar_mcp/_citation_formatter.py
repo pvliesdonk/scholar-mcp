@@ -45,6 +45,8 @@ _CONFERENCE_KEYWORDS = ("conference", "proceedings", "workshop", "symposium")
 # where the venue name is not: "Neural Information Processing Systems" and
 # "Computer Vision and Pattern Recognition" carry none of the keywords above.
 _CONFERENCE_TYPE = "Conference"
+# What a citation error says when it names no reason.
+_UNKNOWN_ERROR = "unknown error"
 
 
 def escape_bibtex(text: str) -> str:
@@ -224,7 +226,7 @@ def format_bibtex(papers: Sequence[PaperRecord], errors: list[dict[str, Any]]) -
 
     for error in errors:
         ident = error.get("identifier", "unknown")
-        reason = error.get("reason", "unknown error")
+        reason = error.get("reason", _UNKNOWN_ERROR)
         lines.append(f"% Could not resolve: {ident} ({reason})")
 
     if errors and papers:
@@ -420,7 +422,7 @@ def format_csl_json(papers: Sequence[PaperRecord], errors: list[dict[str, Any]])
     error_list = [
         {
             "identifier": e.get("identifier", "unknown"),
-            "reason": e.get("reason", "unknown error"),
+            "reason": e.get("reason", _UNKNOWN_ERROR),
         }
         for e in errors
     ]
@@ -473,7 +475,7 @@ def format_ris(papers: Sequence[PaperRecord], errors: list[dict[str, Any]]) -> s
 
     for error in errors:
         ident = error.get("identifier", "unknown")
-        reason = error.get("reason", "unknown error")
+        reason = error.get("reason", _UNKNOWN_ERROR)
         blocks.append(f"% Could not resolve: {ident} ({reason})")
 
     for paper in papers:

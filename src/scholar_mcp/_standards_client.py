@@ -26,6 +26,8 @@ logger = logging.getLogger(__name__)
 # Compiled regex patterns for local identifier resolution
 # ---------------------------------------------------------------------------
 
+# A datatracker document name for an RFC: "rfc9000".
+_RFC_NAME_RE = re.compile(r"(?i)^rfc\d+$")
 # IETF RFC: "RFC 9000", "rfc9000", "rfc-9000", "RFC9000"
 _IETF_RFC_RE = re.compile(r"(?i)\brfc[-\s]?(\d+)\b")
 # IETF BCP: "BCP 47", "BCP47"
@@ -52,11 +54,13 @@ _NIST_SP_RE = re.compile(
     r"(?:\s*r(?:ev(?:ision)?\.?)?\s*(?P<rev>\d+))?\b"
 )
 # The catalogue's spelling of each _NIST_SP_RE suffix group, in order.
+_NIST_SP = "NIST SP"
+_PART, _VOL, _VERSION, _EDITION = " Part ", " Vol. ", " Version ", " E"
 _NIST_SP_SUFFIXES = (
-    ("part", " Part "),
-    ("vol", " Vol. "),
-    ("version", " Version "),
-    ("edition", " E"),
+    ("part", _PART),
+    ("vol", _VOL),
+    ("version", _VERSION),
+    ("edition", _EDITION),
 )
 # NIST FIPS: "FIPS 140-3", "FIPS140-3", "FIPS PUB 140-3"
 _NIST_FIPS_RE = re.compile(r"(?i)\bfips(?:\s+pub)?\s*(\d{1,3}(?:-\d+)?)\b")
@@ -475,9 +479,7 @@ class _IETFFetcher:
             ``{name: "YYYY-MM"}`` for each RFC that has the event.
         """
         names = [
-            o.get("name", "")
-            for o in objects
-            if re.match(r"(?i)^rfc\d+$", o.get("name", ""))
+            o.get("name", "") for o in objects if _RFC_NAME_RE.match(o.get("name", ""))
         ]
         if not names:
             return {}
@@ -528,7 +530,7 @@ class _IETFFetcher:
             StandardsUpstreamError: The lookup never got a usable answer.
         """
         names = [o.get("name", "") for o in objects]
-        names = [n for n in names if re.match(r"(?i)^rfc\d+$", n)]
+        names = [n for n in names if _RFC_NAME_RE.match(n)]
         if not names:
             return {}
         await self._limiter.acquire()
@@ -610,7 +612,7 @@ def _normalize_ietf(
     """
     name = obj.get("name", "")  # e.g. "rfc9000"
     n = re.sub(r"[^\d]", "", name)
-    is_rfc = bool(re.match(r"(?i)^rfc\d+$", name))
+    is_rfc = bool(_RFC_NAME_RE.match(name))
     if is_rfc:
         identifier = f"RFC {int(n)}" if n else name.upper()
     elif n:
@@ -721,7 +723,7 @@ _CSRC_PUBS_EXPORT_URL = (
 _CSRC_PUBS_EXPORT_MEMBER = "pubs-export.json"
 # The export writes "SP 800-53 Rev. 4" and "IR 7298"; the MODS catalogue, and
 # resolve_identifier_local, write "NIST SP 800-53 Rev. 4" and "NISTIR 7298".
-_CSRC_PREFIX_TO_CATALOGUE = {"SP": "NIST SP", "IR": "NISTIR"}
+_CSRC_PREFIX_TO_CATALOGUE = {"SP": _NIST_SP, "IR": "NISTIR"}
 # The export's series the catalogue carries, so the ones a record is built
 # for when MODS lacks the publication (#653).
 _CSRC_RECORD_SERIES = ("SP", "IR", "FIPS")
@@ -731,11 +733,11 @@ _CSRC_RECORD_SERIES = ("SP", "IR", "FIPS")
 # out (#598). A four-digit "e" is a year ("260e1969") and stays as written.
 _MODS_SP_SUFFIX_RE = re.compile(r"^(\d{3,4}(?:-\d+)?)(?:(pt|p|ver|v)(\d+)|e(\d))$")
 _MODS_SP_SUFFIX_LABELS = {
-    "pt": " Part ",
-    "p": " Part ",
-    "v": " Vol. ",
-    "ver": " Version ",
-    "e": " E",
+    "pt": _PART,
+    "p": _PART,
+    "v": _VOL,
+    "ver": _VERSION,
+    "e": _EDITION,
 }
 
 
@@ -1264,7 +1266,7 @@ def _normalize_nist_mods(mods: ET.Element, ns: str) -> StandardRecord | None:
     part_number = part_el.text.strip() if part_el is not None and part_el.text else ""
 
     if "special publication" in series_title or "nist sp" in series_title:
-        body_prefix = "NIST SP"
+        body_prefix = _NIST_SP
     elif (
         "nistir" in series_title
         or "interagency" in series_title
@@ -1288,7 +1290,7 @@ def _normalize_nist_mods(mods: ET.Element, ns: str) -> StandardRecord | None:
         revision = None
 
     # Canonical identifier
-    if body_prefix == "NIST SP":
+    if body_prefix == _NIST_SP:
         number = _spell_mods_sp_number(number)
         canonical = f"NIST SP {number}"
         if revision:

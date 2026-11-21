@@ -37,6 +37,9 @@ else:
 
 logger = logging.getLogger(__name__)
 
+# CC 3.1 Revision 5, the last CC 3.1 release.
+_CC_31_R5 = "3.1 R5"
+
 
 @dataclass(frozen=True)
 class CCFrameworkEntry:
@@ -129,7 +132,7 @@ def _framework_aliases(entry: CCFrameworkEntry) -> list[str]:
     # For CC:2017 (CC 3.1 R5), add version-only citation forms
     # These resolve to the first Part (Part 1) by convention when no
     # explicit part is specified.
-    if entry.cc_version == "3.1 R5" and "Part 1" in cc_id:
+    if entry.cc_version == _CC_31_R5 and "Part 1" in cc_id:
         aliases.extend(
             [
                 "CC 3.1 R5",
@@ -213,7 +216,7 @@ _FRAMEWORK_DOCS: list[CCFrameworkEntry] = [
         ),
         cc_pdf_url="https://www.commoncriteriaportal.org/files/ccfiles/CCPART1V3.1R5.pdf",
         published_date="2017-04-01",
-        cc_version="3.1 R5",
+        cc_version=_CC_31_R5,
     ),
     CCFrameworkEntry(
         cc_identifier="CC:2017 Part 2",
@@ -224,7 +227,7 @@ _FRAMEWORK_DOCS: list[CCFrameworkEntry] = [
         ),
         cc_pdf_url="https://www.commoncriteriaportal.org/files/ccfiles/CCPART2V3.1R5.pdf",
         published_date="2017-04-01",
-        cc_version="3.1 R5",
+        cc_version=_CC_31_R5,
     ),
     CCFrameworkEntry(
         cc_identifier="CC:2017 Part 3",
@@ -235,7 +238,7 @@ _FRAMEWORK_DOCS: list[CCFrameworkEntry] = [
         ),
         cc_pdf_url="https://www.commoncriteriaportal.org/files/ccfiles/CCPART3V3.1R5.pdf",
         published_date="2017-04-01",
-        cc_version="3.1 R5",
+        cc_version=_CC_31_R5,
     ),
     # CEM
     CCFrameworkEntry(
@@ -259,7 +262,7 @@ _FRAMEWORK_DOCS: list[CCFrameworkEntry] = [
         ),
         cc_pdf_url="https://www.commoncriteriaportal.org/files/ccfiles/CEMV3.1R5.pdf",
         published_date="2017-04-01",
-        cc_version="3.1 R5",
+        cc_version=_CC_31_R5,
     ),
 ]
 
