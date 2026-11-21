@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import httpx
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
+from requests.exceptions import HTTPError
 
 from ._book_enrichment import resolve_book_by_isbn
 from ._chapter_parser import hint_to_dict, parse_chapter_hint
@@ -170,6 +171,35 @@ async def _openalex_work(doi: str, service: Service) -> dict[str, Any] | None:
     return work
 
 
+def _patent_failure(raw: str, exc: Exception) -> dict[str, Any]:
+    """Say why one patent of a batch could not be resolved.
+
+    Args:
+        raw: The raw patent number.
+        exc: What normalising or fetching it raised.
+
+    Returns:
+        The error fields of the entry: ``invalid_patent_number`` for an
+        unparseable number, ``not_found`` for a publication OPS does not have
+        (its 404, #728), the EPO payload for a throttle or exhausted quota,
+        and ``resolve_failed`` for anything else.
+    """
+    if isinstance(exc, ValueError):
+        return {"error": "invalid_patent_number"}
+    if isinstance(exc, EPO_REPORTED_ERRORS):
+        return epo_error_payload(exc)
+    response = getattr(exc, "response", None)
+    if (
+        isinstance(exc, HTTPError)
+        and response is not None
+        and response.status_code == 404
+    ):
+        logger.info("batch_patent_not_found id=%s", raw)
+        return {"error": "not_found"}
+    logger.warning("batch_patent_resolve_failed id=%s", raw)
+    return {"error": "resolve_failed"}
+
+
 async def _resolve_patent(
     idx: int, raw: str, service: Service
 ) -> tuple[int, dict[str, Any]]:
@@ -197,24 +227,11 @@ async def _resolve_patent(
     try:
         doc = normalize(raw)
         biblio = await with_epo_retry(lambda: epo.get_biblio(doc))
-    except ValueError:
-        return idx, {
-            "identifier": raw,
-            "error": "invalid_patent_number",
-            "source_type": "patent",
-        }
-    except EPO_REPORTED_ERRORS as exc:
+    except Exception as exc:
         return idx, {
             "identifier": raw,
             "source_type": "patent",
-            **epo_error_payload(exc),
-        }
-    except Exception:
-        logger.warning("batch_patent_resolve_failed id=%s", raw)
-        return idx, {
-            "identifier": raw,
-            "error": "resolve_failed",
-            "source_type": "patent",
+            **_patent_failure(raw, exc),
         }
     if not biblio_has_data(biblio):
         return idx, {
