@@ -176,7 +176,8 @@ class TestServerInfoTool:
         assert isinstance(first, TextContent)
         payload = json.loads(first.text)
         assert payload["server_name"] == "scholar-mcp"
-        assert isinstance(payload["server_version"], str) and payload["server_version"]
+        assert isinstance(payload["server_version"], str)
+        assert payload["server_version"]
         assert "core_version" in payload
 
     @pytest.mark.parametrize("server", [_NAMED], indirect=True, ids=["named"])

@@ -677,8 +677,10 @@ async def test_repair_forces_an_iec_resync_for_its_successors(tmp_path):
     try:
         iec = await upgraded.get_sync_run("IEC")
         iso = await upgraded.get_sync_run("ISO")
-        assert iec is not None and iec["upstream_ref"] is None
-        assert iso is not None and iso["upstream_ref"] == "abc123"
+        assert iec is not None
+        assert iec["upstream_ref"] is None
+        assert iso is not None
+        assert iso["upstream_ref"] == "abc123"
     finally:
         await upgraded.close()
 

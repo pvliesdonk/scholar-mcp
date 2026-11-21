@@ -116,9 +116,8 @@ def test_claude_code_plugin_json_shape() -> None:
     version = plugin["version"]
     assert version != "${VERSION}"
     parts = version.split(".")
-    assert len(parts) == 3 and all(p.isdigit() for p in parts), (
-        f"expected X.Y.Z semver, got {version!r}"
-    )
+    assert len(parts) == 3, f"expected X.Y.Z semver, got {version!r}"
+    assert all(p.isdigit() for p in parts), f"expected X.Y.Z semver, got {version!r}"
 
 
 def _load_plugin_mcp_json() -> dict:  # type: ignore[type-arg]

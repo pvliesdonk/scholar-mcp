@@ -291,8 +291,10 @@ async def test_cc_loader_cold_sync_writes_framework_and_pps(
         assert report.body == "CC"
         cc_p1 = await cache.get_standard("CC:2022 Part 1")
         iso_p1 = await cache.get_standard("ISO/IEC 15408-1:2022")
-        assert cc_p1 is not None and cc_p1["body"] == "CC"
-        assert iso_p1 is not None and iso_p1["body"] == "ISO/IEC"
+        assert cc_p1 is not None
+        assert cc_p1["body"] == "CC"
+        assert iso_p1 is not None
+        assert iso_p1["body"] == "ISO/IEC"
         assert iso_p1["full_text_url"] == cc_p1["full_text_url"]
         bsi = await cache.get_standard("BSI-CC-PP-0099-V2-2017")
         assert bsi is not None
