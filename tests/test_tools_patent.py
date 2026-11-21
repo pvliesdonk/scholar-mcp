@@ -2001,3 +2001,33 @@ async def test_search_patents_clamps_limit_to_the_ops_range(
     call_args = epo_client.search.call_args  # type: ignore[union-attr]
     assert call_args.kwargs["range_begin"] == 1
     assert call_args.kwargs["range_end"] == expected_end
+
+
+async def test_fetch_sections_without_fulltext_are_null(service: Service) -> None:
+    """#701: OPS answers 404 when it has no full text; the section is null."""
+    from scholar_mcp._patent_numbers import DocdbNumber
+
+    epo = _make_epo_client()
+    epo.get_claims = AsyncMock(side_effect=_ops_http_error(404))  # type: ignore[method-assign]
+    epo.get_description = AsyncMock(side_effect=_ops_http_error(404))  # type: ignore[method-assign]
+    doc = DocdbNumber("US", "11234567", "B2")
+    result = await _fetch_patent_sections(
+        doc=doc, sections=["claims", "description"], epo=epo, cache=service.cache
+    )
+    assert result["claims"] is None
+    assert result["description"] is None
+    assert await service.cache.get_patent_claims("US.11234567.B2") is None
+    assert await service.cache.get_patent_description("US.11234567.B2") is None
+
+
+async def test_fetch_sections_other_fulltext_errors_propagate(service: Service) -> None:
+    """A full-text failure other than 404 is not mistaken for missing text."""
+    from scholar_mcp._patent_numbers import DocdbNumber
+
+    epo = _make_epo_client()
+    epo.get_claims = AsyncMock(side_effect=_ops_http_error(500))  # type: ignore[method-assign]
+    doc = DocdbNumber("EP", "1234567", "A1")
+    with pytest.raises(requests.HTTPError):
+        await _fetch_patent_sections(
+            doc=doc, sections=["claims"], epo=epo, cache=service.cache
+        )

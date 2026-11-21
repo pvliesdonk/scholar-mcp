@@ -389,6 +389,36 @@ async def test_repair_drops_every_patent_section_with_a_lowercase_kind(tmp_path)
         await upgraded.close()
 
 
+async def test_repair_drops_patent_text_the_broken_parser_cached(tmp_path):
+    """#701: empty claims and descriptions are dropped; real text is kept."""
+    import aiosqlite
+
+    db_path = tmp_path / "empty-fulltext.db"
+    old = ScholarCache(db_path)
+    await old.open()
+    await old.set_patent_claims("EP.3491801.B1", "")
+    await old.set_patent_description("EP.3491801.B1", "")
+    await old.set_patent_claims("EP.1000000.B1", "1. A method.")
+    await old.set_patent_description("EP.1000000.B1", "TECHNICAL FIELD")
+    await old.close()
+
+    async with aiosqlite.connect(db_path) as db:
+        await db.execute("DELETE FROM repairs WHERE name LIKE '701_%'")
+        await db.commit()
+
+    upgraded = ScholarCache(db_path)
+    await upgraded.open()
+    try:
+        assert await upgraded.get_patent_claims("EP.3491801.B1") is None
+        assert await upgraded.get_patent_description("EP.3491801.B1") is None
+        assert await upgraded.get_patent_claims("EP.1000000.B1") == "1. A method."
+        assert (
+            await upgraded.get_patent_description("EP.1000000.B1") == "TECHNICAL FIELD"
+        )
+    finally:
+        await upgraded.close()
+
+
 async def test_repair_moves_embedded_standard_text_out_of_the_record(tmp_path):
     """#479: text written into a standards row moves to its own table.
 
@@ -923,6 +953,8 @@ async def test_every_registered_repair_is_valid_sql(cache):
         "653_standards_search_results",
         "674_standards_search_results",
         "675_resync_iso_iec",
+        "701_empty_patent_claims",
+        "701_empty_patent_descriptions",
     }
     for statement in _REPAIRS.values():
         await cache._db.execute(f"EXPLAIN {statement}")

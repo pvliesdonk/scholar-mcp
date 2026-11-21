@@ -280,7 +280,9 @@ async def get_patent(
     Accepts patent numbers in any format (EP, WO, US, etc.). By default
     returns bibliographic data only; use the sections parameter to
     request additional detail (claims, description, family members, legal
-    status, cited references). When sections includes 'citations',
+    status, cited references). Claims and description are null when EPO
+    holds no full text for the publication; fetch_patent_pdf then has the
+    document. When sections includes 'citations',
     non-patent literature references are resolved to Semantic Scholar
     papers on a best-effort basis; unresolved references are returned as
     raw citation strings.
@@ -652,6 +654,38 @@ def _is_http_404(exc: HTTPError) -> bool:
     return exc.response is not None and exc.response.status_code == 404
 
 
+async def _fetch_fulltext(
+    get_cached: Callable[[], Awaitable[str | None]],
+    fetch: Callable[[], Awaitable[str]],
+    store: Callable[[str], Awaitable[None]],
+) -> str | None:
+    """Read a claims or description section, from the cache or from EPO.
+
+    OPS answers 404 when it holds no full text for a publication, which is
+    common (US11234567B2 has none), so that is ``None`` rather than a
+    failure. It is not cached: the next call asks again.
+
+    Args:
+        get_cached: Reads the cached text, ``None`` when absent.
+        fetch: Fetches and parses the section from EPO.
+        store: Caches fetched text.
+
+    Returns:
+        The section text, or ``None`` when EPO has no full text.
+    """
+    cached = await get_cached()
+    if cached is not None:
+        return cached
+    try:
+        text = await fetch()
+    except HTTPError as exc:
+        if not _is_http_404(exc):
+            raise
+        return None
+    await store(text)
+    return text
+
+
 async def _fetch_patent_sections(
     *,
     doc: DocdbNumber,
@@ -702,22 +736,18 @@ async def _fetch_patent_sections(
         result["biblio"] = biblio
 
     async def _fetch_claims() -> None:
-        cached = await cache.get_patent_claims(patent_id)
-        if cached is not None:
-            result["claims"] = cached
-            return
-        claims = await epo.get_claims(doc)
-        await cache.set_patent_claims(patent_id, claims)
-        result["claims"] = claims
+        result["claims"] = await _fetch_fulltext(
+            lambda: cache.get_patent_claims(patent_id),
+            lambda: epo.get_claims(doc),
+            lambda text: cache.set_patent_claims(patent_id, text),
+        )
 
     async def _fetch_description() -> None:
-        cached = await cache.get_patent_description(patent_id)
-        if cached is not None:
-            result["description"] = cached
-            return
-        desc = await epo.get_description(doc)
-        await cache.set_patent_description(patent_id, desc)
-        result["description"] = desc
+        result["description"] = await _fetch_fulltext(
+            lambda: cache.get_patent_description(patent_id),
+            lambda: epo.get_description(doc),
+            lambda text: cache.set_patent_description(patent_id, text),
+        )
 
     async def _fetch_family() -> None:
         cached = await cache.get_patent_family(patent_id)

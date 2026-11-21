@@ -58,31 +58,13 @@ _SEARCH_XML = b"""<?xml version="1.0" encoding="UTF-8"?>
   </ops:biblio-search>
 </ops:world-patent-data>"""
 
-_CLAIMS_RESPONSE_XML = b"""\
-<?xml version="1.0" encoding="UTF-8"?>
-<ops:world-patent-data xmlns:ops="http://ops.epo.org"
-    xmlns="http://www.epo.org/exchange">
-  <exchange-documents>
-    <exchange-document country="EP" doc-number="1234567" kind="A1">
-      <claims lang="en">
-        <claim><claim-text>1. A method for testing.</claim-text></claim>
-      </claims>
-    </exchange-document>
-  </exchange-documents>
-</ops:world-patent-data>"""
-
-_DESCRIPTION_RESPONSE_XML = b"""\
-<?xml version="1.0" encoding="UTF-8"?>
-<ops:world-patent-data xmlns:ops="http://ops.epo.org"
-    xmlns="http://www.epo.org/exchange">
-  <exchange-documents>
-    <exchange-document country="EP" doc-number="1234567" kind="A1">
-      <description lang="en">
-        <p num="0001">Test description.</p>
-      </description>
-    </exchange-document>
-  </exchange-documents>
-</ops:world-patent-data>"""
+# Real OPS full-text responses (#701).
+_CLAIMS_RESPONSE_XML = (
+    Path(__file__).parent / "fixtures" / "epo" / "claims_ep3491801b1.xml"
+).read_bytes()
+_DESCRIPTION_RESPONSE_XML = (
+    Path(__file__).parent / "fixtures" / "epo" / "description_ep3491801b1.xml"
+).read_bytes()
 
 _FAMILY_RESPONSE_XML = b"""\
 <?xml version="1.0" encoding="UTF-8"?>
@@ -472,7 +454,7 @@ async def test_get_claims_returns_text(
     mock_ops_client.published_data.return_value = _mock_response(_CLAIMS_RESPONSE_XML)
     doc = DocdbNumber(country="EP", number="1234567", kind="A1")
     result = await epo_client.get_claims(doc)
-    assert "method for testing" in result
+    assert result.startswith("1. A method (200)")
 
 
 async def test_get_claims_calls_with_claims_endpoint(
@@ -502,7 +484,7 @@ async def test_get_description_returns_text(
     )
     doc = DocdbNumber(country="EP", number="1234567", kind="A1")
     result = await epo_client.get_description(doc)
-    assert "Test description" in result
+    assert result.startswith("TECHNICAL FIELD")
 
 
 async def test_get_description_calls_with_description_endpoint(

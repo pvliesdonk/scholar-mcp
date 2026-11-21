@@ -6,6 +6,7 @@ Responses captured from EPO OPS against live credentials on 2026-09-10:
 | --- | --- | --- |
 | `images_inquiry_*.xml` | `published_data(..., endpoint='images')` | #371 |
 | `legal_ep1000000a1.xml` | `legal('publication', ...)` | #388, #390 |
+| `claims_*.xml`, `description_*.xml` | `published_data(..., endpoint='claims' / 'description')`, captured 2026-11-21 | #701 |
 
 The behaviour they evidence is written up under `docs/design/reference/`.
 
@@ -32,3 +33,10 @@ uses ignores trailing whitespace after the root element. Compare with
 **Do not edit these to make a test pass.** They are the ground truth. If a
 test disagrees with them, the test or the code is wrong. Re-capture with a
 live call rather than adjusting the bytes by hand.
+
+The full-text fixtures (#701) are the third case: `parse_claims_xml` and
+`parse_description_xml` looked for an `exchange-document` in the exchange
+namespace, where OPS sends `ftxt:fulltext-document` in
+`http://www.epo.org/fulltext`, so both returned an empty string for every
+patent. They were captured from `requests`' decoded `response.text` and
+written back as UTF-8, so compare them by content rather than byte for byte.
