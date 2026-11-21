@@ -206,6 +206,18 @@ throttle policy.
 - A conference paper's `journal` held only `pages` (`"5998-6008"` for
   arXiv 1706.03762). [observed: the same request]
 
+### Batch with unknown ids
+
+- `POST /paper/batch` answers a batch that holds at least one id it knows
+  with 200 and `null` for each id it does not. A batch none of whose ids it
+  knows gets 400 `{"error":"No valid paper ids given"}` instead.
+  `DOI:10.1038/nature14539` alone gave the 400; the same DOI next to
+  `DOI:10.1109/TSM.2017.2676245` gave `[null, {…}]`. `GET
+  /paper/DOI:10.1038/nature14539` answered 404 "not found".
+  [observed: unkeyed `curl` to `/graph/v1/paper/batch` and `/paper/{id}`,
+  2026-11-21]
+  [pins: tests/test_s2_client.py::test_batch_of_only_unknown_ids_gives_none_each]
+
 ### Title match
 
 - `/paper/search/match` "Behaves similarly to `/paper/search`, but is

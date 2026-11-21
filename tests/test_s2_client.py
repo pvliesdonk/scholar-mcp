@@ -542,3 +542,33 @@ async def test_run_keepalive_publishes_its_verdict(
     assert payload["consecutive_failures"] == 2
     assert payload["key_status"] == "failing"
     assert payload["last_failure_kind"] == "rate_limited"
+
+
+# ---------------------------------------------------------------------------
+# #729: a batch none of whose ids S2 knows
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_batch_of_only_unknown_ids_gives_none_each(
+    client: S2Client, respx_mock
+) -> None:
+    """S2 answers it with 400 "No valid paper ids given", not with nulls."""
+    respx_mock.post("/paper/batch").mock(
+        return_value=httpx.Response(400, json={"error": "No valid paper ids given"})
+    )
+    result = await client.batch_resolve(
+        ["DOI:10.1038/nature14539", "DOI:10.0/none"], fields="title"
+    )
+    assert result == [None, None]
+
+
+@pytest.mark.respx(base_url=S2_BASE)
+async def test_batch_other_bad_request_still_raises(
+    client: S2Client, respx_mock
+) -> None:
+    respx_mock.post("/paper/batch").mock(
+        return_value=httpx.Response(400, json={"error": "Unrecognized field: x"})
+    )
+    with pytest.raises(httpx.HTTPStatusError):
+        await client.batch_resolve(["DOI:10.1/x"], fields="x")

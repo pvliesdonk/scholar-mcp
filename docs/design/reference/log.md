@@ -4,6 +4,11 @@ Newest first. One entry per research pass.
 
 ## 2026-11-21
 
+### Semantic Scholar: a batch of unknown ids
+
+Updated [Semantic Scholar API behaviour](semantic-scholar-api.md) for #729:
+an all-unknown batch answers 400 where a mixed one gets `null` entries.
+
 ### Semantic Scholar: title match
 
 Updated [Semantic Scholar API behaviour](semantic-scholar-api.md) for #59:

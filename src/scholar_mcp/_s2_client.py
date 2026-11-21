@@ -248,6 +248,11 @@ def format_s2_error(exc: httpx.HTTPStatusError) -> str:
     return json.dumps(s2_error_payload(exc))
 
 
+# The 400 body S2's batch endpoint answers when it knows none of the ids;
+# a batch with at least one known id gets a list with nulls instead (#729).
+_NO_VALID_IDS = "No valid paper ids given"
+
+
 class S2Client:
     """Async client for the Semantic Scholar Graph API.
 
@@ -550,6 +555,8 @@ class S2Client:
 
         Returns:
             List of paper records (None for unresolved items, preserving order).
+            A batch none of whose ids S2 knows gives ``None`` for each: S2
+            answers it with a 400 rather than a list of nulls (#729).
         """
 
         async def _call() -> list[PaperRecord | None]:
@@ -558,6 +565,8 @@ class S2Client:
                 json={"ids": ids},
                 params={"fields": fields},
             )
+            if r.status_code == 400 and _NO_VALID_IDS in r.text:
+                return [None] * len(ids)
             r.raise_for_status()
             return r.json()  # type: ignore[no-any-return]
 

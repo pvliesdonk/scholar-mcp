@@ -383,3 +383,25 @@ async def test_all_fail_lists_reasons(mcp: FastMCP, service: Service) -> None:
         {"identifier": "EP3491801B1", "reason": "epo_not_configured"},
         {"identifier": "bad1", "reason": "not found"},
     ]
+
+
+async def test_unknown_doi_does_not_lose_the_patents(
+    mcp: FastMCP, service: Service
+) -> None:
+    """#729: S2's all-unknown 400 no longer fails the patents beside it."""
+    service.epo = _epo_returning(ep3491801b1())
+    with respx.mock:
+        respx.post(f"{S2_BASE}/paper/batch").mock(
+            return_value=httpx.Response(400, json={"error": "No valid paper ids given"})
+        )
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "generate_citations",
+                {
+                    "paper_ids": ["EP3491801B1", "DOI:10.1038/nature14539"],
+                    "enrich": False,
+                },
+            )
+    text = json.loads(result.content[0].text)["output"]
+    assert "% Could not resolve: DOI:10.1038/nature14539 (not found)" in text
+    assert "@patent{ep3491801b1," in text
