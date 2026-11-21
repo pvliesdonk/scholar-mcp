@@ -2031,3 +2031,58 @@ async def test_fetch_sections_other_fulltext_errors_propagate(service: Service) 
         await _fetch_patent_sections(
             doc=doc, sections=["claims"], epo=epo, cache=service.cache
         )
+
+
+async def test_get_patent_pages_the_description(
+    mcp_with_epo: FastMCP, epo_client: EpoClient
+) -> None:
+    """#44: a long description comes back in pages; claims stay whole."""
+    description = "".join(f"[{i:04d}] {'x' * 95}\n\n" for i in range(300))
+    epo_client.get_description = AsyncMock(return_value=description)  # type: ignore[method-assign]
+    async with Client(mcp_with_epo) as client:
+        first = json.loads(
+            (
+                await client.call_tool(
+                    "get_patent",
+                    {
+                        "patent_number": "EP1234567A1",
+                        "sections": ["claims", "description"],
+                    },
+                )
+            )
+            .content[0]
+            .text
+        )
+        second = json.loads(
+            (
+                await client.call_tool(
+                    "get_patent",
+                    {
+                        "patent_number": "EP1234567A1",
+                        "sections": ["description"],
+                        "text_offset": first["next_offset"],
+                        "max_chars": None,
+                    },
+                )
+            )
+            .content[0]
+            .text
+        )
+    assert first["text_total_chars"] == len(description)
+    assert first["text_returned_chars"] == 20_000
+    assert first["text_truncated"] is True
+    assert first["claims"] == "1. A method for testing."
+    assert first["description"] + second["description"] == description
+    assert "next_offset" not in second
+    epo_client.get_description.assert_awaited_once()  # second page from the cache
+
+
+async def test_get_patent_without_description_has_no_paging_fields(
+    mcp_with_epo: FastMCP,
+) -> None:
+    async with Client(mcp_with_epo) as client:
+        result = await client.call_tool(
+            "get_patent", {"patent_number": "EP1234567A1", "sections": ["claims"]}
+        )
+    data = json.loads(result.content[0].text)
+    assert "text_offset" not in data

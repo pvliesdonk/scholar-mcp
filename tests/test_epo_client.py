@@ -484,7 +484,7 @@ async def test_get_description_returns_text(
     )
     doc = DocdbNumber(country="EP", number="1234567", kind="A1")
     result = await epo_client.get_description(doc)
-    assert result.startswith("TECHNICAL FIELD")
+    assert result.startswith("## TECHNICAL FIELD")
 
 
 async def test_get_description_calls_with_description_endpoint(

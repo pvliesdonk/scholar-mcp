@@ -419,6 +419,33 @@ async def test_repair_drops_patent_text_the_broken_parser_cached(tmp_path):
         await upgraded.close()
 
 
+async def test_repair_drops_plain_text_claims_and_descriptions(tmp_path):
+    """#44: rows cached as plain text are all fetched again as Markdown."""
+    import aiosqlite
+
+    db_path = tmp_path / "plain-fulltext.db"
+    old = ScholarCache(db_path)
+    await old.open()
+    await old.set_patent_claims("EP.3491801.B1", "1. A method.\n\nencrypting")
+    await old.set_patent_description("EP.3491801.B1", "TECHNICAL FIELD")
+    await old.close()
+
+    async with aiosqlite.connect(db_path) as db:
+        await db.execute(
+            "DELETE FROM repairs WHERE name IN (?, ?)",
+            ("44_patent_claims_as_markdown", "44_patent_descriptions_as_markdown"),
+        )
+        await db.commit()
+
+    upgraded = ScholarCache(db_path)
+    await upgraded.open()
+    try:
+        assert await upgraded.get_patent_claims("EP.3491801.B1") is None
+        assert await upgraded.get_patent_description("EP.3491801.B1") is None
+    finally:
+        await upgraded.close()
+
+
 async def test_repair_moves_embedded_standard_text_out_of_the_record(tmp_path):
     """#479: text written into a standards row moves to its own table.
 
@@ -955,6 +982,8 @@ async def test_every_registered_repair_is_valid_sql(cache):
         "675_resync_iso_iec",
         "701_empty_patent_claims",
         "701_empty_patent_descriptions",
+        "44_patent_claims_as_markdown",
+        "44_patent_descriptions_as_markdown",
     }
     for statement in _REPAIRS.values():
         await cache._db.execute(f"EXPLAIN {statement}")

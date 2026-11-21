@@ -522,6 +522,11 @@ _REPAIRS: dict[str, str] = {
     # is always the bug's.
     "701_empty_patent_claims": "DELETE FROM patent_claims WHERE data = ''",
     "701_empty_patent_descriptions": "DELETE FROM patent_descriptions WHERE data = ''",
+    # #44: claims and descriptions are cached as Markdown now. A release with
+    # only the #701 fix cached them as plain text, which no predicate tells
+    # apart from Markdown, so every row is fetched once more.
+    "44_patent_claims_as_markdown": "DELETE FROM patent_claims",
+    "44_patent_descriptions_as_markdown": "DELETE FROM patent_descriptions",
 }
 
 

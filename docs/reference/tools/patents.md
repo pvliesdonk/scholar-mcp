@@ -77,7 +77,11 @@ Get detailed information about a single patent.
 Accepts patent numbers in any format (EP, WO, US, etc.). By default
 returns bibliographic data only; use the sections parameter to
 request additional detail (claims, description, family members, legal
-status, cited references). Claims and description are null when EPO
+status, cited references). Claims and description come as Markdown:
+one numbered block per claim, and description paragraphs under ``##``
+section headings with their paragraph numbers (``[0001]``). The
+description is paged; when ``next_offset`` is present, call again with
+that value as ``text_offset``. Claims and description are null when EPO
 holds no full text for the publication; `fetch_patent_pdf` then has the
 document. When sections includes 'citations',
 non-patent literature references are resolved to Semantic Scholar
@@ -95,12 +99,17 @@ throttle states yourself.
 |---|---|---|---|
 | `patent_number` | `string` | required | Patent number in any common format, such as ``"EP1234567A1"``, ``"WO2024/123456"`` or ``"US11,234,567B2"``. |
 | `sections` | `array of biblio \| claims \| description \| family \| legal \| citations \| null` | `null` | Sections to include in the response. Defaults to ``["biblio"]``. Available sections: biblio, claims, description, family, legal, citations. When citations is included, NPL references are resolved via Semantic Scholar on a best-effort basis. |
+| `text_offset` | `integer` | `0` | Character offset in the description at which the page starts. |
+| `max_chars` | `integer \| null` | `20000` | Maximum description characters to return, capped at 20,000; null returns the rest of the description. |
 
 **Returns**
 
 A mapping with ``patent_number`` (normalised DOCDB format) and the
-requested section data, or an error mapping on failure.
-A busy EPO service is waited out rather than failed on, which can
+requested section data, or an error mapping on failure. With a
+description, it also carries ``text_offset``,
+``text_returned_chars``, ``text_total_chars``, ``text_truncated``
+and, when more follows, ``next_offset``, all counting description
+characters. A busy EPO service is waited out rather than failed on, which can
 take a few minutes; the call is then handed back as
 ``{"status": "working", "job_id": "..."}`` and the result retrieved
 with ``get_job_result``. If the service never clears, the outcome
