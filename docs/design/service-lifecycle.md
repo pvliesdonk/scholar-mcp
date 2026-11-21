@@ -35,6 +35,23 @@ the record; the wrapper cancels the body and raises an INFO `ToolError` telling
 the caller to retry later, the same outcome pvl-core's
 `register_long_running_tool` gives (#617).
 
+The SQLite cache is one connection, shared by every coroutine in a process,
+and `sync-standards` opens a second one from its own process. Three rules keep
+them from blocking each other (#692):
+
+- The database is in WAL mode, so reads in either process never wait for the
+  other's writer.
+- Each write method runs inside `ScholarCache._writing`. It holds a lock for
+  the unit, so two coroutines' statements never share a transaction, and it
+  commits on success and rolls back on failure. Before this, a write that
+  failed with "database is locked" left its transaction open, and the server
+  held the database's write lock until it restarted.
+- A writer waits up to `_BUSY_TIMEOUT_S` (30 s) for the other process's
+  write instead of failing at once.
+
+The sync runner records each body's run with `set_sync_run`; a failure there
+is logged and noted in that body's report, and the other bodies carry on.
+
 The Google Books enrichment client depends on
 [the Google Books volume-search reference](reference/google-books-api.md).
 

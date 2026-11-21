@@ -145,17 +145,28 @@ async def run_sync(
         # Persist a row per body for get_sync_status — on both the
         # success and crash paths, so operators see the failure via
         # get_sync_status instead of "last successful run" or silence.
-        await cache.set_sync_run(
-            body=report.body,
-            upstream_ref=report.upstream_ref,
-            added=report.added,
-            updated=report.updated,
-            unchanged=report.unchanged,
-            withdrawn=report.withdrawn,
-            errors=report.errors,
-            started_at=report.started_at or started,
-            finished_at=report.finished_at or time.time(),
-        )
+        try:
+            await cache.set_sync_run(
+                body=report.body,
+                upstream_ref=report.upstream_ref,
+                added=report.added,
+                updated=report.updated,
+                unchanged=report.unchanged,
+                withdrawn=report.withdrawn,
+                errors=report.errors,
+                started_at=report.started_at or started,
+                finished_at=report.finished_at or time.time(),
+            )
+        except Exception as exc:
+            # The report still reaches the CLI summary. Raising here would
+            # end every other body's sync with it (#692).
+            logger.error(
+                "sync_run_record_failed body=%s err=%s",
+                report.body,
+                exc,
+                exc_info=True,
+            )
+            report.errors.append(f"run not recorded: {type(exc).__name__}: {exc}")
         return report
 
     return list(await asyncio.gather(*(_run_one(loader) for loader in loaders)))

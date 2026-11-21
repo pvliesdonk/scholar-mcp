@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import aiosqlite
 
@@ -21,6 +23,9 @@ from ._record_types import (
     standard_in_current_shape,
 )
 from ._standards_ranking import rank_standards
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +70,10 @@ def normalize_isbn(isbn: str) -> str:
 
 
 # TTLs in seconds
+# How long a write waits for another process's write (a running
+# sync-standards) before it fails (#692). A sync commits in batches well under
+# this.
+_BUSY_TIMEOUT_S = 30.0
 _PAPER_TTL = 30 * 86400  # 30 days
 _CITATION_TTL = 7 * 86400  # 7 days
 _REFERENCE_TTL = 7 * 86400  # 7 days
@@ -591,6 +600,14 @@ _TTL_TABLES = (
     "standards_search",
     "standards_index",
 )
+# clear()'s statements, built once from the constant table names above; no
+# name ever comes from a caller.
+if not all(name.isidentifier() for name in _TTL_TABLES):  # pragma: no cover
+    raise RuntimeError("_TTL_TABLES holds a name that is not an identifier")
+_CLEAR_ALL = tuple(" ".join(("DELETE FROM", name)) for name in _TTL_TABLES)
+_CLEAR_OLDER = tuple(
+    " ".join(("DELETE FROM", name, "WHERE cached_at < ?")) for name in _TTL_TABLES
+)
 
 
 def _require_open(db: aiosqlite.Connection | None) -> aiosqlite.Connection:
@@ -617,18 +634,53 @@ class ScholarCache:
         db_path: Path to the SQLite database file.
     """
 
-    def __init__(self, db_path: Path) -> None:
+    def __init__(
+        self, db_path: Path, *, busy_timeout_s: float = _BUSY_TIMEOUT_S
+    ) -> None:
         self._db_path = db_path
+        self._busy_timeout_s = busy_timeout_s
         self._db: aiosqlite.Connection | None = None
+        # One connection serves every coroutine, so a write unit (its
+        # statements and the commit) must not interleave with another's:
+        # a rollback would discard the other unit's pending writes (#692).
+        self._write_lock = asyncio.Lock()
 
     async def open(self) -> None:
-        """Open database connection and apply schema."""
+        """Open database connection and apply schema.
+
+        The database is opened in WAL mode, so a reader never waits for a
+        writer in another process, such as ``sync-standards`` running beside
+        the server, and a writer waits up to ``busy_timeout_s`` for the other
+        process's write to finish rather than failing at once (#692).
+        """
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._db = await aiosqlite.connect(self._db_path)
+        self._db = await aiosqlite.connect(self._db_path, timeout=self._busy_timeout_s)
+        await self._db.execute("PRAGMA journal_mode=WAL")
         await self._db.executescript(_SCHEMA)
         await _apply_migrations(self._db)
         await self._db.commit()
         logger.info("cache_opened path=%s", self._db_path)
+
+    @asynccontextmanager
+    async def _writing(self) -> AsyncIterator[aiosqlite.Connection]:
+        """Run one write unit: commit when it succeeds, roll back when it fails.
+
+        Without the rollback, a statement or commit that failed (``database
+        is locked`` while another process writes) left its transaction open
+        on this long-lived connection. That held the database's write lock
+        until the process restarted, so every other writer failed (#692).
+
+        Yields:
+            The open connection.
+        """
+        db = _require_open(self._db)
+        async with self._write_lock:
+            try:
+                yield db
+                await db.commit()
+            except BaseException:
+                await db.rollback()
+                raise
 
     async def close(self) -> None:
         """Close database connection."""
@@ -667,12 +719,11 @@ class ScholarCache:
             paper_id: S2 paper ID.
             data: Paper metadata record.
         """
-        db = _require_open(self._db)
-        await db.execute(
-            "INSERT OR REPLACE INTO papers (paper_id, data, cached_at) VALUES (?, ?, ?)",
-            (paper_id, json.dumps(data), time.time()),
-        )
-        await db.commit()
+        async with self._writing() as db:
+            await db.execute(
+                "INSERT OR REPLACE INTO papers (paper_id, data, cached_at) VALUES (?, ?, ?)",
+                (paper_id, json.dumps(data), time.time()),
+            )
 
     # ------------------------------------------------------------------
     # Citations (list of citing paper IDs)
@@ -704,12 +755,11 @@ class ScholarCache:
             paper_id: S2 paper ID.
             ids: List of citing paper IDs.
         """
-        db = _require_open(self._db)
-        await db.execute(
-            "INSERT OR REPLACE INTO citations (paper_id, citing_ids, cached_at) VALUES (?, ?, ?)",
-            (paper_id, json.dumps(ids), time.time()),
-        )
-        await db.commit()
+        async with self._writing() as db:
+            await db.execute(
+                "INSERT OR REPLACE INTO citations (paper_id, citing_ids, cached_at) VALUES (?, ?, ?)",
+                (paper_id, json.dumps(ids), time.time()),
+            )
 
     # ------------------------------------------------------------------
     # References (list of referenced paper IDs)
@@ -740,12 +790,11 @@ class ScholarCache:
             paper_id: S2 paper ID.
             ids: List of referenced paper IDs.
         """
-        db = _require_open(self._db)
-        await db.execute(
-            "INSERT OR REPLACE INTO refs (paper_id, referenced_ids, cached_at) VALUES (?, ?, ?)",
-            (paper_id, json.dumps(ids), time.time()),
-        )
-        await db.commit()
+        async with self._writing() as db:
+            await db.execute(
+                "INSERT OR REPLACE INTO refs (paper_id, referenced_ids, cached_at) VALUES (?, ?, ?)",
+                (paper_id, json.dumps(ids), time.time()),
+            )
 
     # ------------------------------------------------------------------
     # Authors
@@ -776,12 +825,11 @@ class ScholarCache:
             author_id: S2 author ID.
             data: Author metadata dict.
         """
-        db = _require_open(self._db)
-        await db.execute(
-            "INSERT OR REPLACE INTO authors (author_id, data, cached_at) VALUES (?, ?, ?)",
-            (author_id, json.dumps(data), time.time()),
-        )
-        await db.commit()
+        async with self._writing() as db:
+            await db.execute(
+                "INSERT OR REPLACE INTO authors (author_id, data, cached_at) VALUES (?, ?, ?)",
+                (author_id, json.dumps(data), time.time()),
+            )
 
     # ------------------------------------------------------------------
     # OpenAlex enrichment
@@ -812,12 +860,11 @@ class ScholarCache:
             doi: DOI string.
             data: OpenAlex work dict.
         """
-        db = _require_open(self._db)
-        await db.execute(
-            "INSERT OR REPLACE INTO openalex (doi, data, cached_at) VALUES (?, ?, ?)",
-            (doi, json.dumps(data), time.time()),
-        )
-        await db.commit()
+        async with self._writing() as db:
+            await db.execute(
+                "INSERT OR REPLACE INTO openalex (doi, data, cached_at) VALUES (?, ?, ?)",
+                (doi, json.dumps(data), time.time()),
+            )
 
     # ------------------------------------------------------------------
     # Identifier aliases (no TTL)
@@ -846,12 +893,11 @@ class ScholarCache:
             raw_id: Raw identifier string.
             s2_paper_id: Canonical S2 paper ID.
         """
-        db = _require_open(self._db)
-        await db.execute(
-            "INSERT OR REPLACE INTO id_aliases (raw_id, s2_paper_id) VALUES (?, ?)",
-            (raw_id, s2_paper_id),
-        )
-        await db.commit()
+        async with self._writing() as db:
+            await db.execute(
+                "INSERT OR REPLACE INTO id_aliases (raw_id, s2_paper_id) VALUES (?, ?)",
+                (raw_id, s2_paper_id),
+            )
 
     # ------------------------------------------------------------------
     # Patents
@@ -882,12 +928,11 @@ class ScholarCache:
             patent_id: Normalised patent ID.
             data: Patent metadata record.
         """
-        db = _require_open(self._db)
-        await db.execute(
-            "INSERT OR REPLACE INTO patents (patent_id, data, cached_at) VALUES (?, ?, ?)",
-            (patent_id, json.dumps(data), time.time()),
-        )
-        await db.commit()
+        async with self._writing() as db:
+            await db.execute(
+                "INSERT OR REPLACE INTO patents (patent_id, data, cached_at) VALUES (?, ?, ?)",
+                (patent_id, json.dumps(data), time.time()),
+            )
 
     # ------------------------------------------------------------------
     # Patent claims
@@ -919,12 +964,11 @@ class ScholarCache:
             patent_id: Normalised patent ID.
             text: Raw claims text.
         """
-        db = _require_open(self._db)
-        await db.execute(
-            "INSERT OR REPLACE INTO patent_claims (patent_id, data, cached_at) VALUES (?, ?, ?)",
-            (patent_id, text, time.time()),
-        )
-        await db.commit()
+        async with self._writing() as db:
+            await db.execute(
+                "INSERT OR REPLACE INTO patent_claims (patent_id, data, cached_at) VALUES (?, ?, ?)",
+                (patent_id, text, time.time()),
+            )
 
     # ------------------------------------------------------------------
     # Patent descriptions
@@ -956,12 +1000,11 @@ class ScholarCache:
             patent_id: Normalised patent ID.
             text: Raw description text.
         """
-        db = _require_open(self._db)
-        await db.execute(
-            "INSERT OR REPLACE INTO patent_descriptions (patent_id, data, cached_at) VALUES (?, ?, ?)",
-            (patent_id, text, time.time()),
-        )
-        await db.commit()
+        async with self._writing() as db:
+            await db.execute(
+                "INSERT OR REPLACE INTO patent_descriptions (patent_id, data, cached_at) VALUES (?, ?, ?)",
+                (patent_id, text, time.time()),
+            )
 
     # ------------------------------------------------------------------
     # Patent families
@@ -995,12 +1038,11 @@ class ScholarCache:
             patent_id: Normalised patent ID.
             data: List of family member dicts.
         """
-        db = _require_open(self._db)
-        await db.execute(
-            "INSERT OR REPLACE INTO patent_families (patent_id, data, cached_at) VALUES (?, ?, ?)",
-            (patent_id, json.dumps(data), time.time()),
-        )
-        await db.commit()
+        async with self._writing() as db:
+            await db.execute(
+                "INSERT OR REPLACE INTO patent_families (patent_id, data, cached_at) VALUES (?, ?, ?)",
+                (patent_id, json.dumps(data), time.time()),
+            )
 
     # ------------------------------------------------------------------
     # Patent legal status
@@ -1034,12 +1076,11 @@ class ScholarCache:
             patent_id: Normalised patent ID.
             data: List of legal status event dicts.
         """
-        db = _require_open(self._db)
-        await db.execute(
-            "INSERT OR REPLACE INTO patent_legal (patent_id, data, cached_at) VALUES (?, ?, ?)",
-            (patent_id, json.dumps(data), time.time()),
-        )
-        await db.commit()
+        async with self._writing() as db:
+            await db.execute(
+                "INSERT OR REPLACE INTO patent_legal (patent_id, data, cached_at) VALUES (?, ?, ?)",
+                (patent_id, json.dumps(data), time.time()),
+            )
 
     # ------------------------------------------------------------------
     # Patent citations (cited references)
@@ -1071,12 +1112,11 @@ class ScholarCache:
             patent_id: Normalised patent ID.
             data: Dict with ``patent_refs`` and ``npl_refs`` keys.
         """
-        db = _require_open(self._db)
-        await db.execute(
-            "INSERT OR REPLACE INTO patent_citations (patent_id, data, cached_at) VALUES (?, ?, ?)",
-            (patent_id, json.dumps(data), time.time()),
-        )
-        await db.commit()
+        async with self._writing() as db:
+            await db.execute(
+                "INSERT OR REPLACE INTO patent_citations (patent_id, data, cached_at) VALUES (?, ?, ?)",
+                (patent_id, json.dumps(data), time.time()),
+            )
 
     # ------------------------------------------------------------------
     # Patent search results
@@ -1109,13 +1149,12 @@ class ScholarCache:
             query: EPO OPS query string; SHA-256 hash used as cache key.
             data: Search results dict.
         """
-        db = _require_open(self._db)
-        query_hash = hashlib.sha256(query.encode()).hexdigest()
-        await db.execute(
-            "INSERT OR REPLACE INTO patent_search (query_hash, data, cached_at) VALUES (?, ?, ?)",
-            (query_hash, json.dumps(data), time.time()),
-        )
-        await db.commit()
+        async with self._writing() as db:
+            query_hash = hashlib.sha256(query.encode()).hexdigest()
+            await db.execute(
+                "INSERT OR REPLACE INTO patent_search (query_hash, data, cached_at) VALUES (?, ?, ?)",
+                (query_hash, json.dumps(data), time.time()),
+            )
 
     # ------------------------------------------------------------------
     # Books (Open Library)
@@ -1146,12 +1185,11 @@ class ScholarCache:
             isbn: ISBN-13 string (already normalized).
             data: Book metadata dict.
         """
-        db = _require_open(self._db)
-        await db.execute(
-            "INSERT OR REPLACE INTO books_isbn (isbn, data, cached_at) VALUES (?, ?, ?)",
-            (isbn, json.dumps(data), time.time()),
-        )
-        await db.commit()
+        async with self._writing() as db:
+            await db.execute(
+                "INSERT OR REPLACE INTO books_isbn (isbn, data, cached_at) VALUES (?, ?, ?)",
+                (isbn, json.dumps(data), time.time()),
+            )
 
     async def get_book_by_work(self, work_id: str) -> BookRecord | None:
         """Return cached book data by Open Library work ID or None.
@@ -1179,12 +1217,11 @@ class ScholarCache:
             work_id: Open Library work ID.
             data: Book metadata dict.
         """
-        db = _require_open(self._db)
-        await db.execute(
-            "INSERT OR REPLACE INTO books_openlibrary (work_id, data, cached_at) VALUES (?, ?, ?)",
-            (work_id, json.dumps(data), time.time()),
-        )
-        await db.commit()
+        async with self._writing() as db:
+            await db.execute(
+                "INSERT OR REPLACE INTO books_openlibrary (work_id, data, cached_at) VALUES (?, ?, ?)",
+                (work_id, json.dumps(data), time.time()),
+            )
 
     async def set_book_by_work_if_absent(self, work_id: str, data: BookRecord) -> None:
         """Cache book data by work ID unless a fresh row already exists.
@@ -1199,17 +1236,16 @@ class ScholarCache:
             work_id: Open Library work ID.
             data: Book metadata dict.
         """
-        db = _require_open(self._db)
-        now = time.time()
-        await db.execute(
-            "INSERT INTO books_openlibrary (work_id, data, cached_at) "
-            "VALUES (?, ?, ?) "
-            "ON CONFLICT(work_id) DO UPDATE SET "
-            "data = excluded.data, cached_at = excluded.cached_at "
-            "WHERE books_openlibrary.cached_at < ?",
-            (work_id, json.dumps(data), now, now - _BOOK_WORK_TTL),
-        )
-        await db.commit()
+        async with self._writing() as db:
+            now = time.time()
+            await db.execute(
+                "INSERT INTO books_openlibrary (work_id, data, cached_at) "
+                "VALUES (?, ?, ?) "
+                "ON CONFLICT(work_id) DO UPDATE SET "
+                "data = excluded.data, cached_at = excluded.cached_at "
+                "WHERE books_openlibrary.cached_at < ?",
+                (work_id, json.dumps(data), now, now - _BOOK_WORK_TTL),
+            )
 
     async def get_book_search(self, query: str) -> list[BookRecord] | None:
         """Return cached book search results or None if missing/stale.
@@ -1238,13 +1274,12 @@ class ScholarCache:
             query: Search query string; SHA-256 hash used as cache key.
             data: List of book metadata dicts.
         """
-        db = _require_open(self._db)
-        query_hash = hashlib.sha256(query.encode()).hexdigest()
-        await db.execute(
-            "INSERT OR REPLACE INTO books_search (query_hash, data, cached_at) VALUES (?, ?, ?)",
-            (query_hash, json.dumps(data), time.time()),
-        )
-        await db.commit()
+        async with self._writing() as db:
+            query_hash = hashlib.sha256(query.encode()).hexdigest()
+            await db.execute(
+                "INSERT OR REPLACE INTO books_search (query_hash, data, cached_at) VALUES (?, ?, ?)",
+                (query_hash, json.dumps(data), time.time()),
+            )
 
     async def get_book_subject(self, cache_key: str) -> list[BookRecord] | None:
         """Return cached book subject results or None if missing/stale.
@@ -1273,13 +1308,12 @@ class ScholarCache:
             cache_key: Subject slug used as the cache key.
             data: List of BookRecord dicts.
         """
-        db = _require_open(self._db)
-        query_hash = hashlib.sha256(cache_key.encode()).hexdigest()
-        await db.execute(
-            "INSERT OR REPLACE INTO books_subject (query_hash, data, cached_at) VALUES (?, ?, ?)",
-            (query_hash, json.dumps(data), time.time()),
-        )
-        await db.commit()
+        async with self._writing() as db:
+            query_hash = hashlib.sha256(cache_key.encode()).hexdigest()
+            await db.execute(
+                "INSERT OR REPLACE INTO books_subject (query_hash, data, cached_at) VALUES (?, ?, ?)",
+                (query_hash, json.dumps(data), time.time()),
+            )
 
     # ------------------------------------------------------------------
     # CrossRef
@@ -1310,12 +1344,11 @@ class ScholarCache:
             doi: DOI string.
             data: CrossRef message dict.
         """
-        db = _require_open(self._db)
-        await db.execute(
-            "INSERT OR REPLACE INTO crossref (doi, data, cached_at) VALUES (?, ?, ?)",
-            (doi, json.dumps(data), time.time()),
-        )
-        await db.commit()
+        async with self._writing() as db:
+            await db.execute(
+                "INSERT OR REPLACE INTO crossref (doi, data, cached_at) VALUES (?, ?, ?)",
+                (doi, json.dumps(data), time.time()),
+            )
 
     # ------------------------------------------------------------------
     # Google Books
@@ -1346,12 +1379,11 @@ class ScholarCache:
             isbn: ISBN string.
             data: Google Books volume dict.
         """
-        db = _require_open(self._db)
-        await db.execute(
-            "INSERT OR REPLACE INTO google_books (isbn, data, cached_at) VALUES (?, ?, ?)",
-            (isbn, json.dumps(data), time.time()),
-        )
-        await db.commit()
+        async with self._writing() as db:
+            await db.execute(
+                "INSERT OR REPLACE INTO google_books (isbn, data, cached_at) VALUES (?, ?, ?)",
+                (isbn, json.dumps(data), time.time()),
+            )
 
     # ------------------------------------------------------------------
     # Standards
@@ -1406,14 +1438,13 @@ class ScholarCache:
         that row, and replacing it with a live copy dropped it from synced
         search and put it under the TTL (#496). A sync write replaces anything.
         """
-        db = _require_open(self._db)
-        now = time.time()
-        synced_at = now if synced else None
-        await db.execute(
-            _WRITE_STANDARD,
-            (identifier, json.dumps(data), now, source, synced_at),
-        )
-        await db.commit()
+        async with self._writing() as db:
+            now = time.time()
+            synced_at = now if synced else None
+            await db.execute(
+                _WRITE_STANDARD,
+                (identifier, json.dumps(data), now, source, synced_at),
+            )
 
     async def list_synced_standard_ids(self, source: str) -> set[str]:
         """Return identifiers of all synced standards for a given source.
@@ -1454,21 +1485,20 @@ class ScholarCache:
         """
         if not identifiers:
             return 0
-        db = _require_open(self._db)
-        # The cursor's rowcount sums the statement's rows over every set of
-        # parameters; total_changes would also count another loader's writes.
-        cursor = await db.executemany(
-            "DELETE FROM standards "
-            "WHERE identifier = ? AND source = ? AND synced_at IS NOT NULL",
-            ((ident, source) for ident in identifiers),
-        )
-        deleted = cursor.rowcount
-        await db.executemany(
-            "DELETE FROM standards_aliases WHERE canonical = ? "
-            "AND NOT EXISTS (SELECT 1 FROM standards WHERE identifier = ?)",
-            ((ident, ident) for ident in identifiers),
-        )
-        await db.commit()
+        async with self._writing() as db:
+            # The cursor's rowcount sums the statement's rows over every set of
+            # parameters; total_changes would also count another loader's writes.
+            cursor = await db.executemany(
+                "DELETE FROM standards "
+                "WHERE identifier = ? AND source = ? AND synced_at IS NOT NULL",
+                ((ident, source) for ident in identifiers),
+            )
+            deleted = cursor.rowcount
+            await db.executemany(
+                "DELETE FROM standards_aliases WHERE canonical = ? "
+                "AND NOT EXISTS (SELECT 1 FROM standards WHERE identifier = ?)",
+                ((ident, ident) for ident in identifiers),
+            )
         return deleted
 
     async def search_synced_standards(
@@ -1544,13 +1574,12 @@ class ScholarCache:
             url: The ``full_text_url`` the text was converted from.
             text: The converted Markdown.
         """
-        db = _require_open(self._db)
-        await db.execute(
-            "INSERT OR REPLACE INTO standard_full_text (url, data, cached_at) "
-            "VALUES (?, ?, ?)",
-            (url, text, time.time()),
-        )
-        await db.commit()
+        async with self._writing() as db:
+            await db.execute(
+                "INSERT OR REPLACE INTO standard_full_text (url, data, cached_at) "
+                "VALUES (?, ?, ?)",
+                (url, text, time.time()),
+            )
 
     async def get_standard_alias(self, raw: str) -> str | None:
         """Return canonical identifier for a raw alias string, or None.
@@ -1578,12 +1607,11 @@ class ScholarCache:
             raw: Raw alias string.
             canonical: Canonical identifier.
         """
-        db = _require_open(self._db)
-        await db.execute(
-            "INSERT OR REPLACE INTO standards_aliases (raw_id, canonical, cached_at) VALUES (?, ?, ?)",
-            (raw, canonical, time.time()),
-        )
-        await db.commit()
+        async with self._writing() as db:
+            await db.execute(
+                "INSERT OR REPLACE INTO standards_aliases (raw_id, canonical, cached_at) VALUES (?, ?, ?)",
+                (raw, canonical, time.time()),
+            )
 
     async def set_standards_batch(
         self,
@@ -1606,17 +1634,16 @@ class ScholarCache:
         """
         if not records:
             return
-        db = _require_open(self._db)
-        now = time.time()
-        synced_at = now if synced else None
-        await db.executemany(
-            _WRITE_STANDARD,
-            (
-                (ident, json.dumps(data), now, source, synced_at)
-                for ident, data in records
-            ),
-        )
-        await db.commit()
+        async with self._writing() as db:
+            now = time.time()
+            synced_at = now if synced else None
+            await db.executemany(
+                _WRITE_STANDARD,
+                (
+                    (ident, json.dumps(data), now, source, synced_at)
+                    for ident, data in records
+                ),
+            )
 
     async def set_standard_aliases_batch(
         self,
@@ -1629,14 +1656,13 @@ class ScholarCache:
         """
         if not aliases:
             return
-        db = _require_open(self._db)
-        now = time.time()
-        await db.executemany(
-            "INSERT OR REPLACE INTO standards_aliases "
-            "(raw_id, canonical, cached_at) VALUES (?, ?, ?)",
-            ((raw, canonical, now) for raw, canonical in aliases),
-        )
-        await db.commit()
+        async with self._writing() as db:
+            now = time.time()
+            await db.executemany(
+                "INSERT OR REPLACE INTO standards_aliases "
+                "(raw_id, canonical, cached_at) VALUES (?, ?, ?)",
+                ((raw, canonical, now) for raw, canonical in aliases),
+            )
 
     async def get_standards_search(self, query: str) -> list[StandardRecord] | None:
         """Return cached standards search results or None if missing/stale.
@@ -1667,13 +1693,12 @@ class ScholarCache:
             query: Search query string.
             data: List of StandardRecord dicts.
         """
-        db = _require_open(self._db)
-        query_hash = hashlib.sha256(query.encode()).hexdigest()
-        await db.execute(
-            "INSERT OR REPLACE INTO standards_search (query_hash, data, cached_at) VALUES (?, ?, ?)",
-            (query_hash, json.dumps(data), time.time()),
-        )
-        await db.commit()
+        async with self._writing() as db:
+            query_hash = hashlib.sha256(query.encode()).hexdigest()
+            await db.execute(
+                "INSERT OR REPLACE INTO standards_search (query_hash, data, cached_at) VALUES (?, ?, ?)",
+                (query_hash, json.dumps(data), time.time()),
+            )
 
     async def get_standards_index(self, body: str) -> list[dict[str, Any]] | None:
         """Return cached standards catalogue index for a body, or None if stale.
@@ -1700,12 +1725,11 @@ class ScholarCache:
             body: Standards body name.
             data: List of stub dicts (identifier, title, url).
         """
-        db = _require_open(self._db)
-        await db.execute(
-            "INSERT OR REPLACE INTO standards_index (body, data, cached_at) VALUES (?, ?, ?)",
-            (body, json.dumps(data), time.time()),
-        )
-        await db.commit()
+        async with self._writing() as db:
+            await db.execute(
+                "INSERT OR REPLACE INTO standards_index (body, data, cached_at) VALUES (?, ?, ?)",
+                (body, json.dumps(data), time.time()),
+            )
 
     # ------------------------------------------------------------------
     # Standards sync runs
@@ -1738,25 +1762,24 @@ class ScholarCache:
             started_at: Unix timestamp (seconds) when the run started.
             finished_at: Unix timestamp (seconds) when the run finished.
         """
-        db = _require_open(self._db)
-        await db.execute(
-            "INSERT OR REPLACE INTO standards_sync_runs ("
-            "body, upstream_ref, added, updated, unchanged, "
-            "withdrawn, errors, started_at, finished_at"
-            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                body,
-                upstream_ref,
-                added,
-                updated,
-                unchanged,
-                withdrawn,
-                json.dumps(errors),
-                started_at,
-                finished_at,
-            ),
-        )
-        await db.commit()
+        async with self._writing() as db:
+            await db.execute(
+                "INSERT OR REPLACE INTO standards_sync_runs ("
+                "body, upstream_ref, added, updated, unchanged, "
+                "withdrawn, errors, started_at, finished_at"
+                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    body,
+                    upstream_ref,
+                    added,
+                    updated,
+                    unchanged,
+                    withdrawn,
+                    json.dumps(errors),
+                    started_at,
+                    finished_at,
+                ),
+            )
 
     async def get_sync_run(self, body: str) -> dict[str, Any] | None:
         """Return the last sync run record for *body*, or None.
@@ -1848,13 +1871,12 @@ class ScholarCache:
             older_than_days: If set, only evict entries older than this many
                 days. If None, wipes all entries in all TTL-bearing tables.
         """
-        db = _require_open(self._db)
-        if older_than_days is None:
-            for table in _TTL_TABLES:
-                await db.execute(f"DELETE FROM {table}")
-        else:
-            cutoff = time.time() - older_than_days * 86400
-            for table in _TTL_TABLES:
-                await db.execute(f"DELETE FROM {table} WHERE cached_at < ?", (cutoff,))
-        await db.commit()
+        async with self._writing() as db:
+            if older_than_days is None:
+                for statement in _CLEAR_ALL:
+                    await db.execute(statement)
+            else:
+                cutoff = time.time() - older_than_days * 86400
+                for statement in _CLEAR_OLDER:
+                    await db.execute(statement, (cutoff,))
         logger.info("cache_cleared older_than_days=%s", older_than_days)

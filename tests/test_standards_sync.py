@@ -181,3 +181,29 @@ def test_format_reports_renders_lines() -> None:
     assert (
         "total added=15 updated=2 unchanged=500 withdrawn=0 removed=0 errors=1" in out
     )
+
+
+async def test_a_run_that_cannot_be_recorded_does_not_stop_the_others(
+    tmp_path: Any,
+) -> None:
+    """#692: set_sync_run failed with "database is locked" inside the crash
+    handler, and that ended every other body's sync with it."""
+    cache = ScholarCache(tmp_path / "cache.db")
+    await cache.open()
+    try:
+        record = cache.set_sync_run
+
+        async def flaky(**kwargs: Any) -> None:
+            if kwargs["body"] == "ISO":
+                raise RuntimeError("database is locked")
+            await record(**kwargs)
+
+        cache.set_sync_run = flaky  # type: ignore[method-assign]
+        reports = await run_sync([_FakeLoader("ISO"), _FakeLoader("IEC")], cache)
+
+        assert [r.body for r in reports] == ["ISO", "IEC"]
+        assert any("run not recorded" in e for e in reports[0].errors)
+        assert reports[1].errors == []
+        assert await cache.get_sync_run("IEC") is not None
+    finally:
+        await cache.close()
