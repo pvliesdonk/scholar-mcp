@@ -2276,9 +2276,12 @@
 
 <h2 id="generate_citations"><code>generate_citations</code><a class="headerlink" href="#generate_citations" title="Permanent link">&para;</a></h2>
 <p><strong>Generate Citations.</strong> Read-only. Reaches outside the server.</p>
-<p>Generate formatted citations for one or more papers.</p>
+<p>Generate formatted citations for papers and patents.</p>
 <p>Papers are resolved through Semantic Scholar and can be enriched with
-OpenAlex metadata. The output is BibTeX, CSL-JSON or RIS.</p>
+OpenAlex metadata. Patent numbers such as <code>EP1234567A1</code> may be mixed
+into <code>paper_ids</code>; they are resolved through EPO and come out as patent
+entries. Entries keep the order of <code>paper_ids</code>. The output is BibTeX,
+CSL-JSON or RIS.</p>
 <p>Enrichment fans out per paper, so a large batch can take a while; such a
 call answers with a job handle to poll using <code>get_job_result</code> instead
 of the citations themselves.</p>
@@ -2297,7 +2300,7 @@ of the citations themselves.</p>
 <td><code>paper_ids</code></td>
 <td><code>array of string</code></td>
 <td>required</td>
-<td>List of paper identifiers (S2 IDs, DOIs, arXiv IDs, etc.). Maximum 100.</td>
+<td>Paper identifiers (S2 IDs, DOIs, arXiv IDs, etc.) and patent numbers (<code>EP1234567A1</code>, <code>US11234567B2</code>), in the order the citations should appear. Maximum 100.</td>
 </tr>
 <tr>
 <td><code>citation_format</code></td>
@@ -2315,8 +2318,16 @@ of the citations themselves.</p>
 </table>
 <p><strong>Returns</strong></p>
 <p><code>{"format": ..., "output": ...}</code> where <code>output</code> is the formatted
-text, with unresolved identifiers included as comments in the
-comment style of the chosen format. An error mapping on failure.</p>
+text: papers as <code>@article</code>-style entries and patents as biblatex
+<code>@patent</code>, CSL <code>patent</code> or RIS <code>PAT</code> entries. Unresolved
+identifiers are included as comments in the comment style of the
+chosen format, each with its reason: <code>not found</code> for a paper, or
+the EPO outcome for a patent (<code>not_found</code>, <code>epo_not_configured</code>,
+<code>rate_limited</code>, <code>epo_unavailable</code>, <code>invalid_patent_number</code>,
+<code>resolve_failed</code>).</p>
+<p>When nothing resolves, <code>{"error": "no_papers_resolved", "failed":
+[...], "errors": [{"identifier": ..., "reason": ...}, ...]}</code>. Other
+failures return an error mapping.</p>
 <p>The key is <code>output</code> rather than <code>citations</code> because the CSL-JSON
 formatter emits its own <code>citations</code> key, which would collide.</p>
 <!-- DOMAIN-EXAMPLE-generate_citations-START -->
