@@ -2,6 +2,35 @@
 
 <!-- version list -->
 
+## 3.3.0-rc.0 (2026-11-21)
+
+### Features
+
+- accept an OpenAlex API key (#620)
+
+### Bug Fixes
+
+- end S2-backed tools at the job cap with a retry-later error (#618)
+- query ETSI's data endpoint and match identifiers exactly (#628)
+- find RFCs numbered below 1000 (#635)
+- read W3C specifications in the shape the API sends (#632)
+- read IETF status and publication date as datatracker sends them (#634)
+- report the RFCs that obsolete an RFC (#642)
+- read the Relaton v2 branch the dumps moved to (#647)
+- list the W3C specifications that replace a specification (#648)
+- find withdrawn, historical and replaced ETSI deliverables (#650)
+- answer a synced identifier from its row before resolving it (#652)
+- report withdrawn and replaced NIST publications from CSRC's export (#654)
+- drop IETF, W3C and ETSI rows cached before supersession was read (#656)
+- list the IEC editions that replace a revised or replaced edition (#659)
+- rank the current edition first in a standards search (#661)
+- keep the whole NIST document number when resolving an identifier (#670)
+- give every NIST publication CSRC lists a record (#673)
+- rank a standard's own editions above other documents that contain its number (#676)
+- sync Relaton files that hold C1 control characters (#677)
+- bring the CEN harmonised-standards table in line with the Official Journal (#678)
+- keep pattern matching on outside input linear (#682)
+
 ## 3.2.0 (2026-11-09)
 
 ### Features
