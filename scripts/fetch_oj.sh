@@ -32,8 +32,12 @@ for _ in 1 2 3 4 5; do
       sed -e 's/<[^>]*>/ /g' -e 's/&nbsp;/ /g' "$body" | tr -s ' \t' ' ' | grep -v '^ *$'
       exit 0
       ;;
-    30[1237])
+    30[12378])
       next=${result#* }
+      if [[ -z "$next" ]]; then
+        echo "fetch_oj.sh: HTTP $status from $url names no Location" >&2
+        exit 1
+      fi
       if [[ ! "$next" =~ ^https?://publications\.europa\.eu/ ]]; then
         echo "fetch_oj.sh: refusing a redirect off publications.europa.eu" >&2
         exit 1
