@@ -359,6 +359,35 @@ class S2Client:
             sort=sort,
         )
 
+    async def match_title(
+        self, title: str, *, fields: str, retry: bool = False
+    ) -> PaperRecord | None:
+        """Return the paper whose title best matches *title*, or None.
+
+        ``/paper/search/match`` always answers with its single closest title
+        and 404s only when nothing comes close, so a hit is a candidate, not
+        an identification.
+
+        Args:
+            title: Title to match.
+            fields: Comma-separated field names.
+            retry: If False (the default), raise :class:`RateLimitedError`
+                on 429 instead of waiting it out.
+
+        Returns:
+            The best-matching paper, or ``None`` when S2 finds no match.
+        """
+        try:
+            result = await self._get(
+                "/paper/search/match", retry=retry, query=title, fields=fields
+            )
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 404:
+                return None
+            raise
+        data = result.get("data") or []
+        return data[0] if data else None
+
     async def get_citations(
         self,
         paper_id: str,

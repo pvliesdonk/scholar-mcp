@@ -4,6 +4,12 @@ Newest first. One entry per research pass.
 
 ## 2026-11-21
 
+### Semantic Scholar: title match
+
+Updated [Semantic Scholar API behaviour](semantic-scholar-api.md) for #59:
+what `/paper/search/match` documents and returns, the 404 on no match, the
+unbounded `matchScore`, and a same-title false match observed unkeyed.
+
 ### ISBNs in free-text citations
 
 New page [ISBNs in free-text citations](isbn-in-citation-text.md) for #70:

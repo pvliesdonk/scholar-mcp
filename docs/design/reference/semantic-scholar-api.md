@@ -42,6 +42,10 @@ sources:
     title: Academic Graph API OpenAPI (swagger) specification, paper `journal` and `publicationVenue`
     resource: https://api.semanticscholar.org/graph/v1/swagger.json
     accessed: 2026-11-02
+  - id: graph-swagger-match
+    title: Academic Graph API OpenAPI (swagger) specification, /paper/search/match
+    resource: https://api.semanticscholar.org/graph/v1/swagger.json
+    accessed: 2026-11-21
   - id: throttle-observations
     title: Deployed-server and direct-call observations on issue 406
     resource: https://github.com/pvliesdonk/scholar-mcp/issues/406
@@ -202,7 +206,39 @@ throttle policy.
 - A conference paper's `journal` held only `pages` (`"5998-6008"` for
   arXiv 1706.03762). [observed: the same request]
 
+### Title match
+
+- `/paper/search/match` "Behaves similarly to `/paper/search`, but is
+  intended for retrieval of a single paper based on closest title match to
+  given query"; it "Will only return the single highest match result", each
+  with `paperId`, `title` and `matchScore` plus the requested fields, and a
+  query with no match "Returns with a 404 error and a 'Title match not found'
+  message". It takes `query` (plain text, "No special query syntax") and
+  `fields`, plus filters including `publicationTypes`, `openAccessPdf`,
+  `minCitationCount` and a publication date range.
+  [source: graph-swagger-match] (`/paper/search/match`)
+  [pins: tests/test_npl_titles.py::test_match_title_returns_the_best_match,
+  tests/test_npl_titles.py::test_match_title_not_found_is_none]
+- A hit answers 200 with `{"data": [paper]}`; no match answers 404 with
+  `{"error":"Title match not found"}`, for "Outline of object recognition" as
+  for "totalGarbageNonsense". [observed: unkeyed `curl` to
+  `/graph/v1/paper/search/match`, 2026-11-21]
+- `matchScore` is unbounded and undocumented: 209.98 and 252.98 for two
+  exact long titles, 38.72 for "Deep learning". [observed: the same requests]
+- The closest title need not be the work meant: "Deep learning" (LeCun et al.,
+  Nature 2015) matched "Deep learning." of 2024 in an orthodontics journal.
+  [observed: the same requests]
+  [pins: tests/test_npl_titles.py::test_implausible_match_is_dropped]
+- Unkeyed, three of five requests a few seconds apart answered 429.
+  [observed: the same requests]
+
 ## Where this project departs from the subject
+
+`get_patent` never treats a title match as an identification: a hit becomes
+a `candidate` marked `confidence: "unconfirmed"` only when its title shares
+most significant words with the cited title and its year is within a year of
+one the citation names, and the score is not used
+(`docs/design/patent-npl-resolution.md`).
 
 The paper-search, citation, reference and recommendation tools clamp a
 caller's `limit` into `1..maximum` for their endpoint before the request is

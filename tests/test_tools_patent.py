@@ -1080,6 +1080,7 @@ async def test_npl_chapter_info_parsed(
     }
     epo = _make_epo_client(citations_result=citations_data)
     service.epo = epo
+    service.s2.match_title = AsyncMock(return_value=None)  # type: ignore[method-assign]
 
     @asynccontextmanager
     async def lifespan(app: FastMCP):  # type: ignore[type-arg]  # noqa: ARG001

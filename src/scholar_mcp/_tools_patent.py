@@ -33,6 +33,7 @@ from ._epo_client import (
     with_epo_retry,
 )
 from ._epo_xml import biblio_has_data, extract_doi
+from ._npl_titles import attach_title_candidates, extract_arxiv_id
 from ._patent_numbers import DocdbNumber, normalize
 from ._protocols import CacheProtocol
 from ._rate_limiter import RateLimitedError, S2RetryDeadlineExceeded
@@ -294,10 +295,12 @@ async def get_patent(
     that value as ``text_offset``. Claims and description are null when EPO
     holds no full text for the publication; fetch_patent_pdf then has the
     document. When sections includes 'citations', non-patent literature
-    references are resolved on a best-effort basis: one with a DOI to a
-    Semantic Scholar ``paper``, otherwise one with an ISBN to an Open Library
-    ``book``. An unresolved reference keeps its raw citation string, plus its
-    ``isbn`` when it has one.
+    references are resolved on a best-effort basis: one with a DOI or arXiv
+    ID to a Semantic Scholar ``paper``, otherwise one with an ISBN to an Open
+    Library ``book``. A reference with neither may carry a title-matched
+    ``candidate`` with ``confidence: "unconfirmed"``: verify it before citing
+    it. Every reference keeps its raw citation string, plus its ``isbn`` when
+    it has one.
 
     When EPO reports itself busy this waits for it to clear, which can take a
     few minutes, so the call may answer with a job handle to poll using
@@ -646,6 +649,26 @@ _AVAILABLE_SECTIONS = {
 }
 
 
+def _npl_s2_id(raw: str, doi: str | None) -> str | None:
+    """Return the Semantic Scholar identifier an NPL reference names, if any.
+
+    An arXiv identifier wins over an arXiv DataCite DOI (``10.48550/arXiv.…``),
+    which S2 resolves less reliably than the arXiv ID itself; any other DOI
+    wins over an arXiv identifier (#59).
+
+    Args:
+        raw: Raw citation string.
+        doi: The DOI extracted from it, or ``None``.
+
+    Returns:
+        ``DOI:…`` or ``ARXIV:…``, or ``None``.
+    """
+    arxiv = extract_arxiv_id(raw, doi)
+    if doi and not (arxiv and doi.lower().startswith("10.48550/")):
+        return f"DOI:{doi}"
+    return f"ARXIV:{arxiv}" if arxiv else None
+
+
 def _attach_npl_chapter_info(entry: dict[str, Any], raw: str) -> None:
     """Attach ``chapter_info`` to an NPL *entry* when hints are found.
 
@@ -872,10 +895,11 @@ async def _fetch_patent_sections(
             dois = [extract_doi(npl["raw"]) for npl in npl_refs]
             doi_indices: list[int] = []
             doi_ids: list[str] = []
-            for i, doi in enumerate(dois):
-                if doi:
+            for i, npl in enumerate(npl_refs):
+                s2_id = _npl_s2_id(npl["raw"], dois[i])
+                if s2_id:
                     doi_indices.append(i)
-                    doi_ids.append(f"DOI:{doi}")
+                    doi_ids.append(s2_id)
 
             # Batch resolve DOIs via S2
             s2_results: list[PaperRecord | None] = [None] * len(doi_ids)
@@ -918,6 +942,8 @@ async def _fetch_patent_sections(
 
         if resolve_book is not None:
             await _attach_npl_books(resolved_npl, resolve_book, patent_id)
+        if s2 is not None:
+            await attach_title_candidates(resolved_npl, s2, patent_id)
         result["citations"] = {
             "patent_refs": patent_refs,
             "npl_refs": resolved_npl,
