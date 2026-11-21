@@ -15,6 +15,7 @@ import httpx
 import pytest
 import respx
 
+from scholar_mcp._npl_resolution import _npl_s2_id
 from scholar_mcp._npl_titles import (
     MAX_TITLE_MATCHES,
     attach_title_candidates,
@@ -23,7 +24,6 @@ from scholar_mcp._npl_titles import (
 )
 from scholar_mcp._rate_limiter import RateLimitedError
 from scholar_mcp._s2_client import S2Client
-from scholar_mcp._tools_patent import _npl_s2_id
 
 S2_BASE = "https://api.semanticscholar.org/graph/v1"
 

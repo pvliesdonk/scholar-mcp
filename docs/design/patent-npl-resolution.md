@@ -5,6 +5,9 @@ reference with its raw citation string and, on a best-effort basis, the work
 it names. Resolution reruns on every call, so it reflects the current paper
 and book indexes; only the raw EPO citations are cached.
 
+The pipeline is `resolve_npl_refs` in `src/scholar_mcp/_npl_resolution.py`
+(#710); `_tools_patent.py` only fetches and caches the raw citations.
+
 ## Papers by DOI
 
 A DOI found in the raw text ([DOIs in free-text citations](reference/doi-in-citation-text.md))

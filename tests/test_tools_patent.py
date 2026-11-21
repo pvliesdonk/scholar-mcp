@@ -2087,3 +2087,10 @@ async def test_get_patent_without_description_has_no_paging_fields(
         )
     data = json.loads(result.content[0].text)
     assert "text_offset" not in data
+
+
+def test_build_cql_empty_date_bound_adds_no_clause() -> None:
+    """An empty date bound is no bound; it once emitted ``pd <= None`` (#710)."""
+    assert _build_cql("battery", date_from="") == 'ta="battery"'
+    with pytest.raises(ValueError, match="At least one search criterion"):
+        _build_cql(date_from="", date_to="")

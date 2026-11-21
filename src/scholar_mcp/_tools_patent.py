@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio as _asyncio
 import logging
 import re
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
@@ -13,10 +14,7 @@ if TYPE_CHECKING:
 
     from fastmcp_pvl_core import Jobs, JobsConfig
 
-    from ._record_types import BookRecord, PaperRecord
-
-    # Looks a book up by ISBN; None when no record is found.
-    BookResolver = Callable[[str], Awaitable[BookRecord | None]]
+    from ._npl_resolution import BookResolver
 
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
@@ -24,20 +22,17 @@ from fastmcp_pvl_core import register_long_running_tool
 from requests.exceptions import HTTPError
 
 from ._book_enrichment import resolve_book_by_isbn
-from ._cache import checked_isbn13
-from ._chapter_parser import hint_to_dict, parse_chapter_hint
 from ._epo_client import (
     EPO_REPORTED_ERRORS,
     EpoClient,
     epo_error_payload,
     with_epo_retry,
 )
-from ._epo_xml import biblio_has_data, extract_doi
-from ._npl_titles import attach_title_candidates, extract_arxiv_id
+from ._epo_xml import biblio_has_data
+from ._npl_resolution import resolve_npl_refs
 from ._patent_numbers import DocdbNumber, normalize
 from ._protocols import CacheProtocol
-from ._rate_limiter import RateLimitedError, S2RetryDeadlineExceeded
-from ._s2_client import FIELD_SETS, S2Client
+from ._s2_client import S2Client
 from ._s2_jobs import register_s2_tool
 from ._server_deps import get_service
 from ._text_window import DEFAULT_MAX_TEXT_CHARS, page_text
@@ -98,6 +93,52 @@ def _cql_escape(s: str) -> str:
     return s.replace("\\", "\\\\").replace('"', '\\"')
 
 
+def _cql_date(value: str | None, name: str) -> str | None:
+    """Normalise a ``YYYY-MM-DD`` or ``YYYYMMDD`` date to ``YYYYMMDD``.
+
+    Args:
+        value: The date, or ``None``.
+        name: The parameter it came from, for the error.
+
+    Returns:
+        The digits, or ``None`` when *value* is empty.
+
+    Raises:
+        ValueError: When the date has anything but digits and hyphens.
+    """
+    if not value:
+        return None
+    digits = value.replace("-", "")
+    if not digits.isdigit():
+        raise ValueError(f"Invalid {name}: {value!r}")
+    return digits
+
+
+def _cql_date_clause(
+    date_from: str | None, date_to: str | None, date_type: str
+) -> str | None:
+    """Build the CQL date-range clause, or ``None`` without a bound.
+
+    Args:
+        date_from: Lower bound, or ``None``.
+        date_to: Upper bound, or ``None``.
+        date_type: ``"publication"``, ``"filing"`` or ``"priority"``.
+
+    Returns:
+        A ``within``, ``>=`` or ``<=`` clause on the date field.
+    """
+    field = _DATE_FIELDS.get(date_type, "pd")
+    d_from = _cql_date(date_from, "date_from")
+    d_to = _cql_date(date_to, "date_to")
+    if d_from is not None and d_to is not None:
+        return f'{field} within "{d_from},{d_to}"'
+    if d_from is not None:
+        return f"{field} >= {d_from}"
+    if d_to is not None:
+        return f"{field} <= {d_to}"
+    return None
+
+
 def _build_cql(
     query: str | None = None,
     *,
@@ -137,35 +178,16 @@ def _build_cql(
     Raises:
         ValueError: When no search criteria are provided at all.
     """
-    parts: list[str] = []
-    if query is not None:
-        parts.append(f'ta="{_cql_escape(query)}"')
-
-    if cpc_classification is not None:
-        parts.append(f'cpc="{_cql_escape(cpc_classification)}"')
-
-    if applicant is not None:
-        parts.append(f'pa="{_cql_escape(applicant)}"')
-
-    if inventor is not None:
-        parts.append(f'in="{_cql_escape(inventor)}"')
-
-    if date_from is not None or date_to is not None:
-        field = _DATE_FIELDS.get(date_type, "pd")
-        # Normalise YYYY-MM-DD → YYYYMMDD
-        d_from = date_from.replace("-", "") if date_from else None
-        d_to = date_to.replace("-", "") if date_to else None
-        if d_from and not d_from.isdigit():
-            raise ValueError(f"Invalid date_from: {date_from!r}")
-        if d_to and not d_to.isdigit():
-            raise ValueError(f"Invalid date_to: {date_to!r}")
-        if d_from is not None and d_to is not None:
-            parts.append(f'{field} within "{d_from},{d_to}"')
-        elif d_from is not None:
-            parts.append(f"{field} >= {d_from}")
-        else:
-            parts.append(f"{field} <= {d_to}")
-
+    text_fields = (
+        ("ta", query),
+        ("cpc", cpc_classification),
+        ("pa", applicant),
+        ("in", inventor),
+    )
+    parts = [f'{name}="{_cql_escape(v)}"' for name, v in text_fields if v is not None]
+    date_clause = _cql_date_clause(date_from, date_to, date_type)
+    if date_clause is not None:
+        parts.append(date_clause)
     if jurisdiction is not None:
         parts.append(f'pn="{_cql_escape(jurisdiction)}"')
 
@@ -649,43 +671,6 @@ _AVAILABLE_SECTIONS = {
 }
 
 
-def _npl_s2_id(raw: str, doi: str | None) -> str | None:
-    """Return the Semantic Scholar identifier an NPL reference names, if any.
-
-    An arXiv identifier wins over an arXiv DataCite DOI (``10.48550/arXiv.…``),
-    which S2 resolves less reliably than the arXiv ID itself; any other DOI
-    wins over an arXiv identifier (#59).
-
-    Args:
-        raw: Raw citation string.
-        doi: The DOI extracted from it, or ``None``.
-
-    Returns:
-        ``DOI:…`` or ``ARXIV:…``, or ``None``.
-    """
-    arxiv = extract_arxiv_id(raw, doi)
-    if doi and not (arxiv and doi.lower().startswith("10.48550/")):
-        return f"DOI:{doi}"
-    return f"ARXIV:{arxiv}" if arxiv else None
-
-
-def _attach_npl_chapter_info(entry: dict[str, Any], raw: str) -> None:
-    """Attach ``chapter_info`` to an NPL *entry* when hints are found.
-
-    Parses the raw citation string for chapter-level hints and, if any
-    are present, adds a ``chapter_info`` dict with ``citation_source``
-    set to ``"parsed"``.
-
-    Args:
-        entry: Mutable NPL entry dict to enrich in-place.
-        raw: Raw citation string from the patent NPL reference.
-    """
-    hint = parse_chapter_hint(raw)
-    if not hint.has_chapter_info:
-        return
-    entry["chapter_info"] = hint_to_dict(hint)
-
-
 def _is_http_404(exc: HTTPError) -> bool:
     """Return whether an OPS ``HTTPError`` carries a 404 response.
 
@@ -696,64 +681,6 @@ def _is_http_404(exc: HTTPError) -> bool:
         ``True`` when the response status is 404.
     """
     return exc.response is not None and exc.response.status_code == 404
-
-
-async def _lookup_npl_book(
-    resolve_book: BookResolver, isbn: str, patent_id: str
-) -> BookRecord | None:
-    """Resolve one cited book, treating any failure as not found.
-
-    Book resolution is best-effort, like the DOI lookup: a failing Open
-    Library leaves the reference with its ISBN rather than failing the call.
-
-    Args:
-        resolve_book: ISBN lookup.
-        isbn: Validated ISBN-13.
-        patent_id: Patent the reference is cited by, for the log.
-
-    Returns:
-        The book record, or ``None``.
-    """
-    try:
-        return await resolve_book(isbn)
-    except Exception:
-        logger.warning(
-            "npl_book_resolution_failed patent=%s isbn=%s",
-            patent_id,
-            isbn,
-            exc_info=True,
-        )
-        return None
-
-
-async def _attach_npl_books(
-    entries: list[dict[str, Any]], resolve_book: BookResolver, patent_id: str
-) -> None:
-    """Attach the cited book to NPL references that carry a valid ISBN (#70).
-
-    Only references no paper was found for are tried. A found book is added
-    as ``book`` with ``confidence: "high"``; otherwise the reference keeps
-    its validated ``isbn`` so a caller can look it up elsewhere.
-
-    Args:
-        entries: Resolved NPL entries, changed in place.
-        resolve_book: ISBN lookup.
-        patent_id: Patent the references are cited by, for the log.
-    """
-    pending: list[tuple[dict[str, Any], str]] = []
-    for entry in entries:
-        isbn = checked_isbn13((entry.get("chapter_info") or {}).get("isbn") or "")
-        if isbn is not None and "paper" not in entry:
-            pending.append((entry, isbn))
-    books = await _asyncio.gather(
-        *(_lookup_npl_book(resolve_book, isbn, patent_id) for _, isbn in pending)
-    )
-    for (entry, isbn), book in zip(pending, books, strict=True):
-        if book is None:
-            entry["isbn"] = isbn
-        else:
-            entry["book"] = book
-            entry["confidence"] = "high"
 
 
 async def _fetch_fulltext(
@@ -788,6 +715,169 @@ async def _fetch_fulltext(
     return text
 
 
+@dataclass(frozen=True)
+class _SectionContext:
+    """What every section fetcher of one ``get_patent`` call needs."""
+
+    doc: DocdbNumber
+    epo: EpoClient
+    cache: CacheProtocol
+    s2: S2Client | None
+    resolve_book: BookResolver | None
+
+    @property
+    def patent_id(self) -> str:
+        """The DOCDB number the caches are keyed on."""
+        return self.doc.docdb
+
+
+async def _cached(
+    get_cached: Callable[[], Awaitable[Any]],
+    fetch: Callable[[], Awaitable[Any]],
+    store: Callable[[Any], Awaitable[None]],
+) -> Any:
+    """Return a cached section, or fetch it from EPO and cache it.
+
+    Args:
+        get_cached: Reads the cached value, ``None`` when absent.
+        fetch: Fetches the section from EPO.
+        store: Caches a fetched value.
+
+    Returns:
+        The section value.
+    """
+    cached = await get_cached()
+    if cached is not None:
+        return cached
+    value = await fetch()
+    await store(value)
+    return value
+
+
+async def _section_biblio(ctx: _SectionContext) -> dict[str, Any]:
+    """Fetch the biblio section, which also tells whether the patent exists.
+
+    Args:
+        ctx: Section context.
+
+    Returns:
+        ``{"biblio": ...}``, or ``{"_not_found": True}`` when OPS has no such
+        publication.
+    """
+    cached = await ctx.cache.get_patent(ctx.patent_id)
+    if cached is not None:
+        return {"biblio": cached}
+    try:
+        biblio = await ctx.epo.get_biblio(ctx.doc)
+    except HTTPError as exc:
+        if not _is_http_404(exc):
+            raise
+        # OPS answers a nonexistent publication with 404 (#475).
+        return {"_not_found": True}
+    if not biblio_has_data(biblio):
+        return {"_not_found": True}
+    await ctx.cache.set_patent(ctx.patent_id, biblio)
+    return {"biblio": biblio}
+
+
+async def _section_claims(ctx: _SectionContext) -> dict[str, Any]:
+    """Fetch the claims section (see :func:`_fetch_fulltext`)."""
+    claims = await _fetch_fulltext(
+        lambda: ctx.cache.get_patent_claims(ctx.patent_id),
+        lambda: ctx.epo.get_claims(ctx.doc),
+        lambda text: ctx.cache.set_patent_claims(ctx.patent_id, text),
+    )
+    return {"claims": claims}
+
+
+async def _section_description(ctx: _SectionContext) -> dict[str, Any]:
+    """Fetch the description section (see :func:`_fetch_fulltext`)."""
+    description = await _fetch_fulltext(
+        lambda: ctx.cache.get_patent_description(ctx.patent_id),
+        lambda: ctx.epo.get_description(ctx.doc),
+        lambda text: ctx.cache.set_patent_description(ctx.patent_id, text),
+    )
+    return {"description": description}
+
+
+async def _section_family(ctx: _SectionContext) -> dict[str, Any]:
+    """Fetch the family section."""
+    family = await _cached(
+        lambda: ctx.cache.get_patent_family(ctx.patent_id),
+        lambda: ctx.epo.get_family(ctx.doc),
+        lambda value: ctx.cache.set_patent_family(ctx.patent_id, value),
+    )
+    return {"family": family}
+
+
+async def _section_legal(ctx: _SectionContext) -> dict[str, Any]:
+    """Fetch the legal-events section."""
+    legal = await _cached(
+        lambda: ctx.cache.get_patent_legal(ctx.patent_id),
+        lambda: ctx.epo.get_legal(ctx.doc),
+        lambda value: ctx.cache.set_patent_legal(ctx.patent_id, value),
+    )
+    return {"legal": legal}
+
+
+async def _section_citations(ctx: _SectionContext) -> dict[str, Any]:
+    """Fetch the citations section, resolving its NPL references.
+
+    Only the raw EPO citations are cached; NPL resolution reruns on every
+    call so it reflects the current paper and book indexes.
+
+    Args:
+        ctx: Section context.
+
+    Returns:
+        ``{"citations": {"patent_refs": [...], "npl_refs": [...]}}``.
+    """
+    citations = await _cached(
+        lambda: ctx.cache.get_patent_citations(ctx.patent_id),
+        lambda: ctx.epo.get_citations(ctx.doc),
+        lambda value: ctx.cache.set_patent_citations(ctx.patent_id, value),
+    )
+    npl_refs = await resolve_npl_refs(
+        citations["npl_refs"],
+        s2=ctx.s2,
+        resolve_book=ctx.resolve_book,
+        patent_id=ctx.patent_id,
+    )
+    return {
+        "citations": {"patent_refs": citations["patent_refs"], "npl_refs": npl_refs}
+    }
+
+
+_SECTION_FETCHERS: dict[str, Callable[[_SectionContext], Awaitable[dict[str, Any]]]] = {
+    "biblio": _section_biblio,
+    "claims": _section_claims,
+    "description": _section_description,
+    "family": _section_family,
+    "legal": _section_legal,
+    "citations": _section_citations,
+}
+
+
+def _raise_section_failure(outcomes: Sequence[object]) -> None:
+    """Re-raise the first section failure, EPO's reportable states first.
+
+    A throttle or exhausted quota must reach ``_run_epo``'s retry and
+    reporting, whichever section happened to fail first.
+
+    Args:
+        outcomes: What each section fetcher returned or raised.
+
+    Raises:
+        BaseException: The first EPO-reported error, else the first failure.
+    """
+    for outcome in outcomes:
+        if isinstance(outcome, EPO_REPORTED_ERRORS):
+            raise outcome
+    for outcome in outcomes:
+        if isinstance(outcome, BaseException):
+            raise outcome
+
+
 async def _fetch_patent_sections(
     *,
     doc: DocdbNumber,
@@ -799,12 +889,12 @@ async def _fetch_patent_sections(
 ) -> dict[str, Any]:
     """Fetch requested sections for a patent, with caching.
 
-    Cache lookups run concurrently via ``asyncio.gather``.  Actual EPO
+    Sections are fetched concurrently via ``asyncio.gather``.  Actual EPO
     API calls are serialised by the ``asyncio.Lock`` inside ``EpoClient``,
     so no additional concurrency limiting is needed here.  When the
     ``citations`` section is requested, non-patent literature (NPL)
-    references are resolved against Semantic Scholar on a best-effort
-    basis if an S2 client is provided.
+    references are resolved on a best-effort basis
+    (:func:`scholar_mcp._npl_resolution.resolve_npl_refs`).
 
     Args:
         doc: Normalised DOCDB patent number.
@@ -818,175 +908,34 @@ async def _fetch_patent_sections(
     Returns:
         A mapping with patent_number and the requested section data.
     """
-    patent_id = doc.docdb
-    result: dict[str, Any] = {"patent_number": patent_id}
-
-    async def _fetch_biblio() -> None:
-        cached = await cache.get_patent(patent_id)
-        if cached is not None:
-            result["biblio"] = cached
-            return
-        try:
-            biblio = await epo.get_biblio(doc)
-        except HTTPError as exc:
-            if not _is_http_404(exc):
-                raise
-            # OPS answers a nonexistent publication with 404 (#475).
-            result["_not_found"] = True
-            return
-        if not biblio_has_data(biblio):
-            result["_not_found"] = True
-            return
-        await cache.set_patent(patent_id, biblio)
-        result["biblio"] = biblio
-
-    async def _fetch_claims() -> None:
-        result["claims"] = await _fetch_fulltext(
-            lambda: cache.get_patent_claims(patent_id),
-            lambda: epo.get_claims(doc),
-            lambda text: cache.set_patent_claims(patent_id, text),
-        )
-
-    async def _fetch_description() -> None:
-        result["description"] = await _fetch_fulltext(
-            lambda: cache.get_patent_description(patent_id),
-            lambda: epo.get_description(doc),
-            lambda text: cache.set_patent_description(patent_id, text),
-        )
-
-    async def _fetch_family() -> None:
-        cached = await cache.get_patent_family(patent_id)
-        if cached is not None:
-            result["family"] = cached
-            return
-        family = await epo.get_family(doc)
-        await cache.set_patent_family(patent_id, family)
-        result["family"] = family
-
-    async def _fetch_legal() -> None:
-        cached = await cache.get_patent_legal(patent_id)
-        if cached is not None:
-            result["legal"] = cached
-            return
-        legal = await epo.get_legal(doc)
-        await cache.set_patent_legal(patent_id, legal)
-        result["legal"] = legal
-
-    async def _fetch_citations() -> None:
-        cached = await cache.get_patent_citations(patent_id)
-        if cached is not None:
-            citations = cached
-        else:
-            citations = await epo.get_citations(doc)
-            await cache.set_patent_citations(patent_id, citations)
-
-        patent_refs = citations["patent_refs"]
-        npl_refs = citations["npl_refs"]
-
-        # Resolve NPL references against Semantic Scholar.
-        # Intentionally re-runs on cache hits: the cache stores raw EPO
-        # citation data (patent_refs + unresolved npl_refs) so that S2
-        # resolution always reflects the latest paper index state.
-        resolved_npl: list[dict[str, Any]] = []
-        if s2 is not None and npl_refs:
-            # Build batch of DOI identifiers. The DOI is read from the raw text
-            # again rather than from the parsed ``doi``: citations cached before
-            # #482 stored None for the doi.org and "DOI 10." forms.
-            dois = [extract_doi(npl["raw"]) for npl in npl_refs]
-            doi_indices: list[int] = []
-            doi_ids: list[str] = []
-            for i, npl in enumerate(npl_refs):
-                s2_id = _npl_s2_id(npl["raw"], dois[i])
-                if s2_id:
-                    doi_indices.append(i)
-                    doi_ids.append(s2_id)
-
-            # Batch resolve DOIs via S2
-            s2_results: list[PaperRecord | None] = [None] * len(doi_ids)
-            if doi_ids:
-                try:
-                    s2_results = await s2.batch_resolve(
-                        doi_ids, fields=FIELD_SETS["compact"]
-                    )
-                except RateLimitedError:
-                    raise
-                except S2RetryDeadlineExceeded:
-                    raise
-                except Exception:
-                    logger.warning("npl_resolution_failed patent=%s", patent_id)
-                    s2_results = [None] * len(doi_ids)
-
-            # Build resolved NPL list
-            s2_map: dict[int, PaperRecord | None] = dict(
-                zip(doi_indices, s2_results, strict=True)
-            )
-            for i, npl in enumerate(npl_refs):
-                entry: dict[str, Any] = {"raw": npl["raw"]}
-                s2_paper = s2_map.get(i)
-                if s2_paper is not None:
-                    entry["paper"] = s2_paper
-                    entry["confidence"] = "high"
-                elif dois[i]:
-                    # Had DOI but resolution failed
-                    entry["doi"] = dois[i]
-                    entry["confidence"] = None
-                else:
-                    entry["confidence"] = None
-                _attach_npl_chapter_info(entry, npl["raw"])
-                resolved_npl.append(entry)
-        else:
-            for n in npl_refs:
-                entry = {"raw": n["raw"], "confidence": None}
-                _attach_npl_chapter_info(entry, n["raw"])
-                resolved_npl.append(entry)
-
-        if resolve_book is not None:
-            await _attach_npl_books(resolved_npl, resolve_book, patent_id)
-        if s2 is not None:
-            await attach_title_candidates(resolved_npl, s2, patent_id)
-        result["citations"] = {
-            "patent_refs": patent_refs,
-            "npl_refs": resolved_npl,
-        }
-
-    fetcher_map: dict[str, Any] = {
-        "biblio": _fetch_biblio,
-        "claims": _fetch_claims,
-        "description": _fetch_description,
-        "family": _fetch_family,
-        "legal": _fetch_legal,
-        "citations": _fetch_citations,
-    }
-
-    fetchers = [fetcher_map[s]() for s in sections if s in fetcher_map]
+    ctx = _SectionContext(doc, epo, cache, s2, resolve_book)
+    names = [s for s in sections if s in _SECTION_FETCHERS]
     # Always probe biblio for not-found detection, even when not requested.
-    if "biblio" not in sections:
-        fetchers.append(_fetch_biblio())
-    outcomes = await _asyncio.gather(*fetchers, return_exceptions=True)
+    if "biblio" not in names:
+        names.append("biblio")
+    outcomes = await _asyncio.gather(
+        *(_SECTION_FETCHERS[name](ctx) for name in names), return_exceptions=True
+    )
+    parts = [o for o in outcomes if isinstance(o, dict)]
 
-    # Detect not-found from biblio probe.  A nonexistent patent also fails
-    # every other section, so their errors give way to the not-found answer.
-    if result.pop("_not_found", False):
+    # A nonexistent patent also fails every other section, so their errors
+    # give way to the not-found answer.
+    if any(part.get("_not_found") for part in parts):
         return {
             "error": "patent_not_found",
             "detail": (
-                f"Patent {patent_id} not found or has no data. Check the number format."
+                f"Patent {ctx.patent_id} not found or has no data. "
+                "Check the number format."
             ),
         }
+    _raise_section_failure(outcomes)
 
-    # A throttle or exhausted quota must reach _run_epo's retry and
-    # reporting, whichever section happened to fail first.
-    for outcome in outcomes:
-        if isinstance(outcome, EPO_REPORTED_ERRORS):
-            raise outcome
-    for outcome in outcomes:
-        if isinstance(outcome, BaseException):
-            raise outcome
-
-    # Remove biblio if it was only fetched as a probe for not-found detection
+    result: dict[str, Any] = {"patent_number": ctx.patent_id}
+    for part in parts:
+        result.update(part)
+    # Drop biblio when it was fetched only as the not-found probe.
     if "biblio" not in sections:
         result.pop("biblio", None)
-
     return result
 
 
