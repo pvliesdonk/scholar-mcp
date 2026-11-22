@@ -2,6 +2,22 @@
 
 <!-- version list -->
 
+## 3.4.0-rc.1 (2026-11-22)
+
+### Features
+
+- format patents in generate_citations (#700)
+- return get_patent full text as paged Markdown (#703)
+- resolve books cited by a patent through Open Library (#707)
+- match non-patent literature without a DOI to papers (#708)
+
+### Bug Fixes
+
+- read get_patent claims and description from OPS's full-text response (#702)
+- list each patent applicant and inventor once (#730)
+- treat a batch of only unknown paper ids as unresolved (#731)
+- report a nonexistent patent in a batch as not found (#732)
+
 ## 3.4.0-rc.0 (2026-11-21)
 
 ### Features
