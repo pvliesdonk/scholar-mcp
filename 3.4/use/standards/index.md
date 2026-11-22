@@ -1,0 +1,283 @@
+# Tier 2 standards sync: ISO, IEC & IEEE
+
+Scholar MCP caches ISO, IEC, and IEEE standards metadata locally. The source of truth is the community-maintained Relaton YAML dumps at [`relaton/relaton-data-iso`](https://github.com/relaton/relaton-data-iso), [`relaton/relaton-data-iec`](https://github.com/relaton/relaton-data-iec), and [`relaton/relaton-data-ieee`](https://github.com/relaton/relaton-data-ieee), read from their `v2` branch. Each repository's `main` branch no longer receives data.
+
+Only a sync replaces a synced record. A lookup through `get_standard` or `resolve_standard_identifier` caches what it fetched, but never over a synced record, so a synced standard stays in `search_standards` and never expires between syncs.
+
+## Running a sync
+
+```
+scholar-mcp sync-standards            # all registered bodies
+scholar-mcp sync-standards --body ISO # only ISO
+scholar-mcp sync-standards --body IEEE # only IEEE
+scholar-mcp sync-standards --force    # re-sync even if upstream SHA is unchanged
+```
+
+Exit codes: `0` on success (or no-op), `1` on hard failure, `3` on partial failure (some bodies succeeded, some did not).
+
+After upgrading to a release that corrects synced records
+
+A fix to how records are read from the Relaton dumps only reaches the local copy on the next sync. Such a release forgets the upstream commit recorded for ISO, IEC, and IEEE when the server first opens its cache, so the next `sync-standards` run rewrites every record even if upstream has not changed. Until that run, the records keep what the earlier release stored. Release 3.0 needs this once: ISO and IEC titles synced before it carry only the first part of the title.
+
+After upgrading to the release that reads the `v2` branch
+
+Earlier releases synced each repository's `main` branch, whose data stops in 2025 or early 2026, and reported every ISO record as `published`. The first `sync-standards` run after the upgrade rewrites every record from `v2` and deletes the synced identifiers `v2` no longer lists, mostly drafts that have since advanced and IEEE drafts that `v2` names differently. Until that run, search and lookups answer from the `main` data. Standards that were only fetched live, never synced, are fetched again on their next lookup.
+
+## Running a sync from Docker
+
+The `scholar-mcp` binary is on `PATH` inside the container, so no `bash -c` or `uv run` wrapper is needed.
+
+**Exec into a running container** (uses the existing container's open DB and env):
+
+```
+docker compose exec -u appuser scholar-mcp scholar-mcp sync-standards
+```
+
+The `-u appuser` flag is required because the container's default user is `root` (the entrypoint uses `gosu` to drop privileges for the main process, but `exec` bypasses the entrypoint). Running without it would create root-owned files in the shared volume.
+
+**One-off via Docker Compose** (goes through the entrypoint → drops to `appuser`):
+
+```
+docker compose run --rm scholar-mcp scholar-mcp sync-standards
+```
+
+The `docker compose run` form is preferred when running outside of an already-running stack, it picks up the correct UID/GID from the entrypoint and inherits all env vars from the `environment:` / `env_file:` declarations in `compose.yml`.
+
+A sync can run while the server keeps answering. The cache opens its database in WAL mode, so lookups read without waiting for the sync, and a lookup that writes waits for the sync's current batch to finish, up to 30 seconds, rather than failing. WAL keeps two files beside `cache.db`, `cache.db-wal` and `cache.db-shm`. Copy all three, or stop the server first, when you back up the cache.
+
+To sync only a specific body:
+
+```
+docker compose exec -u appuser scholar-mcp scholar-mcp sync-standards --body ISO
+docker compose run --rm scholar-mcp scholar-mcp sync-standards --body ISO
+```
+
+## Cron / systemd scheduling
+
+Daily resync is plenty; Relaton dumps move slowly and the SHA check skips the tarball fetch when nothing has changed.
+
+```
+0 3 * * *  /usr/local/bin/scholar-mcp sync-standards >> /var/log/scholar-mcp-sync.log 2>&1
+```
+
+Or with systemd:
+
+```
+# /etc/systemd/system/scholar-mcp-sync.service
+[Unit]
+Description=Sync scholar-mcp Tier 2 standards
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/scholar-mcp sync-standards
+```
+
+```
+# /etc/systemd/system/scholar-mcp-sync.timer
+[Timer]
+OnCalendar=daily
+Persistent=true
+[Install]
+WantedBy=timers.target
+```
+
+## GitHub rate limiting
+
+The sync makes 2 GitHub API calls per body (`/commits/{branch}` and `/tarball/{sha}`). Unauthenticated clients get 60 requests per hour per IP, more than enough for daily cron. For repeated `--force` testing, set `SCHOLAR_GITHUB_TOKEN` to a personal access token (no scopes required for public-repo reads) to lift the limit to 5,000 req/hr:
+
+```
+export SCHOLAR_GITHUB_TOKEN=ghp_...
+```
+
+## Live-fetch fallback
+
+A `get_standard("ISO 9001:2015")` call on an unsynced cache triggers a single-file fetch from `raw.githubusercontent.com`. Results are cached with a 90-day TTL (standards rarely change) and can be replaced by running `sync-standards` to populate the full synced copy.
+
+## Joint ISO/IEC standards
+
+Standards like `ISO/IEC 27001:2022` and `ISO/IEC 15408:2022` appear in both dumps. The loader stores each joint identifier once, and the row reflects the dump that last wrote it. Its `body` is that dump's body, `"ISO"` or `"IEC"`, not `"ISO/IEC"`: the records list identifiers of their own dump's type only, so the loader can't tell a joint document from the record.
+
+## Troubleshooting
+
+### "removal pass aborted"
+
+A Relaton dump keeps a withdrawn edition at its withdrawn stage, so an identifier that disappears from it was renamed or advanced; the ISO, IEC and IEEE sync deletes such records. When the new dump lists fewer than half as many records as the sync held before, it looks truncated and the sync deletes nothing. Run `--force` after confirming upstream state is sane.
+
+### "withdrawal pass aborted" or "removal pass aborted"
+
+The CC sync marks records that disappear from its source as `withdrawn`. The CEN table lists withdrawn standards itself, so the CEN sync deletes a record whose entry left the table, which means it was never a harmonised standard. Either sync skips that pass when more than 50% of prior identifiers are missing, which protects the whole cache from a broken edit. Run `--force` after confirming upstream state is sane.
+
+### Rate-limit errors (HTTP 403)
+
+Indicates the unauthenticated limit has been exhausted. Set `SCHOLAR_GITHUB_TOKEN` or wait an hour.
+
+### Inspecting last sync
+
+Open the SQLite cache database (default `$SCHOLAR_MCP_CACHE_DIR/scholar.db`) and query the `standards_sync_runs` table:
+
+```
+SELECT body, upstream_ref, added, updated, unchanged, withdrawn, errors,
+       datetime(started_at, 'unixepoch') AS started,
+       datetime(finished_at, 'unixepoch') AS finished
+FROM standards_sync_runs;
+```
+
+To see how many standards are cached per body:
+
+```
+SELECT source, COUNT(*) AS count, datetime(MAX(synced_at), 'unixepoch') AS last_synced
+FROM standards
+WHERE source IS NOT NULL
+GROUP BY source;
+```
+
+## IEEE
+
+IEEE metadata comes from the [`relaton/relaton-data-ieee`](https://github.com/relaton/relaton-data-ieee) repository.
+
+### Supported identifier forms
+
+- `IEEE 1003.1-2024`, `IEEE 802.11-2020`, plain IEEE standards
+- `IEEE Std 1588-2019`, the `Std` token is accepted (upstream convention)
+- `IEC/IEEE 61588-2021`, joint standards hosted in the IEEE repo
+- `ISO/IEC/IEEE 42010-2011`, triple-joint standards (ISO + IEC + IEEE committees)
+
+For joint standards the stored `body` field reflects the true joint nature (such as `"ISO/IEC/IEEE"`), while dispatch still routes through the `"IEEE"` fetcher key. Per-body filename conventions differ between repositories: ISO/IEC use lowercase-hyphen (`iso-9001-2015.yaml`), IEEE uses uppercase-underscore (`IEEE_1003.1-2024.yaml`, `ISO_IEC_IEEE_42010-2011.yaml`).
+
+### Not yet supported (filed follow-ups)
+
+- `ANSI/IEEE Std 754-1985` and other historical ANSI-co-branded identifiers, see [#127](https://github.com/pvliesdonk/scholar-mcp/issues/127)
+- `AIEE 11-1937` and other pre-IEEE AIEE identifiers, see [#127](https://github.com/pvliesdonk/scholar-mcp/issues/127)
+- `IEEE P802.11-REVme` unpublished drafts, see [#128](https://github.com/pvliesdonk/scholar-mcp/issues/128)
+- Explicit `body="IEC/IEEE"` / `body="ISO/IEC/IEEE"` search dispatch, see [#129](https://github.com/pvliesdonk/scholar-mcp/issues/129). Today, use identifier lookup or `body="IEEE"` which returns joints too.
+- IEEE Xplore authenticated full-text, see [#92](https://github.com/pvliesdonk/scholar-mcp/issues/92)
+
+## Common Criteria
+
+Common Criteria metadata is sync-only, there's no live API for the CC portal. Run:
+
+```
+scholar-mcp sync-standards --body CC
+```
+
+to populate the local cache with core CC documents and Protection Profiles.
+
+### Core CC documents (~15 records)
+
+The core CC documents (`CC:2022`, `CC:2017` (CC 3.1 Revision 5), and the Common Evaluation Methodology (CEM)) are stored in a hard-coded table in `_sync_cc.py`. Updates land manually when CCRA publishes a new release (every ~5 years).
+
+CC core documents that are also published as ISO/IEC 15408 / 18045 (parts 1-3) write **two records** under one `source="CC"` sync, one with `body="CC"` (`CC:2022 Part 1`), one with `body="ISO/IEC"` (`ISO/IEC 15408-1:2022`). Both records share the same free CC PDF as `full_text_url`. The `related` field on each cross-links to the other.
+
+Why two records? CC and ISO/IEC 15408 are **parallel publications**, not a joint committee output. Existing citations use either form (`CC:2022` or `ISO/IEC 15408`) but never a joined form. To keep returned metadata matching what the LLM looked up, we store one record per publishing body.
+
+To prevent collision with the existing ISO loader, the ISO loader has a small denylist (`_RELATON_SKIP_SLUGS`) covering the 15408 / 18045 family, those records are owned exclusively by the CC loader, which has the freely downloadable PDFs (vs. ISO's paywalled metadata).
+
+### Protection Profiles (~500 records)
+
+Loaded from `https://www.commoncriteriaportal.org/pps/pps.csv`. Identifier extraction uses per-scheme regex with a composite fallback:
+
+| Scheme       | Code | Identifier example                           |
+| ------------ | ---- | -------------------------------------------- |
+| German BSI   | DE   | `BSI-CC-PP-0099-V2-2017`                     |
+| Korean KECS  | KR   | `KECS-PP-0822-2017`                          |
+| French ANSSI | FR   | `ANSSI-CC-PP-2014/01`                        |
+| US NIAP      | US   | `NIAP-PP-...` / `PP_..._v3.1`                |
+| Spanish CCN  | ES   | `CCN-PP-0058-2021`                           |
+| Other        | \*   | `CC PP {scheme}-{name}` (composite fallback) |
+
+### Supported identifier forms
+
+- `CC:2022`, `CC:2017`, `CC 3.1 R5`, `CC 3.1 Revision 5`
+- `CC:2022 Part 1`, `Common Criteria 2022 Part 1`
+- `CEM:2022`, `Common Evaluation Methodology 2022`
+- `ISO/IEC 15408-1:2022` (resolves to the CC-owned dual record with free PDF)
+- `BSI-CC-PP-0099-V2-2017`, `KECS-PP-0822-2017`, etc.
+
+### Not yet supported (filed follow-ups)
+
+- ~6700 certified product certifications from sec-certs JSON, see [#131](https://github.com/pvliesdonk/scholar-mcp/issues/131)
+- CC Supporting Documents and Guidance Documents, see [#132](https://github.com/pvliesdonk/scholar-mcp/issues/132)
+- CEM Supplements and Application Notes, see [#133](https://github.com/pvliesdonk/scholar-mcp/issues/133)
+- Auto-discovery of new core documents from the portal HTML, see [#134](https://github.com/pvliesdonk/scholar-mcp/issues/134)
+
+## CEN/CENELEC (European Norms)
+
+CEN/CENELEC harmonised standards metadata is sync-only. Run:
+
+```
+scholar-mcp sync-standards --body CEN
+```
+
+to populate the local cache. Unlike ISO/IEC/IEEE (which sync from upstream Relaton repositories), CEN standards load from a curated hard-coded table covering the most-cited harmonised standards from the major EU directives.
+
+### Covered directives
+
+| Directive                                | Shorthand | Example standards                      |
+| ---------------------------------------- | --------- | -------------------------------------- |
+| Electromagnetic Compatibility 2014/30/EU | EMC       | EN 55032, EN 61000-series              |
+| Radio Equipment 2014/53/EU               | RED       | EN 300 328, EN 301 489-series          |
+| Machinery 2006/42/EC                     | Machinery | EN ISO 12100, EN ISO 13849-1           |
+| Medical Devices 2017/745                 | MDR       | EN ISO 13485, EN ISO 14971             |
+| Toy Safety 2009/48/EC                    | Toys      | EN 71-series                           |
+| General Product Safety 2023/988          | GPSR      | EN 14988, EN 1130 (childcare articles) |
+| Low Voltage 2014/35/EU                   | LVD       | EN 62368-1, EN 60335-1                 |
+
+A record is `"harmonised"` while the Official Journal cites it. A withdrawn one is `"withdrawn"`, with the date its presumption of conformity ended in `withdrawn_date` and its replacement in `superseded_by`, as EN 62061:2005 lists `EN IEC 62061:2021`. The Cyber Resilience Act has no harmonised standards yet, so the table has no CRA entries. The Machinery Directive's list ends on January 20, 2027, when the Machinery Regulation (EU) 2023/1230 replaces it.
+
+### Supported identifier forms
+
+- `EN 55032:2015`, plain European Norm
+- `EN ISO 13849-1:2023`, ISO standard adopted as EN
+- `EN IEC 62443-3-3:2020`, IEC standard adopted as EN
+- `EN ISO/IEC 27001:2022`, ISO/IEC joint adopted as EN
+
+All dispatch to `body="CEN"`. No cross-linking to the ISO/IEC records, the `EN ISO` / `EN IEC` prefix is self-documenting.
+
+### Table maintenance
+
+The `_HARMONISED_STANDARDS` table in `_sync_cen.py` needs periodic review when the EU Commission issues new decisions. A scheduled workflow checks it against the Official Journal each quarter and files what it finds as an issue labelled `cen-review`. It follows the procedure in `docs/design/cen-table-review.md`. If EUR-Lex infrastructure stabilises, [#137](https://github.com/pvliesdonk/scholar-mcp/issues/137) would automate this via Formex XML parsing.
+
+### Not yet supported
+
+- Full CEN/CENELEC catalogue beyond harmonised standards
+- Live scrape fallback from `standards.cencenelec.eu`, see [#138](https://github.com/pvliesdonk/scholar-mcp/issues/138)
+- EUR-Lex Formex XML automated sync, see [#137](https://github.com/pvliesdonk/scholar-mcp/issues/137)
+
+## Auto-enrichment
+
+When `get_citations`, `get_references`, or `get_citation_graph` return S2 citation records, the `StandardsEnricher` automatically checks each citation's title. If the title is predominantly a standards identifier (the resolved canonical form covers >50% of the title text), the enricher attaches a `standard_metadata` field containing the full `StandardRecord`.
+
+### Which citations trigger enrichment
+
+Citations whose title IS a standard, short, identifier-dominated titles:
+
+| Citation title          | Coverage | Triggers? |
+| ----------------------- | -------- | --------- |
+| `RFC 9000`              | 100%     | Yes       |
+| `ISO 9001:2015`         | 100%     | Yes       |
+| `NIST SP 800-53 Rev. 5` | 100%     | Yes       |
+| `IEEE 802.11-2020`      | 100%     | Yes       |
+| `EN 55032:2015`         | 100%     | Yes       |
+
+Citations that mention a standard but are papers ABOUT it:
+
+| Citation title                                   | Coverage | Triggers? |
+| ------------------------------------------------ | -------- | --------- |
+| `Implementing ISO 27001 in healthcare: a review` | ~20%     | No        |
+| `A survey of NIST post-quantum candidates`       | ~15%     | No        |
+
+### What `standard_metadata` contains
+
+A `StandardRecord` dict, the same shape returned by `get_standard`:
+
+- `identifier`, canonical form (such as `"RFC 9000"`, `"ISO 9001:2015"`). A W3C specification carries its common name where the server knows one (`"WCAG 2.1"`) and the short name W3C gives it otherwise (`"html401"`); `get_standard` accepts either.
+- `title`, full standard title
+- `body`, standards body (`"IETF"`, `"ISO"`, `"IEEE"`, `"CC"`, `"CEN"`, etc.)
+- `status`, `"published"`, `"withdrawn"`, `"superseded"`, `"draft"`, `"harmonised"`, etc. An ISO, IEC or IEEE record takes it from the stage the Relaton dump records; a cancelled ISO project reports `"withdrawn"`.
+- `superseded_by`, a list of the identifiers that replace this edition, each one `get_standard` accepts. An RFC that later RFCs obsolete is `"superseded"` and lists them: RFC 2616 gives `RFC 7230` to `RFC 7235`. A withdrawn ISO or IEEE edition whose dump record names its replacement does the same: ISO/IEC 27001:2005 gives `ISO/IEC 27001:2013`. An IEEE replacement keeps the "Std" of its identifier (`IEEE Std 1588-2019`), and `get_standard` answers it from the synced copy. A W3C specification that another one replaced lists it too, as Web Forms 2.0 lists `HTML5`, while a retired one with no named successor, such as HTML 4.01, is `"superseded"` with an empty list. An ETSI deliverable whose newest edition ETSI marks as replaced lists the other ETSI standards that replaced it (`ETSI EN 300 328-1` gives `ETSI EN 300 328`); a historical or withdrawn one is `"withdrawn"`. A NIST publication on CSRC that NIST withdrew lists what replaced it, as `NIST SP 800-53 Rev. 4` lists `NIST SP 800-53 Rev. 5` and `FIPS 186-4` lists `FIPS 186-5`; one withdrawn with no replacement named is `"withdrawn"`. CSRC lists about 550 of the more than 11,000 NIST publications, and the rest always read `"published"`. The server reads the CSRC list along with the catalogue every 90 days, so a withdrawal can take that long to show. NIST identifiers spell out a part, volume or version, as `NIST SP 800-57 Part 1 Rev. 5` and `NIST SP 800-160 Vol. 2`, and keep a numbered edition such as `NIST SP 800-73-4`. A publication on CSRC that the NIST catalogue lacks, such as `FIPS 186-3` or the 2005 `NIST SP 800-53`, has a record built from the CSRC list: its title, date, status and link, with no abstract (`scope` is empty). The CSRC white papers (CSWP) have no records. An IEC edition that IEC marks as revised or replaced lists the editions that followed it, as IEC 60335-2-91:2008 lists `IEC 62841-4-4:2020`. About a quarter of them name no successor in the IEC dump and keep an empty list, and a few list every part of the family that replaced them. A withdrawn IEC edition lists nothing. The first `sync-standards` run after upgrading to the release that fills these lists reads the IEC dump again, even if it has not changed; until that run, IEC editions keep an empty list. The other bodies leave the list empty, so an empty list doesn't show that an edition is current. IETF, NIST, W3C and ETSI records cached by an earlier release are fetched again on their next lookup, so they pick up these fields.
+- `full_text_url`, direct link to the freely downloadable document (when available)
+- `full_text_available`, `True` for Tier 1 sources (IETF, NIST, W3C, ETSI) and CC
+- `related`, cross-linked identifiers (such as CC ↔ ISO/IEC 15408)
+
+### Tier 2 bodies require sync
+
+ISO, IEC, IEEE, CC, and CEN metadata comes from the synced cache. If `sync-standards` hasn't been run, Tier 2 citations won't get enriched (Tier 1 citations, RFC, NIST SP, WCAG, ETSI, always work via live API lookup).
