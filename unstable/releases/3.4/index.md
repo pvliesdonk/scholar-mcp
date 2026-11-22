@@ -4,11 +4,11 @@ Patents become readable and citable. `get_patent` returns a patent's claims and 
 
 ## Upgrading
 
-No step is needed. The first `get_patent` call for a patent's claims or description after upgrading fetches them from EPO again, because the copies the previous release cached were empty ([#702](https://github.com/pvliesdonk/scholar-mcp/pull/702), [#703](https://github.com/pvliesdonk/scholar-mcp/pull/703)).
+No step is needed. The first `get_patent` call for a patent after upgrading fetches it from EPO again: the claims and descriptions the previous release cached were empty ([#702](https://github.com/pvliesdonk/scholar-mcp/pull/702), [#703](https://github.com/pvliesdonk/scholar-mcp/pull/703)), and its cached bibliographic data could list a party twice ([#730](https://github.com/pvliesdonk/scholar-mcp/pull/730)).
 
 **Clients:** nothing beyond reconnecting. `get_patent` gains `text_offset` and `max_chars`, and its claims, description and citations carry new fields; none of the existing fields changed meaning.
 
-**State:** the cache keeps everything except the patent claims and description rows, which a one-shot repair drops so they are fetched again.
+**State:** the cache keeps everything except the patent bibliographic, claims and description rows, which one-shot repairs drop so they are fetched again.
 
 **Security posture:** none in this server. Images and packages built from the lock file move FastMCP from 4.2.3 to 4.2.4, which fixes a race in the OAuth proxy where two concurrent token requests could redeem one authorization code or refresh token twice (GHSA-78c8-3jhx-5mg7). That matters if you run OIDC authentication ([#705](https://github.com/pvliesdonk/scholar-mcp/pull/705)).
 
@@ -46,3 +46,6 @@ A patent EPO cannot look up becomes a comment with the reason, as an unresolved 
 ## Smaller fixes
 
 - `search_patents` with an empty `date_from` and no `date_to` sent EPO a query containing `pd <= None`; it now adds no date filter ([#717](https://github.com/pvliesdonk/scholar-mcp/pull/717)).
+- A patent whose applicants or inventors EPO lists twice in two spellings (US11234567B2 has every inventor once in capitals and again in title case) now lists each once, in `get_patent` and in its citations ([#727](https://github.com/pvliesdonk/scholar-mcp/issues/727)).
+- A `batch_resolve` or `generate_citations` call whose paper identifiers Semantic Scholar knows none of no longer fails the whole call: each is reported as not found and the rest of the call answers ([#729](https://github.com/pvliesdonk/scholar-mcp/issues/729)).
+- A patent number that does not exist is reported as `not_found` in `batch_resolve` and `generate_citations`, not as `resolve_failed`, which read as a server failure worth retrying ([#728](https://github.com/pvliesdonk/scholar-mcp/issues/728)).

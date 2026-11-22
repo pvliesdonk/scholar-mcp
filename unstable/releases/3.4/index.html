@@ -2242,7 +2242,7 @@
 
 
 <h1 id="34">3.4<a class="headerlink" href="#34" title="Permanent link">&para;</a></h1>
-<!-- notes-range-end: dcab175a9f7266a7610b73842433f27e74671ebf -->
+<!-- notes-range-end: 9daf68400cf8d3eab87e1cc7b036a9d6bd4f2b9b -->
 
 <!-- RELEASE-SUMMARY v3.4.0 START -->
 <p>Patents become readable and citable. <code>get_patent</code> returns a patent's claims
@@ -2255,16 +2255,19 @@ title-matched candidate. See Upgrading.</p>
 <!-- RELEASE-SUMMARY v3.4.0 END -->
 
 <h2 id="upgrading">Upgrading<a class="headerlink" href="#upgrading" title="Permanent link">&para;</a></h2>
-<p>No step is needed. The first <code>get_patent</code> call for a patent's claims or
-description after upgrading fetches them from EPO again, because the copies
-the previous release cached were empty
+<p>No step is needed. The first <code>get_patent</code> call for a patent after upgrading
+fetches it from EPO again: the claims and descriptions the previous release
+cached were empty
 (<a href="https://github.com/pvliesdonk/scholar-mcp/pull/702">#702</a>,
-<a href="https://github.com/pvliesdonk/scholar-mcp/pull/703">#703</a>).</p>
+<a href="https://github.com/pvliesdonk/scholar-mcp/pull/703">#703</a>), and its cached
+bibliographic data could list a party twice
+(<a href="https://github.com/pvliesdonk/scholar-mcp/pull/730">#730</a>).</p>
 <p><strong>Clients:</strong> nothing beyond reconnecting. <code>get_patent</code> gains <code>text_offset</code>
 and <code>max_chars</code>, and its claims, description and citations carry new fields;
 none of the existing fields changed meaning.</p>
-<p><strong>State:</strong> the cache keeps everything except the patent claims and
-description rows, which a one-shot repair drops so they are fetched again.</p>
+<p><strong>State:</strong> the cache keeps everything except the patent bibliographic,
+claims and description rows, which one-shot repairs drop so they are fetched
+again.</p>
 <p><strong>Security posture:</strong> none in this server. Images and packages built from the
 lock file move FastMCP from 4.2.3 to 4.2.4, which fixes a race in the OAuth
 proxy where two concurrent token requests could redeem one authorization code
@@ -2349,6 +2352,18 @@ routes now apply, each on a best-effort basis that never fails the call:</p>
 <li><code>search_patents</code> with an empty <code>date_from</code> and no <code>date_to</code> sent EPO a
   query containing <code>pd &lt;= None</code>; it now adds no date filter
   (<a href="https://github.com/pvliesdonk/scholar-mcp/pull/717">#717</a>).</li>
+<li>A patent whose applicants or inventors EPO lists twice in two spellings
+  (US11234567B2 has every inventor once in capitals and again in title
+  case) now lists each once, in <code>get_patent</code> and in its
+  citations (<a href="https://github.com/pvliesdonk/scholar-mcp/issues/727">#727</a>).</li>
+<li>A <code>batch_resolve</code> or <code>generate_citations</code> call whose paper identifiers
+  Semantic Scholar knows none of no longer fails the whole call: each is
+  reported as not found and the rest of the call answers
+  (<a href="https://github.com/pvliesdonk/scholar-mcp/issues/729">#729</a>).</li>
+<li>A patent number that does not exist is reported as <code>not_found</code> in
+  <code>batch_resolve</code> and <code>generate_citations</code>, not as <code>resolve_failed</code>, which
+  read as a server failure worth retrying
+  (<a href="https://github.com/pvliesdonk/scholar-mcp/issues/728">#728</a>).</li>
 </ul>
 <!-- PATCH-RELEASES-START -->
 <!-- PATCH-RELEASES-END -->
