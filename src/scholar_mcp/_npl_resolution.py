@@ -13,6 +13,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from ._cache import checked_isbn13
+from ._chapter_parent import attach_parent_book, parent_book_isbn
 from ._chapter_parser import hint_to_dict, parse_chapter_hint
 from ._epo_xml import extract_doi
 from ._npl_titles import attach_title_candidates, extract_arxiv_id
@@ -190,6 +191,49 @@ async def _attach_npl_books(
             entry["confidence"] = "high"
 
 
+async def _attach_npl_parent_books(
+    entries: list[dict[str, Any]], resolve_book: BookResolver
+) -> None:
+    """Attach the containing volume to resolved papers cited as a part (#64).
+
+    Only references a paper was found for are tried: for the others the
+    book found by :func:`_attach_npl_books` already is the containing book,
+    at the entry's ``book``, and is not repeated inside ``chapter_info``.
+
+    Args:
+        entries: Resolved NPL entries, changed in place.
+        resolve_book: ISBN lookup.
+    """
+    await _asyncio.gather(
+        *(
+            attach_parent_book(entry["chapter_info"], resolve_book)
+            for entry in entries
+            if "paper" in entry
+            and "chapter_info" in entry
+            and not _doi_is_the_books(entry["raw"], entry["chapter_info"])
+        )
+    )
+
+
+def _doi_is_the_books(raw: str, chapter_info: dict[str, Any]) -> bool:
+    """Say whether the citation's DOI is the book's own, ending in its ISBN.
+
+    A book DOI such as ``10.1201/9781420010749`` resolves to the book
+    itself, so its ISBN names no parent. A chapter DOI carries the ISBN with
+    a suffix (``10.1007/978-3-540-52155-6_1``), and that ISBN is the parent's.
+
+    Args:
+        raw: Raw citation string.
+        chapter_info: The reference's parsed ``chapter_info``.
+
+    Returns:
+        True when the DOI ends in the ISBN the parent would be looked up by.
+    """
+    isbn = parent_book_isbn(chapter_info)
+    doi = extract_doi(raw)
+    return bool(isbn and doi and doi.replace("-", "").endswith(isbn))
+
+
 async def resolve_npl_refs(
     npl_refs: Sequence[dict[str, Any]],
     *,
@@ -200,7 +244,9 @@ async def resolve_npl_refs(
     """Resolve a patent's NPL references, each on a best-effort basis.
 
     In order: a DOI or arXiv ID to a Semantic Scholar paper, an ISBN to a
-    book, then an unconfirmed title-match candidate for what is left.
+    book (or, for a paper cited as part of a volume, to that volume as
+    ``chapter_info.parent_book``), then an unconfirmed title-match candidate
+    for what is left.
 
     Args:
         npl_refs: The raw NPL references from EPO, each with ``raw``.
@@ -224,6 +270,7 @@ async def resolve_npl_refs(
     ]
     if resolve_book is not None:
         await _attach_npl_books(entries, resolve_book, patent_id)
+        await _attach_npl_parent_books(entries, resolve_book)
     if s2 is not None:
         await attach_title_candidates(entries, s2, patent_id)
     return entries

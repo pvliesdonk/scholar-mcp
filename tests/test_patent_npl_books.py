@@ -105,13 +105,61 @@ async def test_cited_books_are_resolved(service: Service, slow_jobs: Jobs) -> No
     assert "book" not in chapter
     assert chapter["isbn"] == "9783540521556"
     assert chapter["chapter_info"]["isbn"] == "9783540521556"  # kept alongside
-    # A resolved paper is not also looked up as a book.
+    # A resolved paper is not also looked up as a book; its ISBN is looked
+    # up only as the volume it appears in (#64), which Open Library lacks here.
     assert paper["paper"]["paperId"] == "p1"
     assert "book" not in paper and "isbn" not in paper
+    assert "parent_book" not in paper["chapter_info"]
     # An ISBN with a wrong check digit is not looked up.
     assert "book" not in bad and "isbn" not in bad
     looked_up = [c.args[0] for c in service.openlibrary.get_by_isbn.await_args_list]
-    assert sorted(looked_up) == ["9783540521556", "9783662546239"]
+    assert sorted(looked_up) == ["9780780344556", "9783540521556", "9783662546239"]
+
+
+_PROCEEDINGS = {
+    "title": "Proceedings of ISCAS 1998",
+    "publishers": ["IEEE"],
+    "publish_date": "1998",
+    "isbn_13": ["9780780344556"],
+    "key": "/books/OL2M",
+}
+
+
+async def test_resolved_paper_gets_the_volume_it_appears_in(
+    service: Service, slow_jobs: Jobs
+) -> None:
+    """A paper cited "In:" a volume with an ISBN gets that volume (#64)."""
+    service.openlibrary.get_by_isbn = AsyncMock(  # type: ignore[method-assign]
+        side_effect=lambda isbn: _PROCEEDINGS if isbn == "9780780344556" else None
+    )
+    service.s2.batch_resolve = AsyncMock(  # type: ignore[method-assign]
+        return_value=[{"paperId": "p1", "title": "A 3-V CMOS optical preamplifier"}]
+    )
+    app = _app(service, slow_jobs, [_PAPER_WITH_ISBN, _BOOK])
+
+    paper, book = await _npl_refs(app)
+
+    assert paper["paper"]["paperId"] == "p1"
+    info = paper["chapter_info"]
+    assert info["parent_book"]["title"] == "Proceedings of ISCAS 1998"
+    # The volume is the paper's container, not the cited work.
+    assert "book" not in paper and paper["confidence"] == "high"
+    # A cited whole book keeps its entry-level ``book`` and gains no parent.
+    assert "parent_book" not in book["chapter_info"]
+
+
+async def test_unresolved_chapter_keeps_its_book_at_entry_level(
+    service: Service, slow_jobs: Jobs
+) -> None:
+    """With no paper, the cited chapter's book stays ``book``, not duplicated."""
+    service.openlibrary.get_by_isbn = AsyncMock(return_value=_EDITION)  # type: ignore[method-assign]
+    app = _app(service, slow_jobs, [_CHAPTER])
+
+    (chapter,) = await _npl_refs(app)
+
+    assert chapter["book"]["title"] == "CAx für Ingenieure"
+    assert "parent_book" not in chapter["chapter_info"]
+    service.openlibrary.get_by_isbn.assert_awaited_once()
 
 
 async def test_resolved_books_are_cached(service: Service, slow_jobs: Jobs) -> None:
@@ -139,3 +187,33 @@ async def test_open_library_failure_keeps_the_isbn(
     assert entry["isbn"] == "9783662546239"
     assert entry["confidence"] is None
     assert any("npl_book_resolution_failed" in m for m in caplog.messages)
+
+
+_BOOK_DOI_PAGES = (
+    "GONZALEZ, T.: Handbook of Approximation Algorithms and Metaheuristics. "
+    "CRC, 2007, pp. 1-10. doi:10.1201/9781420010749"
+)
+_CHAPTER_DOI = (
+    "SMITH, J.: Expert systems. In: Technische Expertensysteme. Springer, "
+    "1990, pp. 1-44. doi:10.1007/978-3-540-52155-6_1. ISBN 978-3-540-52155-6"
+)
+
+
+async def test_book_doi_is_not_its_own_parent(
+    service: Service, slow_jobs: Jobs
+) -> None:
+    """A DOI that is the book's own (its ISBN ends it) names no parent."""
+    service.openlibrary.get_by_isbn = AsyncMock(return_value=_EDITION)  # type: ignore[method-assign]
+    service.s2.batch_resolve = AsyncMock(  # type: ignore[method-assign]
+        return_value=[{"paperId": "b1", "title": "Handbook"}, {"paperId": "c1"}]
+    )
+    app = _app(service, slow_jobs, [_BOOK_DOI_PAGES, _CHAPTER_DOI])
+
+    book, chapter = await _npl_refs(app)
+
+    assert book["chapter_info"]["isbn"] == "9781420010749"
+    assert "parent_book" not in book["chapter_info"]
+    # A chapter DOI carries its book's ISBN with a suffix: that is the parent.
+    assert chapter["chapter_info"]["parent_book"]["title"] == "CAx für Ingenieure"
+    looked_up = [c.args[0] for c in service.openlibrary.get_by_isbn.await_args_list]
+    assert looked_up == ["9783540521556"]
