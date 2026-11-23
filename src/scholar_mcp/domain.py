@@ -213,6 +213,7 @@ def _build_enrichment_pipeline() -> EnrichmentPipeline:
     Returns:
         Configured :class:`EnrichmentPipeline` instance.
     """
+    from ._enricher_crossref_chapter import CrossRefChapterEnricher
     from ._enricher_google_books import GoogleBooksEnricher
     from ._enricher_openlibrary import OpenLibraryEnricher
     from ._enricher_standards import StandardsEnricher
@@ -221,6 +222,7 @@ def _build_enrichment_pipeline() -> EnrichmentPipeline:
         [
             OpenAlexEnricher(),
             CrossRefEnricher(),
+            CrossRefChapterEnricher(),
             StandardsEnricher(),
             OpenLibraryEnricher(),
             GoogleBooksEnricher(),

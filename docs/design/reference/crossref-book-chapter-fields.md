@@ -50,8 +50,10 @@ journal fields; [CrossRef work journal fields](crossref-works.md) does.
 - Does not cover: citation lists, licences, abstracts, rate limits beyond the
   one header noted below, or other record types (`book-section`,
   `reference-entry`).
-- Depended on by: nothing yet. #67 and #593 will read it. No code in
-  `src/scholar_mcp/` maps chapter fields today, so there are no pins.
+- Depended on by: `_enricher_crossref_chapter.py` (#67), which maps a
+  chapter and its parent onto `chapter_info`; see
+  [CrossRef book chapters](../crossref-book-chapters.md). #593 and #745 will
+  read it too.
 
 ## Sample
 
@@ -272,7 +274,10 @@ User-Agent, no `mailto`, about 150 requests at 1 per second]
 
 ## Where this project departs from the subject
 
-Empty: no code reads these fields yet.
+- A chapter without `relation.is-part-of` gets no parent book: the ISBN
+  route above stays unverified and is not followed.
+- `chapter_info.editors` flattens each `Author` to one `"Given Family"`
+  string (or `name`), dropping `sequence`, `affiliation` and `role`.
 
 ## Not covered
 
