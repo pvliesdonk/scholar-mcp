@@ -4,6 +4,18 @@ Newest first. One entry per research pass.
 
 ## 2026-11-23
 
+### CrossRef title queries for chapters without a DOI
+
+Updated [CrossRef book-chapter fields](crossref-book-chapter-fields.md) and
+[Semantic Scholar API behaviour](semantic-scholar-api.md) for #745. S2 types a
+chapter `BookSection`; 37 of 700 hits on seven relevance-ranked
+`publicationTypes=BookSection` searches had no DOI, mostly repository copies.
+A `type:book-chapter` title query found the same chapter for 3 of the 37, and
+an equal title plus a shared author confirmed 2 of them; neither `score` nor
+title similarity separated right from wrong. The list endpoint re-answered 1
+request a second, concurrency 1, pool `public-array`. Per-paper results in
+`sources/crossref-chapter-title-query/`.
+
 ### Book-chapter entry types
 
 New page [Book-chapter entries in BibTeX, biblatex, CSL-JSON and RIS](chapter-citation-entry-types.md)

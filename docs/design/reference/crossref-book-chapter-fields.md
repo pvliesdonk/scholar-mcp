@@ -29,6 +29,10 @@ sources:
     title: "Live parent-book records: /works/{doi} for each chapter's relation.is-part-of target (58 chapters, up to 3 per prefix, 58 resolved)"
     resource: https://api.crossref.org/works/10.1002/9780470996836
     accessed: 2026-11-23
+  - id: title-query-sample
+    title: "Live title-query yield: 37 DOI-less Semantic Scholar BookSection papers (from 700 hits on 7 topic searches) queried with /works?filter=type:book-chapter&query.bibliographic=<title>&rows=5, generic User-Agent, no mailto, 1.2 s apart (per-paper results in sources/crossref-chapter-title-query/doiless-booksection.tsv)"
+    resource: https://api.crossref.org/works?filter=type:book-chapter&query.bibliographic=Human%20capital%20and%20artists%E2%80%99%20labour%20markets&rows=5
+    accessed: 2026-11-23
 ---
 
 # CrossRef book-chapter fields
@@ -38,7 +42,8 @@ several of the fields a citation needs (parent book title, editors) sit
 elsewhere than a journal article's equivalents. This page records which
 fields exist, how often publishers fill them, and how the chapter links to its
 book. It supports the chapter mapping (#67), the BibTeX `@incollection`
-builder (#593) and the title-query fallback (#745). It does not cover the
+builder (#593), and records why a title-query fallback (#745) was not
+built. It does not cover the
 journal fields; [CrossRef work journal fields](crossref-works.md) does.
 
 ## Scope
@@ -52,8 +57,8 @@ journal fields; [CrossRef work journal fields](crossref-works.md) does.
   `reference-entry`).
 - Depended on by: `_enricher_crossref_chapter.py` (#67), which maps a
   chapter and its parent onto `chapter_info`; see
-  [CrossRef book chapters](../crossref-book-chapters.md). #593 and #745 will
-  read it too.
+  [CrossRef book chapters](../crossref-book-chapters.md). #593 will read
+  it too.
 
 ## Sample
 
@@ -269,6 +274,69 @@ User-Agent, no `mailto`, about 150 requests at 1 per second]
   concurrency limit is 1 for both. Whether a `mailto` (the polite pool)
   raises either is unverified. [observed: `curl` with a generic User-Agent
   and no `mailto`, 2026-11-23, 1.5 s between requests]
+- A second list run answered the same `x-rate-limit-limit: 1`,
+  `x-rate-limit-interval: 1s` and `x-concurrency-limit: 1`, and named its
+  pool with `x-api-pool: public-array`. Whether the concurrency limit of 1
+  is shared between the list and single-work endpoints was not tested.
+  [observed: headers of the first request of the yield run below]
+  [unverified]
+
+#### Yield for chapters that reach this project without a DOI
+
+The 14 chapters above were drawn from CrossRef, so each was certain to be
+there. This run started from the other side: Semantic Scholar chapters that
+have no DOI, the only ones a title query would serve.
+
+- In this project only `generate_citations` requests S2's
+  `publicationTypes`, so only its enrichment could tell that a DOI-less paper
+  is a chapter (S2 type `BookSection`; see
+  [Semantic Scholar API behaviour](semantic-scholar-api.md#paper-types)).
+  [observed: `grep publicationTypes src/scholar_mcp/` at commit 83927fc]
+- The sample is 37 DOI-less `BookSection` papers out of 700 hits (5.3%) on
+  seven relevance-ranked S2 topic searches. It is biased in two ways: search
+  ranks well-described records first, and seven topics are not the corpus.
+  The rates below say how the query behaves on such records, not how often
+  a given user's references would match. [observed: title-query-sample]
+- Most of the 37 are repository copies: their S2 `venue` or `journal.name`
+  names an institutional repository, or is empty. Neither field names the
+  parent book, so the container-title boost measured above is not available
+  for them. [observed: title-query-sample]
+- For each of the 37, `/works?filter=type:book-chapter&query.bibliographic=<S2
+  title>&rows=5` was sent, and the five results were compared with the S2
+  record after normalising case, accents, markup and punctuation:
+  - **2 matched** a result with an equal title and a shared author family
+    name: 10.1007/978-3-030-82250-7_2 exactly, and
+    10.1016/s1574-0676(06)01024-6 only after removing a leading
+    "Chapter 24" from the CrossRef title. Both CrossRef years were within
+    one year of S2's (2021 against 2022, 2006 against 2006).
+  - **1 more is the same chapter** but missed by equality: CrossRef spells
+    "Theorizing" where S2 has "theorising" (10.1007/978-3-319-67286-1_14,
+    both authors in common, one written "Cutter-Mackenzie" against
+    "Cutter-Mackenzie-Knowles").
+  - **1 is by the same author with a different title** ("Food aid,
+    intra-regional trade and economics development In SADCC" against
+    "Chapter 8. Food Aid, Trade, and Economic Development in SADCC",
+    10.1515/9781685852245-011); whether it is the same work is
+    [unverified].
+  - **33 had no result with an equal title.** Two top results shared an
+    author with the S2 record under a clearly different title ("Chapter 19.
+    Reintroducing livestock…" for "Livestock at the heart of 'climate-smart'
+    landscapes in West Africa", "Introduction: Gramsci Past and Present" for
+    "Antonio Gramsci’s Dialectic: Past and Present"); whether either is the
+    same work is [unverified]. Others were unrelated works with a high
+    `score`: "Introduction: Where Have We
+    Been, Where Are We Now, Where Are We Going?" scored 94.8 for the S2
+    title "Education in occupational health psychology: Where have we been,
+    where are we now and where are we going?". The S2 record whose title is
+    its book's title ranked chapters of that book first.
+  [observed: title-query-sample]
+- `score` does not separate right from wrong: the exact match scored 68.7,
+  while wrong top results scored up to 94.8. Title similarity alone does
+  not either: a wrong result reached 0.85 (difflib ratio after
+  normalisation) and a true one 0.88 before its "Chapter 24" label was
+  removed. [observed: title-query-sample]
+- Per-paper results:
+  [`sources/crossref-chapter-title-query/doiless-booksection.tsv`](sources/crossref-chapter-title-query/doiless-booksection.tsv).
 
 ## How book-chapter fields differ from the journal fields
 
