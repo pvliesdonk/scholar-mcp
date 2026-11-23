@@ -219,8 +219,9 @@ def format_bibtex(
     """Format papers and patents as BibTeX entries.
 
     Papers become ``@article``, ``@inproceedings``, ``@incollection``,
-    ``@book`` or ``@misc`` entries; patents become biblatex ``@patent`` entries. Entries keep the
-    order of *papers*, and all share one citation-key namespace.
+    ``@book`` or ``@misc`` entries; patents become biblatex ``@patent``
+    entries. Entries keep the order of *papers*, and all share one
+    citation-key namespace.
 
     Args:
         papers: Paper and patent records, in output order.
@@ -537,14 +538,14 @@ _RIS_TYPE_MAP: dict[str, str] = {
 
 
 def _ris_author_line(paper: PaperRecord, tag: str = "AU") -> list[str]:
-    """Format one AU tag per author for RIS.
+    """Format one name tag per author for RIS, ``AU`` unless *tag* says.
 
     Args:
         paper: Paper metadata dict with an ``authors`` list.
         tag: The RIS tag to write, ``A2`` for a chapter's book editors.
 
     Returns:
-        List of ``AU  - Last, First`` tag strings.
+        List of ``<tag>  - Last, First`` tag strings.
     """
     authors = paper.get("authors") or []
     lines: list[str] = []
