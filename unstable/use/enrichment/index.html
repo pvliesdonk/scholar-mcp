@@ -1163,6 +1163,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#book-chapters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Book chapters
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#other-sources" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2278,6 +2289,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#book-chapters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Book chapters
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#other-sources" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2334,7 +2356,7 @@
 <p>Paper and book results are filled in from more sources than the one that answered the call. Enrichment runs in two phases:</p>
 <ul>
 <li><strong>Phase 0</strong> (primary): OpenAlex (open-access status, affiliations, funders, concepts) and CrossRef (publisher, page ranges, container titles).</li>
-<li><strong>Phase 1</strong> (secondary): from Open Library (book metadata for papers with an ISBN) and Google Books (preview links, excerpts, snippets).</li>
+<li><strong>Phase 1</strong> (secondary): from Open Library (book metadata for papers with an ISBN), Google Books (preview links, excerpts, snippets) and the CrossRef chapter mapping (<code>chapter_info</code> for book chapters).</li>
 </ul>
 <h2 id="books-cited-as-papers">Books cited as papers<a class="headerlink" href="#books-cited-as-papers" title="Permanent link">&para;</a></h2>
 <p>When <code>get_paper</code>, <code>get_citations</code>, <code>get_references</code> or <code>get_citation_graph</code> returns a paper whose <code>externalIds.ISBN</code> is present and not empty, Open Library metadata is fetched and attached to the record as <code>book_metadata</code>:</p>
@@ -2384,6 +2406,52 @@
 </tr>
 </tbody>
 </table>
+<h2 id="book-chapters">Book chapters<a class="headerlink" href="#book-chapters" title="Permanent link">&para;</a></h2>
+<p>When a paper's DOI names a book chapter in CrossRef, the paper result gets a <code>chapter_info</code> dict with <code>citation_source: "crossref"</code>. scholar-mcp also fetches the book the chapter belongs to, because CrossRef keeps a book's editors on the book's record rather than the chapter's. Each field is left out when CrossRef doesn't have it:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>chapter_title</code></td>
+<td>Title of the chapter</td>
+</tr>
+<tr>
+<td><code>parent_title</code></td>
+<td>Title of the book, with its subtitle; never the series title</td>
+</tr>
+<tr>
+<td><code>parent_doi</code></td>
+<td>DOI of the book</td>
+</tr>
+<tr>
+<td><code>editors</code></td>
+<td>Editor names, from the chapter or else from the book</td>
+</tr>
+<tr>
+<td><code>pages</code></td>
+<td>Page range as CrossRef gives it, such as <code>"15-32"</code> or <code>"xiii-xiii"</code></td>
+</tr>
+<tr>
+<td><code>page_start</code>, <code>page_end</code></td>
+<td>First and last page, only when both are plain numbers</td>
+</tr>
+<tr>
+<td><code>publisher</code>, <code>publisher_location</code>, <code>edition</code></td>
+<td>Publisher name, place and edition number</td>
+</tr>
+<tr>
+<td><code>isbn</code></td>
+<td>The print ISBN when CrossRef marks one, otherwise the electronic ISBN</td>
+</tr>
+</tbody>
+</table>
+<p>CrossRef has no chapter number, so <code>chapter_info</code> from CrossRef never has one. A chapter that doesn't link to its book is described from its own record alone. If the book lookup fails, the chapter is still described, without the book's editors. Book records are cached like any CrossRef lookup, so a later lookup of a chapter from the same book reads the book from the cache.</p>
+<p><code>batch_resolve</code> can also attach a <code>chapter_info</code> with <code>citation_source: "parsed"</code> to an entry, read from the identifier string itself. That one sits beside <code>paper</code>, not inside it.</p>
 <h2 id="other-sources">Other sources<a class="headerlink" href="#other-sources" title="Permanent link">&para;</a></h2>
 <p>CrossRef adds publisher metadata, page ranges and container titles to a paper result that has a DOI. Google Books adds <code>google_books_url</code> and <code>snippet</code> to a book record that has an ISBN.</p>
 <h2 id="an-openalex-api-key">An OpenAlex API key<a class="headerlink" href="#an-openalex-api-key" title="Permanent link">&para;</a></h2>

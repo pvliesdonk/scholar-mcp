@@ -3,7 +3,7 @@
 Paper and book results are filled in from more sources than the one that answered the call. Enrichment runs in two phases:
 
 - **Phase 0** (primary): OpenAlex (open-access status, affiliations, funders, concepts) and CrossRef (publisher, page ranges, container titles).
-- **Phase 1** (secondary): from Open Library (book metadata for papers with an ISBN) and Google Books (preview links, excerpts, snippets).
+- **Phase 1** (secondary): from Open Library (book metadata for papers with an ISBN), Google Books (preview links, excerpts, snippets) and the CrossRef chapter mapping (`chapter_info` for book chapters).
 
 ## Books cited as papers
 
@@ -20,6 +20,25 @@ When `get_paper`, `get_citations`, `get_references` or `get_citation_graph` retu
 | `subjects`            | List of subject strings                                        |
 | `page_count`          | Page count, if known                                           |
 | `authors`             | List of author names, resolved from Open Library work metadata |
+
+## Book chapters
+
+When a paper's DOI names a book chapter in CrossRef, the paper result gets a `chapter_info` dict with `citation_source: "crossref"`. scholar-mcp also fetches the book the chapter belongs to, because CrossRef keeps a book's editors on the book's record rather than the chapter's. Each field is left out when CrossRef doesn't have it:
+
+| Field                                        | Description                                                           |
+| -------------------------------------------- | --------------------------------------------------------------------- |
+| `chapter_title`                              | Title of the chapter                                                  |
+| `parent_title`                               | Title of the book, with its subtitle; never the series title          |
+| `parent_doi`                                 | DOI of the book                                                       |
+| `editors`                                    | Editor names, from the chapter or else from the book                  |
+| `pages`                                      | Page range as CrossRef gives it, such as `"15-32"` or `"xiii-xiii"`   |
+| `page_start`, `page_end`                     | First and last page, only when both are plain numbers                 |
+| `publisher`, `publisher_location`, `edition` | Publisher name, place and edition number                              |
+| `isbn`                                       | The print ISBN when CrossRef marks one, otherwise the electronic ISBN |
+
+CrossRef has no chapter number, so `chapter_info` from CrossRef never has one. A chapter that doesn't link to its book is described from its own record alone. If the book lookup fails, the chapter is still described, without the book's editors. Book records are cached like any CrossRef lookup, so a later lookup of a chapter from the same book reads the book from the cache.
+
+`batch_resolve` can also attach a `chapter_info` with `citation_source: "parsed"` to an entry, read from the identifier string itself. That one sits beside `paper`, not inside it.
 
 ## Other sources
 
