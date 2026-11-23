@@ -42,6 +42,60 @@ validated ISBN-13 as `isbn` when Open Library has no edition or fails.
 - A chapter reference keeps its `chapter_info` next to the `book`, which is
   the book the chapter sits in.
 
+## The book a chapter sits in (#64)
+
+`BookChapterRecord.parent_book` is the book a cited part sits in. This
+pipeline fills it in `chapter_info` through `attach_parent_book`
+(`src/scholar_mcp/_chapter_parent.py`).
+
+- A parsed `chapter_info` names a part of a book only when it has a
+  `chapter_number`, a `page_start` or a `parent_title` (an `In:` clause). An
+  ISBN alone names the whole book, which is no parent of itself, so it is
+  not looked up as one.
+- A book's own DOI ends in its ISBN (`10.1201/9781420010749`), and the
+  parser reads those digits as the ISBN. When the citation's DOI ends in the
+  ISBN, the paper found for that DOI is the book, so no parent is looked up.
+  A chapter DOI carries its book's ISBN followed by a suffix
+  (`10.1007/978-3-540-52155-6_1`), and that ISBN is the parent's.
+- With a part named and a valid ISBN, the ISBN is the containing book's. It
+  is looked up through `resolve_book_by_isbn`, best-effort like the other
+  lookups: a book Open Library lacks, or a failing lookup, leaves
+  `chapter_info` with its `isbn`. The failure is logged at DEBUG
+  (`chapter_parent_book_failed`), as the logging standard asks for an
+  optional extra; the paper, the entry's result, is unaffected.
+- The book is stored once per entry. A reference no paper was found for
+  already carries the book as the entry's `book` (above), so its
+  `chapter_info` gets no `parent_book`. Only a reference a paper was found
+  for, cited as part of a volume (a proceedings paper `In:` a volume with an
+  ISBN, a chapter with a DOI), gets `chapter_info.parent_book`. A reader takes
+  the containing book from `chapter_info.parent_book`, else from `book` when
+  `chapter_info` names a part.
+- #70 does not look up a resolved paper's ISBN as a book, because the paper
+  already is the cited work. The parent lookup does not contradict that: it
+  looks the ISBN up as the paper's container, not as the cited work. It adds
+  at most one Open Library request per such reference, from the cache first,
+  with authors from the cache only, as for #70.
+
+Alternatives not taken: copying the entry's `book` into `parent_book` repeats
+the same record in one response; moving it there changes where v3.4.0
+returns it; a pointer from `chapter_info` to `book` is a new kind of field for
+a reader to follow.
+
+### `batch_resolve` is not wired
+
+`batch_resolve` also attaches `chapter_info`, parsed from the identifier
+string itself, but fills no `parent_book`. A caller reaches its chapter path
+only by appending citation text to a `DOI:` identifier
+(`DOI:10.1201/9781420010749 pp. 1-10`), a form the tool description does not
+mention. Observed on 2026-11-23 against the deployed server (3.4.0-rc.1):
+Semantic Scholar's batch endpoint resolved `DOI:10.1201/9781420010749` but
+returned nothing for the same DOI with ` pp. 1-10` or `, Ch. 3` appended, and
+OpenAlex, the fallback, returned the book for both from
+`/works/https://doi.org/<DOI with the text appended>`. So the path runs only
+through an undocumented input form and an OpenAlex tolerance nothing
+documents, and in the observed case the paper is the book itself. A bare
+book DOI reaches it with an ISBN alone, which names no part.
+
 ## Papers by arXiv identifier (#59)
 
 An arXiv identifier (`abs/1704.04861`, `arXiv:1704.04861`, or the DataCite

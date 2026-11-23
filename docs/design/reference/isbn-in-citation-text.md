@@ -32,7 +32,8 @@ resolves the books a patent's non-patent literature (NPL) cites.
 - Does not cover: finding a book without an ISBN (title search, #59), or how
   Open Library answers an ISBN lookup.
 - Depended on by: `src/scholar_mcp/_cache.py` (`checked_isbn13`), used by
-  `_attach_npl_books` in `src/scholar_mcp/_npl_resolution.py` and by
+  `_attach_npl_books` in `src/scholar_mcp/_npl_resolution.py`, by
+  `parent_book_isbn` in `src/scholar_mcp/_chapter_parent.py` (#64), and by
   `src/scholar_mcp/_chapter_parser.py`, which extracts the ISBN and keeps
   only a candidate with a valid check digit (#737).
 
