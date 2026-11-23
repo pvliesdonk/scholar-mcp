@@ -11,10 +11,10 @@ Patent numbers go in the same `paper_ids` list as paper identifiers. A value
 `is_patent_number` accepts is resolved through EPO biblio with the same
 per-identifier handling `batch_resolve` uses (`_tools_utility._resolve_patent`).
 Everything else goes to Semantic Scholar, which is not called when the list
-holds only patents. A 40-digit lower-case hex string is a Semantic Scholar
-paper id even when `is_patent_number` accepts it (`ca1…`, `de0…` start
-with an office code and a digit), so it stays with Semantic Scholar;
-#699 tracks fixing `is_patent_number` itself. Records come out in input
+holds only patents. A 40-character hex string is a Semantic Scholar paper id, never a patent
+number: `is_patent_number` refuses it whatever its case, though `ca1…` or
+`de0…` would otherwise read as an office code and a digit (#699), so it stays
+with Semantic Scholar in every tool. Records come out in input
 order, and unresolved
 identifiers are listed in input order as comments, with the reason
 (`not found` for a paper; for a patent, the code `_resolve_patent` returns:

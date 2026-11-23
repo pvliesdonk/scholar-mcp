@@ -1124,3 +1124,28 @@ async def test_batch_resolve_patent_404_is_not_found(
     assert [(r.levelname, r.getMessage()) for r in records] == [
         ("INFO", "batch_patent_not_found id=EP99999999A1")
     ]
+
+
+@pytest.mark.parametrize(
+    "s2_id",
+    [
+        "ca1234567890abcdef1234567890abcdef123456",
+        "de0f3b9c2a1e4d5b6c7a8e9f0a1b2c3d4e5f6a7b",
+    ],
+)
+async def test_batch_resolve_routes_hex_s2_id_to_s2(
+    mcp_with_epo: FastMCP, s2_id: str
+) -> None:
+    """#699: a 40-hex S2 id that starts like an office code never reaches EPO."""
+    with respx.mock:
+        route = respx.post(f"{S2_BASE}/paper/batch").mock(
+            return_value=httpx.Response(
+                200, json=[{"paperId": s2_id, "title": "An S2 paper"}]
+            )
+        )
+        async with Client(mcp_with_epo) as client:
+            result = await client.call_tool("batch_resolve", {"identifiers": [s2_id]})
+        assert json.loads(route.calls.last.request.content)["ids"] == [s2_id]
+    data = json.loads(result.content[0].text)["results"]
+    assert data[0]["paper"]["title"] == "An S2 paper"
+    assert data[0].get("source_type") != "patent"

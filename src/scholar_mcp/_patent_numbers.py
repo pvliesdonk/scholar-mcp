@@ -17,6 +17,12 @@ _PATENT_RE = re.compile(
     r"(?P<kind>[A-Za-z]\d{0,2})?$"
 )
 
+# A Semantic Scholar paper id is 40 hex digits. ``BE``, ``CA`` and ``DE`` are
+# hex letters, so ``ca1…`` or ``de0…`` would otherwise read as an office code
+# plus a digit. No real patent number is 40 characters of hex, so the shape is
+# refused outright; case is ignored so an upper-cased id is not misrouted.
+_S2_PAPER_ID_RE = re.compile(r"^[0-9a-f]{40}$", re.IGNORECASE)
+
 _PATENT_COUNTRIES = frozenset(
     {
         "EP",
@@ -138,7 +144,9 @@ def is_patent_number(raw: str) -> bool:
 
     The check is intentionally lightweight: the string must start with a
     recognised two-letter patent authority code followed immediately by a
-    digit (after stripping a leading space or dot).
+    digit (after stripping a leading space or dot). A 40-character hex string
+    is a Semantic Scholar paper id and is never a patent number, even when it
+    starts with ``BE``, ``CA`` or ``DE`` and a digit.
 
     Args:
         raw: Candidate identifier string.
@@ -148,7 +156,7 @@ def is_patent_number(raw: str) -> bool:
         otherwise.
     """
     raw = raw.strip()
-    if len(raw) < 4:
+    if len(raw) < 4 or _S2_PAPER_ID_RE.match(raw):
         return False
     prefix = raw[:2].upper()
     if prefix not in _PATENT_COUNTRIES:
