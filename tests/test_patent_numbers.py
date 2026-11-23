@@ -94,3 +94,24 @@ class TestIsPatentNumber:
 
     def test_doi_prefix(self) -> None:
         assert is_patent_number("DOI:10.1234/abc") is False
+
+    @pytest.mark.parametrize(
+        "s2_id",
+        [
+            "ca1234567890abcdef1234567890abcdef123456",
+            "de0f3b9c2a1e4d5b6c7a8e9f0a1b2c3d4e5f6a7b",
+            "be1b2c3d4e5f60718293a4b5c6d7e8f901234567",
+            "649def34f8be52c8b66281af98ae884c09aef38b",
+        ],
+    )
+    def test_s2_paper_id_is_not_a_patent(self, s2_id: str) -> None:
+        """#699: a 40-hex S2 id starting with a hex office code is a paper."""
+        assert is_patent_number(s2_id) is False
+        assert is_patent_number(s2_id.upper()) is False
+        assert is_patent_number(f"  {s2_id} ") is False
+
+    @pytest.mark.parametrize(
+        "raw", ["BE1234567A1", "CA2345678C", "DE102019123456A1", "DE 1234567 B4"]
+    )
+    def test_real_hex_letter_office_numbers_still_match(self, raw: str) -> None:
+        assert is_patent_number(raw) is True

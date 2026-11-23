@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import re
 from typing import TYPE_CHECKING, Any, Literal
 
 import httpx
@@ -32,25 +31,6 @@ _FORMATTERS = {
     "csl-json": format_csl_json,
     "ris": format_ris,
 }
-
-
-# A Semantic Scholar paper id is 40 lower-case hex digits. Some begin with
-# what ``is_patent_number`` reads as an office code and a digit (``ca1…``,
-# ``de0…``), so they are kept away from EPO. Remove once #699 fixes
-# ``is_patent_number`` itself.
-_S2_PAPER_ID = re.compile(r"^[0-9a-f]{40}$")
-
-
-def _is_patent_id(raw: str) -> bool:
-    """Say whether an identifier is resolved as a patent number.
-
-    Args:
-        raw: One entry of ``paper_ids``.
-
-    Returns:
-        ``True`` for a patent number, ``False`` for a paper identifier.
-    """
-    return is_patent_number(raw) and not _S2_PAPER_ID.match(raw.strip())
 
 
 async def _resolve_papers(
@@ -187,7 +167,7 @@ async def generate_citations(
     if len(paper_ids) > 100:
         return {"error": "paper_ids must contain at most 100 identifiers"}
 
-    patent_indices = [i for i, raw in enumerate(paper_ids) if _is_patent_id(raw)]
+    patent_indices = [i for i, raw in enumerate(paper_ids) if is_patent_number(raw)]
     patent_set = set(patent_indices)
     paper_indices = [i for i in range(len(paper_ids)) if i not in patent_set]
 
