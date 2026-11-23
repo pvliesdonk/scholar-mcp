@@ -21,9 +21,18 @@ up in Open Library: the result is `book` with `confidence: "high"`, or the
 validated ISBN-13 as `isbn` when Open Library has no edition or fails.
 
 - The ISBN is the one the chapter parser already extracts into
-  `chapter_info.isbn`, checked by `checked_isbn13`: free text holds other
-  10- and 13-digit numbers, and only a valid check digit makes one an ISBN
-  ([ISBNs in free-text citations](reference/isbn-in-citation-text.md)).
+  `chapter_info.isbn`. Free text holds other 10- and 13-digit numbers (page
+  ranges such as "S. 81057-81105", Wikipedia `oldid=` revision ids), and only
+  a valid check digit makes one an ISBN
+  ([ISBNs in free-text citations](reference/isbn-in-citation-text.md)), so
+  the parser keeps only a candidate `checked_isbn13` accepts, the first valid
+  ISBN-13 before any ISBN-10 (#737). An ISBN-10 candidate never starts inside
+  a longer digit group, so the tail of an ISBN-13 that failed its check is not
+  retried as an ISBN-10; an unmarked ISBN-10 directly after another number and
+  one space or hyphen is missed for the same reason. The book lookup checks it again with
+  `checked_isbn13`, which also converts an ISBN-10 to the ISBN-13 it looks up.
+  No "ISBN" marker is required: the reference does not establish that every
+  citation carries one.
 - The lookup is `resolve_book_by_isbn`, the one ISBN lookup every caller
   shares (#706). Like `batch_resolve`, this path leaves `fetch_authors` off:
   the cache first, then one Open Library request, with authors filled from
