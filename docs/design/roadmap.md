@@ -152,7 +152,27 @@ index holds the argument for the direction and order.
   left open because only the first issue after `Closes` was closed. What
   remains is chapter citation: chapter records that carry their parent book,
   CrossRef chapter metadata, and a chapter entry type in citation output.
-  **[stated]** The "Done when" is revisited inside the refinement.
+- **[stated]** The epic's "Done when" stays frozen. The refinement records its
+  shortfall in backlog features instead of rewriting it: free-text citation to
+  an edition or work ([#746](https://github.com/pvliesdonk/scholar-mcp/issues/746))
+  and when resolution returns an edition rather than the work
+  ([#747](https://github.com/pvliesdonk/scholar-mcp/issues/747)). The third gap,
+  "across the supported book sources", has no feature; see Known unknowns.
+- **[derived]** Chapter citation depends on CrossRef, not on the citation
+  parser. `generate_citations` resolves its inputs as Semantic Scholar papers,
+  so the parent book, editors and pages an `@incollection` entry needs can only
+  come from a CrossRef book-chapter record. #593 is blocked by #67, and #67 by
+  the field research in [#742](https://github.com/pvliesdonk/scholar-mcp/issues/742),
+  because what CrossRef populates reliably decides what the entry can name. The
+  parser line (#737, then #64's `parent_book`, then the table-of-contents match)
+  runs alongside and improves patent references and `batch_resolve`.
+- **[evidenced: `src/scholar_mcp/_access_links.py` and
+  [#142](https://github.com/pvliesdonk/scholar-mcp/issues/142), 2026-11-23]**
+  Checked for blockers outside the epic: none. Access links already read the
+  raw `crossref_metadata`, and the standards backlog proposes reading its
+  title, so the chapter mapping must add to that key, not reshape it.
+  **[derived]** Judging by its issue titles, package `065` touches neither
+  CrossRef nor the chapter parser.
 
 ### Structural health
 
@@ -174,7 +194,11 @@ index holds the argument for the direction and order.
   (minor):** the chapter-citation slice, approved by the maintainer.
   **[stated]** It also carries two bugs found during the 3.4 cycle, the
   chapter parser's false ISBNs (#737) and the patent-number false positive
-  (#699), because bugs ship in the current package.
+  (#699), because bugs ship in the current package. **[stated]** The pieces
+  split out of #64 and #67 during refinement (German chapter patterns, the
+  table-of-contents match, the CrossRef title fallback) stay in `060`.
+  **[derived]** Order: the CrossRef line first, because its research spike is
+  the package's one open question and the `@incollection` output waits on it.
 - **[stated] [065 standards-followups](https://github.com/pvliesdonk/scholar-mcp/milestone/27)
   (minor):** the `040` follow-ups named under the standards direction,
   approved by the maintainer.
@@ -199,13 +223,17 @@ backlog; commit it to a package when it should ship in that cut.
   the survey left open whether "relevant status" needs EP Register procedural
   status beyond legal events.
 
-- **[derived] What do the standards, patent, and books epics promise once
-  their "Done when" is rewritten?** Resolved by the refinement issues
-  [#417](https://github.com/pvliesdonk/scholar-mcp/issues/417),
-  [#418](https://github.com/pvliesdonk/scholar-mcp/issues/418), and
-  [#419](https://github.com/pvliesdonk/scholar-mcp/issues/419). The first
+- **[derived] What do the standards and patent epics promise once their
+  "Done when" is rewritten?** Resolved by the refinement issues
+  [#417](https://github.com/pvliesdonk/scholar-mcp/issues/417) and
+  [#418](https://github.com/pvliesdonk/scholar-mcp/issues/418). The first
   slices hold under the current wording; a rewrite may move backlog children
-  in or out of each epic.
+  in or out of each epic. **[stated]** The books epic's "Done when" stays as
+  written (see Book and chapter resolution).
+- **[derived] What does "across the supported book sources" in epic #414's
+  "Done when" require?** No feature covers it and no test defines it; the books
+  refinement [#419](https://github.com/pvliesdonk/scholar-mcp/issues/419) stays
+  open on this question. Not knowing does not change the `060` order.
 - **[evidenced: [#357](https://github.com/pvliesdonk/scholar-mcp/issues/357)]
   When is semantic context over an identified corpus document viable?** The
   issue carries the external dependency that resolves it. The answer does not
@@ -217,6 +245,13 @@ backlog; commit it to a package when it should ship in that cut.
   independently of the package sequence.
 
 ## Revisions
+
+- **2026-11-23 — [stated] scope and "Done when"; [derived] order:** the `060`
+  refinement narrowed #64 to filling `parent_book` and #67 to the DOI-based
+  chapter mapping. It split out #743, #744 and #745 (kept in `060`), filed
+  the research spike #742, and moved #593's blocker from #64 to #67. The books
+  "Done when" stays frozen; its gaps became backlog features #746 and #747
+  plus one known unknown.
 
 - **2026-11-23 — [stated] packaging; [evidenced] the rest:** v3.4.0 shipped
   `050 patent-citations`, so it left the package list. At the maintainer's
