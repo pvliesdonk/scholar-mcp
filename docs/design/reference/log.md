@@ -2,6 +2,18 @@
 
 Newest first. One entry per research pass.
 
+## 2026-11-23
+
+### CrossRef book-chapter fields
+
+New page [CrossRef book-chapter fields](crossref-book-chapter-fields.md) for
+#742: 380 live `book-chapter` records over 14 targeted DOI prefixes plus a
+random 100, 58 parent-book records fetched through `relation.is-part-of`, and
+14 title queries. Editors sit on the parent book, not the chapter (3% of
+chapters); `container-title[0]` is the series when the record has an `ISSN`;
+`ISBN` and `isbn-type` are on the chapter itself; no Elsevier chapter had
+`is-part-of`.
+
 ## 2026-11-21
 
 ### Semantic Scholar: a batch of unknown ids

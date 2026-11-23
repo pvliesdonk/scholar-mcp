@@ -85,3 +85,6 @@ How completely publishers deposit these fields, and the formats `page` takes
 besides a hyphenated range, rest on one sample.
 The definition does not say which date `issued` takes when a work has both a
 print and an online date; the one sample had the same date for both.
+
+Book chapters carry different fields: see
+[CrossRef book-chapter fields](crossref-book-chapter-fields.md).
