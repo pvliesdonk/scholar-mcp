@@ -79,6 +79,13 @@ resolves the books a patent's non-patent literature (NPL) cites.
   Expertensysteme. In: Technische Expertensysteme … Kap. 1, S. 1-44. ISBN
   978-3-540-52155-6"), or an IEEE conference proceedings volume.
   [observed: DE102025118534A1, DE102025119099A1]
+- The same citations write the chapter as `Kap. 1` and the pages as `S. 1-44`
+  (German `Kapitel`, `Seite`/`Seiten` are the long forms, not seen in the
+  sample); journal citations use `S.` for pages too ("IEEE Access, Vol. 7,
+  2019, S. 81057-81105"). The parser reads `S.` pages as it reads `pp.`.
+  [observed: DE102025118534A1, DE102025118928A1; `Kapitel`, `Seite(n)` are
+  [unverified] as EPO forms]
+  [pins: tests/test_chapter_parser.py::TestGermanCitations::test_real_epo_citation]
 - Journal references carry an ISSN instead (`ISSN 0143-8166`), eight digits
   with a hyphen. [observed: DE102025108780A1]
   [pins: tests/test_patent_npl_books.py::test_checked_isbn13]

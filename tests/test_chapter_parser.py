@@ -191,3 +191,68 @@ class TestHintToDict:
         hint = ChapterHint(page_start=100, isbn="9780262035613")
         info = hint_to_dict(hint)
         assert info["isbn"] == "9780262035613"
+
+
+_GERMAN = (
+    "HARTMANN, Dietrich ; LEHNER, Karlheinz: Einführung in Expertensysteme. "
+    "In: Technische Expertensysteme. 1st edition. Berlin : Springer, 1990. "
+    "Kap. 1, S. 1-44. ISBN 978-3-540-52155-6."
+)
+_ENGLISH = (
+    "HARTMANN, Dietrich ; LEHNER, Karlheinz: Einführung in Expertensysteme. "
+    "In: Technische Expertensysteme. 1st edition. Berlin : Springer, 1990. "
+    "Ch. 1, pp. 1-44. ISBN 978-3-540-52155-6."
+)
+
+
+class TestGermanCitations:
+    """German examiner citations (``Kap.``, ``S.``) match their English forms (#743)."""
+
+    def test_real_epo_citation(self) -> None:
+        hint = parse_chapter_hint(_GERMAN)
+        assert hint.chapter_number == 1
+        assert hint.page_start == 1
+        assert hint.page_end == 44
+        assert hint.parent_title == "Technische Expertensysteme"
+        assert hint.isbn == "9783540521556"
+
+    def test_parity_with_english_equivalent(self) -> None:
+        assert hint_to_dict(parse_chapter_hint(_GERMAN)) == hint_to_dict(
+            parse_chapter_hint(_ENGLISH)
+        )
+
+    def test_kap_alone(self) -> None:
+        assert parse_chapter_hint("Lehrbuch, Kap. 7").chapter_number == 7
+
+    def test_kapitel_word(self) -> None:
+        assert parse_chapter_hint("Lehrbuch, Kapitel 12").chapter_number == 12
+
+    def test_s_alone(self) -> None:
+        hint = parse_chapter_hint("Lehrbuch, S. 45-67")
+        assert (hint.page_start, hint.page_end) == (45, 67)
+
+    def test_single_page_s(self) -> None:
+        hint = parse_chapter_hint("Lehrbuch, S. 45")
+        assert (hint.page_start, hint.page_end) == (45, None)
+
+    def test_seiten_word(self) -> None:
+        hint = parse_chapter_hint("Lehrbuch, Seiten 10-12")
+        assert (hint.page_start, hint.page_end) == (10, 12)
+
+    def test_journal_pages_follow_pp_behaviour(self) -> None:
+        """A journal ``S.`` range populates pages exactly as ``pp.`` does."""
+        de = parse_chapter_hint("IEEE Access, Vol. 7, 2019, S. 81057-81105")
+        en = parse_chapter_hint("IEEE Access, Vol. 7, 2019, pp. 81057-81105")
+        assert (de.page_start, de.page_end) == (81057, 81105)
+        assert hint_to_dict(de) == hint_to_dict(en)
+        assert de.isbn is None
+
+    def test_german_edition_ends_parent_title(self) -> None:
+        hint = parse_chapter_hint(
+            "Kapitel: In: Regelungstechnik. 2. Aufl. Berlin, 1999."
+        )
+        assert hint.parent_title == "Regelungstechnik"
+
+    def test_parent_title_stops_before_chapter_marker(self) -> None:
+        hint = parse_chapter_hint("In: Expertensysteme. Kap. 1, S. 1-44")
+        assert hint.parent_title == "Expertensysteme"
