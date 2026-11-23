@@ -385,6 +385,7 @@ async def service(cache: ScholarCache, test_config: ProjectConfig) -> Service:
     # Import enrichers here to avoid circular import
     # (_enricher_openlibrary -> _book_enrichment -> domain)
     from scholar_mcp._enricher_crossref import CrossRefEnricher
+    from scholar_mcp._enricher_crossref_chapter import CrossRefChapterEnricher
     from scholar_mcp._enricher_google_books import GoogleBooksEnricher
     from scholar_mcp._enricher_openalex import OpenAlexEnricher
     from scholar_mcp._enricher_openlibrary import OpenLibraryEnricher
@@ -393,6 +394,7 @@ async def service(cache: ScholarCache, test_config: ProjectConfig) -> Service:
         [
             OpenAlexEnricher(),
             CrossRefEnricher(),
+            CrossRefChapterEnricher(),
             OpenLibraryEnricher(),
             GoogleBooksEnricher(),
         ]

@@ -84,8 +84,9 @@ class PaperRecord(TypedDict, total=False):
     requested field set and what the S2 corpus has indexed, and records
     round-trip through JSON cache serialisation.
 
-    The final two fields (``book_metadata``, ``crossref_metadata``) are
-    attached in-place by enrichers rather than returned by S2 itself.
+    The final fields (``book_metadata``, ``crossref_metadata``,
+    ``chapter_info``) are attached in-place by enrichers rather than
+    returned by S2 itself.
     """
 
     paperId: str
@@ -107,6 +108,7 @@ class PaperRecord(TypedDict, total=False):
     # Enrichment-added fields (populated by enrichers, not by S2).
     book_metadata: dict[str, Any]
     crossref_metadata: dict[str, Any]
+    chapter_info: BookChapterRecord
 
 
 class PatentParties(TypedDict):
@@ -174,9 +176,10 @@ class BookRecord(TypedDict, total=False):
 class BookChapterRecord(TypedDict, total=False):
     """Chapter-level metadata within a book.
 
-    Used when citation strings reference specific chapters or page
-    ranges. ``citation_source`` indicates whether data came from
-    CrossRef (structured) or regex parsing (heuristic).
+    Built either from a citation string that references a chapter or
+    page range, or from a CrossRef ``book-chapter`` work and its parent
+    book. ``citation_source`` indicates whether data came from CrossRef
+    (structured) or regex parsing (heuristic).
     """
 
     chapter_title: str
@@ -187,6 +190,13 @@ class BookChapterRecord(TypedDict, total=False):
     parent_book: BookRecord
     isbn: str
     citation_source: Literal["crossref", "parsed"]
+    # Set only from CrossRef (citation_source "crossref").
+    pages: str
+    editors: list[str]
+    publisher: str
+    publisher_location: str
+    edition: str
+    parent_doi: str
 
 
 class StandardRecord(TypedDict, total=False):
