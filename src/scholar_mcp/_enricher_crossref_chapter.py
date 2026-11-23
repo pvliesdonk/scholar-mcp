@@ -11,9 +11,13 @@ from __future__ import annotations
 import html
 import logging
 import re
+import sqlite3
 from typing import Any
 
+import httpx
+
 from ._cache import checked_isbn13
+from ._rate_limiter import RateLimitedError
 
 logger = logging.getLogger(__name__)
 
@@ -194,8 +198,11 @@ def chapter_info_from_crossref(
 async def _fetch_parent(doi: str, service: Any) -> dict[str, Any] | None:
     """Return the CrossRef work of a parent book, through the CrossRef cache.
 
-    A missing or failed lookup is a normal outcome: the chapter is mapped
-    without its book's fields.
+    A missing, throttled or failed lookup is a normal outcome: the chapter
+    is mapped without its book's fields. Only the expected failures are
+    caught (throttling, HTTP and transport errors, cache errors and a
+    corrupt cached row); anything else is a bug and propagates to the
+    pipeline's guard.
 
     Args:
         doi: The parent book's DOI.
@@ -212,7 +219,9 @@ async def _fetch_parent(doi: str, service: Any) -> dict[str, Any] | None:
         if parent is not None:
             await service.cache.set_crossref(doi, parent)
         return parent  # type: ignore[no-any-return]
-    except Exception:
+    except RateLimitedError:
+        return None
+    except (httpx.HTTPError, sqlite3.Error, ValueError):
         logger.debug("crossref_parent_fetch_failed parent_doi=%s", doi, exc_info=True)
         return None
 

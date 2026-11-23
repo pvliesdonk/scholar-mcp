@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 import logging
+import sqlite3
 from typing import Any
+
+import httpx
+
+from ._rate_limiter import RateLimitedError
 
 logger = logging.getLogger(__name__)
 
@@ -46,8 +51,9 @@ class CrossRefEnricher:
         the cache, falls back to the CrossRef API, and sets
         ``record["crossref_metadata"]`` with the result.
 
-        All errors are caught and logged at DEBUG level so enrichment
-        failures never propagate.
+        A throttled lookup (logged by the client), a transport error or a
+        cache error leaves the record without CrossRef metadata. Any other
+        exception propagates to the pipeline's own guard.
 
         Args:
             record: The paper record dict to enrich in place.
@@ -66,5 +72,7 @@ class CrossRefEnricher:
             if cached is None:
                 await service.cache.set_crossref(doi, cr_data)
             record["crossref_metadata"] = cr_data
-        except Exception:
+        except RateLimitedError:
+            return
+        except (httpx.HTTPError, sqlite3.Error, ValueError):
             logger.debug("crossref_enrich_failed doi=%s", doi, exc_info=True)

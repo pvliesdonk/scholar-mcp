@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import sqlite3
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -17,6 +18,7 @@ from scholar_mcp._enricher_crossref_chapter import (
     parent_doi,
 )
 from scholar_mcp._enrichment import Enricher
+from scholar_mcp._rate_limiter import RateLimitedError
 from tests.fixtures.crossref_chapters import (
     cambridge_chapter,
     cambridge_parent,
@@ -327,10 +329,19 @@ async def test_enrich_when_parent_lookup_finds_nothing(
     assert all(r.levelno == logging.DEBUG for r in caplog.records)
 
 
-async def test_enrich_when_parent_lookup_raises() -> None:
-    """A failing cache or client is a missing parent, not a failed enrichment."""
+@pytest.mark.parametrize(
+    "error",
+    [
+        sqlite3.OperationalError("database is locked"),
+        ValueError("corrupt cached row"),
+        httpx.ConnectError("unreachable"),
+    ],
+    ids=["cache-locked", "cache-corrupt", "transport"],
+)
+async def test_enrich_when_parent_lookup_raises(error: Exception) -> None:
+    """An expected cache or transport failure is a missing parent."""
     service = _service()
-    service.cache.get_crossref = AsyncMock(side_effect=RuntimeError("db closed"))
+    service.cache.get_crossref = AsyncMock(side_effect=error)
     record: dict[str, Any] = {"crossref_metadata": springer_chapter()}
 
     await CrossRefChapterEnricher().enrich(record, service)
@@ -338,6 +349,29 @@ async def test_enrich_when_parent_lookup_raises() -> None:
     assert record["chapter_info"]["parent_title"] == (
         "Cultural Heritage-Based Sustainable Tourism Approaches"
     )
+
+
+async def test_enrich_when_parent_lookup_is_throttled() -> None:
+    """A throttled parent lookup maps the chapter without the book's fields."""
+    service = _service()
+    service.crossref.get_by_doi = AsyncMock(side_effect=RateLimitedError())
+    record: dict[str, Any] = {"crossref_metadata": springer_chapter()}
+
+    await CrossRefChapterEnricher().enrich(record, service)
+
+    assert "editors" not in record["chapter_info"]
+    service.cache.set_crossref.assert_not_awaited()
+
+
+async def test_enrich_lets_unexpected_parent_errors_propagate() -> None:
+    """A bug in the parent lookup reaches the pipeline instead of hiding."""
+    service = _service()
+    service.cache.get_crossref = AsyncMock(side_effect=RuntimeError("bug"))
+    record: dict[str, Any] = {"crossref_metadata": springer_chapter()}
+
+    with pytest.raises(RuntimeError):
+        await CrossRefChapterEnricher().enrich(record, service)
+    assert "chapter_info" not in record
 
 
 # ---------------------------------------------------------------------------
