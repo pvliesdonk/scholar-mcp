@@ -90,6 +90,14 @@ index holds the argument for the direction and order.
   [ETSI](reference/etsi-standards-search.md) and
   [supersession](reference/standards-supersession-sources.md) references.
 
+- **[derived]** The `040` slice left defects in what it shipped: joint
+  ISO/IEC and IEEE bodies, deleted records in the sync status, W3C
+  `supersedes`, ETSI deliverables on approval, search results cached past a
+  sync, and no records for NIST white papers. They are the cheapest
+  user-visible standards work left, so they go ahead of new sources; the
+  epic's broader children stay with refinement
+  [#417](https://github.com/pvliesdonk/scholar-mcp/issues/417).
+
 ### Patent research workflows
 
 - **[derived]** [Epic #413](https://github.com/pvliesdonk/scholar-mcp/issues/413)
@@ -122,7 +130,15 @@ index holds the argument for the direction and order.
   from a patent's cited literature (books by ISBN, papers by arXiv
   identifier). **[stated]** A title-matched paper may be returned when it is
   marked unconfirmed, since an agent can deal with that; it is a `candidate`,
-  never the `paper`.
+  never the `paper`. **[evidenced: milestone `v3.4.0 patent-citations`]** The
+  slice shipped in v3.4.0.
+- **[evidenced: [#736](https://github.com/pvliesdonk/scholar-mcp/issues/736)]**
+  In the v3.4.0 release-candidate tests the title-candidate route produced no
+  candidate on real German examiner citations: references carrying any URL
+  are skipped, short-style title guesses fail the overlap check, and lookups
+  stop at the first Semantic Scholar throttle. **[derived]** The route is safe
+  but rarely useful until #736 is done; it belongs with the patent epic's
+  second slice, not with a standalone fix.
 
 ### Book and chapter resolution
 
@@ -154,16 +170,16 @@ index holds the argument for the direction and order.
 
 ## Packages
 
-- **[stated] [050 patent-citations](https://github.com/pvliesdonk/scholar-mcp/milestone/25)
-  (minor):** the first patent slice, approved by the maintainer.
-  **[derived]** It closes the one "Done when" term with no coverage (citation
-  output) and adds cross-links that reuse existing clients.
-  **[stated]** The maintainer also put the cognitive-complexity work (#688)
-  and the shared ISBN lookup (#706) in this cut.
 - **[stated] [060 book-chapters](https://github.com/pvliesdonk/scholar-mcp/milestone/26)
   (minor):** the chapter-citation slice, approved by the maintainer.
-- **[derived]** `050` and `060` are each epic's first slice rather than a
-  committed sequence; reorder by renaming. `070` is held, not scheduled.
+  **[stated]** It also carries two bugs found during the 3.4 cycle, the
+  chapter parser's false ISBNs (#737) and the patent-number false positive
+  (#699), because bugs ship in the current package.
+- **[stated] [065 standards-followups](https://github.com/pvliesdonk/scholar-mcp/milestone/27)
+  (minor):** the `040` follow-ups named under the standards direction,
+  approved by the maintainer.
+- **[derived]** `060` and `065` are independent; reorder by renaming. `070`
+  is held, not scheduled.
 - **[stated] [070 corpus foundations](https://github.com/pvliesdonk/scholar-mcp/milestone/16)
   (minor):** postponed by the maintainer because the design notes were lost.
   **[evidenced: [epic #353](https://github.com/pvliesdonk/scholar-mcp/issues/353)]**
@@ -178,7 +194,8 @@ backlog; commit it to a package when it should ship in that cut.
 - **[derived] Does the patent epic need a second slice, and which?** Resolved
   by refinement [#418](https://github.com/pvliesdonk/scholar-mcp/issues/418):
   after `050`, the cross-links the slice did not add remain, such as
-  patent–paper co-citation (#47) and citing patents from OpenAlex (#60), and
+  patent–paper co-citation (#47), citing patents from OpenAlex (#60) and
+  title candidates that reach real citations (#736), and
   the survey left open whether "relevant status" needs EP Register procedural
   status beyond legal events.
 
@@ -200,6 +217,14 @@ backlog; commit it to a package when it should ship in that cut.
   independently of the package sequence.
 
 ## Revisions
+
+- **2026-11-23 — [stated] packaging; [evidenced] the rest:** v3.4.0 shipped
+  `050 patent-citations`, so it left the package list. At the maintainer's
+  request `060` gained #737 and #699, and a new `065 standards-followups`
+  takes six standards defects and gaps from `040`. A triage linked the
+  orphaned standards, patent and chapter issues to their epics and closed two
+  structural-debt issues the 3.4 refactors resolved (#237, #240). The patent
+  direction records that title candidates rarely reach real citations (#736).
 
 - **2026-11-21 — [evidenced] what shipped; [stated] scope; [derived] the
   rest:** `030 agent-fetched-pdfs` and `040 standards-reliability` shipped in
