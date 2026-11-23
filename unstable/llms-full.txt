@@ -1801,7 +1801,7 @@ CrossRef has no chapter number, so `chapter_info` from CrossRef never has one. A
 
 ## Other sources
 
-CrossRef adds publisher metadata, page ranges and container titles to a paper result that has a DOI. Google Books adds `google_books_url` and `snippet` to a book record that has an ISBN.
+CrossRef adds publisher metadata, page ranges and container titles to a paper result that has a DOI. CrossRef lookups run one at a time, at most five a second, the limits CrossRef's public service sets, so a batch with many DOIs takes longer than it would without them. When CrossRef still answers that it is busy, that result goes without its CrossRef fields and the log shows `crossref_rate_limited` at WARNING; a DOI CrossRef doesn't know logs `crossref_not_found` at DEBUG instead. Google Books adds `google_books_url` and `snippet` to a book record that has an ISBN.
 
 ## An OpenAlex API key
 
