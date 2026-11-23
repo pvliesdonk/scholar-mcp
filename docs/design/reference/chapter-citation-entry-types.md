@@ -100,9 +100,11 @@ Prompted by #593, which cites a chapter that CrossRef identified (see
   "empty author in *key*" and carry on; the entry is still written.
   [source: plain-bst] (`output.check`, lines 77–83)
   [pins: tests/test_chapter_citation.py::TestBibtex::test_no_author_no_editor_still_a_chapter]
-- `pages` is formatted by `n.dashify`, which turns a single hyphen into an
-  en dash, and by `multi.page.check`; any string is accepted.
-  [source: plain-bst] (`format.pages`, lines 367–376)
+- `pages` is formatted by `n.dashify`, which turns a single hyphen into
+  `--` (an en dash in TeX) and leaves a run of hyphens alone, and
+  `multi.page.check` reads a `-`, `,` or `+` as a range; any string is
+  accepted. [source: plain-bst] (`format.pages` lines 367–376, `n.dashify`
+  lines 240–262, `multi.page.check` lines 347–366)
   [pins: tests/test_chapter_citation.py::TestBibtex::test_nonnumeric_pages_kept_as_given]
 - `edition` "should be an ordinal" with a capital first letter, such as
   "Second". [source: btxdoc] (`edition`, lines 673–677)

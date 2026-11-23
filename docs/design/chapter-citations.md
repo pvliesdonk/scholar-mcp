@@ -17,13 +17,20 @@ The code is `_chapter_citation.py`, called from `_citation_formatter.py`.
   `enrich` is true, the default. With `enrich=False` no CrossRef lookup runs,
   S2's batch endpoint returns no `chapter_info`, and a chapter comes out as
   `@article` (or whatever its venue implies), as it did before #593.
-- A conference paper stays `inproceedings`. Springer deposits proceedings
-  papers (LNCS and similar series) as CrossRef `book-chapter` works; for
-  example 10.1007/978-3-319-24574-4_28 is a `book-chapter` in "Lecture
-  Notes in Computer Science" / "Medical Image Computing and
-  Computer-Assisted Intervention – MICCAI 2015" (observed against
-  api.crossref.org on 2026-11-23). S2's `Conference` publication type or a
-  conference keyword in the venue therefore wins over `chapter_info`.
+- A paper S2 marks as a conference paper stays `inproceedings`. Springer
+  deposits proceedings papers (LNCS and similar series) as CrossRef
+  `book-chapter` works; for example 10.1007/978-3-319-24574-4_28 is a
+  `book-chapter` in "Lecture Notes in Computer Science" / "Medical Image
+  Computing and Computer-Assisted Intervention – MICCAI 2015" (observed
+  against api.crossref.org on 2026-11-23). S2's `Conference` publication
+  type or a conference keyword in the venue therefore wins over
+  `chapter_info`. Two LNCS papers S2 holds under their Springer DOI
+  (10.1007/978-3-319-46448-0_2, ECCV 2016; 10.1007/978-3-319-24553-9_68,
+  MICCAI 2015) came out as `@inproceedings` from the deployed
+  `generate_citations` with `enrich=false` on 2026-11-23, so they keep that
+  type. An LNCS paper S2 does not mark as a conference paper, with a venue
+  lacking a conference keyword, becomes `@incollection` in its proceedings
+  volume; that is a correct BibTeX entry for it too.
 - A chapter wins over `book_metadata`: a chapter whose ISBN led to a book
   record is still the chapter, not the whole book.
 
@@ -74,7 +81,8 @@ series, and `parent_title` is already the book.
   authors are S2's `authors`, so "no author" means S2 lists none.
 - **Editors are `"Given Family"` strings** and go through the same name
   parser as authors. An organisation editor (CrossRef `name` only, absent
-  from the 380-record sample) would be split like a personal name.
+  from the 380-record sample) would be split like a personal name
+  ([#763](https://github.com/pvliesdonk/scholar-mcp/issues/763)).
 - **Two `chapter_info` shapes exist.** #67's CrossRef shape (flat
   `parent_title`, `editors`, `publisher`, …) is the one read here. #64's
   parsed shape fills `parent_book` only on patent NPL entries and
@@ -84,7 +92,8 @@ series, and `parent_title` is already the book.
 ## Not covered
 
 - `series` (CrossRef's first `container-title` for a series chapter):
-  `chapter_info` does not keep it, and adding it is an enricher change.
+  `chapter_info` does not keep it, and adding it is an enricher change
+  ([#762](https://github.com/pvliesdonk/scholar-mcp/issues/762)).
 - Chapter numbers: CrossRef has no such field.
 - CSL `entry-encyclopedia` and biblatex `@inreference`/`@suppbook`: the
   CrossRef chapter record does not say which chapters are encyclopedia

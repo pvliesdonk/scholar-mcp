@@ -118,8 +118,9 @@ def infer_entry_type(paper: PaperRecord) -> str:
     """Infer BibTeX entry type from paper metadata.
 
     A paper whose CrossRef ``chapter_info`` names its book is a chapter
-    (``incollection``) unless it is a conference paper: Springer deposits
-    proceedings papers (LNCS) as CrossRef book chapters, and those stay
+    (``incollection``) unless the conference test below marks it as a
+    conference paper: Springer deposits proceedings papers (LNCS) as
+    CrossRef book chapters, and those that test catches stay
     ``inproceedings``. A chapter outranks ``book_metadata``.
 
     A paper counts as a conference paper when S2 says so in
