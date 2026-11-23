@@ -32,8 +32,9 @@ resolves the books a patent's non-patent literature (NPL) cites.
 - Does not cover: finding a book without an ISBN (title search, #59), or how
   Open Library answers an ISBN lookup.
 - Depended on by: `src/scholar_mcp/_cache.py` (`checked_isbn13`), used by
-  `_attach_npl_books` in `src/scholar_mcp/_tools_patent.py`; the ISBN itself
-  is extracted by `src/scholar_mcp/_chapter_parser.py`.
+  `_attach_npl_books` in `src/scholar_mcp/_npl_resolution.py` and by
+  `src/scholar_mcp/_chapter_parser.py`, which extracts the ISBN and keeps
+  only a candidate with a valid check digit (#737).
 
 ## Claims
 
@@ -57,8 +58,13 @@ resolves the books a patent's non-patent literature (NPL) cites.
   [pins: tests/test_patent_npl_books.py::test_checked_isbn13]
 - A number of the right length without a valid check digit is not an ISBN:
   without the check, any 10-digit number after the word "ISBN", or a 13-digit
-  number starting 978, would be taken for one.
+  number starting 978, would be taken for one. Without the marker it is
+  worse: a page range ("S. 81057-81105") or a Wikipedia revision id
+  (`oldid=1195304739`) has the shape of an ISBN-10 and fails the check.
+  [observed: DE102025118928A1, DE102025119138A1, #737]
   [pins: tests/test_patent_npl_books.py::test_checked_isbn13]
+  [pins: tests/test_chapter_parser.py::TestIsbnRequiresCheckDigit::test_page_range_is_not_an_isbn]
+  [pins: tests/test_chapter_parser.py::TestIsbnRequiresCheckDigit::test_revision_id_is_not_an_isbn]
 
 ### Forms in EPO citation text
 

@@ -12,6 +12,8 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from ._cache import checked_isbn13
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -45,9 +47,11 @@ _RE_ISBN13 = re.compile(
 
 # ISBN-10: 10 chars where first 9 are digits and last is digit or X,
 # with optional hyphens/spaces between groups.
-# Negative lookahead prevents matching the tail of an ISBN-13.
+# The lookahead refuses an ISBN-13's 978/979 start; the lookbehinds refuse a
+# start inside a longer digit group, so the tail of an ISBN-13 that failed its
+# check ("978-0-...") is not retried as an ISBN-10 (#737).
 _RE_ISBN10 = re.compile(
-    r"(?<!\d)(?!97[89])\d(?:[-\s]?\d){8}[-\s]?[\dXx](?!\d)",
+    r"(?<!\d)(?<!\d[-\s])(?!97[89])\d(?:[-\s]?\d){8}[-\s]?[\dXx](?!\d)",
 )
 
 
@@ -66,6 +70,29 @@ def _clean_isbn(raw: str) -> str:
         ISBN digits (and optional trailing X) with no separators.
     """
     return re.sub(r"[-\s]", "", raw).upper()
+
+
+def _first_valid_isbn(citation: str) -> str | None:
+    """Return the first ISBN in *citation* whose check digit is valid.
+
+    A digit run of ISBN length is only a candidate: page ranges and URL
+    ids have the same shape (#737), so each candidate must pass
+    :func:`~scholar_mcp._cache.checked_isbn13`. ISBN-13 candidates are
+    preferred over ISBN-10 ones.
+
+    Args:
+        citation: Raw citation string.
+
+    Returns:
+        The cleaned ISBN (hyphens and spaces removed, in the length the
+        text gives it), or ``None`` when no candidate is a valid ISBN.
+    """
+    for pattern in (_RE_ISBN13, _RE_ISBN10):
+        for m in pattern.finditer(citation):
+            candidate = _clean_isbn(m.group())
+            if checked_isbn13(candidate) is not None:
+                return candidate
+    return None
 
 
 @dataclass
@@ -145,16 +172,12 @@ def parse_chapter_hint(citation: str) -> ChapterHint:
         hint.parent_title = m.group(1).strip()
         logger.debug("parse_chapter_hint parent_title=%s", hint.parent_title)
 
-    # ISBN — prefer ISBN-13 over ISBN-10
-    m13 = _RE_ISBN13.search(citation)
-    if m13:
-        hint.isbn = _clean_isbn(m13.group())
-        logger.debug("parse_chapter_hint isbn=%s isbn_kind=isbn13", hint.isbn)
-    else:
-        m10 = _RE_ISBN10.search(citation)
-        if m10:
-            hint.isbn = _clean_isbn(m10.group())
-            logger.debug("parse_chapter_hint isbn=%s isbn_kind=isbn10", hint.isbn)
+    # ISBN — prefer ISBN-13 over ISBN-10; a failed check digit is no ISBN
+    hint.isbn = _first_valid_isbn(citation)
+    if hint.isbn is not None:
+        logger.debug(
+            "parse_chapter_hint isbn=%s isbn_digits=%d", hint.isbn, len(hint.isbn)
+        )
 
     return hint
 

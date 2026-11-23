@@ -69,6 +69,74 @@ class TestIsbn:
         assert hint.isbn == "9780262035613"
 
 
+class TestIsbnRequiresCheckDigit:
+    """Only a number with a valid check digit is an ISBN (#737)."""
+
+    # Real NPL strings from the issue: a page range and a Wikipedia revision id.
+    PAGE_RANGE = (
+        "OUBBATI, Omar Sami [et al.]: A survey. In: IEEE Access, Vol. 7, 2019,"
+        " S. 81057-81105."
+    )
+    REVISION_ID = (
+        "Bump mapping. In: Wikipedia, https://en.wikipedia.org/w/"
+        "index.php?title=Bump_mapping&amp;oldid=1195304739"
+    )
+
+    def test_page_range_is_not_an_isbn(self) -> None:
+        hint = parse_chapter_hint(self.PAGE_RANGE)
+        assert hint.isbn is None
+        assert "isbn" not in hint_to_dict(hint)
+
+    def test_revision_id_is_not_an_isbn(self) -> None:
+        hint = parse_chapter_hint(self.REVISION_ID)
+        assert hint.isbn is None
+        assert hint.has_chapter_info is False
+
+    def test_isbn10_with_marker_and_hyphens(self) -> None:
+        hint = parse_chapter_hint("Proc. IEEE, 1998, ISBN 0-7803-4455-3")
+        assert hint.isbn == "0780344553"
+
+    def test_isbn10_without_marker(self) -> None:
+        hint = parse_chapter_hint("Proc. IEEE, 1998, 0-7803-4455-3")
+        assert hint.isbn == "0780344553"
+
+    def test_isbn13_with_marker_and_hyphens(self) -> None:
+        hint = parse_chapter_hint("Kap. 1, S. 1-44. ISBN 978-3-540-52155-6")
+        assert hint.isbn == "9783540521556"
+
+    def test_isbn13_without_marker(self) -> None:
+        hint = parse_chapter_hint("Kap. 1, S. 1-44. 978-3-540-52155-6")
+        assert hint.isbn == "9783540521556"
+
+    def test_isbn10_with_bad_check_digit_is_rejected(self) -> None:
+        hint = parse_chapter_hint("Some Book, ISBN 0-7803-4455-4")
+        assert hint.isbn is None
+
+    def test_isbn13_with_bad_check_digit_is_rejected(self) -> None:
+        hint = parse_chapter_hint("Some Book, ISBN 978-3-540-52155-7")
+        assert hint.isbn is None
+
+    def test_valid_isbn_after_a_false_match_is_found(self) -> None:
+        hint = parse_chapter_hint(
+            "In: IEEE Access, 2019, S. 81057-81105, ISBN 0-7803-4455-3"
+        )
+        assert hint.isbn == "0780344553"
+
+    def test_valid_isbn13_after_a_false_isbn13_is_found(self) -> None:
+        hint = parse_chapter_hint("Ref 978-1-234-56789-0, ISBN 978-3-540-52155-6")
+        assert hint.isbn == "9783540521556"
+
+    def test_tail_of_an_invalid_isbn13_is_not_an_isbn10(self) -> None:
+        # 978-0-7803-4455-3 fails the ISBN-13 check; its tail
+        # 0-7803-4455-3 is a valid ISBN-10 but not a separate number.
+        hint = parse_chapter_hint("Some Book, ISBN 978-0-7803-4455-3")
+        assert hint.isbn is None
+
+    def test_tail_of_an_invalid_spaced_isbn13_is_not_an_isbn10(self) -> None:
+        hint = parse_chapter_hint("Some Book, ISBN 978 0 7803 4455 3")
+        assert hint.isbn is None
+
+
 class TestEmptyAndProperties:
     def test_no_match_returns_empty_hint(self) -> None:
         hint = parse_chapter_hint("Goodfellow et al., 2016")
