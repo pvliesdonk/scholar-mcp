@@ -4,6 +4,16 @@ Newest first. One entry per research pass.
 
 ## 2026-11-23
 
+### Open Library tables of contents
+
+New page [Open Library tables of contents](openlibrary-table-of-contents.md)
+for #744: 305 academic books holding a CrossRef `book-chapter` (197 random,
+108 from Wiley, CRC and Oxford prefixes) looked up by ISBN with
+`/api/books?jscmd=details`. 252 were in Open Library, 14 had a
+`table_of_contents`, and none had an entry with a numeric `label` or a
+`pagenum`. The field sits on the edition record, every entry seen had
+`level` 0, and absent values come as empty strings or missing keys.
+
 ### CrossRef book-chapter fields
 
 New page [CrossRef book-chapter fields](crossref-book-chapter-fields.md) for
