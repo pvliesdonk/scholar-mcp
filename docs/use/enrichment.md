@@ -41,7 +41,7 @@ When a paper's DOI names a book chapter in CrossRef, the paper result gets a `ch
 | `publisher`, `publisher_location`, `edition` | Publisher name, place and edition number |
 | `isbn` | The print ISBN when CrossRef marks one, otherwise the electronic ISBN |
 
-CrossRef has no chapter number, so `chapter_info` from CrossRef never has one. A chapter that doesn't link to its book is described from its own record alone. If the book lookup fails, the chapter is still described, without the book's editors. Book records are cached like any CrossRef lookup, so later chapters of the same book cost no extra request.
+CrossRef has no chapter number, so `chapter_info` from CrossRef never has one. A chapter that doesn't link to its book is described from its own record alone. If the book lookup fails, the chapter is still described, without the book's editors. Book records are cached like any CrossRef lookup, so a later lookup of a chapter from the same book reads the book from the cache.
 
 `batch_resolve` can also attach a `chapter_info` with `citation_source: "parsed"` to an entry, read from the identifier string itself. That one sits beside `paper`, not inside it.
 

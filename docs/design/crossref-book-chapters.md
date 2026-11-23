@@ -19,8 +19,9 @@ follow [CrossRef book-chapter fields](reference/crossref-book-chapter-fields.md)
   `chapter_info` yet.
 - The parent book is fetched by the DOI in `relation.is-part-of`, with the
   `https://doi.org/` prefix stripped, through the same `crossref` cache table
-  every CrossRef work uses (30-day TTL). A second chapter of the same book, or
-  a repeat lookup, costs no request.
+  every CrossRef work uses (30-day TTL). A later call for a chapter of the
+  same book reads the parent from the cache; two chapters of one book in the
+  same batch can both miss it, because their lookups run concurrently.
 - Fields, each left out when CrossRef has nothing:
 
   | Key | Source |
@@ -61,6 +62,14 @@ follow [CrossRef book-chapter fields](reference/crossref-book-chapter-fields.md)
   one. Alternatives: a new key such as
   `crossref_chapter` (a second shape to learn), or reshaping
   `crossref_metadata` (read by `_access_links.py`; kept as is).
+- **Flat parent fields, not `parent_book`.** `BookChapterRecord` already has
+  `parent_book: BookRecord`, which the NPL path fills from an ISBN lookup
+  (#64). The book's editors have no `BookRecord` field, and filling a
+  `BookRecord` from a CrossRef work would mix two sources' normalisations
+  into one record, so the CrossRef fields stay flat next to `parent_title`.
+  The alternative, a CrossRef-built `parent_book` with an added `editors`
+  field, would give both paths one place for the book; #593 can decide
+  which shape it reads.
 - **Pages.** The raw string is always kept, because forms such as
   `xiii-xiii`, `639-650.e3` and `343a-349` occur and do not fit two
   integers; the integer keys stay for the parsed path's consumers.
