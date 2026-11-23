@@ -48,7 +48,7 @@ journal fields; [CrossRef work journal fields](crossref-works.md) does.
   `relation.is-part-of`, `issued` of a `book-chapter`, the same fields of its
   parent book record, and `type:book-chapter` title queries.
 - Does not cover: citation lists, licences, abstracts, rate limits beyond the
-  one header noted below, or other record types (`book-section`,
+  headers noted below, or other record types (`book-section`,
   `reference-entry`).
 - Depended on by: `_enricher_crossref_chapter.py` (#67), which maps a
   chapter and its parent onto `chapter_info`; see
@@ -261,6 +261,14 @@ User-Agent, no `mailto`, about 150 requests at 1 per second]
 - The public pool answered with `x-rate-limit-limit: 1`,
   `x-rate-limit-interval: 1s` and `x-concurrency-limit: 1`.
   [observed: response headers of a list request]
+- A single-work request (`/works/{doi}`) is allowed more: two DOIs and one
+  chapter DOI each answered `x-rate-limit-limit: 5`,
+  `x-rate-limit-interval: 1s` and `x-concurrency-limit: 1`, while a
+  `/works?filter=type:book-chapter&rows=1` list request in the same run
+  answered `x-rate-limit-limit: 1`. The limit is per endpoint shape; the
+  concurrency limit is 1 for both. Whether a `mailto` (the polite pool)
+  raises either is unverified. [observed: `curl` with a generic User-Agent
+  and no `mailto`, 2026-11-23, 1.5 s between requests]
 
 ## How book-chapter fields differ from the journal fields
 

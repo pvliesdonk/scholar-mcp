@@ -371,7 +371,7 @@ async def service(cache: ScholarCache, test_config: ProjectConfig) -> Service:
     openalex_http = httpx.AsyncClient(base_url="https://api.openalex.org")
     openalex = OpenAlexClient(openalex_http)
     crossref_http = httpx.AsyncClient(base_url="https://api.crossref.org", timeout=10.0)
-    crossref = CrossRefClient(crossref_http)
+    crossref = CrossRefClient(crossref_http, RateLimiter(delay=0.0))
     google_books_http = httpx.AsyncClient(
         base_url="https://www.googleapis.com/books/v1", timeout=10.0
     )

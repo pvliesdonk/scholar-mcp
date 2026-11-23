@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -9,6 +10,7 @@ import pytest
 
 from scholar_mcp._enricher_crossref import CrossRefEnricher
 from scholar_mcp._enrichment import Enricher
+from scholar_mcp._rate_limiter import RateLimitedError
 
 
 def _make_service(
@@ -108,11 +110,13 @@ async def test_enrich_fills_crossref_metadata_from_api() -> None:
 
 
 @pytest.mark.anyio
-async def test_enrich_handles_error_silently() -> None:
-    """Exception during enrichment is swallowed; record stays unchanged."""
+async def test_enrich_handles_cache_error_silently() -> None:
+    """A cache error is a missing CrossRef layer; record stays unchanged."""
     enricher = CrossRefEnricher()
     service = _make_service()
-    service.cache.get_crossref = AsyncMock(side_effect=RuntimeError("boom"))
+    service.cache.get_crossref = AsyncMock(
+        side_effect=sqlite3.OperationalError("database is locked")
+    )
     record: dict[str, Any] = {
         "externalIds": {"DOI": "10.1234/err"},
     }
@@ -120,3 +124,29 @@ async def test_enrich_handles_error_silently() -> None:
     await enricher.enrich(record, service)
 
     assert "crossref_metadata" not in record
+
+
+@pytest.mark.anyio
+async def test_enrich_throttled_leaves_record_unchanged() -> None:
+    """A throttled lookup is swallowed and nothing is cached."""
+    enricher = CrossRefEnricher()
+    service = _make_service()
+    service.crossref.get_by_doi = AsyncMock(side_effect=RateLimitedError())
+    record: dict[str, Any] = {"externalIds": {"DOI": "10.1234/busy"}}
+
+    await enricher.enrich(record, service)
+
+    assert "crossref_metadata" not in record
+    service.cache.set_crossref.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_enrich_lets_unexpected_errors_propagate() -> None:
+    """A bug is not swallowed here; the pipeline's guard handles it."""
+    enricher = CrossRefEnricher()
+    service = _make_service()
+    service.cache.get_crossref = AsyncMock(side_effect=RuntimeError("bug"))
+    record: dict[str, Any] = {"externalIds": {"DOI": "10.1234/err"}}
+
+    with pytest.raises(RuntimeError):
+        await enricher.enrich(record, service)

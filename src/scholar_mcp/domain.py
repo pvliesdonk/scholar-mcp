@@ -44,6 +44,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _CROSSREF_BASE = "https://api.crossref.org"
+_CROSSREF_DELAY = 0.2  # public pool advertises 5 single-work requests/s
 _GOOGLE_BOOKS_BASE = "https://www.googleapis.com/books/v1"
 _OPENALEX_BASE = "https://api.openalex.org"
 _OPENLIBRARY_BASE = "https://openlibrary.org"
@@ -150,7 +151,9 @@ class Service:
             # the key never appears in a URL or a request log line.
             openalex_http.headers["Authorization"] = f"Bearer {config.openalex_api_key}"
         self.openalex = OpenAlexClient(openalex_http)
-        self.crossref = CrossRefClient(_http_client(stack, _CROSSREF_BASE, ua))
+        self.crossref = CrossRefClient(
+            _http_client(stack, _CROSSREF_BASE, ua), RateLimiter(delay=_CROSSREF_DELAY)
+        )
         self.google_books = GoogleBooksClient(
             _http_client(stack, _GOOGLE_BOOKS_BASE, ua),
             api_key=config.google_books_api_key,

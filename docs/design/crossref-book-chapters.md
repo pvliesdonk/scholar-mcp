@@ -44,13 +44,20 @@ follow [CrossRef book-chapter fields](reference/crossref-book-chapter-fields.md)
   Following the ISBN to a parent book was considered and not built; whether
   an `isbn:` filter returns the parent is unverified on the reference page
   ([#753](https://github.com/pvliesdonk/scholar-mcp/issues/753)).
-- **Parent lookup fails** (404, throttled, network error, cache error): the
-  chapter is still mapped from its own record, without the book's editors or
-  subtitle, and `crossref_chapter_without_parent` is logged at DEBUG. A failed
-  lookup is not cached, so the next call asks again. The CrossRef client
-  itself already logs `crossref_error` at WARNING for an HTTP error.
-- An unexpected exception while mapping is caught by the pipeline's own
-  guard (`enricher_failed` at DEBUG); the record then has no `chapter_info`.
+- **Parent lookup finds nothing or fails** (404, throttled, HTTP or
+  transport error, cache error, corrupt cached row): the chapter is still
+  mapped from its own record, without the book's editors or subtitle, and
+  `crossref_chapter_without_parent` is logged at DEBUG. A failed lookup is
+  not cached, so the next call asks again. The CrossRef client logs the
+  cause once: `crossref_not_found` at DEBUG for a 404,
+  `crossref_rate_limited` at WARNING without a traceback for a 429, and
+  `crossref_error` at WARNING with a traceback for any other HTTP,
+  transport or body error.
+- **Any other exception** in the parent lookup or the mapping is a bug.
+  `_fetch_parent` catches only the failures listed above
+  (`RateLimitedError`, `httpx.HTTPError`, `sqlite3.Error`, `ValueError`), so
+  anything else reaches the pipeline's own guard (`enricher_failed` at
+  DEBUG with the traceback) and the record then has no `chapter_info`.
 
 ## Decisions
 
@@ -73,7 +80,21 @@ follow [CrossRef book-chapter fields](reference/crossref-book-chapter-fields.md)
 - **Pages.** The raw string is always kept, because forms such as
   `xiii-xiii`, `639-650.e3` and `343a-349` occur and do not fit two
   integers; the integer keys stay for the parsed path's consumers.
-- **Rate limit.** The public pool allows one request a second with one in
-  flight, and the parent fetch adds one request per uncached book. The
-  CrossRef client has no rate limiter today; adding one is a separate change
+- **Rate limit.** `CrossRefClient` spaces request starts with a
+  `RateLimiter` of 0.2 s (`_CROSSREF_DELAY` in `domain.py`) and holds a
+  lock across each request, so at most one is in flight. This matches what
+  the public pool advertises for `/works/{doi}`, the only endpoint the
+  client calls: 5 requests a second, concurrency 1
+  ([reference](reference/crossref-book-chapter-fields.md#title-queries-for-chapters-without-a-doi);
+  list queries are limited to 1 a second and would need their own
+  limiter). The delay is a constant, not read from the
+  `x-rate-limit-*` headers: the headers differ per endpoint shape, the
+  single-work values were observed directly, and adapting to them would
+  add parsing for no request the client makes today. The same pacing
+  applies with a `contact_email`, since a higher polite-pool limit is
+  unverified. A 429 raises `RateLimitedError`, which both CrossRef
+  enrichers treat as a missing layer for this call; there is no retry, and
+  the limiter's `cooldown()` is not used, because inside an S2-backed tool
+  an active cooldown is reported to the job as an S2 throttle
+  (`S2_RETRY_CONTEXT`) and would defer the tool for a CrossRef reason
   ([#752](https://github.com/pvliesdonk/scholar-mcp/issues/752)).
