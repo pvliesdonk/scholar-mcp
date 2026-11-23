@@ -40,7 +40,8 @@ async def _resolve_papers(
 
     Args:
         paper_ids: Paper identifiers; S2 is not called when this is empty.
-        enrich: Whether to enrich the found papers with OpenAlex data, in place.
+        enrich: Whether to run the papers enrichment (OpenAlex, CrossRef and
+            its book-chapter mapping) on the found papers, in place.
         service: Injected service.
 
     Returns:
@@ -126,9 +127,9 @@ async def generate_citations(
     """Generate formatted citations for papers and patents.
 
     Papers are resolved through Semantic Scholar and can be enriched with
-    OpenAlex metadata. Patent numbers such as ``EP1234567A1`` may be mixed
-    into ``paper_ids``; they are resolved through EPO and come out as patent
-    entries. Entries keep the order of ``paper_ids``. The output is BibTeX,
+    OpenAlex and CrossRef metadata. Patent numbers such as ``EP1234567A1``
+    may be mixed into ``paper_ids``; they are resolved through EPO and come
+    out as patent entries. Entries keep the order of ``paper_ids``. The output is BibTeX,
     CSL-JSON or RIS.
 
     Enrichment fans out per paper, so a large batch can take a while; such a
@@ -140,14 +141,17 @@ async def generate_citations(
             patent numbers (``EP1234567A1``, ``US11234567B2``), in the order
             the citations should appear. Maximum 100.
         citation_format: Output format: ``bibtex``, ``csl-json`` or ``ris``.
-        enrich: If True, attempt OpenAlex enrichment for missing venue
-            data when a DOI is available.
+        enrich: Look up OpenAlex and CrossRef metadata for papers with a
+            DOI: fills a missing venue, and cites a book chapter in its
+            book with editors and pages. False skips the lookups.
         service: Injected service.
 
     Returns:
         ``{"format": ..., "output": ...}`` where ``output`` is the formatted
-        text: papers as ``@article``-style entries and patents as biblatex
-        ``@patent``, CSL ``patent`` or RIS ``PAT`` entries. Unresolved
+        text: papers as ``@article``-style entries, a book chapter found
+        through CrossRef (``enrich`` only) as BibTeX ``@incollection``, CSL
+        ``chapter`` or RIS ``CHAP``, and patents as biblatex ``@patent``,
+        CSL ``patent`` or RIS ``PAT`` entries. Unresolved
         identifiers are included as comments in the comment style of the
         chosen format, each with its reason: ``not found`` for a paper, or
         the EPO outcome for a patent (``not_found``, ``epo_not_configured``,

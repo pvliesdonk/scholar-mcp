@@ -7,6 +7,14 @@ import unicodedata
 from typing import TYPE_CHECKING, Any, cast
 
 from ._bibtex_escape import escape_bibtex
+from ._chapter_citation import (
+    CHAPTER_ENTRY_TYPE,
+    bibtex_chapter_fields,
+    chapter_of,
+    csl_chapter_fields,
+    editors_as_paper,
+    ris_chapter_lines,
+)
 from ._citation_names import parse_author_name
 from ._patent_citation import patent_bibtex_entry, patent_csl_entry, patent_ris_record
 
@@ -25,6 +33,8 @@ _CONFERENCE_KEYWORDS = ("conference", "proceedings", "workshop", "symposium")
 # where the venue name is not: "Neural Information Processing Systems" and
 # "Computer Vision and Pattern Recognition" carry none of the keywords above.
 _CONFERENCE_TYPE = "Conference"
+# Entry types whose container is not the S2 venue.
+_NO_VENUE_TYPES = frozenset({"book", CHAPTER_ENTRY_TYPE})
 # What a citation error says when it names no reason.
 _UNKNOWN_ERROR = "unknown error"
 
@@ -87,8 +97,30 @@ def generate_bibtex_key(paper: PaperRecord, seen_keys: set[str]) -> str:
         i += 1
 
 
+def _is_conference_paper(paper: PaperRecord) -> bool:
+    """Say whether S2's publication type or the venue name marks a conference.
+
+    Args:
+        paper: Paper metadata dict.
+
+    Returns:
+        ``True`` when ``publicationTypes`` holds ``Conference`` or the venue
+        name carries one of :data:`_CONFERENCE_KEYWORDS`.
+    """
+    venue = (paper.get("venue") or "").lower()
+    publication_types = paper.get("publicationTypes") or []
+    return _CONFERENCE_TYPE in publication_types or any(
+        kw in venue for kw in _CONFERENCE_KEYWORDS
+    )
+
+
 def infer_entry_type(paper: PaperRecord) -> str:
     """Infer BibTeX entry type from paper metadata.
+
+    A paper whose CrossRef ``chapter_info`` names its book is a chapter
+    (``incollection``) unless it is a conference paper: Springer deposits
+    proceedings papers (LNCS) as CrossRef book chapters, and those stay
+    ``inproceedings``. A chapter outranks ``book_metadata``.
 
     A paper counts as a conference paper when S2 says so in
     ``publicationTypes``, or, for a record without that field, when its venue
@@ -100,19 +132,19 @@ def infer_entry_type(paper: PaperRecord) -> str:
         paper: Paper metadata dict.
 
     Returns:
-        One of ``"book"``, ``"article"``, ``"inproceedings"``, or ``"misc"``.
+        One of ``"incollection"``, ``"book"``, ``"article"``,
+        ``"inproceedings"``, or ``"misc"``.
     """
+    conference = _is_conference_paper(paper)
+    if chapter_of(paper) is not None and not conference:
+        return CHAPTER_ENTRY_TYPE
     book_meta = paper.get("book_metadata")
     if book_meta and (book_meta.get("isbn_13") or book_meta.get("publisher")):
         return "book"
-    venue = (paper.get("venue") or "").lower()
-    publication_types = paper.get("publicationTypes") or []
-    if _CONFERENCE_TYPE in publication_types or any(
-        kw in venue for kw in _CONFERENCE_KEYWORDS
-    ):
+    if conference:
         return "inproceedings"
     external_ids = paper.get("externalIds") or {}
-    if external_ids.get("ArXiv") and not venue:
+    if external_ids.get("ArXiv") and not paper.get("venue"):
         return "misc"
     return "article"
 
@@ -186,8 +218,8 @@ def format_bibtex(
 ) -> str:
     """Format papers and patents as BibTeX entries.
 
-    Papers become ``@article``, ``@inproceedings``, ``@book`` or ``@misc``
-    entries; patents become biblatex ``@patent`` entries. Entries keep the
+    Papers become ``@article``, ``@inproceedings``, ``@incollection``,
+    ``@book`` or ``@misc`` entries; patents become biblatex ``@patent`` entries. Entries keep the
     order of *papers*, and all share one citation-key namespace.
 
     Args:
@@ -244,11 +276,12 @@ def _bibtex_venue_field(paper: PaperRecord, entry_type: str) -> list[str]:
         entry_type: BibTeX entry type from :func:`infer_entry_type`.
 
     Returns:
-        A one-element list with the venue field, or an empty list for a book
-        or a paper without a venue.
+        A one-element list with the venue field, or an empty list for a book,
+        a chapter (its book comes from ``chapter_info``) or a paper without a
+        venue.
     """
     venue = paper.get("venue")
-    if not venue or entry_type == "book":
+    if not venue or entry_type in _NO_VENUE_TYPES:
         return []
     name = "booktitle" if entry_type == "inproceedings" else "journal"
     return [f"  {name} = {{{escape_bibtex(venue)}}}"]
@@ -328,6 +361,10 @@ def _paper_bibtex_entry(paper: PaperRecord, seen_keys: set[str]) -> str:
     fields.extend(_bibtex_venue_field(paper, entry_type))
     if entry_type == "book":
         fields.extend(_bibtex_book_fields(paper))
+    chapter = chapter_of(paper) if entry_type == CHAPTER_ENTRY_TYPE else None
+    if chapter is not None:
+        editor = _format_bibtex_author(editors_as_paper(chapter))
+        fields.extend(bibtex_chapter_fields(chapter, editor))
     fields.extend(_bibtex_link_fields(paper))
 
     entry = f"@{entry_type}{{{key},\n"
@@ -342,6 +379,7 @@ _CSL_TYPE_MAP: dict[str, str] = {
     "inproceedings": "paper-conference",
     "misc": "article",
     "book": "book",
+    CHAPTER_ENTRY_TYPE: "chapter",
 }
 
 
@@ -477,11 +515,15 @@ def _paper_csl_entry(paper: PaperRecord, seen_keys: set[str]) -> dict[str, Any]:
     if year is not None:
         entry["issued"] = {"date-parts": [[year]]}
     venue = paper.get("venue")
-    if venue and entry_type != "book":
+    if venue and entry_type not in _NO_VENUE_TYPES:
         entry["container-title"] = venue
     entry.update(_csl_link_fields(paper))
     if entry_type == "book":
         entry.update(_csl_book_fields(paper))
+    chapter = chapter_of(paper) if entry_type == CHAPTER_ENTRY_TYPE else None
+    if chapter is not None:
+        editors = _csl_author(editors_as_paper(chapter))
+        entry.update(csl_chapter_fields(chapter, editors))
     return entry
 
 
@@ -490,14 +532,16 @@ _RIS_TYPE_MAP: dict[str, str] = {
     "inproceedings": "CONF",
     "misc": "GEN",
     "book": "BOOK",
+    CHAPTER_ENTRY_TYPE: "CHAP",
 }
 
 
-def _ris_author_line(paper: PaperRecord) -> list[str]:
+def _ris_author_line(paper: PaperRecord, tag: str = "AU") -> list[str]:
     """Format one AU tag per author for RIS.
 
     Args:
         paper: Paper metadata dict with an ``authors`` list.
+        tag: The RIS tag to write, ``A2`` for a chapter's book editors.
 
     Returns:
         List of ``AU  - Last, First`` tag strings.
@@ -512,7 +556,7 @@ def _ris_author_line(paper: PaperRecord) -> list[str]:
         if parsed.suffix:
             name = f"{name}, {parsed.suffix}"
         if name:
-            lines.append(f"AU  - {name}")
+            lines.append(f"{tag}  - {name}")
     return lines
 
 
@@ -552,11 +596,11 @@ def _ris_venue_line(paper: PaperRecord, entry_type: str) -> list[str]:
         entry_type: BibTeX entry type from :func:`infer_entry_type`.
 
     Returns:
-        A one-element list with the venue tag, or an empty list for a book
-        or a paper without a venue.
+        A one-element list with the venue tag, or an empty list for a book,
+        a chapter or a paper without a venue.
     """
     venue = paper.get("venue")
-    if not venue or entry_type == "book":
+    if not venue or entry_type in _NO_VENUE_TYPES:
         return []
     tag = "BT" if entry_type == "inproceedings" else "JO"
     return [f"{tag}  - {venue}"]
@@ -629,5 +673,9 @@ def _paper_ris_record(paper: PaperRecord) -> str:
     lines.extend(_ris_link_lines(paper))
     if entry_type == "book":
         lines.extend(_ris_book_lines(paper))
+    chapter = chapter_of(paper) if entry_type == CHAPTER_ENTRY_TYPE else None
+    if chapter is not None:
+        editor_lines = _ris_author_line(editors_as_paper(chapter), tag="A2")
+        lines.extend(ris_chapter_lines(chapter, editor_lines))
     lines.append("ER  -")
     return "\n".join(lines)
