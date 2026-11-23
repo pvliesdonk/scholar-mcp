@@ -20,23 +20,29 @@ logger = logging.getLogger(__name__)
 # Compiled regex patterns
 # ---------------------------------------------------------------------------
 
-# Chapter number: "Chapter 3", "Ch. 12", "Chap. 5" (case-insensitive)
+# Chapter number: "Chapter 3", "Ch. 12", "Chap. 5"; German "Kap. 1",
+# "Kapitel 1" (case-insensitive)
 _RE_CHAPTER = re.compile(
-    r"\b(?:chapter|chap\.|ch\.)\s+(\d+)\b",
+    r"\b(?:chapter|chap\.|ch\.|kapitel|kap\.)\s+(\d+)\b",
     re.IGNORECASE,
 )
 
-# Page range: "pp. 45-67", "p. 123", "pages 100-150"
+# Page range: "pp. 45-67", "p. 123", "pages 100-150"; German "S. 1-44",
+# "Seite 5", "Seiten 10-12". "S." also follows journal citations; those pages
+# are kept exactly as "pp." pages are (#743).
 # Dashes: hyphen (-), en-dash (U+2013), em-dash (U+2014)
 _DASH = r"[-\u2013\u2014]"
 _RE_PAGES = re.compile(
-    r"\b(?:pp?\.|pages?)\s+(\d+)(?:\s*" + _DASH + r"\s*(\d+))?",
+    r"\b(?:pp?\.|pages?|s\.|seiten?)\s+(\d+)(?:\s*" + _DASH + r"\s*(\d+))?",
     re.IGNORECASE,
 )
 
-# Parent book title: "In: {title}" up to comma+(year|ISBN) or end of string
+# Parent book title: "In: {title}" up to comma+(year|ISBN), an edition
+# statement ("1st edition", "2. Aufl."), a chapter/page marker, or end of string
 _RE_PARENT = re.compile(
-    r"\bIn:\s+(.+?)(?=,\s*(?:\d{4}|ISBN\b)|$)",
+    r"\bIn:\s+(.+?)(?=,\s*(?:\d{4}|ISBN\b)"
+    r"|\.\s+(?:\d+(?:st|nd|rd|th)\s+ed|\d+\.\s*aufl|(?:kap|ch|chap|s|pp?)\.\s+\d)"
+    r"|$)",
     re.IGNORECASE,
 )
 
