@@ -2614,7 +2614,7 @@ form.</p>
 <span class="w">  </span><span class="p">}</span>
 <span class="p">}</span>
 </code></pre></div>
-<p>In <code>citations</code>, NPL references with a DOI are resolved with <code>"confidence": "high"</code>. A DOI is recognised after <code>doi:</code>, <code>DOI</code>, or in a <code>doi.org</code> link, and one that does not resolve is still returned in <code>doi</code>. References without a DOI or that fail to resolve have <code>"confidence": null</code>. When citation strings contain chapter patterns (such as "Ch. 5" or "pp. 112-130"), a <code>chapter_info</code> dict is included with parsed chapter and page information.</p>
+<p>In <code>citations</code>, NPL references with a DOI are resolved with <code>"confidence": "high"</code>. A DOI is recognised after <code>doi:</code>, <code>DOI</code>, or in a <code>doi.org</code> link, and one that does not resolve is still returned in <code>doi</code>. References without a DOI or that fail to resolve have <code>"confidence": null</code>. When citation strings contain chapter patterns (such as "Ch. 5" or "pp. 112-130"), a <code>chapter_info</code> dict is included with parsed chapter and page information. Its <code>isbn</code> is set only when a number in the citation has a valid ISBN check digit, so a page range or a URL id of the same length is not reported as an ISBN.</p>
 <!-- DOMAIN-EXAMPLE-get_patent-END -->
 
 <h2 id="get_citing_patents"><code>get_citing_patents</code><a class="headerlink" href="#get_citing_patents" title="Permanent link">&para;</a></h2>
