@@ -116,6 +116,7 @@ denylists
 docling
 DOIs
 edition_count
+Elsevier
 enricher
 enrichers
 Formex
