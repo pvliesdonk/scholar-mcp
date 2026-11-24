@@ -2278,9 +2278,9 @@
 <p><strong>Generate Citations.</strong> Read-only. Reaches outside the server.</p>
 <p>Generate formatted citations for papers and patents.</p>
 <p>Papers are resolved through Semantic Scholar and can be enriched with
-OpenAlex metadata. Patent numbers such as <code>EP1234567A1</code> may be mixed
-into <code>paper_ids</code>; they are resolved through EPO and come out as patent
-entries. Entries keep the order of <code>paper_ids</code>. The output is BibTeX,
+OpenAlex and CrossRef metadata. Patent numbers such as <code>EP1234567A1</code>
+may be mixed into <code>paper_ids</code>; they are resolved through EPO and come
+out as patent entries. Entries keep the order of <code>paper_ids</code>. The output is BibTeX,
 CSL-JSON or RIS.</p>
 <p>Enrichment fans out per paper, so a large batch can take a while; such a
 call answers with a job handle to poll using <code>get_job_result</code> instead
@@ -2312,14 +2312,16 @@ of the citations themselves.</p>
 <td><code>enrich</code></td>
 <td><code>boolean</code></td>
 <td><code>true</code></td>
-<td>If True, attempt OpenAlex enrichment for missing venue data when a DOI is available.</td>
+<td>Look up OpenAlex and CrossRef metadata for papers with a DOI: fills a missing venue, and cites a book chapter in its book with editors and pages. False skips the lookups.</td>
 </tr>
 </tbody>
 </table>
 <p><strong>Returns</strong></p>
 <p><code>{"format": ..., "output": ...}</code> where <code>output</code> is the formatted
-text: papers as <code>@article</code>-style entries and patents as biblatex
-<code>@patent</code>, CSL <code>patent</code> or RIS <code>PAT</code> entries. Unresolved
+text: papers as <code>@article</code>-style entries, a book chapter found
+through CrossRef (<code>enrich</code> only) as BibTeX <code>@incollection</code>, CSL
+<code>chapter</code> or RIS <code>CHAP</code>, and patents as biblatex <code>@patent</code>,
+CSL <code>patent</code> or RIS <code>PAT</code> entries. Unresolved
 identifiers are included as comments in the comment style of the
 chosen format, each with its reason: <code>not found</code> for a paper, or
 the EPO outcome for a patent (<code>not_found</code>, <code>epo_not_configured</code>,
@@ -2331,8 +2333,9 @@ failures return an error mapping.</p>
 <p>The key is <code>output</code> rather than <code>citations</code> because the CSL-JSON
 formatter emits its own <code>citations</code> key, which would collide.</p>
 <!-- DOMAIN-EXAMPLE-generate_citations-START -->
-<p><strong>BibTeX output</strong> includes entry type inference (<code>@article</code>, <code>@inproceedings</code>, <code>@misc</code>, <code>@book</code>), proper author formatting (<code>{Last}, First</code>), title casing preservation, DOI, arXiv eprint fields, and special character escaping. Papers with <code>book_metadata</code> (ISBN or publisher) are emitted as <code>@book</code> entries with <code>publisher</code>, <code>edition</code>, and <code>isbn</code> fields.</p>
+<p><strong>BibTeX output</strong> includes entry type inference (<code>@article</code>, <code>@inproceedings</code>, <code>@incollection</code>, <code>@misc</code>, <code>@book</code>), proper author formatting (<code>{Last}, First</code>), title casing preservation, DOI, arXiv eprint fields, and special character escaping. Papers with <code>book_metadata</code> (ISBN or publisher) are emitted as <code>@book</code> entries with <code>publisher</code>, <code>edition</code>, and <code>isbn</code> fields.</p>
 <p>A paper is emitted as <code>@inproceedings</code> when Semantic Scholar reports it as a conference paper, and otherwise when its venue name contains conference, proceedings, workshop, or symposium. The first rule matters because venue names such as "Neural Information Processing Systems" and "Computer Vision and Pattern Recognition" contain none of those words. The same inference drives the CSL-JSON <code>paper-conference</code> type and the RIS <code>CONF</code> tag.</p>
+<p>A book chapter is emitted as <code>@incollection</code> when enrichment finds a CrossRef <code>book-chapter</code> record for its DOI. Its <code>title</code> and <code>author</code> are the chapter's; <code>booktitle</code> is the book. Where CrossRef has them, the entry also gets the book's <code>editor</code>, the chapter's <code>pages</code>, and <code>publisher</code>, <code>address</code>, <code>edition</code> and <code>isbn</code>. A chapter with no author or editor is still emitted as a chapter, without those fields. A paper Semantic Scholar marks as a conference paper stays <code>@inproceedings</code>, even though CrossRef files proceedings volumes such as LNCS as books. With <code>enrich</code> set to false no CrossRef lookup runs, so a chapter is inferred like any other paper. CSL-JSON writes a chapter as <code>type: "chapter"</code> with <code>container-title</code>, <code>editor</code>, <code>page</code>, <code>publisher</code>, <code>publisher-place</code>, <code>edition</code> and <code>ISBN</code>; RIS writes <code>TY - CHAP</code> with <code>T2</code> (book title), <code>A2</code> (editors), <code>SP</code>/<code>EP</code>, <code>PB</code>, <code>CY</code>, <code>ET</code> and <code>SN</code>.</p>
 <p><strong>CSL-JSON output</strong> puts a JSON document in <code>output</code>, so reaching the entries means parsing that string: it is <code>{"citations": [...], "errors": [...]}</code>, whose citations array contains standard CSL-JSON objects compatible with Zotero, Mendeley, Pandoc, and other CSL processors. Book entries use <code>type: "book"</code> with <code>publisher</code> and <code>ISBN</code> fields.</p>
 <p><strong>RIS output</strong> uses standard RIS tags (<code>TY</code>, <code>AU</code>, <code>TI</code>, <code>PY</code>, <code>JO</code>/<code>BT</code>, <code>DO</code>, <code>UR</code>, <code>AB</code>, <code>ER</code>). Book entries use <code>TY - BOOK</code> with <code>PB</code> (publisher) and <code>SN</code> (ISBN) tags.</p>
 <p>In CSL-JSON output, papers that fail to resolve go in the errors array. When all papers fail, a structured error is returned: <code>{"error": "no_papers_resolved", "failed": [...]}</code>.</p>
