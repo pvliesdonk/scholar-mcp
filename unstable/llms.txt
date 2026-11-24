@@ -70,6 +70,7 @@
 - [3.2](https://pvliesdonk.github.io/scholar-mcp/unstable/releases/3.2/index.md): Release notes for the 3.2 series, with the steps to upgrade to it.
 - [3.3](https://pvliesdonk.github.io/scholar-mcp/unstable/releases/3.3/index.md): Release notes for the 3.3 series, with the steps to upgrade to it.
 - [3.4](https://pvliesdonk.github.io/scholar-mcp/unstable/releases/3.4/index.md): Release notes for the 3.4 series, with the steps to upgrade to it.
+- [3.5](https://pvliesdonk.github.io/scholar-mcp/unstable/releases/3.5/index.md): Release notes for the 3.5 series, with the steps to upgrade to it.
 
 ## Contribute
 
