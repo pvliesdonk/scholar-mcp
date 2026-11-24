@@ -18,9 +18,9 @@ kind: reference
 Generate formatted citations for papers and patents.
 
 Papers are resolved through Semantic Scholar and can be enriched with
-OpenAlex metadata. Patent numbers such as ``EP1234567A1`` may be mixed
-into ``paper_ids``; they are resolved through EPO and come out as patent
-entries. Entries keep the order of ``paper_ids``. The output is BibTeX,
+OpenAlex and CrossRef metadata. Patent numbers such as ``EP1234567A1``
+may be mixed into ``paper_ids``; they are resolved through EPO and come
+out as patent entries. Entries keep the order of ``paper_ids``. The output is BibTeX,
 CSL-JSON or RIS.
 
 Enrichment fans out per paper, so a large batch can take a while; such a
@@ -33,13 +33,15 @@ of the citations themselves.
 |---|---|---|---|
 | `paper_ids` | `array of string` | required | Paper identifiers (S2 IDs, DOIs, arXiv IDs, etc.) and patent numbers (``EP1234567A1``, ``US11234567B2``), in the order the citations should appear. Maximum 100. |
 | `citation_format` | `bibtex \| csl-json \| ris` | `"bibtex"` | Output format: ``bibtex``, ``csl-json`` or ``ris``. |
-| `enrich` | `boolean` | `true` | If True, attempt OpenAlex enrichment for missing venue data when a DOI is available. |
+| `enrich` | `boolean` | `true` | Look up OpenAlex and CrossRef metadata for papers with a DOI: fills a missing venue, and cites a book chapter in its book with editors and pages. False skips the lookups. |
 
 **Returns**
 
 ``{"format": ..., "output": ...}`` where ``output`` is the formatted
-text: papers as ``@article``-style entries and patents as biblatex
-``@patent``, CSL ``patent`` or RIS ``PAT`` entries. Unresolved
+text: papers as ``@article``-style entries, a book chapter found
+through CrossRef (``enrich`` only) as BibTeX ``@incollection``, CSL
+``chapter`` or RIS ``CHAP``, and patents as biblatex ``@patent``,
+CSL ``patent`` or RIS ``PAT`` entries. Unresolved
 identifiers are included as comments in the comment style of the
 chosen format, each with its reason: ``not found`` for a paper, or
 the EPO outcome for a patent (``not_found``, ``epo_not_configured``,
@@ -54,9 +56,11 @@ The key is ``output`` rather than ``citations`` because the CSL-JSON
 formatter emits its own ``citations`` key, which would collide.
 
 <!-- DOMAIN-EXAMPLE-generate_citations-START -->
-**BibTeX output** includes entry type inference (`@article`, `@inproceedings`, `@misc`, `@book`), proper author formatting (`{Last}, First`), title casing preservation, DOI, arXiv eprint fields, and special character escaping. Papers with `book_metadata` (ISBN or publisher) are emitted as `@book` entries with `publisher`, `edition`, and `isbn` fields.
+**BibTeX output** includes entry type inference (`@article`, `@inproceedings`, `@incollection`, `@misc`, `@book`), proper author formatting (`{Last}, First`), title casing preservation, DOI, arXiv eprint fields, and special character escaping. Papers with `book_metadata` (ISBN or publisher) are emitted as `@book` entries with `publisher`, `edition`, and `isbn` fields.
 
 A paper is emitted as `@inproceedings` when Semantic Scholar reports it as a conference paper, and otherwise when its venue name contains conference, proceedings, workshop, or symposium. The first rule matters because venue names such as "Neural Information Processing Systems" and "Computer Vision and Pattern Recognition" contain none of those words. The same inference drives the CSL-JSON `paper-conference` type and the RIS `CONF` tag.
+
+A book chapter is emitted as `@incollection` when enrichment finds a CrossRef `book-chapter` record for its DOI. Its `title` and `author` are the chapter's; `booktitle` is the book. Where CrossRef has them, the entry also gets the book's `editor`, the chapter's `pages`, and `publisher`, `address`, `edition` and `isbn`. A chapter with no author or editor is still emitted as a chapter, without those fields. A paper Semantic Scholar marks as a conference paper stays `@inproceedings`, even though CrossRef files proceedings volumes such as LNCS as books. With `enrich` set to false no CrossRef lookup runs, so a chapter is inferred like any other paper. CSL-JSON writes a chapter as `type: "chapter"` with `container-title`, `editor`, `page`, `publisher`, `publisher-place`, `edition` and `ISBN`; RIS writes `TY - CHAP` with `T2` (book title), `A2` (editors), `SP`/`EP`, `PB`, `CY`, `ET` and `SN`.
 
 **CSL-JSON output** puts a JSON document in `output`, so reaching the entries means parsing that string: it is `{"citations": [...], "errors": [...]}`, whose citations array contains standard CSL-JSON objects compatible with Zotero, Mendeley, Pandoc, and other CSL processors. Book entries use `type: "book"` with `publisher` and `ISBN` fields.
 

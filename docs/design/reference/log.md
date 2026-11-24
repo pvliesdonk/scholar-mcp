@@ -4,6 +4,16 @@ Newest first. One entry per research pass.
 
 ## 2026-11-23
 
+### Book-chapter entry types
+
+New page [Book-chapter entries in BibTeX, biblatex, CSL-JSON and RIS](chapter-citation-entry-types.md)
+for #593, from btxdoc, plain.bst, the biblatex 3.22a manual, the CSL 1.0.2
+specification, the archived ResearchSoft RIS pages and Zotero's RIS
+translator. Classic BibTeX's `@inbook` puts the book title in `title`, so
+`@incollection` is the one type that reads the same in BibTeX and biblatex;
+CSL `chapter` covers prefaces too; RIS `CHAP` takes the book as `T2` and its
+editors as `A2`.
+
 ### Open Library tables of contents
 
 New page [Open Library tables of contents](openlibrary-table-of-contents.md)

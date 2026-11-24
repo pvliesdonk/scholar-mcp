@@ -19,6 +19,8 @@ from scholar_mcp._epo_client import EpoClient, EpoRateLimitedError
 from scholar_mcp._tools_citation import register_citation_tools
 from scholar_mcp.domain import Service
 from tests.conftest import PlainClient, tasks_server
+from tests.fixtures.chapter_papers import springer_paper
+from tests.fixtures.crossref_chapters import springer_chapter, springer_parent
 from tests.fixtures.patent_records import ep3491801b1
 
 S2_BASE = "https://api.semanticscholar.org/graph/v1"
@@ -426,3 +428,71 @@ async def test_nonexistent_patent_is_reported_not_found(
     text = json.loads(result.content[0].text)["output"]
     assert text.startswith("% Could not resolve: EP99999999A1 (not_found)")
     assert "TY  - PAT" in text
+
+
+# ---------------------------------------------------------------------------
+# Book chapters (#593): CrossRef enrichment supplies chapter_info
+# ---------------------------------------------------------------------------
+
+_CR_BASE = "https://api.crossref.org/works"
+_CHAPTER_DOI = "10.1007/978-3-031-93275-5_2"
+
+
+def _mock_springer_chapter() -> None:
+    """Mock S2, OpenAlex and CrossRef for the Springer series chapter."""
+    respx.post(f"{S2_BASE}/paper/batch").mock(
+        return_value=httpx.Response(200, json=[springer_paper()])
+    )
+    respx.get(url__startswith=f"{OA_BASE}/works/").mock(
+        return_value=httpx.Response(404)
+    )
+    respx.get(f"{_CR_BASE}/{_CHAPTER_DOI}").mock(
+        return_value=httpx.Response(200, json={"message": springer_chapter()})
+    )
+    respx.get(f"{_CR_BASE}/10.1007/978-3-031-93275-5").mock(
+        return_value=httpx.Response(200, json={"message": springer_parent()})
+    )
+
+
+@pytest.mark.parametrize(
+    ("citation_format", "expected"),
+    [
+        ("bibtex", "@incollection{silva2025,"),
+        ("bibtex", "  editor = {Rossi, Maria and de Vries, Jan}"),
+        ("csl-json", '"type": "chapter"'),
+        ("csl-json", '"container-title": "Cultural Heritage-Based'),
+        ("ris", "TY  - CHAP"),
+        ("ris", "A2  - Rossi, Maria"),
+    ],
+)
+async def test_enriched_chapter_is_a_chapter_entry(
+    mcp: FastMCP, citation_format: str, expected: str
+) -> None:
+    """The default enrich=True path maps the CrossRef chapter end to end."""
+    with respx.mock:
+        _mock_springer_chapter()
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "generate_citations",
+                {
+                    "paper_ids": [f"DOI:{_CHAPTER_DOI}"],
+                    "citation_format": citation_format,
+                },
+            )
+    assert expected in json.loads(result.content[0].text)["output"]
+
+
+async def test_chapter_without_enrichment_is_an_article(mcp: FastMCP) -> None:
+    """enrich=False runs no CrossRef lookup, so no chapter_info exists."""
+    with respx.mock:
+        respx.post(f"{S2_BASE}/paper/batch").mock(
+            return_value=httpx.Response(200, json=[springer_paper()])
+        )
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "generate_citations",
+                {"paper_ids": [f"DOI:{_CHAPTER_DOI}"], "enrich": False},
+            )
+    output = json.loads(result.content[0].text)["output"]
+    assert output.startswith("@article{silva2025,")
+    assert "booktitle" not in output
