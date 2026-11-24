@@ -80,6 +80,12 @@ follow [CrossRef book-chapter fields](reference/crossref-book-chapter-fields.md)
 - **Pages.** The raw string is always kept, because forms such as
   `xiii-xiii`, `639-650.e3` and `343a-349` occur and do not fit two
   integers; the integer keys stay for the parsed path's consumers.
+- **No title query for a chapter without a DOI.** A paper reaches CrossRef
+  only through its DOI. A `type:book-chapter` title query was measured
+  for #745 and not built: of 37 DOI-less S2 `BookSection` papers, an equal
+  title plus a shared author confirmed 2, and only `generate_citations`
+  requests the `publicationTypes` that would select them
+  ([reference](reference/crossref-book-chapter-fields.md#yield-for-chapters-that-reach-this-project-without-a-doi)).
 - **Rate limit.** `CrossRefClient` spaces request starts with a
   `RateLimiter` of 0.2 s (`_CROSSREF_DELAY` in `domain.py`) and holds a
   lock across each request, so at most one is in flight. This matches what

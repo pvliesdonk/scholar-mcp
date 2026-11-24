@@ -46,6 +46,10 @@ sources:
     title: Academic Graph API OpenAPI (swagger) specification, /paper/search/match
     resource: https://api.semanticscholar.org/graph/v1/swagger.json
     accessed: 2026-11-21
+  - id: graph-swagger-types
+    title: Academic Graph API OpenAPI (swagger) specification, `publicationTypes` filter values
+    resource: https://api.semanticscholar.org/graph/v1/swagger.json
+    accessed: 2026-11-23
   - id: throttle-observations
     title: Deployed-server and direct-call observations on issue 406
     resource: https://github.com/pvliesdonk/scholar-mcp/issues/406
@@ -178,6 +182,37 @@ throttle policy.
 - Whether another publication type should also map to `@inproceedings`, or
   whether `publicationTypes` can be `null`, was not established by that sample.
   [unverified] Check representative records or an explicit schema guarantee.
+- The `publicationTypes` filter of `/paper/search`, `/paper/search/bulk` and
+  `/paper/search/match` takes these values: `Review`, `JournalArticle`,
+  `CaseReport`, `ClinicalTrial`, `Conference`, `Dataset`, `Editorial`,
+  `LettersAndComments`, `MetaAnalysis`, `News`, `Study`, `Book` and
+  `BookSection`. There is no `BookChapter`. The specification lists them as
+  filter values; it does not enumerate the values a response carries.
+  [source: graph-swagger-types] (`/paper/search` parameter 2,
+  `/paper/search/bulk` parameter 4, `/paper/search/match` parameter 2)
+- A `publicationTypes=BookSection` search returned 700 hits (684 distinct
+  papers), every one carrying `BookSection` as the filter requires; some also
+  carried `Review` (89), `JournalArticle` (44), `Book` (8), `Conference` (5)
+  or `CaseReport` (1). The sample was the top 100 hits for each of seven
+  topic queries (machine learning, history, psychology, climate, economics,
+  language, philosophy). It was ranked by relevance, not drawn at random, so
+  its rates describe what a search surfaces, not the corpus. [observed: keyed
+  `/graph/v1/paper/search?query=<topic>&publicationTypes=BookSection&fields=title,externalIds,publicationTypes,venue,year,journal,authors&limit=100`,
+  2026-11-23]
+- S2 types a book chapter `BookSection`: the three DOI-less hits that a
+  CrossRef title query found as `book-chapter` works carried it. Whether
+  every chapter S2 holds is typed so is not established. [observed: the same
+  requests and the CrossRef queries on
+  [CrossRef book-chapter fields](crossref-book-chapter-fields.md#yield-for-chapters-that-reach-this-project-without-a-doi)]
+  [unverified]
+- 37 of the 700 hits (5.3%, all distinct papers) had no `externalIds.DOI`.
+  Their `venue` or `journal.name` was usually an institutional repository
+  ("IRIS UNIMORE", "OpenDocs (Institute of Development Studies)") or empty,
+  so they look like repository copies of published chapters. The list is in
+  [`sources/crossref-chapter-title-query/doiless-booksection.tsv`](sources/crossref-chapter-title-query/doiless-booksection.tsv).
+  One of them, "Opportunities and Challenges for Computational Social
+  Science Methods", carries the title of the book its chapter sits in.
+  [observed: the same requests]
 
 ### Journal details
 
