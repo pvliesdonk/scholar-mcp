@@ -2449,7 +2449,7 @@ wheels = [
 
 [[package]]
 name = "pvliesdonk-scholar-mcp"
-version = "3.4.0"
+version = "3.5.0rc0"
 source = { editable = "." }
 dependencies = [
     { name = "aiosqlite" },

@@ -15,6 +15,7 @@ posture**; the [Upgrade](../upgrade/index.md) page says what each answers.
 
 <!-- RELEASE-PAGES-START: newest series first; one list entry per page.
      The first real entry replaces the placeholder line below. -->
+- [3.5](3.5.md)
 - [3.4](3.4.md)
 - [3.3](3.3.md)
 - [3.2](3.2.md)
