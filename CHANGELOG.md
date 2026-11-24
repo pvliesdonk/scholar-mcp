@@ -2,6 +2,21 @@
 
 <!-- version list -->
 
+## 3.5.0-rc.0 (2026-11-24)
+
+### Features
+
+- parse German-format chapter citations (Kap., S.) (#751)
+- map CrossRef book-chapter records onto chapter_info (#754)
+- fill the parent book of a cited chapter (#755)
+- pace CrossRef lookups and report a throttle as a throttle (#760)
+- cite a CrossRef book chapter as a chapter of its book (#764)
+
+### Bug Fixes
+
+- report a chapter_info ISBN only when its check digit is valid (#750)
+- keep 40-hex Semantic Scholar ids out of patent detection (#759)
+
 ## 3.4.0 (2026-11-22)
 
 ### Features
